@@ -173,16 +173,16 @@ extension iPhoneMainViewController {
 
     /// Pins the ambient music mini player / bubble to the home bottom.
     ///
-    /// Every orientation uses the same compact card floating beside the Music
-    /// bubble; only its width changes with the available room.
+    /// Every orientation uses the same compact card joined to the Music circle;
+    /// only its width changes with the available room.
     private func setupAudioMiniPlayer() {
         audioMiniPlayer.translatesAutoresizingMaskIntoConstraints = false
         audioMiniPlayer.isHidden = true
         audioMiniPlayer.onOpenLibrary = { [weak self] in
             self?.presentNowPlaying()
         }
-        audioMiniPlayer.onMinimize = { [weak self] in
-            self?.setAudioMiniCollapsed(true, animated: true)
+        audioMiniPlayer.onStop = { [weak self] in
+            self?.stopAmbientPlayback()
         }
         view.addSubview(audioMiniPlayer)
 
@@ -202,10 +202,10 @@ extension iPhoneMainViewController {
         NSLayoutConstraint.activate([
             height,
             cardWidth,
-            // Card sits beside the Music bubble in the same corner.
+            // Card tucks under the Music circle so the join has no gap.
             audioMiniPlayer.trailingAnchor.constraint(
                 equalTo: audioMiniBubble.leadingAnchor,
-                constant: -AudioMiniPlayerView.circleFooterGap
+                constant: AudioMiniPlayerView.connectedOverlap
             ),
             audioMiniPlayer.bottomAnchor.constraint(
                 equalTo: view.bottomAnchor,

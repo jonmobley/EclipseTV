@@ -8,37 +8,42 @@
 import UIKit
 
 /// Floating card chrome for ambient music on the home screen.
-/// Stop lives on the Music circle, not this bar.
+///
+/// The card grows out of the Music circle: same height, no gap, leading end
+/// rounded to match. Stop and the mic duck live here; the circle only shows
+/// or hides the card.
 final class AudioMiniPlayerView: UIView, UIGestureRecognizerDelegate {
 
-    /// Preferred height when visible.
+    /// Preferred height when visible. Matches `AudioMiniPlayerBubbleView.side`.
     static let preferredHeight: CGFloat = 64
     /// Solid fill under the chrome.
     static let barBackgroundColor: UIColor = .secondarySystemBackground
-    /// Floating card width — title, speaker, and collapse control.
+    /// Visible card width, not counting the portion tucked under the circle.
     static let compactWidth: CGFloat = 360
     /// Narrowest the card squeezes to before it would clip its own controls.
     static let minimumCompactWidth: CGFloat = 200
+    /// Sheet corner shared with Now Playing and the Music picker.
     static let compactCornerRadius: CGFloat = 20
     /// Matches the Music bubble so the bar grows from the same corner.
     static let compactTrailingInset: CGFloat = 16
     /// Gap from the screen bottom (not the safe area) so the circle sits in the corner.
     static let compactBottomInset: CGFloat = 10
-    /// Space between the compact card and the Music circle.
-    static let circleFooterGap: CGFloat = 8
-    /// Padding around the round volume and close controls inside the 64pt bar.
+    /// The card's trailing edge lands on the circle's vertical center.
+    static var connectedOverlap: CGFloat { preferredHeight / 2 }
+    /// Padding around the round mic and stop controls inside the bar.
     static let controlChromeInset: CGFloat = 4
-    /// Round volume and close controls; same size, filling the bar height.
+    /// Round mic and stop controls; same size, filling the bar height.
     static let controlSide: CGFloat = preferredHeight - controlChromeInset * 2
-    /// Gap between the volume and close circles.
+    /// Gap between the mic and stop circles.
     static let controlGap: CGFloat = 6
-    /// Trailing inset for close when the circle sits beside the card.
-    static let controlTrailingInset: CGFloat = controlChromeInset
+    /// Trailing inset for stop: clears the circle bite, then the usual padding.
+    static var controlTrailingInset: CGFloat { connectedOverlap + controlChromeInset }
 
-    /// Round filled chrome shared by volume and close.
+    /// Round filled chrome shared by the mic and stop buttons.
     static func roundControlConfiguration(
         systemName: String,
-        pointSize: CGFloat = 20
+        pointSize: CGFloat = 18,
+        prominent: Bool = false
     ) -> UIButton.Configuration {
         var config = UIButton.Configuration.plain()
         config.image = UIImage(
@@ -47,8 +52,10 @@ final class AudioMiniPlayerView: UIView, UIGestureRecognizerDelegate {
                 pointSize: pointSize, weight: .bold
             )
         )
-        config.baseForegroundColor = .secondaryLabel
-        config.background.backgroundColor = UIColor.white.withAlphaComponent(0.12)
+        config.baseForegroundColor = prominent ? .white : .secondaryLabel
+        config.background.backgroundColor = prominent
+            ? .accent
+            : UIColor.white.withAlphaComponent(0.12)
         config.background.cornerRadius = controlSide / 2
         config.contentInsets = NSDirectionalEdgeInsets(
             top: 16, leading: 16, bottom: 16, trailing: 16
@@ -56,9 +63,10 @@ final class AudioMiniPlayerView: UIView, UIGestureRecognizerDelegate {
         return config
     }
 
-    /// Card width for a host of `containerWidth`, leaving room for the Music
-    /// circle beside it and a matching gap on the leading edge.
+    /// Card width for a host of `containerWidth`, leaving the Music circle on
+    /// the trailing edge and the same inset on the leading edge.
     ///
+    /// The frame includes `connectedOverlap`, which sits under the circle.
     /// The floor keeps the card usable on the narrowest phones and guards the
     /// zero-width container that Auto Layout reports during early layout.
     static func cardWidth(
@@ -68,16 +76,14 @@ final class AudioMiniPlayerView: UIView, UIGestureRecognizerDelegate {
         let available = containerWidth - horizontalSafeArea
             - compactTrailingInset * 2
             - AudioMiniPlayerBubbleView.side
-            - circleFooterGap
-        return max(minimumCompactWidth, min(compactWidth, available))
+            + connectedOverlap
+        let widest = compactWidth + connectedOverlap
+        return max(minimumCompactWidth, min(widest, available))
     }
 
     var onOpenLibrary: (() -> Void)?
-    /// Collapses the bar to the floating bubble (does not stop playback).
-    var onMinimize: (() -> Void)?
-
-    /// True while the vertical volume slider is showing above the speaker.
-    var isVolumeExpanded: Bool { volumeControl.isExpanded }
+    /// Fades out and stops playback.
+    var onStop: (() -> Void)?
 
     private let titleLabel: UILabel = {
         let label = UILabel()
@@ -97,12 +103,27 @@ final class AudioMiniPlayerView: UIView, UIGestureRecognizerDelegate {
         return label
     }()
 
-    private let volumeControl = AudioMiniVolumeControl()
+    private let fillView: UIView = {
+        let view = UIView()
+        view.backgroundColor = AudioMiniPlayerView.barBackgroundColor
+        view.isUserInteractionEnabled = false
+        view.translatesAutoresizingMaskIntoConstraints = false
+        return view
+    }()
 
-    private let minimizeButton: UIButton = {
+    private let fillMask = CAShapeLayer()
+
+    private let duckButton: UIButton = {
         let button = UIButton(type: .system)
         button.translatesAutoresizingMaskIntoConstraints = false
-        button.tintColor = .secondaryLabel
+        button.accessibilityLabel = "Duck volume"
+        return button
+    }()
+
+    private let stopButton: UIButton = {
+        let button = UIButton(type: .system)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.accessibilityLabel = "Stop"
         return button
     }()
 
@@ -115,18 +136,18 @@ final class AudioMiniPlayerView: UIView, UIGestureRecognizerDelegate {
         fatalError("init(coder:) has not been implemented")
     }
 
-    /// Rounded corners and a drop shadow matching the Music circle.
+    /// Drop shadow matching the Music circle. The fill mask supplies the shape.
     func applyFloatingChrome() {
-        layer.cornerCurve = .continuous
-        layer.cornerRadius = Self.compactCornerRadius
+        layer.shadowColor = UIColor.black.cgColor
         layer.shadowOpacity = 0.28
         layer.shadowRadius = 12
         layer.shadowOffset = CGSize(width: 0, height: 4)
     }
 
-    /// Refreshes labels/controls from `AudioPlayerController`.
+    /// Refreshes labels and the mic duck from `AudioPlayerController`.
     func reload() {
         let player = AudioPlayerController.shared
+        applyDuckChrome(ducked: player.isDucked)
         guard let track = player.currentTrack else {
             isHidden = true
             return
@@ -139,22 +160,27 @@ final class AudioMiniPlayerView: UIView, UIGestureRecognizerDelegate {
         } else {
             subtitleLabel.text = track.subtitle.isEmpty ? "Music" : track.subtitle
         }
-
-        volumeControl.setVolume(player.isMuted ? 0 : player.volume)
     }
 
-    /// Hides the vertical volume slider without changing the mix level.
-    func collapseVolumeControl(animated: Bool = false) {
-        volumeControl.setExpanded(false, animated: animated)
+    /// Mic on (accent) while volume is ducked.
+    func applyDuckChrome(ducked: Bool) {
+        duckButton.configuration = Self.roundControlConfiguration(
+            systemName: ducked ? "mic.fill" : "mic",
+            prominent: ducked
+        )
+        duckButton.accessibilityValue = ducked ? "On" : "Off"
+        duckButton.accessibilityHint = ducked
+            ? "Restores the music volume."
+            : "Lowers the music so you can talk over it."
     }
 
     // MARK: - Private
 
     private func setup() {
-        isOpaque = true
-        backgroundColor = Self.barBackgroundColor
+        isOpaque = false
+        backgroundColor = .clear
         clipsToBounds = false
-        layer.shadowColor = UIColor.black.cgColor
+        fillView.layer.mask = fillMask
 
         let textStack = UIStackView(arrangedSubviews: [titleLabel, subtitleLabel])
         textStack.axis = .vertical
@@ -163,15 +189,11 @@ final class AudioMiniPlayerView: UIView, UIGestureRecognizerDelegate {
         textStack.setContentHuggingPriority(.defaultLow, for: .horizontal)
         textStack.translatesAutoresizingMaskIntoConstraints = false
 
-        configureMinimizeButton()
-        volumeControl.translatesAutoresizingMaskIntoConstraints = false
-        volumeControl.onVolumeChange = { value, notify in
-            AudioPlayerController.shared.setVolume(value, notify: notify)
-        }
-
+        configureStopButton()
+        addSubview(fillView)
         addSubview(textStack)
-        addSubview(volumeControl)
-        addSubview(minimizeButton)
+        addSubview(duckButton)
+        addSubview(stopButton)
         pinChrome(textStack: textStack)
         applyFloatingChrome()
 
@@ -181,47 +203,55 @@ final class AudioMiniPlayerView: UIView, UIGestureRecognizerDelegate {
         let tap = UITapGestureRecognizer(target: self, action: #selector(openTapped))
         tap.delegate = self
         addGestureRecognizer(tap)
-        minimizeButton.addTarget(self, action: #selector(minimizeTapped), for: .touchUpInside)
+        duckButton.addTarget(self, action: #selector(duckTapped), for: .touchUpInside)
+        stopButton.addTarget(self, action: #selector(stopTapped), for: .touchUpInside)
     }
 
     private func pinChrome(textStack: UIStackView) {
-        let minimizeTrailing = minimizeButton.trailingAnchor.constraint(
-            equalTo: trailingAnchor, constant: -Self.controlTrailingInset
-        )
         NSLayoutConstraint.activate([
-            textStack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
+            fillView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            fillView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            fillView.topAnchor.constraint(equalTo: topAnchor),
+            fillView.bottomAnchor.constraint(equalTo: bottomAnchor),
+
+            textStack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 20),
             textStack.centerYAnchor.constraint(equalTo: centerYAnchor),
             textStack.trailingAnchor.constraint(
-                lessThanOrEqualTo: volumeControl.leadingAnchor, constant: -8
+                lessThanOrEqualTo: duckButton.leadingAnchor, constant: -8
             ),
 
-            minimizeTrailing,
-            minimizeButton.topAnchor.constraint(
-                equalTo: topAnchor, constant: Self.controlChromeInset
+            stopButton.trailingAnchor.constraint(
+                equalTo: trailingAnchor, constant: -Self.controlTrailingInset
             ),
-            minimizeButton.widthAnchor.constraint(equalToConstant: Self.controlSide),
-            minimizeButton.heightAnchor.constraint(equalToConstant: Self.controlSide),
+            stopButton.centerYAnchor.constraint(equalTo: centerYAnchor),
+            stopButton.widthAnchor.constraint(equalToConstant: Self.controlSide),
+            stopButton.heightAnchor.constraint(equalToConstant: Self.controlSide),
 
-            volumeControl.trailingAnchor.constraint(
-                equalTo: minimizeButton.leadingAnchor, constant: -Self.controlGap
+            duckButton.trailingAnchor.constraint(
+                equalTo: stopButton.leadingAnchor, constant: -Self.controlGap
             ),
-            volumeControl.topAnchor.constraint(
-                equalTo: topAnchor, constant: Self.controlChromeInset
-            )
+            duckButton.centerYAnchor.constraint(equalTo: centerYAnchor),
+            duckButton.widthAnchor.constraint(equalToConstant: Self.controlSide),
+            duckButton.heightAnchor.constraint(equalToConstant: Self.controlSide)
         ])
     }
 
-    private func configureMinimizeButton() {
-        minimizeButton.configuration = Self.roundControlConfiguration(systemName: "xmark")
-        minimizeButton.accessibilityLabel = "Close"
-        minimizeButton.accessibilityHint =
-            "Collapse to a floating button. Music keeps playing."
+    private func configureStopButton() {
+        stopButton.configuration = Self.roundControlConfiguration(
+            systemName: "stop.fill", pointSize: 16
+        )
+        stopButton.accessibilityHint = "Fades out and stops playback."
     }
 
-    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
-        if super.point(inside: point, with: event) { return true }
-        guard volumeControl.isExpanded else { return false }
-        return volumeControl.point(inside: convert(point, to: volumeControl), with: event)
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        let path = AudioMiniPlayerShape.maskPath(
+            in: bounds,
+            biteOnRight: effectiveUserInterfaceLayoutDirection != .rightToLeft
+        )
+        fillMask.frame = bounds
+        fillMask.path = path.cgPath
+        layer.shadowPath = path.cgPath
     }
 
     func gestureRecognizer(
@@ -229,17 +259,21 @@ final class AudioMiniPlayerView: UIView, UIGestureRecognizerDelegate {
         shouldReceive touch: UITouch
     ) -> Bool {
         guard let view = touch.view else { return true }
-        if view is UIControl { return false }
-        return !view.isDescendant(of: volumeControl)
+        return !(view is UIControl)
     }
 
     @objc private func openTapped() {
-        if volumeControl.isExpanded {
-            volumeControl.setExpanded(false, animated: true)
-            return
-        }
         onOpenLibrary?()
     }
 
-    @objc private func minimizeTapped() { onMinimize?() }
+    @objc private func duckTapped() {
+        Haptics.selection()
+        let player = AudioPlayerController.shared
+        player.setDucked(!player.isDucked)
+    }
+
+    @objc private func stopTapped() {
+        Haptics.impactMedium()
+        onStop?()
+    }
 }
