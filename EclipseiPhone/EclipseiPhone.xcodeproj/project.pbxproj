@@ -7,10 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		CT0000000000000000000B2 /* CamTailKit in Frameworks */ = {isa = PBXBuildFile; productRef = CT0000000000000000000B1 /* CamTailKit */; };
 		E2C5A0000000000000000001 /* Sentry in Frameworks */ = {isa = PBXBuildFile; productRef = E2C5A0000000000000000002 /* Sentry */; };
 		E2F51CF32F1FDBB500B87D90 /* EclipsePhoneCameraClient in Frameworks */ = {isa = PBXBuildFile; productRef = E2F51CF42F1FDBB500B87D90 /* EclipsePhoneCameraClient */; };
 		LP0000000000000000000B2 /* LivePollKit in Frameworks */ = {isa = PBXBuildFile; productRef = LP0000000000000000000B1 /* LivePollKit */; };
-		CT0000000000000000000B2 /* CamTailKit in Frameworks */ = {isa = PBXBuildFile; productRef = CT0000000000000000000B1 /* CamTailKit */; };
 		LP0000000000000000000B3 /* LivePollKit in Frameworks */ = {isa = PBXBuildFile; productRef = LP0000000000000000000B4 /* LivePollKit */; };
 /* End PBXBuildFile section */
 
@@ -374,10 +374,23 @@
 				CURRENT_PROJECT_VERSION = 2026110801;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = EclipseiPhone/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Eclipse;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.entertainment";
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
+				INFOPLIST_KEY_UIMainStoryboardFile = Main;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UIUserInterfaceStyle = Dark;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
 				"LIBRARY_SEARCH_PATHS[sdk=iphoneos*]" = (
 					"$(inherited)",
 					"\"/Library/NDI SDK for Apple/lib/iOS\"",
 				);
+				MARKETING_VERSION = 1.0;
 				"OTHER_LDFLAGS[sdk=iphoneos*]" = (
 					"$(inherited)",
 					"-lndi_ios",
@@ -391,19 +404,6 @@
 					"-framework",
 					CoreAudio,
 				);
-				INFOPLIST_KEY_CFBundleDisplayName = Eclipse;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.entertainment";
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
-				INFOPLIST_KEY_UIMainStoryboardFile = Main;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UIUserInterfaceStyle = Dark;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-				);
-				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.mobleypro.eclipse.EclipseiPhone;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -422,10 +422,23 @@
 				CURRENT_PROJECT_VERSION = 2026110801;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = EclipseiPhone/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Eclipse;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.entertainment";
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
+				INFOPLIST_KEY_UIMainStoryboardFile = Main;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UIUserInterfaceStyle = Dark;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
 				"LIBRARY_SEARCH_PATHS[sdk=iphoneos*]" = (
 					"$(inherited)",
 					"\"/Library/NDI SDK for Apple/lib/iOS\"",
 				);
+				MARKETING_VERSION = 1.0;
 				"OTHER_LDFLAGS[sdk=iphoneos*]" = (
 					"$(inherited)",
 					"-lndi_ios",
@@ -439,19 +452,6 @@
 					"-framework",
 					CoreAudio,
 				);
-				INFOPLIST_KEY_CFBundleDisplayName = Eclipse;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.entertainment";
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
-				INFOPLIST_KEY_UIMainStoryboardFile = Main;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UIUserInterfaceStyle = Dark;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-				);
-				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.mobleypro.eclipse.EclipseiPhone;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -693,6 +693,10 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
+		CT0000000000000000000B0 /* XCLocalSwiftPackageReference "../../CamTail/Packages/CamTailKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../../CamTail/Packages/CamTailKit;
+		};
 		E2F51CF52F1FDBB500B87D90 /* XCLocalSwiftPackageReference "../../eclipsepro/Packages/EclipsePhoneCameraClient" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../../eclipsepro/Packages/EclipsePhoneCameraClient;
@@ -700,10 +704,6 @@
 		LP0000000000000000000B0 /* XCLocalSwiftPackageReference "../../eclipsepro/Packages/LivePollKit" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../../eclipsepro/Packages/LivePollKit;
-		};
-		CT0000000000000000000B0 /* XCLocalSwiftPackageReference "../../CamTail/Packages/CamTailKit" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = ../../CamTail/Packages/CamTailKit;
 		};
 /* End XCLocalSwiftPackageReference section */
 
@@ -719,6 +719,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		CT0000000000000000000B1 /* CamTailKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = CT0000000000000000000B0 /* XCLocalSwiftPackageReference "../../CamTail/Packages/CamTailKit" */;
+			productName = CamTailKit;
+		};
 		E2C5A0000000000000000002 /* Sentry */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = E2C5A0000000000000000003 /* XCRemoteSwiftPackageReference "sentry-cocoa" */;
@@ -738,11 +743,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = LP0000000000000000000B0 /* XCLocalSwiftPackageReference "../../eclipsepro/Packages/LivePollKit" */;
 			productName = LivePollKit;
-		};
-		CT0000000000000000000B1 /* CamTailKit */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = CT0000000000000000000B0 /* XCLocalSwiftPackageReference "../../CamTail/Packages/CamTailKit" */;
-			productName = CamTailKit;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
