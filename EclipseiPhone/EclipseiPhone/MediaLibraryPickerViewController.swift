@@ -345,7 +345,11 @@ final class MediaLibraryPickerViewController: UIViewController {
             1
         )
         let aspect = orientation.gridCellHeightOverWidth
-        layout.itemSize = CGSize(width: side, height: side * aspect)
+        // Each card's name sits on a line under its picture.
+        layout.itemSize = CGSize(
+            width: side,
+            height: side * aspect + LibraryThumbnailCell.nameLineHeight
+        )
     }
 
     // MARK: - Actions
@@ -542,6 +546,7 @@ extension MediaLibraryPickerViewController: UICollectionViewDataSource {
         ) as? LibraryThumbnailCell else {
             return UICollectionViewCell()
         }
+        cell.namesBelow = true
         guard items.indices.contains(indexPath.item) else { return cell }
         let item = items[indexPath.item]
         switch item {

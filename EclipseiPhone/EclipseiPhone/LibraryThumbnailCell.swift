@@ -23,6 +23,15 @@ final class LibraryThumbnailCell: UICollectionViewCell {
     let imageView = UIImageView()
     let placeholderIcon = UIImageView()
     let captionLabel = UILabel()
+    /// The card's name on a line under the picture (Show grid and Library).
+    let nameLabel = UILabel()
+    /// True where names sit under the picture instead of on it; set at
+    /// dequeue time, cleared on reuse. See `LibraryThumbnailCell+NameBelow`.
+    var namesBelow = false {
+        didSet { applyNamesBelow() }
+    }
+    var cardBottomToContent: NSLayoutConstraint!
+    var cardBottomAboveName: NSLayoutConstraint!
     /// Set by the Show grid when the Show's Card Titles setting is off: every
     /// caption path keeps the title hidden (VoiceOver still reads it).
     var hidesCaptions = false
@@ -160,10 +169,11 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         installMoreButton()
         installRewindButton()
         installTypeIcon()
+        installNameLabel()
 
         NSLayoutConstraint.activate([
             cardView.topAnchor.constraint(equalTo: contentView.topAnchor),
-            cardView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
+            cardBottomToContent,
             cardView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
             cardView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
 
@@ -475,6 +485,8 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         captionLabel.numberOfLines = 2
         captionLabel.lineBreakMode = .byTruncatingTail
         captionScrimView.isHidden = true
+        nameLabel.text = nil
+        nameLabel.isHidden = true
         hideMediaBadges()
         selectionBadge.isHidden = true
         isLiveStroked = false
@@ -553,6 +565,7 @@ final class LibraryThumbnailCell: UICollectionViewCell {
     override func prepareForReuse() {
         super.prepareForReuse()
         hidesCaptions = false
+        namesBelow = false
         resetChrome()
         setUpNext(false)
         setFrameOn(false)

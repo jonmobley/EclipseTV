@@ -533,15 +533,17 @@ extension LibraryGridViewController {
             sectionInset: sectionInset,
             spacing: spacing
         )
+        // Each card's name sits on a line under its picture.
+        let cellHeight = tile.height + LibraryThumbnailCell.nameLineHeight
 
         let itemSize = NSCollectionLayoutSize(
             widthDimension: .absolute(tile.width),
-            heightDimension: .absolute(tile.height)
+            heightDimension: .absolute(cellHeight)
         )
         let item = NSCollectionLayoutItem(layoutSize: itemSize)
         let groupSize = NSCollectionLayoutSize(
             widthDimension: .fractionalWidth(1),
-            heightDimension: .absolute(tile.height)
+            heightDimension: .absolute(cellHeight)
         )
         let group = NSCollectionLayoutGroup.horizontal(
             layoutSize: groupSize,
