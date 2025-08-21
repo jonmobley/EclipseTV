@@ -1,0 +1,576 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXContainerItemProxy section */
+		E24EA3A62D8A64E9002DB63F /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E24EA3872D8A64E7002DB63F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = E24EA38E2D8A64E7002DB63F;
+			remoteInfo = EclipseiPhone;
+		};
+		E24EA3B02D8A64E9002DB63F /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E24EA3872D8A64E7002DB63F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = E24EA38E2D8A64E7002DB63F;
+			remoteInfo = EclipseiPhone;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		E24EA38F2D8A64E7002DB63F /* EclipseiPhone.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = EclipseiPhone.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		E24EA3A52D8A64E9002DB63F /* EclipseiPhoneTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = EclipseiPhoneTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		E24EA3AF2D8A64E9002DB63F /* EclipseiPhoneUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = EclipseiPhoneUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		E24EA3B72D8A64E9002DB63F /* Exceptions for "EclipseiPhone" folder in "EclipseiPhone" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = E24EA38E2D8A64E7002DB63F /* EclipseiPhone */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		E24EA3912D8A64E7002DB63F /* EclipseiPhone */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				E24EA3B72D8A64E9002DB63F /* Exceptions for "EclipseiPhone" folder in "EclipseiPhone" target */,
+			);
+			path = EclipseiPhone;
+			sourceTree = "<group>";
+		};
+		E24EA3A82D8A64E9002DB63F /* EclipseiPhoneTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = EclipseiPhoneTests;
+			sourceTree = "<group>";
+		};
+		E24EA3B22D8A64E9002DB63F /* EclipseiPhoneUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = EclipseiPhoneUITests;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		E24EA38C2D8A64E7002DB63F /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E24EA3A22D8A64E9002DB63F /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E24EA3AC2D8A64E9002DB63F /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		E24EA3862D8A64E7002DB63F = {
+			isa = PBXGroup;
+			children = (
+				E24EA3912D8A64E7002DB63F /* EclipseiPhone */,
+				E24EA3A82D8A64E9002DB63F /* EclipseiPhoneTests */,
+				E24EA3B22D8A64E9002DB63F /* EclipseiPhoneUITests */,
+				E24EA3902D8A64E7002DB63F /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		E24EA3902D8A64E7002DB63F /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				E24EA38F2D8A64E7002DB63F /* EclipseiPhone.app */,
+				E24EA3A52D8A64E9002DB63F /* EclipseiPhoneTests.xctest */,
+				E24EA3AF2D8A64E9002DB63F /* EclipseiPhoneUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		E24EA38E2D8A64E7002DB63F /* EclipseiPhone */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E24EA3B82D8A64E9002DB63F /* Build configuration list for PBXNativeTarget "EclipseiPhone" */;
+			buildPhases = (
+				E24EA38B2D8A64E7002DB63F /* Sources */,
+				E24EA38C2D8A64E7002DB63F /* Frameworks */,
+				E24EA38D2D8A64E7002DB63F /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				E24EA3912D8A64E7002DB63F /* EclipseiPhone */,
+			);
+			name = EclipseiPhone;
+			packageProductDependencies = (
+			);
+			productName = EclipseiPhone;
+			productReference = E24EA38F2D8A64E7002DB63F /* EclipseiPhone.app */;
+			productType = "com.apple.product-type.application";
+		};
+		E24EA3A42D8A64E9002DB63F /* EclipseiPhoneTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E24EA3BD2D8A64E9002DB63F /* Build configuration list for PBXNativeTarget "EclipseiPhoneTests" */;
+			buildPhases = (
+				E24EA3A12D8A64E9002DB63F /* Sources */,
+				E24EA3A22D8A64E9002DB63F /* Frameworks */,
+				E24EA3A32D8A64E9002DB63F /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				E24EA3A72D8A64E9002DB63F /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				E24EA3A82D8A64E9002DB63F /* EclipseiPhoneTests */,
+			);
+			name = EclipseiPhoneTests;
+			packageProductDependencies = (
+			);
+			productName = EclipseiPhoneTests;
+			productReference = E24EA3A52D8A64E9002DB63F /* EclipseiPhoneTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		E24EA3AE2D8A64E9002DB63F /* EclipseiPhoneUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E24EA3C02D8A64E9002DB63F /* Build configuration list for PBXNativeTarget "EclipseiPhoneUITests" */;
+			buildPhases = (
+				E24EA3AB2D8A64E9002DB63F /* Sources */,
+				E24EA3AC2D8A64E9002DB63F /* Frameworks */,
+				E24EA3AD2D8A64E9002DB63F /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				E24EA3B12D8A64E9002DB63F /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				E24EA3B22D8A64E9002DB63F /* EclipseiPhoneUITests */,
+			);
+			name = EclipseiPhoneUITests;
+			packageProductDependencies = (
+			);
+			productName = EclipseiPhoneUITests;
+			productReference = E24EA3AF2D8A64E9002DB63F /* EclipseiPhoneUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		E24EA3872D8A64E7002DB63F /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1620;
+				LastUpgradeCheck = 1620;
+				TargetAttributes = {
+					E24EA38E2D8A64E7002DB63F = {
+						CreatedOnToolsVersion = 16.2;
+					};
+					E24EA3A42D8A64E9002DB63F = {
+						CreatedOnToolsVersion = 16.2;
+						TestTargetID = E24EA38E2D8A64E7002DB63F;
+					};
+					E24EA3AE2D8A64E9002DB63F = {
+						CreatedOnToolsVersion = 16.2;
+						TestTargetID = E24EA38E2D8A64E7002DB63F;
+					};
+				};
+			};
+			buildConfigurationList = E24EA38A2D8A64E7002DB63F /* Build configuration list for PBXProject "EclipseiPhone" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = E24EA3862D8A64E7002DB63F;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = E24EA3902D8A64E7002DB63F /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				E24EA38E2D8A64E7002DB63F /* EclipseiPhone */,
+				E24EA3A42D8A64E9002DB63F /* EclipseiPhoneTests */,
+				E24EA3AE2D8A64E9002DB63F /* EclipseiPhoneUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		E24EA38D2D8A64E7002DB63F /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E24EA3A32D8A64E9002DB63F /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E24EA3AD2D8A64E9002DB63F /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		E24EA38B2D8A64E7002DB63F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E24EA3A12D8A64E9002DB63F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E24EA3AB2D8A64E9002DB63F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		E24EA3A72D8A64E9002DB63F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = E24EA38E2D8A64E7002DB63F /* EclipseiPhone */;
+			targetProxy = E24EA3A62D8A64E9002DB63F /* PBXContainerItemProxy */;
+		};
+		E24EA3B12D8A64E9002DB63F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = E24EA38E2D8A64E7002DB63F /* EclipseiPhone */;
+			targetProxy = E24EA3B02D8A64E9002DB63F /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		E24EA3B92D8A64E9002DB63F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2YBTPD32DW;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = EclipseiPhone/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Eclipse;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
+				INFOPLIST_KEY_UIMainStoryboardFile = Main;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mobleypro.eclipse.EclipseiPhone;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		E24EA3BA2D8A64E9002DB63F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2YBTPD32DW;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = EclipseiPhone/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Eclipse;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
+				INFOPLIST_KEY_UIMainStoryboardFile = Main;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mobleypro.eclipse.EclipseiPhone;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		E24EA3BB2D8A64E9002DB63F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		E24EA3BC2D8A64E9002DB63F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		E24EA3BE2D8A64E9002DB63F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2YBTPD32DW;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mobleypro.eclipse.EclipseiPhoneTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/EclipseiPhone.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/EclipseiPhone";
+			};
+			name = Debug;
+		};
+		E24EA3BF2D8A64E9002DB63F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2YBTPD32DW;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mobleypro.eclipse.EclipseiPhoneTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/EclipseiPhone.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/EclipseiPhone";
+			};
+			name = Release;
+		};
+		E24EA3C12D8A64E9002DB63F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2YBTPD32DW;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mobleypro.eclipse.EclipseiPhoneUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = EclipseiPhone;
+			};
+			name = Debug;
+		};
+		E24EA3C22D8A64E9002DB63F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2YBTPD32DW;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mobleypro.eclipse.EclipseiPhoneUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = EclipseiPhone;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		E24EA38A2D8A64E7002DB63F /* Build configuration list for PBXProject "EclipseiPhone" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E24EA3BB2D8A64E9002DB63F /* Debug */,
+				E24EA3BC2D8A64E9002DB63F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		E24EA3B82D8A64E9002DB63F /* Build configuration list for PBXNativeTarget "EclipseiPhone" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E24EA3B92D8A64E9002DB63F /* Debug */,
+				E24EA3BA2D8A64E9002DB63F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		E24EA3BD2D8A64E9002DB63F /* Build configuration list for PBXNativeTarget "EclipseiPhoneTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E24EA3BE2D8A64E9002DB63F /* Debug */,
+				E24EA3BF2D8A64E9002DB63F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		E24EA3C02D8A64E9002DB63F /* Build configuration list for PBXNativeTarget "EclipseiPhoneUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E24EA3C12D8A64E9002DB63F /* Debug */,
+				E24EA3C22D8A64E9002DB63F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = E24EA3872D8A64E7002DB63F /* Project object */;
+}
