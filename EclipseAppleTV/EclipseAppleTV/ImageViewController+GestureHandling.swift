@@ -43,7 +43,7 @@ extension ImageViewController {
             }
         }
         
-        // Handle right/left/down clicks in fullscreen mode
+        // Handle right/left/down/select clicks in fullscreen mode
         if !isInGridMode {
             for press in presses {
                 if press.type == .rightArrow {
@@ -54,6 +54,9 @@ extension ImageViewController {
                     return
                 } else if press.type == .downArrow {
                     handleDownPress()
+                    return
+                } else if press.type == .select {
+                    handleCenterSelectPress()
                     return
                 }
             }
@@ -133,6 +136,34 @@ extension ImageViewController {
         
         // Toggle player controls visibility
         togglePlayerControls()
+    }
+    
+    @objc func handleCenterSelectPress() {
+        logger.debug("Center select button pressed")
+        
+        // Only handle center select for video content in fullscreen mode
+        guard !isInGridMode && isVideo else { return }
+        
+        // Toggle video playback (same logic as handlePlayerSingleTap)
+        if let player = playerView.player {
+            if player.rate > 0 {
+                player.pause()
+                logger.debug("Video paused via center select button")
+                
+                // Show playback controls when paused and cancel auto-hide timer
+                playerView.showsPlaybackControls = true
+                playerControlsAutoHideTimer?.invalidate()
+                playerControlsAutoHideTimer = nil
+            } else {
+                player.play()
+                logger.debug("Video resumed via center select button")
+                
+                // Hide playback controls when playing starts
+                playerView.showsPlaybackControls = false
+                playerControlsAutoHideTimer?.invalidate()
+                playerControlsAutoHideTimer = nil
+            }
+        }
     }
     
     // MARK: - UIGestureRecognizerDelegate

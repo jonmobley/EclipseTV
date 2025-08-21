@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		E2DFA74E2DDED07100702EFF /* video1.mov in Resources */ = {isa = PBXBuildFile; fileRef = E2DFA74D2DDED07100702EFF /* video1.mov */; };
+		E2A9294F2E5750800056C5F9 /* video1.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = E2A9294E2E5750800056C5F9 /* video1.mp4 */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -31,7 +31,7 @@
 		E24EA2CE2D89ED30002DB63F /* EclipseAppleTV.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = EclipseAppleTV.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E24EA2E12D89ED31002DB63F /* EclipseAppleTVTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = EclipseAppleTVTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		E24EA2EB2D89ED31002DB63F /* EclipseAppleTVUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = EclipseAppleTVUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		E2DFA74D2DDED07100702EFF /* video1.mov */ = {isa = PBXFileReference; lastKnownFileType = video.quicktime; path = video1.mov; sourceTree = "<group>"; };
+		E2A9294E2E5750800056C5F9 /* video1.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file; path = video1.mp4; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -80,7 +80,7 @@
 		E24689602DDE66E0000E36B4 /* Videos */ = {
 			isa = PBXGroup;
 			children = (
-				E2DFA74D2DDED07100702EFF /* video1.mov */,
+				E2A929502E5751EA0056C5F9 /* Loop */,
 			);
 			path = Videos;
 			sourceTree = "<group>";
@@ -112,6 +112,14 @@
 				E24EA2EB2D89ED31002DB63F /* EclipseAppleTVUITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		E2A929502E5751EA0056C5F9 /* Loop */ = {
+			isa = PBXGroup;
+			children = (
+				E2A9294E2E5750800056C5F9 /* video1.mp4 */,
+			);
+			path = Loop;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -234,7 +242,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				E2DFA74E2DDED07100702EFF /* video1.mov in Resources */,
+				E2A9294F2E5750800056C5F9 /* video1.mp4 in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

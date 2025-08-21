@@ -27,6 +27,15 @@ extension ImageViewController: UICollectionViewDataSource, UICollectionViewDeleg
             // Configure cell with media item
             configureThumbnailCell(cell, with: mediaItem, at: indexPath)
             
+            // CRITICAL FIX: Set the selected state based on move mode
+            if isMoveMode && indexPath == movingItemIndexPath {
+                // This is the item being moved - keep it selected
+                cell.isSelected = true
+            } else {
+                // All other cells should not be selected
+                cell.isSelected = false
+            }
+            
             return cell
         }
     }
@@ -85,8 +94,23 @@ extension ImageViewController: UICollectionViewDataSource, UICollectionViewDeleg
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         dataSource.debugPrint() // TEMPORARY: Remove after testing
         
-        // Ignore selection events in move mode or when ignoring
-        if isMoveMode || isIgnoringSelectionEvents {
+        // In move mode, finish the move when selecting an item
+        if isMoveMode {
+            // If we select the same item we're moving, end move mode
+            if indexPath == movingItemIndexPath {
+                endMoveMode()
+            } else {
+                // Otherwise, move the item to the new position
+                if let sourceIndex = movingItemIndex {
+                    moveItemToPosition(from: sourceIndex, to: indexPath.item)
+                    endMoveMode()
+                }
+            }
+            return
+        }
+        
+        // Ignore selection events when ignoring
+        if isIgnoringSelectionEvents {
             return
         }
         
@@ -98,6 +122,19 @@ extension ImageViewController: UICollectionViewDataSource, UICollectionViewDeleg
     }
     
     func collectionView(_ collectionView: UICollectionView, willDisplay cell: UICollectionViewCell, forItemAt indexPath: IndexPath) {
+        // CRITICAL FIX: Ensure proper selection state when cells become visible
+        if let thumbnailCell = cell as? ImageThumbnailCell {
+            if isMoveMode && indexPath == movingItemIndexPath {
+                // This is the item being moved - ensure it stays selected
+                thumbnailCell.isSelected = true
+                thumbnailCell.updateVisualEffects()
+            } else {
+                // All other cells should not be selected
+                thumbnailCell.isSelected = false
+                thumbnailCell.updateVisualEffects()
+            }
+        }
+        
         // Preload images and videos for visible cells and their neighbors
         let preloadRange = 2 // Number of cells to preload on each side
         

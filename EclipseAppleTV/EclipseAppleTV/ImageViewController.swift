@@ -563,22 +563,57 @@ class ImageViewController: ManagedViewController, ConnectionManagerDelegate, UIG
         
         // Only handle grid focus changes
         guard isInGridMode,
-              !isMoveMode,  // Don't interfere with move mode
               gridView.alpha == 1,  // Don't interfere during transitions
               let nextCell = context.nextFocusedItem as? UICollectionViewCell,
-              let indexPath = gridView.indexPath(for: nextCell) else {
+              let nextIndexPath = gridView.indexPath(for: nextCell) else {
             return
         }
+        
+        // CRITICAL FIX FOR MOVE MODE: Handle selection differently in move mode
+        if isMoveMode {
+            logger.debug("🔊 [FOCUS] In move mode - handling focus change specially")
+            
+            // Get the previously focused cell's index path
+            if let previousCell = context.previouslyFocusedItem as? UICollectionViewCell,
+               let previousIndexPath = gridView.indexPath(for: previousCell) {
+                
+                // If the previously focused cell was our moving item, update its position
+                if previousIndexPath == movingItemIndexPath {
+                    // Update the moving item's index path to the new position
+                    movingItemIndexPath = nextIndexPath
+                    movingItemIndex = nextIndexPath.item
+                    
+                    // Clear selection from the old cell
+                    if let oldCell = previousCell as? ImageThumbnailCell {
+                        oldCell.isSelected = false
+                        oldCell.updateVisualEffects()
+                    }
+                    
+                    // Apply selection to the new cell
+                    if let newCell = nextCell as? ImageThumbnailCell {
+                        newCell.isSelected = true
+                        newCell.updateVisualEffects()
+                    }
+                    
+                    logger.debug("🔊 [FOCUS] Updated moving item position to index: \(nextIndexPath.item)")
+                }
+            }
+            
+            // Don't update SimpleSelectionManager in move mode
+            return
+        }
+        
+        // NORMAL MODE: Handle selection normally when not in move mode
         
         // CRITICAL: If we already have a selection that matches the focused item, don't change it
         // This prevents interference during grid view transitions
         if let currentSelection = simpleSelectionManager.currentSelection,
-           currentSelection == indexPath {
-            logger.debug("🔊 [FOCUS] Focus matches current selection (\(indexPath.item)) - no action needed")
+           currentSelection == nextIndexPath {
+            logger.debug("🔊 [FOCUS] Focus matches current selection (\(nextIndexPath.item)) - no action needed")
             return
         }
         
-        logger.debug("🔊 [FOCUS] Grid focus change to index: \(indexPath.item)")
+        logger.debug("🔊 [FOCUS] Grid focus change to index: \(nextIndexPath.item)")
         
         // Cancel any pending focus debounce timer
         focusDebounceTimer?.invalidate()
@@ -586,7 +621,7 @@ class ImageViewController: ManagedViewController, ConnectionManagerDelegate, UIG
         // CRITICAL: Clear the previous selection immediately to prevent dual blue strokes
         // This ensures only one blue outline is visible at any time
         if let currentSelection = simpleSelectionManager.currentSelection,
-           currentSelection != indexPath {
+           currentSelection != nextIndexPath {
             // Immediately clear the previous selection's visual state
             if let previousCell = gridView.cellForItem(at: currentSelection) as? ImageThumbnailCell {
                 previousCell.isSelected = false
@@ -600,10 +635,10 @@ class ImageViewController: ManagedViewController, ConnectionManagerDelegate, UIG
             guard let self = self else { return }
             
             // The selection manager will properly clear previous selections and set new ones
-            self.simpleSelectionManager.selectItem(at: indexPath)
+            self.simpleSelectionManager.selectItem(at: nextIndexPath)
             
             // Preload the currently focused item for smooth transitions
-            self.preloadFocusedItem(at: indexPath.item)
+            self.preloadFocusedItem(at: nextIndexPath.item)
         }
     }
     
@@ -703,6 +738,8 @@ class ImageViewController: ManagedViewController, ConnectionManagerDelegate, UIG
     func loadVideosFromBundle() {
         guard let videosURL = Bundle.main.resourceURL?.appendingPathComponent("Videos") else { return }
         let fileManager = FileManager.default
+        
+        // Load videos from main Videos folder
         print("[DEBUG] Looking for videos in: \(videosURL.path)")
         if let files = try? fileManager.contentsOfDirectory(at: videosURL, includingPropertiesForKeys: nil) {
             for file in files {
@@ -716,6 +753,23 @@ class ImageViewController: ManagedViewController, ConnectionManagerDelegate, UIG
             }
         } else {
             print("[DEBUG] No files found in Videos folder")
+        }
+        
+        // Also load videos from Videos/Loop subfolder
+        let loopURL = videosURL.appendingPathComponent("Loop")
+        print("[DEBUG] Looking for videos in Loop folder: \(loopURL.path)")
+        if let loopFiles = try? fileManager.contentsOfDirectory(at: loopURL, includingPropertiesForKeys: nil) {
+            for file in loopFiles {
+                let ext = file.pathExtension.lowercased()
+                print("[DEBUG] Found file in Videos/Loop: \(file.lastPathComponent)")
+                if ext == "mp4" || ext == "mov" {
+                    let path = file.path
+                    print("[DEBUG] Adding loop video to dataSource: \(path)")
+                    dataSource.addMedia(at: path)
+                }
+            }
+        } else {
+            print("[DEBUG] No files found in Videos/Loop folder")
         }
     }
 
@@ -936,13 +990,18 @@ extension ImageViewController {
     }
     
     func getVideoSetting(for videoPath: String, setting: String) -> Bool {
-        // Default settings: Audio On (not muted), Loop Off
+        // Default settings: Audio On (not muted), Loop Off (except videos in Loop folder)
         let defaultValue: Bool
         
         if setting == "mute" {
             defaultValue = false  // Audio on by default (not muted)
         } else if setting == "loop" {
-            defaultValue = false  // Not looping by default
+            // Special case: videos in Loop folder should loop by default
+            if videoPath.contains("/Loop/") {
+                defaultValue = true  // Loop videos in Loop folder by default
+            } else {
+                defaultValue = false  // Other videos don't loop by default
+            }
         } else {
             defaultValue = false  // Default fallback
         }

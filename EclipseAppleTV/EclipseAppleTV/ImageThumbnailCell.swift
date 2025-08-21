@@ -109,6 +109,7 @@ class ImageThumbnailCell: UICollectionViewCell {
     // Add these new properties for async loading:
     private var currentLoadingTask: Task<Void, Never>?
     private var currentItemPath: String?
+    private var currentTaskID: UUID?
     
     // MARK: - Initialization
     
@@ -369,6 +370,7 @@ class ImageThumbnailCell: UICollectionViewCell {
         // Reset UI state
         currentImage = nil
         currentItemPath = nil
+        currentTaskID = nil
         videoIndicator.isHidden = true
         durationBackground.isHidden = true
         durationLabel.isHidden = true
@@ -386,7 +388,9 @@ class ImageThumbnailCell: UICollectionViewCell {
         // Cancel previous loading task
         currentLoadingTask?.cancel()
         
-        // Set the current item path for validation
+        // Generate unique task ID and set current item path for validation
+        let taskID = UUID()
+        currentTaskID = taskID
         currentItemPath = imagePath
         
         // Set initial state
@@ -406,8 +410,8 @@ class ImageThumbnailCell: UICollectionViewCell {
                 guard !Task.isCancelled else { return }
                 
                 await MainActor.run {
-                    // Only update if we're still showing the same item
-                    guard self.currentItemPath == imagePath else { return }
+                    // Only update if we're still showing the same item AND this is the current task
+                    guard self.currentItemPath == imagePath && self.currentTaskID == taskID else { return }
                     
                     if let image = image {
                         self.imageView.image = image
@@ -426,8 +430,8 @@ class ImageThumbnailCell: UICollectionViewCell {
                 guard !Task.isCancelled else { return }
                 
                 await MainActor.run {
-                    // Only update if we're still showing the same item
-                    guard self.currentItemPath == imagePath else { return }
+                    // Only update if we're still showing the same item AND this is the current task
+                    guard self.currentItemPath == imagePath && self.currentTaskID == taskID else { return }
                     
                     if let image = image {
                         self.imageView.image = image
@@ -483,7 +487,7 @@ class ImageThumbnailCell: UICollectionViewCell {
     
 
     
-    private func updateVisualEffects() {
+    internal func updateVisualEffects() {
         // Ensure we're on the main thread for UI updates
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
