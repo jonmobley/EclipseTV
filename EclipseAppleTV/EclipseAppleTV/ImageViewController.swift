@@ -353,32 +353,24 @@ class ImageViewController: ManagedViewController, ConnectionManagerDelegate, UIG
         // Configure player view before adding to view hierarchy
         playerView.view.translatesAutoresizingMaskIntoConstraints = false
         playerView.view.backgroundColor = .black
-        playerView.showsPlaybackControls = false
+        playerView.showsPlaybackControls = true  // Enable controls to allow remote control handling
         playerView.videoGravity = .resizeAspect
         
         // Add player view as child view controller
         addChild(playerView)
         view.addSubview(playerView.view)
         
-        // Setup player view constraints with lower priorities to avoid conflicts
-        let topConstraint = playerView.view.topAnchor.constraint(equalTo: view.topAnchor)
-        topConstraint.priority = UILayoutPriority(999)
+        // Use full screen constraints but with lower priority to avoid conflicts
+        let constraints = [
+            playerView.view.topAnchor.constraint(equalTo: view.topAnchor),
+            playerView.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            playerView.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            playerView.view.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ]
         
-        let leadingConstraint = playerView.view.leadingAnchor.constraint(equalTo: view.leadingAnchor)
-        leadingConstraint.priority = UILayoutPriority(999)
-        
-        let trailingConstraint = playerView.view.trailingAnchor.constraint(equalTo: view.trailingAnchor)
-        trailingConstraint.priority = UILayoutPriority(999)
-        
-        let bottomConstraint = playerView.view.bottomAnchor.constraint(equalTo: view.bottomAnchor)
-        bottomConstraint.priority = UILayoutPriority(999)
-        
-        NSLayoutConstraint.activate([
-            topConstraint,
-            leadingConstraint,
-            trailingConstraint,
-            bottomConstraint
-        ])
+        // Set lower priority to avoid conflicts with AVPlayerViewController's internal constraints
+        constraints.forEach { $0.priority = UILayoutPriority(999) }
+        NSLayoutConstraint.activate(constraints)
         
         // Complete the child view controller setup
         playerView.didMove(toParent: self)
@@ -634,8 +626,13 @@ class ImageViewController: ManagedViewController, ConnectionManagerDelegate, UIG
         focusDebounceTimer = Timer.scheduledTimer(withTimeInterval: 0.03, repeats: false) { [weak self] _ in
             guard let self = self else { return }
             
+            // CRITICAL: Synchronize data source with visual selection
+            self.dataSource.setCurrentIndex(nextIndexPath.item)
+            
             // The selection manager will properly clear previous selections and set new ones
             self.simpleSelectionManager.selectItem(at: nextIndexPath)
+            
+            self.logger.debug("🔄 [SYNC] Focus change synchronized - visual: \(nextIndexPath.item), data: \(self.dataSource.currentIndex)")
             
             // Preload the currently focused item for smooth transitions
             self.preloadFocusedItem(at: nextIndexPath.item)
@@ -900,6 +897,29 @@ class ImageViewController: ManagedViewController, ConnectionManagerDelegate, UIG
         self.isProcessingQueue = false
     }
     
+    // MARK: - Selection Synchronization
+    
+    /// Validates and fixes synchronization between visual selection and data source
+    private func validateSelectionSync() {
+        guard let visualSelection = simpleSelectionManager.currentSelection else {
+            logger.warning("🔴 [SYNC] No visual selection found")
+            return
+        }
+        
+        let dataIndex = dataSource.currentIndex
+        let visualIndex = visualSelection.item
+        
+        if dataIndex != visualIndex {
+            logger.warning("🔴 [SYNC] Selection desync detected! Data: \(dataIndex), Visual: \(visualIndex)")
+            
+            // Fix the synchronization by updating data source to match visual selection
+            dataSource.setCurrentIndex(visualIndex)
+            logger.debug("🔄 [SYNC] Fixed selection sync - updated data to match visual: \(visualIndex)")
+        } else {
+            logger.debug("✅ [SYNC] Selection is synchronized: \(visualIndex)")
+        }
+    }
+    
     // MARK: - Performance & Memory Management
     
     private func handleMemoryPressure(_ memInfo: PerformanceMonitor.MemoryInfo) {
@@ -1133,6 +1153,8 @@ extension ImageViewController: MediaDataSourceDelegate {
             // Use another async dispatch to ensure reload is complete
             DispatchQueue.main.async {
                 self.simpleSelectionManager.validateSelectionState()
+                // Also validate synchronization between visual and data selection
+                self.validateSelectionSync()
             }
             
             // TEMPORARILY DISABLED: Let setupViewModel handle empty state logic instead
@@ -1164,30 +1186,66 @@ extension ImageViewController: MediaDataSourceDelegate {
     
     func mediaData(_ dataSource: MediaDataSource, didRemoveItemAt index: Int) {
         DispatchQueue.main.async {
+            self.logger.debug("🗑️ Starting deletion process for index \(index)")
+            
+            // CRITICAL: Disable focus updates during deletion to prevent tvOS from interfering
+            self.gridView.remembersLastFocusedIndexPath = false
+            
             // Animate removal
             let indexPath = IndexPath(item: index, section: 0)
             self.gridView.performBatchUpdates({
                 self.gridView.deleteItems(at: [indexPath])
-            }) { _ in
-                // Select the item that moves into the deleted item's position
+            }) { completed in
+                // Handle selection after item deletion
+                self.logger.debug("🗑️ Collection view delete animation completed: \(completed)")
+                
                 if !dataSource.isEmpty {
                     let newSelectedIndex: Int
                     
                     if index >= dataSource.count {
-                        // Deleted the last item, select the new last item
+                        // Deleted the last item - select the new last item (previous item)
                         newSelectedIndex = dataSource.count - 1
+                        self.logger.debug("🗑️ Deleted last item at index \(index), selecting new last item at index \(newSelectedIndex)")
                     } else {
-                        // Item shifts into the deleted position, keep same index
+                        // Deleted a non-last item - keep the same index position
                         newSelectedIndex = index
+                        self.logger.debug("🗑️ Deleted middle item at index \(index), keeping selection at same position")
                     }
                     
-                    // Update data source current index to match UI selection
+                    self.logger.debug("🗑️ About to update selection - current focus: \(self.gridView.indexPathsForVisibleItems)")
+                    
+                    // Update data source to match UI selection
                     dataSource.setCurrentIndex(newSelectedIndex)
                     
-                    let newIndexPath = IndexPath(item: newSelectedIndex, section: 0)
-                    self.simpleSelectionManager.selectItem(at: newIndexPath)
-                    self.setNeedsFocusUpdate()
-                    self.updateFocusIfNeeded()
+                    // Clear any existing selection immediately to prevent conflicts
+                    self.simpleSelectionManager.clearSelection()
+                    
+                    // Use a longer delay and force layout completion
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        self.logger.debug("🗑️ Applying delayed selection to index \(newSelectedIndex)")
+                        
+                        // Force layout update before setting selection
+                        self.gridView.layoutIfNeeded()
+                        
+                        let newIndexPath = IndexPath(item: newSelectedIndex, section: 0)
+                        self.simpleSelectionManager.selectItem(at: newIndexPath)
+                        
+                        // Re-enable focus updates after selection is complete
+                        self.gridView.remembersLastFocusedIndexPath = true
+                        
+                        // Force focus update
+                        self.setNeedsFocusUpdate()
+                        self.updateFocusIfNeeded()
+                        
+                        // Validate selection synchronization after deletion
+                        self.validateSelectionSync()
+                        
+                        self.logger.debug("🗑️ Selection update complete - focus system re-enabled")
+                    }
+                } else {
+                    self.logger.debug("🗑️ Data source is empty after deletion")
+                    // Re-enable focus updates even if data source is empty
+                    self.gridView.remembersLastFocusedIndexPath = true
                 }
             }
         }

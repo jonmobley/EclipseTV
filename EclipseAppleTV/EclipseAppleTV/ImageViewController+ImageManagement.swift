@@ -87,8 +87,8 @@ extension ImageViewController {
                 self.setupPlayerView()
                 self.playerView.player = player
                 
-                // Ensure controls are hidden by default
-                self.playerView.showsPlaybackControls = false
+                // Let AVPlayerViewController handle controls naturally for better remote control support
+                // self.playerView.showsPlaybackControls = false
                 
                 // Add observer for playback end
                 self.addManagedObserver(for: .AVPlayerItemDidPlayToEndTime, object: player.currentItem) { [weak self] _ in
@@ -120,8 +120,8 @@ extension ImageViewController {
                 self.playerView.player = player
                 self.isVideo = true
                 
-                // Ensure controls are hidden by default
-                self.playerView.showsPlaybackControls = false
+                // Let AVPlayerViewController handle controls naturally for better remote control support
+                // self.playerView.showsPlaybackControls = false
                 
                 // Add observer for playback end
                 self.addManagedObserver(for: .AVPlayerItemDidPlayToEndTime, object: player.currentItem) { [weak self] _ in
@@ -419,7 +419,8 @@ extension ImageViewController {
             
             // Apply settings
             queuePlayer.isMuted = settings.isMuted
-            queuePlayer.rate = settings.playbackRate
+            // Note: Don't set rate directly here - let play() method handle playback start
+            // Setting rate directly can interfere with pause/play logic
             
             logger.debug("🔄 Created dual-item seamless looping player for: \(mediaItem.fileName)")
             
@@ -447,7 +448,8 @@ extension ImageViewController {
             
             // Apply settings
             player.isMuted = settings.isMuted
-            player.rate = settings.playbackRate
+            // Note: Don't set rate directly here - let play() method handle playback start
+            // Setting rate directly can interfere with pause/play logic
             
             // Clear any existing looper
             playerLooper = nil

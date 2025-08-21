@@ -8,15 +8,36 @@ extension ImageViewController {
     @objc func handleLongPress(_ gesture: UILongPressGestureRecognizer) {
         // Only trigger once when gesture begins
         if gesture.state == .began {
-            guard let cell = gesture.view as? ImageThumbnailCell else { return }
-            let index = cell.tag
+            guard let cell = gesture.view as? ImageThumbnailCell else { 
+                logger.warning("🔴 Long press gesture not on ImageThumbnailCell")
+                return 
+            }
             
-            guard index < dataSource.count else { return }
+            // CRITICAL: Get the actual index from collection view, not from cell.tag
+            // cell.tag can be stale due to cell reuse and async operations
+            guard let indexPath = gridView.indexPath(for: cell) else {
+                logger.warning("🔴 Could not find indexPath for cell in long press")
+                return
+            }
             
-            // Check if it's a video file
-            guard let imagePath = dataSource.getPath(at: index) else { return }
+            let index = indexPath.item
+            logger.debug("🔵 Long press detected on cell at index \(index) (cell.tag was \(cell.tag))")
+            
+            guard index < self.dataSource.count else { 
+                logger.warning("🔴 Long press index \(index) >= dataSource.count \(self.dataSource.count)")
+                return 
+            }
+            
+            // Check if it's a video file using the actual data source
+            guard let imagePath = self.dataSource.getPath(at: index) else { 
+                logger.warning("🔴 Could not get path for index \(index)")
+                return 
+            }
+            
             let url = URL(fileURLWithPath: imagePath)
             let isVideo = url.pathExtension.lowercased() == "mp4" || url.pathExtension.lowercased() == "mov"
+            
+            logger.debug("🔵 Long press on \(isVideo ? "video" : "image"): \(url.lastPathComponent)")
             
             if isVideo {
                 showVideoOptionsMenu(forVideoAt: index)

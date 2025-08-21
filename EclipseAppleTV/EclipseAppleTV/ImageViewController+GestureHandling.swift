@@ -43,7 +43,8 @@ extension ImageViewController {
             }
         }
         
-        // Handle right/left/down/select clicks in fullscreen mode
+        // Handle right/left/down clicks in fullscreen mode
+        // Note: Removed select button handling to let AVPlayerViewController handle it naturally
         if !isInGridMode {
             for press in presses {
                 if press.type == .rightArrow {
@@ -55,7 +56,8 @@ extension ImageViewController {
                 } else if press.type == .downArrow {
                     handleDownPress()
                     return
-                } else if press.type == .select {
+                } else if press.type == .select && !isVideo {
+                    // Only handle select for non-video content
                     handleCenterSelectPress()
                     return
                 }
@@ -75,7 +77,20 @@ extension ImageViewController {
                 if player.rate > 0 {
                     player.pause()
                 } else {
-                    player.play()
+                    // Get the current media item to check for custom playback rate
+                    if let currentPath = dataSource.getCurrentPath() {
+                        let mediaItem = MediaItem(path: currentPath)
+                        let settings = viewModel.getVideoSettings(for: mediaItem)
+                        
+                        // Apply custom playback rate if different from 1.0
+                        if settings.playbackRate != 1.0 {
+                            player.rate = settings.playbackRate
+                        } else {
+                            player.play()
+                        }
+                    } else {
+                        player.play()
+                    }
                 }
             }
         } else {
@@ -139,31 +154,17 @@ extension ImageViewController {
     }
     
     @objc func handleCenterSelectPress() {
-        logger.debug("Center select button pressed")
+        logger.debug("Center select button pressed (for non-video content)")
         
-        // Only handle center select for video content in fullscreen mode
-        guard !isInGridMode && isVideo else { return }
-        
-        // Toggle video playback (same logic as handlePlayerSingleTap)
-        if let player = playerView.player {
-            if player.rate > 0 {
-                player.pause()
-                logger.debug("Video paused via center select button")
-                
-                // Show playback controls when paused and cancel auto-hide timer
-                playerView.showsPlaybackControls = true
-                playerControlsAutoHideTimer?.invalidate()
-                playerControlsAutoHideTimer = nil
-            } else {
-                player.play()
-                logger.debug("Video resumed via center select button")
-                
-                // Hide playback controls when playing starts
-                playerView.showsPlaybackControls = false
-                playerControlsAutoHideTimer?.invalidate()
-                playerControlsAutoHideTimer = nil
-            }
+        // This method is now only called for non-video content
+        // Video playback is handled by AVPlayerViewController's built-in remote control
+        guard !isInGridMode && !isVideo else { 
+            logger.debug("Ignoring center select - not applicable (isInGridMode: \(self.isInGridMode), isVideo: \(self.isVideo))")
+            return 
         }
+        
+        // Handle center select for images or other non-video content
+        logger.debug("Center select pressed on image - could implement image-specific actions here")
     }
     
     // MARK: - UIGestureRecognizerDelegate
@@ -246,136 +247,24 @@ extension ImageViewController {
         return true
     }
 
-    // Add gesture recognizers for single/double tap on playerView
+    // Setup player view gestures - now minimal to let AVPlayerViewController handle most interactions
     func setupPlayerViewGestures() {
-        // Single tap: play/pause
-        let singleTap = UITapGestureRecognizer(target: self, action: #selector(handlePlayerSingleTap))
-        singleTap.numberOfTapsRequired = 1
-        // Double tap: restart video
-        let doubleTap = UITapGestureRecognizer(target: self, action: #selector(handlePlayerDoubleTap))
-        doubleTap.numberOfTapsRequired = 2
-        // Ensure single tap waits for double tap to fail
-        singleTap.require(toFail: doubleTap)
-        playerView.view.addGestureRecognizer(doubleTap)
-        playerView.view.addGestureRecognizer(singleTap)
+        // Let AVPlayerViewController handle most gestures including play/pause
+        // We only add custom gestures if absolutely necessary
         
-        // Add pan gesture recognizer for scrubbing
-        let panGesture = UIPanGestureRecognizer(target: self, action: #selector(handlePlayerPan(_:)))
-        playerView.view.addGestureRecognizer(panGesture)
+        // Note: Removed custom tap and pan gestures to avoid conflicts with AVPlayerViewController's
+        // built-in remote control handling. The AVPlayerViewController should handle:
+        // - Play/pause via center button
+        // - Scrubbing via touch surface
+        // - Transport controls
         
-        // Set delegate for player view gestures
-        singleTap.delegate = self
-        doubleTap.delegate = self
-        panGesture.delegate = self
+        logger.debug("Player view gestures setup - using AVPlayerViewController defaults")
     }
 
-    @objc func handlePlayerSingleTap() {
-        if !isInGridMode && isVideo, let player = playerView.player {
-            if player.rate > 0 {
-                player.pause()
-                
-                // Show playback controls when paused and cancel auto-hide timer
-                playerView.showsPlaybackControls = true
-                playerControlsAutoHideTimer?.invalidate()
-                playerControlsAutoHideTimer = nil
-            } else {
-                player.play()
-                
-                // Hide playback controls when playing starts
-                playerView.showsPlaybackControls = false
-                playerControlsAutoHideTimer?.invalidate()
-                playerControlsAutoHideTimer = nil
-            }
-        }
-    }
-
-    @objc func handlePlayerDoubleTap() {
-        if !isInGridMode && isVideo, let player = playerView.player {
-            player.seek(to: .zero)
-            player.play()
-        }
-    }
+    // Removed handlePlayerSingleTap and handlePlayerDoubleTap methods
+    // These are now handled by AVPlayerViewController's built-in remote control support
     
-    @objc func handlePlayerPan(_ gesture: UIPanGestureRecognizer) {
-        guard !isInGridMode && isVideo, let player = playerView.player else { return }
-        
-        // Only enable scrubbing when video is paused
-        if player.rate > 0 {
-            return
-        }
-        
-        switch gesture.state {
-        case .began:
-            // Start scrubbing
-            isVideoScrubbing = true
-            
-            // Show playback controls while scrubbing
-            playerView.showsPlaybackControls = true
-            
-            // Initialize haptic feedback
-            // UISelectionFeedbackGenerator is not available on tvOS, so we'll use a custom approach
-            prepareFeedback()
-            
-            // Update on-screen time display
-            updateTimeDisplay(for: player)
-            
-        case .changed:
-            guard let duration = player.currentItem?.duration, duration.isValid && !duration.isIndefinite else { return }
-            
-            // Get translation in X direction
-            let translation = gesture.translation(in: playerView.view)
-            
-            // Reset translation to avoid accumulation
-            gesture.setTranslation(.zero, in: playerView.view)
-            
-            // Calculate scrubbing speed and adjust based on gesture velocity
-            let viewWidth = playerView.view.bounds.width
-            let normalizedTranslation = translation.x / viewWidth
-            
-            // Get the velocity to determine scrubbing speed
-            let velocity = abs(gesture.velocity(in: playerView.view).x)
-            let velocityFactor = min(velocity / 500, 3.0) // Cap at 3x speed
-            
-            // Base time change is 5 seconds per full width
-            // Adjust based on velocity for more precise control
-            let baseTimeChange = normalizedTranslation * 5.0
-            let timeChange = baseTimeChange * (1.0 + velocityFactor)
-            
-            // Get current time and calculate new time with bounds checking
-            let currentTime = player.currentTime()
-            var newTime = currentTime.seconds + Double(timeChange)
-            newTime = max(0, min(newTime, duration.seconds))
-            
-            // Create new CMTime and seek
-            let seekTime = CMTime(seconds: newTime, preferredTimescale: currentTime.timescale)
-            player.seek(to: seekTime, toleranceBefore: .zero, toleranceAfter: .zero)
-            
-            // Provide haptic feedback at regular intervals
-            if abs(timeChange) > 1.0 {
-                provideFeedback()
-            }
-            
-            // Update time display
-            updateTimeDisplay(for: player)
-            
-        case .ended, .cancelled, .failed:
-            // End scrubbing
-            isVideoScrubbing = false
-            
-            // Hide playback controls with a delay
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                if !self.isVideoScrubbing {
-                    self.playerView.showsPlaybackControls = false
-                }
-            }
-            
-            // Release haptic feedback resources
-            cleanupFeedback()
-            
-        default:
-            break
-        }
-    }
+    // Removed handlePlayerPan method - scrubbing is now handled by AVPlayerViewController's built-in support
     
     /// Updates the on-screen time display for the given player
     private func updateTimeDisplay(for player: AVPlayer) {

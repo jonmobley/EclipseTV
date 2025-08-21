@@ -85,8 +85,10 @@ class MediaDataSource: ObservableObject {
         
         // Adjust current index
         if currentIndex >= count {
+            // If current index is now beyond the array, set it to the last valid index
             currentIndex = max(0, count - 1)
         } else if index <= currentIndex && currentIndex > 0 {
+            // If we deleted an item at or before the current index, shift current index back
             currentIndex -= 1
         }
         
