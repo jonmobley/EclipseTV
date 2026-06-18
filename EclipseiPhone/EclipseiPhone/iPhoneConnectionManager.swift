@@ -11,12 +11,18 @@ protocol iPhoneConnectionManagerDelegate: AnyObject {
     func connectionManager(_ manager: iPhoneConnectionManager, didUpdateVideoTransferProgress progress: Double)
     func connectionManager(_ manager: iPhoneConnectionManager, didUpdateImageTransferProgress progress: Double)
     func connectionManager(_ manager: iPhoneConnectionManager, didReceiveMoveModeState enabled: Bool)
+    func connectionManager(_ manager: iPhoneConnectionManager, didFailTransferIsVideo isVideo: Bool, error: Error?)
 }
 
 class iPhoneConnectionManager: NSObject {
     // MARK: - Properties
     
     private let serviceType = "eclipse-share" // MUST MATCH EXACTLY on both devices
+
+    /// Shared handshake token used to authenticate with the Apple TV. MUST MATCH the
+    /// value in the Apple TV app's `ConnectionManager`.
+    private let handshakeToken = "EclipseShare/v1"
+
     private(set) var session: MCSession? // Allow read-only access from outside
     private var browser: MCNearbyServiceBrowser?
     private let peerID: MCPeerID
@@ -44,9 +50,9 @@ class iPhoneConnectionManager: NSObject {
     override init() {
         // Log the device name we're using
         let deviceName = UIDevice.current.name
-        print("📱 Initializing iPhoneConnectionManager with device name: \(deviceName)")
         self.peerID = MCPeerID(displayName: deviceName)
         super.init()
+        logger.debug("Initializing iPhoneConnectionManager with device name: \(deviceName, privacy: .public)")
         setupMultipeerConnectivity()
         
         // Register for notifications
@@ -74,10 +80,10 @@ class iPhoneConnectionManager: NSObject {
     // MARK: - Notification Handlers
     
     @objc private func handleAppDidBecomeActive() {
-        print("📱 App became active, ensuring connection")
+        logger.debug("App became active, ensuring connection")
         // If we have a peer but aren't connected, try to reconnect
         if let selectedPeer = discoveredPeers.first, session?.connectedPeers.isEmpty == true {
-            print("🔄 Trying to reconnect to \(selectedPeer.displayName)")
+            logger.debug("Trying to reconnect to \(selectedPeer.displayName, privacy: .public)")
             invitePeer(selectedPeer)
         } else if discoveredPeers.isEmpty && !isBrowsing {
             // If we don't have any discovered peers, start browsing
@@ -88,18 +94,17 @@ class iPhoneConnectionManager: NSObject {
     // MARK: - Multipeer Connectivity
     
     private func setupMultipeerConnectivity() {
-        print("🔄 Setting up Multipeer Connectivity with service type: \(serviceType)")
-        print("🔧 Peer ID: \(peerID.displayName)")
+        logger.debug("Setting up Multipeer Connectivity with service type: \(self.serviceType, privacy: .public)")
+        logger.debug("Peer ID: \(self.peerID.displayName, privacy: .public)")
         
-        // Create session with optimized settings for better reliability
-        session = MCSession(peer: peerID, securityIdentity: nil, encryptionPreference: .optional)
+        // Create session with required encryption for all peer-to-peer traffic
+        session = MCSession(peer: peerID, securityIdentity: nil, encryptionPreference: .required)
         session?.delegate = self
         
         // Create browser
-        print("🔍 Creating browser for service: \(serviceType)")
         browser = MCNearbyServiceBrowser(peer: peerID, serviceType: serviceType)
         browser?.delegate = self
-        print("✅ Browser created successfully")
+        logger.debug("Browser created successfully")
     }
     
     // MARK: - Public Methods
@@ -109,13 +114,11 @@ class iPhoneConnectionManager: NSObject {
     }
     
     func startBrowsing() {
-        print("🔍 Starting browsing for peers")
-        print("🔧 iOS Version: \(UIDevice.current.systemVersion)")
-        print("🔧 Device Model: \(UIDevice.current.model)")
+        logger.debug("Starting browsing for peers")
         
         // Check if browser exists
         if browser == nil {
-            print("❌ Browser is nil! Recreating...")
+            logger.error("Browser is nil! Recreating...")
             setupMultipeerConnectivity()
         }
         
@@ -131,21 +134,10 @@ class iPhoneConnectionManager: NSObject {
     }
     
     private func verifyBrowsing() {
-        print("🔍 Verifying browsing status after 2 seconds...")
-        print("🔍 isBrowsing flag: \(isBrowsing)")
-        print("🔍 Browser exists: \(browser != nil)")
-        print("🔍 Discovered peers count: \(discoveredPeers.count)")
-        if let browser = browser {
-            print("🔍 Browser peer: \(browser.myPeerID.displayName)")
-            print("🔍 Browser service type: \(browser.serviceType)")
-        }
-        for (index, peer) in discoveredPeers.enumerated() {
-            print("🔍 Peer \(index): \(peer.displayName)")
-        }
+        logger.debug("Verifying browsing status: isBrowsing=\(self.isBrowsing), browserExists=\(self.browser != nil), peers=\(self.discoveredPeers.count)")
     }
     
     func stopBrowsing() {
-        print("🛑 Stopping browsing")
         browser?.stopBrowsingForPeers()
         isBrowsing = false
         logger.info("Stopped browsing for peers")
@@ -153,31 +145,30 @@ class iPhoneConnectionManager: NSObject {
     
     func invitePeer(_ peer: MCPeerID) {
         guard let session = session else {
-            print("❌ Cannot invite peer: session is nil")
+            logger.error("Cannot invite peer: session is nil")
             return
         }
         
         // Don't invite if we're already connected to this peer
         if session.connectedPeers.contains(peer) {
-            print("✅ Already connected to peer: \(peer.displayName)")
+            logger.debug("Already connected to peer: \(peer.displayName, privacy: .public)")
             return
         }
         
         // Don't invite if we're currently connecting to this peer
         if session.connectedPeers.isEmpty == false {
-            print("🔄 Already connecting/connected to another peer")
+            logger.debug("Already connecting/connected to another peer")
             return
         }
         
-        print("📨 Inviting peer: \(peer.displayName)")
-        // Increase timeout to 60 seconds and provide discovery info
-        let context = "iPhone-Connection".data(using: .utf8)
+        // Increase timeout to 60 seconds and present the shared handshake token so the
+        // Apple TV can authenticate this client.
+        let context = "\(handshakeToken)-iPhone".data(using: .utf8)
         browser?.invitePeer(peer, to: session, withContext: context, timeout: 60)
         logger.info("Invited peer: \(peer.displayName)")
     }
     
     func disconnect() {
-        print("🔌 Disconnecting session")
         session?.disconnect()
         logger.info("Disconnected session")
     }
@@ -204,7 +195,7 @@ class iPhoneConnectionManager: NSObject {
                 
                 if let error = error {
                     self.logger.error("Image transfer failed: \(error.localizedDescription)")
-                    self.delegate?.connectionManager(self, didUpdateImageTransferProgress: 0)
+                    self.delegate?.connectionManager(self, didFailTransferIsVideo: false, error: error)
                 } else {
                     self.logger.info("Image transfer completed successfully.")
                     self.delegate?.connectionManager(self, didUpdateImageTransferProgress: 100)
@@ -270,7 +261,8 @@ class iPhoneConnectionManager: NSObject {
         if let customThumbnailPath = UserDefaults.standard.string(forKey: "customThumbnail_\(fileName)"),
            FileManager.default.fileExists(atPath: customThumbnailPath) {
             
-            // Send custom thumbnail first
+            // Send custom thumbnail first, then send the video only once the thumbnail
+            // transfer completes so the Apple TV always has the thumbnail before the video.
             let thumbnailURL = URL(fileURLWithPath: customThumbnailPath)
             let thumbnailFileName = "thumbnail_\(fileName)"
             
@@ -283,9 +275,28 @@ class iPhoneConnectionManager: NSObject {
                 // Clean up the temporary thumbnail file
                 try? FileManager.default.removeItem(at: thumbnailURL)
                 UserDefaults.standard.removeObject(forKey: "customThumbnail_\(fileName)")
+                
+                // Now send the video itself
+                DispatchQueue.main.async {
+                    self?.beginVideoResourceSend(videoURL, session: session, peer: peer)
+                }
             }
+        } else {
+            // No custom thumbnail; send the video immediately
+            beginVideoResourceSend(videoURL, session: session, peer: peer)
+        }
+        
+        return true
+    }
+
+    /// Performs the actual video resource transfer and wires up progress observation.
+    private func beginVideoResourceSend(_ videoURL: URL, session: MCSession, peer: MCPeerID) {
+        guard !isTransferCancelled else {
+            logger.info("Video transfer cancelled before it began")
+            return
         }
 
+        let fileName = videoURL.lastPathComponent
         let progress = session.sendResource(at: videoURL, withName: fileName, toPeer: peer) { [weak self] error in
             DispatchQueue.main.async {
                 guard let self = self else { return }
@@ -296,7 +307,7 @@ class iPhoneConnectionManager: NSObject {
                 
                 if let error = error {
                     self.logger.error("Video transfer failed: \(error.localizedDescription)")
-                    self.delegate?.connectionManager(self, didUpdateVideoTransferProgress: 0)
+                    self.delegate?.connectionManager(self, didFailTransferIsVideo: true, error: error)
                 } else {
                     self.logger.info("Video transfer completed successfully.")
                     self.delegate?.connectionManager(self, didUpdateVideoTransferProgress: 100)
@@ -312,8 +323,6 @@ class iPhoneConnectionManager: NSObject {
             currentTransferTask = progress
             progress.addObserver(self, forKeyPath: #keyPath(Progress.fractionCompleted), options: .new, context: nil)
         }
-        
-        return true
     }
     
     // MARK: - Connection Retry Logic
@@ -323,7 +332,7 @@ class iPhoneConnectionManager: NSObject {
         retryTimer?.invalidate()
         
         guard retryCount < maxRetries else {
-            print("❌ Max retry attempts reached for peer: \(peer.displayName)")
+            logger.error("Max retry attempts reached for peer: \(peer.displayName, privacy: .public)")
             retryCount = 0
             return
         }
@@ -331,12 +340,12 @@ class iPhoneConnectionManager: NSObject {
         retryCount += 1
         let delay = TimeInterval(retryCount * 2) // Exponential backoff: 2s, 4s, 6s
         
-        print("⏱️ Scheduling reconnect attempt \(retryCount)/\(maxRetries) in \(delay)s")
+        logger.debug("Scheduling reconnect attempt \(self.retryCount)/\(self.maxRetries) in \(delay)s")
         
         retryTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
             guard let self = self else { return }
             
-            print("🔄 Retry attempt \(self.retryCount) to reconnect to \(peer.displayName)")
+            self.logger.debug("Retry attempt \(self.retryCount) to reconnect to \(peer.displayName, privacy: .public)")
             self.invitePeer(peer)
         }
     }
@@ -352,12 +361,6 @@ class iPhoneConnectionManager: NSObject {
 
 extension iPhoneConnectionManager: MCNearbyServiceBrowserDelegate {
     func browser(_ browser: MCNearbyServiceBrowser, foundPeer peerID: MCPeerID, withDiscoveryInfo info: [String : String]?) {
-        print("🔍 Found peer: \(peerID.displayName)")
-        if let info = info {
-            print("🔍 Discovery info: \(info)")
-        } else {
-            print("🔍 No discovery info provided")
-        }
         logger.info("Found peer: \(peerID.displayName)")
         
         // Track discovered peer
@@ -371,7 +374,6 @@ extension iPhoneConnectionManager: MCNearbyServiceBrowserDelegate {
     }
     
     func browser(_ browser: MCNearbyServiceBrowser, lostPeer peerID: MCPeerID) {
-        print("❌ Lost peer: \(peerID.displayName)")
         logger.info("Lost peer: \(peerID.displayName)")
         
         if let index = discoveredPeers.firstIndex(of: peerID) {
@@ -384,19 +386,18 @@ extension iPhoneConnectionManager: MCNearbyServiceBrowserDelegate {
     }
     
     func browser(_ browser: MCNearbyServiceBrowser, didNotStartBrowsingForPeers error: Error) {
-        print("❌ Failed to start browsing: \(error.localizedDescription)")
         logger.error("Failed to start browsing: \(error.localizedDescription)")
         
         // Handle specific error types and retry
         if error.localizedDescription.contains("busy") || error.localizedDescription.contains("in use") {
-            print("🔄 Browser service appears busy, waiting 10 seconds before retry")
+            logger.debug("Browser service appears busy, waiting 10 seconds before retry")
             DispatchQueue.main.asyncAfter(deadline: .now() + 10.0) { [weak self] in
                 if let self = self, !self.isBrowsing {
                     self.startBrowsing()
                 }
             }
         } else {
-            print("🔄 General browser error, retrying in 5 seconds")
+            logger.debug("General browser error, retrying in 5 seconds")
             DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) { [weak self] in
                 if let self = self, !self.isBrowsing {
                     self.startBrowsing()
@@ -410,7 +411,7 @@ extension iPhoneConnectionManager: MCNearbyServiceBrowserDelegate {
 
 extension iPhoneConnectionManager: MCSessionDelegate {
     func session(_ session: MCSession, peer peerID: MCPeerID, didChange state: MCSessionState) {
-        print("🔄 Peer \(peerID.displayName) changed state to: \(state.rawValue)")
+        logger.debug("Peer \(peerID.displayName, privacy: .public) changed state to: \(state.rawValue)")
         
         switch state {
         case .connected:
@@ -439,7 +440,6 @@ extension iPhoneConnectionManager: MCSessionDelegate {
             }
             
         @unknown default:
-            print("❓ Unknown session state: \(state.rawValue)")
             logger.error("Unknown session state: \(state.rawValue)")
         }
     }
@@ -447,16 +447,27 @@ extension iPhoneConnectionManager: MCSessionDelegate {
     func session(_ session: MCSession, didReceive data: Data, fromPeer peerID: MCPeerID) {
         // Check if this is a confirmation message
         if let message = String(data: data, encoding: .utf8) {
-            if message == "IMAGE_RECEIVED" {
-                print("📱 Received confirmation from Apple TV")
-                // Notify delegate that image was received by Apple TV
-                delegate?.connectionManager(self, didReceiveConfirmationFromPeer: peerID)
+            if message == "IMAGE_RECEIVED" || message == "VIDEO_RECEIVED" {
+                logger.debug("Received confirmation from Apple TV: \(message, privacy: .public)")
+                // Notify delegate that media was received by Apple TV
+                DispatchQueue.main.async {
+                    self.delegate?.connectionManager(self, didReceiveConfirmationFromPeer: peerID)
+                }
+                return
+            }
+
+            if message == "IMAGE_ERROR" || message == "VIDEO_ERROR" {
+                logger.debug("Received error from Apple TV: \(message, privacy: .public)")
+                let isVideo = (message == "VIDEO_ERROR")
+                DispatchQueue.main.async {
+                    self.delegate?.connectionManager(self, didFailTransferIsVideo: isVideo, error: nil)
+                }
                 return
             }
             
             // Handle move mode status messages
             if message == "MOVE_MODE_ENABLED" {
-                print("📱 Apple TV entered move mode")
+                logger.debug("Apple TV entered move mode")
                 isAppleTVInMoveMode = true
                 DispatchQueue.main.async {
                     self.delegate?.connectionManager(self, didReceiveMoveModeState: true)
@@ -465,7 +476,7 @@ extension iPhoneConnectionManager: MCSessionDelegate {
             }
             
             if message == "MOVE_MODE_DISABLED" {
-                print("📱 Apple TV exited move mode")
+                logger.debug("Apple TV exited move mode")
                 isAppleTVInMoveMode = false
                 DispatchQueue.main.async {
                     self.delegate?.connectionManager(self, didReceiveMoveModeState: false)
@@ -475,7 +486,7 @@ extension iPhoneConnectionManager: MCSessionDelegate {
         }
         
         // Handle other data types if needed
-        print("📱 Received data from peer: \(peerID.displayName)")
+        logger.debug("Received data from peer: \(peerID.displayName, privacy: .public)")
     }
     
     func session(_ session: MCSession, didReceive stream: InputStream, withName streamName: String, fromPeer peerID: MCPeerID) {

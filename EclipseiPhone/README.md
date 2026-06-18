@@ -125,10 +125,10 @@ Build and run on connected device
 
 ### **Core Components**
 ```swift
-iPhoneMainViewController     // Main UI controller
+iPhoneMainViewController     // Main UI controller (PHPickerViewController-based media selection)
 iPhoneConnectionManager     // Network communication
 MediaValidator             // File format validation
-ImagePreviewCell          // Media thumbnail display
+VideoThumbnailPreviewViewController  // Custom video thumbnail picker
 ```
 
 ### **Network Layer**
@@ -141,7 +141,7 @@ ImagePreviewCell          // Media thumbnail display
 ```
 Photo Library → Media Selection → Validation → Transfer → Apple TV
       ↓              ↓              ↓           ↓         ↓
-   PhotoKit    Collection View   Validator   MCSession  Display
+   PhotoKit    PHPickerViewController  Validator   MCSession  Display
 ```
 
 ## Development
@@ -152,7 +152,7 @@ EclipseiPhone/
 ├── iPhoneMainViewController.swift    # Main app interface
 ├── iPhoneConnectionManager.swift     # Network management
 ├── MediaValidator.swift              # File validation
-├── ImagePreviewCell.swift           # UI components
+├── VideoThumbnailPreviewViewController.swift  # Custom video thumbnail picker
 ├── AppDelegate.swift                # App lifecycle
 ├── SceneDelegate.swift              # Scene management
 ├── Assets.xcassets/                 # App icons and images

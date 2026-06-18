@@ -1,0 +1,225 @@
+// iPhoneMainViewController+MediaActions.swift
+import UIKit
+import PhotosUI
+import os
+
+// MARK: - Media Picking & Transfer Actions
+
+extension iPhoneMainViewController {
+
+    @objc func mediaPickerButtonTapped() {
+        guard let selectedPeer = selectedPeer, connectionManager.isConnectedToPeer(selectedPeer) else {
+            showTemporaryStatus("Please connect to Apple TV first")
+            return
+        }
+
+        let alertController = UIAlertController(title: nil, message: nil, preferredStyle: .actionSheet)
+
+        // Add Image option
+        alertController.addAction(UIAlertAction(title: "Image", style: .default) { [weak self] _ in
+            self?.showImagePicker()
+        })
+
+        // Add Video option
+        alertController.addAction(UIAlertAction(title: "Video", style: .default) { [weak self] _ in
+            self?.showVideoPicker()
+        })
+
+        // Add Cancel option
+        alertController.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+
+        // For iPad, we need to set the source view and rect
+        if let popoverController = alertController.popoverPresentationController {
+            popoverController.sourceView = mediaPickerButton
+            popoverController.sourceRect = mediaPickerButton.bounds
+        }
+
+        present(alertController, animated: true)
+    }
+
+    private func showImagePicker() {
+        // Keep the connection alive while the picker is presented
+        isShowingPicker = true
+        var config = PHPickerConfiguration()
+        config.selectionLimit = 1
+        config.filter = .images
+        let picker = PHPickerViewController(configuration: config)
+        picker.delegate = self
+        present(picker, animated: true)
+    }
+
+    private func showVideoPicker() {
+        // Keep the connection alive while the picker is presented
+        isShowingPicker = true
+        var config = PHPickerConfiguration()
+        config.selectionLimit = 1
+        config.filter = .videos
+        let picker = PHPickerViewController(configuration: config)
+        picker.delegate = self
+        present(picker, animated: true)
+    }
+
+    /// Copies a picked video into the app's temporary directory so it remains accessible
+    /// after the image picker delegate callback returns. Returns the local copy URL.
+    func copyPickedVideoToSandbox(_ sourceURL: URL) -> URL? {
+        let fileManager = FileManager.default
+        let ext = sourceURL.pathExtension.isEmpty ? "mov" : sourceURL.pathExtension
+        let destinationURL = fileManager.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension(ext)
+
+        do {
+            if fileManager.fileExists(atPath: destinationURL.path) {
+                try fileManager.removeItem(at: destinationURL)
+            }
+            try fileManager.copyItem(at: sourceURL, to: destinationURL)
+            return destinationURL
+        } catch {
+            logger.error("Failed to copy picked video to sandbox: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    @objc func cancelButtonTapped() {
+        // Cancel the current transfer
+        connectionManager.cancelCurrentTransfer()
+
+        // Reset UI
+        hideTransferUI()
+
+        // Show cancellation message
+        statusLabel.text = "Transfer cancelled"
+        UIView.animate(withDuration: 0.3) {
+            self.statusLabel.alpha = 1.0
+        } completion: { _ in
+            // Fade out the message after a delay
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                UIView.animate(withDuration: 0.3) {
+                    self.statusLabel.alpha = 0
+                }
+            }
+        }
+    }
+
+    private func showTransferUI() {
+        // Show initial status
+        statusLabel.text = "Preparing to send..."
+        UIView.animate(withDuration: 0.3) {
+            self.statusLabel.alpha = 1.0
+            self.cancelButton.alpha = 1.0
+            // Fade out connection status while transferring
+            self.connectionStatusContainer.alpha = 0.3
+            self.connectionStatusLabel.alpha = 0.3
+        }
+        cancelButton.isHidden = false
+
+        // Disable media picker button while sending
+        mediaPickerButton.isEnabled = false
+        mediaPickerButton.alpha = 0.5
+    }
+
+    func hideTransferUI() {
+        UIView.animate(withDuration: 0.3) {
+            self.statusLabel.alpha = 0
+            self.cancelButton.alpha = 0
+            // Restore connection status visibility
+            self.connectionStatusContainer.alpha = 1.0
+            self.connectionStatusLabel.alpha = 1.0
+        } completion: { _ in
+            self.cancelButton.isHidden = true
+            self.mediaPickerButton.isEnabled = true
+            self.mediaPickerButton.alpha = 1.0
+
+            // Clean up temp file when transfer UI is hidden
+            if let tempURL = self.currentTempFileURL {
+                self.cleanupTempFile(at: tempURL)
+                self.currentTempFileURL = nil
+            }
+        }
+    }
+
+    func sendMediaToAppleTV(_ mediaURL: URL) {
+        // Remove aspect ratio check: allow all videos
+        // Show transfer UI
+        showTransferUI()
+        // Send the media
+        let success = connectionManager.sendVideoData(mediaURL)
+        if !success {
+            // Handle failure
+            statusLabel.text = "Failed to send media"
+            hideTransferUI()
+        }
+    }
+
+    func sendImageToAppleTV(_ image: UIImage) {
+        guard selectedPeer != nil else { return }
+
+        // Show processing UI if image is large
+        let largestSide = max(image.size.width, image.size.height)
+        let isLargeImage = largestSide > 3840
+
+        if isLargeImage {
+            DispatchQueue.main.async {
+                self.statusLabel.text = "Processing image..."
+                self.statusLabel.alpha = 1.0
+                self.showTransferUI()
+                self.connectionActivityIndicator.startAnimating()
+            }
+        }
+
+        // Process image on background queue for large images
+        let processQueue = isLargeImage ? DispatchQueue.global(qos: .userInitiated) : DispatchQueue.main
+
+        processQueue.async {
+            // Save image to a temporary file
+            let tempDir = FileManager.default.temporaryDirectory
+            let fileName = "temp_image_\(UUID().uuidString).jpg"
+            let fileURL = tempDir.appendingPathComponent(fileName)
+
+            guard let imageData = image.jpegData(compressionQuality: 0.7) else {
+                DispatchQueue.main.async {
+                    self.showTemporaryStatus("Failed to prepare image for sending")
+                    self.hideTransferUI()
+                    self.connectionActivityIndicator.stopAnimating()
+                }
+                return
+            }
+
+            do {
+                try imageData.write(to: fileURL)
+            } catch {
+                DispatchQueue.main.async {
+                    self.showTemporaryStatus("Failed to save image for sending")
+                    self.hideTransferUI()
+                    self.connectionActivityIndicator.stopAnimating()
+                }
+                return
+            }
+
+            DispatchQueue.main.async {
+                // Store temp file URL for cleanup
+                self.currentTempFileURL = fileURL
+
+                // Update status for sending
+                if isLargeImage {
+                    self.statusLabel.text = "Sending optimized image..."
+                } else {
+                    // Show transfer UI for smaller images
+                    self.showTransferUI()
+                    self.connectionActivityIndicator.startAnimating()
+                }
+
+                // Send the image as a resource
+                let success = self.connectionManager.sendImage(at: fileURL)
+                if !success {
+                    self.showTemporaryStatus("Failed to send image. Please try again.")
+                    self.hideTransferUI()
+                    self.connectionActivityIndicator.stopAnimating()
+                    // Clean up temp file if sending failed
+                    self.cleanupTempFile(at: fileURL)
+                    self.currentTempFileURL = nil
+                }
+            }
+        }
+    }
+}

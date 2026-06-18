@@ -4,11 +4,17 @@ import AVFoundation
 
 /// Represents a media file (image or video) in the library
 struct MediaItem: Identifiable, Equatable, Codable {
-    let id = UUID()
+    /// Identity is derived from the file path so two items referring to the same file are
+    /// considered equal (and stable across encode/decode).
+    var id: String { path }
     let path: String
     let type: MediaType
     let dateAdded: Date
     let fileSize: Int64
+    
+    static func == (lhs: MediaItem, rhs: MediaItem) -> Bool {
+        return lhs.path == rhs.path
+    }
     
     /// Full initializer with all parameters
     init(path: String, type: MediaType, dateAdded: Date, fileSize: Int64) {
@@ -90,13 +96,13 @@ struct MediaItem: Identifiable, Equatable, Codable {
         let ext = url.pathExtension.lowercased()
         let type: MediaType
         
-        if ["mp4", "mov"].contains(ext) {
+        if ["mp4", "mov", "m4v"].contains(ext) {
             let duration = try await getVideoDuration(for: url)
             type = .video(duration: duration)
         } else if let format = MediaType.ImageFormat(rawValue: ext) {
             type = .image(format: format)
         } else {
-            throw MediaError.unsupportedFormat(extension: ext, supportedFormats: ["jpg", "png", "heic", "mp4", "mov"])
+            throw MediaError.unsupportedFormat(extension: ext, supportedFormats: ["jpg", "png", "heic", "mp4", "mov", "m4v"])
         }
         
         return MediaItem(path: path, type: type, dateAdded: dateAdded, fileSize: fileSize)

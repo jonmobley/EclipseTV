@@ -62,6 +62,22 @@ class ResourceManager {
         }
     }
     
+    /// Removes every observer registered for the given notification name, regardless of
+    /// the associated object. Useful for observers keyed by transient objects (e.g. a new
+    /// AVPlayerItem on each video) that would otherwise accumulate.
+    func removeNotificationObservers(for name: Notification.Name) {
+        let prefix = "\(name.rawValue)_"
+        let matchingKeys = notificationObservers.keys.filter { $0.hasPrefix(prefix) }
+        for key in matchingKeys {
+            if let observer = notificationObservers.removeValue(forKey: key) {
+                NotificationCenter.default.removeObserver(observer)
+            }
+        }
+        if !matchingKeys.isEmpty {
+            logger.debug("Removed \(matchingKeys.count) notification observer(s) for \(name.rawValue)")
+        }
+    }
+
     func removeAllNotificationObservers() {
         for observer in notificationObservers.values {
             NotificationCenter.default.removeObserver(observer)

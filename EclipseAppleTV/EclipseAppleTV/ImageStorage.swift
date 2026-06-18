@@ -10,26 +10,36 @@ class ImageStorage {
     
     private let fileManager = FileManager.default
     private let logger = Logger(subsystem: "com.eclipsetv.app", category: "ImageStorage")
-    private let imagesDirectory: URL
+
+    /// Persistent location for user media. Lives in Application Support (which the OS
+    /// does NOT purge) rather than Caches, so received media survives storage pressure.
+    private let mediaDirectory: URL
+
+    /// Previous (purgeable) location. Used only to migrate existing media on first launch
+    /// after the storage relocation.
+    private let legacyMediaDirectory: URL
     
     // MARK: - Initialization
     
     private init() {
-        // Get the documents directory
-        let documentsDirectory = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first!
-        imagesDirectory = documentsDirectory.appendingPathComponent("Images")
+        let baseDirectory = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? fileManager.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        mediaDirectory = baseDirectory.appendingPathComponent("Media", isDirectory: true)
+        legacyMediaDirectory = fileManager.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Media", isDirectory: true)
         
-        // Create the images directory if it doesn't exist
+        // Create the media directory if it doesn't exist, then migrate any legacy files
         createImagesDirectory()
+        migrateLegacyMediaIfNeeded()
     }
     
     // MARK: - Directory Management
     
     func getImagesDirectory() -> URL {
-        let paths = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)
-        return paths[0].appendingPathComponent("Media")
+        return mediaDirectory
     }
     
+    @discardableResult
     func createImagesDirectory() -> Bool {
         let imagesDirURL = getImagesDirectory()
         do {
@@ -41,6 +51,36 @@ class ImageStorage {
         } catch {
             logger.error("Error creating directory: \(error.localizedDescription)")
             return false
+        }
+    }
+
+    /// One-time migration of media files from the old purgeable Caches location to the
+    /// persistent Application Support location. Safe to call on every launch; it no-ops
+    /// once the legacy directory is empty/absent.
+    private func migrateLegacyMediaIfNeeded() {
+        guard fileManager.fileExists(atPath: legacyMediaDirectory.path) else { return }
+
+        do {
+            let legacyFiles = try fileManager.contentsOfDirectory(at: legacyMediaDirectory,
+                                                                  includingPropertiesForKeys: nil)
+            for fileURL in legacyFiles {
+                let destinationURL = mediaDirectory.appendingPathComponent(fileURL.lastPathComponent)
+                if fileManager.fileExists(atPath: destinationURL.path) {
+                    // Already migrated; remove the stale legacy copy
+                    try? fileManager.removeItem(at: fileURL)
+                    continue
+                }
+                do {
+                    try fileManager.moveItem(at: fileURL, to: destinationURL)
+                    logger.info("Migrated media file to persistent storage: \(fileURL.lastPathComponent)")
+                } catch {
+                    logger.error("Failed to migrate \(fileURL.lastPathComponent): \(error.localizedDescription)")
+                }
+            }
+            // Remove the now-empty legacy directory
+            try? fileManager.removeItem(at: legacyMediaDirectory)
+        } catch {
+            logger.error("Legacy media migration error: \(error.localizedDescription)")
         }
     }
     

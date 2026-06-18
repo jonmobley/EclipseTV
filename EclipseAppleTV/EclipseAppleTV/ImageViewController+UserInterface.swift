@@ -80,6 +80,7 @@ extension ImageViewController {
         PerformanceMonitor.shared.measureUIOperation("hideGridViewTransition") {
             logger.info("Hiding grid view")
 
+            // Sync the data source to the grid's selected item (if any) before transitioning
             if let selectedIndexPath = self.gridView.indexPathsForSelectedItems?.first {
                 // Verify the selected index is valid
                 guard selectedIndexPath.item < self.dataSource.count else {
@@ -108,17 +109,9 @@ extension ImageViewController {
                 }
             }
             
-            isInGridMode = false
-            
-            // Hide grid elements immediately and show fullscreen
-            gridView.alpha = 0.0
-            titleLabel.alpha = 0.0
-            gradientView.alpha = 0.0
-            imageView.isHidden = false
-            
-            // Bring fullscreen content to front and set focus
-            view.bringSubviewToFront(imageView)
-            imageView.setNeedsFocusUpdate()
+            // Delegate to the canonical grid->fullscreen transition, which actually loads
+            // and displays the current media (the previous inline fade did not).
+            hideGridView()
         }
     }
 

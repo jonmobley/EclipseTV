@@ -12,6 +12,15 @@ class ConnectionManager: NSObject {
     // MARK: - Properties
     
     private let serviceType = "eclipse-share" // MUST MATCH EXACTLY on both devices
+
+    /// Shared handshake token used to authenticate peers. MUST MATCH the value in
+    /// the iPhone companion app's `iPhoneConnectionManager`.
+    private let handshakeToken = "EclipseShare/v1"
+
+    /// Hard ceiling for an in-memory video transfer (legacy chunked path) to avoid
+    /// a malicious or buggy peer exhausting memory.
+    private let maxInMemoryVideoBytes: Int64 = 2_000_000_000 // 2 GB
+
     private var session: MCSession?
     private var advertiser: MCNearbyServiceAdvertiser?
     private let peerID: MCPeerID
@@ -30,8 +39,8 @@ class ConnectionManager: NSObject {
     override init() {
         // Log the device name we're using
         let deviceName = UIDevice.current.name
-        print("📱 Initializing ConnectionManager with device name: \(deviceName)")
-        print("📱 System info: \(UIDevice.current.systemName) \(UIDevice.current.systemVersion)")
+        logger.debug("Initializing ConnectionManager with device name: \(deviceName, privacy: .public)")
+        logger.debug("System info: \(UIDevice.current.systemName, privacy: .public) \(UIDevice.current.systemVersion, privacy: .public)")
         self.peerID = MCPeerID(displayName: deviceName)
         super.init()
         checkNetworkPermissions()
@@ -39,44 +48,42 @@ class ConnectionManager: NSObject {
     }
     
     private func checkNetworkPermissions() {
-        print("🔐 Checking network permissions...")
+        logger.debug("Checking network permissions...")
         // Note: There's no direct API to check local network permission
         // but we can check for general network availability
-        print("🔐 Network permission check complete")
+        logger.debug("Network permission check complete")
     }
     
     // MARK: - Multipeer Connectivity
     
     private func setupMultipeerConnectivity() {
-        print("🔄 Setting up Multipeer Connectivity with service type: \(serviceType)")
-        print("🔧 Peer ID: \(peerID.displayName)")
+        logger.debug("Setting up Multipeer Connectivity with service type: \(self.serviceType, privacy: .public)")
+        logger.debug("Peer ID: \(self.peerID.displayName, privacy: .public)")
         
-        // Create session with optimized settings for better reliability
-        session = MCSession(peer: peerID, securityIdentity: nil, encryptionPreference: .optional)
+        // Create session with required encryption for all peer-to-peer traffic
+        session = MCSession(peer: peerID, securityIdentity: nil, encryptionPreference: .required)
         session?.delegate = self
         
         // Create advertiser with discovery info to help with identification
-        print("📢 Creating advertiser for service: \(serviceType)")
+        logger.debug("Creating advertiser for service: \(self.serviceType, privacy: .public)")
         let discoveryInfo = ["device": "AppleTV", "service": "eclipse-share"]
         advertiser = MCNearbyServiceAdvertiser(peer: peerID, discoveryInfo: discoveryInfo, serviceType: serviceType)
         advertiser?.delegate = self
-        print("✅ Advertiser created successfully")
+        logger.debug("Advertiser created successfully")
     }
     
     func startAdvertising() {
         guard !isAdvertising else { 
-            print("⚠️ Already advertising, skipping duplicate start")
+            logger.debug("Already advertising, skipping duplicate start")
             return 
         }
         
-        print("📣 Starting to advertise as: \(self.peerID.displayName)")
-        print("🔧 Service type: \(serviceType)")
-        print("🔧 iOS Version: \(UIDevice.current.systemVersion)")
-        print("🔧 Device Model: \(UIDevice.current.model)")
+        logger.debug("Starting to advertise as: \(self.peerID.displayName, privacy: .public)")
+        logger.debug("Service type: \(self.serviceType, privacy: .public)")
         
         // Check if advertiser exists
         if advertiser == nil {
-            print("❌ Advertiser is nil! Recreating...")
+            logger.error("Advertiser is nil! Recreating...")
             setupMultipeerConnectivity()
         }
         
@@ -91,26 +98,23 @@ class ConnectionManager: NSObject {
     }
     
     private func verifyAdvertising() {
-        print("🔍 Verifying advertising status after 2 seconds...")
-        print("🔍 isAdvertising flag: \(isAdvertising)")
-        print("🔍 Advertiser exists: \(advertiser != nil)")
+        logger.debug("Verifying advertising status: isAdvertising=\(self.isAdvertising), advertiserExists=\(self.advertiser != nil)")
         if let advertiser = advertiser {
-            print("🔍 Advertiser peer: \(advertiser.myPeerID.displayName)")
-            print("🔍 Advertiser service type: \(advertiser.serviceType)")
+            logger.debug("Advertiser peer: \(advertiser.myPeerID.displayName, privacy: .public), service: \(advertiser.serviceType, privacy: .public)")
         }
     }
     
     func stopAdvertising() {
         guard isAdvertising else { return } // Prevent multiple stops
         
-        print("🛑 Stopping advertising")
+        logger.debug("Stopping advertising")
         advertiser?.stopAdvertisingPeer()
         isAdvertising = false
         logger.info("Stopped advertising")
     }
     
     func disconnect() {
-        print("🔌 Disconnecting session")
+        logger.debug("Disconnecting session")
         session?.disconnect()
         logger.info("Disconnected session")
         
@@ -126,7 +130,7 @@ class ConnectionManager: NSObject {
     
     // Add method to force restart advertising
     func restartAdvertising() {
-        print("🔄 Force restarting advertising")
+        logger.debug("Force restarting advertising")
         stopAdvertising()
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
             self?.startAdvertising()
@@ -153,6 +157,22 @@ class ConnectionManager: NSObject {
     
     // MARK: - Resource Management
     
+    /// Sanitizes a peer-supplied resource name into a safe, single path component.
+    /// Strips any directory components and rejects names that attempt traversal,
+    /// preventing a malicious peer from writing outside the media directory.
+    private func sanitizedFileName(from resourceName: String) -> String? {
+        // Collapse to just the last path component to drop any "../" or absolute prefixes
+        let candidate = (resourceName as NSString).lastPathComponent
+        guard !candidate.isEmpty,
+              candidate != ".",
+              candidate != "..",
+              !candidate.contains("/"),
+              !candidate.contains("\\") else {
+            return nil
+        }
+        return candidate
+    }
+
     private func handleConnectionError(_ error: Error, context: String) {
         if let mediaError = error as? MediaError {
             Task { @MainActor in
@@ -191,40 +211,35 @@ class ConnectionManager: NSObject {
 
 extension ConnectionManager: MCNearbyServiceAdvertiserDelegate {
     func advertiser(_ advertiser: MCNearbyServiceAdvertiser, didReceiveInvitationFromPeer peerID: MCPeerID, withContext context: Data?, invitationHandler: @escaping (Bool, MCSession?) -> Void) {
-        print("📩 Received invitation from: \(peerID.displayName)")
         logger.info("Received invitation from: \(peerID.displayName)")
         
         // Check if we already have a connection
         if let session = session, !session.connectedPeers.isEmpty {
-            print("❌ Already connected to another peer, rejecting invitation")
+            logger.info("Already connected to another peer, rejecting invitation")
             invitationHandler(false, nil)
             return
         }
         
-        // Verify the context if provided
-        if let contextData = context,
-           let contextString = String(data: contextData, encoding: .utf8) {
-            print("📝 Invitation context: \(contextString)")
-            
-            // Only accept invitations from iPhone clients
-            if contextString.contains("iPhone") {
-                print("✅ Accepting invitation from iPhone client")
-                invitationHandler(true, session)
-            } else {
-                print("❌ Rejecting invitation from unknown client")
-                invitationHandler(false, nil)
-            }
-        } else {
-            // Accept invitation even without context for backward compatibility
-            print("✅ Accepting invitation (no context provided)")
-            invitationHandler(true, session)
+        // Require a matching handshake token. Reject any peer that does not present
+        // the shared secret, including peers that send no context at all.
+        guard let contextData = context,
+              let contextString = String(data: contextData, encoding: .utf8) else {
+            logger.error("Rejected invitation from \(peerID.displayName): missing context")
+            invitationHandler(false, nil)
+            return
         }
+
+        guard contextString.contains(handshakeToken) else {
+            logger.error("Rejected invitation from \(peerID.displayName): invalid token")
+            invitationHandler(false, nil)
+            return
+        }
+
+        logger.info("Accepted invitation from \(peerID.displayName)")
+        invitationHandler(true, session)
     }
     
     func advertiser(_ advertiser: MCNearbyServiceAdvertiser, didNotStartAdvertisingPeer error: Error) {
-        print("❌ Failed to start advertising: \(error.localizedDescription)")
-        print("❌ Error details: \(error)")
-        print("❌ Service type: \(serviceType)")
         logger.error("Failed to start advertising: \(error.localizedDescription)")
         
         // Set advertising flag to false
@@ -233,13 +248,13 @@ extension ConnectionManager: MCNearbyServiceAdvertiserDelegate {
         // Handle specific error types
         if error.localizedDescription.contains("busy") || error.localizedDescription.contains("in use") {
             // Service type might be in use, wait longer before retrying
-            print("🔄 Service appears busy, waiting 10 seconds before retry")
+            logger.debug("Service appears busy, waiting 10 seconds before retry")
             DispatchQueue.main.asyncAfter(deadline: .now() + 10.0) { [weak self] in
                 self?.startAdvertising()
             }
         } else {
             // General error, try sooner
-            print("🔄 General error, retrying in 5 seconds")
+            logger.debug("General error, retrying in 5 seconds")
             DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) { [weak self] in
                 self?.startAdvertising()
             }
@@ -253,7 +268,6 @@ extension ConnectionManager: MCSessionDelegate {
     func session(_ session: MCSession, peer peerID: MCPeerID, didChange state: MCSessionState) {
         switch state {
         case .connected:
-            print("🔗 Connected to: \(peerID.displayName)")
             logger.info("Connected to: \(peerID.displayName)")
             
             // Stop advertising once connected to avoid multiple connections
@@ -265,11 +279,9 @@ extension ConnectionManager: MCSessionDelegate {
             }
             
         case .connecting:
-            print("🔄 Connecting to: \(peerID.displayName)")
             logger.info("Connecting to: \(peerID.displayName)")
             
         case .notConnected:
-            print("❌ Disconnected from: \(peerID.displayName)")
             logger.info("Disconnected from: \(peerID.displayName)")
             
             // Restart advertising if we get disconnected
@@ -283,13 +295,12 @@ extension ConnectionManager: MCSessionDelegate {
             }
             
         @unknown default:
-            print("❓ Unknown connection state: \(peerID.displayName)")
             logger.warning("Unknown connection state: \(peerID.displayName)")
         }
     }
     
     func session(_ session: MCSession, didReceive data: Data, fromPeer peerID: MCPeerID) {
-        print("📥 Received data from \(peerID.displayName): \(data.count) bytes")
+        logger.debug("Received data from \(peerID.displayName): \(data.count) bytes")
         
         // Check if this is a video metadata message
         if let message = String(data: data, encoding: .utf8),
@@ -299,7 +310,15 @@ extension ConnectionManager: MCSessionDelegate {
            let sizeString = json["size"],
            let videoSize = Int64(sizeString) {
             
-            print("📥 Starting video transfer of size: \(videoSize) bytes")
+            // Reject absurd / hostile sizes before allocating any buffer
+            guard videoSize > 0, videoSize <= maxInMemoryVideoBytes else {
+                logger.error("Rejected video transfer: declared size \(videoSize) bytes out of bounds")
+                videoBuffer = nil
+                expectedVideoSize = nil
+                return
+            }
+
+            logger.debug("Starting video transfer of size: \(videoSize) bytes")
             // Initialize video buffer
             videoBuffer = Data()
             expectedVideoSize = videoSize
@@ -311,15 +330,15 @@ extension ConnectionManager: MCSessionDelegate {
            message == "VIDEO_COMPLETE" {
             // Video transfer complete, save the video
             if let videoData = videoBuffer {
-                print("📥 Video transfer complete, saving \(videoData.count) bytes")
+                logger.debug("Video transfer complete, saving \(videoData.count) bytes")
                 if let videoURL = ImageStorage.shared.saveReceivedVideo(videoData) {
-                    print("✅ Video saved successfully at: \(videoURL.path)")
+                    logger.info("Video saved successfully at: \(videoURL.path, privacy: .public)")
                     
                     // Send confirmation back to iPhone
                     let confirmation = "VIDEO_RECEIVED".data(using: .utf8)!
                     do {
                         try session.send(confirmation, toPeers: [peerID], with: .reliable)
-                        print("✅ Sent video confirmation to iPhone")
+                        logger.debug("Sent video confirmation to iPhone")
                         
                         // Notify delegate on main thread
                         DispatchQueue.main.async { [weak self] in
@@ -327,10 +346,10 @@ extension ConnectionManager: MCSessionDelegate {
                             self.delegate?.connectionManager(self, didReceiveVideoAt: videoURL.path)
                         }
                     } catch {
-                        print("❌ Failed to send video confirmation: \(error)")
+                        logger.error("Failed to send video confirmation: \(error.localizedDescription)")
                     }
                 } else {
-                    print("❌ Failed to save video")
+                    logger.error("Failed to save video")
                     Task { @MainActor in
                         ErrorHandler.shared.handle(.fileCorrupted(path: "received_video", reason: "Could not save video data"), context: "ConnectionManager.didReceive")
                     }
@@ -352,26 +371,35 @@ extension ConnectionManager: MCSessionDelegate {
         
         // Handle video chunks
         if let expectedSize = expectedVideoSize, var buffer = videoBuffer {
+            // Guard against receiving more data than declared (and against the hard cap)
+            let projectedSize = Int64(buffer.count) + Int64(data.count)
+            guard projectedSize <= expectedSize, projectedSize <= maxInMemoryVideoBytes else {
+                logger.error("Aborted video transfer: projected \(projectedSize) bytes exceeds expected \(expectedSize)")
+                videoBuffer = nil
+                expectedVideoSize = nil
+                return
+            }
+
             buffer.append(data)
             videoBuffer = buffer
             
             // Log progress
             if let currentSize = videoBuffer?.count {
                 let progress = Double(currentSize) / Double(expectedSize) * 100
-                print("📥 Video transfer progress: \(Int(progress))%")
+                logger.debug("Video transfer progress: \(Int(progress))%")
             }
             return
         }
         
         // Handle image data
         if let imageURL = ImageStorage.shared.saveReceivedImage(data) {
-            print("✅ Image saved successfully at: \(imageURL.path)")
+            logger.info("Image saved successfully at: \(imageURL.path, privacy: .public)")
             
             // Send confirmation back to iPhone
             let confirmation = "IMAGE_RECEIVED".data(using: .utf8)!
             do {
                 try session.send(confirmation, toPeers: [peerID], with: .reliable)
-                print("✅ Sent image confirmation to iPhone")
+                logger.debug("Sent image confirmation to iPhone")
                 
                 // Notify delegate on main thread
                 DispatchQueue.main.async { [weak self] in
@@ -379,10 +407,10 @@ extension ConnectionManager: MCSessionDelegate {
                     self.delegate?.connectionManager(self, didReceiveImageAt: imageURL.path)
                 }
             } catch {
-                print("❌ Failed to send image confirmation: \(error)")
+                logger.error("Failed to send image confirmation: \(error.localizedDescription)")
             }
         } else {
-            print("❌ Failed to save image")
+            logger.error("Failed to save image")
             Task { @MainActor in
                 ErrorHandler.shared.handle(.fileCorrupted(path: "received_image", reason: "Could not save received data"), context: "ConnectionManager.didReceive")
             }
@@ -401,36 +429,41 @@ extension ConnectionManager: MCSessionDelegate {
     }
     
     func session(_ session: MCSession, didStartReceivingResourceWithName resourceName: String, fromPeer peerID: MCPeerID, with progress: Progress) {
-        print("⬇️ Started receiving resource: \(resourceName) from: \(peerID.displayName)")
         logger.info("Started receiving resource: \(resourceName) from: \(peerID.displayName)")
         // Optionally, observe progress here if you want to show a progress bar
     }
     
     func session(_ session: MCSession, didFinishReceivingResourceWithName resourceName: String, fromPeer peerID: MCPeerID, at localURL: URL?, withError error: Error?) {
         if let error = error {
-            print("❌ Error receiving resource: \(error.localizedDescription)")
+            logger.error("Error receiving resource: \(error.localizedDescription)")
             Task { @MainActor in
                 ErrorHandler.shared.handle(.transferCorrupted(fileName: resourceName, expectedSize: 0, actualSize: 0), context: "ConnectionManager.didFinishReceivingResource")
             }
             return
         }
         guard let localURL = localURL else {
-            print("❌ Resource URL is nil")
+            logger.error("Resource URL is nil")
             Task { @MainActor in
                 ErrorHandler.shared.handle(.fileNotFound(path: resourceName), context: "ConnectionManager.didFinishReceivingResource")
             }
             return
         }
-        print("✅ Received resource: \(resourceName) at: \(localURL.path)")
         logger.info("Received resource: \(resourceName) at: \(localURL.path)")
         
+        // Reject any resource whose name attempts directory traversal
+        guard let safeName = sanitizedFileName(from: resourceName) else {
+            logger.error("Rejected resource with unsafe name: \(resourceName)")
+            try? FileManager.default.removeItem(at: localURL)
+            return
+        }
+        
         // Check if this is a custom thumbnail
-        if resourceName.hasPrefix("thumbnail_") {
+        if safeName.hasPrefix("thumbnail_") {
             // This is a custom thumbnail for a video
-            let videoFileName = String(resourceName.dropFirst(10)) // Remove "thumbnail_" prefix
+            let videoFileName = String(safeName.dropFirst(10)) // Remove "thumbnail_" prefix
             
             // Load the thumbnail image and cache it
-            if let thumbnailImage = UIImage(contentsOfFile: localURL.path) {
+            if !videoFileName.isEmpty, let thumbnailImage = UIImage(contentsOfFile: localURL.path) {
                 let videoPath = ImageStorage.shared.getImagesDirectory().appendingPathComponent(videoFileName).path
                 VideoThumbnailCache.shared.cacheThumbnail(thumbnailImage, for: videoPath)
                 logger.info("Cached custom thumbnail for video: \(videoFileName)")
@@ -443,23 +476,38 @@ extension ConnectionManager: MCSessionDelegate {
         
         // Move the received file to our storage as a video or image
         let fileManager = FileManager.default
-        let destinationURL = ImageStorage.shared.getImagesDirectory().appendingPathComponent(resourceName)
+        let destinationURL = ImageStorage.shared.getImagesDirectory().appendingPathComponent(safeName)
         do {
             if fileManager.fileExists(atPath: destinationURL.path) {
                 try fileManager.removeItem(at: destinationURL)
             }
             try fileManager.moveItem(at: localURL, to: destinationURL)
+
+            let ext = destinationURL.pathExtension.lowercased()
+            let videoExtensions: Set<String> = ["mp4", "mov", "m4v"]
+            let imageExtensions: Set<String> = ["jpg", "jpeg", "png", "heic"]
+            let isVideo = videoExtensions.contains(ext)
+            let isImage = imageExtensions.contains(ext)
+
+            // Send a confirmation back to the sender so it can report success symmetrically
+            // with the legacy in-memory transfer path.
+            if isVideo || isImage {
+                let confirmationMessage = isVideo ? "VIDEO_RECEIVED" : "IMAGE_RECEIVED"
+                if let confirmation = confirmationMessage.data(using: .utf8) {
+                    try? session.send(confirmation, toPeers: [peerID], with: .reliable)
+                }
+            }
+
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
-                let ext = destinationURL.pathExtension.lowercased()
-                if ext == "mp4" || ext == "mov" {
+                if isVideo {
                     self.delegate?.connectionManager(self, didReceiveVideoAt: destinationURL.path)
-                } else if ext == "jpg" || ext == "jpeg" || ext == "png" {
+                } else if isImage {
                     self.delegate?.connectionManager(self, didReceiveImageAt: destinationURL.path)
                 }
             }
         } catch {
-            print("❌ Failed to move received resource: \(error)")
+            logger.error("Failed to move received resource: \(error.localizedDescription)")
             Task { @MainActor in
                 ErrorHandler.shared.handle(.permissionDenied(operation: "moving received file"), context: "ConnectionManager.didFinishReceivingResource")
             }

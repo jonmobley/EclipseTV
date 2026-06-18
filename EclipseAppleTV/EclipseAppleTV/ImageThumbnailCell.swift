@@ -1,7 +1,10 @@
 import UIKit
 import AVFoundation
+import os.log
 
 class ImageThumbnailCell: UICollectionViewCell {
+
+    private static let logger = Logger(subsystem: "com.eclipsetv.app", category: "ImageThumbnailCell")
     
     // MARK: - UI Elements
     
@@ -340,7 +343,7 @@ class ImageThumbnailCell: UICollectionViewCell {
         updateVisualEffects()
         
         // Debug logging to track focus changes
-        print("🔵 [CELL] Focus changed for cell - isFocused: \(isFocused), isSelected: \(isSelected)")
+        Self.logger.debug("Focus changed for cell - isFocused: \(self.isFocused), isSelected: \(self.isSelected)")
         
         // Use the coordinator to ensure smooth transitions for transform and shadow
         coordinator.addCoordinatedAnimations({
@@ -480,7 +483,7 @@ class ImageThumbnailCell: UICollectionViewCell {
             
             // Debug logging to track selection changes
             if oldValue != isSelected {
-                print("🔵 [CELL] Selection changed for cell - isSelected: \(isSelected)")
+                Self.logger.debug("Selection changed for cell - isSelected: \(self.isSelected)")
             }
         }
     }

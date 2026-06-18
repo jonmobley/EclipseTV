@@ -104,10 +104,7 @@ extension ImageViewController {
             // Toggle the setting
             isMuted = !isMuted
             
-            // Update both old and new systems for compatibility
-            self.setVideoSetting(for: videoPath, setting: "mute", value: isMuted)
-            
-            // Update the new system (viewModel/AppState)
+            // Persist via the single video-settings store
             let mediaItem = MediaItem(path: videoPath)
             self.viewModel.updateVideoSetting(for: mediaItem, keyPath: \.isMuted, value: isMuted)
             
@@ -130,7 +127,7 @@ extension ImageViewController {
             if let cell = self.gridView.cellForItem(at: indexPath) as? ImageThumbnailCell {
                 // Get current settings
                 let duration = cell.getDuration()
-                let isLooping = self.getVideoSetting(for: videoPath, setting: "loop")
+                let isLooping = self.viewModel.getVideoSettings(for: MediaItem(path: videoPath)).isLooping
                 
                 // Update cell with new settings
                 cell.configure(with: cell.currentImage, isVideo: true, duration: duration, isLooping: isLooping, isMuted: isMuted)
@@ -144,10 +141,7 @@ extension ImageViewController {
             // Toggle the setting
             isLooping = !isLooping
             
-            // Update both old and new systems for compatibility
-            self.setVideoSetting(for: videoPath, setting: "loop", value: isLooping)
-            
-            // Update the new system (viewModel/AppState)
+            // Persist via the single video-settings store
             let mediaItem = MediaItem(path: videoPath)
             self.viewModel.updateVideoSetting(for: mediaItem, keyPath: \.isLooping, value: isLooping)
             
@@ -170,7 +164,7 @@ extension ImageViewController {
             if let cell = self.gridView.cellForItem(at: indexPath) as? ImageThumbnailCell {
                 // Get current settings
                 let duration = cell.getDuration()
-                let isMuted = self.getVideoSetting(for: videoPath, setting: "mute")
+                let isMuted = self.viewModel.getVideoSettings(for: MediaItem(path: videoPath)).isMuted
                 
                 // Update cell with new settings
                 cell.configure(with: cell.currentImage, isVideo: true, duration: duration, isLooping: isLooping, isMuted: isMuted)
@@ -210,14 +204,13 @@ extension ImageViewController {
     // Start move mode for a specific image
     internal func startMoveMode(forImageAt index: Int) {
         isMoveMode = true
+        originalMovingIndex = index
         movingItemIndex = index
         movingItemIndexPath = IndexPath(item: index, section: 0)
         
         // Notify connection manager that we're in move mode
         // This will cause received content to be queued instead of immediately shown
-        if let appDelegate = UIApplication.shared.delegate as? AppDelegate {
-            appDelegate.connectionManager?.notifyMoveModeEnabled(true)
-        }
+        connectionManager?.notifyMoveModeEnabled(true)
         
         // Explicitly select the item to ensure it has the blue stroke
         let indexPath = IndexPath(item: index, section: 0)
@@ -318,14 +311,19 @@ extension ImageViewController {
     // End move mode and commit changes
     internal func endMoveMode() {
         guard isMoveMode,
-              let _ = movingItemIndex else {
+              let sourceIndex = originalMovingIndex else {
             return
         }
         
+        // The target is wherever the user navigated focus to during move mode
+        let rawTarget = movingItemIndex ?? sourceIndex
+        let targetIndex = min(max(rawTarget, 0), max(dataSource.count - 1, 0))
+        let didMove = targetIndex != sourceIndex
+            && sourceIndex < dataSource.count
+            && targetIndex < dataSource.count
+        
         // Notify connection manager that we're no longer in move mode
-        if let appDelegate = UIApplication.shared.delegate as? AppDelegate {
-            appDelegate.connectionManager?.notifyMoveModeEnabled(false)
-        }
+        connectionManager?.notifyMoveModeEnabled(false)
         
         // Set a flag to temporarily ignore item selection events
         isIgnoringSelectionEvents = true
@@ -340,11 +338,15 @@ extension ImageViewController {
         // Hide the move overlay
         hideMoveOverlay()
         
-        // Show confirmation toast
-        showNotificationToast(message: "Image position updated")
-        
-        // Update the SimpleSelectionManager with the current position
-        if let indexPath = movingItemIndexPath {
+        if didMove {
+            // Commit the reorder. The data source delegate animates the grid move and
+            // re-selects the item at its new position.
+            dataSource.moveMedia(from: sourceIndex, to: targetIndex)
+            showNotificationToast(message: "Image position updated")
+        } else {
+            // No move occurred; just restore selection on the original item.
+            showNotificationToast(message: "Move cancelled")
+            let indexPath = IndexPath(item: min(sourceIndex, max(dataSource.count - 1, 0)), section: 0)
             simpleSelectionManager.selectItem(at: indexPath)
         }
         
@@ -352,6 +354,7 @@ extension ImageViewController {
         movingItemCell = nil
         movingItemIndex = nil
         movingItemIndexPath = nil
+        originalMovingIndex = nil
         
         // Reset the ignore selection flag after a short delay
         // This prevents the SELECT button press from triggering fullscreen mode
@@ -368,9 +371,7 @@ extension ImageViewController {
         guard isMoveMode else { return }
         
         // Notify connection manager that we're no longer in move mode
-        if let appDelegate = UIApplication.shared.delegate as? AppDelegate {
-            appDelegate.connectionManager?.notifyMoveModeEnabled(false)
-        }
+        connectionManager?.notifyMoveModeEnabled(false)
         
         isMoveMode = false
         
@@ -386,6 +387,7 @@ extension ImageViewController {
         movingItemCell = nil
         movingItemIndex = nil
         movingItemIndexPath = nil
+        originalMovingIndex = nil
         
         // Reload the grid to reset any visual changes
         gridView.reloadData()
@@ -432,31 +434,5 @@ extension ImageViewController {
 
         // Let data source handle the move (it will call delegate methods)
         dataSource.moveMedia(from: sourceIndex, to: targetIndex)
-    }
-
-    // The following methods are kept for backward compatibility but won't be used in the new flow
-    
-    // Move the selected item up one row
-    internal func moveItemUp() {
-        // These methods are no longer needed - MediaDataSource handles moves automatically
-        // through the delegate pattern when focus changes in move mode
-    }
-
-    // Move the selected item down one row
-    internal func moveItemDown() {
-        // These methods are no longer needed - MediaDataSource handles moves automatically
-        // through the delegate pattern when focus changes in move mode
-    }
-
-    // Move the selected item left
-    internal func moveItemLeft() {
-        // These methods are no longer needed - MediaDataSource handles moves automatically
-        // through the delegate pattern when focus changes in move mode
-    }
-
-    // Move the selected item right
-    internal func moveItemRight() {
-        // These methods are no longer needed - MediaDataSource handles moves automatically
-        // through the delegate pattern when focus changes in move mode
     }
 }

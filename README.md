@@ -106,7 +106,7 @@ open EclipseiPhone.xcodeproj
 ## 🏗 Architecture
 
 ### Design Patterns
-- **MVVM Architecture** with reactive programming (Combine)
+- **Single source of truth**: `MediaDataSource` owns the media list, current index, and persistence
 - **Protocol-oriented programming** for modularity
 - **Delegate patterns** for communication
 - **Async/await** for modern concurrency
@@ -115,22 +115,24 @@ open EclipseiPhone.xcodeproj
 
 #### Apple TV App
 ```
-Models/
-├── MediaItem.swift          # Core data model
-├── AppState.swift          # Application state
-└── MediaError.swift        # Error handling
+MediaDataSource.swift        # Single source of truth for the media list + persistence
 
-ViewModels/  
-└── MediaLibraryViewModel.swift  # Business logic
+Models/
+├── MediaItem.swift          # Core data model (path-based identity)
+├── AppState.swift           # Per-file video settings (mute/loop) storage
+└── MediaError.swift         # Error handling
+
+ViewModels/
+└── MediaLibraryViewModel.swift  # Sample-media loading + video settings access
 
 Services/
-├── MediaService.swift      # Media operations
-├── ThumbnailService.swift  # Thumbnail management
-└── ConnectionManager.swift # Network connectivity
+├── MediaService.swift      # Bundled sample-media loading
+└── ConnectionManager.swift # Network connectivity (encryption required)
 
 Views/
-├── ImageViewController.swift    # Main controller (modular)
+├── ImageViewController.swift    # Main controller (split across extensions)
 ├── ImageThumbnailCell.swift    # Grid cell implementation  
+├── VideoThumbnailCache.swift   # Memory + disk thumbnail cache
 ├── ToastView.swift             # User notifications
 ├── HelpView.swift              # Built-in help system
 └── EmptyStateView.swift        # Empty state interface
@@ -192,7 +194,7 @@ This project is provided as-is with no warranties. For educational and personal 
 ## 🙏 Credits
 
 **Eclipse** - Advanced media viewing and wireless connectivity for Apple TV
-- **Architecture**: MVVM with reactive programming
+- **Architecture**: `MediaDataSource`-centered single source of truth (UIKit, not full MVVM)
 - **Frameworks**: UIKit, AVKit, MultipeerConnectivity, Combine
 - **Platform**: tvOS 17.0+ / iOS 16.0+
 

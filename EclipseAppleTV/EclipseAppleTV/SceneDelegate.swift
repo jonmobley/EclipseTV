@@ -19,10 +19,17 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 		// Initialize and start advertising
 		connectionManager = ConnectionManager()
 		connectionManager?.delegate = root
+		root.connectionManager = connectionManager
 		connectionManager?.startAdvertising()
 
 		logger.info("🌅 [SCENE] Window connected. Root=ImageViewController, advertising started")
 	}
+
+	func sceneDidDisconnect(_ scene: UIScene) {
+        logger.info("🌇 [SCENE] Scene disconnected - tearing down connection manager")
+        connectionManager?.cleanup()
+        connectionManager = nil
+    }
 
 	func sceneDidBecomeActive(_ scene: UIScene) {
         logger.info("Scene did become active")

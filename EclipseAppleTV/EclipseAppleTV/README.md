@@ -1,6 +1,6 @@
 # Eclipse Apple TV
 
-A sophisticated Apple TV application for displaying and managing fullscreen media with wireless connectivity to iOS devices. Built with modern iOS development practices using MVVM architecture and reactive programming.
+A sophisticated Apple TV application for displaying and managing fullscreen media with wireless connectivity to iOS devices. Built with UIKit around a `MediaDataSource` single-source-of-truth, with Combine used for lightweight reactive updates.
 
 ## Features
 
@@ -35,7 +35,7 @@ A sophisticated Apple TV application for displaying and managing fullscreen medi
 
 ### ⚡ **Performance & User Experience**
 - **Async image loading** with memory optimization
-- **Intelligent thumbnail caching** via ThumbnailService
+- **Intelligent thumbnail caching** via VideoThumbnailCache (memory + disk)
 - **Performance monitoring** for smooth playback
 - **Toast notifications** for user feedback
 - **Empty state handling** with helpful instructions
@@ -43,20 +43,24 @@ A sophisticated Apple TV application for displaying and managing fullscreen medi
 
 ## Architecture
 
-### 🏗️ **MVVM Design Pattern**
+### 🏗️ **Single Source of Truth**
+`MediaDataSource` owns the media list, current index, and persistence; the UI observes it.
 ```
+MediaDataSource.swift        # Single source of truth for media list + persistence
+
 Models/
-├── MediaItem.swift          # Core data model for media files
-├── AppState.swift          # Application state management
+├── MediaItem.swift          # Core data model for media files (path-based identity)
+├── AppState.swift          # Per-file video settings (mute/loop) storage
 └── MediaError.swift        # Comprehensive error handling
 
 ViewModels/
-└── MediaLibraryViewModel.swift  # Business logic and data binding
+└── MediaLibraryViewModel.swift  # Sample-media loading + video settings access
 
 Services/
-├── MediaService.swift      # Media file operations
-├── ThumbnailService.swift  # Thumbnail generation and caching
-└── ConnectionManager.swift # Network connectivity
+├── MediaService.swift      # Bundled sample-media loading
+└── ConnectionManager.swift # Network connectivity (encryption required)
+
+VideoThumbnailCache.swift    # Memory + disk thumbnail cache
 
 Views/
 ├── ImageViewController.swift    # Main view controller (modular)
@@ -168,7 +172,7 @@ Add sample images to `Assets.xcassets`:
 
 ### **Code Style**
 - Swift 5.5+ with async/await
-- MVVM architecture with Combine
+- `MediaDataSource` single source of truth, with Combine for lightweight updates
 - Comprehensive error handling
 - Modular, testable design
 
@@ -185,6 +189,6 @@ This project is provided as-is with no warranties. For educational and personal 
 ## Credits
 
 **Eclipse Apple TV** - Advanced media viewing and wireless connectivity for Apple TV
-- Architecture: MVVM with reactive programming
+- Architecture: `MediaDataSource`-centered single source of truth (UIKit, not full MVVM)
 - Frameworks: UIKit, AVKit, MultipeerConnectivity, Combine
 - Platform: tvOS 17.0+

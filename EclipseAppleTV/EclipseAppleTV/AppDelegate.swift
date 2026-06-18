@@ -2,7 +2,6 @@
 import UIKit
 import TVUIKit
 import os.log
-import MultipeerConnectivity
 
 /// The AppDelegate responsible for application lifecycle management.
 /// This class conforms to Apple TV HIG by providing a clean, simple startup sequence.
@@ -16,9 +15,6 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     
     /// Logger for troubleshooting application startup issues
     private let logger = Logger(subsystem: "com.eclipsetv.app", category: "AppDelegate")
-    
-    // Connection manager is managed by SceneDelegate on tvOS
-    var connectionManager: ConnectionManager?
 
     // MARK: - Application Lifecycle
     
@@ -60,11 +56,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     
     func applicationWillTerminate(_ application: UIApplication) {
         logger.info("Application will terminate - cleaning up resources")
-        
-        // Clean up connection manager
-        connectionManager?.cleanup()
-        connectionManager = nil
-        
+        // ConnectionManager teardown is owned by SceneDelegate's lifecycle.
+
         // Clear image caches asynchronously
         Task {
             await AsyncImageLoader.shared.clearCache()

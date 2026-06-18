@@ -1,5 +1,8 @@
 import UIKit
 import AVFoundation
+import os.log
+
+private let thumbnailPreviewLogger = Logger(subsystem: "com.eclipseapp.ios", category: "VideoThumbnailPreview")
 
 protocol VideoThumbnailPreviewDelegate: AnyObject {
     func videoThumbnailPreview(_ controller: VideoThumbnailPreviewViewController, didFinishWithVideoURL videoURL: URL, selectedThumbnail: UIImage)
@@ -357,7 +360,7 @@ class VideoThumbnailPreviewViewController: UIViewController {
                 
             } catch {
                 // If even fallback fails, just continue with whatever thumbnail we have
-                print("Thumbnail generation failed, continuing with existing thumbnail")
+                thumbnailPreviewLogger.debug("Thumbnail generation failed, continuing with existing thumbnail")
             }
         }
     }
