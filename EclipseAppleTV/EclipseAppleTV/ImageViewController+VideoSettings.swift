@@ -25,10 +25,17 @@ extension ImageViewController {
         let mediaItem = MediaItem(path: currentPath)
         let settings = viewModel.getVideoSettings(for: mediaItem)
 
-        // Apply mute setting immediately
+        // Mute and volume can be applied live without interrupting playback.
         player.isMuted = settings.isMuted
+        player.volume = settings.volume
 
-        // Note: Loop setting will be applied when video ends
+        // Loop can't be toggled on a live player (it swaps player types), so rebuild
+        // the player in place only when the desired loop state differs from the active one.
+        let isCurrentlyLooping = (playerLooper != nil)
+        if settings.isLooping != isCurrentlyLooping {
+            rebuildCurrentVideoPlayer(for: mediaItem)
+        }
+
         logger.info("Applied settings to current video: muted=\(settings.isMuted), loop=\(settings.isLooping)")
     }
 

@@ -65,8 +65,7 @@ extension ImageViewController: UICollectionViewDataSource, UICollectionViewDeleg
         
         // Load thumbnail asynchronously using the improved configureAsync method
         let cellSize = (gridView.collectionViewLayout as? UICollectionViewFlowLayout)?.itemSize ?? CGSize(width: 300, height: 169)
-        let storedPosition = imagePositions[mediaItem.path]
-        cell.configureAsync(imagePath: mediaItem.path, isVideo: mediaItem.isVideo, cellSize: cellSize, userPosition: storedPosition)
+        cell.configureAsync(imagePath: mediaItem.path, isVideo: mediaItem.isVideo, cellSize: cellSize, userPosition: nil)
         
         // Handle video metadata separately if needed
         if mediaItem.isVideo {

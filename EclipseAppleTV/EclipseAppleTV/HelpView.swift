@@ -31,6 +31,10 @@ class HelpView: UIView {
         
         • Press Play/Pause to toggle grid view
         
+        • Press and hold a video in the grid for Loop and Audio (mute) options
+        
+        • While a video plays, its controls appear on interaction and hide automatically
+        
         
         This app displays the built-in sample images.
         Images are shown fullscreen while maintaining aspect ratio.

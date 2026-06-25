@@ -92,7 +92,7 @@ class ResourceManager {
                           options: NSKeyValueObservingOptions = [],
                           changeHandler: @escaping (Any?, Any?) -> Void) -> NSKeyValueObservation {
         let observation = player.observe(\.currentItem, options: options) { player, change in
-            changeHandler(change.oldValue, change.newValue)
+            changeHandler(change.oldValue ?? nil, change.newValue ?? nil)
         }
         
         avPlayerObservers.append((player: player, observer: observation))

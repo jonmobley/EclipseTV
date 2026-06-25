@@ -26,7 +26,9 @@ class ImageViewController: ManagedViewController, ConnectionManagerDelegate, UIG
         let view = AVPlayerViewController()
         view.view.isHidden = true
         view.view.backgroundColor = .black
-        view.showsPlaybackControls = false  // Hide playback controls
+        // Let AVPlayerViewController own its transport controls: it shows them on
+        // interaction and auto-hides them after inactivity, the standard tvOS behavior.
+        view.showsPlaybackControls = true
         view.videoGravity = .resizeAspect  // Keep videos as they were
         return view
     }()
@@ -163,22 +165,7 @@ class ImageViewController: ManagedViewController, ConnectionManagerDelegate, UIG
     
     internal var isVideo = false
     
-    /// Dictionary to store user-defined positions for each image path
-    internal var imagePositions: [String: CGPoint] = [:] {
-        didSet {
-            saveImagePositions()
-        }
-    }
-    
-    /// UserDefaults key for storing image positions
-    private let imagePositionsKey = "EclipseTV.imagePositions"
-    
-    /// Pan gesture recognizer for image positioning
-    internal var imagePanGesture: UIPanGestureRecognizer?
     internal var playerLooper: AVPlayerLooper?
-    
-    // Video player controls auto-hide timer
-    internal var playerControlsAutoHideTimer: Timer?
     
     // Track move state
     internal var isMoveMode = false
@@ -254,9 +241,6 @@ class ImageViewController: ManagedViewController, ConnectionManagerDelegate, UIG
         setupGestures()
         setupFocusGuide()
         setupViewModel()
-        
-        // Load stored image positions
-        loadImagePositions()
         
         // Initialize selection manager
         simpleSelectionManager = SimpleSelectionManager(collectionView: gridView)
@@ -425,36 +409,6 @@ class ImageViewController: ManagedViewController, ConnectionManagerDelegate, UIG
         
         // Debug the data source
         self.dataSource.debugState()
-    }
-}
-
-// MARK: - Image Position Persistence
-
-extension ImageViewController {
-
-    /// Saves image positions to UserDefaults
-    private func saveImagePositions() {
-        let encodedPositions = imagePositions.compactMapValues { position in
-            return [position.x, position.y]
-        }
-        UserDefaults.standard.set(encodedPositions, forKey: imagePositionsKey)
-    }
-    
-    /// Loads image positions from UserDefaults
-    private func loadImagePositions() {
-        guard let savedPositions = UserDefaults.standard.object(forKey: imagePositionsKey) as? [String: [Double]] else {
-            return
-        }
-        
-        var loadedPositions: [String: CGPoint] = [:]
-        for (path, coordinates) in savedPositions {
-            if coordinates.count == 2 {
-                loadedPositions[path] = CGPoint(x: coordinates[0], y: coordinates[1])
-            }
-        }
-        
-        // Set directly to avoid triggering didSet save
-        self.imagePositions = loadedPositions
     }
 }
 

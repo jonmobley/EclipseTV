@@ -103,44 +103,40 @@ class VideoThumbnailCache {
             return cached
         }
         
-        // Generate thumbnail asynchronously
-        return await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
-                let url = URL(fileURLWithPath: videoPath)
-                let asset = AVURLAsset(url: url)
-                let imageGenerator = AVAssetImageGenerator(asset: asset)
-                imageGenerator.appliesPreferredTrackTransform = true
-                imageGenerator.maximumSize = targetSize
-                imageGenerator.requestedTimeToleranceBefore = .positiveInfinity
-                imageGenerator.requestedTimeToleranceAfter = .positiveInfinity
-                
-                // Try multiple time points for best thumbnail
-                let timePoints: [CMTime] = [
-                    CMTime(seconds: 2.0, preferredTimescale: 600),
-                    CMTime(seconds: 5.0, preferredTimescale: 600),
-                    CMTime(seconds: 0.5, preferredTimescale: 600),
-                    CMTime.zero
-                ]
-                
-                var bestThumbnail: UIImage?
-                
-                for timePoint in timePoints {
-                    do {
-                        let cgImage = try imageGenerator.copyCGImage(at: timePoint, actualTime: nil)
-                        bestThumbnail = UIImage(cgImage: cgImage)
-                        break // Use first successful thumbnail
-                    } catch {
-                        continue // Try next time point
-                    }
-                }
-                
-                // Cache the result
-                if let thumbnail = bestThumbnail {
-                    self.cacheThumbnail(thumbnail, for: videoPath)
-                }
-                
-                continuation.resume(returning: bestThumbnail)
+        // Generate thumbnail asynchronously using the modern async image generator API
+        let url = URL(fileURLWithPath: videoPath)
+        let asset = AVURLAsset(url: url)
+        let imageGenerator = AVAssetImageGenerator(asset: asset)
+        imageGenerator.appliesPreferredTrackTransform = true
+        imageGenerator.maximumSize = targetSize
+        imageGenerator.requestedTimeToleranceBefore = .positiveInfinity
+        imageGenerator.requestedTimeToleranceAfter = .positiveInfinity
+        
+        // Try multiple time points for best thumbnail
+        let timePoints: [CMTime] = [
+            CMTime(seconds: 2.0, preferredTimescale: 600),
+            CMTime(seconds: 5.0, preferredTimescale: 600),
+            CMTime(seconds: 0.5, preferredTimescale: 600),
+            CMTime.zero
+        ]
+        
+        var bestThumbnail: UIImage?
+        
+        for timePoint in timePoints {
+            do {
+                let (cgImage, _) = try await imageGenerator.image(at: timePoint)
+                bestThumbnail = UIImage(cgImage: cgImage)
+                break // Use first successful thumbnail
+            } catch {
+                continue // Try next time point
             }
         }
+        
+        // Cache the result
+        if let thumbnail = bestThumbnail {
+            cacheThumbnail(thumbnail, for: videoPath)
+        }
+        
+        return bestThumbnail
     }
 }

@@ -117,9 +117,9 @@ class VideoCacheManager {
         let asset = AVURLAsset(url: url)
         
         do {
-            // Preload essential properties for smooth playback
-            let _ = try await asset.load(.duration)
-            let _ = try await asset.load(.tracks)
+            // Preload essential properties for smooth playback so a cached asset is
+            // fully ready to hand to a player (avoids on-open preparation delay).
+            let _ = try await asset.load(.duration, .tracks, .isPlayable, .preferredTransform)
             
             // Cache the asset if task wasn't cancelled
             if !Task.isCancelled {

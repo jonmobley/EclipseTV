@@ -4,9 +4,6 @@ import AVFoundation  // Add this import for CMTime and AVPlayer
 extension ImageViewController {
     
     func setupGestures() {
-        // We're removing the swipe gestures to prevent accidental sliding
-        // Navigation will be handled exclusively through directional button presses
-        
         // Back button press for returning to grid
         let backPressRecognizer = UITapGestureRecognizer()
         backPressRecognizer.addTarget(self, action: #selector(handleBackPress))
@@ -19,12 +16,41 @@ extension ImageViewController {
         playPauseRecognizer.allowedPressTypes = [NSNumber(value: UIPress.PressType.playPause.rawValue)]
         view.addGestureRecognizer(playPauseRecognizer)
         
-        // Set up image pan gesture for positioning
-        setupImagePanGesture()
+        // Swipe gestures for navigating between media in fullscreen
+        setupNavigationSwipeGestures()
         
-        // Set delegate for all gesture recognizers to prevent default swiping behavior
+        // Set delegate for all gesture recognizers
         for gestureRecognizer in view.gestureRecognizers ?? [] {
             gestureRecognizer.delegate = self
+        }
+    }
+    
+    // MARK: - Navigation Swipe Setup
+    
+    /// Adds left/right swipe gestures so users can navigate between media in fullscreen.
+    /// A deliberate swipe is required, which avoids the accidental sliding that motivated
+    /// removing the previous free-form pan gesture.
+    private func setupNavigationSwipeGestures() {
+        let swipeLeft = UISwipeGestureRecognizer(target: self, action: #selector(handleNavigationSwipe(_:)))
+        swipeLeft.direction = .left
+        view.addGestureRecognizer(swipeLeft)
+        
+        let swipeRight = UISwipeGestureRecognizer(target: self, action: #selector(handleNavigationSwipe(_:)))
+        swipeRight.direction = .right
+        view.addGestureRecognizer(swipeRight)
+    }
+    
+    /// Handles left/right swipes to move between media items in fullscreen image mode.
+    @objc private func handleNavigationSwipe(_ gesture: UISwipeGestureRecognizer) {
+        guard !isInGridMode && !isVideo else { return }
+        
+        switch gesture.direction {
+        case .left:
+            nextImage()
+        case .right:
+            previousImage()
+        default:
+            break
         }
     }
     
@@ -43,8 +69,9 @@ extension ImageViewController {
             }
         }
         
-        // Handle right/left/down clicks in fullscreen mode
-        // Note: Removed select button handling to let AVPlayerViewController handle it naturally
+        // Handle right/left clicks in fullscreen mode.
+        // Note: Down and Select are intentionally not intercepted for video so
+        // AVPlayerViewController can reveal/hide its own transport controls.
         if !isInGridMode {
             for press in presses {
                 if press.type == .rightArrow {
@@ -52,9 +79,6 @@ extension ImageViewController {
                     return
                 } else if press.type == .leftArrow {
                     previousImage()
-                    return
-                } else if press.type == .downArrow {
-                    handleDownPress()
                     return
                 } else if press.type == .select && !isVideo {
                     // Only handle select for non-video content
@@ -143,16 +167,6 @@ extension ImageViewController {
         }
     }
     
-    @objc func handleDownPress() {
-        logger.debug("Down button pressed")
-        
-        // Only handle down press for video content in fullscreen mode
-        guard !isInGridMode && isVideo else { return }
-        
-        // Toggle player controls visibility
-        togglePlayerControls()
-    }
-    
     @objc func handleCenterSelectPress() {
         logger.debug("Center select button pressed (for non-video content)")
         
@@ -170,9 +184,9 @@ extension ImageViewController {
     // MARK: - UIGestureRecognizerDelegate
     
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
-        // Disable swipe gestures completely
+        // Allow navigation swipes only in fullscreen image mode
         if gestureRecognizer is UISwipeGestureRecognizer {
-            return false
+            return !isInGridMode && !isVideo
         }
         
         // Disable zoom/pinch gestures completely (iOS only)
@@ -196,11 +210,6 @@ extension ImageViewController {
     }
     
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, canPreventGestureRecognizer preventedGestureRecognizer: UIGestureRecognizer) -> Bool {
-        // Our button press recognizers should prevent swipe gestures
-        if gestureRecognizer is UITapGestureRecognizer && preventedGestureRecognizer is UISwipeGestureRecognizer {
-            return true
-        }
-        
         // Prevent any pan gestures (which would be from the remote touch surface)
         if preventedGestureRecognizer is UIPanGestureRecognizer {
             return true
@@ -208,11 +217,11 @@ extension ImageViewController {
         
         return false
     }
-    
+
     func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-        // Prevent swipe gestures from beginning
+        // Allow navigation swipes only in fullscreen image mode
         if gestureRecognizer is UISwipeGestureRecognizer {
-            return false
+            return !isInGridMode && !isVideo
         }
         
         // Prevent zoom/pinch gestures from beginning (iOS only)
@@ -228,13 +237,6 @@ extension ImageViewController {
            isVideo,
            let player = playerView.player,
            player.rate == 0 {  // Check if player is paused
-            return true
-        }
-        
-        // Allow our image pan gesture for positioning
-        if let panGesture = gestureRecognizer as? UIPanGestureRecognizer,
-           panGesture == imagePanGesture,
-           !isInGridMode && !isVideo {
             return true
         }
         
@@ -268,8 +270,7 @@ extension ImageViewController {
     
     /// Updates the on-screen time display for the given player
     private func updateTimeDisplay(for player: AVPlayer) {
-        guard let item = player.currentItem, 
-              let duration = item.duration.isValid ? item.duration : nil else {
+        guard let item = player.currentItem, item.duration.isValid else {
             return
         }
         
@@ -302,116 +303,4 @@ extension ImageViewController {
         // Clean up any resources related to feedback
     }
     
-    // MARK: - Image Pan Gesture Setup
-    
-    /// Sets up pan gesture for image positioning
-    private func setupImagePanGesture() {
-        // Remove existing gesture if any
-        if let existingGesture = imagePanGesture {
-            imageView.removeGestureRecognizer(existingGesture)
-        }
-        
-        // Create new pan gesture for image positioning
-        let panGesture = UIPanGestureRecognizer(target: self, action: #selector(handleImagePan(_:)))
-        panGesture.delegate = self
-        imagePanGesture = panGesture
-        imageView.addGestureRecognizer(panGesture)
-        imageView.isUserInteractionEnabled = true
-    }
-    
-    /// Handles pan gestures for image positioning
-    @objc private func handleImagePan(_ gesture: UIPanGestureRecognizer) {
-        guard !isInGridMode && !isVideo,
-              let currentPath = dataSource.getCurrentPath() else { return }
-        
-        switch gesture.state {
-        case .began:
-            // Store initial position if not already stored
-            if imagePositions[currentPath] == nil {
-                imagePositions[currentPath] = .zero
-            }
-            
-        case .changed:
-            let translation = gesture.translation(in: view)
-            
-            // Get or create current position for this image
-            var currentPosition = imagePositions[currentPath] ?? .zero
-            
-            // Update position with translation
-            currentPosition.x += translation.x
-            currentPosition.y += translation.y
-            
-            // Apply reasonable bounds to prevent moving too far off-screen
-            let maxOffset: CGFloat = 200
-            currentPosition.x = max(-maxOffset, min(maxOffset, currentPosition.x))
-            currentPosition.y = max(-maxOffset, min(maxOffset, currentPosition.y))
-            
-            // Store updated position
-            imagePositions[currentPath] = currentPosition
-            
-            // Apply the transform to the image view
-            imageView.transform = CGAffineTransform(translationX: currentPosition.x, y: currentPosition.y)
-            
-            // Reset gesture translation to prevent accumulation
-            gesture.setTranslation(.zero, in: view)
-            
-        case .ended, .cancelled, .failed:
-            // Position is already stored, nothing more to do
-            break
-            
-        default:
-            break
-        }
-    }
-    
-    // MARK: - Player Controls Management
-    
-    /// Toggles the visibility of video player controls
-    private func togglePlayerControls() {
-        guard isVideo else { return }
-        
-        let shouldShow = !playerView.showsPlaybackControls
-        
-        // Defer the controls change to avoid constraint conflicts during focus transitions
-        DispatchQueue.main.async { [weak self] in
-            guard let self = self else { return }
-            
-            // Double-check we're still in video mode
-            guard self.isVideo else { return }
-            
-            self.playerView.showsPlaybackControls = shouldShow
-            self.logger.debug("Player controls \(shouldShow ? "shown" : "hidden")")
-            
-            // If showing controls, auto-hide them after 5 seconds unless video is paused
-            if shouldShow {
-                // Cancel any existing auto-hide timer
-                self.playerControlsAutoHideTimer?.invalidate()
-                
-                // Only auto-hide if video is playing
-                if let player = self.playerView.player, player.rate > 0 {
-                    self.playerControlsAutoHideTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: false) { [weak self] _ in
-                        self?.hidePlayerControlsIfPlaying()
-                    }
-                }
-            } else {
-                // Cancel auto-hide timer when manually hiding
-                self.playerControlsAutoHideTimer?.invalidate()
-            }
-        }
-    }
-    
-    /// Hides player controls if video is currently playing
-    private func hidePlayerControlsIfPlaying() {
-        guard isVideo, let player = playerView.player else { return }
-        
-        // Only hide if video is still playing
-        if player.rate > 0 {
-            // Defer the controls change to avoid constraint conflicts
-            DispatchQueue.main.async { [weak self] in
-                guard let self = self, self.isVideo else { return }
-                self.playerView.showsPlaybackControls = false
-                self.logger.debug("Player controls auto-hidden")
-            }
-        }
-    }
 }

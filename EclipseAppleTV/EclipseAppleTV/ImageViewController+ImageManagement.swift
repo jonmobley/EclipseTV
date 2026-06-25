@@ -147,8 +147,6 @@ extension ImageViewController {
                 // Stop current video if playing
                 if self.isVideo {
                     self.playerView.player?.pause()
-                    self.playerControlsAutoHideTimer?.invalidate()
-                    self.playerControlsAutoHideTimer = nil
                     self.cleanupPlayerLooper()
                 }
                 
@@ -301,9 +299,6 @@ extension ImageViewController {
                 resourceManager.removePlayerObservers(for: currentPlayer)
             }
             
-            // Clean up player controls timer
-            playerControlsAutoHideTimer?.invalidate()
-            playerControlsAutoHideTimer = nil
             cleanupPlayerLooper()
         }
         
@@ -328,7 +323,6 @@ extension ImageViewController {
         gradientView.isHidden = false
         
         // CRITICAL: Disable grid mode temporarily to prevent any focus-based selection changes
-        let wasInGridMode = isInGridMode
         isInGridMode = false
         
         // Reload grid data
@@ -399,13 +393,10 @@ extension ImageViewController {
     
     // MARK: - Image Positioning
     
-    /// Applies stored position for the given image path
+    /// Resets the image transform so every image is shown centered.
+    /// Image repositioning was removed in favor of swipe-to-navigate, so any
+    /// previously stored offsets must no longer shift the displayed image.
     private func applyStoredImagePosition(for imagePath: String) {
-        if let storedPosition = imagePositions[imagePath] {
-            imageView.transform = CGAffineTransform(translationX: storedPosition.x, y: storedPosition.y)
-        } else {
-            // Reset to no transform for new images
-            imageView.transform = .identity
-        }
+        imageView.transform = .identity
     }
 }

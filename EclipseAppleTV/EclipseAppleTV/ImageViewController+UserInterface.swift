@@ -55,13 +55,13 @@ extension ImageViewController {
         
         // Animate in
         toastView.alpha = 0
-        UIView.animate(withDuration: 0.3, animations: { [self] in
+        UIView.animate(withDuration: 0.3, animations: {
             toastView.alpha = 1
-        }) { [self] _ in
+        }) { _ in
             // Animate out after delay
-            UIView.animate(withDuration: 0.3, delay: 3.0, options: [], animations: { [self] in
+            UIView.animate(withDuration: 0.3, delay: 3.0, options: [], animations: {
                 toastView.alpha = 0
-            }) { [self] _ in
+            }) { _ in
                 toastView.removeFromSuperview()
             }
         }

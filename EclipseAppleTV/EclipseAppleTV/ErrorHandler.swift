@@ -125,7 +125,7 @@ class ErrorHandler: ObservableObject {
         // Use existing ToastView or create a simple one
         guard let presentingVC = presentingViewController else { return }
         
-        let message = error.localizedDescription ?? "Unknown error"
+        let message = error.localizedDescription
         
         // Create simple toast view
         let toastView = UIView()
@@ -240,7 +240,7 @@ class ErrorHandler: ObservableObject {
         \(getErrorSummary())
         
         Recent Errors:
-        \(errorHistory.suffix(5).map { "• \($0.error.localizedDescription ?? "Unknown") at \($0.timestamp)" }.joined(separator: "\n"))
+        \(errorHistory.suffix(5).map { "• \($0.error.localizedDescription) at \($0.timestamp)" }.joined(separator: "\n"))
         """
         
         logger.info("Error report generated:\n\(report)")
@@ -269,10 +269,10 @@ extension ErrorHandler {
         do {
             return try await operation()
         } catch let error as MediaError {
-            await handle(error, context: context)
+            handle(error, context: context)
             return nil
         } catch {
-            await handle(.unknown(underlyingError: error), context: context)
+            handle(.unknown(underlyingError: error), context: context)
             return nil
         }
     }

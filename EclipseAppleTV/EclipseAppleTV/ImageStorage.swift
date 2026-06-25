@@ -11,26 +11,18 @@ class ImageStorage {
     private let fileManager = FileManager.default
     private let logger = Logger(subsystem: "com.eclipsetv.app", category: "ImageStorage")
 
-    /// Persistent location for user media. Lives in Application Support (which the OS
-    /// does NOT purge) rather than Caches, so received media survives storage pressure.
+    /// Location for user media. On tvOS, Caches is the reliable writable location and
+    /// is durable in practice (only purged under genuine storage pressure). This was the
+    /// app's original, working location; a later move to Application Support broke saving
+    /// on tvOS. Note: for guaranteed persistence Apple's intended option is iCloud/CloudKit.
     private let mediaDirectory: URL
-
-    /// Previous (purgeable) location. Used only to migrate existing media on first launch
-    /// after the storage relocation.
-    private let legacyMediaDirectory: URL
     
     // MARK: - Initialization
     
     private init() {
-        let baseDirectory = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-            ?? fileManager.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let baseDirectory = fileManager.urls(for: .cachesDirectory, in: .userDomainMask)[0]
         mediaDirectory = baseDirectory.appendingPathComponent("Media", isDirectory: true)
-        legacyMediaDirectory = fileManager.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Media", isDirectory: true)
-        
-        // Create the media directory if it doesn't exist, then migrate any legacy files
         createImagesDirectory()
-        migrateLegacyMediaIfNeeded()
     }
     
     // MARK: - Directory Management
@@ -51,36 +43,6 @@ class ImageStorage {
         } catch {
             logger.error("Error creating directory: \(error.localizedDescription)")
             return false
-        }
-    }
-
-    /// One-time migration of media files from the old purgeable Caches location to the
-    /// persistent Application Support location. Safe to call on every launch; it no-ops
-    /// once the legacy directory is empty/absent.
-    private func migrateLegacyMediaIfNeeded() {
-        guard fileManager.fileExists(atPath: legacyMediaDirectory.path) else { return }
-
-        do {
-            let legacyFiles = try fileManager.contentsOfDirectory(at: legacyMediaDirectory,
-                                                                  includingPropertiesForKeys: nil)
-            for fileURL in legacyFiles {
-                let destinationURL = mediaDirectory.appendingPathComponent(fileURL.lastPathComponent)
-                if fileManager.fileExists(atPath: destinationURL.path) {
-                    // Already migrated; remove the stale legacy copy
-                    try? fileManager.removeItem(at: fileURL)
-                    continue
-                }
-                do {
-                    try fileManager.moveItem(at: fileURL, to: destinationURL)
-                    logger.info("Migrated media file to persistent storage: \(fileURL.lastPathComponent)")
-                } catch {
-                    logger.error("Failed to migrate \(fileURL.lastPathComponent): \(error.localizedDescription)")
-                }
-            }
-            // Remove the now-empty legacy directory
-            try? fileManager.removeItem(at: legacyMediaDirectory)
-        } catch {
-            logger.error("Legacy media migration error: \(error.localizedDescription)")
         }
     }
     

@@ -17,6 +17,45 @@ extension ImageViewController {
         }
     }
 
+    /// Calls `play()` once the item is ready, prerolling to ensure a first frame is
+    /// decoded before we reveal the player (avoids AVPlayerViewController's spinner).
+    private func startWhenReady(_ player: AVPlayer, reveal: @escaping () -> Void) {
+        guard let item = player.currentItem else {
+            player.play()
+            reveal()
+            return
+        }
+
+        if item.status == .readyToPlay {
+            player.preroll(atRate: 1.0) { _ in
+                player.play()
+                reveal()
+            }
+            return
+        }
+
+        // Observe readiness with a timeout fallback so we never hang.
+        var token: NSKeyValueObservation?
+        token = item.observe(\.status, options: [.new]) { observingItem, _ in
+            if observingItem.status == .readyToPlay {
+                token?.invalidate()
+                token = nil
+                player.preroll(atRate: 1.0) { _ in
+                    player.play()
+                    reveal()
+                }
+            }
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            guard token != nil else { return }
+            token?.invalidate()
+            token = nil
+            player.play()
+            reveal()
+        }
+    }
+
     internal func displayVideo(_ mediaItem: MediaItem) {
         logger.info("Displaying video: \(mediaItem.fileName)")
 
@@ -37,15 +76,13 @@ extension ImageViewController {
                 self.setupPlayerView()
                 self.playerView.player = player
 
-                // Let AVPlayerViewController handle controls naturally for better remote control support
-                // self.playerView.showsPlaybackControls = false
-
                 // Add observer for playback end (removes any prior observers first)
                 self.installVideoEndObserver(for: player, mediaItem: mediaItem)
 
-                // Start playback immediately
-                player.play()
-                self.activityIndicator.stopAnimating()
+                // Start playback once the first frame is ready to avoid the spinner
+                self.startWhenReady(player) {
+                    self.activityIndicator.stopAnimating()
+                }
             }
         }
     }
@@ -68,21 +105,18 @@ extension ImageViewController {
                 self.playerView.player = player
                 self.isVideo = true
 
-                // Let AVPlayerViewController handle controls naturally for better remote control support
-                // self.playerView.showsPlaybackControls = false
-
                 // Add observer for playback end (removes any prior observers first)
                 self.installVideoEndObserver(for: player, mediaItem: mediaItem)
 
-                // Start playback immediately and fade in player
-                player.play()
-
-                UIView.animate(withDuration: 0.4, animations: { 
-                    self.playerView.view.alpha = 1
-                }) { (_: Bool) in
-                    self.activityIndicator.stopAnimating()
-                    self.setNeedsFocusUpdate()
-                    self.updateFocusIfNeeded()
+                // Fade in the player only once the first frame is ready to avoid the spinner
+                self.startWhenReady(player) {
+                    UIView.animate(withDuration: 0.4, animations: {
+                        self.playerView.view.alpha = 1
+                    }) { (_: Bool) in
+                        self.activityIndicator.stopAnimating()
+                        self.setNeedsFocusUpdate()
+                        self.updateFocusIfNeeded()
+                    }
                 }
             }
         }
@@ -313,6 +347,7 @@ extension ImageViewController {
 
             // Apply settings
             queuePlayer.isMuted = settings.isMuted
+            queuePlayer.volume = settings.volume
             // Note: Don't set rate directly here - let play() method handle playback start
             // Setting rate directly can interfere with pause/play logic
 
@@ -340,8 +375,13 @@ extension ImageViewController {
                 logger.debug("📁 Using file URL for regular player: \(mediaItem.fileName)")
             }
 
+            // Start rendering as soon as the first frame is available instead of
+            // pre-buffering, which is the right trade-off for local files.
+            player.automaticallyWaitsToMinimizeStalling = false
+
             // Apply settings
             player.isMuted = settings.isMuted
+            player.volume = settings.volume
             // Note: Don't set rate directly here - let play() method handle playback start
             // Setting rate directly can interfere with pause/play logic
 
@@ -351,6 +391,30 @@ extension ImageViewController {
             logger.debug("▶️ Created regular player for: \(mediaItem.fileName)")
             return player
         }
+    }
+
+    /// Rebuilds the active player to apply a setting that can't be changed on a live
+    /// player (e.g. toggling loop swaps between `AVPlayer` and `AVQueuePlayer`+looper).
+    /// Preserves the current playback position and play/pause state.
+    internal func rebuildCurrentVideoPlayer(for mediaItem: MediaItem) {
+        let wasPlaying = (playerView.player?.rate ?? 0) > 0
+        let resumeTime = playerView.player?.currentTime() ?? .zero
+
+        // Tear down the existing player/looper before swapping in a new one.
+        playerView.player?.pause()
+        cleanupPlayerLooper()
+
+        let player = setupPlayer(for: mediaItem)
+        playerView.player = player
+        installVideoEndObserver(for: player, mediaItem: mediaItem)
+
+        player.seek(to: resumeTime, toleranceBefore: .zero, toleranceAfter: .zero) { _ in
+            if wasPlaying {
+                player.play()
+            }
+        }
+
+        logger.debug("🔁 Rebuilt active player to apply loop change for: \(mediaItem.fileName)")
     }
 
     /// Displays a video with a smooth dissolve transition from current content
@@ -367,7 +431,7 @@ extension ImageViewController {
                 tempOverlay.backgroundColor = .black
 
                 // Capture current frame if there's a video playing
-                if self.isVideo, let currentPlayer = self.playerView.player {
+                if self.isVideo, self.playerView.player != nil {
                     // Try to capture the current video frame as a snapshot
                     if let snapshot = self.playerView.view.snapshotView(afterScreenUpdates: false) {
                         snapshot.frame = self.view.bounds
@@ -387,15 +451,12 @@ extension ImageViewController {
                 // Stop and clean up old video
                 if self.isVideo {
                     self.playerView.player?.pause()
-                    self.playerControlsAutoHideTimer?.invalidate()
-                    self.playerControlsAutoHideTimer = nil
                     self.cleanupPlayerLooper()
                 }
 
                 // Set up the main player view with the new player
                 self.setupPlayerView()
                 self.playerView.player = player
-                self.playerView.showsPlaybackControls = false
                 self.playerView.view.isHidden = false
                 self.playerView.view.alpha = 1  // Keep visible
                 self.isVideo = true
@@ -403,13 +464,9 @@ extension ImageViewController {
                 // Add observer for playback end (removes any prior observers first)
                 self.installVideoEndObserver(for: player, mediaItem: mediaItem)
 
-                // Start playback and wait for first frame
-                player.play()
-
-                // Wait for the video to be ready to display - use a reasonable delay
-                // that allows the first frame to render without being too long
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                    // Create smooth dissolve transition
+                // Dissolve the overlay only once the first frame is ready, which both
+                // hides the spinner and avoids a black flash during the transition.
+                self.startWhenReady(player) {
                     UIView.animate(withDuration: 0.4, animations: {
                         tempOverlay.alpha = 0
                     }) { _ in

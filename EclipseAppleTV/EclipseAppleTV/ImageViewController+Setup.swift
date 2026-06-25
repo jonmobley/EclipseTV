@@ -27,9 +27,10 @@ extension ImageViewController {
         imageView.isHidden = true
         playerView.view.isHidden = true
 
-        // Always load sample media first
+        // Always load sample media first. Run at utility priority so the heavy
+        // image/asset processing yields to first-frame UI rendering at launch.
         logger.info("Loading sample media automatically on every launch")
-        Task {
+        Task(priority: .utility) {
             logger.info("🚀 [SETUP] About to call viewModel.loadSampleMedia()")
             await viewModel.loadSampleMedia()
             await MainActor.run {

@@ -36,11 +36,13 @@ class ManagedViewController: UIViewController {
     // MARK: - Convenience Methods
     
     /// Creates a managed timer that will be automatically cleaned up
+    @discardableResult
     func createManagedTimer(interval: TimeInterval, repeats: Bool, block: @escaping () -> Void) -> Timer {
         return resourceManager.createTimer(interval: interval, repeats: repeats, block: block)
     }
     
     /// Adds a managed notification observer that will be automatically cleaned up
+    @discardableResult
     func addManagedObserver(for name: Notification.Name, 
                            object: Any? = nil,
                            block: @escaping (Notification) -> Void) -> NSObjectProtocol {
