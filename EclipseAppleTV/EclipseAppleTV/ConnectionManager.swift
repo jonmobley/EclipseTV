@@ -6,6 +6,21 @@ protocol ConnectionManagerDelegate: AnyObject {
     func connectionManager(_ manager: ConnectionManager, didReceiveImageAt path: String)
     func connectionManager(_ manager: ConnectionManager, didReceiveVideoAt path: String)
     func connectionManager(_ manager: ConnectionManager, didUpdateConnectionState connected: Bool, with peer: MCPeerID?)
+    /// The companion requested that the item with the given id (file name) be made live.
+    func connectionManager(_ manager: ConnectionManager, didReceivePlayRequestForId id: String)
+    /// The companion requested deletion of the item with the given id.
+    func connectionManager(_ manager: ConnectionManager, didReceiveDeleteRequestForId id: String)
+    /// The companion requested moving the item with the given id to a new index.
+    func connectionManager(_ manager: ConnectionManager, didReceiveMoveRequestForId id: String, toIndex: Int)
+    /// The companion saved a drag-and-drop arrangement: reorder the live library so its
+    /// item ids (file names) match `orderedIds`.
+    func connectionManager(_ manager: ConnectionManager, didReceiveReorderRequest orderedIds: [String])
+    /// The companion requested a per-item video setting change. Nil fields are unchanged.
+    func connectionManager(_ manager: ConnectionManager, didReceiveVideoSettingForId id: String, isLooping: Bool?, isMuted: Bool?)
+    /// A purged item was just re-sent: the freshly received file is at `newPath` and the
+    /// unavailable ledger entry keyed by `ledgerId` (the original file name) should be
+    /// cleared and the new item moved back into its original slot.
+    func connectionManager(_ manager: ConnectionManager, didRestoreItemForLedgerId ledgerId: String, newPath: String)
 }
 
 class ConnectionManager: NSObject {
@@ -27,8 +42,20 @@ class ConnectionManager: NSObject {
     private let logger = Logger(subsystem: "com.eclipsetv.app", category: "ConnectionManager")
     
     weak var delegate: ConnectionManagerDelegate?
+
+    /// Drives library mirroring to the companion. Notified when a peer connects so it
+    /// can push a full manifest + thumbnails.
+    weak var librarySync: TVLibrarySync?
+
     private var receivedImageCount = 0
     private var isAdvertising = false
+
+    /// When a companion re-sends a purged item, it first sends a `restore_item` envelope
+    /// naming the original item (ledger id). The very next media resource is treated as
+    /// that restore. Carries an expiry so a stale request can't hijack an unrelated send.
+    /// Accessed only on the `MCSession` delegate queue.
+    private var pendingRestore: (ledgerId: String, expires: Date)?
+    private let restoreWindow: TimeInterval = 120
     
     // Add properties for video transfer
     private var videoBuffer: Data?
@@ -89,7 +116,7 @@ class ConnectionManager: NSObject {
         
         advertiser?.startAdvertisingPeer()
         isAdvertising = true
-        logger.info("Started advertising as: \(self.peerID.displayName)")
+        logger.info("[Eclipse:CONN] AppleTV started advertising service '\(self.serviceType, privacy: .public)' as '\(self.peerID.displayName, privacy: .public)'")
         
         // Add a test to verify advertising is actually working
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
@@ -155,6 +182,104 @@ class ConnectionManager: NSObject {
         }
     }
     
+    // MARK: - Library Mirroring (TV -> iPhone)
+
+    /// Number of currently connected peers.
+    var connectedPeerCount: Int {
+        session?.connectedPeers.count ?? 0
+    }
+
+    /// Sends the full ordered library manifest (plus which item is live) to all peers.
+    func sendLibraryManifest(items: [LibraryItemDTO], currentId: String?) {
+        sendControlMessage(.manifest(items: items, currentId: currentId))
+    }
+
+    /// Sends a lightweight update telling the companion which item is now live.
+    func sendCurrentChanged(currentId: String?) {
+        sendControlMessage(.currentChanged(currentId: currentId))
+    }
+
+    /// Streams a thumbnail file to the first connected peer, keyed by item id.
+    func sendThumbnail(at fileURL: URL, forId id: String) {
+        guard let session = session, let peer = session.connectedPeers.first else { return }
+
+        let resourceName = EclipseShareProtocol.thumbnailResourceName(for: id)
+        session.sendResource(at: fileURL, withName: resourceName, toPeer: peer) { [weak self] error in
+            // Best-effort: clean up the temporary thumbnail once the transfer settles.
+            try? FileManager.default.removeItem(at: fileURL)
+            if let error = error {
+                self?.logger.error("Failed to send library thumbnail for \(id): \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func sendControlMessage(_ envelope: EclipseShareEnvelope) {
+        guard let session = session,
+              !session.connectedPeers.isEmpty,
+              let data = envelope.encoded() else {
+            return
+        }
+
+        do {
+            try session.send(data, toPeers: session.connectedPeers, with: .reliable)
+        } catch {
+            logger.error("Failed to send control message (\(envelope.eclipseMsg)): \(error.localizedDescription)")
+        }
+    }
+
+    /// Routes a decoded control envelope received from a peer.
+    private func handleControlEnvelope(_ envelope: EclipseShareEnvelope, from peerID: MCPeerID) {
+        switch envelope.kind {
+        case .playRequest:
+            guard let id = envelope.id else { return }
+            logger.info("Received play request for id: \(id, privacy: .public)")
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                self.delegate?.connectionManager(self, didReceivePlayRequestForId: id)
+            }
+        case .deleteItem:
+            guard let id = envelope.id else { return }
+            logger.info("Received delete request for id: \(id, privacy: .public)")
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                self.delegate?.connectionManager(self, didReceiveDeleteRequestForId: id)
+            }
+        case .moveItem:
+            guard let id = envelope.id, let toIndex = envelope.toIndex else { return }
+            logger.info("Received move request for id: \(id, privacy: .public) -> \(toIndex)")
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                self.delegate?.connectionManager(self, didReceiveMoveRequestForId: id, toIndex: toIndex)
+            }
+        case .reorderItems:
+            guard let orderedIds = envelope.orderedIds else { return }
+            logger.info("Received reorder request for \(orderedIds.count) items")
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                self.delegate?.connectionManager(self, didReceiveReorderRequest: orderedIds)
+            }
+        case .setVideoSetting:
+            guard let id = envelope.id else { return }
+            let isLooping = envelope.isLooping
+            let isMuted = envelope.isMuted
+            logger.info("Received video setting for id: \(id, privacy: .public)")
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                self.delegate?.connectionManager(self, didReceiveVideoSettingForId: id,
+                                                  isLooping: isLooping, isMuted: isMuted)
+            }
+        case .restoreItem:
+            guard let id = envelope.id else { return }
+            logger.info("Received restore request for id: \(id, privacy: .public)")
+            // The next media resource from this peer is the restore. Recorded on the
+            // session delegate queue, where the resource callback also runs.
+            pendingRestore = (ledgerId: id, expires: Date().addingTimeInterval(restoreWindow))
+        case .libraryManifest, .currentChanged, .none:
+            // These are TV -> iPhone only; ignore if a peer ever sends them back.
+            break
+        }
+    }
+
     // MARK: - Resource Management
     
     /// Sanitizes a peer-supplied resource name into a safe, single path component.
@@ -211,11 +336,11 @@ class ConnectionManager: NSObject {
 
 extension ConnectionManager: MCNearbyServiceAdvertiserDelegate {
     func advertiser(_ advertiser: MCNearbyServiceAdvertiser, didReceiveInvitationFromPeer peerID: MCPeerID, withContext context: Data?, invitationHandler: @escaping (Bool, MCSession?) -> Void) {
-        logger.info("Received invitation from: \(peerID.displayName)")
+        logger.info("[Eclipse:CONN] AppleTV received invitation from: \(peerID.displayName, privacy: .public)")
         
         // Check if we already have a connection
         if let session = session, !session.connectedPeers.isEmpty {
-            logger.info("Already connected to another peer, rejecting invitation")
+            logger.info("[Eclipse:CONN] AppleTV REJECTED invitation from \(peerID.displayName, privacy: .public): already connected to another peer")
             invitationHandler(false, nil)
             return
         }
@@ -224,23 +349,23 @@ extension ConnectionManager: MCNearbyServiceAdvertiserDelegate {
         // the shared secret, including peers that send no context at all.
         guard let contextData = context,
               let contextString = String(data: contextData, encoding: .utf8) else {
-            logger.error("Rejected invitation from \(peerID.displayName): missing context")
+            logger.error("[Eclipse:CONN] AppleTV REJECTED invitation from \(peerID.displayName, privacy: .public): missing context")
             invitationHandler(false, nil)
             return
         }
 
         guard contextString.contains(handshakeToken) else {
-            logger.error("Rejected invitation from \(peerID.displayName): invalid token")
+            logger.error("[Eclipse:CONN] AppleTV REJECTED invitation from \(peerID.displayName, privacy: .public): invalid handshake token")
             invitationHandler(false, nil)
             return
         }
 
-        logger.info("Accepted invitation from \(peerID.displayName)")
+        logger.info("[Eclipse:CONN] AppleTV ACCEPTED invitation from \(peerID.displayName, privacy: .public)")
         invitationHandler(true, session)
     }
     
     func advertiser(_ advertiser: MCNearbyServiceAdvertiser, didNotStartAdvertisingPeer error: Error) {
-        logger.error("Failed to start advertising: \(error.localizedDescription)")
+        logger.error("[Eclipse:CONN] AppleTV FAILED to start advertising: \(error.localizedDescription, privacy: .public)")
         
         // Set advertising flag to false
         isAdvertising = false
@@ -268,7 +393,7 @@ extension ConnectionManager: MCSessionDelegate {
     func session(_ session: MCSession, peer peerID: MCPeerID, didChange state: MCSessionState) {
         switch state {
         case .connected:
-            logger.info("Connected to: \(peerID.displayName)")
+            logger.info("[Eclipse:CONN] AppleTV CONNECTED to: \(peerID.displayName, privacy: .public)")
             
             // Stop advertising once connected to avoid multiple connections
             stopAdvertising()
@@ -277,12 +402,16 @@ extension ConnectionManager: MCSessionDelegate {
             DispatchQueue.main.async {
                 self.delegate?.connectionManager(self, didUpdateConnectionState: true, with: peerID)
             }
+            // Push the full library so the companion can mirror it immediately.
+            Task { @MainActor in
+                self.librarySync?.peerDidConnect(peerID)
+            }
             
         case .connecting:
-            logger.info("Connecting to: \(peerID.displayName)")
+            logger.info("[Eclipse:CONN] AppleTV connecting to: \(peerID.displayName, privacy: .public)")
             
         case .notConnected:
-            logger.info("Disconnected from: \(peerID.displayName)")
+            logger.info("[Eclipse:CONN] AppleTV NOT connected to: \(peerID.displayName, privacy: .public)")
             
             // Restart advertising if we get disconnected
             if !isAdvertising {
@@ -293,6 +422,9 @@ extension ConnectionManager: MCSessionDelegate {
             DispatchQueue.main.async {
                 self.delegate?.connectionManager(self, didUpdateConnectionState: false, with: peerID)
             }
+            Task { @MainActor in
+                self.librarySync?.peerDidDisconnect(peerID)
+            }
             
         @unknown default:
             logger.warning("Unknown connection state: \(peerID.displayName)")
@@ -301,6 +433,14 @@ extension ConnectionManager: MCSessionDelegate {
     
     func session(_ session: MCSession, didReceive data: Data, fromPeer peerID: MCPeerID) {
         logger.debug("Received data from \(peerID.displayName): \(data.count) bytes")
+        
+        // Eclipse control messages (e.g. play requests) are tagged JSON envelopes and
+        // MUST be handled before the raw-image fallback below, otherwise they would be
+        // written to disk as junk images.
+        if let envelope = EclipseShareEnvelope.decode(from: data) {
+            handleControlEnvelope(envelope, from: peerID)
+            return
+        }
         
         // Check if this is a video metadata message
         if let message = String(data: data, encoding: .utf8),
@@ -498,12 +638,27 @@ extension ConnectionManager: MCSessionDelegate {
                 }
             }
 
+            // If this resource completes a pending restore, capture and clear it (on the
+            // session delegate queue) before dispatching the in-order delegate calls.
+            var restoreLedgerId: String?
+            if isVideo || isImage, let pending = pendingRestore {
+                pendingRestore = nil
+                if Date() < pending.expires {
+                    restoreLedgerId = pending.ledgerId
+                }
+            }
+
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
                 if isVideo {
                     self.delegate?.connectionManager(self, didReceiveVideoAt: destinationURL.path)
                 } else if isImage {
                     self.delegate?.connectionManager(self, didReceiveImageAt: destinationURL.path)
+                }
+                // After the item is added normally, restore it into its original slot.
+                if let ledgerId = restoreLedgerId {
+                    self.delegate?.connectionManager(self, didRestoreItemForLedgerId: ledgerId,
+                                                     newPath: destinationURL.path)
                 }
             }
         } catch {

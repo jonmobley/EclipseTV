@@ -36,6 +36,20 @@ class iPhoneConnectionManager: NSObject {
     private var isTransferCancelled = false
     private var isTransferringVideo = false
     private var currentProgress: Progress?
+
+    /// Tracks an in-flight invitation so the auto-connect timer and app-active handlers
+    /// don't fire overlapping invitations to the same peer. Overlapping invites make
+    /// MultipeerConnectivity tear down and restart the handshake (the TV's accept fails
+    /// to deliver and channels are abandoned), which can leave the connection stuck.
+    private var pendingInvitePeer: MCPeerID?
+    private var pendingInviteStartedAt: Date?
+    /// Matches the invitation timeout below; after this, a stale attempt may be retried.
+    private let inviteTimeout: TimeInterval = 60
+
+    /// When set, the next media send is a re-send of a purged Apple TV item. A
+    /// `restore_item` envelope (carrying the original item id) is sent just before the
+    /// resource so the TV can restore it into its original slot. Cleared after sending.
+    var pendingRestoreId: String?
     
     // Keep track of AppleTV's move mode state
     private(set) var isAppleTVInMoveMode = false
@@ -125,7 +139,7 @@ class iPhoneConnectionManager: NSObject {
         discoveredPeers.removeAll()
         browser?.startBrowsingForPeers()
         isBrowsing = true
-        logger.info("Started browsing for peers")
+        logger.info("[Eclipse:CONN] iPhone started browsing for service '\(self.serviceType, privacy: .public)' as '\(self.peerID.displayName, privacy: .public)'")
         
         // Add verification after a delay
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
@@ -151,28 +165,122 @@ class iPhoneConnectionManager: NSObject {
         
         // Don't invite if we're already connected to this peer
         if session.connectedPeers.contains(peer) {
-            logger.debug("Already connected to peer: \(peer.displayName, privacy: .public)")
+            logger.info("[Eclipse:CONN] iPhone skipping invite, already connected to: \(peer.displayName, privacy: .public)")
             return
         }
         
         // Don't invite if we're currently connecting to this peer
         if session.connectedPeers.isEmpty == false {
-            logger.debug("Already connecting/connected to another peer")
+            logger.info("[Eclipse:CONN] iPhone skipping invite, already connected to another peer")
             return
         }
-        
+
+        // Don't start a second invitation while one is still negotiating. Overlapping
+        // invites cause MultipeerConnectivity to abandon the in-progress handshake.
+        if let pendingPeer = pendingInvitePeer,
+           let startedAt = pendingInviteStartedAt,
+           Date().timeIntervalSince(startedAt) < inviteTimeout {
+            logger.info("[Eclipse:CONN] iPhone skipping invite to \(peer.displayName, privacy: .public): invitation already in flight to \(pendingPeer.displayName, privacy: .public)")
+            return
+        }
+
         // Increase timeout to 60 seconds and present the shared handshake token so the
         // Apple TV can authenticate this client.
         let context = "\(handshakeToken)-iPhone".data(using: .utf8)
+        pendingInvitePeer = peer
+        pendingInviteStartedAt = Date()
         browser?.invitePeer(peer, to: session, withContext: context, timeout: 60)
-        logger.info("Invited peer: \(peer.displayName)")
+        logger.info("[Eclipse:CONN] iPhone invited peer: \(peer.displayName, privacy: .public) (timeout 60s)")
+    }
+
+    /// Clears any in-flight invitation bookkeeping once an attempt resolves.
+    private func clearPendingInvite() {
+        pendingInvitePeer = nil
+        pendingInviteStartedAt = nil
     }
     
     func disconnect() {
+        clearPendingInvite()
         session?.disconnect()
         logger.info("Disconnected session")
     }
+
+    /// Switches the active connection to `peer`. If currently connected to a different
+    /// Apple TV, tears that down first (only one peer is connected at a time), then
+    /// invites the requested peer.
+    func switchToPeer(_ peer: MCPeerID) {
+        if session?.connectedPeers.contains(peer) == true {
+            logger.info("[Eclipse:CONN] iPhone already connected to requested peer: \(peer.displayName, privacy: .public)")
+            return
+        }
+        if session?.connectedPeers.isEmpty == false {
+            logger.info("[Eclipse:CONN] iPhone switching peers, disconnecting current session")
+            session?.disconnect()
+        }
+        clearPendingInvite()
+        invitePeer(peer)
+    }
+
+    /// Asks the Apple TV to make the item with the given id (file name) live/fullscreen.
+    @discardableResult
+    func sendPlayRequest(id: String) -> Bool {
+        return sendCommand(.playRequest(id: id), description: "play request")
+    }
+
+    /// Asks the Apple TV to delete the item with the given id.
+    @discardableResult
+    func sendDeleteRequest(id: String) -> Bool {
+        return sendCommand(.deleteItem(id: id), description: "delete request")
+    }
+
+    /// Asks the Apple TV to move the item with the given id to a new index.
+    @discardableResult
+    func sendMoveRequest(id: String, toIndex: Int) -> Bool {
+        return sendCommand(.moveItem(id: id, toIndex: toIndex), description: "move request")
+    }
+
+    /// Asks the Apple TV to reorder its live library to match `orderedIds` exactly.
+    /// Used when saving a drag-and-drop arrangement made on the companion.
+    @discardableResult
+    func sendReorderRequest(orderedIds: [String]) -> Bool {
+        return sendCommand(.reorderItems(orderedIds: orderedIds), description: "reorder request")
+    }
+
+    /// Asks the Apple TV to change a per-item video setting. Nil fields are left as-is.
+    @discardableResult
+    func sendVideoSetting(id: String, isLooping: Bool?, isMuted: Bool?) -> Bool {
+        return sendCommand(.setVideoSetting(id: id, isLooping: isLooping, isMuted: isMuted),
+                           description: "video setting")
+    }
+
+    private func sendCommand(_ envelope: EclipseShareEnvelope, description: String) -> Bool {
+        guard let session = session, let peer = session.connectedPeers.first else {
+            logger.error("Cannot send \(description): no active session or peer")
+            return false
+        }
+        guard let data = envelope.encoded() else { return false }
+
+        do {
+            try session.send(data, toPeers: [peer], with: .reliable)
+            logger.info("Sent \(description)")
+            return true
+        } catch {
+            logger.error("Failed to send \(description): \(error.localizedDescription)")
+            return false
+        }
+    }
     
+    /// If a re-send was requested, tells the TV the upcoming resource restores a purged
+    /// item, then clears the flag so subsequent normal sends aren't treated as restores.
+    private func sendPendingRestoreIfNeeded(to peer: MCPeerID, via session: MCSession) {
+        guard let restoreId = pendingRestoreId else { return }
+        pendingRestoreId = nil
+        if let data = EclipseShareEnvelope.restoreItem(id: restoreId).encoded() {
+            try? session.send(data, toPeers: [peer], with: .reliable)
+            logger.info("Sent restore_item for id: \(restoreId)")
+        }
+    }
+
     func sendImage(at imageURL: URL) -> Bool {
         guard let session = session, let peer = session.connectedPeers.first else {
             logger.error("Cannot send image: No active session or peer")
@@ -184,6 +292,8 @@ class iPhoneConnectionManager: NSObject {
 
         // Clean up any existing progress observer before starting new transfer
         cleanupCurrentProgress()
+
+        sendPendingRestoreIfNeeded(to: peer, via: session)
 
         let fileName = imageURL.lastPathComponent
         let progress = session.sendResource(at: imageURL, withName: fileName, toPeer: peer) { [weak self] error in
@@ -296,6 +406,8 @@ class iPhoneConnectionManager: NSObject {
             return
         }
 
+        sendPendingRestoreIfNeeded(to: peer, via: session)
+
         let fileName = videoURL.lastPathComponent
         let progress = session.sendResource(at: videoURL, withName: fileName, toPeer: peer) { [weak self] error in
             DispatchQueue.main.async {
@@ -361,7 +473,7 @@ class iPhoneConnectionManager: NSObject {
 
 extension iPhoneConnectionManager: MCNearbyServiceBrowserDelegate {
     func browser(_ browser: MCNearbyServiceBrowser, foundPeer peerID: MCPeerID, withDiscoveryInfo info: [String : String]?) {
-        logger.info("Found peer: \(peerID.displayName)")
+        logger.info("[Eclipse:CONN] iPhone found peer: \(peerID.displayName, privacy: .public)")
         
         // Track discovered peer
         if !discoveredPeers.contains(peerID) {
@@ -374,7 +486,7 @@ extension iPhoneConnectionManager: MCNearbyServiceBrowserDelegate {
     }
     
     func browser(_ browser: MCNearbyServiceBrowser, lostPeer peerID: MCPeerID) {
-        logger.info("Lost peer: \(peerID.displayName)")
+        logger.info("[Eclipse:CONN] iPhone lost peer: \(peerID.displayName, privacy: .public)")
         
         if let index = discoveredPeers.firstIndex(of: peerID) {
             discoveredPeers.remove(at: index)
@@ -386,7 +498,7 @@ extension iPhoneConnectionManager: MCNearbyServiceBrowserDelegate {
     }
     
     func browser(_ browser: MCNearbyServiceBrowser, didNotStartBrowsingForPeers error: Error) {
-        logger.error("Failed to start browsing: \(error.localizedDescription)")
+        logger.error("[Eclipse:CONN] iPhone FAILED to start browsing: \(error.localizedDescription, privacy: .public)")
         
         // Handle specific error types and retry
         if error.localizedDescription.contains("busy") || error.localizedDescription.contains("in use") {
@@ -415,20 +527,33 @@ extension iPhoneConnectionManager: MCSessionDelegate {
         
         switch state {
         case .connected:
-            logger.info("Connected to peer: \(peerID.displayName)")
+            logger.info("[Eclipse:CONN] iPhone CONNECTED to peer: \(peerID.displayName, privacy: .public)")
+            clearPendingInvite()
             // Stop browsing once connected to avoid duplicate connections
             stopBrowsing()
             // Reset retry count on successful connection
             resetRetryCount()
+            Task { @MainActor in
+                // Point the store at this TV's library bucket *before* its manifest
+                // arrives so the incoming manifest/thumbnails land in the right cache.
+                TVLibraryStore.shared.setActiveTV(peerID.displayName)
+                TVLibraryStore.shared.setOnline(true)
+            }
             DispatchQueue.main.async {
                 self.delegate?.connectionManager(self, didConnectToPeer: peerID)
             }
             
         case .connecting:
-            logger.info("Connecting to peer: \(peerID.displayName)")
+            logger.info("[Eclipse:CONN] iPhone connecting to peer: \(peerID.displayName, privacy: .public)")
             
         case .notConnected:
-            logger.info("Disconnected from peer: \(peerID.displayName)")
+            logger.info("[Eclipse:CONN] iPhone NOT connected to peer: \(peerID.displayName, privacy: .public)")
+            // The attempt resolved (failed/timed out/dropped); allow a fresh invitation.
+            clearPendingInvite()
+            // Keep the cached library but mark it offline; it refreshes on reconnect.
+            Task { @MainActor in
+                TVLibraryStore.shared.setOnline(false)
+            }
             // Restart browsing if we were connected but got disconnected
             if discoveredPeers.contains(peerID) {
                 startBrowsing()
@@ -445,6 +570,13 @@ extension iPhoneConnectionManager: MCSessionDelegate {
     }
     
     func session(_ session: MCSession, didReceive data: Data, fromPeer peerID: MCPeerID) {
+        // Eclipse library-mirroring control messages are tagged JSON envelopes; handle
+        // them before the plain-string confirmations below.
+        if let envelope = EclipseShareEnvelope.decode(from: data) {
+            handleControlEnvelope(envelope)
+            return
+        }
+
         // Check if this is a confirmation message
         if let message = String(data: data, encoding: .utf8) {
             if message == "IMAGE_RECEIVED" || message == "VIDEO_RECEIVED" {
@@ -498,6 +630,41 @@ extension iPhoneConnectionManager: MCSessionDelegate {
     }
     
     func session(_ session: MCSession, didFinishReceivingResourceWithName resourceName: String, fromPeer peerID: MCPeerID, at localURL: URL?, withError error: Error?) {
-        // Not used in this app
+        // The only resources the Apple TV sends us are library thumbnails.
+        guard error == nil,
+              let localURL = localURL,
+              let id = EclipseShareProtocol.itemId(fromThumbnailResourceName: resourceName) else {
+            return
+        }
+
+        if let image = UIImage(contentsOfFile: localURL.path) {
+            Task { @MainActor in
+                TVLibraryStore.shared.setThumbnail(image, forId: id)
+            }
+        }
+
+        try? FileManager.default.removeItem(at: localURL)
+    }
+
+    // MARK: - Control Message Routing
+
+    /// Routes a decoded library-mirroring envelope into the shared `TVLibraryStore`.
+    private func handleControlEnvelope(_ envelope: EclipseShareEnvelope) {
+        switch envelope.kind {
+        case .libraryManifest:
+            let items = envelope.items ?? []
+            let currentId = envelope.currentId
+            Task { @MainActor in
+                TVLibraryStore.shared.updateManifest(items: items, currentId: currentId)
+            }
+        case .currentChanged:
+            let currentId = envelope.currentId
+            Task { @MainActor in
+                TVLibraryStore.shared.updateCurrentId(currentId)
+            }
+        case .playRequest, .setVideoSetting, .deleteItem, .moveItem, .reorderItems, .restoreItem, .none:
+            // These are iPhone -> TV commands; ignore if ever echoed back to us.
+            break
+        }
     }
 }

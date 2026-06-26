@@ -37,6 +37,163 @@ extension ImageViewController {
         }
     }
 
+    /// The companion asked us to make a specific item live. Resolve it and bring it
+    /// to fullscreen, mirroring the behavior of selecting it on the TV.
+    func connectionManager(_ manager: ConnectionManager, didReceivePlayRequestForId id: String) {
+        // A file may have been purged by tvOS since the last sync; catch it now (this
+        // moves any missing file into the ledger and rebroadcasts an updated manifest)
+        // before we attempt to display it.
+        dataSource.revalidateAvailability()
+
+        guard let index = libraryIndex(forItemId: id) else {
+            logger.error("Play request for unavailable id: \(id, privacy: .public)")
+            showNotificationToast(message: "That item is no longer available")
+            Task { @MainActor in
+                self.connectionManager?.librarySync?.librarySettingsDidChange()
+            }
+            return
+        }
+
+        // If the user is mid-reorder or a menu is open, just update the selection; the
+        // live view will catch up once the UI returns to a safe state.
+        if isMoveMode || presentedViewController != nil {
+            dataSource.setCurrentIndex(index)
+            showNotificationToast(message: "Selection updated from companion")
+            return
+        }
+
+        dataSource.setCurrentIndex(index)
+
+        if isInGridMode {
+            hideGridView()
+        } else {
+            displayImageAtCurrentIndex()
+        }
+    }
+
+    /// The companion asked us to delete an item.
+    func connectionManager(_ manager: ConnectionManager, didReceiveDeleteRequestForId id: String) {
+        guard let index = libraryIndex(forItemId: id) else {
+            // Not in the live list: it may be an unavailable (purged) item the user chose
+            // to remove. Drop the ledger entry and refresh the companion's manifest.
+            if dataSource.unavailableLedger.remove(id: id) != nil {
+                logger.info("Removed unavailable ledger entry: \(id, privacy: .public)")
+                Task { @MainActor in
+                    self.connectionManager?.librarySync?.librarySettingsDidChange()
+                }
+            } else {
+                logger.error("Delete request for unknown id: \(id, privacy: .public)")
+            }
+            return
+        }
+
+        // Avoid mutating the list while the user is reorganizing or a menu is open.
+        if isMoveMode || presentedViewController != nil {
+            showNotificationToast(message: "Busy on TV - try again in a moment")
+            return
+        }
+
+        let wasFullscreenTarget = !isInGridMode && index == dataSource.currentIndex
+        dataSource.removeMedia(at: index)
+
+        // If we just deleted the item shown fullscreen, refresh or fall back to the grid.
+        if wasFullscreenTarget {
+            if dataSource.isEmpty {
+                showGridView()
+            } else {
+                displayImageAtCurrentIndex()
+            }
+        }
+    }
+
+    /// The companion asked us to move an item to a new position.
+    func connectionManager(_ manager: ConnectionManager, didReceiveMoveRequestForId id: String, toIndex: Int) {
+        guard let fromIndex = libraryIndex(forItemId: id) else {
+            logger.error("Move request for unknown id: \(id, privacy: .public)")
+            return
+        }
+
+        if isMoveMode || presentedViewController != nil {
+            showNotificationToast(message: "Busy on TV - try again in a moment")
+            return
+        }
+
+        let clampedTarget = max(0, min(toIndex, dataSource.count - 1))
+        dataSource.moveMedia(from: fromIndex, to: clampedTarget)
+    }
+
+    /// The companion saved a drag-and-drop arrangement. Apply the full new order at once.
+    func connectionManager(_ manager: ConnectionManager, didReceiveReorderRequest orderedIds: [String]) {
+        if isMoveMode || presentedViewController != nil {
+            showNotificationToast(message: "Busy on TV - try again in a moment")
+            return
+        }
+        dataSource.applyOrder(orderedIds: orderedIds)
+    }
+
+    /// The companion changed a per-item video setting (loop / mute).
+    func connectionManager(_ manager: ConnectionManager, didReceiveVideoSettingForId id: String,
+                           isLooping: Bool?, isMuted: Bool?) {
+        guard let index = libraryIndex(forItemId: id), let path = dataSource.getPath(at: index) else {
+            logger.error("Video setting for unknown id: \(id, privacy: .public)")
+            return
+        }
+
+        let item = MediaItem(path: path)
+        guard item.isVideo else { return }
+
+        if let isLooping = isLooping {
+            viewModel.updateVideoSetting(for: item, keyPath: \.isLooping, value: isLooping)
+        }
+        if let isMuted = isMuted {
+            viewModel.updateVideoSetting(for: item, keyPath: \.isMuted, value: isMuted)
+        }
+
+        // If this video is the one playing fullscreen, apply the change live.
+        if !isInGridMode, isVideo, index == dataSource.currentIndex {
+            applySettingsToCurrentVideo()
+        }
+
+        // The path list didn't change, so push a fresh manifest to update the companion.
+        Task { @MainActor in
+            self.connectionManager?.librarySync?.librarySettingsDidChange()
+        }
+    }
+
+    /// A purged item was re-sent from the companion: the fresh file was just added via
+    /// the normal image/video path. Drop the ledger entry and move the new item back to
+    /// the slot the original occupied.
+    func connectionManager(_ manager: ConnectionManager, didRestoreItemForLedgerId ledgerId: String, newPath: String) {
+        let entry = dataSource.unavailableLedger.remove(id: ledgerId)
+
+        // Locate the freshly added item by its new file name.
+        let newId = URL(fileURLWithPath: newPath).lastPathComponent
+        if let fromIndex = libraryIndex(forItemId: newId), let entry = entry {
+            let target = max(0, min(entry.lastIndex, dataSource.count - 1))
+            if target != fromIndex {
+                dataSource.moveMedia(from: fromIndex, to: target)
+            }
+        }
+
+        // moveMedia/addMedia already nudge the manifest, but rebroadcast explicitly so the
+        // dropped ledger entry is reflected even if nothing in the path list changed.
+        Task { @MainActor in
+            self.connectionManager?.librarySync?.librarySettingsDidChange()
+        }
+        logger.info("Restored item \(ledgerId, privacy: .public) as \(newId, privacy: .public)")
+    }
+
+    /// Finds the data-source index for an item id (file name), or nil if not present.
+    private func libraryIndex(forItemId id: String) -> Int? {
+        for index in 0..<dataSource.count {
+            if let path = dataSource.getPath(at: index),
+               URL(fileURLWithPath: path).lastPathComponent == id {
+                return index
+            }
+        }
+        return nil
+    }
+
     func connectionManager(_ manager: ConnectionManager, didReceiveVideoAt path: String) {
         let startTime = Date()
         self.logger.info("Received video at path: \(path)")

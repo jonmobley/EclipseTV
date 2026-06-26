@@ -6,6 +6,19 @@ import MultipeerConnectivity
 
 extension iPhoneMainViewController {
 
+    /// The Apple TV (by device name) the user last chose to view. Auto-connect prefers
+    /// it over the first-discovered peer. Nil means "no preference" (legacy behavior).
+    var preferredTVName: String? {
+        get { UserDefaults.standard.string(forKey: "EclipseTV.companion.preferredTVName") }
+        set { UserDefaults.standard.set(newValue, forKey: "EclipseTV.companion.preferredTVName") }
+    }
+
+    /// Returns the discovered peer matching `preferredTVName`, if any.
+    func preferredPeer(from peers: [MCPeerID]) -> MCPeerID? {
+        guard let preferred = preferredTVName else { return nil }
+        return peers.first(where: { $0.displayName == preferred })
+    }
+
     func startSearching() {
         // Check if we already have a connection
         if isConnected() {
@@ -14,12 +27,8 @@ extension iPhoneMainViewController {
             return
         }
 
-        // Update UI to show searching
-        connectionStatusIcon.tintColor = .lightGray
-        connectionStatusLabel.text = "Connecting..."
-        connectionStatusLabel.textColor = .lightGray
-        subtitleLabel.text = "Open the Eclipse app on your AppleTV to connect"
-        connectionActivityIndicator.startAnimating()
+        // Update UI to show searching (disconnected until we actually connect).
+        headerBar.setConnected(false)
 
         // Start browsing if not already browsing
         if !connectionManager.isBrowsing {
@@ -30,6 +39,50 @@ extension iPhoneMainViewController {
         if autoConnectTimer == nil {
             autoConnectTimer = Timer.scheduledTimer(timeInterval: 2.0, target: self, selector: #selector(tryAutoConnect), userInfo: nil, repeats: true)
         }
+
+        // If we still aren't connected after a grace period, surface troubleshooting help
+        // (covers denied Local Network permission, wrong Wi-Fi, or TV app not open).
+        scheduleConnectionHint()
+    }
+
+    // MARK: - Troubleshooting Hint
+
+    /// Arms a one-shot timer that reveals the troubleshooting hint if we haven't connected.
+    private func scheduleConnectionHint() {
+        connectionHintTimer?.invalidate()
+        connectionHintTimer = Timer.scheduledTimer(withTimeInterval: 12.0, repeats: false) { [weak self] _ in
+            self?.showConnectionHint()
+        }
+    }
+
+    private func showConnectionHint() {
+        guard !isConnected() else { return }
+        guard presentedViewController == nil else { return }
+        logger.info("[Eclipse:CONN] iPhone no connection after grace period. discoveredPeers=\(self.connectionManager.discoveredPeers.count, privacy: .public), browsing=\(self.connectionManager.isBrowsing, privacy: .public)")
+        DispatchQueue.main.async {
+            guard !self.isConnected(), self.presentedViewController == nil else { return }
+            let alert = UIAlertController(
+                title: "Still connecting?",
+                message: "Make sure the Eclipse app is open on your Apple TV, both devices are on the same Wi-Fi, and that Local Network access is enabled for Eclipse.",
+                preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "Open Settings", style: .default) { [weak self] _ in
+                self?.openAppSettings()
+            })
+            alert.addAction(UIAlertAction(title: "Keep Waiting", style: .cancel))
+            self.present(alert, animated: true)
+        }
+    }
+
+    /// Cancels the pending troubleshooting hint timer (e.g. once connected).
+    func hideConnectionHint() {
+        connectionHintTimer?.invalidate()
+        connectionHintTimer = nil
+    }
+
+    /// Deep-links to Eclipse's page in Settings, where the Local Network toggle appears.
+    @objc func openAppSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        UIApplication.shared.open(url)
     }
 
     @objc private func tryAutoConnect() {
@@ -49,72 +102,39 @@ extension iPhoneMainViewController {
             return
         }
 
-        // Try to connect to any available Apple TV peer
-        for peer in connectionManager.discoveredPeers {
-            if peer.displayName.contains("Apple TV") || peer.displayName.contains("AppleTV") {
-                selectedPeer = peer
-                connectionManager.invitePeer(peer)
+        // Connect to the preferred Apple TV if it's discovered, otherwise the first
+        // available peer. Only the Eclipse Apple TV app advertises the `eclipse-share`
+        // service, so any discovered peer is an Eclipse TV regardless of its name.
+        let peers = connectionManager.discoveredPeers
+        if let peer = preferredPeer(from: peers) ?? peers.first {
+            selectedPeer = peer
+            connectionManager.invitePeer(peer)
 
-                // Don't update UI state to connected until we actually connect
-                // Just update status to show we're trying to connect
-                DispatchQueue.main.async {
-                    self.connectionStatusLabel.text = "Connecting to \(peer.displayName)..."
-                }
-
-                // Stop the timer safely
-                autoConnectTimer?.invalidate()
-                autoConnectTimer = nil
-                break
-            }
+            // Don't update UI state to connected until we actually connect.
+            // Stop the timer safely
+            autoConnectTimer?.invalidate()
+            autoConnectTimer = nil
         }
     }
 
     func stopSearching() {
         connectionManager.stopBrowsing()
-        connectionActivityIndicator.stopAnimating()
 
         // Clean invalidate timer safely
         autoConnectTimer?.invalidate()
         autoConnectTimer = nil
+        hideConnectionHint()
     }
 
     func updateConnectedState(_ connected: Bool, peer: MCPeerID?) {
         DispatchQueue.main.async {
             if connected, let peer = peer {
-                // Update connected UI
-                UIView.animate(withDuration: 0.3) {
-                    self.connectionStatusIcon.alpha = 1
-                    self.connectionActivityIndicator.alpha = 0
-                }
-                self.connectionActivityIndicator.stopAnimating()
-                self.connectionStatusIcon.tintColor = .systemGreen
-                self.connectionStatusLabel.text = "Connected"
-                self.connectionStatusLabel.textColor = .systemGreen
-                self.subtitleLabel.text = "Keep the Eclipse AppleTV app open to stay connected."
-
-                // Enable media picker button when connected
-                self.mediaPickerButton.isEnabled = true
-                self.mediaPickerButton.alpha = 1.0
-                self.mediaPickerButton.backgroundColor = .systemBlue
-
-                // Update selectedPeer
+                // Connected: drop any pending troubleshooting hint and enable sending.
+                self.hideConnectionHint()
+                self.headerBar.setConnected(true)
                 self.selectedPeer = peer
             } else {
-                // Update disconnected UI
-                UIView.animate(withDuration: 0.3) {
-                    self.connectionStatusIcon.alpha = 0
-                    self.connectionActivityIndicator.alpha = 1
-                }
-                self.connectionActivityIndicator.startAnimating()
-                self.connectionStatusIcon.tintColor = .lightGray
-                self.connectionStatusLabel.text = "Connecting..."
-                self.connectionStatusLabel.textColor = .lightGray
-                self.subtitleLabel.text = "Open the Eclipse app on your AppleTV to connect"
-
-                // Disable media picker button when disconnected
-                self.mediaPickerButton.isEnabled = false
-                self.mediaPickerButton.alpha = 0.5
-                self.mediaPickerButton.backgroundColor = .lightGray
+                self.headerBar.setConnected(false)
 
                 // Only clear selectedPeer if explicitly told to
                 if peer == nil {

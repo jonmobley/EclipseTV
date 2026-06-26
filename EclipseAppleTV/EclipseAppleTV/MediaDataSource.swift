@@ -31,8 +31,13 @@ class MediaDataSource: ObservableObject {
     /// `UserDefaults` suite instead of polluting `.standard`.
     private let defaults: UserDefaults
 
+    /// Records library items whose files were purged by tvOS so the companion can show
+    /// them as unavailable and offer to re-send. Shares this instance's `defaults`.
+    let unavailableLedger: UnavailableLedger
+
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        self.unavailableLedger = UnavailableLedger(defaults: defaults)
         loadFromStorage()
     }
     
@@ -141,6 +146,43 @@ class MediaDataSource: ObservableObject {
         delegate?.mediaDataDidChange()
     }
     
+    /// Reorders the live list so item file names match `orderedIds`. Ids not present
+    /// are ignored; any live paths not mentioned keep their relative order at the end.
+    /// The currently live item stays live (its index is remapped). Triggers a single
+    /// change notification + manifest broadcast when the order actually changes.
+    func applyOrder(orderedIds: [String]) {
+        guard !orderedIds.isEmpty, count > 0 else { return }
+
+        let currentPath = getCurrentPath()
+        var pathByName: [String: String] = [:]
+        for path in mediaPaths {
+            pathByName[URL(fileURLWithPath: path).lastPathComponent] = path
+        }
+
+        var reordered: [String] = []
+        var used = Set<String>()
+        for id in orderedIds {
+            if let path = pathByName[id], !used.contains(path) {
+                reordered.append(path)
+                used.insert(path)
+            }
+        }
+        // Preserve any live items the companion didn't mention (defensive).
+        for path in mediaPaths where !used.contains(path) {
+            reordered.append(path)
+        }
+
+        guard reordered != mediaPaths else { return }
+        mediaPaths = reordered
+
+        if let currentPath = currentPath, let newIndex = reordered.firstIndex(of: currentPath) {
+            currentIndex = newIndex
+        }
+
+        saveToStorage()
+        delegate?.mediaDataDidChange()
+    }
+
     func nextIndex() -> Bool {
         guard currentIndex < count - 1 else { return false }
         currentIndex += 1
@@ -153,6 +195,32 @@ class MediaDataSource: ObservableObject {
         return true
     }
     
+    // MARK: - Availability
+
+    /// Re-checks the live list and moves any now-missing files into the unavailable
+    /// ledger (recording their current slot). Idempotent and safe to call repeatedly,
+    /// e.g. on launch or when a companion connects. Walks back-to-front so index
+    /// removals don't shift the positions still to be examined.
+    func revalidateAvailability() {
+        guard count > 0 else { return }
+        for index in stride(from: count - 1, through: 0, by: -1) {
+            let path = mediaPaths[index]
+            if !FileManager.default.fileExists(atPath: path) {
+                recordUnavailable(path: path, lastIndex: index)
+                removeMedia(at: index)
+            }
+        }
+    }
+
+    /// Records a purged file in the ledger using its filename as the stable id.
+    private func recordUnavailable(path: String, lastIndex: Int) {
+        let item = MediaItem(path: path)
+        unavailableLedger.record(id: item.fileName,
+                                 name: item.fileName,
+                                 isVideo: item.isVideo,
+                                 lastIndex: lastIndex)
+    }
+
     // MARK: - Storage
     
     private func loadFromStorage() {
@@ -160,7 +228,7 @@ class MediaDataSource: ObservableObject {
 
         let mediaDirectory = ImageStorage.shared.getImagesDirectory()
         var resolved: [String] = []
-        for path in saved {
+        for (index, path) in saved.enumerated() {
             if FileManager.default.fileExists(atPath: path) {
                 resolved.append(path)
             } else {
@@ -169,6 +237,11 @@ class MediaDataSource: ObservableObject {
                 let candidate = mediaDirectory.appendingPathComponent((path as NSString).lastPathComponent).path
                 if FileManager.default.fileExists(atPath: candidate) {
                     resolved.append(candidate)
+                } else {
+                    // File was purged (tvOS Caches eviction): remember it so the companion
+                    // can show it as unavailable and offer to re-send. Keep it out of the
+                    // live list so the TV grid stays clean.
+                    recordUnavailable(path: path, lastIndex: index)
                 }
             }
         }

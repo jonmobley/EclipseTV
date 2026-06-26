@@ -8,92 +8,27 @@ import os
 class iPhoneMainViewController: UIViewController {
     
     // MARK: - UI Elements
-    
-    let connectionStatusContainer: UIView = {
-        let view = UIView()
-        view.translatesAutoresizingMaskIntoConstraints = false
-        return view
-    }()
-    
-    let connectionStatusIcon: UIImageView = {
-        let imageView = UIImageView()
-        let config = UIImage.SymbolConfiguration(pointSize: 36, weight: .medium)
-        imageView.image = UIImage(systemName: "dot.radiowaves.left.and.right", withConfiguration: config)
-        imageView.tintColor = .lightGray
-        imageView.contentMode = .scaleAspectFit
-        imageView.alpha = 0 // Start hidden
-        return imageView
-    }()
-    
-    let connectionActivityIndicator: UIActivityIndicatorView = {
-        let indicator = UIActivityIndicatorView(style: .medium)
-        indicator.color = .lightGray
-        return indicator
-    }()
-    
-    let connectionStatusLabel: UILabel = {
-        let label = UILabel()
-        label.text = "Connecting..."
-        label.textColor = .lightGray
-        label.font = UIFont.systemFont(ofSize: 14)
-        label.textAlignment = .center
-        return label
-    }()
-    
-    let titleLabel: UILabel = {
-        let label = UILabel()
-        label.text = "Eclipse"
-        label.textColor = .white
-        label.font = UIFont.systemFont(ofSize: 28, weight: .bold)
-        label.textAlignment = .center
-        return label
-    }()
-    
-    let subtitleLabel: UILabel = {
-        let label = UILabel()
-        label.text = "Open the Eclipse app on your AppleTV to connect"
-        label.textColor = .lightGray
-        label.font = UIFont.systemFont(ofSize: 14)
-        label.textAlignment = .center
-        label.numberOfLines = 0
-        return label
-    }()
-    
-    let statusLabel: UILabel = {
-        let label = UILabel()
+
+    /// Top header: connection status (leading) and the blue "+" media button (trailing).
+    let headerBar = HomeHeaderBar()
+
+    /// The library grid is the home screen; it's embedded as a child view controller.
+    lazy var libraryViewController = LibraryGridViewController(connectionManager: connectionManager)
+
+    /// Transient transfer/status message overlaid on top of the library while sending.
+    let statusLabel: PaddedLabel = {
+        let label = PaddedLabel()
         label.textAlignment = .center
         label.textColor = .white
-        label.font = UIFont.systemFont(ofSize: 16)
+        label.font = UIFont.systemFont(ofSize: 16, weight: .semibold)
         label.numberOfLines = 0
+        label.backgroundColor = UIColor.black.withAlphaComponent(0.7)
+        label.layer.cornerRadius = 10
+        label.layer.masksToBounds = true
         label.alpha = 0
         return label
     }()
-    
-    let mediaPickerButton: UIButton = {
-        let button = UIButton(type: .system)
-        button.setTitle("Select Media", for: .normal)
-        button.titleLabel?.font = UIFont.systemFont(ofSize: 17, weight: .medium)
-        button.backgroundColor = .systemBlue
-        button.setTitleColor(.white, for: .normal)
-        button.layer.cornerRadius = 12
-        button.alpha = 0.5 // Start disabled
-        button.isEnabled = false
-        return button
-    }()
-    
-    let sendButton: UIButton = {
-        let button = UIButton(type: .system)
-        button.setTitle("Send to Apple TV", for: .normal)
-        button.setTitleColor(.white, for: .normal)
-        button.backgroundColor = .systemOrange
-        button.layer.cornerRadius = 8
-        button.titleLabel?.font = UIFont.systemFont(ofSize: 16, weight: .semibold)
-        button.isEnabled = false
-        button.alpha = 0.5
-        button.isHidden = true
-        return button
-    }()
-    
+
     let cancelButton: UIButton = {
         let button = UIButton(type: .system)
         button.setTitle("Cancel", for: .normal)
@@ -105,12 +40,14 @@ class iPhoneMainViewController: UIViewController {
         button.isHidden = true
         return button
     }()
-    
+
     // MARK: - Properties
     
     let connectionManager = iPhoneConnectionManager()
     var selectedPeer: MCPeerID?
     var autoConnectTimer: Timer?
+    /// One-shot timer that reveals the troubleshooting hint if we can't connect in time.
+    var connectionHintTimer: Timer?
     var isShowingPicker = false // Track if we're showing the image picker
     private var statusFadeTimer: Timer?
     let logger = Logger(subsystem: "com.eclipseapp.ios", category: "MainViewController")
@@ -129,6 +66,9 @@ class iPhoneMainViewController: UIViewController {
     
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        
+        // The home screen uses its own custom header bar, so keep the nav bar hidden.
+        navigationController?.setNavigationBarHidden(true, animated: animated)
         
         // Only start searching if we're not in the middle of picking images
         if !isShowingPicker {
@@ -175,6 +115,13 @@ class iPhoneMainViewController: UIViewController {
         previewController.modalPresentationStyle = .overFullScreen
         present(previewController, animated: true)
     }
+
+    func showImagePreview(for image: UIImage) {
+        let previewController = ImagePreviewViewController(image: image)
+        previewController.delegate = self
+        previewController.modalPresentationStyle = .overFullScreen
+        present(previewController, animated: true)
+    }
     
     func isConnected() -> Bool {
         guard let peer = selectedPeer else {
@@ -213,6 +160,8 @@ class iPhoneMainViewController: UIViewController {
         autoConnectTimer = nil
         statusFadeTimer?.invalidate()
         statusFadeTimer = nil
+        connectionHintTimer?.invalidate()
+        connectionHintTimer = nil
     }
     
     func cleanupTempFile(at url: URL) {

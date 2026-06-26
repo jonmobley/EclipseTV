@@ -13,7 +13,12 @@ extension iPhoneMainViewController: PHPickerViewControllerDelegate {
         isShowingPicker = false
         picker.dismiss(animated: true)
 
-        guard let provider = results.first?.itemProvider else { return }
+        guard let provider = results.first?.itemProvider else {
+            // User cancelled: drop any pending re-send so a later normal send isn't
+            // mistaken for a restore.
+            connectionManager.pendingRestoreId = nil
+            return
+        }
 
         if provider.hasItemConformingToTypeIdentifier(UTType.movie.identifier) {
             handlePickedVideo(provider)
@@ -67,16 +72,37 @@ extension iPhoneMainViewController: PHPickerViewControllerDelegate {
             }
 
             DispatchQueue.main.async {
-                if MediaValidator.imageNeedsDownscaling(image) {
-                    if let description = MediaValidator.getDownscalingDescription(for: image) {
-                        self.showTemporaryStatus(description, duration: 4.0)
-                    }
-                }
-
-                // Downscale image if needed and send directly with default fit-to-fill centered
-                let optimizedImage = MediaValidator.downscaleImage(image)
-                self.sendImageToAppleTV(optimizedImage)
+                // Let the user review the image before it's sent. The actual downscale +
+                // transfer happens only once they confirm in the preview.
+                self.showImagePreview(for: image)
             }
+        }
+    }
+}
+
+// MARK: - ImagePreviewDelegate
+
+extension iPhoneMainViewController: ImagePreviewDelegate {
+    func imagePreview(_ controller: ImagePreviewViewController, didConfirm image: UIImage) {
+        controller.dismiss(animated: true) { [weak self] in
+            guard let self = self else { return }
+            if MediaValidator.imageNeedsDownscaling(image) {
+                if let description = MediaValidator.getDownscalingDescription(for: image) {
+                    self.showTemporaryStatus(description, duration: 4.0)
+                }
+            }
+
+            // Downscale if needed and send with default fit-to-fill centered.
+            let optimizedImage = MediaValidator.downscaleImage(image)
+            self.sendImageToAppleTV(optimizedImage)
+        }
+    }
+
+    func imagePreviewDidCancel(_ controller: ImagePreviewViewController) {
+        controller.dismiss(animated: true) { [weak self] in
+            // Backing out of a re-send must clear the pending flag so a later normal
+            // send isn't mistaken for a restore.
+            self?.connectionManager.pendingRestoreId = nil
         }
     }
 }

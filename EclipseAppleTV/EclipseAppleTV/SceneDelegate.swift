@@ -7,6 +7,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 	var window: UIWindow?
     private let logger = Logger(subsystem: "com.eclipsetv.app", category: "SceneDelegate")
     var connectionManager: ConnectionManager?
+    var librarySync: TVLibrarySync?
 
 	func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
 		guard let windowScene = scene as? UIWindowScene else { return }
@@ -20,6 +21,14 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 		connectionManager = ConnectionManager()
 		connectionManager?.delegate = root
 		root.connectionManager = connectionManager
+
+		// Wire up library mirroring to the companion app
+		if let connectionManager = connectionManager {
+			let sync = TVLibrarySync(connectionManager: connectionManager)
+			connectionManager.librarySync = sync
+			librarySync = sync
+		}
+
 		connectionManager?.startAdvertising()
 
 		logger.info("🌅 [SCENE] Window connected. Root=ImageViewController, advertising started")
@@ -29,6 +38,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         logger.info("🌇 [SCENE] Scene disconnected - tearing down connection manager")
         connectionManager?.cleanup()
         connectionManager = nil
+        librarySync = nil
     }
 
 	func sceneDidBecomeActive(_ scene: UIScene) {

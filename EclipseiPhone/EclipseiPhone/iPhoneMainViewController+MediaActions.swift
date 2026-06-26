@@ -7,6 +7,18 @@ import os
 
 extension iPhoneMainViewController {
 
+    /// Begins re-sending a purged Apple TV item: flags the next transfer as a restore
+    /// (so the TV puts it back in its original slot) and opens the existing picker.
+    /// Requires a live connection, like any other send.
+    func beginResend(forItemId id: String) {
+        guard let selectedPeer = selectedPeer, connectionManager.isConnectedToPeer(selectedPeer) else {
+            showTemporaryStatus("Please connect to Apple TV first")
+            return
+        }
+        connectionManager.pendingRestoreId = id
+        mediaPickerButtonTapped()
+    }
+
     @objc func mediaPickerButtonTapped() {
         guard let selectedPeer = selectedPeer, connectionManager.isConnectedToPeer(selectedPeer) else {
             showTemporaryStatus("Please connect to Apple TV first")
@@ -30,8 +42,8 @@ extension iPhoneMainViewController {
 
         // For iPad, we need to set the source view and rect
         if let popoverController = alertController.popoverPresentationController {
-            popoverController.sourceView = mediaPickerButton
-            popoverController.sourceRect = mediaPickerButton.bounds
+            popoverController.sourceView = headerBar.addAnchor
+            popoverController.sourceRect = headerBar.addAnchor.bounds
         }
 
         present(alertController, animated: true)
@@ -107,28 +119,21 @@ extension iPhoneMainViewController {
         UIView.animate(withDuration: 0.3) {
             self.statusLabel.alpha = 1.0
             self.cancelButton.alpha = 1.0
-            // Fade out connection status while transferring
-            self.connectionStatusContainer.alpha = 0.3
-            self.connectionStatusLabel.alpha = 0.3
         }
         cancelButton.isHidden = false
 
-        // Disable media picker button while sending
-        mediaPickerButton.isEnabled = false
-        mediaPickerButton.alpha = 0.5
+        // Disable the "+" button while sending.
+        headerBar.setAddEnabled(false)
     }
 
     func hideTransferUI() {
         UIView.animate(withDuration: 0.3) {
             self.statusLabel.alpha = 0
             self.cancelButton.alpha = 0
-            // Restore connection status visibility
-            self.connectionStatusContainer.alpha = 1.0
-            self.connectionStatusLabel.alpha = 1.0
         } completion: { _ in
             self.cancelButton.isHidden = true
-            self.mediaPickerButton.isEnabled = true
-            self.mediaPickerButton.alpha = 1.0
+            // Re-enable sending only if still connected.
+            self.headerBar.setAddEnabled(self.isConnected())
 
             // Clean up temp file when transfer UI is hidden
             if let tempURL = self.currentTempFileURL {
@@ -163,7 +168,6 @@ extension iPhoneMainViewController {
                 self.statusLabel.text = "Processing image..."
                 self.statusLabel.alpha = 1.0
                 self.showTransferUI()
-                self.connectionActivityIndicator.startAnimating()
             }
         }
 
@@ -180,7 +184,6 @@ extension iPhoneMainViewController {
                 DispatchQueue.main.async {
                     self.showTemporaryStatus("Failed to prepare image for sending")
                     self.hideTransferUI()
-                    self.connectionActivityIndicator.stopAnimating()
                 }
                 return
             }
@@ -191,7 +194,6 @@ extension iPhoneMainViewController {
                 DispatchQueue.main.async {
                     self.showTemporaryStatus("Failed to save image for sending")
                     self.hideTransferUI()
-                    self.connectionActivityIndicator.stopAnimating()
                 }
                 return
             }
@@ -206,7 +208,6 @@ extension iPhoneMainViewController {
                 } else {
                     // Show transfer UI for smaller images
                     self.showTransferUI()
-                    self.connectionActivityIndicator.startAnimating()
                 }
 
                 // Send the image as a resource
@@ -214,7 +215,6 @@ extension iPhoneMainViewController {
                 if !success {
                     self.showTemporaryStatus("Failed to send image. Please try again.")
                     self.hideTransferUI()
-                    self.connectionActivityIndicator.stopAnimating()
                     // Clean up temp file if sending failed
                     self.cleanupTempFile(at: fileURL)
                     self.currentTempFileURL = nil
