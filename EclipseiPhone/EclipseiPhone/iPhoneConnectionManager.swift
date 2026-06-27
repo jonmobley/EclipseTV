@@ -253,6 +253,20 @@ class iPhoneConnectionManager: NSObject {
                            description: "video setting")
     }
 
+    /// Sends a remote playback command for the live video. `position` is the absolute
+    /// target for `.seek` or the relative delta for `.skip` (seconds).
+    @discardableResult
+    func sendPlaybackCommand(action: EclipseShareProtocol.PlaybackAction, position: Double?) -> Bool {
+        return sendCommand(.playbackCommand(action: action, position: position), description: "playback command")
+    }
+
+    /// Configures the TV's read-only remote albums from a short account code. The TV
+    /// composes the manifest URL from it and syncs all of the account's albums.
+    @discardableResult
+    func sendSetAccount(code: String) -> Bool {
+        return sendCommand(.setAccount(code: code), description: "set account")
+    }
+
     private func sendCommand(_ envelope: EclipseShareEnvelope, description: String) -> Bool {
         guard let session = session, let peer = session.connectedPeers.first else {
             logger.error("Cannot send \(description): no active session or peer")
@@ -662,7 +676,16 @@ extension iPhoneConnectionManager: MCSessionDelegate {
             Task { @MainActor in
                 TVLibraryStore.shared.updateCurrentId(currentId)
             }
-        case .playRequest, .setVideoSetting, .deleteItem, .moveItem, .reorderItems, .restoreItem, .none:
+        case .playbackStatus:
+            let currentId = envelope.currentId
+            let isPlaying = envelope.isPlaying ?? false
+            let position = envelope.position ?? 0
+            let duration = envelope.playbackDuration ?? 0
+            Task { @MainActor in
+                TVLibraryStore.shared.updatePlayback(currentId: currentId, isPlaying: isPlaying,
+                                                     position: position, duration: duration)
+            }
+        case .playRequest, .setVideoSetting, .deleteItem, .moveItem, .reorderItems, .restoreItem, .playbackCommand, .setAccount, .none:
             // These are iPhone -> TV commands; ignore if ever echoed back to us.
             break
         }

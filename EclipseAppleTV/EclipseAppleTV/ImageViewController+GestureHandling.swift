@@ -162,8 +162,9 @@ extension ImageViewController {
             // Transition to grid view
             showGridViewTransition()
         } else {
-            // If already in grid view, let system handle the back button
-            UIApplication.shared.sendAction(#selector(UIApplication.sendEvent(_:)), to: nil, from: nil, for: nil)
+            // Already in grid view: open the options menu (album setup/refresh, help).
+            // Exiting to the Home screen is handled by the TV/Home button.
+            showOptionsMenu()
         }
     }
     

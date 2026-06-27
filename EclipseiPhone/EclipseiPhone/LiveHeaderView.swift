@@ -2,9 +2,8 @@
 import UIKit
 
 /// Large hero banner pinned to the top of the Library screen showing whatever is
-/// currently live on the Apple TV. Tapping it surfaces the live item's options.
-/// When nothing is live it falls back to a neutral placeholder so the layout stays
-/// fixed while the grid scrolls beneath it.
+/// currently live on the Apple TV. When nothing is live it falls back to a neutral
+/// placeholder so the layout stays fixed while the grid scrolls beneath it.
 final class LiveHeaderView: UIView {
 
     // MARK: - Subviews
@@ -16,8 +15,13 @@ final class LiveHeaderView: UIView {
     private let titleLabel = UILabel()
     private let subtitleLabel = UILabel()
 
-    /// Invoked when the banner is tapped while an item is live.
-    var onTapped: (() -> Void)?
+    /// Remote transport controls, shown only when the live item is a video.
+    private let controls = PlaybackControlsView()
+
+    /// Forwarded from the transport controls (play/pause, skip ±10s, absolute seek).
+    var onTogglePlayPause: (() -> Void)?
+    var onSkip: ((Double) -> Void)?
+    var onSeek: ((Double) -> Void)?
 
     // MARK: - Init
 
@@ -73,6 +77,20 @@ final class LiveHeaderView: UIView {
         subtitleLabel.translatesAutoresizingMaskIntoConstraints = false
         addSubview(subtitleLabel)
 
+        // No tap-to-open-options on the banner; only the transport controls are interactive.
+        controls.translatesAutoresizingMaskIntoConstraints = false
+        controls.isHidden = true
+        controls.onTogglePlayPause = { [weak self] in self?.onTogglePlayPause?() }
+        controls.onSkip = { [weak self] delta in self?.onSkip?(delta) }
+        controls.onSeek = { [weak self] position in self?.onSeek?(position) }
+        addSubview(controls)
+
+        NSLayoutConstraint.activate([
+            controls.leadingAnchor.constraint(equalTo: leadingAnchor),
+            controls.trailingAnchor.constraint(equalTo: trailingAnchor),
+            controls.bottomAnchor.constraint(equalTo: bottomAnchor),
+        ])
+
         NSLayoutConstraint.activate([
             imageView.topAnchor.constraint(equalTo: topAnchor),
             imageView.bottomAnchor.constraint(equalTo: bottomAnchor),
@@ -95,18 +113,11 @@ final class LiveHeaderView: UIView {
             subtitleLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
             subtitleLabel.bottomAnchor.constraint(equalTo: titleLabel.topAnchor, constant: -4)
         ])
-
-        let tap = UITapGestureRecognizer(target: self, action: #selector(handleTap))
-        addGestureRecognizer(tap)
     }
 
     override func layoutSubviews() {
         super.layoutSubviews()
         gradientLayer.frame = bounds
-    }
-
-    @objc private func handleTap() {
-        onTapped?()
     }
 
     // MARK: - Configuration
@@ -130,6 +141,9 @@ final class LiveHeaderView: UIView {
         titleLabel.isHidden = true
         subtitleLabel.isHidden = true
         isUserInteractionEnabled = true
+
+        // Transport controls only apply to videos (and only while connected).
+        controls.isHidden = !(item.isVideo && isOnline)
     }
 
     private func showPlaceholder(isOnline: Bool) {
@@ -141,6 +155,7 @@ final class LiveHeaderView: UIView {
         gradientLayer.isHidden = true
         liveBadge.isHidden = true
         subtitleLabel.isHidden = true
+        controls.isHidden = true
 
         titleLabel.isHidden = false
         titleLabel.textColor = .secondaryLabel
@@ -148,5 +163,10 @@ final class LiveHeaderView: UIView {
         titleLabel.textAlignment = .center
         titleLabel.text = isOnline ? "Nothing live yet" : "Apple TV not connected"
         isUserInteractionEnabled = false
+    }
+
+    /// Applies the latest playback state to the transport controls.
+    func updatePlayback(_ state: PlaybackState) {
+        controls.update(isPlaying: state.isPlaying, currentTime: state.currentTime, duration: state.duration)
     }
 }

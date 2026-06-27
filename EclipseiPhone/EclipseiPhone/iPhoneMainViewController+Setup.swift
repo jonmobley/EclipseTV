@@ -73,6 +73,9 @@ extension iPhoneMainViewController {
             self.libraryViewController.beginArranging()
             self.headerBar.setArranging(true)
         }
+        headerBar.onSetUpAlbum = { [weak self] in
+            self?.presentSetUpAlbum()
+        }
         headerBar.onArrangeDone = { [weak self] in
             guard let self = self else { return }
             if self.libraryViewController.commitArranging() {
@@ -86,6 +89,9 @@ extension iPhoneMainViewController {
         }
         headerBar.onSelectLibrary = { [weak self] name in
             self?.selectLibrary(named: name)
+        }
+        headerBar.onBrowseAlbums = { [weak self] in
+            self?.presentAlbums()
         }
         headerBar.onOpenSettings = { [weak self] in
             self?.presentSettings()

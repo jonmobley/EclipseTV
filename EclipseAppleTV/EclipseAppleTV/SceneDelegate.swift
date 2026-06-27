@@ -44,6 +44,9 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 	func sceneDidBecomeActive(_ scene: UIScene) {
         logger.info("Scene did become active")
         connectionManager?.startAdvertising()
+
+        // Re-sync the remote album when returning to the foreground.
+        (window?.rootViewController as? ImageViewController)?.refreshAlbumIfConfigured()
     }
     func sceneWillResignActive(_ scene: UIScene) {
         logger.info("⏸️ [SCENE] Scene will resign active")

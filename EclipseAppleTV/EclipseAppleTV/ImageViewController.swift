@@ -148,6 +148,29 @@ class ImageViewController: ManagedViewController, ConnectionManagerDelegate, UIG
     // ADD to the top of the class (after existing properties):
     internal let dataSource = MediaDataSource.shared
 
+    // MARK: - Remote Album (read-only)
+
+    /// Read-only albums mirrored from an account's online manifest. Shown as separate
+    /// grid sections (sections 1…N) and kept entirely out of `MediaDataSource`.
+    internal let albumStore = RemoteAlbumStore.shared
+
+    /// Which collection the fullscreen viewer is currently showing/navigating.
+    internal var activeCollection: CollectionKind = .library
+
+    /// When `activeCollection` is `.album`, which display album (0-based over
+    /// `albumStore.displayAlbums`) the fullscreen viewer is in.
+    internal var albumCurrentAlbumIndex: Int = 0
+
+    /// When `activeCollection` is `.album`, the item index within the current album.
+    /// (The local library uses `MediaDataSource.currentIndex`.)
+    internal var albumCurrentItemIndex: Int = 0
+
+    /// Stable identity of the album/item the fullscreen viewer is on. Tracked alongside
+    /// the indices so a background sync that reorders or removes albums/items can restore
+    /// the same position (see `reconcileAlbumCursor()`) instead of jumping by raw index.
+    internal var albumCurrentAlbumId: String?
+    internal var albumCurrentItemId: String?
+
     /// The peer-to-peer connection manager that owns this view controller as its
     /// delegate. Set by `SceneDelegate` so move-mode notifications reach the live
     /// instance instead of a nil app-delegate reference.
@@ -156,6 +179,13 @@ class ImageViewController: ManagedViewController, ConnectionManagerDelegate, UIG
     internal var isInGridMode = true // Start in grid mode
     internal let sampleImageNames = ["sample1", "sample2", "sample3"]
     internal let logger = Logger(subsystem: "com.eclipsetv.app", category: "ImageViewController")
+
+    /// Repeating timer that streams playback position to companions while a video plays
+    /// fullscreen. A timer (vs an AVPlayer periodic observer) survives player swaps safely.
+    internal var playbackStatusTimer: Timer?
+    /// KVO on the active player's `timeControlStatus`, so play/pause changes (including
+    /// from the Siri remote) are reported to companions immediately.
+    internal var playbackTimeControlObservation: NSKeyValueObservation?
     
     // REMOVE these old properties - now handled by MediaDataSource:
     // internal var recentImages: [String] = []
@@ -241,9 +271,12 @@ class ImageViewController: ManagedViewController, ConnectionManagerDelegate, UIG
         setupGestures()
         setupFocusGuide()
         setupViewModel()
-        
+
         // Initialize selection manager
         simpleSelectionManager = SimpleSelectionManager(collectionView: gridView)
+
+        // Observe the remote album and start an initial sync if one is configured.
+        setupAlbumSync()
         
         // Note: Player view setup is deferred until actually needed for video playback
         // This prevents unnecessary constraint conflicts during app launch

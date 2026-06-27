@@ -22,24 +22,42 @@ extension ImageViewController: UICollectionViewDelegateFlowLayout {
     }
 
     func collectionView(_ collectionView: UICollectionView, viewForSupplementaryElementOfKind kind: String, at indexPath: IndexPath) -> UICollectionReusableView {
-        if kind == UICollectionView.elementKindSectionHeader {
-            let headerView = collectionView.dequeueReusableSupplementaryView(ofKind: kind, withReuseIdentifier: "HeaderView", for: indexPath)
+        guard kind == UICollectionView.elementKindSectionHeader else {
+            return UICollectionReusableView()
+        }
 
-            // Remove any existing title label
-            headerView.subviews.forEach { $0.removeFromSuperview() }
+        let headerView = collectionView.dequeueReusableSupplementaryView(ofKind: kind, withReuseIdentifier: "HeaderView", for: indexPath)
 
-            // Add title label to header
-            titleLabel.translatesAutoresizingMaskIntoConstraints = false
-            headerView.addSubview(titleLabel)
+        // Reset any reused content
+        headerView.subviews.forEach { $0.removeFromSuperview() }
 
+        // Each album section gets its own header label; the library section keeps the
+        // shared "Eclipse" title (whose alpha is animated during transitions).
+        if indexPath.section != ImageViewController.librarySectionIndex {
+            // Apple "shelf" style: a left-aligned title sitting just above the row,
+            // lined up with the row's leading content inset (see AdaptiveFlowLayout).
+            let albumLabel = UILabel()
+            albumLabel.text = albumStore.album(at: indexPath.section - 1)?.name ?? "Album"
+            albumLabel.textColor = .white
+            albumLabel.font = UIFont.systemFont(ofSize: 38, weight: .semibold)
+            albumLabel.textAlignment = .left
+            albumLabel.translatesAutoresizingMaskIntoConstraints = false
+            headerView.addSubview(albumLabel)
             NSLayoutConstraint.activate([
-                titleLabel.centerXAnchor.constraint(equalTo: headerView.centerXAnchor),
-                titleLabel.topAnchor.constraint(equalTo: headerView.topAnchor, constant: 20)
+                albumLabel.leadingAnchor.constraint(equalTo: headerView.leadingAnchor, constant: 120),
+                albumLabel.trailingAnchor.constraint(lessThanOrEqualTo: headerView.trailingAnchor, constant: -120),
+                albumLabel.bottomAnchor.constraint(equalTo: headerView.bottomAnchor, constant: -12)
             ])
-
             return headerView
         }
-        return UICollectionReusableView()
+
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        headerView.addSubview(titleLabel)
+        NSLayoutConstraint.activate([
+            titleLabel.centerXAnchor.constraint(equalTo: headerView.centerXAnchor),
+            titleLabel.topAnchor.constraint(equalTo: headerView.topAnchor, constant: 20)
+        ])
+        return headerView
     }
 }
 

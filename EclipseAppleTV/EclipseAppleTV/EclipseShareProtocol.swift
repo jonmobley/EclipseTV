@@ -27,6 +27,21 @@ enum EclipseShareProtocol {
         case moveItem = "move_item"
         case reorderItems = "reorder_items"
         case restoreItem = "restore_item"
+        case playbackCommand = "playback_command"
+        case playbackStatus = "playback_status"
+        /// Companion configures the TV's read-only remote albums from an account code.
+        case setAccount = "set_account"
+    }
+
+    /// Remote playback actions a companion can request for the live video on the TV.
+    enum PlaybackAction: String {
+        case play
+        case pause
+        case toggle
+        /// Seek to an absolute position (seconds), carried in the envelope's `position`.
+        case seek
+        /// Seek relative to the current position by `position` seconds (may be negative).
+        case skip
     }
 
     /// Builds the resource name used to send the thumbnail for a given item id.
@@ -76,6 +91,18 @@ struct EclipseShareEnvelope: Codable {
     var toIndex: Int? = nil
     /// Full ordered list of item ids (file names) for a `reorderItems` message.
     var orderedIds: [String]? = nil
+    /// Remote-playback fields. `playbackAction` names a command (iPhone -> TV); `position`
+    /// carries an absolute seek target or a relative skip delta (seconds). For a
+    /// `playbackStatus` (TV -> iPhone), `isPlaying`, `position` (current time) and
+    /// `playbackDuration` describe the live video's playback state.
+    var playbackAction: String? = nil
+    var position: Double? = nil
+    var playbackDuration: Double? = nil
+    var isPlaying: Bool? = nil
+    /// Remote-album field (iPhone -> TV). `accountCode` is the short account code the TV
+    /// composes its manifest URL from (via `AlbumConfig`); the manifest returns all of
+    /// that account's albums.
+    var accountCode: String? = nil
 
     var kind: EclipseShareProtocol.Kind? {
         EclipseShareProtocol.Kind(rawValue: eclipseMsg)
@@ -161,6 +188,40 @@ struct EclipseShareEnvelope: Codable {
             currentId: nil,
             items: nil,
             id: id
+        )
+    }
+
+    /// Requests a remote playback action for the live video on the TV. `position` is the
+    /// absolute target for `.seek` or the relative delta for `.skip` (seconds).
+    static func playbackCommand(action: EclipseShareProtocol.PlaybackAction, position: Double?) -> EclipseShareEnvelope {
+        EclipseShareEnvelope(
+            eclipseMsg: EclipseShareProtocol.Kind.playbackCommand.rawValue,
+            currentId: nil,
+            items: nil,
+            id: nil,
+            playbackAction: action.rawValue,
+            position: position
+        )
+    }
+
+    /// Reports the live video's current playback state to companions.
+    static func playbackStatus(currentId: String?, isPlaying: Bool, position: Double, duration: Double) -> EclipseShareEnvelope {
+        EclipseShareEnvelope(
+            eclipseMsg: EclipseShareProtocol.Kind.playbackStatus.rawValue,
+            currentId: currentId,
+            items: nil,
+            id: nil,
+            position: position,
+            playbackDuration: duration,
+            isPlaying: isPlaying
+        )
+    }
+
+    /// Tells the TV to configure its read-only remote albums from an account `code`.
+    static func setAccount(code: String) -> EclipseShareEnvelope {
+        EclipseShareEnvelope(
+            eclipseMsg: EclipseShareProtocol.Kind.setAccount.rawValue,
+            accountCode: code
         )
     }
 

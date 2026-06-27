@@ -22,8 +22,8 @@ extension ImageViewController {
             return
         }
 
-        // Add the newly received image using data source
-        dataSource.addMedia(at: path)
+        // Add the newly received image without making it live or stealing selection/focus.
+        dataSource.addMediaSilently(at: path)
 
         let endTime = Date()
         let duration = endTime.timeIntervalSince(startTime)
@@ -35,6 +35,17 @@ extension ImageViewController {
             // Show a notification that a device connected
             toastView.show(message: "Connected to \(peer.displayName)")
         }
+    }
+
+    /// The companion configured the read-only remote albums. Persist the account code
+    /// and kick off a sync; the existing engine downloads media and updates the grid.
+    func connectionManager(_ manager: ConnectionManager, didReceiveSetAccountCode code: String) {
+        guard albumStore.setAccountCode(code) else {
+            showNotificationToast(message: "Received an invalid account code")
+            return
+        }
+        showNotificationToast(message: "Account code received — syncing…")
+        refreshAlbumIfConfigured()
     }
 
     /// The companion asked us to make a specific item live. Resolve it and bring it
@@ -222,8 +233,8 @@ extension ImageViewController {
             return
         }
 
-        // Add the newly received video using data source
-        dataSource.addMedia(at: path)
+        // Add the newly received video without making it live or stealing selection/focus.
+        dataSource.addMediaSilently(at: path)
 
         let endTime = Date()
         let duration = endTime.timeIntervalSince(startTime)
@@ -306,15 +317,13 @@ extension ImageViewController {
         self.logger.info("Processing queued content - \(self.queuedContent.count) items")
         self.isProcessingQueue = true
 
-        // Process all queued items
+        // Process all queued items without making any of them live or stealing focus.
         var addedCount = 0
-        var lastAddedIndex = -1
 
         for queuedItem in self.queuedContent {
-            // Add the item via data source
-            self.dataSource.addMedia(at: queuedItem.path)
-            lastAddedIndex = self.dataSource.count - 1
-            addedCount += 1
+            if self.dataSource.addMediaSilently(at: queuedItem.path) {
+                addedCount += 1
+            }
         }
 
         // Clear the queue
@@ -327,31 +336,11 @@ extension ImageViewController {
                 hideEmptyState()
             }
 
-            // Reload the grid with all the new content (delegate will handle this)
-            // But force it just in case
+            // Reload the grid with all the new content, but keep the user's current
+            // selection/focus and the live item exactly where they were.
             self.gridView.reloadData()
-
-            // Select the last added item using SimpleSelectionManager
-            if lastAddedIndex >= 0 {
-                let indexPath = IndexPath(item: lastAddedIndex, section: 0)
-
-                // Use async dispatch to ensure reload is complete before selection
-                DispatchQueue.main.async {
-                    self.simpleSelectionManager.selectItem(at: indexPath)
-                    self.dataSource.setCurrentIndex(lastAddedIndex)
-
-                    // Ensure visibility
-                    if !self.gridView.indexPathsForVisibleItems.contains(indexPath) {
-                        self.gridView.scrollToItem(at: indexPath, at: .centeredVertically, animated: true)
-                    }
-
-                    // Validate selection state after all operations
-                    self.simpleSelectionManager.validateSelectionState()
-
-                    // Ensure focus is updated
-                    self.setNeedsFocusUpdate()
-                    self.updateFocusIfNeeded()
-                }
+            DispatchQueue.main.async {
+                self.simpleSelectionManager.validateSelectionState()
             }
 
             // Show a notification with the count of added items

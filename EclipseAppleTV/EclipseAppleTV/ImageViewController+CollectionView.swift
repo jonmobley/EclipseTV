@@ -5,8 +5,16 @@ import os.log
 
 // MARK: - UICollectionViewDataSource & UICollectionViewDelegate
 extension ImageViewController: UICollectionViewDataSource, UICollectionViewDelegate {
-    
+
+    func numberOfSections(in collectionView: UICollectionView) -> Int {
+        // Section 0 is always the local library; each non-empty album adds a section.
+        return 1 + albumStore.albumSectionCount
+    }
+
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
+        if section != ImageViewController.librarySectionIndex {
+            return albumStore.itemCount(albumIndex: section - 1)
+        }
         let count = dataSource.count
         logger.info("📊 [COLLECTION] numberOfItems=\(count)")
         return count
@@ -15,7 +23,14 @@ extension ImageViewController: UICollectionViewDataSource, UICollectionViewDeleg
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
         return PerformanceMonitor.shared.measureUIOperation("cellForItemAt") {
             let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "ThumbnailCell", for: indexPath) as! ImageThumbnailCell
-            
+
+            // Read-only album sections are configured separately (no move/delete gesture).
+            if indexPath.section != ImageViewController.librarySectionIndex {
+                configureAlbumCell(cell, albumIndex: indexPath.section - 1, itemIndex: indexPath.item)
+                cell.isSelected = false
+                return cell
+            }
+
             guard let path = dataSource.getPath(at: indexPath.item) else {
                 logger.warning("Invalid index: \(indexPath.item), max: \(self.dataSource.count - 1)")
                 return cell
@@ -92,7 +107,20 @@ extension ImageViewController: UICollectionViewDataSource, UICollectionViewDeleg
     
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         dataSource.debugState()
-        
+
+        // Album sections: read-only. Tapping an item views it fullscreen.
+        if indexPath.section != ImageViewController.librarySectionIndex {
+            let albumIndex = indexPath.section - 1
+            guard !isMoveMode, !isIgnoringSelectionEvents,
+                  indexPath.item < albumStore.itemCount(albumIndex: albumIndex) else { return }
+            activeCollection = .album
+            albumCurrentAlbumIndex = albumIndex
+            albumCurrentItemIndex = indexPath.item
+            rememberAlbumCursor()
+            hideGridView()
+            return
+        }
+
         // In move mode, finish the move when selecting an item
         if isMoveMode {
             // If we select the same item we're moving, end move mode
@@ -115,12 +143,17 @@ extension ImageViewController: UICollectionViewDataSource, UICollectionViewDeleg
         
         // Go to fullscreen
         if indexPath.item < dataSource.count {
+            activeCollection = .library
             dataSource.setCurrentIndex(indexPath.item)
             hideGridView() // Use the smooth transition method we just created
         }
     }
     
     func collectionView(_ collectionView: UICollectionView, willDisplay cell: UICollectionViewCell, forItemAt indexPath: IndexPath) {
+        // Album cells are read-only and load their own thumbnails; skip the library
+        // selection-state sync and neighbor preloading below.
+        guard indexPath.section == ImageViewController.librarySectionIndex else { return }
+
         // CRITICAL FIX: Ensure proper selection state when cells become visible
         if let thumbnailCell = cell as? ImageThumbnailCell {
             if isMoveMode && indexPath == movingItemIndexPath {

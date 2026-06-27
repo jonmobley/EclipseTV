@@ -78,6 +78,7 @@ extension ImageViewController {
 
                 // Add observer for playback end (removes any prior observers first)
                 self.installVideoEndObserver(for: player, mediaItem: mediaItem)
+                self.installPlaybackStatusObserver(on: player)
 
                 // Start playback once the first frame is ready to avoid the spinner
                 self.startWhenReady(player) {
@@ -107,6 +108,7 @@ extension ImageViewController {
 
                 // Add observer for playback end (removes any prior observers first)
                 self.installVideoEndObserver(for: player, mediaItem: mediaItem)
+                self.installPlaybackStatusObserver(on: player)
 
                 // Fade in the player only once the first frame is ready to avoid the spinner
                 self.startWhenReady(player) {
@@ -407,6 +409,7 @@ extension ImageViewController {
         let player = setupPlayer(for: mediaItem)
         playerView.player = player
         installVideoEndObserver(for: player, mediaItem: mediaItem)
+        installPlaybackStatusObserver(on: player)
 
         player.seek(to: resumeTime, toleranceBefore: .zero, toleranceAfter: .zero) { _ in
             if wasPlaying {
@@ -463,6 +466,7 @@ extension ImageViewController {
 
                 // Add observer for playback end (removes any prior observers first)
                 self.installVideoEndObserver(for: player, mediaItem: mediaItem)
+                self.installPlaybackStatusObserver(on: player)
 
                 // Dissolve the overlay only once the first frame is ready, which both
                 // hides the spinner and avoids a black flash during the transition.

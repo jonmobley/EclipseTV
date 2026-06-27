@@ -55,7 +55,7 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         durationLabel.isHidden = true
         contentView.addSubview(durationLabel)
 
-        configurePill(liveBadge, background: .systemBlue, textColor: .white)
+        configurePill(liveBadge, background: .systemRed, textColor: .white)
         liveBadge.text = "LIVE"
         liveBadge.isHidden = true
         contentView.addSubview(liveBadge)
@@ -125,7 +125,7 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         let showLive = isLive && !isUnavailable
         liveBadge.isHidden = !showLive
         contentView.layer.borderWidth = showLive ? 3 : 0
-        contentView.layer.borderColor = showLive ? UIColor.systemBlue.cgColor : UIColor.clear.cgColor
+        contentView.layer.borderColor = showLive ? UIColor.systemRed.cgColor : UIColor.clear.cgColor
     }
 
     override func prepareForReuse() {

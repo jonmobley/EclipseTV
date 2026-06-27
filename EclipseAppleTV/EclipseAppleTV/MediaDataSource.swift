@@ -73,6 +73,24 @@ class MediaDataSource: ObservableObject {
         delegate?.mediaData(self, didAddItemAt: mediaPaths.count - 1)
         delegate?.mediaDataDidChange()
     }
+
+    /// Appends media without changing `currentIndex` or nudging grid selection/focus.
+    ///
+    /// Used for passively received items (e.g. media sent from the companion) so an
+    /// arrival never takes over the screen or steals the user's place. The `@Published`
+    /// `mediaPaths` change still drives the manifest rebroadcast and a `mediaDataDidChange`
+    /// reload (which preserves the existing selection); only the selecting/focusing
+    /// `didAddItemAt` callback is intentionally skipped. Returns true if it was added.
+    @discardableResult
+    func addMediaSilently(at path: String) -> Bool {
+        // Don't add duplicates
+        if mediaPaths.contains(path) { return false }
+
+        mediaPaths.append(path)
+        saveToStorage()
+        delegate?.mediaDataDidChange()
+        return true
+    }
     
     func addMediaBatch(paths: [String]) {
         // Filter out paths already present, and de-duplicate within the incoming

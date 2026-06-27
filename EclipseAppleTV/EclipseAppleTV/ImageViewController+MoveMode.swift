@@ -19,7 +19,13 @@ extension ImageViewController {
                 logger.warning("🔴 Could not find indexPath for cell in long press")
                 return
             }
-            
+
+            // Album items are read-only; no move/delete options.
+            guard indexPath.section == ImageViewController.librarySectionIndex else {
+                logger.debug("🔵 Ignoring long press on read-only album cell")
+                return
+            }
+
             let index = indexPath.item
             logger.debug("🔵 Long press detected on cell at index \(index) (cell.tag was \(cell.tag))")
             

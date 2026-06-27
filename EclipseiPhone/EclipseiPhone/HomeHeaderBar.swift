@@ -37,12 +37,16 @@ final class HomeHeaderBar: UIView {
     var onAddTapped: (() -> Void)?
     /// Invoked when "Arrange" is chosen from the ellipsis menu.
     var onArrangeTapped: (() -> Void)?
+    /// Invoked when "Set Up Album" is chosen from the ellipsis menu.
+    var onSetUpAlbum: (() -> Void)?
     /// Invoked when "Done" is tapped while arranging (save the layout).
     var onArrangeDone: (() -> Void)?
     /// Invoked when "Cancel" is tapped while arranging (discard changes).
     var onArrangeCancel: (() -> Void)?
     /// Invoked with the device name when a library is chosen from the dropdown.
     var onSelectLibrary: ((String) -> Void)?
+    /// Invoked when "Albums" is chosen from the dropdown (browse account albums).
+    var onBrowseAlbums: (() -> Void)?
     /// Invoked when "Settings" is chosen from the dropdown.
     var onOpenSettings: (() -> Void)?
 
@@ -162,7 +166,11 @@ final class HomeHeaderBar: UIView {
                                image: UIImage(systemName: "arrow.up.arrow.down")) { [weak self] _ in
             self?.onArrangeTapped?()
         }
-        return UIMenu(title: "", children: [arrange])
+        let setUpAlbum = UIAction(title: "Set Up Album…",
+                                  image: UIImage(systemName: "rectangle.stack.badge.plus")) { [weak self] _ in
+            self?.onSetUpAlbum?()
+        }
+        return UIMenu(title: "", children: [arrange, setUpAlbum])
     }
 
     // MARK: - Library Dropdown
@@ -187,17 +195,21 @@ final class HomeHeaderBar: UIView {
             tvActions.append(action)
         }
 
+        let albums = UIAction(title: "Albums",
+                              image: UIImage(systemName: "rectangle.stack")) { [weak self] _ in
+            self?.onBrowseAlbums?()
+        }
         let settings = UIAction(title: "Settings",
                                 image: UIImage(systemName: "gearshape")) { [weak self] _ in
             self?.onOpenSettings?()
         }
-        let settingsSection = UIMenu(title: "", options: .displayInline, children: [settings])
+        let bottomSection = UIMenu(title: "", options: .displayInline, children: [albums, settings])
 
         var children: [UIMenuElement] = []
         if !tvActions.isEmpty {
             children.append(UIMenu(title: "Apple TVs", options: .displayInline, children: tvActions))
         }
-        children.append(settingsSection)
+        children.append(bottomSection)
         libraryButton.menu = UIMenu(title: "", children: children)
     }
 

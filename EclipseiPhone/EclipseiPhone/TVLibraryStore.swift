@@ -8,6 +8,16 @@ protocol TVLibraryStoreDelegate: AnyObject {
     func libraryStoreDidUpdateCurrent(_ store: TVLibraryStore)
     func libraryStore(_ store: TVLibraryStore, didUpdateThumbnailFor id: String)
     func libraryStoreDidChangeConnection(_ store: TVLibraryStore)
+    /// The live video's playback state (play/pause/position/duration) changed.
+    func libraryStoreDidUpdatePlayback(_ store: TVLibraryStore)
+}
+
+/// Live playback state mirrored from the Apple TV for the currently playing video.
+struct PlaybackState: Equatable {
+    var itemId: String?
+    var isPlaying: Bool = false
+    var currentTime: Double = 0
+    var duration: Double = 0
 }
 
 /// Read-only mirror of the Apple TV library, populated from messages received over
@@ -36,6 +46,9 @@ final class TVLibraryStore {
 
     /// Whether we are currently connected to the Apple TV. Not persisted.
     private(set) var isOnline = false
+
+    /// Live playback state for the currently playing video on the Apple TV. Not persisted.
+    private(set) var playback = PlaybackState()
 
     private var thumbnails: [String: UIImage] = [:]
 
@@ -113,6 +126,12 @@ final class TVLibraryStore {
     func setOnline(_ online: Bool) {
         guard online != isOnline else { return }
         isOnline = online
+        // Playback state is only meaningful while connected; clear it when going offline
+        // so the companion's scrubber doesn't appear to keep playing.
+        if !online, playback != PlaybackState() {
+            playback = PlaybackState()
+            delegate?.libraryStoreDidUpdatePlayback(self)
+        }
         delegate?.libraryStoreDidChangeConnection(self)
     }
 
@@ -138,6 +157,16 @@ final class TVLibraryStore {
             UserDefaults.standard.set(currentId, forKey: key)
         }
         delegate?.libraryStoreDidUpdateCurrent(self)
+    }
+
+    /// Updates the mirrored playback state for the live video. Notifies the delegate only
+    /// when something actually changed to avoid redundant UI work on frequent updates.
+    func updatePlayback(currentId: String?, isPlaying: Bool, position: Double, duration: Double) {
+        let newState = PlaybackState(itemId: currentId, isPlaying: isPlaying,
+                                     currentTime: position, duration: duration)
+        guard newState != playback else { return }
+        playback = newState
+        delegate?.libraryStoreDidUpdatePlayback(self)
     }
 
     func setThumbnail(_ image: UIImage, forId id: String) {

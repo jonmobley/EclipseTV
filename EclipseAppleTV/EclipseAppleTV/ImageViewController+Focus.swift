@@ -44,6 +44,15 @@ extension ImageViewController {
             return
         }
 
+        // Album sections are read-only: track which album item is focused (so a SELECT
+        // press opens the right one) but never touch the library's selection/index.
+        if nextIndexPath.section != ImageViewController.librarySectionIndex {
+            albumCurrentAlbumIndex = nextIndexPath.section - 1
+            albumCurrentItemIndex = nextIndexPath.item
+            rememberAlbumCursor()
+            return
+        }
+
         // CRITICAL FIX FOR MOVE MODE: Handle selection differently in move mode
         if isMoveMode {
             logger.debug("🔊 [FOCUS] In move mode - handling focus change specially")

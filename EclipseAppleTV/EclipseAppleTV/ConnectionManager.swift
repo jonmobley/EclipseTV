@@ -21,6 +21,11 @@ protocol ConnectionManagerDelegate: AnyObject {
     /// unavailable ledger entry keyed by `ledgerId` (the original file name) should be
     /// cleared and the new item moved back into its original slot.
     func connectionManager(_ manager: ConnectionManager, didRestoreItemForLedgerId ledgerId: String, newPath: String)
+    /// The companion requested a remote playback action for the live video. `position`
+    /// is the absolute target for `.seek` or the relative delta for `.skip` (seconds).
+    func connectionManager(_ manager: ConnectionManager, didReceivePlaybackCommand action: EclipseShareProtocol.PlaybackAction, position: Double?)
+    /// The companion configured the read-only remote albums from an account `code`.
+    func connectionManager(_ manager: ConnectionManager, didReceiveSetAccountCode code: String)
 }
 
 class ConnectionManager: NSObject {
@@ -199,6 +204,17 @@ class ConnectionManager: NSObject {
         sendControlMessage(.currentChanged(currentId: currentId))
     }
 
+    /// Reports the live video's playback state to the companion. Sent frequently while
+    /// playing, so it travels unreliably to avoid head-of-line blocking behind transfers.
+    func sendPlaybackStatus(currentId: String?, isPlaying: Bool, position: Double, duration: Double) {
+        guard let session = session, !session.connectedPeers.isEmpty,
+              let data = EclipseShareEnvelope.playbackStatus(currentId: currentId, isPlaying: isPlaying,
+                                                             position: position, duration: duration).encoded() else {
+            return
+        }
+        try? session.send(data, toPeers: session.connectedPeers, with: .unreliable)
+    }
+
     /// Streams a thumbnail file to the first connected peer, keyed by item id.
     func sendThumbnail(at fileURL: URL, forId id: String) {
         guard let session = session, let peer = session.connectedPeers.first else { return }
@@ -274,7 +290,23 @@ class ConnectionManager: NSObject {
             // The next media resource from this peer is the restore. Recorded on the
             // session delegate queue, where the resource callback also runs.
             pendingRestore = (ledgerId: id, expires: Date().addingTimeInterval(restoreWindow))
-        case .libraryManifest, .currentChanged, .none:
+        case .playbackCommand:
+            guard let raw = envelope.playbackAction,
+                  let action = EclipseShareProtocol.PlaybackAction(rawValue: raw) else { return }
+            let position = envelope.position
+            logger.info("Received playback command: \(raw, privacy: .public)")
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                self.delegate?.connectionManager(self, didReceivePlaybackCommand: action, position: position)
+            }
+        case .setAccount:
+            guard let code = envelope.accountCode, !code.isEmpty else { return }
+            logger.info("Received set account code: \(code, privacy: .public)")
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                self.delegate?.connectionManager(self, didReceiveSetAccountCode: code)
+            }
+        case .libraryManifest, .currentChanged, .playbackStatus, .none:
             // These are TV -> iPhone only; ignore if a peer ever sends them back.
             break
         }

@@ -8,7 +8,7 @@ extension ImageViewController {
     
     /// Displays the image at the current index
     internal func displayImageAtCurrentIndex() {
-        guard let currentPath = dataSource.getCurrentPath() else {
+        guard let currentPath = currentDisplayPath() else {
             ErrorHandler.shared.handle(.emptyLibrary, context: "displayImageAtCurrentIndex")
             return
         }
@@ -32,7 +32,7 @@ extension ImageViewController {
     
     /// Displays the image at the current index with smooth transition coordination
     private func displayImageAtCurrentIndexWithTransition() {
-        guard let currentPath = dataSource.getCurrentPath() else {
+        guard let currentPath = currentDisplayPath() else {
             logger.error("❌ [DISPLAY] No current path available for displayImageAtCurrentIndexWithTransition")
             ErrorHandler.shared.handle(.emptyLibrary, context: "displayImageAtCurrentIndexWithTransition")
             return
@@ -68,7 +68,11 @@ extension ImageViewController {
                     self.imageView.isHidden = false
                     self.playerView.view.isHidden = true
                     self.isVideo = false
-                    
+
+                    // Switched to a photo: stop streaming playback state to companions.
+                    self.removePlaybackStatusObserver()
+                    self.broadcastPlaybackStopped()
+
                     // Apply stored position for this image
                     self.applyStoredImagePosition(for: mediaItem.path)
                 } else {
@@ -111,7 +115,7 @@ extension ImageViewController {
     
     /// Displays the media at the current index with a smooth dissolve transition
     private func displayImageAtCurrentIndexWithDissolveTransition() {
-        guard let currentPath = dataSource.getCurrentPath() else {
+        guard let currentPath = currentDisplayPath() else {
             logger.error("❌ [DISSOLVE] No current path available")
             ErrorHandler.shared.handle(.emptyLibrary, context: "displayImageAtCurrentIndexWithDissolveTransition")
             return
@@ -201,39 +205,32 @@ extension ImageViewController {
         }
     }
     
-    /// Moves to the next image in the collection
+    /// Moves to the next item in the active collection (library or album)
     internal func nextImage() {
         guard !isInGridMode else { return }
-        
-        let oldIndex = dataSource.currentIndex
-        if dataSource.nextIndex() {
-            let newIndex = dataSource.currentIndex
-            logger.debug("📍 [NAVIGATION] nextImage() - moved from index \(oldIndex) to \(newIndex)")
-            
-            // Preload videos around the new index for smooth future transitions
-            VideoCacheManager.shared.preloadVideosAroundIndex(newIndex, in: dataSource)
-            
+
+        if advanceDisplayIndex() {
+            // Video preloading is only wired for the local library data source.
+            if activeCollection == .library {
+                VideoCacheManager.shared.preloadVideosAroundIndex(dataSource.currentIndex, in: dataSource)
+            }
             displayImageAtCurrentIndexWithDissolveTransition()
         } else {
-            logger.debug("📍 [NAVIGATION] nextImage() - already at last image (index \(oldIndex))")
+            logger.debug("📍 [NAVIGATION] nextImage() - already at last item")
         }
     }
-    
-    /// Moves to the previous image in the collection
+
+    /// Moves to the previous item in the active collection (library or album)
     internal func previousImage() {
         guard !isInGridMode else { return }
-        
-        let oldIndex = dataSource.currentIndex
-        if dataSource.previousIndex() {
-            let newIndex = dataSource.currentIndex
-            logger.debug("📍 [NAVIGATION] previousImage() - moved from index \(oldIndex) to \(newIndex)")
-            
-            // Preload videos around the new index for smooth future transitions
-            VideoCacheManager.shared.preloadVideosAroundIndex(newIndex, in: dataSource)
-            
+
+        if retreatDisplayIndex() {
+            if activeCollection == .library {
+                VideoCacheManager.shared.preloadVideosAroundIndex(dataSource.currentIndex, in: dataSource)
+            }
             displayImageAtCurrentIndexWithDissolveTransition()
         } else {
-            logger.debug("📍 [NAVIGATION] previousImage() - already at first image (index \(oldIndex))")
+            logger.debug("📍 [NAVIGATION] previousImage() - already at first item")
         }
     }
     
@@ -284,7 +281,10 @@ extension ImageViewController {
     /// Shows the grid view and hides the fullscreen content with smooth animation
     internal func showGridView() {
         guard !isInGridMode else { return }
-        
+
+        // Grid selection/focus is library-driven; album viewing is re-entered on tap.
+        activeCollection = .library
+
         logger.info("🔄 [FULLSCREEN→GRID] Transitioning from fullscreen to grid view")
         
         // Stop activity indicator
@@ -301,6 +301,11 @@ extension ImageViewController {
             
             cleanupPlayerLooper()
         }
+
+        // The live video is no longer playing fullscreen: stop streaming its position and
+        // tell companions it's paused so their scrubber settles.
+        removePlaybackStatusObserver()
+        broadcastPlaybackStopped()
         
         // Bring fullscreen content to front during transition so it fades out on top
         view.bringSubviewToFront(imageView)

@@ -95,9 +95,14 @@ final class LibraryGridViewController: UIViewController {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
 
-        liveHeader.onTapped = { [weak self] in
-            guard let self = self, !self.isArranging, let id = self.store.currentId else { return }
-            self.presentOptions(forItemId: id)
+        liveHeader.onTogglePlayPause = { [weak self] in
+            self?.connectionManager.sendPlaybackCommand(action: .toggle, position: nil)
+        }
+        liveHeader.onSkip = { [weak self] delta in
+            self?.connectionManager.sendPlaybackCommand(action: .skip, position: delta)
+        }
+        liveHeader.onSeek = { [weak self] position in
+            self?.connectionManager.sendPlaybackCommand(action: .seek, position: position)
         }
 
         collectionView.addGestureRecognizer(reorderGesture)
@@ -158,6 +163,7 @@ final class LibraryGridViewController: UIViewController {
         }
         let thumbnail = liveItem.flatMap { store.thumbnail(for: $0.id) }
         liveHeader.configure(with: liveItem, thumbnail: thumbnail, isOnline: store.isOnline)
+        liveHeader.updatePlayback(store.playback)
     }
 
     // MARK: - Per-item Options
@@ -201,17 +207,6 @@ final class LibraryGridViewController: UIViewController {
             let muted = item.isMuted ?? false
             sheet.addAction(UIAlertAction(title: muted ? "Unmute" : "Mute", style: .default) { [weak self] _ in
                 self?.runCommand { self?.connectionManager.sendVideoSetting(id: id, isLooping: nil, isMuted: !muted) ?? false }
-            })
-        }
-
-        if index > 0 {
-            sheet.addAction(UIAlertAction(title: "Move Left", style: .default) { [weak self] _ in
-                self?.runCommand { self?.connectionManager.sendMoveRequest(id: id, toIndex: index - 1) ?? false }
-            })
-        }
-        if index < store.items.count - 1 {
-            sheet.addAction(UIAlertAction(title: "Move Right", style: .default) { [weak self] _ in
-                self?.runCommand { self?.connectionManager.sendMoveRequest(id: id, toIndex: index + 1) ?? false }
             })
         }
 
@@ -413,5 +408,9 @@ extension LibraryGridViewController: TVLibraryStoreDelegate {
     func libraryStoreDidChangeConnection(_ store: TVLibraryStore) {
         updateEmptyState()
         refreshLiveHeader()
+    }
+
+    func libraryStoreDidUpdatePlayback(_ store: TVLibraryStore) {
+        liveHeader.updatePlayback(store.playback)
     }
 }

@@ -149,7 +149,30 @@ extension ImageViewController {
                 self?.showGridViewTransition()
             })
         }
-        
+
+        // Remote album controls. An account code can be entered here on the TV or pushed
+        // from the iPhone companion; once configured the TV can resync or remove albums.
+        let accountCodeTitle = albumStore.hasAlbumConfigured ? "Change Account Code" : "Enter Account Code"
+        alertController.addAction(UIAlertAction(title: accountCodeTitle, style: .default) { [weak self] _ in
+            self?.presentAccountCodeEntry()
+        })
+        if albumStore.hasAlbumConfigured {
+            alertController.addAction(UIAlertAction(title: "Refresh Albums", style: .default) { [weak self] _ in
+                self?.refreshAlbumFromMenu()
+            })
+            alertController.addAction(UIAlertAction(title: "Remove Albums", style: .destructive) { [weak self] _ in
+                Task { @MainActor in
+                    self?.albumStore.clearAlbum()
+                    self?.showNotificationToast(message: "Albums removed")
+                }
+            })
+        }
+        #if DEBUG
+        alertController.addAction(UIAlertAction(title: "Load Demo Album", style: .default) { [weak self] _ in
+            self?.loadDemoAlbum()
+        })
+        #endif
+
         alertController.addAction(UIAlertAction(title: "Show Help", style: .default) { [weak self] _ in
             self?.showHelp()
         })
