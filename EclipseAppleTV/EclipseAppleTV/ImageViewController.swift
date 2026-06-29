@@ -138,6 +138,21 @@ class ImageViewController: ManagedViewController, ConnectionManagerDelegate, UIG
         view.translatesAutoresizingMaskIntoConstraints = false
         return view
     }()
+
+    /// Top-right "Options" button shown on the grid. Selecting it opens a native tvOS
+    /// dropdown menu (account code, refresh, help, …). Hidden during fullscreen playback.
+    /// The menu itself is built lazily in `setupOptionsButton()`.
+    internal lazy var optionsButton: UIButton = {
+        var config = UIButton.Configuration.plain()
+        config.image = UIImage(systemName: "ellipsis.circle.fill",
+                               withConfiguration: UIImage.SymbolConfiguration(pointSize: 44, weight: .semibold))
+        config.baseForegroundColor = .white
+        let button = UIButton(configuration: config)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.showsMenuAsPrimaryAction = true
+        button.accessibilityLabel = "Options"
+        return button
+    }()
     
     // MARK: - Properties
     
@@ -153,6 +168,11 @@ class ImageViewController: ManagedViewController, ConnectionManagerDelegate, UIG
     /// Read-only albums mirrored from an account's online manifest. Shown as separate
     /// grid sections (sections 1…N) and kept entirely out of `MediaDataSource`.
     internal let albumStore = RemoteAlbumStore.shared
+
+    /// Pushes "album changed" nudges from the server over a Realtime WebSocket so the TV
+    /// re-syncs immediately while it stays open (instead of only on launch/foreground/
+    /// manual refresh).
+    internal let albumNotifier = RealtimeAlbumNotifier()
 
     /// Which collection the fullscreen viewer is currently showing/navigating.
     internal var activeCollection: CollectionKind = .library
@@ -228,8 +248,9 @@ class ImageViewController: ManagedViewController, ConnectionManagerDelegate, UIG
     internal var queuedContent = [(path: String, isVideo: Bool)]()
     internal var isProcessingQueue = false
     
-    // First launch detection
-    private let hasLaunchedBeforeKey = "EclipseTV.hasLaunchedBefore"
+    // First launch detection. Used to load bundled sample media only once (see
+    // `setupViewModel`); accessible from extensions in other files.
+    let hasLaunchedBeforeKey = "EclipseTV.hasLaunchedBefore"
     
     // MARK: - Lifecycle Methods
     
@@ -267,6 +288,7 @@ class ImageViewController: ManagedViewController, ConnectionManagerDelegate, UIG
         
         // Setup UI and services
         setupUI()
+        setupOptionsButton()
         setupGradientBackground()
         setupGestures()
         setupFocusGuide()
@@ -341,10 +363,6 @@ class ImageViewController: ManagedViewController, ConnectionManagerDelegate, UIG
         
         // Note: Player view focus constraints are now set up only when the player view is actually needed
     }
-    
-    private var hasConfiguredPlayerConstraints = false
-    private func setupPlayerViewFocusConstraintsIfNeeded() {}
-    private func configurePlayerViewFocusConstraints() {}
     
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)

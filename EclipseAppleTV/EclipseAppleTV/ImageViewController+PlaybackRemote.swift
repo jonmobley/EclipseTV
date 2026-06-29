@@ -17,7 +17,9 @@ extension ImageViewController {
                            didReceivePlaybackCommand action: EclipseShareProtocol.PlaybackAction,
                            position: Double?) {
         // Only videos are controllable; ignore commands when the live item is a photo.
-        guard let path = dataSource.getCurrentPath(), MediaItem(path: path).isVideo else {
+        // Use currentDisplayPath() so this works for both the local library and the
+        // read-only cloud albums (which resolve through RemoteAlbumStore, not dataSource).
+        guard let path = currentDisplayPath(), MediaItem(path: path).isVideo else {
             logger.info("Ignoring playback command: live item is not a video")
             return
         }
@@ -28,7 +30,9 @@ extension ImageViewController {
         // If the video isn't already playing fullscreen, bring it live first (a play tap
         // doubles as "Make Live"). The player is created asynchronously and auto-plays,
         // so for play/toggle we're done; pause/seek then apply to the live player.
-        if isInGridMode || !isVideo {
+        // This "bring live" fallback only applies to the local library; album items are
+        // already live (and resolved through RemoteAlbumStore) once navigated into.
+        if activeCollection == .library, isInGridMode || !isVideo {
             if isInGridMode {
                 hideGridView()
             } else {
@@ -113,7 +117,7 @@ extension ImageViewController {
     func broadcastPlaybackStatus() {
         guard isVideo, !isInGridMode, !playerView.view.isHidden,
               let player = playerView.player,
-              let path = dataSource.getCurrentPath() else {
+              let path = currentDisplayPath() else {
             return
         }
 
@@ -131,7 +135,7 @@ extension ImageViewController {
     /// Tells companions the live video is no longer playing (e.g. returned to the grid),
     /// so their scrubber settles into a paused state.
     func broadcastPlaybackStopped() {
-        let currentId = dataSource.getCurrentPath().map { URL(fileURLWithPath: $0).lastPathComponent }
+        let currentId = currentDisplayPath().map { URL(fileURLWithPath: $0).lastPathComponent }
         connectionManager?.sendPlaybackStatus(currentId: currentId, isPlaying: false, position: 0, duration: 0)
     }
 }

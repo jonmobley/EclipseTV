@@ -31,20 +31,53 @@ class iPhoneConnectionManager: NSObject {
     weak var delegate: iPhoneConnectionManagerDelegate?
     var isBrowsing: Bool = false
     var discoveredPeers = [MCPeerID]() // Track discovered peers for auto-connection
+
+    /// When false, the manager's own automatic reconnection behaviors are suspended:
+    /// it won't re-browse or re-invite on app-active, browser failure, or disconnect.
+    /// Set to false while the user is using the app offline ("paused"); flipped back to
+    /// true the moment they ask to connect again. Does not tear down an existing session.
+    var autoConnectEnabled = true
     
     private var currentTransferTask: Progress?
     private var isTransferCancelled = false
     private var isTransferringVideo = false
     private var currentProgress: Progress?
 
-    /// Tracks an in-flight invitation so the auto-connect timer and app-active handlers
-    /// don't fire overlapping invitations to the same peer. Overlapping invites make
-    /// MultipeerConnectivity tear down and restart the handshake (the TV's accept fails
-    /// to deliver and channels are abandoned), which can leave the connection stuck.
-    private var pendingInvitePeer: MCPeerID?
-    private var pendingInviteStartedAt: Date?
+    /// Tracks in-flight invitations (keyed by peer) so the auto-connect timer and
+    /// app-active handlers don't fire overlapping invitations to the same peer.
+    /// Overlapping invites make MultipeerConnectivity tear down and restart the handshake
+    /// (the TV's accept fails to deliver and channels are abandoned), which can leave the
+    /// connection stuck. A dictionary (rather than a single peer) supports inviting
+    /// several Apple TVs at once when "keep all in sync" is enabled.
+    private var pendingInvites: [MCPeerID: Date] = [:]
     /// Matches the invitation timeout below; after this, a stale attempt may be retried.
     private let inviteTimeout: TimeInterval = 60
+
+    /// The peer whose library the companion UI mirrors. This is the first peer to connect
+    /// and is unchanged when additional "sync replica" Apple TVs connect under
+    /// `syncAllEnabled`. Library mirroring, playback control, and the header all follow
+    /// this peer.
+    private(set) var activePeer: MCPeerID?
+
+    private let syncAllKey = "EclipseTV.companion.syncAllTVs"
+
+    /// When true, library mutations fan out to every connected Apple TV and the manager
+    /// keeps additional discovered TVs connected as sync replicas. The active TV still
+    /// drives the mirrored UI. Backed by the same UserDefaults key the Settings toggle writes.
+    var syncAllEnabled: Bool {
+        get { UserDefaults.standard.bool(forKey: syncAllKey) }
+        set {
+            UserDefaults.standard.set(newValue, forKey: syncAllKey)
+            if newValue {
+                inviteAllDiscoveredPeersForSync()
+            } else {
+                disconnectSyncReplicas()
+            }
+        }
+    }
+
+    /// Coordinates catching newly connected replica TVs up to the active library.
+    weak var syncCoordinator: MultiTVSyncCoordinator?
 
     /// When set, the next media send is a re-send of a purged Apple TV item. A
     /// `restore_item` envelope (carrying the original item id) is sent just before the
@@ -94,6 +127,11 @@ class iPhoneConnectionManager: NSObject {
     // MARK: - Notification Handlers
     
     @objc private func handleAppDidBecomeActive() {
+        // Respect the user's choice to stay offline; don't silently reconnect.
+        guard autoConnectEnabled else {
+            logger.debug("App became active but auto-connect is paused; staying offline")
+            return
+        }
         logger.debug("App became active, ensuring connection")
         // If we have a peer but aren't connected, try to reconnect
         if let selectedPeer = discoveredPeers.first, session?.connectedPeers.isEmpty == true {
@@ -169,38 +207,42 @@ class iPhoneConnectionManager: NSObject {
             return
         }
         
-        // Don't invite if we're currently connecting to this peer
-        if session.connectedPeers.isEmpty == false {
+        // Don't invite a second peer while connected to another, UNLESS we're keeping all
+        // Apple TVs in sync (in which case additional TVs are connected as replicas).
+        if session.connectedPeers.isEmpty == false && !syncAllEnabled {
             logger.info("[Eclipse:CONN] iPhone skipping invite, already connected to another peer")
             return
         }
 
-        // Don't start a second invitation while one is still negotiating. Overlapping
-        // invites cause MultipeerConnectivity to abandon the in-progress handshake.
-        if let pendingPeer = pendingInvitePeer,
-           let startedAt = pendingInviteStartedAt,
-           Date().timeIntervalSince(startedAt) < inviteTimeout {
-            logger.info("[Eclipse:CONN] iPhone skipping invite to \(peer.displayName, privacy: .public): invitation already in flight to \(pendingPeer.displayName, privacy: .public)")
+        // Don't start a second invitation to the SAME peer while one is still negotiating.
+        // Overlapping invites cause MultipeerConnectivity to abandon the in-progress
+        // handshake. Invitations to different peers may proceed concurrently (for sync).
+        if let startedAt = pendingInvites[peer], Date().timeIntervalSince(startedAt) < inviteTimeout {
+            logger.info("[Eclipse:CONN] iPhone skipping invite to \(peer.displayName, privacy: .public): invitation already in flight")
             return
         }
 
         // Increase timeout to 60 seconds and present the shared handshake token so the
         // Apple TV can authenticate this client.
         let context = "\(handshakeToken)-iPhone".data(using: .utf8)
-        pendingInvitePeer = peer
-        pendingInviteStartedAt = Date()
+        pendingInvites[peer] = Date()
         browser?.invitePeer(peer, to: session, withContext: context, timeout: 60)
         logger.info("[Eclipse:CONN] iPhone invited peer: \(peer.displayName, privacy: .public) (timeout 60s)")
     }
 
-    /// Clears any in-flight invitation bookkeeping once an attempt resolves.
-    private func clearPendingInvite() {
-        pendingInvitePeer = nil
-        pendingInviteStartedAt = nil
+    /// Clears in-flight invitation bookkeeping for a peer once its attempt resolves.
+    private func clearPendingInvite(for peer: MCPeerID) {
+        pendingInvites[peer] = nil
+    }
+
+    /// Clears all in-flight invitation bookkeeping.
+    private func clearAllPendingInvites() {
+        pendingInvites.removeAll()
     }
     
     func disconnect() {
-        clearPendingInvite()
+        clearAllPendingInvites()
+        activePeer = nil
         session?.disconnect()
         logger.info("Disconnected session")
     }
@@ -209,16 +251,57 @@ class iPhoneConnectionManager: NSObject {
     /// Apple TV, tears that down first (only one peer is connected at a time), then
     /// invites the requested peer.
     func switchToPeer(_ peer: MCPeerID) {
+        // Already connected (possibly as a sync replica): just promote it to the active TV.
         if session?.connectedPeers.contains(peer) == true {
             logger.info("[Eclipse:CONN] iPhone already connected to requested peer: \(peer.displayName, privacy: .public)")
+            promoteToActive(peer)
             return
         }
-        if session?.connectedPeers.isEmpty == false {
+        // When keeping all TVs in sync we keep the other connections alive; otherwise the
+        // single active connection is torn down before switching.
+        if session?.connectedPeers.isEmpty == false && !syncAllEnabled {
             logger.info("[Eclipse:CONN] iPhone switching peers, disconnecting current session")
             session?.disconnect()
+            activePeer = nil
         }
-        clearPendingInvite()
+        clearPendingInvite(for: peer)
         invitePeer(peer)
+    }
+
+    /// Makes an already-connected peer the active (mirrored) TV without disturbing other
+    /// connected sync replicas.
+    private func promoteToActive(_ peer: MCPeerID) {
+        guard activePeer != peer else { return }
+        activePeer = peer
+        Task { @MainActor in
+            TVLibraryStore.shared.setActiveTV(peer.displayName)
+            TVLibraryStore.shared.setOnline(true)
+        }
+        DispatchQueue.main.async {
+            self.delegate?.connectionManager(self, didConnectToPeer: peer)
+        }
+    }
+
+    /// Invites every discovered Apple TV that isn't already connected, so they join as
+    /// sync replicas. Only the Eclipse Apple TV app advertises `eclipse-share`, so all
+    /// discovered peers are Eclipse TVs.
+    func inviteAllDiscoveredPeersForSync() {
+        guard syncAllEnabled else { return }
+        if !isBrowsing { startBrowsing() }
+        for peer in discoveredPeers where session?.connectedPeers.contains(peer) != true {
+            invitePeer(peer)
+        }
+    }
+
+    /// Disconnects all peers except the active TV, restoring single-TV behavior when the
+    /// user turns "keep all in sync" off. MultipeerConnectivity has no per-peer disconnect,
+    /// so this is a no-op when more than the active peer is connected is handled by the TVs
+    /// timing out; in practice we simply stop inviting replicas and let them drop.
+    func disconnectSyncReplicas() {
+        // There's no public API to drop a single peer from an MCSession; replicas are left
+        // to time out naturally once we stop sending to or inviting them. New mutations
+        // will only target the active peer (see syncTargetPeers).
+        logger.info("[Eclipse:CONN] Sync disabled; replicas will no longer receive updates")
     }
 
     /// Asks the Apple TV to make the item with the given id (file name) live/fullscreen.
@@ -227,30 +310,34 @@ class iPhoneConnectionManager: NSObject {
         return sendCommand(.playRequest(id: id), description: "play request")
     }
 
-    /// Asks the Apple TV to delete the item with the given id.
+    /// Asks the Apple TV to delete the item with the given id. Broadcast to all synced
+    /// TVs so their libraries stay matched.
     @discardableResult
     func sendDeleteRequest(id: String) -> Bool {
-        return sendCommand(.deleteItem(id: id), description: "delete request")
+        return sendCommand(.deleteItem(id: id), description: "delete request", broadcast: true)
     }
 
-    /// Asks the Apple TV to move the item with the given id to a new index.
+    /// Asks the Apple TV to move the item with the given id to a new index. Broadcast to
+    /// all synced TVs.
     @discardableResult
     func sendMoveRequest(id: String, toIndex: Int) -> Bool {
-        return sendCommand(.moveItem(id: id, toIndex: toIndex), description: "move request")
+        return sendCommand(.moveItem(id: id, toIndex: toIndex), description: "move request", broadcast: true)
     }
 
     /// Asks the Apple TV to reorder its live library to match `orderedIds` exactly.
-    /// Used when saving a drag-and-drop arrangement made on the companion.
+    /// Used when saving a drag-and-drop arrangement made on the companion. Broadcast to
+    /// all synced TVs.
     @discardableResult
     func sendReorderRequest(orderedIds: [String]) -> Bool {
-        return sendCommand(.reorderItems(orderedIds: orderedIds), description: "reorder request")
+        return sendCommand(.reorderItems(orderedIds: orderedIds), description: "reorder request", broadcast: true)
     }
 
     /// Asks the Apple TV to change a per-item video setting. Nil fields are left as-is.
+    /// Broadcast to all synced TVs.
     @discardableResult
     func sendVideoSetting(id: String, isLooping: Bool?, isMuted: Bool?) -> Bool {
         return sendCommand(.setVideoSetting(id: id, isLooping: isLooping, isMuted: isMuted),
-                           description: "video setting")
+                           description: "video setting", broadcast: true)
     }
 
     /// Sends a remote playback command for the live video. `position` is the absolute
@@ -267,20 +354,119 @@ class iPhoneConnectionManager: NSObject {
         return sendCommand(.setAccount(code: code), description: "set account")
     }
 
-    private func sendCommand(_ envelope: EclipseShareEnvelope, description: String) -> Bool {
-        guard let session = session, let peer = session.connectedPeers.first else {
+    /// Sends a control envelope. When `broadcast` is true and "keep all in sync" is on,
+    /// the message goes to every connected Apple TV; otherwise it targets only the active
+    /// TV (preserving single-TV behavior for live-selection and playback commands).
+    @discardableResult
+    private func sendCommand(_ envelope: EclipseShareEnvelope, description: String, broadcast: Bool = false) -> Bool {
+        guard let session = session, let data = envelope.encoded() else {
+            logger.error("Cannot send \(description): no session or failed to encode")
+            return false
+        }
+        let peers = syncTargetPeers(broadcast: broadcast, in: session)
+        guard !peers.isEmpty else {
             logger.error("Cannot send \(description): no active session or peer")
             return false
         }
-        guard let data = envelope.encoded() else { return false }
-
         do {
-            try session.send(data, toPeers: [peer], with: .reliable)
-            logger.info("Sent \(description)")
+            try session.send(data, toPeers: peers, with: .reliable)
+            logger.info("Sent \(description) to \(peers.count) peer(s)")
             return true
         } catch {
             logger.error("Failed to send \(description): \(error.localizedDescription)")
             return false
+        }
+    }
+
+    /// Resolves the peers a message should target: every connected TV for broadcast
+    /// mutations while syncing all, otherwise just the active TV (falling back to the
+    /// first connected peer for backwards compatibility).
+    private func syncTargetPeers(broadcast: Bool, in session: MCSession) -> [MCPeerID] {
+        if broadcast && syncAllEnabled { return session.connectedPeers }
+        if let active = activePeer, session.connectedPeers.contains(active) { return [active] }
+        if let first = session.connectedPeers.first { return [first] }
+        return []
+    }
+
+    /// The peer the UI mirrors / sends user-initiated transfers to: the active TV when
+    /// connected, else the first connected peer.
+    private var activeTargetPeer: MCPeerID? {
+        if let active = activePeer, session?.connectedPeers.contains(active) == true { return active }
+        return session?.connectedPeers.first
+    }
+
+    /// Sends a control envelope to one specific peer (used by the sync coordinator to
+    /// catch a replica TV up). Returns false if the peer isn't connected.
+    @discardableResult
+    func sendEnvelope(_ envelope: EclipseShareEnvelope, to peer: MCPeerID) -> Bool {
+        guard let session = session, session.connectedPeers.contains(peer),
+              let data = envelope.encoded() else { return false }
+        do {
+            try session.send(data, toPeers: [peer], with: .reliable)
+            return true
+        } catch {
+            logger.error("Failed to send envelope to \(peer.displayName, privacy: .public): \(error.localizedDescription)")
+            return false
+        }
+    }
+
+    /// Sends a media file to one specific peer without progress UI (used by the sync
+    /// coordinator to replay the library to a replica TV).
+    func sendMedia(at url: URL, id: String, to peer: MCPeerID) {
+        guard let session = session, session.connectedPeers.contains(peer) else { return }
+        session.sendResource(at: url, withName: id, toPeer: peer) { [weak self] error in
+            if let error = error {
+                self?.logger.error("Replica media send failed for \(id, privacy: .public): \(error.localizedDescription)")
+            }
+        }
+    }
+
+    /// The connected peer with the given display name, if any. Lets the (name-based) sync
+    /// coordinator address a specific TV without holding `MCPeerID` references.
+    private func connectedPeer(named name: String) -> MCPeerID? {
+        session?.connectedPeers.first { $0.displayName == name }
+    }
+
+    /// Whether the named TV is currently connected.
+    func isConnectedToPeerNamed(_ name: String) -> Bool {
+        connectedPeer(named: name) != nil
+    }
+
+    /// Replays a full library to one TV (used by the sync coordinator to catch a replica
+    /// up). Sends every media file, then — once all transfers finish — a single reorder so
+    /// the replica's order matches. Reordering after the transfers ensures the ids are
+    /// present on the TV when the reorder is applied. `completion` reports whether anything
+    /// was actually sent.
+    func replayLibrary(_ items: [(id: String, url: URL)],
+                       orderedIds: [String],
+                       toPeerNamed name: String,
+                       completion: @escaping (Bool) -> Void) {
+        guard let session = session, let peer = connectedPeer(named: name), !items.isEmpty else {
+            completion(false)
+            return
+        }
+        let group = DispatchGroup()
+        for item in items {
+            group.enter()
+            session.sendResource(at: item.url, withName: item.id, toPeer: peer) { [weak self] error in
+                if let error = error {
+                    self?.logger.error("Replay send failed for \(item.id, privacy: .public): \(error.localizedDescription)")
+                }
+                group.leave()
+            }
+        }
+        group.notify(queue: .main) { [weak self] in
+            self?.sendEnvelope(.reorderItems(orderedIds: orderedIds), to: peer)
+            completion(true)
+        }
+    }
+
+    /// Fans a just-sent media file out to every connected replica TV (all connected peers
+    /// except the active one). No-op unless syncing all.
+    private func fanOutMediaToReplicas(url: URL, id: String, excluding active: MCPeerID) {
+        guard syncAllEnabled, let session = session else { return }
+        for peer in session.connectedPeers where peer != active {
+            sendMedia(at: url, id: id, to: peer)
         }
     }
     
@@ -296,7 +482,7 @@ class iPhoneConnectionManager: NSObject {
     }
 
     func sendImage(at imageURL: URL) -> Bool {
-        guard let session = session, let peer = session.connectedPeers.first else {
+        guard let session = session, let peer = activeTargetPeer else {
             logger.error("Cannot send image: No active session or peer")
             return false
         }
@@ -310,6 +496,12 @@ class iPhoneConnectionManager: NSObject {
         sendPendingRestoreIfNeeded(to: peer, via: session)
 
         let fileName = imageURL.lastPathComponent
+        // Keep a full-resolution copy on the phone so it can be presented on an external
+        // AirPlay display without the TV-side companion app. Keyed by the resource name,
+        // which becomes this item's id in the TV library.
+        LocalMediaStore.shared.store(fileURL: imageURL, forId: fileName)
+        // Replicate to other synced TVs (no progress UI for those).
+        fanOutMediaToReplicas(url: imageURL, id: fileName, excluding: peer)
         let progress = session.sendResource(at: imageURL, withName: fileName, toPeer: peer) { [weak self] error in
             DispatchQueue.main.async {
                 guard let self = self else { return }
@@ -369,7 +561,7 @@ class iPhoneConnectionManager: NSObject {
     }
 
     func sendVideoData(_ videoURL: URL) -> Bool {
-        guard let session = session, let peer = session.connectedPeers.first else {
+        guard let session = session, let peer = activeTargetPeer else {
             logger.error("Cannot send video: No active session or peer")
             return false
         }
@@ -423,6 +615,11 @@ class iPhoneConnectionManager: NSObject {
         sendPendingRestoreIfNeeded(to: peer, via: session)
 
         let fileName = videoURL.lastPathComponent
+        // Keep a full-resolution copy on the phone for external AirPlay presentation
+        // (see sendImage for rationale).
+        LocalMediaStore.shared.store(fileURL: videoURL, forId: fileName)
+        // Replicate to other synced TVs (no progress UI for those).
+        fanOutMediaToReplicas(url: videoURL, id: fileName, excluding: peer)
         let progress = session.sendResource(at: videoURL, withName: fileName, toPeer: peer) { [weak self] error in
             DispatchQueue.main.async {
                 guard let self = self else { return }
@@ -497,6 +694,12 @@ extension iPhoneConnectionManager: MCNearbyServiceBrowserDelegate {
         DispatchQueue.main.async {
             self.delegate?.connectionManager(self, didFindPeer: peerID)
         }
+
+        // When keeping all Apple TVs in sync, connect every newly discovered TV (the
+        // first to connect becomes the active/mirrored TV; the rest are sync replicas).
+        if syncAllEnabled, session?.connectedPeers.contains(peerID) != true {
+            invitePeer(peerID)
+        }
     }
     
     func browser(_ browser: MCNearbyServiceBrowser, lostPeer peerID: MCPeerID) {
@@ -518,14 +721,14 @@ extension iPhoneConnectionManager: MCNearbyServiceBrowserDelegate {
         if error.localizedDescription.contains("busy") || error.localizedDescription.contains("in use") {
             logger.debug("Browser service appears busy, waiting 10 seconds before retry")
             DispatchQueue.main.asyncAfter(deadline: .now() + 10.0) { [weak self] in
-                if let self = self, !self.isBrowsing {
+                if let self = self, self.autoConnectEnabled, !self.isBrowsing {
                     self.startBrowsing()
                 }
             }
         } else {
             logger.debug("General browser error, retrying in 5 seconds")
             DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) { [weak self] in
-                if let self = self, !self.isBrowsing {
+                if let self = self, self.autoConnectEnabled, !self.isBrowsing {
                     self.startBrowsing()
                 }
             }
@@ -542,19 +745,37 @@ extension iPhoneConnectionManager: MCSessionDelegate {
         switch state {
         case .connected:
             logger.info("[Eclipse:CONN] iPhone CONNECTED to peer: \(peerID.displayName, privacy: .public)")
-            clearPendingInvite()
-            // Stop browsing once connected to avoid duplicate connections
-            stopBrowsing()
-            // Reset retry count on successful connection
+            clearPendingInvite(for: peerID)
             resetRetryCount()
-            Task { @MainActor in
-                // Point the store at this TV's library bucket *before* its manifest
-                // arrives so the incoming manifest/thumbnails land in the right cache.
-                TVLibraryStore.shared.setActiveTV(peerID.displayName)
-                TVLibraryStore.shared.setOnline(true)
+
+            // The first peer to connect becomes the active (mirrored) TV; any subsequent
+            // ones are sync replicas under "keep all in sync".
+            let isPrimary = (activePeer == nil)
+            if isPrimary {
+                activePeer = peerID
+                // Keep browsing while gathering replicas; otherwise stop to avoid
+                // duplicate connections.
+                if !syncAllEnabled { stopBrowsing() }
+                Task { @MainActor in
+                    // Point the store at this TV's library bucket *before* its manifest
+                    // arrives so the incoming manifest/thumbnails land in the right cache.
+                    TVLibraryStore.shared.setActiveTV(peerID.displayName)
+                    TVLibraryStore.shared.setOnline(true)
+                }
+                DispatchQueue.main.async {
+                    self.delegate?.connectionManager(self, didConnectToPeer: peerID)
+                }
+            } else {
+                logger.info("[Eclipse:CONN] Connected sync replica: \(peerID.displayName, privacy: .public)")
             }
-            DispatchQueue.main.async {
-                self.delegate?.connectionManager(self, didConnectToPeer: peerID)
+
+            // Keep gathering replicas and catch this TV up to the active library.
+            if syncAllEnabled {
+                let name = peerID.displayName
+                if !isPrimary {
+                    Task { @MainActor in self.syncCoordinator?.peerConnected(named: name) }
+                }
+                inviteAllDiscoveredPeersForSync()
             }
             
         case .connecting:
@@ -563,16 +784,26 @@ extension iPhoneConnectionManager: MCSessionDelegate {
         case .notConnected:
             logger.info("[Eclipse:CONN] iPhone NOT connected to peer: \(peerID.displayName, privacy: .public)")
             // The attempt resolved (failed/timed out/dropped); allow a fresh invitation.
-            clearPendingInvite()
-            // Keep the cached library but mark it offline; it refreshes on reconnect.
-            Task { @MainActor in
-                TVLibraryStore.shared.setOnline(false)
+            clearPendingInvite(for: peerID)
+
+            // If the active TV dropped, go offline and let the normal reconnect flow
+            // re-establish a primary. Replica drops don't affect the mirrored UI.
+            let wasActive = (activePeer == peerID)
+            if wasActive {
+                activePeer = nil
+                Task { @MainActor in
+                    TVLibraryStore.shared.setOnline(false)
+                }
             }
-            // Restart browsing if we were connected but got disconnected
-            if discoveredPeers.contains(peerID) {
+            // Restart browsing if we were connected but got disconnected — unless the
+            // user has paused auto-connect to use the app offline. Only the active peer
+            // gets the exponential-backoff reconnect; replicas are re-invited on
+            // rediscovery via inviteAllDiscoveredPeersForSync.
+            if autoConnectEnabled, discoveredPeers.contains(peerID) {
                 startBrowsing()
-                // Try to reconnect with exponential backoff
-                scheduleReconnectAttempt(to: peerID)
+                if wasActive {
+                    scheduleReconnectAttempt(to: peerID)
+                }
             }
             DispatchQueue.main.async {
                 self.delegate?.connectionManager(self, didDisconnectFromPeer: peerID)

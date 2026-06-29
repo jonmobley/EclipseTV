@@ -131,6 +131,8 @@ final class AlbumsViewController: UIViewController {
     // MARK: - Actions
 
     @objc private func closeTapped() {
+        // Leaving the album browser hands the external display back to the live TV item.
+        ExternalDisplayManager.shared.restoreCurrentSource()
         dismiss(animated: true)
     }
 
@@ -207,6 +209,14 @@ extension AlbumsViewController: UICollectionViewDataSource, UICollectionViewDele
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         collectionView.deselectItem(at: indexPath, animated: true)
         guard let item = store.albums[safe: indexPath.section]?.items[safe: indexPath.item] else { return }
+        // Mirror the selected album item onto any connected AirPlay display (full quality,
+        // streamed from HTTPS) while the phone shows its own preview.
+        if let url = item.remoteURL {
+            let source: PresentationSource = item.isVideo
+                ? .video(url, isLooping: false, isMuted: false)
+                : .image(url)
+            ExternalDisplayManager.shared.present(source)
+        }
         let preview = AlbumItemPreviewViewController(item: item)
         preview.modalPresentationStyle = .overFullScreen
         present(preview, animated: true)

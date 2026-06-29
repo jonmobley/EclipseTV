@@ -32,11 +32,33 @@ extension ImageViewController {
             }
             .store(in: &cancellables)
 
+        configureAlbumNotifier()
         refreshAlbumIfConfigured()
 
         #if DEBUG
         maybeAutoloadDemoAlbum()
         #endif
+    }
+
+    /// Wires the realtime notifier's callback once. A server "changed" nudge triggers the
+    /// same idempotent sync used on launch/foreground; coalescing in `RemoteAlbumSync`
+    /// keeps overlapping syncs safe.
+    func configureAlbumNotifier() {
+        albumNotifier.onChange = { [weak self] in
+            self?.logger.info("Realtime nudge received — re-syncing albums")
+            self?.refreshAlbumIfConfigured()
+        }
+    }
+
+    /// Opens (or refreshes) the realtime subscription for the configured account code, or
+    /// tears it down when no account is configured. Safe to call repeatedly; subscribing
+    /// to the same code is a no-op.
+    func startRealtimeIfConfigured() {
+        guard albumStore.hasAlbumConfigured, let code = albumStore.accountCode else {
+            albumNotifier.stop()
+            return
+        }
+        albumNotifier.start(code: code)
     }
 
     #if DEBUG
@@ -74,6 +96,7 @@ extension ImageViewController {
     /// Triggers a background sync against the configured manifest URL, if any.
     func refreshAlbumIfConfigured() {
         guard albumStore.hasAlbumConfigured else { return }
+        startRealtimeIfConfigured()
         Task { [weak self] in
             do {
                 let count = try await RemoteAlbumSync.shared.sync()
@@ -207,7 +230,13 @@ extension ImageViewController {
         cell.configure(with: nil, isVideo: item.isVideo)
         let cellSize = (gridView.collectionViewLayout as? UICollectionViewFlowLayout)?.itemSize
             ?? CGSize(width: 300, height: 169)
-        cell.configureAsync(imagePath: item.localPath, isVideo: item.isVideo, cellSize: cellSize, userPosition: nil)
+        // Prefer the lightweight server thumbnail when one was downloaded; otherwise fall
+        // back to the full media file (the TV generates a thumbnail from it).
+        cell.configureAsync(imagePath: item.thumbnailSourcePath,
+                            isVideo: item.isVideo,
+                            cellSize: cellSize,
+                            userPosition: nil,
+                            thumbnailIsPrerendered: item.hasPrerenderedThumbnail)
 
         if item.isVideo {
             let path = item.localPath
@@ -258,15 +287,52 @@ extension ImageViewController {
         alert.addAction(UIAlertAction(title: "Sync Albums", style: .default) { [weak self, weak alert] _ in
             guard let self = self else { return }
             let raw = alert?.textFields?.first?.text ?? ""
-            guard self.albumStore.setAccountCode(raw) else {
-                self.showNotificationToast(message: "Enter a valid \(AlbumConfig.codeLength)-digit code")
-                return
-            }
-            self.showNotificationToast(message: "Account code saved — syncing…")
-            self.refreshAlbumFromMenu()
+            self.applyAccountCodeAndSync(raw)
         })
 
         present(alert, animated: true)
+    }
+
+    /// Applies a freshly entered or received account code and runs the first sync.
+    /// Surfaces the result (and any failure reason) as a toast on both the TV-entry and
+    /// companion-push paths. If the server definitively rejects the code (HTTP 400/404),
+    /// the previously configured code is restored so a known-bad code is never left
+    /// persisted or subscribed to over Realtime.
+    func applyAccountCodeAndSync(_ rawCode: String) {
+        let previousCode = albumStore.accountCode
+        guard albumStore.setAccountCode(rawCode) else {
+            showNotificationToast(message: "Enter a valid \(AlbumConfig.codeLength)-digit code")
+            return
+        }
+
+        showNotificationToast(message: "Syncing albums…")
+        startRealtimeIfConfigured()
+
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let count = try await RemoteAlbumSync.shared.sync()
+                await MainActor.run {
+                    self.showNotificationToast(message: "Albums synced (\(count) item\(count == 1 ? "" : "s"))")
+                }
+            } catch {
+                await MainActor.run {
+                    self.handleAccountCodeFailure(error, revertingTo: previousCode)
+                }
+            }
+        }
+    }
+
+    /// Handles a failed first sync after a code change: reverts a definitively bad code to
+    /// the prior configuration (and re-points Realtime accordingly), then reports the
+    /// reason. Transient/server errors keep the code so a later sync can succeed.
+    @MainActor
+    private func handleAccountCodeFailure(_ error: Error, revertingTo previousCode: String?) {
+        if let syncError = error as? RemoteAlbumSync.SyncError, syncError.isBadCode {
+            albumStore.revertAccountCode(to: previousCode)
+            startRealtimeIfConfigured()
+        }
+        showNotificationToast(message: error.localizedDescription)
     }
 
     // MARK: - Menu Actions
@@ -279,6 +345,7 @@ extension ImageViewController {
             return
         }
         showNotificationToast(message: "Syncing albums…")
+        startRealtimeIfConfigured()
         Task { [weak self] in
             do {
                 let count = try await RemoteAlbumSync.shared.sync()

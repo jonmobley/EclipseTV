@@ -387,25 +387,30 @@ class ImageThumbnailCell: UICollectionViewCell {
     
     // MARK: - Async Loading
     
-    func configureAsync(imagePath: String, isVideo: Bool, cellSize: CGSize, userPosition: CGPoint? = nil) {
+    /// Loads the cell's thumbnail asynchronously.
+    /// - Parameter thumbnailIsPrerendered: When true, `imagePath` already points at a
+    ///   ready-to-display image (e.g. a server-provided album thumbnail), so it's loaded
+    ///   directly as an image even for video items instead of generating a frame from the
+    ///   video. The video badge/duration are still shown when `isVideo` is true.
+    func configureAsync(imagePath: String, isVideo: Bool, cellSize: CGSize, userPosition: CGPoint? = nil, thumbnailIsPrerendered: Bool = false) {
         // Cancel previous loading task
         currentLoadingTask?.cancel()
-        
+
         // Generate unique task ID and set current item path for validation
         let taskID = UUID()
         currentTaskID = taskID
         currentItemPath = imagePath
-        
+
         // Set initial state
         self.isVideo = isVideo
         videoIndicator.isHidden = !isVideo
-        
+
         // Start async loading
         currentLoadingTask = Task {
             // Calculate target size (thumbnail size)
             let targetSize = CGSize(width: cellSize.width * 2, height: cellSize.height * 2) // 2x for retina
-            
-            if isVideo {
+
+            if isVideo && !thumbnailIsPrerendered {
                 // For videos, check cache first, then generate thumbnail
                 let image = await VideoThumbnailCache.shared.getThumbnailAsync(for: imagePath, targetSize: targetSize)
                 
@@ -439,7 +444,13 @@ class ImageThumbnailCell: UICollectionViewCell {
                     if let image = image {
                         self.imageView.image = image
                         self.currentImage = image
-                        
+
+                        // A prerendered thumbnail for a video item: keep the video badge
+                        // and any duration label visible.
+                        if isVideo {
+                            self.configureVideoUI(for: imagePath)
+                        }
+
                         // Apply user positioning
                         self.applyUserPosition(userPosition)
                     }

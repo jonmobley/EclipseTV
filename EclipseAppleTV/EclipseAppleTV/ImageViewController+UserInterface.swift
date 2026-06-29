@@ -163,6 +163,7 @@ extension ImageViewController {
             alertController.addAction(UIAlertAction(title: "Remove Albums", style: .destructive) { [weak self] _ in
                 Task { @MainActor in
                     self?.albumStore.clearAlbum()
+                    self?.albumNotifier.stop()
                     self?.showNotificationToast(message: "Albums removed")
                 }
             })
@@ -190,12 +191,10 @@ extension ImageViewController {
             self.showNotificationToast(message: "Performance data reset")
         })
         
-        alertController.addAction(UIAlertAction(title: "Reset First Launch (Show QR Code)", style: .default) { [weak self] _ in
+        alertController.addAction(UIAlertAction(title: "Reset First Launch (Reload Samples)", style: .default) { [weak self] _ in
             guard let self = self else { return }
-            // Access the property from the main ImageViewController
-            let hasLaunchedBeforeKey = "EclipseTV.hasLaunchedBefore"
-            UserDefaults.standard.removeObject(forKey: hasLaunchedBeforeKey)
-            self.showNotificationToast(message: "First launch flag reset - app will show QR code on next launch")
+            UserDefaults.standard.removeObject(forKey: self.hasLaunchedBeforeKey)
+            self.showNotificationToast(message: "First launch flag reset - sample media will reload on next launch")
         })
         #endif
         
@@ -238,6 +237,10 @@ extension ImageViewController {
         
         // Bring the title label to front so it's above the empty state view
         view.bringSubviewToFront(titleLabel)
+
+        // Keep the options button reachable so a user with no local media can still enter
+        // their account code from here.
+        updateOptionsButtonVisibility()
         
         // Ensure focus is reset
         setNeedsFocusUpdate()
@@ -259,6 +262,7 @@ extension ImageViewController {
         gridView.isHidden = false
         gradientView.isHidden = false
         titleLabel.isHidden = false
+        updateOptionsButtonVisibility()
         
         // Make sure image view and player are hidden
         imageView.isHidden = true

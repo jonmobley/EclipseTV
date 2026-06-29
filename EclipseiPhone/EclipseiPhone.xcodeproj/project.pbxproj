@@ -112,6 +112,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = E24EA3B82D8A64E9002DB63F /* Build configuration list for PBXNativeTarget "EclipseiPhone" */;
 			buildPhases = (
+				E2C0DE112E57600000000201 /* Verify Shared Sources */,
 				E24EA38B2D8A64E7002DB63F /* Sources */,
 				E24EA38C2D8A64E7002DB63F /* Frameworks */,
 				E24EA38D2D8A64E7002DB63F /* Resources */,
@@ -243,6 +244,31 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		E2C0DE112E57600000000201 /* Verify Shared Sources */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/../Scripts/verify_shared_sources.sh",
+				"$(SRCROOT)/../EclipseAppleTV/EclipseAppleTV/EclipseShareProtocol.swift",
+				"$(SRCROOT)/../EclipseiPhone/EclipseiPhone/EclipseShareProtocol.swift",
+			);
+			name = "Verify Shared Sources";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/bash;
+			shellScript = "\"${SRCROOT}/../Scripts/verify_shared_sources.sh\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		E24EA38B2D8A64E7002DB63F /* Sources */ = {

@@ -57,12 +57,39 @@ struct AlbumItem: Codable, Equatable {
     let checksum: String?
     /// File name within the album's directory.
     let localFileName: String
+    /// Optional file name (within the album's directory) of a server-provided thumbnail.
+    /// Absent when the manifest carried no `thumbnailUrl` or the thumbnail download failed.
+    /// Decodes to `nil` for albums persisted before thumbnails were supported.
+    let thumbnailFileName: String?
 
     /// Absolute path to the downloaded file.
     var localPath: String { AlbumStorage.path(forAlbumId: albumId, fileName: localFileName) }
 
     /// Whether the backing file is present on disk.
     var fileExists: Bool { FileManager.default.fileExists(atPath: localPath) }
+
+    /// Absolute path to the downloaded server thumbnail, if one was downloaded.
+    var localThumbnailPath: String? {
+        guard let thumbnailFileName else { return nil }
+        return AlbumStorage.path(forAlbumId: albumId, fileName: thumbnailFileName)
+    }
+
+    /// Path to use when rendering the grid thumbnail: the lightweight server thumbnail
+    /// when present on disk, otherwise the full media file (from which the TV generates
+    /// its own thumbnail).
+    var thumbnailSourcePath: String {
+        if let path = localThumbnailPath, FileManager.default.fileExists(atPath: path) {
+            return path
+        }
+        return localPath
+    }
+
+    /// Whether `thumbnailSourcePath` is a ready-to-display image (a server thumbnail)
+    /// rather than the full media file.
+    var hasPrerenderedThumbnail: Bool {
+        guard let path = localThumbnailPath else { return false }
+        return FileManager.default.fileExists(atPath: path)
+    }
 }
 
 /// A downloaded album: identity, display name, and its resolved items.
@@ -184,6 +211,21 @@ final class RemoteAlbumStore: ObservableObject {
         return AlbumConfig.manifestURL(forCode: accountCode)
     }
 
+    /// Restores the account code to `code` after a freshly entered code is rejected by the
+    /// server, so a known-bad code is never left persisted. Passing `nil` (no prior code)
+    /// clears the configuration entirely. Downloaded albums are untouched, since a failed
+    /// sync never replaced them.
+    @MainActor
+    func revertAccountCode(to code: String?) {
+        guard let code else {
+            clearAlbum()
+            return
+        }
+        accountCode = code
+        defaults.set(code, forKey: codeKey)
+        logger.info("Reverted account code to previous value")
+    }
+
     /// Replaces the album contents after a sync and persists the new state. Removes any
     /// downloaded files (and whole album directories) no longer referenced.
     @MainActor
@@ -254,10 +296,12 @@ final class RemoteAlbumStore: ObservableObject {
                 try? fm.removeItem(at: dir)
                 continue
             }
-            // Within a kept album, drop files no longer referenced.
-            let keepFiles = Set(newAlbums
+            // Within a kept album, drop files no longer referenced (keeping both the
+            // media file and any server thumbnail file).
+            let keptAlbumItems = newAlbums
                 .first { AlbumStorage.sanitize($0.id) == dirName }?
-                .items.map { $0.localFileName } ?? [])
+                .items ?? []
+            let keepFiles = Set(keptAlbumItems.flatMap { [$0.localFileName, $0.thumbnailFileName].compactMap { $0 } })
             if let files = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil) {
                 for file in files where !keepFiles.contains(file.lastPathComponent) {
                     try? fm.removeItem(at: file)

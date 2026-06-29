@@ -45,7 +45,8 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         logger.info("Scene did become active")
         connectionManager?.startAdvertising()
 
-        // Re-sync the remote album when returning to the foreground.
+        // Re-sync the remote album when returning to the foreground. This also (re)opens
+        // the Realtime subscription so server-side changes push to the TV while it's open.
         (window?.rootViewController as? ImageViewController)?.refreshAlbumIfConfigured()
     }
     func sceneWillResignActive(_ scene: UIScene) {
@@ -56,6 +57,10 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 	func sceneDidEnterBackground(_ scene: UIScene) {
         logger.info("Scene did enter background")
+
+        // Drop the Realtime WebSocket while backgrounded; the foreground re-sync in
+        // sceneDidBecomeActive reopens it and catches anything missed in the meantime.
+        (window?.rootViewController as? ImageViewController)?.albumNotifier.stop()
     }
 }
 

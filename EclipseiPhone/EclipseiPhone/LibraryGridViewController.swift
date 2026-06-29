@@ -20,6 +20,8 @@ final class LibraryGridViewController: UIViewController {
     private let sectionInset: CGFloat = 16
     private let interitemSpacing: CGFloat = 12
     private let headerInset: CGFloat = 16
+    /// Black gap inserted between the hero banner and the grid below it.
+    private let heroBottomPadding: CGFloat = 16
 
     /// True while the user is dragging items to rearrange them.
     var isArranging = false
@@ -49,6 +51,14 @@ final class LibraryGridViewController: UIViewController {
         let header = LiveHeaderView()
         header.translatesAutoresizingMaskIntoConstraints = false
         return header
+    }()
+
+    /// Solid black padding strip below the hero banner, separating it from the grid.
+    private let heroSpacer: UIView = {
+        let view = UIView()
+        view.backgroundColor = .black
+        view.translatesAutoresizingMaskIntoConstraints = false
+        return view
     }()
 
     lazy var collectionView: UICollectionView = {
@@ -108,6 +118,7 @@ final class LibraryGridViewController: UIViewController {
         collectionView.addGestureRecognizer(reorderGesture)
 
         view.addSubview(liveHeader)
+        view.addSubview(heroSpacer)
         view.addSubview(collectionView)
         view.addSubview(emptyLabel)
 
@@ -118,7 +129,12 @@ final class LibraryGridViewController: UIViewController {
             liveHeader.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -headerInset),
             liveHeader.heightAnchor.constraint(equalTo: liveHeader.widthAnchor, multiplier: 9.0 / 16.0),
 
-            collectionView.topAnchor.constraint(equalTo: liveHeader.bottomAnchor),
+            heroSpacer.topAnchor.constraint(equalTo: liveHeader.bottomAnchor),
+            heroSpacer.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            heroSpacer.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            heroSpacer.heightAnchor.constraint(equalToConstant: heroBottomPadding),
+
+            collectionView.topAnchor.constraint(equalTo: heroSpacer.bottomAnchor),
             collectionView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             collectionView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             collectionView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
@@ -133,9 +149,14 @@ final class LibraryGridViewController: UIViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         store.delegate = self
+        // Let the external display ask for the live item if it connects mid-session.
+        ExternalDisplayManager.shared.currentSourceProvider = { [weak self] in
+            self?.currentPresentationSource()
+        }
         collectionView.reloadData()
         updateEmptyState()
         refreshLiveHeader()
+        pushCurrentToExternalDisplay()
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -143,6 +164,7 @@ final class LibraryGridViewController: UIViewController {
         if store.delegate === self {
             store.delegate = nil
         }
+        ExternalDisplayManager.shared.currentSourceProvider = nil
     }
 
     // MARK: - Helpers
@@ -164,6 +186,26 @@ final class LibraryGridViewController: UIViewController {
         let thumbnail = liveItem.flatMap { store.thumbnail(for: $0.id) }
         liveHeader.configure(with: liveItem, thumbnail: thumbnail, isOnline: store.isOnline)
         liveHeader.updatePlayback(store.playback)
+    }
+
+    // MARK: - External Display
+
+    /// The presentation source for the currently live item, or nil when nothing is live.
+    /// Used by `ExternalDisplayManager` when a display connects mid-session.
+    func currentPresentationSource() -> PresentationSource? {
+        guard let id = store.currentId,
+              let item = store.items.first(where: { $0.id == id }) else { return nil }
+        return .forLibraryItem(item, thumbnail: store.thumbnail(for: id))
+    }
+
+    /// Pushes the currently live item to the external display (if one is connected).
+    private func pushCurrentToExternalDisplay() {
+        guard ExternalDisplayManager.shared.isConnected else { return }
+        if let source = currentPresentationSource() {
+            ExternalDisplayManager.shared.present(source)
+        } else {
+            ExternalDisplayManager.shared.clear()
+        }
     }
 
     // MARK: - Per-item Options
@@ -302,6 +344,8 @@ extension LibraryGridViewController: UICollectionViewDelegateFlowLayout {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             // Optimistically reflect the new live item; the Apple TV will confirm.
             store.updateCurrentId(item.id)
+            // Mirror the selection onto any connected AirPlay display at full resolution.
+            ExternalDisplayManager.shared.present(.forLibraryItem(item, thumbnail: store.thumbnail(for: item.id)))
         } else {
             let alert = UIAlertController(title: "Not Connected",
                                           message: "Reconnect to your Apple TV and try again.",
@@ -389,6 +433,7 @@ extension LibraryGridViewController: TVLibraryStoreDelegate {
 
     func libraryStoreDidUpdateCurrent(_ store: TVLibraryStore) {
         refreshLiveHeader()
+        pushCurrentToExternalDisplay()
         guard !isArranging else { return }
         collectionView.reloadData()
     }

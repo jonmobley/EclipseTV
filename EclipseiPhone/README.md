@@ -1,29 +1,33 @@
 # Eclipse iPhone
 
-A powerful iOS companion app for wirelessly transferring photos and videos to the Eclipse Apple TV application. Features seamless device discovery, real-time transfer progress, and intuitive media selection.
+A companion app for the Eclipse Apple TV. It sends photos and videos to the TV, mirrors and controls the TV's live library, browses read-only cloud albums, and can present media on an AirPlay display. Built around a library-centric home screen (header bar + grid), not a one-off "pick and send" flow.
 
 ## Features
 
+### 📺 **Library Mirroring & Control**
+- **Live library mirror** of the TV's media, cached per Apple TV (works offline)
+- **Make items live**, delete, and drag-to-reorder from the phone
+- **Video transport controls** (play/pause, scrub, skip) for the live TV video
+- **Re-send purged items** that tvOS evicted from the TV's cache
+
 ### 📱 **Wireless Media Transfer**
-- **Auto-discovery** of nearby Apple TV devices running Eclipse
-- **Real-time transfer progress** with visual indicators
-- **Background transfer support** for uninterrupted communication
-- **Transfer cancellation** with instant feedback
+- **Auto-discovery** of nearby Apple TV devices running Eclipse, with offline/pause mode
+- **Real-time transfer progress** with visual indicators and cancellation
+- **Validation** (resolution/size/duration) and **custom video thumbnails** before sending
 - **Encrypted connections** via MultipeerConnectivity
 
-### 🖼️ **Media Selection & Management**
-- **PhotoKit integration** for seamless access to your photo library
-- **Multi-selection support** for batch transfers
-- **Live preview** of selected media in collection view
-- **Format validation** to ensure compatibility
-- **Media type detection** (images and videos)
+### ☁️ **Remote Albums**
+- **Browse cloud albums** by entering a 6-digit account code (HTTPS, read-only)
+- **Push the account code to the TV** so it syncs the same albums
 
-### 🔄 **Connection Management**
+### 📡 **AirPlay Presentation**
+- **Present the selected item fullscreen** on a mirrored Apple TV while the phone stays interactive
+- Uses full-resolution copies kept on the phone (local items) or HTTPS streams (album items)
+
+### 🔄 **Connection & Multi-TV Management**
+- **Multiple Apple TVs**: remembers every TV connected, with a library switcher and preferred TV
 - **Automatic reconnection** when devices come back in range
 - **Connection state monitoring** with visual feedback
-- **Smart pairing** remembers previously connected devices
-- **Network status awareness** with graceful error handling
-- **Background task handling** maintains connections during app switching
 
 ### 🎨 **User Experience**
 - **Modern iOS design** following Apple's Human Interface Guidelines
@@ -79,69 +83,66 @@ Build and run on connected device
 
 ### 🚀 **Getting Started**
 1. **Launch** Eclipse on your Apple TV first
-2. **Open** the Eclipse iPhone app
-3. **Wait** for automatic device discovery (usually 2-5 seconds)
-4. **Connection established** indicator will appear
+2. **Open** the Eclipse iPhone app — it auto-connects and mirrors that TV's library
+3. **Browse the grid** of the TV's library; tap an item to make it live on the TV
 
-### 📸 **Transferring Media**
-1. **Tap "Select Media"** to open the photo picker
-2. **Choose photos/videos** from your library
-3. **Tap "Send to Apple TV"** to begin transfer
-4. **Monitor progress** with the built-in progress indicator
-5. **View immediately** on your Apple TV once transfer completes
+### 📸 **Sending Media**
+1. **Tap the `+` button** in the header to open the photo picker
+2. **Choose a photo/video**; preview it (and pick a custom video thumbnail) before sending
+3. **Monitor progress** with the transfer overlay
+4. **It appears** in the TV library (and the mirrored grid) once the transfer completes
+
+### ☁️ **Remote Albums**
+1. **Open "Set Up Albums"** and enter your 6-digit account code
+2. **Browse** the read-only albums; the code is also pushed to the TV so it syncs them
 
 ### 🔗 **Connection Management**
-- **Green indicator**: Successfully connected to Apple TV
-- **Orange indicator**: Searching for devices
-- **Red indicator**: Connection failed or lost
-- **Auto-reconnect**: App automatically reconnects when devices are in range
+- **Connection pill** shows connected / searching / offline for the active TV
+- **Library switcher** lets you switch between Apple TVs you've connected to
+- **Auto-reconnect** when devices are back in range; pause to use the app offline
 
 ## Interface Overview
 
 ### **Main Screen Elements**
 ```
-┌─────────────────────────┐
-│      Eclipse Title      │
-│   Connection Status     │
-│                        │
-│   [Select Media]       │
-│                        │
-│  Selected Media Grid   │
-│                        │
-│  [Send to Apple TV]    │
-│     [Cancel]           │
-└─────────────────────────┘
+┌─────────────────────────────┐
+│ [pill] [library ▾] [↕] [+]  │  ← HomeHeaderBar
+│  ───────────────────────    │
+│   Live item (hero)          │  ← LiveHeaderView
+│  ───────────────────────    │
+│   TV library grid           │  ← LibraryGridViewController
+│   (tap = live, hold = menu) │
+└─────────────────────────────┘
 ```
-
-### **Connection States**
-| Status | Visual | Description |
-|--------|--------|-------------|
-| **Connecting** | Orange pulse | Searching for Apple TV |
-| **Connected** | Green solid | Ready to transfer |
-| **Transferring** | Blue progress | Transfer in progress |
-| **Disconnected** | Red/Gray | Connection lost |
 
 ## Technical Architecture
 
 ### **Core Components**
 ```swift
-iPhoneMainViewController     // Main UI controller (PHPickerViewController-based media selection)
-iPhoneConnectionManager     // Network communication
-MediaValidator             // File format validation
-VideoThumbnailPreviewViewController  // Custom video thumbnail picker
+iPhoneMainViewController        // Root shell (split across extensions)
+iPhoneConnectionManager         // Multipeer browser/session + control commands
+TVLibraryStore                  // Read-only mirror of the TV library (per TV)
+LocalMediaStore                 // Full-res copies of sent media (for AirPlay)
+KnownTVRegistry                 // Apple TVs this phone has connected to
+LibraryGridViewController       // Home grid: live hero, tap-to-play, context menus
+HomeHeaderBar                   // Connection pill, library switcher, arrange, +
+AlbumsViewController            // Read-only cloud album browser (HTTPS)
+ExternalDisplayManager          // AirPlay external screen detection + window
+PresentationViewController      // Fullscreen renderer on the external display
+MediaValidator                  // File validation + image downscaling
 ```
 
 ### **Network Layer**
-- **Protocol**: MultipeerConnectivity framework
-- **Service Type**: `eclipse-share` (matches Apple TV)
-- **Security**: Encrypted peer-to-peer connections
-- **Discovery**: Bonjour service advertising and browsing
+- **TV link**: MultipeerConnectivity (`eclipse-share`, Bonjour, required encryption)
+- **Control protocol**: JSON `EclipseShareEnvelope` (play/delete/move/reorder/video/playback/account)
+- **Cloud albums**: HTTPS manifest + thumbnails from the hosted account (`aircamtv.com`)
 
 ### **Data Flow**
 ```
-Photo Library → Media Selection → Validation → Transfer → Apple TV
-      ↓              ↓              ↓           ↓         ↓
-   PhotoKit    PHPickerViewController  Validator   MCSession  Display
+Photo Library → pick/preview → validate → Multipeer sendResource → Apple TV
+Apple TV → manifest + thumbnails + playback status → TVLibraryStore → grid
+Cloud (HTTPS) → AlbumBrowserStore → AlbumsViewController
+Grid/Albums → ExternalDisplayManager → PresentationViewController (AirPlay)
 ```
 
 ## Development
@@ -149,14 +150,22 @@ Photo Library → Media Selection → Validation → Transfer → Apple TV
 ### **Project Structure**
 ```
 EclipseiPhone/
-├── iPhoneMainViewController.swift    # Main app interface
-├── iPhoneConnectionManager.swift     # Network management
-├── MediaValidator.swift              # File validation
-├── VideoThumbnailPreviewViewController.swift  # Custom video thumbnail picker
-├── AppDelegate.swift                # App lifecycle
-├── SceneDelegate.swift              # Scene management
-├── Assets.xcassets/                 # App icons and images
-└── Base.lproj/                      # Storyboards and localizations
+├── iPhoneMainViewController.swift    # Root shell (+ Setup/Connection/MediaActions/Album/Library extensions)
+├── iPhoneConnectionManager.swift     # Multipeer browser/session + control commands
+├── EclipseShareProtocol.swift        # Shared wire protocol (mirrored on the TV target)
+├── TVLibraryStore.swift              # Read-only mirror of the TV library (per TV)
+├── LocalMediaStore.swift             # Full-res copies of sent media (for AirPlay)
+├── KnownTVRegistry.swift             # Apple TVs this phone has connected to
+├── LibraryGridViewController.swift   # Home grid (+ Arrange extension)
+├── HomeHeaderBar.swift               # Header bar
+├── AlbumsViewController.swift        # Cloud album browser
+├── AlbumBrowserStore.swift           # Account code + cached album manifest
+├── ExternalDisplayManager.swift      # AirPlay external display
+├── PresentationViewController.swift  # External-display renderer
+├── MediaValidator.swift              # File validation + downscaling
+├── AppDelegate.swift                 # App lifecycle
+├── SceneDelegate.swift               # Scene management
+└── Assets.xcassets/                  # App icons and images
 ```
 
 ### **Key Frameworks**
@@ -216,30 +225,27 @@ session.sendResource(at: fileURL, withName: fileName, toPeer: peer)
 ## Privacy & Security
 
 ### **Data Protection**
-- **Local processing**: No cloud storage or external servers
-- **Encrypted transfers**: All data encrypted in transit
+- **Encrypted TV link**: All Multipeer data is encrypted in transit
 - **Permission-based access**: Requires explicit photo library permission
-- **No data persistence**: Media only stored temporarily during transfer
+- **Local copies**: Full-res copies of sent media are kept on the phone to enable AirPlay presentation
+- **Cloud albums**: Read-only HTTPS fetch from the hosted account (no credentials stored beyond the account code)
 
 ### **Network Security**
-- Peer-to-peer encryption via MultipeerConnectivity
-- Local network only (no internet connectivity required)
-- Device authentication and trusted connections
+- Peer-to-peer encryption via MultipeerConnectivity for the TV link
+- HTTPS for read-only cloud album browsing
 
 ## Future Enhancements
 
 ### **Planned Features**
 - [ ] **iPad optimization** with enhanced UI for larger screens
-- [ ] **Batch operations** with queue management
 - [ ] **Transfer history** and recently sent items
-- [ ] **Compression options** for faster transfers
-- [ ] **Dark mode** support
-
-### **Potential Improvements**
-- [ ] **Cloud backup** integration for settings
-- [ ] **Multiple Apple TV** support
 - [ ] **Live Photos** support
-- [ ] **Audio file** compatibility
+
+### **Done**
+- [x] **Multiple Apple TV** support (library switcher + per-TV cached libraries)
+- [x] **AirPlay presentation** on an external display
+- [x] **Remote albums** by account code
+- [x] **Dark mode** (the app runs in a forced dark appearance)
 
 ## License
 

@@ -37,15 +37,12 @@ extension ImageViewController {
         }
     }
 
-    /// The companion configured the read-only remote albums. Persist the account code
-    /// and kick off a sync; the existing engine downloads media and updates the grid.
+    /// The companion configured the read-only remote albums. Apply the account code and
+    /// sync; the existing engine downloads media and updates the grid. Reuses the shared
+    /// apply-and-sync flow so an invalid/unknown code is reported (and rolled back) here
+    /// too, rather than failing silently.
     func connectionManager(_ manager: ConnectionManager, didReceiveSetAccountCode code: String) {
-        guard albumStore.setAccountCode(code) else {
-            showNotificationToast(message: "Received an invalid account code")
-            return
-        }
-        showNotificationToast(message: "Account code received — syncing…")
-        refreshAlbumIfConfigured()
+        applyAccountCodeAndSync(code)
     }
 
     /// The companion asked us to make a specific item live. Resolve it and bring it

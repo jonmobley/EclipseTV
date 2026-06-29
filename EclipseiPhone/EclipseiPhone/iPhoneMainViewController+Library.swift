@@ -73,6 +73,13 @@ extension iPhoneMainViewController {
             self?.refreshLibraryMenu()
             self?.libraryViewController.collectionView.reloadData()
         }
+        settings.onSyncPreferenceChanged = { [weak self] isOn in
+            // Apply to the live connection manager: enabling fans out to / gathers replica
+            // TVs; disabling stops replicating. Reset coordinator state so re-enabling
+            // re-replays the library to reconnected TVs.
+            self?.connectionManager.syncAllEnabled = isOn
+            MultiTVSyncCoordinator.shared.reset()
+        }
         let nav = UINavigationController(rootViewController: settings)
         present(nav, animated: true)
     }

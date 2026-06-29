@@ -27,62 +27,77 @@ extension ImageViewController {
         imageView.isHidden = true
         playerView.view.isHidden = true
 
-        // Always load sample media first. Run at utility priority so the heavy
-        // image/asset processing yields to first-frame UI rendering at launch.
-        logger.info("Loading sample media automatically on every launch")
-        Task(priority: .utility) {
-            logger.info("🚀 [SETUP] About to call viewModel.loadSampleMedia()")
-            await viewModel.loadSampleMedia()
-            await MainActor.run {
-                logger.info("✅ [SETUP] Sample media loading completed. Data source count: \(self.dataSource.count)")
+        // Load bundled sample media on the first launch only, so the app is never empty
+        // out of the box. On later launches the user's real library is restored from
+        // storage by `MediaDataSource`, and we deliberately don't re-add samples
+        // (respecting any the user deleted). The heavy image/asset work runs at utility
+        // priority so it yields to first-frame UI rendering at launch.
+        if !UserDefaults.standard.bool(forKey: hasLaunchedBeforeKey) {
+            logger.info("First launch: loading bundled sample media")
+            Task(priority: .utility) {
+                logger.info("🚀 [SETUP] About to call viewModel.loadSampleMedia()")
+                await viewModel.loadSampleMedia()
+                await MainActor.run {
+                    UserDefaults.standard.set(true, forKey: self.hasLaunchedBeforeKey)
+                    logger.info("✅ [SETUP] Sample media loading completed. Data source count: \(self.dataSource.count)")
 
-                // Debug data source state
-                self.dataSource.debugState()
+                    // Debug data source state
+                    self.dataSource.debugState()
 
-                // Fallback: if no media found by service, try scanning bundle subfolders explicitly
-                if self.dataSource.isEmpty {
-                    self.logger.info("❔ [SETUP] No media after service load — scanning bundle 'Videos' and 'Images' folders as fallback")
-                    let before = self.dataSource.count
-                    self.loadVideosFromBundle()
-                    self.logger.info("📦 [SETUP] After videos scan: count=\(self.dataSource.count) (Δ=\(self.dataSource.count - before))")
-                    self.loadImagesFromBundle()
-                    self.logger.info("📦 [SETUP] After images scan: count=\(self.dataSource.count)")
+                    // Fallback: if no media found by service, try scanning bundle subfolders explicitly
                     if self.dataSource.isEmpty {
-                        self.logger.error("🚫 [SETUP] Still empty after fallback scans. Showing empty state.")
+                        self.logger.info("❔ [SETUP] No media after service load — scanning bundle 'Videos' and 'Images' folders as fallback")
+                        let before = self.dataSource.count
+                        self.loadVideosFromBundle()
+                        self.logger.info("📦 [SETUP] After videos scan: count=\(self.dataSource.count) (Δ=\(self.dataSource.count - before))")
+                        self.loadImagesFromBundle()
+                        self.logger.info("📦 [SETUP] After images scan: count=\(self.dataSource.count)")
+                        if self.dataSource.isEmpty {
+                            self.logger.error("🚫 [SETUP] Still empty after fallback scans. Showing empty state.")
+                        }
                     }
-                }
 
-                // Always go directly to grid view with sample media
-                logger.info("🎯 [SETUP] Going directly to grid view with sample media")
-                self.isInGridMode = true
-
-                // If we have media, show grid view directly
-                if !self.dataSource.isEmpty {
-                    logger.info("✅ [SETUP] Data source has \(self.dataSource.count) items - showing grid view")
-                    self.gridView.isHidden = false
-                    self.titleLabel.isHidden = false
-                    self.gradientView.isHidden = false
-
-                    // Start preloading videos for smooth transitions
-                    logger.info("🚀 [CACHE] Starting initial video preloading")
-                    VideoCacheManager.shared.preloadInitialVideos(from: self.dataSource)
-
-                    // Reload and select first item
-                    self.gridView.reloadData()
-                    if let firstIndexPath = IndexPath(item: 0, section: 0) as IndexPath?, self.dataSource.count > 0 {
-                        self.simpleSelectionManager.selectItem(at: firstIndexPath)
-                        self.dataSource.setCurrentIndex(0)
-
-                        // Update focus to the grid view
-                        self.setNeedsFocusUpdate()
-                        self.updateFocusIfNeeded()
-                    }
-                } else {
-                    // If no media loaded, show empty state
-                    logger.info("❌ [SETUP] Data source is empty - showing empty state")
-                    self.showEmptyState()
+                    self.presentInitialMedia()
                 }
             }
+        } else {
+            logger.info("Returning launch: using persisted library, skipping sample media")
+            dataSource.debugState()
+            presentInitialMedia()
+        }
+    }
+
+    /// Shows the grid for the currently loaded library, or the empty state if there is
+    /// no media. Shared by the first-launch (post sample load) and returning-launch
+    /// paths in `setupViewModel`. Must be called on the main thread.
+    func presentInitialMedia() {
+        isInGridMode = true
+
+        guard !dataSource.isEmpty else {
+            logger.info("❌ [SETUP] Data source is empty - showing empty state")
+            showEmptyState()
+            return
+        }
+
+        logger.info("✅ [SETUP] Data source has \(self.dataSource.count) items - showing grid view")
+        gridView.isHidden = false
+        titleLabel.isHidden = false
+        gradientView.isHidden = false
+        updateOptionsButtonVisibility()
+
+        // Start preloading videos for smooth transitions
+        logger.info("🚀 [CACHE] Starting initial video preloading")
+        VideoCacheManager.shared.preloadInitialVideos(from: dataSource)
+
+        // Reload and select the first item
+        gridView.reloadData()
+        if dataSource.count > 0 {
+            simpleSelectionManager.selectItem(at: IndexPath(item: 0, section: 0))
+            dataSource.setCurrentIndex(0)
+
+            // Update focus to the grid view
+            setNeedsFocusUpdate()
+            updateFocusIfNeeded()
         }
     }
 

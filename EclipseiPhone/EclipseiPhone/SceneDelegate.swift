@@ -16,25 +16,13 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         
         // Set app to dark mode
         window?.overrideUserInterfaceStyle = .dark
+
+        // Begin watching for an AirPlay-mirrored Apple TV (external display) so the
+        // selected item can be presented fullscreen on it.
+        ExternalDisplayManager.shared.start()
     }
 
-    func sceneDidDisconnect(_ scene: UIScene) {
-        // Called when scene is being released
-    }
-
-    func sceneDidBecomeActive(_ scene: UIScene) {
-        // Called when scene has moved from inactive to active state
-    }
-
-    func sceneWillResignActive(_ scene: UIScene) {
-        // Called when scene will move from active to inactive state
-    }
-
-    func sceneWillEnterForeground(_ scene: UIScene) {
-        // Called as scene transitions from background to foreground
-    }
-
-    func sceneDidEnterBackground(_ scene: UIScene) {
-        // Called as scene transitions from foreground to background
-    }
+    // Note: app lifecycle work (reconnecting, pausing auto-connect timers) is handled via
+    // UIApplication notifications in `iPhoneMainViewController+Setup.swift`, so the empty
+    // UISceneSession lifecycle placeholders are intentionally omitted here.
 }

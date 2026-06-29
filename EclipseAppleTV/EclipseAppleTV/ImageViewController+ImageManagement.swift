@@ -247,6 +247,7 @@ extension ImageViewController {
         logger.debug("🔄 [GRID→FULLSCREEN] PlayerView current state - isHidden: \(self.playerView.view.isHidden), alpha: \(self.playerView.view.alpha)")
         
         isInGridMode = false
+        updateOptionsButtonVisibility()
         
         // Start loading content immediately
         // activityIndicator.startAnimating()  // Hidden per user request
@@ -379,6 +380,7 @@ extension ImageViewController {
             
             // CRITICAL: Re-enable grid mode now that transition is complete and selection is set
             self.isInGridMode = true
+            self.updateOptionsButtonVisibility()
             
             // Force focus update to the selected cell 
             self.setNeedsFocusUpdate()

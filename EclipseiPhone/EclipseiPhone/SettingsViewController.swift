@@ -1,20 +1,25 @@
 // SettingsViewController.swift
 import UIKit
 
-/// Companion settings: a (currently stubbed) toggle to keep every Apple TV's library
-/// in sync, and management of the Apple TVs this phone has connected to.
+/// Companion settings: a toggle to keep every Apple TV's library in sync, and management
+/// of the Apple TVs this phone has connected to.
 final class SettingsViewController: UITableViewController {
 
     /// Invoked when the known-TV list changes (e.g. a TV is forgotten) so the host can
     /// refresh the header dropdown and grid.
     var onLibrariesChanged: (() -> Void)?
 
+    /// Invoked when the "keep all Apple TVs in sync" preference changes, so the host can
+    /// apply it to the live connection manager (which begins/stops fanning out to replicas).
+    var onSyncPreferenceChanged: ((Bool) -> Void)?
+
     private enum Section: Int, CaseIterable {
         case sync
         case appleTVs
     }
 
-    /// Persists the (inert) "keep all Apple TVs in sync" preference.
+    /// Persists the "keep all Apple TVs in sync" preference (also read by the connection
+    /// manager's `syncAllEnabled`).
     private let syncAllTVsKey = "EclipseTV.companion.syncAllTVs"
     private let preferredTVNameKey = "EclipseTV.companion.preferredTVName"
 
@@ -74,7 +79,7 @@ final class SettingsViewController: UITableViewController {
     override func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
         switch Section(rawValue: section) {
         case .sync:
-            return "When on, your library will be mirrored to every Apple TV you connect to so they all match. Coming soon."
+            return "When on, library changes are sent to every Apple TV you're connected to, and newly connected TVs are caught up to match. Only media you've sent from this iPhone can be mirrored to other TVs."
         case .appleTVs:
             return "Removing an Apple TV clears its cached library on this iPhone."
         case .none:
@@ -129,8 +134,11 @@ final class SettingsViewController: UITableViewController {
     // MARK: - Actions
 
     @objc private func syncToggleChanged(_ sender: UISwitch) {
-        // Stubbed for now: the preference is persisted but no sync engine runs yet.
+        // The connection manager's `syncAllEnabled` setter persists the preference and
+        // starts/stops fanning out to replica TVs; route through the host so it applies to
+        // the live manager. (Persist here too so the value is correct even if no host is wired.)
         UserDefaults.standard.set(sender.isOn, forKey: syncAllTVsKey)
+        onSyncPreferenceChanged?(sender.isOn)
     }
 
     // MARK: - Editing (swipe to forget a TV)
@@ -154,6 +162,8 @@ final class SettingsViewController: UITableViewController {
         let tv = knownTVs[indexPath.row]
         KnownTVRegistry.shared.forget(name: tv.name)
         TVLibraryStore.shared.reset(tvName: tv.name)
+        // Drop the TV's caught-up state so it re-replays fully if re-added later.
+        MultiTVSyncCoordinator.shared.forget(tvNamed: tv.name)
 
         // If this was the preferred TV, clear the preference so we no longer hold out for it.
         if UserDefaults.standard.string(forKey: preferredTVNameKey) == tv.name {

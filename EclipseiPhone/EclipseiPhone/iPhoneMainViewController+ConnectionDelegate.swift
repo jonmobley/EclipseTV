@@ -15,6 +15,8 @@ extension iPhoneMainViewController: iPhoneConnectionManagerDelegate {
         // discovered peer if the preferred one never appears. Only the Eclipse Apple TV
         // app advertises `eclipse-share`, so any discovered peer is an Eclipse TV.
         if selectedPeer == nil {
+            // Don't auto-invite while the user has chosen to stay offline.
+            guard !isConnectionPaused else { return }
             if let preferred = preferredTVName, peer.displayName != preferred {
                 logger.debug("Holding out for preferred Apple TV: \(preferred, privacy: .public)")
                 return

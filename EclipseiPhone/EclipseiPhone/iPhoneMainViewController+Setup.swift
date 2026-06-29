@@ -28,6 +28,19 @@ extension iPhoneMainViewController {
             name: UIApplication.didEnterBackgroundNotification,
             object: nil
         )
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleExternalDisplayChange),
+            name: ExternalDisplayManager.didChangeNotification,
+            object: nil
+        )
+    }
+
+    @objc private func handleExternalDisplayChange() {
+        DispatchQueue.main.async { [weak self] in
+            self?.headerBar.setPresenting(ExternalDisplayManager.shared.isConnected)
+        }
     }
 
     @objc private func handleAppWillEnterForeground() {
@@ -96,6 +109,12 @@ extension iPhoneMainViewController {
         headerBar.onOpenSettings = { [weak self] in
             self?.presentSettings()
         }
+        headerBar.onConnect = { [weak self] in
+            self?.resumeConnection()
+        }
+        headerBar.onStopConnecting = { [weak self] in
+            self?.pauseConnection()
+        }
         view.addSubview(headerBar)
 
         NSLayoutConstraint.activate([
@@ -107,6 +126,9 @@ extension iPhoneMainViewController {
 
         // Populate the dropdown with any remembered Apple TVs and the active library.
         refreshLibraryMenu()
+
+        // Reflect any display already connected at launch.
+        headerBar.setPresenting(ExternalDisplayManager.shared.isConnected)
     }
 
     /// Embeds the library grid as a child controller filling the area below the header.
@@ -155,5 +177,11 @@ extension iPhoneMainViewController {
 
     func setupConnectionManager() {
         connectionManager.delegate = self
+
+        // Wire up the multi-TV sync coordinator so newly connected replica TVs get caught
+        // up to the active library when "Keep all Apple TVs in sync" is enabled.
+        let coordinator = MultiTVSyncCoordinator.shared
+        coordinator.connectionManager = connectionManager
+        connectionManager.syncCoordinator = coordinator
     }
 }

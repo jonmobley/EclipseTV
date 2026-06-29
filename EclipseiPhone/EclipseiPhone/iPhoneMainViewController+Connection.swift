@@ -27,8 +27,15 @@ extension iPhoneMainViewController {
             return
         }
 
+        // Honor the user's choice to use the app offline: don't browse, auto-connect,
+        // or nag with the troubleshooting hint until they ask to reconnect.
+        guard !isConnectionPaused else {
+            headerBar.setConnectionState(.paused)
+            return
+        }
+
         // Update UI to show searching (disconnected until we actually connect).
-        headerBar.setConnected(false)
+        headerBar.setConnectionState(.disconnected)
 
         // Start browsing if not already browsing
         if !connectionManager.isBrowsing {
@@ -68,9 +75,36 @@ extension iPhoneMainViewController {
             alert.addAction(UIAlertAction(title: "Open Settings", style: .default) { [weak self] _ in
                 self?.openAppSettings()
             })
+            alert.addAction(UIAlertAction(title: "Use Without Apple TV", style: .default) { [weak self] _ in
+                self?.pauseConnection()
+            })
             alert.addAction(UIAlertAction(title: "Keep Waiting", style: .cancel))
             self.present(alert, animated: true)
         }
+    }
+
+    // MARK: - Pause / Resume
+
+    /// Suspends all connection attempts so the user can browse their cached library
+    /// offline. Reconnect on demand from the status pill or the "…" menu. Session-only.
+    func pauseConnection() {
+        isConnectionPaused = true
+        connectionManager.autoConnectEnabled = false
+        stopSearching()
+        headerBar.setConnectionState(.paused)
+        showTemporaryStatus("Using Eclipse without Apple TV. Tap “Offline” or the … menu to connect.")
+    }
+
+    /// Re-enables auto-connect and immediately starts looking for the Apple TV again.
+    /// No-op while already connected.
+    func resumeConnection() {
+        guard !isConnected() else { return }
+        isConnectionPaused = false
+        connectionManager.autoConnectEnabled = true
+        // Drop any stale peer so fresh discovery (and the preferred-TV bias) drives the
+        // next connection.
+        selectedPeer = nil
+        startSearching()
     }
 
     /// Cancels the pending troubleshooting hint timer (e.g. once connected).
@@ -86,6 +120,13 @@ extension iPhoneMainViewController {
     }
 
     @objc private func tryAutoConnect() {
+        // Stop auto-connecting while the user is using the app offline.
+        if isConnectionPaused {
+            autoConnectTimer?.invalidate()
+            autoConnectTimer = nil
+            return
+        }
+
         // If we already have a selected peer and it's connected, no need to auto-connect
         if isConnected() {
             autoConnectTimer?.invalidate()
@@ -130,16 +171,19 @@ extension iPhoneMainViewController {
         DispatchQueue.main.async {
             if connected, let peer = peer {
                 // Connected: drop any pending troubleshooting hint and enable sending.
+                // A live connection always clears the paused state.
                 self.hideConnectionHint()
-                self.headerBar.setConnected(true)
+                self.isConnectionPaused = false
+                self.connectionManager.autoConnectEnabled = true
                 self.selectedPeer = peer
+                self.headerBar.setConnectionState(.connected)
             } else {
-                self.headerBar.setConnected(false)
-
                 // Only clear selectedPeer if explicitly told to
                 if peer == nil {
                     self.selectedPeer = nil
                 }
+                // Preserve the offline pill while paused; otherwise show disconnected.
+                self.headerBar.setConnectionState(self.isConnectionPaused ? .paused : .disconnected)
             }
         }
     }

@@ -21,23 +21,20 @@ class HelpView: UIView {
     private let helpTextLabel: UILabel = {
         let label = UILabel()
         label.text = """
-        • Press Menu button to access options
+        • Press Play/Pause to toggle between the grid and fullscreen
         
-        • Swipe Left/Right to navigate between images
+        • Press Menu in fullscreen to return to the grid; press Menu in the grid to open options
         
-        • Swipe Up to view image grid
-        
-        • Swipe Down to exit grid view
-        
-        • Press Play/Pause to toggle grid view
+        • Swipe Left/Right in fullscreen to move between items
         
         • Press and hold a video in the grid for Loop and Audio (mute) options
         
         • While a video plays, its controls appear on interaction and hide automatically
         
         
-        This app displays the built-in sample images.
-        Images are shown fullscreen while maintaining aspect ratio.
+        Send photos and videos from the Eclipse iPhone app, or set up
+        remote albums from the options menu. Media is shown fullscreen
+        while maintaining aspect ratio.
         """
         label.textColor = UIColor(white: 0.9, alpha: 1.0) // Lighter, more readable text
         label.font = UIFont.preferredFont(forTextStyle: .body)

@@ -45,6 +45,10 @@ class iPhoneMainViewController: UIViewController {
     
     let connectionManager = iPhoneConnectionManager()
     var selectedPeer: MCPeerID?
+    /// Session-only flag: when true the user chose to use Eclipse without an Apple TV,
+    /// so auto-connect, browsing, and the "Still connecting?" hint are all suspended
+    /// until they reconnect. Resets to false on next launch.
+    var isConnectionPaused = false
     var autoConnectTimer: Timer?
     /// One-shot timer that reveals the troubleshooting hint if we can't connect in time.
     var connectionHintTimer: Timer?

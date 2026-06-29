@@ -50,6 +50,14 @@ extension ImageViewController {
             albumCurrentAlbumIndex = nextIndexPath.section - 1
             albumCurrentItemIndex = nextIndexPath.item
             rememberAlbumCursor()
+
+            // Focus moved into a read-only album section. The album cell shows its own
+            // focus border, so clear the library's persistent selection to avoid two
+            // blue strokes appearing selected at once. (Move mode owns its own
+            // highlight and must not be disturbed here.)
+            if !isMoveMode, simpleSelectionManager.currentSelection != nil {
+                simpleSelectionManager.clearSelection()
+            }
             return
         }
 

@@ -8,7 +8,9 @@ A sophisticated Apple TV application for displaying and managing fullscreen medi
 - **Fullscreen media viewing** with optimal aspect ratio handling
 - **Grid view interface** with rounded corner thumbnails and 16:9 aspect ratio optimization
 - **Dual-mode navigation**: Switch seamlessly between grid and fullscreen views
-- **Move mode**: Reorganize your media library with intuitive drag-and-drop
+- **Move mode**: Reorganize your local library with intuitive drag-and-drop
+- **Remote albums**: Read-only cloud albums (synced via a 6-digit account code) shown as extra grid sections
+- **Sample media**: Bundled samples load on the first launch only, so the app is never empty out of the box
 - **Smart media detection**: Automatic format recognition and validation
 
 ### 🎬 **Supported Media Formats**
@@ -24,13 +26,12 @@ A sophisticated Apple TV application for displaying and managing fullscreen medi
 - **Encrypted transfers** for security
 
 ### 🎮 **Apple TV Navigation**
-- **Optimized gesture controls**:
-  - Swipe Left/Right: Navigate between media
-  - Swipe Up: Show grid view
-  - Swipe Down: Exit grid view or return to fullscreen
-  - Play/Pause: Toggle between grid and fullscreen modes
-  - Menu: Show options menu, exit modes, or access help
-- **Focus management** optimized for Apple TV remote
+- **Optimized Siri Remote controls**:
+  - Play/Pause: Toggle between grid and fullscreen
+  - Menu: In fullscreen, return to grid; in grid, open the options menu (albums, help)
+  - Swipe Left/Right: Navigate between items in fullscreen
+  - Long Press: Enter move mode to reorder the local library (grid view)
+- **Focus management** optimized for the Siri Remote
 - **Comprehensive help system** with contextual guidance
 
 ### ⚡ **Performance & User Experience**
@@ -58,7 +59,15 @@ ViewModels/
 
 Services/
 ├── MediaService.swift      # Bundled sample-media loading
-└── ConnectionManager.swift # Network connectivity (encryption required)
+├── ConnectionManager.swift # iPhone connectivity (Multipeer, encryption required)
+└── TVLibrarySync.swift     # Mirrors the local library to the connected iPhone
+
+RemoteAlbum/                 # Read-only cloud albums
+├── AlbumConfig.swift        # Manifest host, code rules, Supabase Realtime credentials
+├── AlbumManifest.swift      # JSON wire format for account albums
+├── RemoteAlbumSync.swift    # HTTPS manifest fetch + media download
+└── RealtimeAlbumNotifier.swift # Supabase Realtime push to re-sync on change
+RemoteAlbumStore.swift       # Downloaded albums (read-only), separate from the library
 
 VideoThumbnailCache.swift    # Memory + disk thumbnail cache
 
@@ -93,7 +102,9 @@ open EclipseAppleTV.xcodeproj
 ```
 
 ### 2. **Asset Configuration**
-Add sample images to `Assets.xcassets`:
+Bundled sample media is loaded on the first launch only (so the app is never empty out
+of the box); afterward the app shows the user's real library. To customize the samples,
+add image sets to `Assets.xcassets`:
 - Create image sets: `sample1`, `sample2`, `sample3`
 - Use high-resolution images (recommended: 1920×1080 or higher)
 - Landscape orientation optimal for TV display
@@ -118,19 +129,20 @@ Add sample images to `Assets.xcassets`:
 - Select media on iPhone and transfer to Apple TV instantly
 
 ### 🎮 **Navigation Controls**
-| Gesture | Action |
+| Control | Action |
 |---------|--------|
-| **Swipe Left/Right** | Navigate between media |
-| **Swipe Up** | Enter grid view |
-| **Swipe Down** | Exit grid/return to fullscreen |
-| **Play/Pause** | Toggle grid/fullscreen modes |
-| **Menu Button** | Options menu, exit modes, help |
+| **Play/Pause** | Toggle between grid and fullscreen |
+| **Menu Button** | In fullscreen: return to grid. In grid: open the options menu |
+| **Swipe Left/Right** | Navigate between items in fullscreen |
+| **Long Press** | Enter move mode to reorder the local library (grid view) |
 | **Select** | Choose media, confirm actions |
 
+Cloud album items are read-only — no move/delete on the TV.
+
 ### ⚙️ **Advanced Features**
-- **Move Mode**: Long press in grid view to reorganize media
-- **Help System**: Access via Menu → "Show Help"
-- **Media Management**: View file details, formats, and transfer history
+- **Move Mode**: Long press a local-library item in grid view to reorder it
+- **Remote Albums**: Enter a 6-digit account code from the options menu to sync read-only cloud albums
+- **Help System**: Access via Menu (in grid) → options → "Show Help"
 
 ## Troubleshooting
 
@@ -154,9 +166,11 @@ Add sample images to `Assets.xcassets`:
 ## Technical Details
 
 ### **Network Configuration**
-- Service Type: `eclipse-share`
-- Protocol: MultipeerConnectivity with encryption
-- Bonjour Services: `_eclipse-share._tcp`, `_eclipse-share._udp`
+- iPhone link: MultipeerConnectivity with required encryption
+  - Service Type: `eclipse-share`
+  - Bonjour Services: `_eclipse-share._tcp`, `_eclipse-share._udp`
+- Cloud albums: HTTPS manifest + media fetch from the hosted account
+- Realtime: Supabase Realtime WebSocket to re-sync albums when they change on the server
 
 ### **File Storage**
 - Local caching for recently viewed media

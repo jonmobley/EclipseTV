@@ -40,9 +40,12 @@ extension ImageViewController {
         view.addGestureRecognizer(swipeRight)
     }
     
-    /// Handles left/right swipes to move between media items in fullscreen image mode.
+    /// Handles left/right swipes to move between media items in fullscreen. Works for both
+    /// images and videos (and for library and album collections), matching the left/right
+    /// arrow-key navigation in `pressesBegan`. `nextImage()`/`previousImage()` resolve the
+    /// active collection and tear down/rebuild the video player as needed.
     @objc private func handleNavigationSwipe(_ gesture: UISwipeGestureRecognizer) {
-        guard !isInGridMode && !isVideo else { return }
+        guard !isInGridMode else { return }
         
         switch gesture.direction {
         case .left:
@@ -268,19 +271,6 @@ extension ImageViewController {
     // These are now handled by AVPlayerViewController's built-in remote control support
     
     // Removed handlePlayerPan method - scrubbing is now handled by AVPlayerViewController's built-in support
-    
-    /// Updates the on-screen time display for the given player
-    private func updateTimeDisplay(for player: AVPlayer) {
-        guard let item = player.currentItem, item.duration.isValid else {
-            return
-        }
-        
-        // AVPlayerViewController already shows time, but we can enhance it if needed
-        // This method is a placeholder for any custom time display you might want to add
-        
-        // Force update of transport controls
-        playerView.updateViewConstraints()
-    }
     
     // MARK: - tvOS Feedback Handling
     

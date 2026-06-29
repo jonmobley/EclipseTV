@@ -14,6 +14,15 @@ import UIKit
 /// an "Arrange" title (center), and a "Done" button (trailing) that saves the layout.
 final class HomeHeaderBar: UIView {
 
+    /// The connection state reflected by the status pill and the "…" menu contents.
+    /// `.paused` means the user chose to use Eclipse without an Apple TV; auto-connect
+    /// is suspended until they reconnect.
+    enum ConnectionDisplayState {
+        case connected
+        case disconnected
+        case paused
+    }
+
     /// A single Apple TV row shown in the library dropdown.
     struct LibraryMenuItem {
         let name: String
@@ -26,6 +35,10 @@ final class HomeHeaderBar: UIView {
     private let libraryButton = UIButton(type: .system)
     private let statusDot = UIView()
     private let statusLabel = UILabel()
+    /// Transparent overlay over the status dot + label so the pill is tappable to
+    /// (re)connect when disconnected or paused.
+    private let statusButton = UIButton(type: .system)
+    private let presentingIcon = UIImageView()
     private let menuButton = UIButton(type: .system)
     private let addButton = UIButton(type: .system)
 
@@ -49,15 +62,21 @@ final class HomeHeaderBar: UIView {
     var onBrowseAlbums: (() -> Void)?
     /// Invoked when "Settings" is chosen from the dropdown.
     var onOpenSettings: (() -> Void)?
+    /// Invoked when the user asks to connect — via the status pill tap or the
+    /// "Connect to Apple TV" / "Connect Now" item in the "…" menu.
+    var onConnect: (() -> Void)?
+    /// Invoked when the user chooses "Stop Trying to Connect" from the "…" menu.
+    var onStopConnecting: (() -> Void)?
 
     private var isArranging = false
+    private var connectionState: ConnectionDisplayState = .disconnected
 
     // MARK: - Init
 
     override init(frame: CGRect) {
         super.init(frame: frame)
         setupViews()
-        setConnected(false)
+        setConnectionState(.disconnected)
         setArranging(false)
     }
 
@@ -88,6 +107,17 @@ final class HomeHeaderBar: UIView {
         statusLabel.font = .systemFont(ofSize: 15, weight: .semibold)
         statusLabel.translatesAutoresizingMaskIntoConstraints = false
         addSubview(statusLabel)
+
+        statusButton.translatesAutoresizingMaskIntoConstraints = false
+        statusButton.addTarget(self, action: #selector(statusTapped), for: .touchUpInside)
+        addSubview(statusButton)
+
+        presentingIcon.image = UIImage(systemName: "airplayvideo")
+        presentingIcon.tintColor = .systemBlue
+        presentingIcon.contentMode = .scaleAspectFit
+        presentingIcon.isHidden = true
+        presentingIcon.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(presentingIcon)
 
         let menuConfig = UIImage.SymbolConfiguration(pointSize: 20, weight: .bold)
         menuButton.setImage(UIImage(systemName: "ellipsis", withConfiguration: menuConfig), for: .normal)
@@ -138,6 +168,16 @@ final class HomeHeaderBar: UIView {
             statusLabel.leadingAnchor.constraint(equalTo: statusDot.trailingAnchor, constant: 8),
             statusLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
 
+            statusButton.leadingAnchor.constraint(equalTo: statusDot.leadingAnchor, constant: -8),
+            statusButton.trailingAnchor.constraint(equalTo: statusLabel.trailingAnchor, constant: 8),
+            statusButton.topAnchor.constraint(equalTo: topAnchor),
+            statusButton.bottomAnchor.constraint(equalTo: bottomAnchor),
+
+            presentingIcon.leadingAnchor.constraint(equalTo: statusLabel.trailingAnchor, constant: 8),
+            presentingIcon.centerYAnchor.constraint(equalTo: centerYAnchor),
+            presentingIcon.widthAnchor.constraint(equalToConstant: 22),
+            presentingIcon.heightAnchor.constraint(equalToConstant: 18),
+
             addButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
             addButton.centerYAnchor.constraint(equalTo: centerYAnchor),
             addButton.widthAnchor.constraint(equalToConstant: 36),
@@ -161,16 +201,40 @@ final class HomeHeaderBar: UIView {
         ])
     }
 
+    /// Builds the "…" menu for the current connection state. When connected it offers
+    /// the TV actions (Arrange / Set Up Album); otherwise it offers connection controls
+    /// so the user can connect on demand or stop auto-connect attempts.
     private func makeOptionsMenu() -> UIMenu {
-        let arrange = UIAction(title: "Arrange",
-                               image: UIImage(systemName: "arrow.up.arrow.down")) { [weak self] _ in
-            self?.onArrangeTapped?()
+        switch connectionState {
+        case .connected:
+            let arrange = UIAction(title: "Arrange",
+                                   image: UIImage(systemName: "arrow.up.arrow.down")) { [weak self] _ in
+                self?.onArrangeTapped?()
+            }
+            let setUpAlbum = UIAction(title: "Set Up Album…",
+                                      image: UIImage(systemName: "rectangle.stack.badge.plus")) { [weak self] _ in
+                self?.onSetUpAlbum?()
+            }
+            return UIMenu(title: "", children: [arrange, setUpAlbum])
+
+        case .disconnected:
+            let connectNow = UIAction(title: "Connect Now",
+                                      image: UIImage(systemName: "wifi")) { [weak self] _ in
+                self?.onConnect?()
+            }
+            let stop = UIAction(title: "Stop Trying to Connect",
+                                image: UIImage(systemName: "pause.circle")) { [weak self] _ in
+                self?.onStopConnecting?()
+            }
+            return UIMenu(title: "", children: [connectNow, stop])
+
+        case .paused:
+            let connect = UIAction(title: "Connect to Apple TV",
+                                   image: UIImage(systemName: "wifi")) { [weak self] _ in
+                self?.onConnect?()
+            }
+            return UIMenu(title: "", children: [connect])
         }
-        let setUpAlbum = UIAction(title: "Set Up Album…",
-                                  image: UIImage(systemName: "rectangle.stack.badge.plus")) { [weak self] _ in
-            self?.onSetUpAlbum?()
-        }
-        return UIMenu(title: "", children: [arrange, setUpAlbum])
     }
 
     // MARK: - Library Dropdown
@@ -223,6 +287,12 @@ final class HomeHeaderBar: UIView {
         onArrangeCancel?()
     }
 
+    @objc private func statusTapped() {
+        // Tapping the pill only does something useful while not connected.
+        guard connectionState != .connected else { return }
+        onConnect?()
+    }
+
     @objc private func doneTapped() {
         onArrangeDone?()
     }
@@ -230,15 +300,35 @@ final class HomeHeaderBar: UIView {
     // MARK: - State
 
     /// Reflects the connection state in the dot, label, and trailing controls. Sending
-    /// media or arranging requires a live connection, so those controls are only enabled
-    /// while connected.
-    func setConnected(_ connected: Bool) {
-        statusDot.backgroundColor = connected ? .systemGreen : .systemGray
-        statusLabel.text = connected ? "Connected" : "Disconnected"
-        statusLabel.textColor = connected ? .systemGreen : .secondaryLabel
-        setAddEnabled(connected)
-        menuButton.isEnabled = connected
-        menuButton.alpha = connected ? 1.0 : 0.4
+    /// media requires a live connection, so the "+" button is only enabled while
+    /// connected; the "…" menu stays enabled in every state because it now hosts the
+    /// connect / stop-connecting controls.
+    func setConnectionState(_ state: ConnectionDisplayState) {
+        connectionState = state
+        switch state {
+        case .connected:
+            statusDot.backgroundColor = .systemGreen
+            statusLabel.text = "Connected"
+            statusLabel.textColor = .systemGreen
+        case .disconnected:
+            statusDot.backgroundColor = .systemGray
+            statusLabel.text = "Disconnected"
+            statusLabel.textColor = .secondaryLabel
+        case .paused:
+            statusDot.backgroundColor = .systemOrange
+            statusLabel.text = "Offline"
+            statusLabel.textColor = .secondaryLabel
+        }
+        setAddEnabled(state == .connected)
+        menuButton.isEnabled = true
+        menuButton.alpha = 1.0
+        menuButton.menu = makeOptionsMenu()
+    }
+
+    /// Shows or hides the AirPlay "presenting on TV" indicator next to the status label.
+    /// Reflects whether an external display (AirPlay-mirrored Apple TV) is connected.
+    func setPresenting(_ presenting: Bool) {
+        presentingIcon.isHidden = !presenting || isArranging
     }
 
     /// Enables or disables the "+" button independently (e.g. dimmed during a transfer).
@@ -253,6 +343,8 @@ final class HomeHeaderBar: UIView {
         libraryButton.isHidden = arranging
         statusDot.isHidden = arranging
         statusLabel.isHidden = arranging
+        statusButton.isHidden = arranging
+        presentingIcon.isHidden = arranging || !ExternalDisplayManager.shared.isConnected
         menuButton.isHidden = arranging
         addButton.isHidden = arranging
         titleLabel.isHidden = !arranging

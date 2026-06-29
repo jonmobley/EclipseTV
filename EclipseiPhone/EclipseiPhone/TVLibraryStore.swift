@@ -146,6 +146,8 @@ final class TVLibraryStore {
         let liveIds = Set(items.map { $0.id })
         thumbnails = thumbnails.filter { liveIds.contains($0.key) }
         pruneDiskThumbnails(keeping: liveIds)
+        // Free full-resolution copies for items no longer in the TV library.
+        LocalMediaStore.shared.prune(keeping: liveIds)
         persistManifest()
 
         delegate?.libraryStoreDidUpdateItems(self)
