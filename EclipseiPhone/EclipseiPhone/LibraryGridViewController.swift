@@ -1,3 +1,10 @@
+//
+//  LibraryGridViewController.swift
+//  Eclipse
+//
+//  Copyright © 2026 Moxie LLC. All rights reserved.
+//
+
 // LibraryGridViewController.swift
 import UIKit
 import os

@@ -1,3 +1,10 @@
+//
+//  ImageViewController+ImageManagement.swift
+//  Eclipse
+//
+//  Copyright © 2026 Moxie LLC. All rights reserved.
+//
+
 // ImageViewController+ImageManagement.swift
 import UIKit
 import AVFoundation

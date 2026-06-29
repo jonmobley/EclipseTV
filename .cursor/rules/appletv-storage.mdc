@@ -1,0 +1,39 @@
+---
+description: Locked-in, reliable Apple TV data-storage strategy. Do not change.
+alwaysApply: true
+---
+
+# Apple TV Storage — DO NOT CHANGE
+
+The EclipseAppleTV target's on-disk storage strategy is intentional and is the
+**most reliable method currently working on tvOS**. Treat it as locked. Do **not**
+migrate, refactor, "modernize", or relocate it without an explicit, written request
+from the user that names this rule.
+
+## What is locked
+
+- **Media files live in the Caches directory.** Both stores root their files under
+  `FileManager.urls(for: .cachesDirectory, …)`:
+  - `ImageStorage` → `Caches/Media` (iPhone-sent images/videos)
+  - `AlbumStorage` → `Caches/Album/<albumId>/…` (downloaded remote-album media)
+- **Lightweight metadata lives in `UserDefaults`.** `RemoteAlbumStore` persists albums,
+  account code, and last-sync date as JSON/values under its `EclipseTV.album.*` keys.
+- **Purged files are re-acquired, not treated as errors.** Missing Caches files are
+  dropped on load and re-downloaded/re-sent on the next sync. This is by design.
+
+## Why (do not relitigate)
+
+On tvOS, **Caches is the reliable writable location** and is durable in practice
+(only purged under genuine storage pressure). A previous move to **Application
+Support broke saving on tvOS** — see the comment in `ImageStorage.swift`. Apple's
+only *guaranteed*-persistence option is iCloud/CloudKit, which is a separate, larger
+decision the user has not requested.
+
+## Forbidden without explicit approval
+
+- ❌ Moving media off `.cachesDirectory` (e.g. to Application Support, Documents).
+- ❌ Replacing `UserDefaults` metadata with Core Data, SwiftData, files, etc.
+- ❌ Changing the `Album/<albumId>/…` layout or the `EclipseTV.album.*` keys.
+- ❌ "Fixing" the drop-and-re-download-on-purge behavior.
+
+If you believe a change is genuinely needed, STOP and ask the user first.

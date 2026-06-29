@@ -1,3 +1,10 @@
+//
+//  ImageViewController+ContentLoading.swift
+//  Eclipse
+//
+//  Copyright © 2026 Moxie LLC. All rights reserved.
+//
+
 // ImageViewController+ContentLoading.swift
 import UIKit
 import os.log

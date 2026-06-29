@@ -1,3 +1,10 @@
+//
+//  ExternalDisplayManager.swift
+//  Eclipse
+//
+//  Copyright © 2026 Moxie LLC. All rights reserved.
+//
+
 // ExternalDisplayManager.swift
 import UIKit
 import os.log
@@ -32,6 +39,13 @@ final class ExternalDisplayManager {
     private init() {}
 
     // MARK: - Lifecycle
+
+    // NOTE: This uses the pre-iOS-16 `UIScreen` connect/disconnect notifications, which are
+    // deprecated (but still functional). The modern path is a `UISceneSession` with the
+    // `.windowExternalDisplayNonInteractive` role, which requires enabling
+    // `UIApplicationSupportsMultipleScenes` and an external-display scene config in
+    // Info.plist plus scene-lifecycle handling. That migration is app-wide and needs
+    // testing on real AirPlay/external-display hardware, so it's intentionally deferred.
 
     /// Begins observing screen connect/disconnect and adopts any already-connected screen.
     func start() {

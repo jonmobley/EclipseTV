@@ -1,3 +1,10 @@
+//
+//  LocalMediaStore.swift
+//  Eclipse
+//
+//  Copyright © 2026 Moxie LLC. All rights reserved.
+//
+
 // LocalMediaStore.swift
 import UIKit
 import os.log

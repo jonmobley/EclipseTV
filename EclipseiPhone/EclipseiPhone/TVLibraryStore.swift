@@ -1,3 +1,10 @@
+//
+//  TVLibraryStore.swift
+//  Eclipse
+//
+//  Copyright © 2026 Moxie LLC. All rights reserved.
+//
+
 // TVLibraryStore.swift
 import UIKit
 import os.log

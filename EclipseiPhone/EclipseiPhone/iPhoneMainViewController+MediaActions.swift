@@ -1,3 +1,10 @@
+//
+//  iPhoneMainViewController+MediaActions.swift
+//  Eclipse
+//
+//  Copyright © 2026 Moxie LLC. All rights reserved.
+//
+
 // iPhoneMainViewController+MediaActions.swift
 import UIKit
 import PhotosUI

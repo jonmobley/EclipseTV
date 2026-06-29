@@ -2,7 +2,7 @@
 //  EclipseAppleTVUITestsLaunchTests.swift
 //  EclipseAppleTVUITests
 //
-//  Created by Jon Mobley on 3/18/25.
+//  Copyright © 2026 Moxie LLC. All rights reserved.
 //
 
 import XCTest

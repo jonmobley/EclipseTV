@@ -1,3 +1,10 @@
+//
+//  EmptyStateView.swift
+//  Eclipse
+//
+//  Copyright © 2026 Moxie LLC. All rights reserved.
+//
+
 import UIKit
 
 protocol EmptyStateViewDelegate: AnyObject {

@@ -1,3 +1,10 @@
+//
+//  ImageViewController+MoveMode.swift
+//  Eclipse
+//
+//  Copyright © 2026 Moxie LLC. All rights reserved.
+//
+
 // ImageViewController+MoveMode.swift
 import UIKit
 

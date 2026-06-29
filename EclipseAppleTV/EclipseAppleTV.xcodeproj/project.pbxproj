@@ -206,6 +206,7 @@
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 1620;
 				LastUpgradeCheck = 2660;
+				ORGANIZATIONNAME = "Moxie LLC";
 				TargetAttributes = {
 					E24EA2CD2D89ED30002DB63F = {
 						CreatedOnToolsVersion = 16.2;

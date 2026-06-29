@@ -1,3 +1,10 @@
+//
+//  AlbumConfig.swift
+//  Eclipse
+//
+//  Copyright © 2026 Moxie LLC. All rights reserved.
+//
+
 // AlbumConfig.swift
 import Foundation
 

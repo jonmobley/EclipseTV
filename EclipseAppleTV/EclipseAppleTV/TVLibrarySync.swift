@@ -1,3 +1,10 @@
+//
+//  TVLibrarySync.swift
+//  Eclipse
+//
+//  Copyright © 2026 Moxie LLC. All rights reserved.
+//
+
 // TVLibrarySync.swift
 import Foundation
 import Combine

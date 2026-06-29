@@ -1,3 +1,10 @@
+//
+//  ImagePreviewViewController.swift
+//  Eclipse
+//
+//  Copyright © 2026 Moxie LLC. All rights reserved.
+//
+
 import UIKit
 
 /// Notifies the host when the user confirms or cancels sending a previewed image.

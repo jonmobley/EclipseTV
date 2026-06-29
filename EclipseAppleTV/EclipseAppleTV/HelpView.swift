@@ -1,3 +1,10 @@
+//
+//  HelpView.swift
+//  Eclipse
+//
+//  Copyright © 2026 Moxie LLC. All rights reserved.
+//
+
 // HelpView.swift
 import UIKit
 
@@ -50,6 +57,17 @@ class HelpView: UIView {
         button.titleLabel?.font = UIFont.preferredFont(forTextStyle: .headline)
         return button
     }()
+
+    private let copyrightLabel: UILabel = {
+        let label = UILabel()
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+        label.text = "Eclipse \(version) • Copyright © 2026 Moxie LLC. All rights reserved."
+        label.textColor = UIColor(white: 0.6, alpha: 1.0)
+        label.font = UIFont.preferredFont(forTextStyle: .caption2)
+        label.textAlignment = .center
+        label.numberOfLines = 0
+        return label
+    }()
     
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -68,10 +86,12 @@ class HelpView: UIView {
         addSubview(titleLabel)
         addSubview(helpTextLabel)
         addSubview(closeButton)
+        addSubview(copyrightLabel)
         
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         helpTextLabel.translatesAutoresizingMaskIntoConstraints = false
         closeButton.translatesAutoresizingMaskIntoConstraints = false
+        copyrightLabel.translatesAutoresizingMaskIntoConstraints = false
         
         NSLayoutConstraint.activate([
             titleLabel.topAnchor.constraint(equalTo: topAnchor, constant: 60),
@@ -85,7 +105,11 @@ class HelpView: UIView {
             
             closeButton.topAnchor.constraint(equalTo: helpTextLabel.bottomAnchor, constant: 60),
             closeButton.centerXAnchor.constraint(equalTo: centerXAnchor),
-            closeButton.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor, constant: -60)
+            
+            copyrightLabel.topAnchor.constraint(greaterThanOrEqualTo: closeButton.bottomAnchor, constant: 24),
+            copyrightLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 40),
+            copyrightLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -40),
+            copyrightLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -40)
         ])
         
         closeButton.addTarget(self, action: #selector(closeButtonTapped), for: .primaryActionTriggered)

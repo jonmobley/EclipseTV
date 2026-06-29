@@ -1,3 +1,10 @@
+//
+//  ImageViewController+Focus.swift
+//  Eclipse
+//
+//  Copyright © 2026 Moxie LLC. All rights reserved.
+//
+
 // ImageViewController+Focus.swift
 import UIKit
 import os.log

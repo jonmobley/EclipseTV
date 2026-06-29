@@ -1,3 +1,10 @@
+//
+//  RemoteAlbumStore.swift
+//  Eclipse
+//
+//  Copyright © 2026 Moxie LLC. All rights reserved.
+//
+
 // RemoteAlbumStore.swift
 import Foundation
 import Combine

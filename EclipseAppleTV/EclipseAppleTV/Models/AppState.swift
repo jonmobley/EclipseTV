@@ -1,3 +1,10 @@
+//
+//  AppState.swift
+//  Eclipse
+//
+//  Copyright © 2026 Moxie LLC. All rights reserved.
+//
+
 import Foundation
 import Combine
 

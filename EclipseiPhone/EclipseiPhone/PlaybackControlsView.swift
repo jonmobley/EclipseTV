@@ -1,3 +1,10 @@
+//
+//  PlaybackControlsView.swift
+//  Eclipse
+//
+//  Copyright © 2026 Moxie LLC. All rights reserved.
+//
+
 // PlaybackControlsView.swift
 import UIKit
 

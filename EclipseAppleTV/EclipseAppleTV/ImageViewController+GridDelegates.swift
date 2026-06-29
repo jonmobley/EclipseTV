@@ -1,3 +1,10 @@
+//
+//  ImageViewController+GridDelegates.swift
+//  Eclipse
+//
+//  Copyright © 2026 Moxie LLC. All rights reserved.
+//
+
 // ImageViewController+GridDelegates.swift
 import UIKit
 import os.log

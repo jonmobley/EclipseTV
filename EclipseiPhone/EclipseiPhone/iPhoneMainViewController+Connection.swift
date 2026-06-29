@@ -1,3 +1,10 @@
+//
+//  iPhoneMainViewController+Connection.swift
+//  Eclipse
+//
+//  Copyright © 2026 Moxie LLC. All rights reserved.
+//
+
 // iPhoneMainViewController+Connection.swift
 import UIKit
 import MultipeerConnectivity

@@ -1,3 +1,10 @@
+//
+//  ImageViewController+UserInterface.swift
+//  Eclipse
+//
+//  Copyright © 2026 Moxie LLC. All rights reserved.
+//
+
 // ImageViewController+UserInterface.swift
 import UIKit
 import ObjectiveC  // For associated objects

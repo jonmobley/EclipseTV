@@ -1,3 +1,10 @@
+//
+//  ImageViewController+VideoSettings.swift
+//  Eclipse
+//
+//  Copyright © 2026 Moxie LLC. All rights reserved.
+//
+
 // ImageViewController+VideoSettings.swift
 import UIKit
 import os.log

@@ -1,3 +1,10 @@
+//
+//  PresentationViewController.swift
+//  Eclipse
+//
+//  Copyright © 2026 Moxie LLC. All rights reserved.
+//
+
 // PresentationViewController.swift
 import UIKit
 import AVFoundation

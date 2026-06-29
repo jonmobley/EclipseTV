@@ -1,5 +1,12 @@
 //
 //  MediaDataSourceTests.swift
+//  Eclipse
+//
+//  Copyright © 2026 Moxie LLC. All rights reserved.
+//
+
+//
+//  MediaDataSourceTests.swift
 //  EclipseAppleTVTests
 //
 //  Unit tests for the single source of truth: add/remove/move index math,

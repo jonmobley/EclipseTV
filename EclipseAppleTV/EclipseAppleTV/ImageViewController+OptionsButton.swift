@@ -1,3 +1,10 @@
+//
+//  ImageViewController+OptionsButton.swift
+//  Eclipse
+//
+//  Copyright © 2026 Moxie LLC. All rights reserved.
+//
+
 // ImageViewController+OptionsButton.swift
 import UIKit
 

@@ -1,3 +1,10 @@
+//
+//  ImageViewController+Album.swift
+//  Eclipse
+//
+//  Copyright © 2026 Moxie LLC. All rights reserved.
+//
+
 // ImageViewController+Album.swift
 import UIKit
 import AVFoundation

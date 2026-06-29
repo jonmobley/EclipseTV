@@ -1,3 +1,10 @@
+//
+//  SettingsViewController.swift
+//  Eclipse
+//
+//  Copyright © 2026 Moxie LLC. All rights reserved.
+//
+
 // SettingsViewController.swift
 import UIKit
 
@@ -42,7 +49,22 @@ final class SettingsViewController: UITableViewController {
                                                             target: self,
                                                             action: #selector(doneTapped))
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: "cell")
+        tableView.tableFooterView = makeCopyrightFooter()
         reloadKnownTVs()
+    }
+
+    /// Builds a small version + copyright line shown beneath the settings list.
+    private func makeCopyrightFooter() -> UIView {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+        let label = UILabel()
+        label.text = "Eclipse \(version)\nCopyright © 2026 Moxie LLC. All rights reserved."
+        label.font = .preferredFont(forTextStyle: .caption2)
+        label.textColor = .secondaryLabel
+        label.textAlignment = .center
+        label.numberOfLines = 0
+        let width = tableView.bounds.width
+        label.frame = CGRect(x: 0, y: 0, width: width, height: 56)
+        return label
     }
 
     private func reloadKnownTVs() {

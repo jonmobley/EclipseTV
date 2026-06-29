@@ -1,3 +1,10 @@
+//
+//  RemoteImageLoader.swift
+//  Eclipse
+//
+//  Copyright © 2026 Moxie LLC. All rights reserved.
+//
+
 // RemoteImageLoader.swift
 import UIKit
 import ImageIO

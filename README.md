@@ -200,7 +200,11 @@ Views/
 
 ## 📄 License
 
-This project is provided as-is with no warranties. For educational and personal use.
+Copyright © 2026 Moxie LLC. All rights reserved.
+
+This software and its source code are the confidential and proprietary property of
+Moxie LLC. Unauthorized copying, modification, or distribution is strictly prohibited.
+See [LICENSE](LICENSE) for full terms.
 
 ## 🙏 Credits
 
@@ -214,3 +218,7 @@ This project is provided as-is with no warranties. For educational and personal 
 For detailed component documentation, see the individual README files in each app directory:
 - [Apple TV App Documentation](EclipseAppleTV/EclipseAppleTV/README.md)
 - [iPhone App Documentation](EclipseiPhone/README.md)
+
+---
+
+Copyright © 2026 Moxie LLC. All rights reserved.

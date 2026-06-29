@@ -1,3 +1,10 @@
+//
+//  RemoteAlbumSync.swift
+//  Eclipse
+//
+//  Copyright © 2026 Moxie LLC. All rights reserved.
+//
+
 // RemoteAlbumSync.swift
 import Foundation
 import os.log

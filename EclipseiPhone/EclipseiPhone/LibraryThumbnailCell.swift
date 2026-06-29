@@ -1,3 +1,10 @@
+//
+//  LibraryThumbnailCell.swift
+//  Eclipse
+//
+//  Copyright © 2026 Moxie LLC. All rights reserved.
+//
+
 // LibraryThumbnailCell.swift
 import UIKit
 

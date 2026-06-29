@@ -1,3 +1,10 @@
+//
+//  MultiTVSyncCoordinator.swift
+//  Eclipse
+//
+//  Copyright © 2026 Moxie LLC. All rights reserved.
+//
+
 // MultiTVSyncCoordinator.swift
 import Foundation
 import os.log

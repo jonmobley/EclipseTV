@@ -1,3 +1,10 @@
+//
+//  iPhoneMainViewController+Setup.swift
+//  Eclipse
+//
+//  Copyright © 2026 Moxie LLC. All rights reserved.
+//
+
 // iPhoneMainViewController+Setup.swift
 import UIKit
 import os

@@ -1,3 +1,10 @@
+//
+//  ImageViewController+CollectionView.swift
+//  Eclipse
+//
+//  Copyright © 2026 Moxie LLC. All rights reserved.
+//
+
 // ImageViewController+CollectionView.swift
 import UIKit
 import AVFoundation

@@ -1,3 +1,10 @@
+//
+//  UnavailableLedger.swift
+//  Eclipse
+//
+//  Copyright © 2026 Moxie LLC. All rights reserved.
+//
+
 // UnavailableLedger.swift
 import Foundation
 import os.log

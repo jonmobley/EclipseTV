@@ -1,3 +1,10 @@
+//
+//  EclipseShareProtocol.swift
+//  Eclipse
+//
+//  Copyright © 2026 Moxie LLC. All rights reserved.
+//
+
 // EclipseShareProtocol.swift
 import Foundation
 

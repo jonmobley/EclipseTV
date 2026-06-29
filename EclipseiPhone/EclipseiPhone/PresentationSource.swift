@@ -1,3 +1,10 @@
+//
+//  PresentationSource.swift
+//  Eclipse
+//
+//  Copyright © 2026 Moxie LLC. All rights reserved.
+//
+
 // PresentationSource.swift
 import UIKit
 

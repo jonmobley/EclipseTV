@@ -1,3 +1,10 @@
+//
+//  LibraryGridViewController+Arrange.swift
+//  Eclipse
+//
+//  Copyright © 2026 Moxie LLC. All rights reserved.
+//
+
 // LibraryGridViewController+Arrange.swift
 import UIKit
 

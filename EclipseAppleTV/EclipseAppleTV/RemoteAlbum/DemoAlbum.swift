@@ -1,3 +1,10 @@
+//
+//  DemoAlbum.swift
+//  Eclipse
+//
+//  Copyright © 2026 Moxie LLC. All rights reserved.
+//
+
 // DemoAlbum.swift
 import Foundation
 

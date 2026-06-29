@@ -1,3 +1,10 @@
+//
+//  ImageViewController.swift
+//  Eclipse
+//
+//  Copyright © 2026 Moxie LLC. All rights reserved.
+//
+
 // ImageViewController.swift
 import UIKit
 import os.log

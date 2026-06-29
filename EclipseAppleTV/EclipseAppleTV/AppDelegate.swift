@@ -1,3 +1,10 @@
+//
+//  AppDelegate.swift
+//  Eclipse
+//
+//  Copyright © 2026 Moxie LLC. All rights reserved.
+//
+
 // AppDelegate.swift
 import UIKit
 import TVUIKit

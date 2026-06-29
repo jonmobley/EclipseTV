@@ -1,3 +1,10 @@
+//
+//  iPhoneMainViewController+Picker.swift
+//  Eclipse
+//
+//  Copyright © 2026 Moxie LLC. All rights reserved.
+//
+
 // iPhoneMainViewController+Picker.swift
 import UIKit
 import PhotosUI

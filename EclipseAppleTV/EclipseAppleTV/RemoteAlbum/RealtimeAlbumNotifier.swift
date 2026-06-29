@@ -1,3 +1,10 @@
+//
+//  RealtimeAlbumNotifier.swift
+//  Eclipse
+//
+//  Copyright © 2026 Moxie LLC. All rights reserved.
+//
+
 // RealtimeAlbumNotifier.swift
 import Foundation
 import Supabase
