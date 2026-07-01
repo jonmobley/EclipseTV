@@ -87,6 +87,9 @@ final class TVLibraryStore {
             ensureThumbnailDirectory()
             loadPersistedManifest()
         }
+        // Surface anything the user added while offline that hasn't been synced yet, so it
+        // shows in the grid even before (or without) an Apple TV connection.
+        mergePendingUploads()
     }
 
     // MARK: - Active TV Selection
@@ -105,6 +108,7 @@ final class TVLibraryStore {
         thumbnails = [:]
         ensureThumbnailDirectory()
         loadPersistedManifest()
+        mergePendingUploads()
 
         delegate?.libraryStoreDidUpdateItems(self)
         delegate?.libraryStoreDidUpdateCurrent(self)
@@ -146,18 +150,73 @@ final class TVLibraryStore {
 
     /// Replaces the full manifest and persists it. Prunes cached thumbnails (memory and
     /// disk) for items that are no longer present.
+    ///
+    /// Any items the user added offline (tracked by `PendingUploadStore`) are reconciled:
+    /// those the TV now reports are considered confirmed and dropped from the queue; those
+    /// it doesn't yet know about are appended so they keep showing in the grid until they
+    /// finish uploading. Their local files and thumbnails are protected from pruning while
+    /// they remain pending.
     func updateManifest(items: [LibraryItemDTO], currentId: String?) {
+        let manifestIds = Set(items.map { $0.id })
+
+        // A manifest that includes a queued item confirms it landed on the TV.
+        for id in PendingUploadStore.shared.pendingIds where manifestIds.contains(id) {
+            PendingUploadStore.shared.remove(id: id)
+        }
+
         self.items = items
         self.currentId = currentId
+        mergePendingUploads()
 
-        let liveIds = Set(items.map { $0.id })
-        thumbnails = thumbnails.filter { liveIds.contains($0.key) }
-        pruneDiskThumbnails(keeping: liveIds)
+        // Keep pending items' media and thumbnails alive so they can still be uploaded.
+        let keepIds = Set(self.items.map { $0.id }).union(PendingUploadStore.shared.pendingIds)
+        thumbnails = thumbnails.filter { keepIds.contains($0.key) }
+        pruneDiskThumbnails(keeping: keepIds)
         // Free full-resolution copies for items no longer in the TV library.
-        LocalMediaStore.shared.prune(keeping: liveIds)
+        LocalMediaStore.shared.prune(keeping: keepIds)
         persistManifest()
 
         delegate?.libraryStoreDidUpdateItems(self)
+    }
+
+    // MARK: - Local (offline) Additions
+
+    /// Records an item the user added on the phone before it has been sent to any Apple
+    /// TV. The item shows in the grid immediately and is queued for upload; its
+    /// full-resolution file must already be stored in `LocalMediaStore` under `item.id`.
+    func addLocalItem(_ item: LibraryItemDTO, thumbnail: UIImage?) {
+        PendingUploadStore.shared.enqueue(item)
+        if let thumbnail = thumbnail {
+            thumbnails[item.id] = thumbnail
+            persistThumbnail(thumbnail, forId: item.id)
+        }
+        if !items.contains(where: { $0.id == item.id }) {
+            items.append(item)
+            persistManifest()
+        }
+        delegate?.libraryStoreDidUpdateItems(self)
+    }
+
+    /// Removes a not-yet-synced local item (e.g. the user deleted it before it uploaded).
+    /// Drops it from the queue, the grid, its cached thumbnail, and its local file.
+    func removeLocalItem(id: String) {
+        PendingUploadStore.shared.remove(id: id)
+        LocalMediaStore.shared.remove(id: id)
+        thumbnails[id] = nil
+        if let index = items.firstIndex(where: { $0.id == id }) {
+            items.remove(at: index)
+            persistManifest()
+        }
+        if currentId == id { currentId = nil }
+        delegate?.libraryStoreDidUpdateItems(self)
+    }
+
+    /// Appends any queued uploads not already present so offline additions remain visible.
+    private func mergePendingUploads() {
+        let existing = Set(items.map { $0.id })
+        for item in PendingUploadStore.shared.items where !existing.contains(item.id) {
+            items.append(item)
+        }
     }
 
     func updateCurrentId(_ currentId: String?) {
