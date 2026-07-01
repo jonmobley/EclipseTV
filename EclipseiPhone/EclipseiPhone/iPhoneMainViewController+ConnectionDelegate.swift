@@ -49,6 +49,29 @@ extension iPhoneMainViewController: iPhoneConnectionManagerDelegate {
         preferredTVName = peer.displayName
         updateConnectedState(true, peer: peer)
         refreshLibraryMenu()
+        // Upload anything the user added while offline.
+        flushPendingUploads()
+    }
+
+    /// Sends any queued offline additions to the just-connected Apple TV. Items whose
+    /// local copy no longer exists are dropped from the queue.
+    private func flushPendingUploads() {
+        let pending = PendingUploadStore.shared.uploads
+        guard !pending.isEmpty else { return }
+
+        var payload: [(id: String, url: URL)] = []
+        for entry in pending {
+            if let url = LocalMediaStore.shared.localURL(forId: entry.item.id) {
+                payload.append((id: entry.item.id, url: url))
+            } else {
+                PendingUploadStore.shared.remove(id: entry.item.id)
+            }
+        }
+
+        guard !payload.isEmpty else { return }
+        let count = payload.count
+        showTemporaryStatus("Syncing \(count) item\(count == 1 ? "" : "s") to Apple TV…")
+        connectionManager.uploadPending(payload)
     }
 
     func connectionManager(_ manager: iPhoneConnectionManager, didDisconnectFromPeer peer: MCPeerID) {

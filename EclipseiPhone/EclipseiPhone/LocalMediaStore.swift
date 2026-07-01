@@ -68,6 +68,15 @@ final class LocalMediaStore {
         }
     }
 
+    /// Deletes the stored copy for a single id, if present (e.g. the user removed a
+    /// not-yet-synced local item).
+    func remove(id: String) {
+        let url = fileURL(forId: id)
+        ioQueue.async {
+            try? FileManager.default.removeItem(at: url)
+        }
+    }
+
     // MARK: - Maintenance
 
     /// Removes any stored files whose ids are not in `liveIds`, mirroring the thumbnail

@@ -177,6 +177,26 @@ extension iPhoneConnectionManager {
         }
     }
 
+    /// Uploads media the user added while offline to the active Apple TV. Each file that
+    /// transfers successfully is removed from `PendingUploadStore`; failures stay queued
+    /// for the next connection. The TV adds the items and re-broadcasts its manifest,
+    /// which reconciles the companion's optimistic entries.
+    func uploadPending(_ items: [(id: String, url: URL)]) {
+        guard let session = session, let peer = activeTargetPeer, !items.isEmpty else { return }
+        for item in items {
+            session.sendResource(at: item.url, withName: item.id, toPeer: peer) { [weak self] error in
+                if let error = error {
+                    self?.logger.error("Pending upload failed for \(item.id, privacy: .public): \(error.localizedDescription)")
+                    return
+                }
+                self?.logger.info("Uploaded queued item \(item.id, privacy: .public)")
+                Task { @MainActor in
+                    PendingUploadStore.shared.remove(id: item.id)
+                }
+            }
+        }
+    }
+
     /// Fans a just-sent media file out to every connected replica TV (all connected peers
     /// except the active one). No-op unless syncing all.
     private func fanOutMediaToReplicas(url: URL, id: String, excluding active: MCPeerID) {
