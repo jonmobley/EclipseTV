@@ -16,7 +16,8 @@ extension iPhoneMainViewController {
 
     /// Begins re-sending a purged Apple TV item: flags the next transfer as a restore
     /// (so the TV puts it back in its original slot) and opens the existing picker.
-    /// Requires a live connection, like any other send.
+    /// Restoring into a specific slot is a TV-side operation, so it still requires a live
+    /// connection.
     func beginResend(forItemId id: String) {
         guard let selectedPeer = selectedPeer, connectionManager.isConnectedToPeer(selectedPeer) else {
             showTemporaryStatus("Please connect to Apple TV first")
@@ -27,11 +28,8 @@ extension iPhoneMainViewController {
     }
 
     @objc func mediaPickerButtonTapped() {
-        guard let selectedPeer = selectedPeer, connectionManager.isConnectedToPeer(selectedPeer) else {
-            showTemporaryStatus("Please connect to Apple TV first")
-            return
-        }
-
+        // Adding works whether or not an Apple TV is connected: offline additions are
+        // shown immediately and uploaded automatically once a TV connects.
         let alertController = UIAlertController(title: nil, message: nil, preferredStyle: .actionSheet)
 
         // Add Image option
@@ -139,13 +137,52 @@ extension iPhoneMainViewController {
             self.cancelButton.alpha = 0
         } completion: { _ in
             self.cancelButton.isHidden = true
-            // Re-enable sending only if still connected.
-            self.headerBar.setAddEnabled(self.isConnected())
+            // Adding is always available (offline additions upload later), so re-enable
+            // the "+" button regardless of connection state.
+            self.headerBar.setAddEnabled(true)
 
             // Clean up temp file when transfer UI is hidden
             if let tempURL = self.currentTempFileURL {
                 self.cleanupTempFile(at: tempURL)
                 self.currentTempFileURL = nil
+            }
+        }
+    }
+
+    /// Adds a picked/confirmed media file to the library, then either sends it to the
+    /// connected Apple TV or queues it for upload if none is connected.
+    ///
+    /// The item is shown in the grid right away and its full-resolution copy is kept in
+    /// `LocalMediaStore` (keyed by the file name, which becomes its library id). When a TV
+    /// later connects, `PendingUploadStore` entries are flushed automatically.
+    func addMedia(localURL: URL, isVideo: Bool, thumbnail: UIImage?, duration: Double) {
+        let id = localURL.lastPathComponent
+        LocalMediaStore.shared.store(fileURL: localURL, forId: id)
+
+        let item = LibraryItemDTO(id: id,
+                                  name: id,
+                                  isVideo: isVideo,
+                                  duration: duration,
+                                  isLooping: isVideo ? false : nil,
+                                  isMuted: isVideo ? false : nil,
+                                  isAvailable: true)
+        TVLibraryStore.shared.addLocalItem(item, thumbnail: thumbnail)
+
+        guard isConnected() else {
+            showTemporaryStatus("Added. It'll upload to your Apple TV once you connect.")
+            return
+        }
+
+        if isVideo {
+            sendMediaToAppleTV(localURL)
+        } else {
+            currentTempFileURL = localURL
+            showTransferUI()
+            if !connectionManager.sendImage(at: localURL) {
+                showTemporaryStatus("Failed to send image. Please try again.")
+                hideTransferUI()
+                cleanupTempFile(at: localURL)
+                currentTempFileURL = nil
             }
         }
     }
@@ -164,8 +201,6 @@ extension iPhoneMainViewController {
     }
 
     func sendImageToAppleTV(_ image: UIImage) {
-        guard selectedPeer != nil else { return }
-
         // Show processing UI if image is large
         let largestSide = max(image.size.width, image.size.height)
         let isLargeImage = largestSide > 3840
@@ -174,7 +209,6 @@ extension iPhoneMainViewController {
             DispatchQueue.main.async {
                 self.statusLabel.text = "Processing image..."
                 self.statusLabel.alpha = 1.0
-                self.showTransferUI()
             }
         }
 
@@ -206,26 +240,10 @@ extension iPhoneMainViewController {
             }
 
             DispatchQueue.main.async {
-                // Store temp file URL for cleanup
-                self.currentTempFileURL = fileURL
-
-                // Update status for sending
                 if isLargeImage {
                     self.statusLabel.text = "Sending optimized image..."
-                } else {
-                    // Show transfer UI for smaller images
-                    self.showTransferUI()
                 }
-
-                // Send the image as a resource
-                let success = self.connectionManager.sendImage(at: fileURL)
-                if !success {
-                    self.showTemporaryStatus("Failed to send image. Please try again.")
-                    self.hideTransferUI()
-                    // Clean up temp file if sending failed
-                    self.cleanupTempFile(at: fileURL)
-                    self.currentTempFileURL = nil
-                }
+                self.addMedia(localURL: fileURL, isVideo: false, thumbnail: image, duration: 0)
             }
         }
     }

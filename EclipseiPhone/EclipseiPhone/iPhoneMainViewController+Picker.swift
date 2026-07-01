@@ -121,8 +121,9 @@ extension iPhoneMainViewController: VideoThumbnailPreviewDelegate {
         controller.dismiss(animated: true) { [weak self] in
             // Save the custom thumbnail for later use
             self?.saveCustomThumbnail(selectedThumbnail, for: videoURL)
-            // Send the video to Apple TV
-            self?.sendMediaToAppleTV(videoURL)
+            // Add to the library (shown immediately, uploaded now if connected, otherwise
+            // queued for the next connection).
+            self?.addMedia(localURL: videoURL, isVideo: true, thumbnail: selectedThumbnail, duration: 0)
         }
     }
 

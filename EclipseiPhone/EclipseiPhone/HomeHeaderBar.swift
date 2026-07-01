@@ -306,10 +306,10 @@ final class HomeHeaderBar: UIView {
 
     // MARK: - State
 
-    /// Reflects the connection state in the dot, label, and trailing controls. Sending
-    /// media requires a live connection, so the "+" button is only enabled while
-    /// connected; the "…" menu stays enabled in every state because it now hosts the
-    /// connect / stop-connecting controls.
+    /// Reflects the connection state in the dot, label, and trailing controls. The "+"
+    /// button stays enabled in every state: media added while offline is shown right away
+    /// and uploaded automatically once an Apple TV connects. The "…" menu likewise stays
+    /// enabled because it hosts the connect / stop-connecting controls when not connected.
     func setConnectionState(_ state: ConnectionDisplayState) {
         connectionState = state
         switch state {
@@ -326,7 +326,7 @@ final class HomeHeaderBar: UIView {
             statusLabel.text = "Offline"
             statusLabel.textColor = .secondaryLabel
         }
-        setAddEnabled(state == .connected)
+        setAddEnabled(true)
         menuButton.isEnabled = true
         menuButton.alpha = 1.0
         menuButton.menu = makeOptionsMenu()
