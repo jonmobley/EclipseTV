@@ -393,7 +393,9 @@ extension ConnectionManager: MCNearbyServiceAdvertiserDelegate {
             return
         }
 
-        guard contextString.contains(handshakeToken) else {
+        // Exact match only: a substring check would accept padded/wrapped payloads.
+        // The companion sends exactly "<token>-iPhone" (see iPhoneConnectionManager).
+        guard contextString == "\(handshakeToken)-iPhone" else {
             logger.error("[Eclipse:CONN] AppleTV REJECTED invitation from \(peerID.displayName, privacy: .public): invalid handshake token")
             invitationHandler(false, nil)
             return

@@ -27,6 +27,7 @@ final class AlbumBrowserStore {
         case invalidURL
         case invalidCode      // HTTP 400
         case unknownCode      // HTTP 404
+        case rateLimited      // HTTP 429
         case badResponse(Int)
         case decodeFailed
 
@@ -35,6 +36,7 @@ final class AlbumBrowserStore {
             case .notConfigured: return "No account code set"
             case .invalidURL, .invalidCode: return "That account code looks invalid"
             case .unknownCode: return "No account found for that code"
+            case .rateLimited: return "Too many requests — please try again in a moment"
             case .badResponse(let status): return "Server error (\(status))"
             case .decodeFailed: return "Couldn't read the album data"
             }
@@ -56,7 +58,13 @@ final class AlbumBrowserStore {
     init(defaults: UserDefaults = .standard, session: URLSession = .shared) {
         self.defaults = defaults
         self.session = session
-        accountCode = defaults.string(forKey: codeKey)
+        // The account code lives in the Keychain (encrypted at rest). Migrate a code
+        // persisted by older builds out of plaintext UserDefaults on first load.
+        if let legacy = defaults.string(forKey: codeKey) {
+            KeychainStore.set(legacy, forKey: codeKey)
+            defaults.removeObject(forKey: codeKey)
+        }
+        accountCode = KeychainStore.string(forKey: codeKey)
         loadCachedManifest()
     }
 
@@ -75,8 +83,9 @@ final class AlbumBrowserStore {
             defaults.removeObject(forKey: manifestKey)
         }
         accountCode = normalized
-        defaults.set(normalized, forKey: codeKey)
-        logger.info("Account code set: \(normalized, privacy: .public)")
+        KeychainStore.set(normalized, forKey: codeKey)
+        // The code is the account secret; keep it out of plaintext logs.
+        logger.info("Account code set: \(normalized, privacy: .private)")
         return true
     }
 
@@ -97,6 +106,7 @@ final class AlbumBrowserStore {
             switch http.statusCode {
             case 400: throw FetchError.invalidCode
             case 404: throw FetchError.unknownCode
+            case 429: throw FetchError.rateLimited
             default: throw FetchError.badResponse(http.statusCode)
             }
         }

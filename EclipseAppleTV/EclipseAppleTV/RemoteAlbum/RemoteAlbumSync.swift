@@ -33,6 +33,10 @@ final class RemoteAlbumSync {
         case unknownCode
         case badResponse(Int)
         case decodeFailed
+        /// The manifest supplied a non-HTTPS media URL, which the TV refuses to fetch.
+        case insecureURL
+        /// HTTP 429 — the server is rate-limiting; retry later with the same code.
+        case rateLimited
 
         var errorDescription: String? {
             switch self {
@@ -42,6 +46,8 @@ final class RemoteAlbumSync {
             case .unknownCode: return "No account found for that code"
             case .badResponse(let status): return "Server error (\(status))"
             case .decodeFailed: return "Couldn't read the album data"
+            case .insecureURL: return "Album media must use HTTPS"
+            case .rateLimited: return "Too many requests — please try again in a moment"
             }
         }
 
@@ -50,7 +56,7 @@ final class RemoteAlbumSync {
         var isBadCode: Bool {
             switch self {
             case .invalidURL, .invalidCode, .unknownCode: return true
-            case .notConfigured, .badResponse, .decodeFailed: return false
+            case .notConfigured, .badResponse, .decodeFailed, .insecureURL, .rateLimited: return false
             }
         }
     }
@@ -84,7 +90,9 @@ final class RemoteAlbumSync {
         guard store.hasAlbumConfigured else { throw SyncError.notConfigured }
         guard let url = store.manifestURL() else { throw SyncError.invalidURL }
 
-        logger.info("Starting account sync from \(url.absoluteString, privacy: .public)")
+        // Log the host publicly but keep the full URL private: its ?code= query is the
+        // account secret and must not land in plaintext in Console/sysdiagnose.
+        logger.info("Starting account sync from \(url.host ?? "?", privacy: .public) \(url.absoluteString, privacy: .private)")
         let manifest = try await fetchManifest(from: url)
         return try await apply(manifest: manifest)
     }
@@ -150,6 +158,7 @@ final class RemoteAlbumSync {
             switch http.statusCode {
             case 400: throw SyncError.invalidCode
             case 404: throw SyncError.unknownCode
+            case 429: throw SyncError.rateLimited
             default: throw SyncError.badResponse(http.statusCode)
             }
         }
@@ -239,6 +248,9 @@ final class RemoteAlbumSync {
     }
 
     private func download(from url: URL, to destination: URL, albumId: String) async throws {
+        // The manifest is fetched over HTTPS but its url/thumbnailUrl strings are
+        // attacker-influencable data; never follow them to plaintext or non-HTTP schemes.
+        guard url.scheme?.lowercased() == "https" else { throw SyncError.insecureURL }
         AlbumStorage.ensureDirectory(forAlbumId: albumId)
         let (tempURL, response) = try await session.download(from: url)
         if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {

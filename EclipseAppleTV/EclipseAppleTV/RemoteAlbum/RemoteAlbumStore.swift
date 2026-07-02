@@ -109,10 +109,10 @@ struct Album: Codable, Equatable {
 /// Single source of truth for the read-only albums mirrored on the Apple TV from an
 /// account's online manifest.
 ///
-/// Holds the configured account code plus the list of successfully downloaded albums,
-/// and persists both to `UserDefaults` so they survive relaunches. Mutations to the
-/// actual remote contents are performed by `RemoteAlbumSync`, which calls
-/// `applyAlbums(_:)` once a sync completes.
+/// Holds the configured account code plus the list of successfully downloaded albums.
+/// The code is persisted in the Keychain (it's the account secret); album metadata is
+/// persisted to `UserDefaults`. Mutations to the actual remote contents are performed
+/// by `RemoteAlbumSync`, which calls `applyAlbums(_:)` once a sync completes.
 final class RemoteAlbumStore: ObservableObject {
 
     // MARK: - Singleton
@@ -207,8 +207,9 @@ final class RemoteAlbumStore: ObservableObject {
             return false
         }
         accountCode = normalized
-        defaults.set(normalized, forKey: codeKey)
-        logger.info("Account code set: \(normalized, privacy: .public)")
+        KeychainStore.set(normalized, forKey: codeKey)
+        // The code is the account secret; keep it out of plaintext logs.
+        logger.info("Account code set: \(normalized, privacy: .private)")
         return true
     }
 
@@ -229,7 +230,7 @@ final class RemoteAlbumStore: ObservableObject {
             return
         }
         accountCode = code
-        defaults.set(code, forKey: codeKey)
+        KeychainStore.set(code, forKey: codeKey)
         logger.info("Reverted account code to previous value")
     }
 
@@ -253,7 +254,8 @@ final class RemoteAlbumStore: ObservableObject {
         accountCode = nil
         lastSyncDate = nil
         defaults.removeObject(forKey: albumsKey)
-        defaults.removeObject(forKey: codeKey)
+        defaults.removeObject(forKey: codeKey) // legacy plaintext location
+        KeychainStore.removeValue(forKey: codeKey)
         defaults.removeObject(forKey: lastSyncKey)
         logger.info("Albums cleared")
     }
@@ -261,7 +263,13 @@ final class RemoteAlbumStore: ObservableObject {
     // MARK: - Storage
 
     private func loadFromStorage() {
-        accountCode = defaults.string(forKey: codeKey)
+        // The account code lives in the Keychain (encrypted at rest). Migrate a code
+        // persisted by older builds out of plaintext UserDefaults on first load.
+        if let legacy = defaults.string(forKey: codeKey) {
+            KeychainStore.set(legacy, forKey: codeKey)
+            defaults.removeObject(forKey: codeKey)
+        }
+        accountCode = KeychainStore.string(forKey: codeKey)
         lastSyncDate = defaults.object(forKey: lastSyncKey) as? Date
 
         guard let data = defaults.data(forKey: albumsKey),

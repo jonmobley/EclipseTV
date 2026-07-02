@@ -93,14 +93,27 @@ final class LocalMediaStore {
 
     /// Maps an id to a filesystem-safe file name while preserving its extension so the
     /// stored file can be type-sniffed (image vs video) and played back correctly.
+    ///
+    /// Mirrors the Apple TV's inbound sanitizer: the id is first collapsed to its last
+    /// path component so traversal sequences ("../", absolute prefixes) can't survive,
+    /// then both the stem and extension are reduced to alphanumerics. Ids are normally
+    /// already bare file names, so real entries map to the same names as before.
     private static func fileName(forId id: String) -> String {
-        let ext = (id as NSString).pathExtension
-        let base = (id as NSString).deletingPathExtension
+        let component = (id as NSString).lastPathComponent
+        let ext = (component as NSString).pathExtension
+        let base = (component as NSString).deletingPathExtension
         let safeBase = base.unicodeScalars.map {
             CharacterSet.alphanumerics.contains($0) ? Character($0) : "_"
         }
-        let name = String(safeBase)
-        return ext.isEmpty ? name : "\(name).\(ext)"
+        // Degenerate ids ("", ".", "..") collapse to a constant, stable name rather than
+        // a per-process hash so the mapping survives relaunches.
+        var name = String(safeBase)
+        if name.isEmpty || name.allSatisfy({ $0 == "_" }) { name = "item" }
+        let safeExt = ext.unicodeScalars
+            .filter { CharacterSet.alphanumerics.contains($0) }
+            .map(String.init)
+            .joined()
+        return safeExt.isEmpty ? name : "\(name).\(safeExt)"
     }
 
     private func excludeFromBackup(_ url: URL) {

@@ -61,7 +61,8 @@ final class RealtimeAlbumNotifier {
         let topic = AlbumConfig.realtimeTopic(forCode: normalized)
         let channel = client.channel(topic)
         self.channel = channel
-        logger.info("Subscribing to realtime topic \(topic, privacy: .public)")
+        // The topic embeds the account code; keep it out of plaintext logs.
+        logger.info("Subscribing to realtime topic \(topic, privacy: .private)")
 
         listenTask = Task { [weak self] in
             // Register the broadcast handler before subscribing, per the Realtime SDK.

@@ -54,6 +54,14 @@ final class RemoteImageLoader {
                    targetSize: CGSize? = nil,
                    completion: @escaping (UIImage?) -> Void) -> RemoteImageRequest {
         let request = RemoteImageRequest()
+
+        // Manifest url/thumbnailUrl strings are attacker-influencable data; never
+        // follow them to plaintext or non-HTTP schemes.
+        guard url.scheme?.lowercased() == "https" else {
+            DispatchQueue.main.async { if !request.isCancelled { completion(nil) } }
+            return request
+        }
+
         let key = Self.cacheKey(url: url, targetSize: targetSize) as NSString
 
         if let cached = memoryCache.object(forKey: key) {
