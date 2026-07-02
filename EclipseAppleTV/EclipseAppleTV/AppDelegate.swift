@@ -32,6 +32,10 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     /// - Returns: Success indicator for app launch
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         logger.info("Application did finish launching")
+        // Sweep media files the library no longer references (interrupted receives,
+        // legacy leftovers) so the Caches/Media directory can't grow unbounded.
+        // The sweep itself runs on a background queue.
+        ImageStorage.shared.cleanupOrphanedFiles(keeping: MediaDataSource.shared.mediaPaths)
         // UIScene handles window and connection setup on tvOS
         return true
     }

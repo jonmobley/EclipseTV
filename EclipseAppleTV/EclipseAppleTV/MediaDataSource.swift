@@ -134,6 +134,12 @@ class MediaDataSource: ObservableObject {
         if removedPath.hasPrefix(mediaDirectory) {
             _ = ImageStorage.shared.removeFile(at: URL(fileURLWithPath: removedPath))
         }
+
+        // Drop the video's cached thumbnail so the disk cache doesn't accumulate
+        // entries for deleted items.
+        if MediaItem(path: removedPath).isVideo {
+            VideoThumbnailCache.shared.removeThumbnail(for: removedPath)
+        }
         
         // Adjust current index
         if currentIndex >= count {

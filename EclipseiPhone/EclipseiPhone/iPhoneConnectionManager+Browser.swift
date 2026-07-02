@@ -15,31 +15,32 @@ import MultipeerConnectivity
 extension iPhoneConnectionManager: MCNearbyServiceBrowserDelegate {
     func browser(_ browser: MCNearbyServiceBrowser, foundPeer peerID: MCPeerID, withDiscoveryInfo info: [String : String]?) {
         logger.info("[Eclipse:CONN] iPhone found peer: \(peerID.displayName, privacy: .public)")
-        
-        // Track discovered peer
-        if !discoveredPeers.contains(peerID) {
-            discoveredPeers.append(peerID)
-        }
-        
-        DispatchQueue.main.async {
-            self.delegate?.connectionManager(self, didFindPeer: peerID)
-        }
 
-        // When keeping all Apple TVs in sync, connect every newly discovered TV (the
-        // first to connect becomes the active/mirrored TV; the rest are sync replicas).
-        if syncAllEnabled, session?.connectedPeers.contains(peerID) != true {
-            invitePeer(peerID)
+        // Browser callbacks arrive on a background queue. Hop to main so all reads/writes
+        // of connection state (`discoveredPeers`, invitations) happen on one thread.
+        DispatchQueue.main.async {
+            if !self.discoveredPeers.contains(peerID) {
+                self.discoveredPeers.append(peerID)
+            }
+
+            self.delegate?.connectionManager(self, didFindPeer: peerID)
+
+            // When keeping all Apple TVs in sync, connect every newly discovered TV (the
+            // first to connect becomes the active/mirrored TV; the rest are sync replicas).
+            if self.syncAllEnabled, self.session?.connectedPeers.contains(peerID) != true {
+                self.invitePeer(peerID)
+            }
         }
     }
     
     func browser(_ browser: MCNearbyServiceBrowser, lostPeer peerID: MCPeerID) {
         logger.info("[Eclipse:CONN] iPhone lost peer: \(peerID.displayName, privacy: .public)")
-        
-        if let index = discoveredPeers.firstIndex(of: peerID) {
-            discoveredPeers.remove(at: index)
-        }
-        
+
         DispatchQueue.main.async {
+            if let index = self.discoveredPeers.firstIndex(of: peerID) {
+                self.discoveredPeers.remove(at: index)
+            }
+
             self.delegate?.connectionManager(self, didLosePeer: peerID)
         }
     }

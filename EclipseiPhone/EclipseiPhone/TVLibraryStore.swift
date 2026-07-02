@@ -59,6 +59,14 @@ final class TVLibraryStore {
 
     private var thumbnails: [String: UIImage] = [:]
 
+    /// Ids with a disk load already in flight, so a scrolling grid doesn't kick off
+    /// duplicate reads for the same cell.
+    private var pendingDiskLoads: Set<String> = []
+
+    /// Serial queue for thumbnail disk I/O (reads, writes, pruning) so image decode
+    /// and file access never block the main thread during scrolling.
+    private let ioQueue = DispatchQueue(label: "com.eclipseapp.ios.TVLibraryStore.io", qos: .utility)
+
     weak var delegate: TVLibraryStoreDelegate?
 
     var isEmpty: Bool { items.isEmpty }
@@ -112,15 +120,35 @@ final class TVLibraryStore {
 
     // MARK: - Reads
 
+    /// Returns the in-memory thumbnail if present. On a miss, kicks off a background
+    /// load from the on-disk cache (e.g. after a relaunch while offline) and returns
+    /// nil; when the load finishes, `libraryStore(_:didUpdateThumbnailFor:)` fires so
+    /// the grid can reload the cell. Reading/decoding on the main thread here used to
+    /// cause scroll hitches on cold caches.
     func thumbnail(for id: String) -> UIImage? {
         if let cached = thumbnails[id] { return cached }
-        // Fall back to the on-disk cache (e.g. after a relaunch while offline).
-        guard let url = thumbnailFileURL(for: id) else { return nil }
-        if let image = UIImage(contentsOfFile: url.path) {
-            thumbnails[id] = image
-            return image
-        }
+        loadThumbnailFromDisk(id)
         return nil
+    }
+
+    private func loadThumbnailFromDisk(_ id: String) {
+        guard !pendingDiskLoads.contains(id), let url = thumbnailFileURL(for: id) else { return }
+        pendingDiskLoads.insert(id)
+        let tvName = activeTVName
+        // Strong capture of self is fine: this is a singleton and the closure is transient.
+        ioQueue.async {
+            // preparingForDisplay() forces the JPEG decode here instead of at render time.
+            let image = UIImage(contentsOfFile: url.path)?.preparingForDisplay()
+            Task { @MainActor in
+                self.pendingDiskLoads.remove(id)
+                // Drop the result if the user switched TVs while the load was in flight.
+                guard let image, self.activeTVName == tvName else { return }
+                if self.thumbnails[id] == nil {
+                    self.thumbnails[id] = image
+                }
+                self.delegate?.libraryStore(self, didUpdateThumbnailFor: id)
+            }
+        }
     }
 
     func item(at index: Int) -> LibraryItemDTO? {
@@ -221,25 +249,33 @@ final class TVLibraryStore {
         UserDefaults.standard.set(currentId, forKey: currentIdKey)
     }
 
+    /// JPEG-encodes and writes on the I/O queue; thumbnails arrive over the wire on the
+    /// main actor and encoding them inline caused visible hitches during bulk syncs.
     private func persistThumbnail(_ image: UIImage, forId id: String) {
-        guard let url = thumbnailFileURL(for: id),
-              let data = image.jpegData(compressionQuality: 0.7) else { return }
-        do {
-            try data.write(to: url, options: [.atomic])
-        } catch {
-            logger.error("Failed to persist thumbnail for \(id, privacy: .public): \(error.localizedDescription)")
+        guard let url = thumbnailFileURL(for: id) else { return }
+        ioQueue.async { [logger] in
+            guard let data = image.jpegData(compressionQuality: 0.7) else { return }
+            do {
+                try data.write(to: url, options: [.atomic])
+            } catch {
+                logger.error("Failed to persist thumbnail for \(id, privacy: .public): \(error.localizedDescription)")
+            }
         }
     }
 
+    /// Deletes disk thumbnails for ids no longer in the manifest. File enumeration and
+    /// removal happen on the I/O queue.
     private func pruneDiskThumbnails(keeping liveIds: Set<String>) {
         guard let directory = activeThumbnailDirectory() else { return }
         let liveFileNames = Set(liveIds.map { "\(Self.stableHash($0)).jpg" })
-        guard let files = try? FileManager.default.contentsOfDirectory(at: directory,
-                                                                       includingPropertiesForKeys: nil) else {
-            return
-        }
-        for file in files where !liveFileNames.contains(file.lastPathComponent) {
-            try? FileManager.default.removeItem(at: file)
+        ioQueue.async {
+            guard let files = try? FileManager.default.contentsOfDirectory(at: directory,
+                                                                           includingPropertiesForKeys: nil) else {
+                return
+            }
+            for file in files where !liveFileNames.contains(file.lastPathComponent) {
+                try? FileManager.default.removeItem(at: file)
+            }
         }
     }
 

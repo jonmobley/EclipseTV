@@ -299,10 +299,13 @@ class ImageViewController: ManagedViewController, ConnectionManagerDelegate, UIG
         setupGradientBackground()
         setupGestures()
         setupFocusGuide()
-        setupViewModel()
 
-        // Initialize selection manager
+        // The selection manager must exist before setupViewModel(): on a returning
+        // launch that call runs presentInitialMedia() synchronously, which selects
+        // the first grid item and would crash on a nil selection manager.
         simpleSelectionManager = SimpleSelectionManager(collectionView: gridView)
+
+        setupViewModel()
 
         // Observe the remote album and start an initial sync if one is configured.
         setupAlbumSync()

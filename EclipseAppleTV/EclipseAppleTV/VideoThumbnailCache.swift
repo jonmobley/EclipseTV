@@ -73,6 +73,21 @@ class VideoThumbnailCache {
         }
     }
     
+    /// Removes the cached thumbnail (memory and disk) for a single video, e.g. when the
+    /// video is deleted from the library. Without this, disk entries live until the next
+    /// full `clearCache()`.
+    func removeThumbnail(for videoPath: String) {
+        cache.removeObject(forKey: NSString(string: videoPath))
+        let thumbnailURL = thumbnailFileURL(for: videoPath)
+        if fileManager.fileExists(atPath: thumbnailURL.path) {
+            do {
+                try fileManager.removeItem(at: thumbnailURL)
+            } catch {
+                logger.error("Failed to remove thumbnail from disk: \(error.localizedDescription)")
+            }
+        }
+    }
+
     func clearCache() {
         // Clear memory cache
         cache.removeAllObjects()

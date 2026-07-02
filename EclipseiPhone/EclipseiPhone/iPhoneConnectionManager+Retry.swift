@@ -8,6 +8,15 @@ import MultipeerConnectivity
 /// Replica TVs are not retried here; they are re-invited on rediscovery.
 extension iPhoneConnectionManager {
     func scheduleReconnectAttempt(to peer: MCPeerID) {
+        // `Timer.scheduledTimer` attaches to the *current* run loop. If this runs on a
+        // background queue (e.g. an MCSession delegate callback) that run loop isn't
+        // spinning and the timer never fires. Always schedule on the main run loop so the
+        // exponential-backoff reconnect actually runs. Retry state is likewise main-only.
+        if !Thread.isMainThread {
+            DispatchQueue.main.async { [weak self] in self?.scheduleReconnectAttempt(to: peer) }
+            return
+        }
+
         // Cancel any existing retry timer
         retryTimer?.invalidate()
         

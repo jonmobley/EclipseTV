@@ -55,7 +55,14 @@ class iPhoneConnectionManager: NSObject {
     /// it won't re-browse or re-invite on app-active, browser failure, or disconnect.
     /// Set to false while the user is using the app offline ("paused"); flipped back to
     /// true the moment they ask to connect again. Does not tear down an existing session.
-    var autoConnectEnabled = true
+    ///
+    /// Pausing also cancels any in-flight exponential-backoff retry so a stale timer/count
+    /// can't fire a reconnect after the user chose to stay offline.
+    var autoConnectEnabled = true {
+        didSet {
+            if !autoConnectEnabled { resetRetryCount() }
+        }
+    }
     
     var currentTransferTask: Progress?
     var isTransferCancelled = false
@@ -217,6 +224,16 @@ class iPhoneConnectionManager: NSObject {
     }
     
     func invitePeer(_ peer: MCPeerID) {
+        // All invitation bookkeeping (`pendingInvites`) lives on the main thread. Callers
+        // come from both the main thread (auto-connect timer, app-active) and background
+        // delegate queues (browser discovery); funnel them onto main so the guard-and-set
+        // below is atomic and can't fire two overlapping invites to the same peer — which
+        // MultipeerConnectivity resolves by abandoning the in-progress handshake.
+        if !Thread.isMainThread {
+            DispatchQueue.main.async { [weak self] in self?.invitePeer(peer) }
+            return
+        }
+
         guard let session = session else {
             logger.error("Cannot invite peer: session is nil")
             return
@@ -263,6 +280,7 @@ class iPhoneConnectionManager: NSObject {
     
     func disconnect() {
         clearAllPendingInvites()
+        resetRetryCount()
         setActivePeer(nil)
         session?.disconnect()
         logger.info("Disconnected session")

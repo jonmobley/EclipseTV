@@ -9,7 +9,22 @@ import MultipeerConnectivity
 extension iPhoneConnectionManager: MCSessionDelegate {
     func session(_ session: MCSession, peer peerID: MCPeerID, didChange state: MCSessionState) {
         logger.debug("Peer \(peerID.displayName, privacy: .public) changed state to: \(state.rawValue)")
-        
+
+        // MCSession delegate callbacks arrive on a background queue. All connection-state
+        // mutation (activePeer, pendingInvites, retry, browsing) and the TVLibraryStore /
+        // delegate updates must happen on the main thread, so run the whole transition
+        // there. This keeps the shared state single-threaded and guarantees `setActiveTV`
+        // runs before any manifest this connect triggers is processed (also on main).
+        DispatchQueue.main.async {
+            MainActor.assumeIsolated {
+                self.handleSessionStateChange(state, for: peerID)
+            }
+        }
+    }
+
+    /// Applies a session state transition on the main thread. See `session(_:peer:didChange:)`.
+    @MainActor
+    private func handleSessionStateChange(_ state: MCSessionState, for peerID: MCPeerID) {
         switch state {
         case .connected:
             logger.info("[Eclipse:CONN] iPhone CONNECTED to peer: \(peerID.displayName, privacy: .public)")
@@ -24,24 +39,19 @@ extension iPhoneConnectionManager: MCSessionDelegate {
                 // Keep browsing while gathering replicas; otherwise stop to avoid
                 // duplicate connections.
                 if !syncAllEnabled { stopBrowsing() }
-                Task { @MainActor in
-                    // Point the store at this TV's library bucket *before* its manifest
-                    // arrives so the incoming manifest/thumbnails land in the right cache.
-                    TVLibraryStore.shared.setActiveTV(peerID.displayName)
-                    TVLibraryStore.shared.setOnline(true)
-                }
-                DispatchQueue.main.async {
-                    self.delegate?.connectionManager(self, didConnectToPeer: peerID)
-                }
+                // Point the store at this TV's library bucket *before* its manifest
+                // arrives so the incoming manifest/thumbnails land in the right cache.
+                TVLibraryStore.shared.setActiveTV(peerID.displayName)
+                TVLibraryStore.shared.setOnline(true)
+                delegate?.connectionManager(self, didConnectToPeer: peerID)
             } else {
                 logger.info("[Eclipse:CONN] Connected sync replica: \(peerID.displayName, privacy: .public)")
             }
 
             // Keep gathering replicas and catch this TV up to the active library.
             if syncAllEnabled {
-                let name = peerID.displayName
                 if !isPrimary {
-                    Task { @MainActor in self.syncCoordinator?.peerConnected(named: name) }
+                    syncCoordinator?.peerConnected(named: peerID.displayName)
                 }
                 inviteAllDiscoveredPeersForSync()
             }
@@ -59,9 +69,7 @@ extension iPhoneConnectionManager: MCSessionDelegate {
             let wasActive = (activePeer == peerID)
             if wasActive {
                 setActivePeer(nil)
-                Task { @MainActor in
-                    TVLibraryStore.shared.setOnline(false)
-                }
+                TVLibraryStore.shared.setOnline(false)
             }
             // Restart browsing if we were connected but got disconnected — unless the
             // user has paused auto-connect to use the app offline. Only the active peer
@@ -73,9 +81,7 @@ extension iPhoneConnectionManager: MCSessionDelegate {
                     scheduleReconnectAttempt(to: peerID)
                 }
             }
-            DispatchQueue.main.async {
-                self.delegate?.connectionManager(self, didDisconnectFromPeer: peerID)
-            }
+            delegate?.connectionManager(self, didDisconnectFromPeer: peerID)
             
         @unknown default:
             logger.error("Unknown session state: \(state.rawValue)")

@@ -122,25 +122,29 @@ class ImageStorage {
     }
     
     // MARK: - Cleanup
-    
-    func cleanupOldImages(keepMostRecent count: Int = 100) {
+
+    /// Removes files in the media directory that the library no longer references —
+    /// e.g. leftovers from an interrupted receive or a legacy code path. Compares by
+    /// file name so a media-directory relocation doesn't orphan everything at once.
+    ///
+    /// This intentionally replaces the old "keep the N most recent files" sweep, which
+    /// was never wired up and would have deleted files still in the library once it
+    /// grew past the cap. Runs on a utility queue; safe to call at launch.
+    func cleanupOrphanedFiles(keeping referencedPaths: [String]) {
         let imagesDir = getImagesDirectory()
-        do {
-            let files = try fileManager.contentsOfDirectory(at: imagesDir, 
-                                                          includingPropertiesForKeys: [.creationDateKey])
-            let sortedFiles = try files.sorted { file1, file2 in
-                let date1 = try file1.resourceValues(forKeys: [.creationDateKey]).creationDate!
-                let date2 = try file2.resourceValues(forKeys: [.creationDateKey]).creationDate!
-                return date1 > date2
+        let referencedNames = Set(referencedPaths.map { ($0 as NSString).lastPathComponent })
+        DispatchQueue.global(qos: .utility).async { [logger] in
+            let fm = FileManager.default
+            guard let files = try? fm.contentsOfDirectory(at: imagesDir,
+                                                          includingPropertiesForKeys: nil) else { return }
+            for fileURL in files where !referencedNames.contains(fileURL.lastPathComponent) {
+                do {
+                    try fm.removeItem(at: fileURL)
+                    logger.info("Removed orphaned media file: \(fileURL.lastPathComponent, privacy: .public)")
+                } catch {
+                    logger.error("Failed to remove orphaned file: \(error.localizedDescription)")
+                }
             }
-            
-            // Delete files beyond the keep limit
-            for fileURL in sortedFiles.dropFirst(count) {
-                try fileManager.removeItem(at: fileURL)
-                logger.info("Removed old image: \(fileURL.lastPathComponent)")
-            }
-        } catch {
-            logger.error("Cleanup error: \(error.localizedDescription)")
         }
     }
     
