@@ -6,6 +6,7 @@
 //
 
 import UIKit
+import ImageIO
 import os.log
 
 actor AsyncImageLoader {
@@ -29,27 +30,15 @@ actor AsyncImageLoader {
     func loadImage(from path: String, targetSize: CGSize? = nil) async -> UIImage? {
         let cacheKey = makeCacheKey(path: path, targetSize: targetSize)
         
-        logger.debug("🔍 [ASYNC-LOADER] Loading image from path: \(path)")
-        logger.debug("🔍 [ASYNC-LOADER] Target size: \(targetSize?.debugDescription ?? "nil")")
-        logger.debug("🔍 [ASYNC-LOADER] Cache key: \(cacheKey)")
-        
         // Check cache first
-        let cached = cache.object(forKey: NSString(string: cacheKey))
-        
-        if let cached = cached {
-            logger.debug("🔍 [ASYNC-LOADER] Cache HIT - returning cached image")
+        if let cached = cache.object(forKey: NSString(string: cacheKey)) {
             return cached
         }
         
-        logger.debug("🔍 [ASYNC-LOADER] Cache MISS - need to load from disk")
-        
         // Check if operation is already running
         if let ongoingTask = ongoingOperations[cacheKey] {
-            logger.debug("🔍 [ASYNC-LOADER] Found ongoing operation, waiting for result")
             return await ongoingTask.value
         }
-        
-        logger.debug("🔍 [ASYNC-LOADER] Creating new loading task")
         
         // Create new loading task
         let task = Task<UIImage?, Never> {
@@ -61,10 +50,7 @@ actor AsyncImageLoader {
         }
         
         ongoingOperations[cacheKey] = task
-        let result = await task.value
-        
-        logger.debug("🔍 [ASYNC-LOADER] Task completed, result: \(result != nil ? "SUCCESS" : "FAILED")")
-        return result
+        return await task.value
     }
     
     func preloadImages(at paths: [String], targetSize: CGSize) async {
@@ -88,47 +74,54 @@ actor AsyncImageLoader {
     }
     
     // MARK: - Private Methods
+
+    /// Loads and optionally downsamples via ImageIO so large photos never decode at
+    /// full resolution into RAM before being resized for the grid.
     private func loadImageFromDisk(path: String, targetSize: CGSize?, cacheKey: String) async -> UIImage? {
-        logger.debug("💾 [DISK-LOAD] Starting disk load for path: \(path)")
-        
-        // Check if file exists
         guard fileManager.fileExists(atPath: path) else {
-            logger.warning("💾 [DISK-LOAD] ❌ Image file not found: \(path)")
+            logger.warning("Image file not found: \(path, privacy: .public)")
             return nil
         }
-        
-        logger.debug("💾 [DISK-LOAD] ✅ File exists, loading image")
-        
-        // Load image (since we're in an actor, this is already off the main queue)
-        logger.debug("💾 [DISK-LOAD] Loading image on background queue")
-        
-        // Load image
-        guard let image = UIImage(contentsOfFile: path) else {
-            logger.error("💾 [DISK-LOAD] ❌ Failed to load image from file: \(path)")
+
+        let url = URL(fileURLWithPath: path)
+        guard let image = Self.downsampledImage(at: url, targetSize: targetSize) else {
+            logger.error("Failed to decode image: \(path, privacy: .public)")
             return nil
         }
-        
-        logger.debug("💾 [DISK-LOAD] ✅ Image loaded successfully")
-        
-        // Resize if needed
-        let finalImage: UIImage
-        if let targetSize: CGSize = targetSize {
-            logger.debug("💾 [DISK-LOAD] Resizing image to target size")
-            finalImage = image.resized(to: targetSize) as UIImage
-            logger.debug("💾 [DISK-LOAD] ✅ Image resized successfully")
+
+        let cost = Int(image.size.width * image.size.height * 4.0)
+        cache.setObject(image, forKey: NSString(string: cacheKey), cost: cost)
+        return image
+    }
+
+    /// Creates a thumbnail-sized `UIImage` using `CGImageSourceCreateThumbnailAtIndex`.
+    /// When `targetSize` is nil, still caps at 3840px on the long edge to bound memory.
+    private static func downsampledImage(at url: URL, targetSize: CGSize?) -> UIImage? {
+        let maxPixel: CGFloat
+        if let targetSize {
+            let scale = UIScreen.main.scale
+            maxPixel = max(targetSize.width, targetSize.height) * scale
         } else {
-            logger.debug("💾 [DISK-LOAD] No resizing needed, using original image")
-            finalImage = image
+            maxPixel = 3840
         }
-        
-        logger.debug("💾 [DISK-LOAD] ✅ Final image ready, caching result")
-        
-        // Cache the result
-        let cost: Int = Int(finalImage.size.width * finalImage.size.height * 4.0) // Rough memory cost
-        cache.setObject(finalImage, forKey: NSString(string: cacheKey), cost: cost)
-        logger.debug("💾 [DISK-LOAD] ✅ Image cached successfully")
-        
-        return finalImage
+
+        let options: [CFString: Any] = [
+            kCGImageSourceShouldCache: false
+        ]
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, options as CFDictionary) else {
+            return nil
+        }
+
+        let thumbOptions: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixel,
+            kCGImageSourceShouldCacheImmediately: true
+        ]
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbOptions as CFDictionary) else {
+            return nil
+        }
+        return UIImage(cgImage: cgImage)
     }
     
     private func makeCacheKey(path: String, targetSize: CGSize?) -> String {
@@ -169,4 +162,4 @@ extension UIImage {
             return CGSize(width: width, height: bounds.height)
         }
     }
-} 
+}

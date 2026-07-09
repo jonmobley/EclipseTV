@@ -225,7 +225,7 @@ final class HomeHeaderBar: UIView {
             return UIMenu(title: "", children: [arrange, setUpAlbum])
 
         case .disconnected:
-            let connectNow = UIAction(title: "Connect Now",
+            let connectNow = UIAction(title: "Connect / Enter Pairing Code…",
                                       image: UIImage(systemName: "wifi")) { [weak self] _ in
                 self?.onConnect?()
             }
@@ -236,7 +236,7 @@ final class HomeHeaderBar: UIView {
             return UIMenu(title: "", children: [connectNow, stop])
 
         case .paused:
-            let connect = UIAction(title: "Connect to Apple TV",
+            let connect = UIAction(title: "Connect / Enter Pairing Code…",
                                    image: UIImage(systemName: "wifi")) { [weak self] _ in
                 self?.onConnect?()
             }

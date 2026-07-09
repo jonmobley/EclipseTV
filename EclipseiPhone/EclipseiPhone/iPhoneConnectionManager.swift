@@ -38,9 +38,13 @@ class iPhoneConnectionManager: NSObject {
     
     private let serviceType = "eclipse-share" // MUST MATCH EXACTLY on both devices
 
-    /// Shared handshake token used to authenticate with the Apple TV. MUST MATCH the
-    /// value in the Apple TV app's `ConnectionManager`.
-    private let handshakeToken = "EclipseShare/v1"
+    /// Allowlist of Apple TVs this phone has successfully paired with.
+    private let pairedStore = PairedPeerStore.shared
+
+    /// PIN supplied for the next first-time invite. Cleared after a successful connect
+    /// or when the user cancels pairing. Remembered peers ignore this and use the
+    /// remembered invitation context instead.
+    private(set) var pendingPairingPIN: String?
 
     private(set) var session: MCSession? // Allow read-only access from outside
     private var browser: MCNearbyServiceBrowser?
@@ -68,6 +72,11 @@ class iPhoneConnectionManager: NSObject {
     var isTransferCancelled = false
     var isTransferringVideo = false
     var currentProgress: Progress?
+
+    /// Monotonic id for the in-flight user transfer. Thumbnail completions and cancel
+    /// paths check this so a stale custom-thumbnail callback can't start a video send
+    /// after a newer image/video transfer (or cancel) has begun.
+    var transferGeneration: UInt64 = 0
 
     /// Tracks in-flight invitations (keyed by peer) so the auto-connect timer and
     /// app-active handlers don't fire overlapping invitations to the same peer.
@@ -241,7 +250,7 @@ class iPhoneConnectionManager: NSObject {
         
         // Don't invite if we're already connected to this peer
         if session.connectedPeers.contains(peer) {
-            logger.info("[Eclipse:CONN] iPhone skipping invite, already connected to: \(peer.displayName, privacy: .public)")
+            logger.info("[Eclipse:CONN] iPhone skipping invite, already connected to: \(peer.displayName, privacy: .private)")
             return
         }
         
@@ -256,16 +265,56 @@ class iPhoneConnectionManager: NSObject {
         // Overlapping invites cause MultipeerConnectivity to abandon the in-progress
         // handshake. Invitations to different peers may proceed concurrently (for sync).
         if let startedAt = pendingInvites[peer], Date().timeIntervalSince(startedAt) < inviteTimeout {
-            logger.info("[Eclipse:CONN] iPhone skipping invite to \(peer.displayName, privacy: .public): invitation already in flight")
+            logger.info("[Eclipse:CONN] iPhone skipping invite to \(peer.displayName, privacy: .private): invitation already in flight")
             return
         }
 
-        // Increase timeout to 60 seconds and present the shared handshake token so the
-        // Apple TV can authenticate this client.
-        let context = "\(handshakeToken)-iPhone".data(using: .utf8)
+        // Remembered TVs reconnect without a PIN; first-time peers need a pending PIN.
+        let context: Data?
+        if pairedStore.isPaired(displayName: peer.displayName) {
+            context = PeerPairing.rememberedContext()
+        } else if let pin = pendingPairingPIN,
+                  let pinData = PeerPairing.pinContext(pin) {
+            context = pinData
+        } else {
+            logger.info("[Eclipse:CONN] iPhone skipping invite to \(peer.displayName, privacy: .private): not paired and no PIN entered")
+            return
+        }
+
         pendingInvites[peer] = Date()
         browser?.invitePeer(peer, to: session, withContext: context, timeout: 60)
-        logger.info("[Eclipse:CONN] iPhone invited peer: \(peer.displayName, privacy: .public) (timeout 60s)")
+        logger.info("[Eclipse:CONN] iPhone invited peer: \(peer.displayName, privacy: .private) (timeout 60s)")
+    }
+
+    /// Supplies the TV-displayed PIN for the next first-time invite. Normalized digits only.
+    func setPendingPairingPIN(_ raw: String) {
+        let normalized = PeerPairing.normalizePIN(raw)
+        guard PeerPairing.isValidPIN(normalized) else {
+            pendingPairingPIN = nil
+            return
+        }
+        pendingPairingPIN = normalized
+    }
+
+    /// Clears any PIN waiting to be used for a first-time invite.
+    func clearPendingPairingPIN() {
+        pendingPairingPIN = nil
+    }
+
+    /// Whether `peer` is on the local allowlist (safe to auto-invite).
+    func isPaired(with peer: MCPeerID) -> Bool {
+        pairedStore.isPaired(displayName: peer.displayName)
+    }
+
+    /// Records a successful pair after the session reaches `.connected`.
+    func rememberPairedPeer(_ peer: MCPeerID) {
+        pairedStore.remember(displayName: peer.displayName)
+        clearPendingPairingPIN()
+    }
+
+    /// Removes a TV from the allowlist (e.g. Settings → forget).
+    func forgetPairedPeer(named displayName: String) {
+        pairedStore.forget(displayName: displayName)
     }
 
     /// Clears in-flight invitation bookkeeping for a peer once its attempt resolves.
@@ -339,6 +388,8 @@ class iPhoneConnectionManager: NSObject {
         guard syncAllEnabled else { return }
         if !isBrowsing { startBrowsing() }
         for peer in discoveredPeers where session?.connectedPeers.contains(peer) != true {
+            // Only auto-invite already-paired TVs; unpaired ones need an explicit PIN.
+            guard isPaired(with: peer) else { continue }
             invitePeer(peer)
         }
     }

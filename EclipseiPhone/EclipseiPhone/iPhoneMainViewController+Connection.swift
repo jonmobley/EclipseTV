@@ -102,16 +102,58 @@ extension iPhoneMainViewController {
         showTemporaryStatus("Using Eclipse without Apple TV. Tap “Offline” or the … menu to connect.")
     }
 
-    /// Re-enables auto-connect and immediately starts looking for the Apple TV again.
-    /// No-op while already connected.
+    /// Re-enables auto-connect. If any discovered TV is already paired, starts searching
+    /// immediately; otherwise prompts for the pairing code shown on the Apple TV.
     func resumeConnection() {
         guard !isConnected() else { return }
         isConnectionPaused = false
         connectionManager.autoConnectEnabled = true
-        // Drop any stale peer so fresh discovery (and the preferred-TV bias) drives the
-        // next connection.
         selectedPeer = nil
-        startSearching()
+
+        let peers = connectionManager.discoveredPeers
+        if peers.contains(where: { connectionManager.isPaired(with: $0) }) {
+            startSearching()
+            return
+        }
+        presentPairingPINEntry()
+    }
+
+    /// Asks the user for the 6-digit code displayed on the Apple TV, then invites.
+    func presentPairingPINEntry(for peer: MCPeerID? = nil) {
+        let alert = UIAlertController(
+            title: "Pair with Apple TV",
+            message: "Enter the 6-digit pairing code shown in the Eclipse app on your Apple TV.",
+            preferredStyle: .alert
+        )
+        alert.addTextField { field in
+            field.placeholder = "000000"
+            field.keyboardType = .numberPad
+            field.textContentType = .oneTimeCode
+            field.autocorrectionType = .no
+        }
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { [weak self] _ in
+            self?.connectionManager.clearPendingPairingPIN()
+        })
+        alert.addAction(UIAlertAction(title: "Connect", style: .default) { [weak self] _ in
+            guard let self else { return }
+            let raw = alert.textFields?.first?.text ?? ""
+            let pin = PeerPairing.normalizePIN(raw)
+            guard PeerPairing.isValidPIN(pin) else {
+                self.showAlert(title: "Invalid Code",
+                               message: "Enter the 6-digit pairing code shown on your Apple TV.")
+                return
+            }
+            self.connectionManager.setPendingPairingPIN(pin)
+            self.startSearching()
+            let target = peer
+                ?? self.preferredPeer(from: self.connectionManager.discoveredPeers)
+                ?? self.connectionManager.discoveredPeers.first
+            if let target {
+                self.selectedPeer = target
+                self.connectionManager.invitePeer(target)
+            }
+        })
+        present(alert, animated: true)
     }
 
     /// Cancels the pending troubleshooting hint timer (e.g. once connected).
@@ -150,11 +192,13 @@ extension iPhoneMainViewController {
             return
         }
 
-        // Connect to the preferred Apple TV if it's discovered, otherwise the first
-        // available peer. Only the Eclipse Apple TV app advertises the `eclipse-share`
-        // service, so any discovered peer is an Eclipse TV regardless of its name.
+        // Prefer a paired preferred TV, then any paired peer. With a pending PIN, also
+        // allow inviting the preferred/first unpaired peer for first-time pairing.
         let peers = connectionManager.discoveredPeers
-        if let peer = preferredPeer(from: peers) ?? peers.first {
+        let paired = peers.filter { connectionManager.isPaired(with: $0) }
+        let hasPIN = connectionManager.pendingPairingPIN != nil
+        let candidates = paired.isEmpty && hasPIN ? peers : paired
+        if let peer = preferredPeer(from: candidates) ?? candidates.first {
             selectedPeer = peer
             connectionManager.invitePeer(peer)
 

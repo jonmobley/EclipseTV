@@ -70,4 +70,43 @@ compare_from() {
 
 compare_from "$TV_PROTOCOL" "$IPHONE_PROTOCOL" "enum EclipseShareProtocol" "EclipseShareProtocol.swift" || status=1
 
+TV_PAIRING="$REPO_ROOT/EclipseAppleTV/EclipseAppleTV/PeerPairing.swift"
+IPHONE_PAIRING="$REPO_ROOT/EclipseiPhone/EclipseiPhone/PeerPairing.swift"
+compare_from "$TV_PAIRING" "$IPHONE_PAIRING" "enum PeerPairing" "PeerPairing.swift" || status=1
+
+# AlbumConfig is intentionally not identical (Realtime lives only on tvOS). Guard the
+# shared core: manifest host + code length + normalize/isValid/manifestURL helpers.
+TV_ALBUM_CONFIG="$REPO_ROOT/EclipseAppleTV/EclipseAppleTV/RemoteAlbum/AlbumConfig.swift"
+IPHONE_ALBUM_CONFIG="$REPO_ROOT/EclipseiPhone/EclipseiPhone/AlbumConfig.swift"
+compare_album_config_core() {
+    local file_a="$1"
+    local file_b="$2"
+    extract_core() {
+        # Lines that define the shared contract (ignore Realtime / Supabase block on TV).
+        awk '
+            /static let manifestBase/ { print; next }
+            /static let codeLength/ { print; next }
+            /static func normalize/ { p=1 }
+            /static func isValidCode/ { p=1 }
+            /static func manifestURL/ { p=1 }
+            p {
+                print
+                if (/^    }$/) { p=0 }
+            }
+        ' "$1"
+    }
+    if ! diff <(extract_core "$file_a") <(extract_core "$file_b") >/dev/null; then
+        echo "error: AlbumConfig shared core has drifted between targets:"
+        echo "  $file_a"
+        echo "  $file_b"
+        echo "----- diff (Apple TV vs iPhone) -----"
+        diff <(extract_core "$file_a") <(extract_core "$file_b") || true
+        echo "-------------------------------------"
+        return 1
+    fi
+    echo "ok: AlbumConfig shared core is in sync across both targets."
+    return 0
+}
+compare_album_config_core "$TV_ALBUM_CONFIG" "$IPHONE_ALBUM_CONFIG" || status=1
+
 exit $status

@@ -15,6 +15,8 @@ extension iPhoneConnectionManager {
             return false
         }
 
+        transferGeneration &+= 1
+        let generation = transferGeneration
         isTransferCancelled = false
         isTransferringVideo = false
 
@@ -32,7 +34,7 @@ extension iPhoneConnectionManager {
         fanOutMediaToReplicas(url: imageURL, id: fileName, excluding: peer)
         let progress = session.sendResource(at: imageURL, withName: fileName, toPeer: peer) { [weak self] error in
             DispatchQueue.main.async {
-                guard let self = self else { return }
+                guard let self = self, self.transferGeneration == generation else { return }
                 
                 // Always clean up observer when transfer completes
                 self.cleanupCurrentProgress()
@@ -79,6 +81,7 @@ extension iPhoneConnectionManager {
     }
 
     func cancelCurrentTransfer() {
+        transferGeneration &+= 1
         isTransferCancelled = true
         currentTransferTask?.cancel()
         currentTransferTask = nil
@@ -95,6 +98,8 @@ extension iPhoneConnectionManager {
             return false
         }
 
+        transferGeneration &+= 1
+        let generation = transferGeneration
         isTransferCancelled = false
         isTransferringVideo = true
 
@@ -121,22 +126,25 @@ extension iPhoneConnectionManager {
                 try? FileManager.default.removeItem(at: thumbnailURL)
                 UserDefaults.standard.removeObject(forKey: "customThumbnail_\(fileName)")
                 
-                // Now send the video itself
+                // Now send the video itself — only if this transfer is still current.
                 DispatchQueue.main.async {
-                    self?.beginVideoResourceSend(videoURL, session: session, peer: peer)
+                    guard let self = self, self.transferGeneration == generation else { return }
+                    self.beginVideoResourceSend(videoURL, session: session, peer: peer,
+                                                generation: generation)
                 }
             }
         } else {
             // No custom thumbnail; send the video immediately
-            beginVideoResourceSend(videoURL, session: session, peer: peer)
+            beginVideoResourceSend(videoURL, session: session, peer: peer, generation: generation)
         }
         
         return true
     }
 
     /// Performs the actual video resource transfer and wires up progress observation.
-    private func beginVideoResourceSend(_ videoURL: URL, session: MCSession, peer: MCPeerID) {
-        guard !isTransferCancelled else {
+    private func beginVideoResourceSend(_ videoURL: URL, session: MCSession, peer: MCPeerID,
+                                        generation: UInt64) {
+        guard transferGeneration == generation, !isTransferCancelled else {
             logger.info("Video transfer cancelled before it began")
             return
         }
@@ -151,7 +159,7 @@ extension iPhoneConnectionManager {
         fanOutMediaToReplicas(url: videoURL, id: fileName, excluding: peer)
         let progress = session.sendResource(at: videoURL, withName: fileName, toPeer: peer) { [weak self] error in
             DispatchQueue.main.async {
-                guard let self = self else { return }
+                guard let self = self, self.transferGeneration == generation else { return }
                 
                 // Always clean up observer when transfer completes
                 self.cleanupCurrentProgress()

@@ -43,9 +43,11 @@ extension iPhoneConnectionManager: MCSessionDelegate {
                 // arrives so the incoming manifest/thumbnails land in the right cache.
                 TVLibraryStore.shared.setActiveTV(peerID.displayName)
                 TVLibraryStore.shared.setOnline(true)
+                rememberPairedPeer(peerID)
                 delegate?.connectionManager(self, didConnectToPeer: peerID)
             } else {
-                logger.info("[Eclipse:CONN] Connected sync replica: \(peerID.displayName, privacy: .public)")
+                logger.info("[Eclipse:CONN] Connected sync replica: \(peerID.displayName, privacy: .private)")
+                rememberPairedPeer(peerID)
             }
 
             // Keep gathering replicas and catch this TV up to the active library.

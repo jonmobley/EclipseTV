@@ -56,6 +56,11 @@ extension ImageViewController {
             })
         }
 
+        elements.append(UIAction(title: "Show Pairing Code",
+                                 image: UIImage(systemName: "lock.rectangle")) { [weak self] _ in
+            self?.presentPairingCode()
+        })
+
         elements.append(UIAction(title: "Show Help",
                                  image: UIImage(systemName: "questionmark.circle")) { [weak self] _ in
             self?.showHelp()

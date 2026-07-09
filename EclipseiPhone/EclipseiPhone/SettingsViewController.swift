@@ -186,6 +186,8 @@ final class SettingsViewController: UITableViewController {
         TVLibraryStore.shared.reset(tvName: tv.name)
         // Drop the TV's caught-up state so it re-replays fully if re-added later.
         MultiTVSyncCoordinator.shared.forget(tvNamed: tv.name)
+        // Require a fresh PIN the next time this TV is discovered.
+        PairedPeerStore.shared.forget(displayName: tv.name)
 
         // If this was the preferred TV, clear the preference so we no longer hold out for it.
         if UserDefaults.standard.string(forKey: preferredTVNameKey) == tv.name {

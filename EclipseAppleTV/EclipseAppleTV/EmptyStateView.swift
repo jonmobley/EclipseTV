@@ -57,12 +57,33 @@ class EmptyStateView: UIView {
     
     private let bodyLabel: UILabel = {
         let label = UILabel()
-        label.text = "Download the Eclipse iPhone app to send images and videos to this device."
+        label.text = "Download the Eclipse iPhone app, then enter the pairing code shown below."
         label.font = UIFont.systemFont(ofSize: 42, weight: .regular)
         label.textColor = .lightGray
         label.textAlignment = .center
         label.numberOfLines = 0
         label.translatesAutoresizingMaskIntoConstraints = false
+        return label
+    }()
+
+    private let pairingTitleLabel: UILabel = {
+        let label = UILabel()
+        label.text = "Pairing code"
+        label.font = UIFont.systemFont(ofSize: 28, weight: .medium)
+        label.textColor = .lightGray
+        label.textAlignment = .center
+        label.translatesAutoresizingMaskIntoConstraints = false
+        return label
+    }()
+
+    private let pairingCodeLabel: UILabel = {
+        let label = UILabel()
+        label.text = "------"
+        label.font = UIFont.monospacedDigitSystemFont(ofSize: 64, weight: .bold)
+        label.textColor = .white
+        label.textAlignment = .center
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.accessibilityIdentifier = "pairingCode"
         return label
     }()
     
@@ -126,6 +147,8 @@ class EmptyStateView: UIView {
         // Add labels to text stack view
         textStackView.addArrangedSubview(headerLabel)
         textStackView.addArrangedSubview(bodyLabel)
+        textStackView.addArrangedSubview(pairingTitleLabel)
+        textStackView.addArrangedSubview(pairingCodeLabel)
         
         // Add the Open App button to the main content stack
         contentStackView.addArrangedSubview(openAppButton)
@@ -240,6 +263,19 @@ class EmptyStateView: UIView {
         }
     }
     
+    // MARK: - Pairing
+
+    /// Updates the on-screen pairing PIN (formatted as XXX XXX for readability).
+    func setPairingCode(_ pin: String) {
+        let normalized = PeerPairing.normalizePIN(pin)
+        guard PeerPairing.isValidPIN(normalized) else {
+            pairingCodeLabel.text = "------"
+            return
+        }
+        let mid = normalized.index(normalized.startIndex, offsetBy: 3)
+        pairingCodeLabel.text = "\(normalized[..<mid]) \(normalized[mid...])"
+    }
+
     // MARK: - Actions
     
     @objc private func openAppButtonTapped() {

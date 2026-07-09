@@ -39,8 +39,10 @@ extension ImageViewController {
 
     func connectionManager(_ manager: ConnectionManager, didUpdateConnectionState connected: Bool, with peer: MCPeerID?) {
         if connected, let peer = peer {
-            // Show a notification that a device connected
             toastView.show(message: "Connected to \(peer.displayName)")
+        } else {
+            // PIN rotates on connect; refresh empty-state display when advertising again.
+            emptyStateView.setPairingCode(manager.currentPairingPIN)
         }
     }
 

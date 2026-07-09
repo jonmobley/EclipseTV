@@ -25,9 +25,11 @@ extension iPhoneConnectionManager: MCNearbyServiceBrowserDelegate {
 
             self.delegate?.connectionManager(self, didFindPeer: peerID)
 
-            // When keeping all Apple TVs in sync, connect every newly discovered TV (the
-            // first to connect becomes the active/mirrored TV; the rest are sync replicas).
-            if self.syncAllEnabled, self.session?.connectedPeers.contains(peerID) != true {
+            // When keeping all Apple TVs in sync, auto-invite only already-paired TVs.
+            // Unpaired TVs require an explicit PIN entry from the user.
+            if self.syncAllEnabled,
+               self.isPaired(with: peerID),
+               self.session?.connectedPeers.contains(peerID) != true {
                 self.invitePeer(peerID)
             }
         }

@@ -40,13 +40,8 @@ class ConnectionManager: NSObject {
     
     private let serviceType = "eclipse-share" // MUST MATCH EXACTLY on both devices
 
-    /// Shared handshake token used to authenticate peers. MUST MATCH the value in
-    /// the iPhone companion app's `iPhoneConnectionManager`.
-    private let handshakeToken = "EclipseShare/v1"
-
-    /// Hard ceiling for an in-memory video transfer (legacy chunked path) to avoid
-    /// a malicious or buggy peer exhausting memory.
-    private let maxInMemoryVideoBytes: Int64 = 2_000_000_000 // 2 GB
+    /// Allowlist + current on-screen pairing PIN.
+    private let pairedStore = PairedPeerStore.shared
 
     private var session: MCSession?
     private var advertiser: MCNearbyServiceAdvertiser?
@@ -68,10 +63,6 @@ class ConnectionManager: NSObject {
     /// Accessed only on the `MCSession` delegate queue.
     private var pendingRestore: (ledgerId: String, expires: Date)?
     private let restoreWindow: TimeInterval = 120
-    
-    // Add properties for video transfer
-    private var videoBuffer: Data?
-    private var expectedVideoSize: Int64?
     
     // MARK: - Initialization
     
@@ -174,6 +165,29 @@ class ConnectionManager: NSObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
             self?.startAdvertising()
         }
+    }
+
+    // MARK: - Pairing
+
+    /// Current 6-digit PIN shown on the TV for first-time pairing.
+    var currentPairingPIN: String {
+        pairedStore.currentPIN
+    }
+
+    /// Issues a new pairing PIN (e.g. after the user asks to re-pair).
+    @discardableResult
+    func rotatePairingPIN() -> String {
+        pairedStore.rotatePIN()
+    }
+
+    /// Removes a previously paired iPhone from the allowlist.
+    func forgetPairedPhone(named displayName: String) {
+        pairedStore.forget(displayName: displayName)
+    }
+
+    /// Display names of phones that have successfully paired with this TV.
+    var pairedPhoneNames: [String] {
+        pairedStore.allPairedNames()
     }
     
     // MARK: - Move Mode Notifications
@@ -308,7 +322,7 @@ class ConnectionManager: NSObject {
             }
         case .setAccount:
             guard let code = envelope.accountCode, !code.isEmpty else { return }
-            logger.info("Received set account code: \(code, privacy: .public)")
+            logger.info("Received set account code: \(code, privacy: .private)")
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
                 self.delegate?.connectionManager(self, didReceiveSetAccountCode: code)
@@ -359,10 +373,6 @@ class ConnectionManager: NSObject {
         // Disconnect session
         disconnect()
         
-        // Clear buffers
-        videoBuffer = nil
-        expectedVideoSize = nil
-        
         // Reset state
         isAdvertising = false
         receivedImageCount = 0
@@ -384,24 +394,30 @@ extension ConnectionManager: MCNearbyServiceAdvertiserDelegate {
             return
         }
         
-        // Require a matching handshake token. Reject any peer that does not present
-        // the shared secret, including peers that send no context at all.
-        guard let contextData = context,
-              let contextString = String(data: contextData, encoding: .utf8) else {
-            logger.error("[Eclipse:CONN] AppleTV REJECTED invitation from \(peerID.displayName, privacy: .public): missing context")
+        // Pairing: accept a correct on-screen PIN, or a remembered invite from an
+        // already-paired phone. Reject missing/malformed/wrong-version contexts.
+        guard let parsed = PeerPairing.parse(context) else {
+            logger.error("[Eclipse:CONN] AppleTV REJECTED invitation from \(peerID.displayName, privacy: .private): missing or invalid pairing context")
             invitationHandler(false, nil)
             return
         }
 
-        // Exact match only: a substring check would accept padded/wrapped payloads.
-        // The companion sends exactly "<token>-iPhone" (see iPhoneConnectionManager).
-        guard contextString == "\(handshakeToken)-iPhone" else {
-            logger.error("[Eclipse:CONN] AppleTV REJECTED invitation from \(peerID.displayName, privacy: .public): invalid handshake token")
-            invitationHandler(false, nil)
-            return
+        switch parsed {
+        case .pin(let pin):
+            guard pin == pairedStore.currentPIN else {
+                logger.error("[Eclipse:CONN] AppleTV REJECTED invitation from \(peerID.displayName, privacy: .private): wrong PIN")
+                invitationHandler(false, nil)
+                return
+            }
+        case .remembered:
+            guard pairedStore.isPaired(displayName: peerID.displayName) else {
+                logger.error("[Eclipse:CONN] AppleTV REJECTED invitation from \(peerID.displayName, privacy: .private): not on allowlist")
+                invitationHandler(false, nil)
+                return
+            }
         }
 
-        logger.info("[Eclipse:CONN] AppleTV ACCEPTED invitation from \(peerID.displayName, privacy: .public)")
+        logger.info("[Eclipse:CONN] AppleTV ACCEPTED invitation from \(peerID.displayName, privacy: .private)")
         invitationHandler(true, session)
     }
     
@@ -434,7 +450,13 @@ extension ConnectionManager: MCSessionDelegate {
     func session(_ session: MCSession, peer peerID: MCPeerID, didChange state: MCSessionState) {
         switch state {
         case .connected:
-            logger.info("[Eclipse:CONN] AppleTV CONNECTED to: \(peerID.displayName, privacy: .public)")
+            logger.info("[Eclipse:CONN] AppleTV CONNECTED to: \(peerID.displayName, privacy: .private)")
+
+            // First successful connect (PIN or remembered) lands the phone on the allowlist
+            // so later reconnects can use the remembered context without re-entering a PIN.
+            pairedStore.remember(displayName: peerID.displayName)
+            // Rotate so a shoulder-surfed PIN cannot be reused by another device.
+            pairedStore.rotatePIN()
             
             // Stop advertising once connected to avoid multiple connections
             stopAdvertising()
@@ -473,136 +495,23 @@ extension ConnectionManager: MCSessionDelegate {
     }
     
     func session(_ session: MCSession, didReceive data: Data, fromPeer peerID: MCPeerID) {
-        logger.debug("Received data from \(peerID.displayName): \(data.count) bytes")
-        
-        // Eclipse control messages (e.g. play requests) are tagged JSON envelopes and
-        // MUST be handled before the raw-image fallback below, otherwise they would be
-        // written to disk as junk images.
+        logger.debug("Received data from \(peerID.displayName, privacy: .private): \(data.count) bytes")
+
+        // Control envelopes only. Media arrives via sendResource; the legacy
+        // in-memory video/image data path has been removed.
         if let envelope = EclipseShareEnvelope.decode(from: data) {
             handleControlEnvelope(envelope, from: peerID)
             return
         }
-        
-        // Check if this is a video metadata message
-        if let message = String(data: data, encoding: .utf8),
-           let jsonData = message.data(using: .utf8),
-           let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: String],
-           json["type"] == "video",
-           let sizeString = json["size"],
-           let videoSize = Int64(sizeString) {
-            
-            // Reject absurd / hostile sizes before allocating any buffer
-            guard videoSize > 0, videoSize <= maxInMemoryVideoBytes else {
-                logger.error("Rejected video transfer: declared size \(videoSize) bytes out of bounds")
-                videoBuffer = nil
-                expectedVideoSize = nil
+
+        // Plain-string move-mode signals from older paths / acknowledgements.
+        if let message = String(data: data, encoding: .utf8) {
+            if message == "MOVE_MODE_ENABLED" || message == "MOVE_MODE_DISABLED" {
                 return
             }
+        }
 
-            logger.debug("Starting video transfer of size: \(videoSize) bytes")
-            // Initialize video buffer
-            videoBuffer = Data()
-            expectedVideoSize = videoSize
-            return
-        }
-        
-        // Check if this is a video completion message
-        if let message = String(data: data, encoding: .utf8),
-           message == "VIDEO_COMPLETE" {
-            // Video transfer complete, save the video
-            if let videoData = videoBuffer {
-                logger.debug("Video transfer complete, saving \(videoData.count) bytes")
-                if let videoURL = ImageStorage.shared.saveReceivedVideo(videoData) {
-                    logger.info("Video saved successfully at: \(videoURL.path, privacy: .public)")
-                    
-                    // Send confirmation back to iPhone
-                    let confirmation = "VIDEO_RECEIVED".data(using: .utf8)!
-                    do {
-                        try session.send(confirmation, toPeers: [peerID], with: .reliable)
-                        logger.debug("Sent video confirmation to iPhone")
-                        
-                        // Notify delegate on main thread
-                        DispatchQueue.main.async { [weak self] in
-                            guard let self = self else { return }
-                            self.delegate?.connectionManager(self, didReceiveVideoAt: videoURL.path)
-                        }
-                    } catch {
-                        logger.error("Failed to send video confirmation: \(error.localizedDescription)")
-                    }
-                } else {
-                    logger.error("Failed to save video")
-                    Task { @MainActor in
-                        ErrorHandler.shared.handle(.fileCorrupted(path: "received_video", reason: "Could not save video data"), context: "ConnectionManager.didReceive")
-                    }
-                    
-                    // Send error back to iPhone
-                    let error = "VIDEO_ERROR".data(using: .utf8)!
-                    do {
-                        try session.send(error, toPeers: [peerID], with: .reliable)
-                    } catch {
-                        handleConnectionError(error, context: "sending video error response")
-                    }
-                }
-            }
-            // Reset video transfer state
-            videoBuffer = nil
-            expectedVideoSize = nil
-            return
-        }
-        
-        // Handle video chunks
-        if let expectedSize = expectedVideoSize, var buffer = videoBuffer {
-            // Guard against receiving more data than declared (and against the hard cap)
-            let projectedSize = Int64(buffer.count) + Int64(data.count)
-            guard projectedSize <= expectedSize, projectedSize <= maxInMemoryVideoBytes else {
-                logger.error("Aborted video transfer: projected \(projectedSize) bytes exceeds expected \(expectedSize)")
-                videoBuffer = nil
-                expectedVideoSize = nil
-                return
-            }
-
-            buffer.append(data)
-            videoBuffer = buffer
-            
-            // Log progress
-            if let currentSize = videoBuffer?.count {
-                let progress = Double(currentSize) / Double(expectedSize) * 100
-                logger.debug("Video transfer progress: \(Int(progress))%")
-            }
-            return
-        }
-        
-        // Handle image data
-        if let imageURL = ImageStorage.shared.saveReceivedImage(data) {
-            logger.info("Image saved successfully at: \(imageURL.path, privacy: .public)")
-            
-            // Send confirmation back to iPhone
-            let confirmation = "IMAGE_RECEIVED".data(using: .utf8)!
-            do {
-                try session.send(confirmation, toPeers: [peerID], with: .reliable)
-                logger.debug("Sent image confirmation to iPhone")
-                
-                // Notify delegate on main thread
-                DispatchQueue.main.async { [weak self] in
-                    guard let self = self else { return }
-                    self.delegate?.connectionManager(self, didReceiveImageAt: imageURL.path)
-                }
-            } catch {
-                logger.error("Failed to send image confirmation: \(error.localizedDescription)")
-            }
-        } else {
-            logger.error("Failed to save image")
-            Task { @MainActor in
-                ErrorHandler.shared.handle(.fileCorrupted(path: "received_image", reason: "Could not save received data"), context: "ConnectionManager.didReceive")
-            }
-            
-            let error = "IMAGE_ERROR".data(using: .utf8)!
-            do {
-                try session.send(error, toPeers: [peerID], with: .reliable)
-            } catch {
-                handleConnectionError(error, context: "sending error response")
-            }
-        }
+        logger.debug("Ignoring non-envelope data (\(data.count) bytes) from \(peerID.displayName, privacy: .private)")
     }
     
     func session(_ session: MCSession, didReceive stream: InputStream, withName streamName: String, fromPeer peerID: MCPeerID) {
@@ -610,8 +519,7 @@ extension ConnectionManager: MCSessionDelegate {
     }
     
     func session(_ session: MCSession, didStartReceivingResourceWithName resourceName: String, fromPeer peerID: MCPeerID, with progress: Progress) {
-        logger.info("Started receiving resource: \(resourceName) from: \(peerID.displayName)")
-        // Optionally, observe progress here if you want to show a progress bar
+        logger.info("Started receiving resource: \(resourceName) from: \(peerID.displayName, privacy: .private)")
     }
     
     func session(_ session: MCSession, didFinishReceivingResourceWithName resourceName: String, fromPeer peerID: MCPeerID, at localURL: URL?, withError error: Error?) {
@@ -629,33 +537,49 @@ extension ConnectionManager: MCSessionDelegate {
             }
             return
         }
-        logger.info("Received resource: \(resourceName) at: \(localURL.path)")
+        logger.info("Received resource: \(resourceName, privacy: .public)")
         
         // Reject any resource whose name attempts directory traversal
         guard let safeName = sanitizedFileName(from: resourceName) else {
-            logger.error("Rejected resource with unsafe name: \(resourceName)")
+            logger.error("Rejected resource with unsafe name: \(resourceName, privacy: .public)")
             try? FileManager.default.removeItem(at: localURL)
             return
         }
         
         // Check if this is a custom thumbnail
         if safeName.hasPrefix("thumbnail_") {
-            // This is a custom thumbnail for a video
-            let videoFileName = String(safeName.dropFirst(10)) // Remove "thumbnail_" prefix
-            
-            // Load the thumbnail image and cache it
-            if !videoFileName.isEmpty, let thumbnailImage = UIImage(contentsOfFile: localURL.path) {
+            let videoFileName = String(safeName.dropFirst(10))
+            if !videoFileName.isEmpty,
+               ReceivedMediaValidator.isValidImage(at: localURL),
+               let thumbnailImage = UIImage(contentsOfFile: localURL.path) {
                 let videoPath = ImageStorage.shared.getImagesDirectory().appendingPathComponent(videoFileName).path
                 VideoThumbnailCache.shared.cacheThumbnail(thumbnailImage, for: videoPath)
-                logger.info("Cached custom thumbnail for video: \(videoFileName)")
+                logger.info("Cached custom thumbnail for video: \(videoFileName, privacy: .public)")
             }
-            
-            // Clean up the temporary thumbnail file
             try? FileManager.default.removeItem(at: localURL)
             return
         }
+
+        guard let kind = ReceivedMediaValidator.kind(forExtension: (safeName as NSString).pathExtension) else {
+            logger.error("Rejected resource with unsupported extension: \(safeName, privacy: .public)")
+            try? FileManager.default.removeItem(at: localURL)
+            return
+        }
+
+        // Validate content before committing into Caches/Media.
+        let isValid: Bool
+        switch kind {
+        case .image: isValid = ReceivedMediaValidator.isValidImage(at: localURL)
+        case .video: isValid = ReceivedMediaValidator.isValidVideo(at: localURL)
+        }
+        guard isValid else {
+            try? FileManager.default.removeItem(at: localURL)
+            if let errorData = (kind == .video ? "VIDEO_ERROR" : "IMAGE_ERROR").data(using: .utf8) {
+                try? session.send(errorData, toPeers: [peerID], with: .reliable)
+            }
+            return
+        }
         
-        // Move the received file to our storage as a video or image
         let fileManager = FileManager.default
         let destinationURL = ImageStorage.shared.getImagesDirectory().appendingPathComponent(safeName)
         do {
@@ -664,25 +588,14 @@ extension ConnectionManager: MCSessionDelegate {
             }
             try fileManager.moveItem(at: localURL, to: destinationURL)
 
-            let ext = destinationURL.pathExtension.lowercased()
-            let videoExtensions: Set<String> = ["mp4", "mov", "m4v"]
-            let imageExtensions: Set<String> = ["jpg", "jpeg", "png", "heic"]
-            let isVideo = videoExtensions.contains(ext)
-            let isImage = imageExtensions.contains(ext)
-
-            // Send a confirmation back to the sender so it can report success symmetrically
-            // with the legacy in-memory transfer path.
-            if isVideo || isImage {
-                let confirmationMessage = isVideo ? "VIDEO_RECEIVED" : "IMAGE_RECEIVED"
-                if let confirmation = confirmationMessage.data(using: .utf8) {
-                    try? session.send(confirmation, toPeers: [peerID], with: .reliable)
-                }
+            let isVideo = (kind == .video)
+            let confirmationMessage = isVideo ? "VIDEO_RECEIVED" : "IMAGE_RECEIVED"
+            if let confirmation = confirmationMessage.data(using: .utf8) {
+                try? session.send(confirmation, toPeers: [peerID], with: .reliable)
             }
 
-            // If this resource completes a pending restore, capture and clear it (on the
-            // session delegate queue) before dispatching the in-order delegate calls.
             var restoreLedgerId: String?
-            if isVideo || isImage, let pending = pendingRestore {
+            if let pending = pendingRestore {
                 pendingRestore = nil
                 if Date() < pending.expires {
                     restoreLedgerId = pending.ledgerId
@@ -693,10 +606,9 @@ extension ConnectionManager: MCSessionDelegate {
                 guard let self = self else { return }
                 if isVideo {
                     self.delegate?.connectionManager(self, didReceiveVideoAt: destinationURL.path)
-                } else if isImage {
+                } else {
                     self.delegate?.connectionManager(self, didReceiveImageAt: destinationURL.path)
                 }
-                // After the item is added normally, restore it into its original slot.
                 if let ledgerId = restoreLedgerId {
                     self.delegate?.connectionManager(self, didRestoreItemForLedgerId: ledgerId,
                                                      newPath: destinationURL.path)
@@ -704,6 +616,7 @@ extension ConnectionManager: MCSessionDelegate {
             }
         } catch {
             logger.error("Failed to move received resource: \(error.localizedDescription)")
+            try? FileManager.default.removeItem(at: localURL)
             Task { @MainActor in
                 ErrorHandler.shared.handle(.permissionDenied(operation: "moving received file"), context: "ConnectionManager.didFinishReceivingResource")
             }

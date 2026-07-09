@@ -14,21 +14,24 @@ import os
 
 extension iPhoneMainViewController: iPhoneConnectionManagerDelegate {
     func connectionManager(_ manager: iPhoneConnectionManager, didFindPeer peer: MCPeerID) {
-        logger.debug("Found peer: \(peer.displayName, privacy: .public)")
+        logger.debug("Found peer: \(peer.displayName, privacy: .private)")
         refreshLibraryMenu()
 
-        // Auto-connect when we don't already have a peer. If the user has a preferred
-        // Apple TV, hold out for it; the auto-connect timer falls back to the first
-        // discovered peer if the preferred one never appears. Only the Eclipse Apple TV
-        // app advertises `eclipse-share`, so any discovered peer is an Eclipse TV.
+        // Auto-connect only to already-paired Apple TVs, unless the user just entered a
+        // pairing PIN (first-time pair). A rogue advertiser can't join without that PIN.
         if selectedPeer == nil {
-            // Don't auto-invite while the user has chosen to stay offline.
             guard !isConnectionPaused else { return }
-            if let preferred = preferredTVName, peer.displayName != preferred {
-                logger.debug("Holding out for preferred Apple TV: \(preferred, privacy: .public)")
+            let hasPIN = manager.pendingPairingPIN != nil
+            guard manager.isPaired(with: peer) || hasPIN else {
+                logger.debug("Discovered unpaired Apple TV; waiting for PIN entry: \(peer.displayName, privacy: .private)")
                 return
             }
-            logger.debug("Attempting to connect to Apple TV: \(peer.displayName, privacy: .public)")
+            if let preferred = preferredTVName, peer.displayName != preferred,
+               manager.isPaired(with: peer) || !hasPIN {
+                logger.debug("Holding out for preferred Apple TV: \(preferred, privacy: .private)")
+                return
+            }
+            logger.debug("Attempting to connect to Apple TV: \(peer.displayName, privacy: .private)")
             selectedPeer = peer
             connectionManager.invitePeer(peer)
         }

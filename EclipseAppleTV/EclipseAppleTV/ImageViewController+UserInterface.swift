@@ -181,6 +181,10 @@ extension ImageViewController {
         })
         #endif
 
+        alertController.addAction(UIAlertAction(title: "Show Pairing Code", style: .default) { [weak self] _ in
+            self?.presentPairingCode()
+        })
+
         alertController.addAction(UIAlertAction(title: "Show Help", style: .default) { [weak self] _ in
             self?.showHelp()
         })
@@ -237,6 +241,10 @@ extension ImageViewController {
         // Make sure the title remains visible at the top
         titleLabel.isHidden = false
         titleLabel.alpha = 1.0
+
+        if let pin = connectionManager?.currentPairingPIN {
+            emptyStateView.setPairingCode(pin)
+        }
         
         // Show the empty state view
         emptyStateView.show(in: view)
