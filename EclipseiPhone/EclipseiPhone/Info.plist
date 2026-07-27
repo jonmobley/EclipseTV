@@ -30,5 +30,7 @@
     </array>
     <key>NSPhotoLibraryUsageDescription</key>
     <string>Eclipse needs access to your photos to send them to your Apple TV</string>
+    <key>NSCameraUsageDescription</key>
+    <string>Eclipse needs camera access to present a live camera feed on your TV via AirPlay</string>
 </dict>
 </plist>

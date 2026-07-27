@@ -17,6 +17,12 @@ import os.log
 /// No companion app, entitlement, or Apple TV-side change is required.
 final class ExternalDisplayManager {
 
+    /// Overlay content that takes priority over the library live item.
+    enum OverlaySource: Equatable {
+        case camera
+        case web(URL)
+    }
+
     /// Shared instance; started once from the scene delegate.
     static let shared = ExternalDisplayManager()
 
@@ -24,8 +30,33 @@ final class ExternalDisplayManager {
     /// can reflect that presentation is active.
     static let didChangeNotification = Notification.Name("ExternalDisplayManager.didChange")
 
+    /// Posted when camera presentation ends because another source was presented or
+    /// the display was cleared (so the phone camera UI can dismiss).
+    static let cameraDidEndNotification = Notification.Name("ExternalDisplayManager.cameraDidEnd")
+
+    /// Posted when web presentation ends so the phone remote can dismiss.
+    static let webDidEndNotification = Notification.Name("ExternalDisplayManager.webDidEnd")
+
     /// Whether an external display is currently connected.
     private(set) var isConnected = false
+
+    /// Active overlay (camera or web), if any.
+    private(set) var overlaySource: OverlaySource?
+
+    /// Whether the live camera is the active presentation source (AirPlay path).
+    var isCameraLive: Bool {
+        if case .camera = overlaySource { return true }
+        return false
+    }
+
+    /// Whether a web page is the active presentation source (AirPlay path).
+    var isWebLive: Bool {
+        if case .web = overlaySource { return true }
+        return false
+    }
+
+    /// Whether any overlay (camera or web) is currently live.
+    var isOverlayLive: Bool { overlaySource != nil }
 
     /// Supplies the source to show when a screen connects with nothing presented yet
     /// (e.g. an item is already live when the user starts mirroring). Set by the grid.
@@ -66,25 +97,139 @@ final class ExternalDisplayManager {
 
     /// Updates the external display with `source`. A no-op visually when no display is
     /// connected, but the source is remembered and applied as soon as one connects.
+    /// Non-overlay sources tear down any active camera/web overlay.
     func present(_ source: PresentationSource) {
+        switch source.content {
+        case .camera:
+            beginOverlay(.camera, endingOther: true)
+        case .web(let url):
+            beginOverlay(.web(url), endingOther: true)
+        default:
+            if overlaySource != nil {
+                endOverlay(notify: true)
+            }
+        }
         lastSource = source
         presentationVC?.show(source)
+        updateIdleTimer()
+    }
+
+    /// Starts presenting the live camera on the external display (and remembers it).
+    func presentCamera() {
+        present(.camera)
+    }
+
+    /// Starts presenting a web page on the external display.
+    func presentWeb(_ url: URL) {
+        present(.web(url))
+    }
+
+    /// Stops the camera session and restores the library live item when available.
+    func stopCameraAndRestoreLibrary() {
+        endOverlay(notify: false)
+        restoreLibraryOrIdle()
+    }
+
+    /// Stops web presentation and restores the library live item when available.
+    func stopWebAndRestoreLibrary() {
+        endOverlay(notify: false)
+        restoreLibraryOrIdle()
     }
 
     /// Clears the external display back to a neutral screen.
     func clear() {
+        if overlaySource != nil {
+            endOverlay(notify: true)
+        }
         lastSource = nil
         presentationVC?.showIdle()
+        updateIdleTimer()
     }
 
     /// Re-presents the live item from `currentSourceProvider` (e.g. after closing a
     /// temporary album preview), or clears the display when nothing is live.
     func restoreCurrentSource() {
+        switch overlaySource {
+        case .camera:
+            present(.camera)
+        case .web(let url):
+            present(.web(url))
+        case .none:
+            if let source = currentSourceProvider?() {
+                present(source)
+            } else {
+                clear()
+            }
+        }
+    }
+
+    // MARK: - Web Remote Forwarders
+
+    /// Forwards a scroll delta to the external web view.
+    func scrollWeb(by delta: CGPoint) {
+        presentationVC?.scrollWeb(by: delta)
+    }
+
+    /// Reloads the external web page.
+    func reloadWeb() {
+        presentationVC?.reloadWeb()
+    }
+
+    /// Scrolls the external web page to the top.
+    func scrollWebToTop() {
+        presentationVC?.scrollWebToTop()
+    }
+
+    // MARK: - Overlay Helpers
+
+    private func beginOverlay(_ next: OverlaySource, endingOther: Bool) {
+        if endingOther, let current = overlaySource, current != next {
+            tearDown(current)
+            notifyOverlayEnd(current)
+        }
+        overlaySource = next
+    }
+
+    private func endOverlay(notify: Bool) {
+        guard let current = overlaySource else { return }
+        tearDown(current)
+        overlaySource = nil
+        if notify {
+            notifyOverlayEnd(current)
+        }
+        updateIdleTimer()
+    }
+
+    private func tearDown(_ source: OverlaySource) {
+        switch source {
+        case .camera:
+            CameraManager.shared.stopSession()
+        case .web:
+            presentationVC?.teardownWeb()
+        }
+    }
+
+    private func notifyOverlayEnd(_ source: OverlaySource) {
+        switch source {
+        case .camera:
+            NotificationCenter.default.post(name: Self.cameraDidEndNotification, object: self)
+        case .web:
+            NotificationCenter.default.post(name: Self.webDidEndNotification, object: self)
+        }
+    }
+
+    private func restoreLibraryOrIdle() {
+        lastSource = nil
         if let source = currentSourceProvider?() {
             present(source)
         } else {
-            clear()
+            presentationVC?.showIdle()
+            updateIdleTimer()
         }
+    }
+
+    private func updateIdleTimer() {
+        UIApplication.shared.isIdleTimerDisabled = overlaySource != nil
     }
 
     // MARK: - Screen Handling

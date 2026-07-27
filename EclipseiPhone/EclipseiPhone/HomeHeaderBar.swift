@@ -74,6 +74,10 @@ final class HomeHeaderBar: UIView {
     var onConnect: (() -> Void)?
     /// Invoked when the user chooses "Stop Trying to Connect" from the "…" menu.
     var onStopConnecting: (() -> Void)?
+    /// Invoked when "Present Camera" is chosen from the ellipsis menu.
+    var onPresentCamera: (() -> Void)?
+    /// Invoked when "Pages" is chosen from the library dropdown.
+    var onBrowsePages: (() -> Void)?
 
     private var isArranging = false
     private var connectionState: ConnectionDisplayState = .disconnected
@@ -211,7 +215,13 @@ final class HomeHeaderBar: UIView {
     /// Builds the "…" menu for the current connection state. When connected it offers
     /// the TV actions (Arrange / Set Up Album); otherwise it offers connection controls
     /// so the user can connect on demand or stop auto-connect attempts.
+    /// "Present Camera" is available in every state (AirPlay path, independent of Multipeer).
     private func makeOptionsMenu() -> UIMenu {
+        let presentCamera = UIAction(title: "Present Camera",
+                                     image: UIImage(systemName: "camera.fill")) { [weak self] _ in
+            self?.onPresentCamera?()
+        }
+
         switch connectionState {
         case .connected:
             let arrange = UIAction(title: "Arrange",
@@ -222,7 +232,7 @@ final class HomeHeaderBar: UIView {
                                       image: UIImage(systemName: "rectangle.stack.badge.plus")) { [weak self] _ in
                 self?.onSetUpAlbum?()
             }
-            return UIMenu(title: "", children: [arrange, setUpAlbum])
+            return UIMenu(title: "", children: [presentCamera, arrange, setUpAlbum])
 
         case .disconnected:
             let connectNow = UIAction(title: "Connect / Enter Pairing Code…",
@@ -233,14 +243,14 @@ final class HomeHeaderBar: UIView {
                                 image: UIImage(systemName: "pause.circle")) { [weak self] _ in
                 self?.onStopConnecting?()
             }
-            return UIMenu(title: "", children: [connectNow, stop])
+            return UIMenu(title: "", children: [presentCamera, connectNow, stop])
 
         case .paused:
             let connect = UIAction(title: "Connect / Enter Pairing Code…",
                                    image: UIImage(systemName: "wifi")) { [weak self] _ in
                 self?.onConnect?()
             }
-            return UIMenu(title: "", children: [connect])
+            return UIMenu(title: "", children: [presentCamera, connect])
         }
     }
 
@@ -270,11 +280,16 @@ final class HomeHeaderBar: UIView {
                               image: UIImage(systemName: "rectangle.stack")) { [weak self] _ in
             self?.onBrowseAlbums?()
         }
+        let pages = UIAction(title: "Pages",
+                             image: UIImage(systemName: "safari")) { [weak self] _ in
+            self?.onBrowsePages?()
+        }
         let settings = UIAction(title: "Settings",
                                 image: UIImage(systemName: "gearshape")) { [weak self] _ in
             self?.onOpenSettings?()
         }
-        let bottomSection = UIMenu(title: "", options: .displayInline, children: [albums, settings])
+        let bottomSection = UIMenu(title: "", options: .displayInline,
+                                   children: [albums, pages, settings])
 
         var children: [UIMenuElement] = []
         if !tvActions.isEmpty {

@@ -8,16 +8,17 @@
 // PresentationViewController.swift
 import UIKit
 import AVFoundation
+import WebKit
 import os.log
 
 /// Fullscreen, non-interactive view shown on an AirPlay-connected external display.
-/// Renders the currently selected item (image or video) at full resolution while the
+/// Renders the currently selected item (image, video, camera, or web page) while the
 /// phone keeps its normal UI. Driven entirely by `ExternalDisplayManager`.
 final class PresentationViewController: UIViewController {
 
     // MARK: - Subviews
 
-    private let imageView: UIImageView = {
+    let imageView: UIImageView = {
         let view = UIImageView()
         view.contentMode = .scaleAspectFit
         view.backgroundColor = .black
@@ -25,7 +26,7 @@ final class PresentationViewController: UIViewController {
         return view
     }()
 
-    private let messageLabel: UILabel = {
+    let messageLabel: UILabel = {
         let label = UILabel()
         label.textColor = UIColor.white.withAlphaComponent(0.6)
         label.font = .systemFont(ofSize: 28, weight: .medium)
@@ -35,20 +36,44 @@ final class PresentationViewController: UIViewController {
         return label
     }()
 
-    private let activityIndicator: UIActivityIndicatorView = {
+    let activityIndicator: UIActivityIndicatorView = {
         let indicator = UIActivityIndicatorView(style: .large)
         indicator.color = .white
         indicator.translatesAutoresizingMaskIntoConstraints = false
         return indicator
     }()
 
-    private var playerLayer: AVPlayerLayer?
-    private var player: AVPlayer?
-    private var loopObserver: NSObjectProtocol?
-    private var imageRequest: RemoteImageRequest?
-    private var imageLoadGeneration = 0
+    /// Host for the live camera preview; rotated for portrait-mounted TVs.
+    let cameraContainer: UIView = {
+        let view = UIView()
+        view.backgroundColor = .black
+        view.isHidden = true
+        view.translatesAutoresizingMaskIntoConstraints = false
+        return view
+    }()
 
-    private let logger = Logger(subsystem: "com.eclipseapp.ios", category: "Presentation")
+    let cameraPreviewView = CameraPreviewView()
+
+    /// Host for the scaled/rotated web view on the external display.
+    let webContainer: UIView = {
+        let view = UIView()
+        view.backgroundColor = .black
+        view.isHidden = true
+        view.clipsToBounds = true
+        view.translatesAutoresizingMaskIntoConstraints = false
+        return view
+    }()
+
+    var webView: WKWebView?
+
+    var playerLayer: AVPlayerLayer?
+    var player: AVPlayer?
+    var loopObserver: NSObjectProtocol?
+    var imageRequest: RemoteImageRequest?
+    var imageLoadGeneration = 0
+    var settingsObserver: NSObjectProtocol?
+
+    let logger = Logger(subsystem: "com.eclipseapp.ios", category: "Presentation")
 
     // MARK: - Lifecycle
 
@@ -59,6 +84,10 @@ final class PresentationViewController: UIViewController {
         view.addSubview(imageView)
         view.addSubview(messageLabel)
         view.addSubview(activityIndicator)
+        view.addSubview(cameraContainer)
+        view.addSubview(webContainer)
+        cameraContainer.addSubview(cameraPreviewView)
+        cameraPreviewView.translatesAutoresizingMaskIntoConstraints = false
 
         NSLayoutConstraint.activate([
             imageView.topAnchor.constraint(equalTo: view.topAnchor),
@@ -72,13 +101,50 @@ final class PresentationViewController: UIViewController {
             messageLabel.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -60),
 
             activityIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            activityIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor)
+            activityIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+
+            cameraContainer.topAnchor.constraint(equalTo: view.topAnchor),
+            cameraContainer.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            cameraContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            cameraContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+
+            cameraPreviewView.centerXAnchor.constraint(equalTo: cameraContainer.centerXAnchor),
+            cameraPreviewView.centerYAnchor.constraint(equalTo: cameraContainer.centerYAnchor),
+
+            webContainer.topAnchor.constraint(equalTo: view.topAnchor),
+            webContainer.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            webContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            webContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor)
         ])
+
+        settingsObserver = NotificationCenter.default.addObserver(
+            forName: ExternalOutputSettings.didChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.applyCameraLayout()
+            self?.applyWebLayout()
+        }
     }
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         playerLayer?.frame = view.bounds
+        if !cameraContainer.isHidden {
+            applyCameraLayout()
+        }
+        if !webContainer.isHidden {
+            applyWebLayout()
+        }
+    }
+
+    deinit {
+        if let loopObserver = loopObserver {
+            NotificationCenter.default.removeObserver(loopObserver)
+        }
+        if let settingsObserver = settingsObserver {
+            NotificationCenter.default.removeObserver(settingsObserver)
+        }
     }
 
     // MARK: - Presentation
@@ -91,10 +157,20 @@ final class PresentationViewController: UIViewController {
 
         switch source.content {
         case .image(let url):
+            hideCamera()
+            hideWeb()
             showImage(at: url)
         case .video(let url, let isLooping, let isMuted):
+            hideCamera()
+            hideWeb()
             showVideo(at: url, isLooping: isLooping, isMuted: isMuted)
+        case .camera:
+            showCamera()
+        case .web(let url):
+            showWeb(url: url)
         case .unavailable(let thumbnail, let message):
+            hideCamera()
+            hideWeb()
             showUnavailable(thumbnail: thumbnail, message: message)
         }
     }
@@ -102,6 +178,8 @@ final class PresentationViewController: UIViewController {
     /// Clears all content back to a neutral black screen.
     func showIdle() {
         teardownPlayer()
+        hideCamera()
+        teardownWeb()
         imageRequest?.cancel()
         imageRequest = nil
         imageView.image = nil
@@ -205,9 +283,4 @@ final class PresentationViewController: UIViewController {
         messageLabel.text = message
     }
 
-    deinit {
-        if let loopObserver = loopObserver {
-            NotificationCenter.default.removeObserver(loopObserver)
-        }
-    }
 }

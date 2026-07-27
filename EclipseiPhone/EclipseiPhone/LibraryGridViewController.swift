@@ -199,15 +199,26 @@ final class LibraryGridViewController: UIViewController {
 
     /// The presentation source for the currently live item, or nil when nothing is live.
     /// Used by `ExternalDisplayManager` when a display connects mid-session.
+    /// Returns the active overlay (camera / web) when one is live.
     func currentPresentationSource() -> PresentationSource? {
+        switch ExternalDisplayManager.shared.overlaySource {
+        case .camera:
+            return .camera
+        case .web(let url):
+            return .web(url)
+        case .none:
+            break
+        }
         guard let id = store.currentId,
               let item = store.items.first(where: { $0.id == id }) else { return nil }
         return .forLibraryItem(item, thumbnail: store.thumbnail(for: id))
     }
 
     /// Pushes the currently live item to the external display (if one is connected).
+    /// Does not interrupt an active camera or web overlay.
     private func pushCurrentToExternalDisplay() {
         guard ExternalDisplayManager.shared.isConnected else { return }
+        guard !ExternalDisplayManager.shared.isOverlayLive else { return }
         if let source = currentPresentationSource() {
             ExternalDisplayManager.shared.present(source)
         } else {

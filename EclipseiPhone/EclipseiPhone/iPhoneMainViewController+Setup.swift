@@ -113,6 +113,9 @@ extension iPhoneMainViewController {
         headerBar.onBrowseAlbums = { [weak self] in
             self?.presentAlbums()
         }
+        headerBar.onBrowsePages = { [weak self] in
+            self?.presentPages()
+        }
         headerBar.onOpenSettings = { [weak self] in
             self?.presentSettings()
         }
@@ -121,6 +124,9 @@ extension iPhoneMainViewController {
         }
         headerBar.onStopConnecting = { [weak self] in
             self?.pauseConnection()
+        }
+        headerBar.onPresentCamera = { [weak self] in
+            self?.presentCameraLive()
         }
         view.addSubview(headerBar)
 
@@ -190,5 +196,20 @@ extension iPhoneMainViewController {
         let coordinator = MultiTVSyncCoordinator.shared
         coordinator.connectionManager = connectionManager
         connectionManager.syncCoordinator = coordinator
+    }
+
+    /// Presents the live camera control surface for AirPlay output.
+    func presentCameraLive() {
+        let cameraVC = CameraLiveViewController()
+        cameraVC.modalPresentationStyle = .fullScreen
+        present(cameraVC, animated: true)
+    }
+
+    /// Presents the saved Pages list for AirPlay web display.
+    func presentPages() {
+        let pagesVC = WebPagesViewController()
+        let nav = UINavigationController(rootViewController: pagesVC)
+        nav.modalPresentationStyle = .fullScreen
+        present(nav, animated: true)
     }
 }
