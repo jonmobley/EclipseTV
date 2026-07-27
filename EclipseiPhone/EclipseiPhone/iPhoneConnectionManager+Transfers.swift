@@ -189,17 +189,32 @@ extension iPhoneConnectionManager {
     /// transfers successfully is removed from `PendingUploadStore`; failures stay queued
     /// for the next connection. The TV adds the items and re-broadcasts its manifest,
     /// which reconciles the companion's optimistic entries.
+    ///
+    /// Uses a single `transferGeneration` for the whole batch so `cancelCurrentTransfer`
+    /// invalidates every outstanding completion without each item cancelling the previous.
+    /// Replicas receive the same fan-out as a normal send.
     func uploadPending(_ items: [(id: String, url: URL)]) {
         guard let session = session, let peer = activeTargetPeer, !items.isEmpty else { return }
+
+        transferGeneration &+= 1
+        let generation = transferGeneration
+        isTransferCancelled = false
+
         for item in items {
+            fanOutMediaToReplicas(url: item.url, id: item.id, excluding: peer)
             session.sendResource(at: item.url, withName: item.id, toPeer: peer) { [weak self] error in
-                if let error = error {
-                    self?.logger.error("Pending upload failed for \(item.id, privacy: .public): \(error.localizedDescription)")
-                    return
-                }
-                self?.logger.info("Uploaded queued item \(item.id, privacy: .public)")
-                Task { @MainActor in
-                    PendingUploadStore.shared.remove(id: item.id)
+                DispatchQueue.main.async {
+                    guard let self = self, self.transferGeneration == generation else { return }
+                    if let error = error {
+                        self.logger.error(
+                            "Pending upload failed for \(item.id, privacy: .public): \(error.localizedDescription)"
+                        )
+                        return
+                    }
+                    self.logger.info("Uploaded queued item \(item.id, privacy: .public)")
+                    Task { @MainActor in
+                        PendingUploadStore.shared.remove(id: item.id)
+                    }
                 }
             }
         }

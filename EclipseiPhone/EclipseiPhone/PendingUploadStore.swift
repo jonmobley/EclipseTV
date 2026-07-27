@@ -73,6 +73,13 @@ final class PendingUploadStore {
         if uploads.count != before { persist() }
     }
 
+    /// Clears the in-memory queue and persisted UserDefaults entry. Intended for unit tests.
+    func removeAll() {
+        guard !uploads.isEmpty || UserDefaults.standard.data(forKey: defaultsKey) != nil else { return }
+        uploads = []
+        UserDefaults.standard.removeObject(forKey: defaultsKey)
+    }
+
     // MARK: - Persistence
 
     private func load() {
