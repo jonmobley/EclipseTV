@@ -20,6 +20,7 @@ final class AlbumsViewController: UIViewController {
     private var collectionView: UICollectionView!
     private let emptyLabel = UILabel()
     private let refreshControl = UIRefreshControl()
+    private var settingsObserver: NSObjectProtocol?
 
     /// Invoked when the user enters/changes the account code here, so the parent can also
     /// push it to a connected Apple TV. Local browsing is updated regardless.
@@ -35,6 +36,19 @@ final class AlbumsViewController: UIViewController {
         setupCollectionView()
         setupEmptyLabel()
         updateEmptyState()
+        settingsObserver = NotificationCenter.default.addObserver(
+            forName: ExternalOutputSettings.didChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.collectionView.collectionViewLayout.invalidateLayout()
+        }
+    }
+
+    deinit {
+        if let settingsObserver {
+            NotificationCenter.default.removeObserver(settingsObserver)
+        }
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -127,12 +141,13 @@ final class AlbumsViewController: UIViewController {
     }
 
     private func cellSize() -> CGSize {
-        let columns: CGFloat = 2
+        let orientation = ExternalOutputSettings.orientation
+        let columns = orientation.gridColumnCount
         let spacing: CGFloat = 12
         let inset: CGFloat = 16
         let available = collectionView.bounds.width - (inset * 2) - (spacing * (columns - 1))
         let width = floor(available / columns)
-        return CGSize(width: width, height: width * 9 / 16)
+        return CGSize(width: width, height: width * orientation.gridCellHeightOverWidth)
     }
 
     // MARK: - Actions

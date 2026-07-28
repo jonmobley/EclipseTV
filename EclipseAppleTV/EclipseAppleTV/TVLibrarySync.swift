@@ -97,11 +97,23 @@ final class TVLibrarySync {
                 self?.broadcastCurrentChanged()
             }
             .store(in: &cancellables)
+
+        // Display mode switched: push the new bucket's manifest immediately.
+        dataSource.$activeLibraryMode
+            .removeDuplicates()
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.sentThumbnailIds.removeAll()
+                self?.broadcastManifest()
+                self?.sendPendingThumbnails()
+            }
+            .store(in: &cancellables)
     }
 
     // MARK: - Broadcasting
 
-    private func broadcastManifest() {
+    func broadcastManifest() {
         guard let connectionManager = connectionManager, connectionManager.connectedPeerCount > 0 else { return }
         connectionManager.sendLibraryManifest(items: currentItems(), currentId: currentId())
     }
@@ -132,7 +144,7 @@ final class TVLibrarySync {
 
         // Append purged items (not in the live list) so the companion can show them as
         // unavailable and offer to re-send. They reuse the phone's cached thumbnail.
-        for entry in dataSource.unavailableLedger.items {
+        for entry in dataSource.ledger(for: dataSource.activeLibraryMode).items {
             var dto = LibraryItemDTO(id: entry.id, name: entry.name, isVideo: entry.isVideo, duration: 0)
             dto.isAvailable = false
             items.append(dto)

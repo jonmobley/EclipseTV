@@ -5,64 +5,37 @@
 //  Copyright © 2026 Moxie LLC. All rights reserved.
 //
 
-// iPhoneMainViewController+Library.swift
 import UIKit
 import MultipeerConnectivity
 
-// MARK: - Library Dropdown & Switching
+// MARK: - Library Title & Settings
 
 extension iPhoneMainViewController {
 
-    private static let relativeFormatter = RelativeDateTimeFormatter()
-
-    /// Rebuilds the header dropdown from the union of currently discovered Apple TVs and
-    /// the remembered (known) TVs, and updates the title to the active library.
+    /// Updates the center title: Multipeer-linked device name, or "Library".
     func refreshLibraryMenu() {
-        let discoveredNames = connectionManager.discoveredPeers.map { $0.displayName }
-        let known = KnownTVRegistry.shared.all()
-        let activeName = TVLibraryStore.shared.activeTVName
         let connectedName = isConnected() ? selectedPeer?.displayName : nil
-
-        // Known TVs first (most-recently-seen order), then any newly discovered ones.
-        var names = known.map { $0.name }
-        for name in discoveredNames where !names.contains(name) {
-            names.append(name)
-        }
-
-        let items = names.map { name -> HomeHeaderBar.LibraryMenuItem in
-            let subtitle: String?
-            if name == connectedName {
-                subtitle = "Connected"
-            } else if discoveredNames.contains(name) {
-                subtitle = "Available"
-            } else if let tv = known.first(where: { $0.name == name }) {
-                subtitle = "Last seen " + Self.relativeFormatter.localizedString(for: tv.lastSeen, relativeTo: Date())
-            } else {
-                subtitle = nil
-            }
-            return HomeHeaderBar.LibraryMenuItem(name: name, subtitle: subtitle, isActive: name == activeName)
-        }
-
-        headerBar.setLibraryMenu(items: items)
-        headerBar.setLibraryTitle(activeName)
+        headerBar.setLibraryTitle(connectedName)
+        refreshPresentedSettingsConnectionState()
     }
 
-    /// Switches the viewed library to `name`. If that Apple TV is currently reachable we
-    /// connect to it; otherwise we show its cached library offline.
+    /// Switches the viewed library to `name`. Connects if that Apple TV is nearby.
     func selectLibrary(named name: String) {
         preferredTVName = name
         TVLibraryStore.shared.setActiveTV(name)
 
+        // Choosing a TV is an explicit request to use the Eclipse TV app.
+        isConnectionPaused = false
+        connectionManager.autoConnectEnabled = true
+
         if let peer = connectionManager.discoveredPeers.first(where: { $0.displayName == name }) {
             if !connectionManager.isConnectedToPeer(peer) {
-                // Show the cached library offline until the new connection is established.
                 TVLibraryStore.shared.setOnline(false)
                 updateConnectedState(false, peer: peer)
             }
             selectedPeer = peer
             connectionManager.switchToPeer(peer)
         } else {
-            // Not reachable right now: drop any live connection and view the cache offline.
             connectionManager.disconnect()
             selectedPeer = nil
             TVLibraryStore.shared.setOnline(false)
@@ -73,21 +46,64 @@ extension iPhoneMainViewController {
         refreshLibraryMenu()
     }
 
-    /// Presents the Settings screen (library sync toggle + known-TV management).
+    /// Current Multipeer link state for Settings / header.
+    func currentConnectionDisplayState() -> HomeHeaderBar.ConnectionDisplayState {
+        if isConnected() { return .connected }
+        if isConnectionPaused { return .paused }
+        return .disconnected
+    }
+
+    /// Presents Settings (display mode, Eclipse TV app, sync, known TVs).
     func presentSettings() {
         let settings = SettingsViewController()
+        settings.setConnectionState(settingsConnectionState())
         settings.onLibrariesChanged = { [weak self] in
             self?.refreshLibraryMenu()
             self?.libraryViewController.collectionView.reloadData()
         }
         settings.onSyncPreferenceChanged = { [weak self] isOn in
-            // Apply to the live connection manager: enabling fans out to / gathers replica
-            // TVs; disabling stops replicating. Reset coordinator state so re-enabling
-            // re-replays the library to reconnected TVs.
             self?.connectionManager.syncAllEnabled = isOn
             MultiTVSyncCoordinator.shared.reset()
         }
+        settings.onConnect = { [weak self, weak settings] in
+            self?.resumeConnection()
+            settings?.setConnectionState(self?.settingsConnectionState() ?? .paused)
+        }
+        settings.onStopConnecting = { [weak self, weak settings] in
+            self?.pauseConnection()
+            settings?.setConnectionState(self?.settingsConnectionState() ?? .paused)
+        }
+        settings.onSelectTV = { [weak self] name in
+            self?.selectLibrary(named: name)
+        }
+        settings.onArrange = { [weak self] in
+            self?.dismiss(animated: true) {
+                guard let self else { return }
+                self.libraryViewController.beginArranging()
+                self.headerBar.setArranging(true)
+            }
+        }
+        settings.onSetUpAlbum = { [weak self] in
+            self?.dismiss(animated: true) {
+                self?.presentSetUpAlbum()
+            }
+        }
         let nav = UINavigationController(rootViewController: settings)
         present(nav, animated: true)
+    }
+
+    private func settingsConnectionState() -> SettingsViewController.ConnectionDisplayState {
+        switch currentConnectionDisplayState() {
+        case .connected: return .connected
+        case .disconnected: return .disconnected
+        case .paused: return .paused
+        }
+    }
+
+    /// Keeps an open Settings screen in sync with Multipeer link changes.
+    private func refreshPresentedSettingsConnectionState() {
+        guard let nav = presentedViewController as? UINavigationController,
+              let settings = nav.viewControllers.first as? SettingsViewController else { return }
+        settings.setConnectionState(settingsConnectionState())
     }
 }

@@ -58,12 +58,10 @@ extension iPhoneMainViewController {
     @objc private func handleAppDidBecomeActive() {
         logger.debug("App did become active")
 
-        // Check if we need to reconnect
-        if selectedPeer != nil && !isConnected() {
-            // We have a selected peer but no active connection, try to reconnect
-            updateConnectedState(false, peer: nil)
-            startSearching()
-        }
+        // Only reconnect if the user has opted into the Eclipse TV app link.
+        guard !isConnectionPaused, selectedPeer != nil, !isConnected() else { return }
+        updateConnectedState(false, peer: selectedPeer)
+        startSearching()
     }
 
     @objc private func handleAppDidEnterBackground() {
@@ -88,14 +86,6 @@ extension iPhoneMainViewController {
         headerBar.onAddTapped = { [weak self] in
             self?.mediaPickerButtonTapped()
         }
-        headerBar.onArrangeTapped = { [weak self] in
-            guard let self = self else { return }
-            self.libraryViewController.beginArranging()
-            self.headerBar.setArranging(true)
-        }
-        headerBar.onSetUpAlbum = { [weak self] in
-            self?.presentSetUpAlbum()
-        }
         headerBar.onArrangeDone = { [weak self] in
             guard let self = self else { return }
             if self.libraryViewController.commitArranging() {
@@ -107,11 +97,11 @@ extension iPhoneMainViewController {
             self.libraryViewController.cancelArranging()
             self.headerBar.setArranging(false)
         }
-        headerBar.onSelectLibrary = { [weak self] name in
-            self?.selectLibrary(named: name)
-        }
         headerBar.onBrowseAlbums = { [weak self] in
             self?.presentAlbums()
+        }
+        headerBar.onBrowseWeb = { [weak self] in
+            self?.presentPages()
         }
         headerBar.onOpenSettings = { [weak self] in
             self?.presentSettings()
@@ -119,8 +109,8 @@ extension iPhoneMainViewController {
         headerBar.onConnect = { [weak self] in
             self?.resumeConnection()
         }
-        headerBar.onStopConnecting = { [weak self] in
-            self?.pauseConnection()
+        headerBar.onPresentCamera = { [weak self] in
+            self?.presentCameraLive()
         }
         view.addSubview(headerBar)
 
@@ -142,6 +132,9 @@ extension iPhoneMainViewController {
     private func embedLibrary() {
         libraryViewController.onRequestResend = { [weak self] id in
             self?.beginResend(forItemId: id)
+        }
+        libraryViewController.onRequestEdit = { [weak self] id in
+            self?.beginEditCrop(forItemId: id)
         }
 
         addChild(libraryViewController)
@@ -184,11 +177,29 @@ extension iPhoneMainViewController {
 
     func setupConnectionManager() {
         connectionManager.delegate = self
+        // AirPlay-first: do not browse for the Eclipse TV app until the user asks.
+        connectionManager.autoConnectEnabled = false
+        headerBar.setConnectionState(.paused)
 
         // Wire up the multi-TV sync coordinator so newly connected replica TVs get caught
         // up to the active library when "Keep all Apple TVs in sync" is enabled.
         let coordinator = MultiTVSyncCoordinator.shared
         coordinator.connectionManager = connectionManager
         connectionManager.syncCoordinator = coordinator
+    }
+
+    /// Presents the live camera control surface for AirPlay output.
+    func presentCameraLive() {
+        let cameraVC = CameraLiveViewController()
+        cameraVC.modalPresentationStyle = .fullScreen
+        present(cameraVC, animated: true)
+    }
+
+    /// Presents the saved Web list for AirPlay web display.
+    func presentPages() {
+        let pagesVC = WebPagesViewController()
+        let nav = UINavigationController(rootViewController: pagesVC)
+        nav.modalPresentationStyle = .fullScreen
+        present(nav, animated: true)
     }
 }

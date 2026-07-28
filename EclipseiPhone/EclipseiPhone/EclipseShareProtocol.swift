@@ -38,6 +38,27 @@ enum EclipseShareProtocol {
         case playbackStatus = "playback_status"
         /// Companion configures the TV's read-only remote albums from an account code.
         case setAccount = "set_account"
+        /// Companion switches the TV's active Landscape / Vertical library bucket.
+        case setDisplayMode = "set_display_mode"
+    }
+
+    /// Separate media libraries: Landscape (16:9) vs Vertical (9:16).
+    enum LibraryMode: String, Codable, CaseIterable {
+        case landscape
+        case vertical
+
+        /// On-disk subdirectory under `Caches/Media` / `LocalMedia`.
+        var directoryName: String {
+            switch self {
+            case .landscape: return "Landscape"
+            case .vertical: return "Vertical"
+            }
+        }
+
+        static func resolved(from raw: String?) -> LibraryMode {
+            guard let raw, let mode = LibraryMode(rawValue: raw) else { return .landscape }
+            return mode
+        }
     }
 
     /// Remote playback actions a companion can request for the live video on the TV.
@@ -110,9 +131,23 @@ struct EclipseShareEnvelope: Codable {
     /// composes its manifest URL from (via `AlbumConfig`); the manifest returns all of
     /// that account's albums.
     var accountCode: String? = nil
+    /// `"landscape"` / `"vertical"` — which library bucket this message applies to.
+    /// Optional for backward compatibility with older peers.
+    var libraryMode: String? = nil
 
     var kind: EclipseShareProtocol.Kind? {
         EclipseShareProtocol.Kind(rawValue: eclipseMsg)
+    }
+
+    var resolvedLibraryMode: EclipseShareProtocol.LibraryMode {
+        EclipseShareProtocol.LibraryMode.resolved(from: libraryMode)
+    }
+
+    /// Returns a copy stamped with `mode` for outbound sends.
+    func withLibraryMode(_ mode: EclipseShareProtocol.LibraryMode) -> EclipseShareEnvelope {
+        var copy = self
+        copy.libraryMode = mode.rawValue
+        return copy
     }
 
     // MARK: Builders
@@ -229,6 +264,14 @@ struct EclipseShareEnvelope: Codable {
         EclipseShareEnvelope(
             eclipseMsg: EclipseShareProtocol.Kind.setAccount.rawValue,
             accountCode: code
+        )
+    }
+
+    /// Tells the TV to switch its active Landscape / Vertical library.
+    static func setDisplayMode(_ mode: EclipseShareProtocol.LibraryMode) -> EclipseShareEnvelope {
+        EclipseShareEnvelope(
+            eclipseMsg: EclipseShareProtocol.Kind.setDisplayMode.rawValue,
+            libraryMode: mode.rawValue
         )
     }
 

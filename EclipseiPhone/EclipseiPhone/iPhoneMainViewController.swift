@@ -52,17 +52,24 @@ class iPhoneMainViewController: UIViewController {
     
     let connectionManager = iPhoneConnectionManager()
     var selectedPeer: MCPeerID?
-    /// Session-only flag: when true the user chose to use Eclipse without an Apple TV,
-    /// so auto-connect, browsing, and the "Still connecting?" hint are all suspended
-    /// until they reconnect. Resets to false on next launch.
-    var isConnectionPaused = false
+    /// When true (the default), Multipeer browsing/auto-connect to the Eclipse TV app
+    /// is off until the user explicitly connects. AirPlay (Camera/Web) is unaffected.
+    var isConnectionPaused = true
     var autoConnectTimer: Timer?
-    /// One-shot timer that reveals the troubleshooting hint if we can't connect in time.
+    /// Retained for cleanup; connection troubleshooting alerts are no longer scheduled.
     var connectionHintTimer: Timer?
     var isShowingPicker = false // Track if we're showing the image picker
     private var statusFadeTimer: Timer?
     let logger = Logger(subsystem: "com.eclipseapp.ios", category: "MainViewController")
     var currentTempFileURL: URL? // Track temp files for cleanup
+    /// When set, the active `AspectCropViewController` is cropping a video (not a still).
+    var pendingVideoCropURL: URL?
+    /// Thumbnail chosen before a Vertical video crop; reused after export.
+    var pendingVideoThumbnail: UIImage?
+    /// Size of the still shown in the video cropper (for mapping crop → video pixels).
+    var pendingVideoCropPreviewSize: CGSize?
+    /// When set, the cropper is re-editing an existing library item (not a new add).
+    var pendingEditItemId: String?
     
     // MARK: - Lifecycle
     
@@ -81,9 +88,13 @@ class iPhoneMainViewController: UIViewController {
         // The home screen uses its own custom header bar, so keep the nav bar hidden.
         navigationController?.setNavigationBarHidden(true, animated: animated)
         
-        // Only start searching if we're not in the middle of picking images
+        // Eclipse TV app link is opt-in; don't browse/auto-connect on appear.
         if !isShowingPicker {
-            startSearching()
+            if isConnectionPaused {
+                headerBar.setConnectionState(.paused)
+            } else {
+                startSearching()
+            }
         }
     }
     
@@ -128,10 +139,28 @@ class iPhoneMainViewController: UIViewController {
     }
 
     func showImagePreview(for image: UIImage) {
-        let previewController = ImagePreviewViewController(image: image)
+        let previewController = ImagePreviewViewController(
+            image: image,
+            sendsToAppleTV: isConnected()
+        )
         previewController.delegate = self
         previewController.modalPresentationStyle = .overFullScreen
         present(previewController, animated: true)
+    }
+
+    /// In Vertical mode, forces a 9:16 crop when the image isn't already that aspect;
+    /// otherwise opens the normal confirm preview.
+    func presentImageAddFlow(for image: UIImage) {
+        let size = MediaAspect.orientedPixelSize(of: image)
+        if MediaAspect.requiresVerticalCrop,
+           !MediaAspect.matches(size, target: MediaAspect.vertical) {
+            let cropper = AspectCropViewController(image: image, targetAspect: MediaAspect.vertical)
+            cropper.delegate = self
+            cropper.modalPresentationStyle = .overFullScreen
+            present(cropper, animated: true)
+            return
+        }
+        showImagePreview(for: image)
     }
     
     func isConnected() -> Bool {

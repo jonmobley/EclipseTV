@@ -35,7 +35,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // Sweep media files the library no longer references (interrupted receives,
         // legacy leftovers) so the Caches/Media directory can't grow unbounded.
         // The sweep itself runs on a background queue.
-        ImageStorage.shared.cleanupOrphanedFiles(keeping: MediaDataSource.shared.mediaPaths)
+        ImageStorage.shared.cleanupOrphanedFiles(
+            keeping: MediaDataSource.shared.allReferencedPaths()
+        )
         // UIScene handles window and connection setup on tvOS
         return true
     }

@@ -199,12 +199,14 @@ struct MediaDataSourceTests {
 
         let files = makeTempFiles(2)
         // Persist one real file plus one that does not exist on disk.
+        // Legacy unscoped key migrates into the landscape bucket on load.
         defaults.set([files[0], "/tmp/definitely-missing-\(UUID().uuidString).jpg"],
                      forKey: "EclipseTV.recentImagesKey")
         defer { deleteTempFiles(files) }
 
         let sut = MediaDataSource(defaults: defaults)
         #expect(sut.mediaPaths == [files[0]])
+        #expect(sut.activeLibraryMode == .landscape)
     }
 
     @Test func loadRemapsMovedMediaDirectory() {
@@ -212,9 +214,9 @@ struct MediaDataSourceTests {
         let defaults = UserDefaults(suiteName: suiteName)!
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
-        // Place a file in the *current* media directory, then persist a stale path that
+        // Place a file in the landscape media directory, then persist a stale path that
         // references the same filename under an old (now-missing) directory.
-        let mediaDir = ImageStorage.shared.getImagesDirectory()
+        let mediaDir = ImageStorage.shared.getImagesDirectory(for: .landscape)
         let fileName = "remap_\(UUID().uuidString).jpg"
         let realURL = mediaDir.appendingPathComponent(fileName)
         try? Data([0x00]).write(to: realURL)
@@ -225,5 +227,19 @@ struct MediaDataSourceTests {
 
         let sut = MediaDataSource(defaults: defaults)
         #expect(sut.mediaPaths == [realURL.path])
+    }
+
+    @Test func setActiveLibraryModeSwitchesBuckets() {
+        let (sut, cleanup) = makeSUT()
+        defer { cleanup() }
+
+        sut.addMedia(at: "/tmp/landscape.jpg")
+        sut.setActiveLibraryMode(.vertical)
+        #expect(sut.mediaPaths.isEmpty)
+        sut.addMedia(at: "/tmp/vertical.jpg")
+        #expect(sut.mediaPaths == ["/tmp/vertical.jpg"])
+
+        sut.setActiveLibraryMode(.landscape)
+        #expect(sut.mediaPaths == ["/tmp/landscape.jpg"])
     }
 }

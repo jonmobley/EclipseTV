@@ -9,8 +9,8 @@
 import UIKit
 
 /// Describes what the external display should render fullscreen. Built from whatever the
-/// user has selected in the app (a TV-library item, an album item, or a picked file) and
-/// handed to `PresentationViewController` via `ExternalDisplayManager`.
+/// user has selected in the app (a TV-library item, an album item, a picked file, or the
+/// live camera) and handed to `PresentationViewController` via `ExternalDisplayManager`.
 struct PresentationSource: Equatable {
 
     enum Content: Equatable {
@@ -18,6 +18,10 @@ struct PresentationSource: Equatable {
         case image(URL)
         /// A video at `url` (a local file or an HTTPS URL), with playback options.
         case video(url: URL, isLooping: Bool, isMuted: Bool)
+        /// Live back-camera feed from `CameraManager` (AirPlay only).
+        case camera
+        /// A web page rendered full-bleed on the external display (AirPlay only).
+        case web(URL)
         /// The full-resolution file isn't on this device; show `thumbnail` (if any) with a
         /// short explanatory caption instead.
         case unavailable(thumbnail: UIImage?, message: String)
@@ -33,6 +37,16 @@ struct PresentationSource: Equatable {
 
     static func video(_ url: URL, isLooping: Bool, isMuted: Bool) -> PresentationSource {
         PresentationSource(content: .video(url: url, isLooping: isLooping, isMuted: isMuted))
+    }
+
+    /// Live camera feed for AirPlay presentation.
+    static var camera: PresentationSource {
+        PresentationSource(content: .camera)
+    }
+
+    /// Web page for AirPlay presentation.
+    static func web(_ url: URL) -> PresentationSource {
+        PresentationSource(content: .web(url))
     }
 
     static func unavailable(thumbnail: UIImage?, message: String) -> PresentationSource {

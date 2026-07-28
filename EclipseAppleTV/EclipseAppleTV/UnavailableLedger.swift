@@ -26,12 +26,16 @@ final class UnavailableLedger {
 
     private(set) var items: [UnavailableItem] = []
 
-    private let storageKey = "EclipseTV.unavailableLedger"
+    private let storageKey: String
     private let defaults: UserDefaults
     private let logger = Logger(subsystem: "com.eclipsetv.app", category: "UnavailableLedger")
 
-    init(defaults: UserDefaults = .standard) {
+    /// - Parameter storageKey: Persistence key. Landscape/Vertical libraries use
+    ///   `EclipseTV.unavailableLedger.<mode>`; the legacy unscoped key migrates to landscape.
+    init(defaults: UserDefaults = .standard,
+         storageKey: String = "EclipseTV.unavailableLedger") {
         self.defaults = defaults
+        self.storageKey = storageKey
         load()
     }
 

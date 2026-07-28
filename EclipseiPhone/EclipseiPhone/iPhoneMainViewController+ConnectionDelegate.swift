@@ -52,6 +52,16 @@ extension iPhoneMainViewController: iPhoneConnectionManagerDelegate {
         preferredTVName = peer.displayName
         updateConnectedState(true, peer: peer)
         refreshLibraryMenu()
+        // Align TV library bucket with the phone's Display Mode, then flush that mode.
+        let mode = ExternalOutputSettings.libraryMode
+        connectionManager.sendSetDisplayMode(mode)
+        let pendingCount = PendingUploadStore.shared.uploads(for: mode).count
+        if pendingCount > 0 {
+            showTemporaryStatus(
+                "Syncing \(pendingCount) item\(pendingCount == 1 ? "" : "s") to Apple TV…"
+            )
+        }
+        connectionManager.flushPendingUploads(for: mode)
     }
 
     func connectionManager(_ manager: iPhoneConnectionManager, didDisconnectFromPeer peer: MCPeerID) {

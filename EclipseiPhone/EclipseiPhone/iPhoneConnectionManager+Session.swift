@@ -171,17 +171,18 @@ extension iPhoneConnectionManager: MCSessionDelegate {
 
     /// Routes a decoded library-mirroring envelope into the shared `TVLibraryStore`.
     private func handleControlEnvelope(_ envelope: EclipseShareEnvelope) {
+        let mode = envelope.resolvedLibraryMode
         switch envelope.kind {
         case .libraryManifest:
             let items = envelope.items ?? []
             let currentId = envelope.currentId
             Task { @MainActor in
-                TVLibraryStore.shared.updateManifest(items: items, currentId: currentId)
+                TVLibraryStore.shared.updateManifest(items: items, currentId: currentId, mode: mode)
             }
         case .currentChanged:
             let currentId = envelope.currentId
             Task { @MainActor in
-                TVLibraryStore.shared.updateCurrentId(currentId)
+                TVLibraryStore.shared.updateCurrentId(currentId, mode: mode)
             }
         case .playbackStatus:
             let currentId = envelope.currentId
@@ -190,9 +191,11 @@ extension iPhoneConnectionManager: MCSessionDelegate {
             let duration = envelope.playbackDuration ?? 0
             Task { @MainActor in
                 TVLibraryStore.shared.updatePlayback(currentId: currentId, isPlaying: isPlaying,
-                                                     position: position, duration: duration)
+                                                     position: position, duration: duration,
+                                                     mode: mode)
             }
-        case .playRequest, .setVideoSetting, .deleteItem, .moveItem, .reorderItems, .restoreItem, .playbackCommand, .setAccount, .none:
+        case .playRequest, .setVideoSetting, .deleteItem, .moveItem, .reorderItems,
+             .restoreItem, .playbackCommand, .setAccount, .setDisplayMode, .none:
             // These are iPhone -> TV commands; ignore if ever echoed back to us.
             break
         }

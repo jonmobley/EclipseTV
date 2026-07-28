@@ -5,36 +5,21 @@
 //  Copyright © 2026 Moxie LLC. All rights reserved.
 //
 
-// HomeHeaderBar.swift
 import UIKit
 
 /// Top header for the home (library) screen.
 ///
-/// In its normal state it shows a connection-status indicator on the leading side
-/// (a colored dot plus "Connected"/"Disconnected"), a center dropdown button showing
-/// the active Apple TV library name (with a chevron) that lets the user switch
-/// libraries or open Settings, and, on the trailing side, an ellipsis ("…") menu
-/// button (which offers "Arrange") next to a blue circular "+" button that opens the
-/// media picker.
+/// Shows a connection-status pill (Ready / Presenting / TV App), a center Library
+/// dropdown (Camera / Albums / Web), and trailing settings (gear) + "+" controls.
 ///
-/// While arranging, it switches to an editing layout: a "Cancel" button (leading),
-/// an "Arrange" title (center), and a "Done" button (trailing) that saves the layout.
+/// While arranging, it switches to Cancel / Arrange / Done.
 final class HomeHeaderBar: UIView {
 
-    /// The connection state reflected by the status pill and the "…" menu contents.
-    /// `.paused` means the user chose to use Eclipse without an Apple TV; auto-connect
-    /// is suspended until they reconnect.
+    /// Multipeer Eclipse TV app link state. `.paused` is the AirPlay-first default.
     enum ConnectionDisplayState {
         case connected
         case disconnected
         case paused
-    }
-
-    /// A single Apple TV row shown in the library dropdown.
-    struct LibraryMenuItem {
-        let name: String
-        let subtitle: String?
-        let isActive: Bool
     }
 
     // MARK: - Subviews
@@ -42,8 +27,7 @@ final class HomeHeaderBar: UIView {
     private let libraryButton = UIButton(type: .system)
     private let statusDot = UIView()
     private let statusLabel = UILabel()
-    /// Transparent overlay over the status dot + label so the pill is tappable to
-    /// (re)connect when disconnected or paused.
+    /// Transparent overlay over the status pill; tappable to connect when not linked.
     private let statusButton = UIButton(type: .system)
     private let presentingIcon = UIImageView()
     private let menuButton = UIButton(type: .system)
@@ -55,36 +39,32 @@ final class HomeHeaderBar: UIView {
 
     /// Invoked when the "+" button is tapped.
     var onAddTapped: (() -> Void)?
-    /// Invoked when "Arrange" is chosen from the ellipsis menu.
-    var onArrangeTapped: (() -> Void)?
-    /// Invoked when "Set Up Album" is chosen from the ellipsis menu.
-    var onSetUpAlbum: (() -> Void)?
-    /// Invoked when "Done" is tapped while arranging (save the layout).
+    /// Invoked when "Done" is tapped while arranging.
     var onArrangeDone: (() -> Void)?
-    /// Invoked when "Cancel" is tapped while arranging (discard changes).
+    /// Invoked when "Cancel" is tapped while arranging.
     var onArrangeCancel: (() -> Void)?
-    /// Invoked with the device name when a library is chosen from the dropdown.
-    var onSelectLibrary: ((String) -> Void)?
-    /// Invoked when "Albums" is chosen from the dropdown (browse account albums).
-    var onBrowseAlbums: (() -> Void)?
-    /// Invoked when "Settings" is chosen from the dropdown.
+    /// Invoked when the gear is tapped.
     var onOpenSettings: (() -> Void)?
-    /// Invoked when the user asks to connect — via the status pill tap or the
-    /// "Connect to Apple TV" / "Connect Now" item in the "…" menu.
+    /// Invoked when the status pill is tapped while not linked (opens connect flow).
     var onConnect: (() -> Void)?
-    /// Invoked when the user chooses "Stop Trying to Connect" from the "…" menu.
-    var onStopConnecting: (() -> Void)?
+    /// Invoked when "Camera" is chosen from the library dropdown.
+    var onPresentCamera: (() -> Void)?
+    /// Invoked when "Albums" is chosen from the library dropdown.
+    var onBrowseAlbums: (() -> Void)?
+    /// Invoked when "Web" is chosen from the library dropdown.
+    var onBrowseWeb: (() -> Void)?
 
-    private var isArranging = false
-    private var connectionState: ConnectionDisplayState = .disconnected
+    private var connectionState: ConnectionDisplayState = .paused
+    private var isAirPlayConnected = false
 
     // MARK: - Init
 
     override init(frame: CGRect) {
         super.init(frame: frame)
         setupViews()
-        setConnectionState(.disconnected)
+        setConnectionState(.paused)
         setArranging(false)
+        rebuildLibraryMenu()
     }
 
     required init?(coder: NSCoder) {
@@ -119,19 +99,18 @@ final class HomeHeaderBar: UIView {
         statusButton.addTarget(self, action: #selector(statusTapped), for: .touchUpInside)
         addSubview(statusButton)
 
-        presentingIcon.image = UIImage(systemName: "airplayvideo")
-        presentingIcon.tintColor = .systemBlue
-        presentingIcon.contentMode = .scaleAspectFit
+        // Kept for layout compatibility; always hidden — an AirPlay glyph next to the
+        // status pill read like a named TV device identity.
         presentingIcon.isHidden = true
         presentingIcon.translatesAutoresizingMaskIntoConstraints = false
         addSubview(presentingIcon)
 
-        let menuConfig = UIImage.SymbolConfiguration(pointSize: 20, weight: .bold)
-        menuButton.setImage(UIImage(systemName: "ellipsis", withConfiguration: menuConfig), for: .normal)
+        let menuConfig = UIImage.SymbolConfiguration(pointSize: 20, weight: .semibold)
+        menuButton.setImage(UIImage(systemName: "gearshape", withConfiguration: menuConfig), for: .normal)
         menuButton.tintColor = .label
         menuButton.translatesAutoresizingMaskIntoConstraints = false
-        menuButton.showsMenuAsPrimaryAction = true
-        menuButton.menu = makeOptionsMenu()
+        menuButton.accessibilityLabel = "Settings"
+        menuButton.addTarget(self, action: #selector(settingsTapped), for: .touchUpInside)
         addSubview(menuButton)
 
         let plusConfig = UIImage.SymbolConfiguration(pointSize: 20, weight: .bold)
@@ -208,80 +187,30 @@ final class HomeHeaderBar: UIView {
         ])
     }
 
-    /// Builds the "…" menu for the current connection state. When connected it offers
-    /// the TV actions (Arrange / Set Up Album); otherwise it offers connection controls
-    /// so the user can connect on demand or stop auto-connect attempts.
-    private func makeOptionsMenu() -> UIMenu {
-        switch connectionState {
-        case .connected:
-            let arrange = UIAction(title: "Arrange",
-                                   image: UIImage(systemName: "arrow.up.arrow.down")) { [weak self] _ in
-                self?.onArrangeTapped?()
-            }
-            let setUpAlbum = UIAction(title: "Set Up Album…",
-                                      image: UIImage(systemName: "rectangle.stack.badge.plus")) { [weak self] _ in
-                self?.onSetUpAlbum?()
-            }
-            return UIMenu(title: "", children: [arrange, setUpAlbum])
-
-        case .disconnected:
-            let connectNow = UIAction(title: "Connect / Enter Pairing Code…",
-                                      image: UIImage(systemName: "wifi")) { [weak self] _ in
-                self?.onConnect?()
-            }
-            let stop = UIAction(title: "Stop Trying to Connect",
-                                image: UIImage(systemName: "pause.circle")) { [weak self] _ in
-                self?.onStopConnecting?()
-            }
-            return UIMenu(title: "", children: [connectNow, stop])
-
-        case .paused:
-            let connect = UIAction(title: "Connect / Enter Pairing Code…",
-                                   image: UIImage(systemName: "wifi")) { [weak self] _ in
-                self?.onConnect?()
-            }
-            return UIMenu(title: "", children: [connect])
-        }
-    }
-
     // MARK: - Library Dropdown
 
-    /// Sets the dropdown's title to the active library name, or "EclipseTV" when none.
+    /// Sets the center title. Pass a Multipeer-linked Eclipse TV app name, or `nil`
+    /// for the AirPlay-first default ("Library").
     func setLibraryTitle(_ name: String?) {
-        let title = (name?.isEmpty == false) ? name! : "EclipseTV"
+        let title = (name?.isEmpty == false) ? name! : "Library"
         libraryButton.configuration?.attributedTitle = AttributedString(
             title, attributes: AttributeContainer([.font: UIFont.systemFont(ofSize: 17, weight: .bold)]))
     }
 
-    /// Rebuilds the dropdown from the given Apple TVs plus a trailing Settings action.
-    func setLibraryMenu(items: [LibraryMenuItem]) {
-        var tvActions: [UIAction] = []
-        for item in items {
-            let action = UIAction(title: item.name,
-                                  subtitle: item.subtitle,
-                                  image: UIImage(systemName: "appletv"),
-                                  state: item.isActive ? .on : .off) { [weak self] _ in
-                self?.onSelectLibrary?(item.name)
-            }
-            tvActions.append(action)
+    private func rebuildLibraryMenu() {
+        let camera = UIAction(title: "Camera",
+                              image: UIImage(systemName: "camera.fill")) { [weak self] _ in
+            self?.onPresentCamera?()
         }
-
         let albums = UIAction(title: "Albums",
                               image: UIImage(systemName: "rectangle.stack")) { [weak self] _ in
             self?.onBrowseAlbums?()
         }
-        let settings = UIAction(title: "Settings",
-                                image: UIImage(systemName: "gearshape")) { [weak self] _ in
-            self?.onOpenSettings?()
+        let web = UIAction(title: "Web",
+                           image: UIImage(systemName: "safari")) { [weak self] _ in
+            self?.onBrowseWeb?()
         }
-        let bottomSection = UIMenu(title: "", options: .displayInline, children: [albums, settings])
-
-        var children: [UIMenuElement] = []
-        if !tvActions.isEmpty {
-            children.append(UIMenu(title: "Apple TVs", options: .displayInline, children: tvActions))
-        }
-        children.append(bottomSection)
-        libraryButton.menu = UIMenu(title: "", children: children)
+        libraryButton.menu = UIMenu(children: [camera, albums, web])
     }
 
     // MARK: - Actions
@@ -295,7 +224,6 @@ final class HomeHeaderBar: UIView {
     }
 
     @objc private func statusTapped() {
-        // Tapping the pill only does something useful while not connected.
         guard connectionState != .connected else { return }
         onConnect?()
     }
@@ -304,41 +232,59 @@ final class HomeHeaderBar: UIView {
         onArrangeDone?()
     }
 
+    @objc private func settingsTapped() {
+        onOpenSettings?()
+    }
+
     // MARK: - State
 
-    /// Reflects the connection state in the dot, label, and trailing controls. Sending
-    /// media requires a live connection, so the "+" button is only enabled while
-    /// connected; the "…" menu stays enabled in every state because it now hosts the
-    /// connect / stop-connecting controls.
+    /// Reflects Eclipse TV app (Multipeer) state. AirPlay presentation is shown via
+    /// `setPresenting` when the TV app isn't linked.
     func setConnectionState(_ state: ConnectionDisplayState) {
         connectionState = state
-        switch state {
-        case .connected:
-            statusDot.backgroundColor = .systemGreen
-            statusLabel.text = "Connected"
-            statusLabel.textColor = .systemGreen
-        case .disconnected:
-            statusDot.backgroundColor = .systemGray
-            statusLabel.text = "Disconnected"
-            statusLabel.textColor = .secondaryLabel
-        case .paused:
-            statusDot.backgroundColor = .systemOrange
-            statusLabel.text = "Offline"
-            statusLabel.textColor = .secondaryLabel
-        }
-        setAddEnabled(state == .connected)
+        applyStatusAppearance()
+        setAddEnabled(true)
         menuButton.isEnabled = true
         menuButton.alpha = 1.0
-        menuButton.menu = makeOptionsMenu()
     }
 
-    /// Shows or hides the AirPlay "presenting on TV" indicator next to the status label.
-    /// Reflects whether an external display (AirPlay-mirrored Apple TV) is connected.
+    /// Updates whether an external display is available for presentation.
     func setPresenting(_ presenting: Bool) {
-        presentingIcon.isHidden = !presenting || isArranging
+        isAirPlayConnected = presenting
+        presentingIcon.isHidden = true
+        applyStatusAppearance()
     }
 
-    /// Enables or disables the "+" button independently (e.g. dimmed during a transfer).
+    /// Status pill: Multipeer TV app link vs external-display presentation.
+    private func applyStatusAppearance() {
+        switch connectionState {
+        case .connected:
+            statusDot.backgroundColor = .systemGreen
+            statusLabel.text = "TV App"
+            statusLabel.textColor = .systemGreen
+            statusLabel.accessibilityLabel = "Eclipse TV app linked"
+        case .disconnected:
+            statusDot.backgroundColor = .systemGray
+            statusLabel.text = "Connecting…"
+            statusLabel.textColor = .secondaryLabel
+            statusLabel.accessibilityLabel = "Connecting to Eclipse TV app"
+        case .paused:
+            if isAirPlayConnected {
+                statusDot.backgroundColor = .systemBlue
+                statusLabel.text = "Presenting"
+                statusLabel.textColor = .systemBlue
+                statusLabel.accessibilityLabel =
+                    "External display available for presentation"
+            } else {
+                statusDot.backgroundColor = .systemGray
+                statusLabel.text = "Ready"
+                statusLabel.textColor = .secondaryLabel
+                statusLabel.accessibilityLabel = "Ready"
+            }
+        }
+    }
+
+    /// Enables or disables the "+" button (e.g. dimmed during a transfer).
     func setAddEnabled(_ enabled: Bool) {
         addButton.isEnabled = enabled
         addButton.alpha = enabled ? 1.0 : 0.4
@@ -346,12 +292,11 @@ final class HomeHeaderBar: UIView {
 
     /// Toggles between the normal layout and the arranging (Cancel / Done) layout.
     func setArranging(_ arranging: Bool) {
-        isArranging = arranging
         libraryButton.isHidden = arranging
         statusDot.isHidden = arranging
         statusLabel.isHidden = arranging
         statusButton.isHidden = arranging
-        presentingIcon.isHidden = arranging || !ExternalDisplayManager.shared.isConnected
+        presentingIcon.isHidden = true
         menuButton.isHidden = arranging
         addButton.isHidden = arranging
         titleLabel.isHidden = !arranging

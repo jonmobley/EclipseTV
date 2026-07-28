@@ -10,11 +10,11 @@ import os.log
 
 class ImageStorage {
     // MARK: - Singleton
-    
+
     static let shared = ImageStorage()
-    
+
     // MARK: - Properties
-    
+
     private let fileManager = FileManager.default
     private let logger = Logger(subsystem: "com.eclipsetv.app", category: "ImageStorage")
 
@@ -22,49 +22,94 @@ class ImageStorage {
     /// is durable in practice (only purged under genuine storage pressure). This was the
     /// app's original, working location; a later move to Application Support broke saving
     /// on tvOS. Note: for guaranteed persistence Apple's intended option is iCloud/CloudKit.
-    private let mediaDirectory: URL
-    
+    private let mediaRootDirectory: URL
+
     // MARK: - Initialization
-    
+
     private init() {
         let baseDirectory = fileManager.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-        mediaDirectory = baseDirectory.appendingPathComponent("Media", isDirectory: true)
-        createImagesDirectory()
+        mediaRootDirectory = baseDirectory.appendingPathComponent("Media", isDirectory: true)
+        createDirectory(at: mediaRootDirectory)
+        migrateLegacyFlatFilesIfNeeded()
+        for mode in EclipseShareProtocol.LibraryMode.allCases {
+            createDirectory(at: directory(for: mode))
+        }
     }
-    
+
     // MARK: - Directory Management
-    
-    func getImagesDirectory() -> URL {
-        return mediaDirectory
+
+    /// Root `Caches/Media` directory (contains Landscape / Vertical subdirs).
+    func getMediaRootDirectory() -> URL {
+        mediaRootDirectory
     }
-    
+
+    /// Mode-scoped media directory (`Caches/Media/Landscape` or `…/Vertical`).
+    func getImagesDirectory(
+        for mode: EclipseShareProtocol.LibraryMode = MediaDataSource.shared.activeLibraryMode
+    ) -> URL {
+        directory(for: mode)
+    }
+
+    private func directory(for mode: EclipseShareProtocol.LibraryMode) -> URL {
+        mediaRootDirectory.appendingPathComponent(mode.directoryName, isDirectory: true)
+    }
+
     @discardableResult
-    func createImagesDirectory() -> Bool {
-        let imagesDirURL = getImagesDirectory()
+    func createImagesDirectory(
+        for mode: EclipseShareProtocol.LibraryMode = MediaDataSource.shared.activeLibraryMode
+    ) -> Bool {
+        createDirectory(at: directory(for: mode))
+    }
+
+    @discardableResult
+    private func createDirectory(at url: URL) -> Bool {
         do {
-            try fileManager.createDirectory(at: imagesDirURL, 
-                                          withIntermediateDirectories: true, 
-                                          attributes: nil)
-            logger.info("Created directory: \(imagesDirURL.path)")
+            try fileManager.createDirectory(at: url,
+                                            withIntermediateDirectories: true,
+                                            attributes: nil)
             return true
         } catch {
             logger.error("Error creating directory: \(error.localizedDescription)")
             return false
         }
     }
-    
-    // MARK: - Image Management
-    
-    func saveReceivedImage(_ imageData: Data) -> URL? {
-        // Ensure directory exists
-        if !createImagesDirectory() {
-            return nil
+
+    /// Moves loose files that lived directly under `Caches/Media` into `Landscape/`.
+    private func migrateLegacyFlatFilesIfNeeded() {
+        guard let contents = try? fileManager.contentsOfDirectory(
+            at: mediaRootDirectory,
+            includingPropertiesForKeys: [.isDirectoryKey]
+        ) else { return }
+
+        let landscape = directory(for: .landscape)
+        createDirectory(at: landscape)
+
+        for url in contents {
+            let isDir = (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
+            if isDir { continue }
+            let dest = landscape.appendingPathComponent(url.lastPathComponent)
+            if fileManager.fileExists(atPath: dest.path) {
+                try? fileManager.removeItem(at: url)
+                continue
+            }
+            do {
+                try fileManager.moveItem(at: url, to: dest)
+                logger.info("Migrated media file to Landscape: \(url.lastPathComponent, privacy: .public)")
+            } catch {
+                logger.error("Failed to migrate \(url.lastPathComponent, privacy: .public): \(error.localizedDescription)")
+            }
         }
-        
+    }
+
+    // MARK: - Image Management
+
+    func saveReceivedImage(_ imageData: Data) -> URL? {
+        let mode = MediaDataSource.shared.activeLibraryMode
+        guard createImagesDirectory(for: mode) else { return nil }
+
         let filename = "\(UUID().uuidString).jpg"
-        let fileURL = getImagesDirectory().appendingPathComponent(filename)
-        
-        // Write on background thread as recommended
+        let fileURL = getImagesDirectory(for: mode).appendingPathComponent(filename)
+
         do {
             try imageData.write(to: fileURL, options: [.atomic])
             logger.info("Saved image to: \(fileURL.path)")
@@ -74,17 +119,14 @@ class ImageStorage {
             return nil
         }
     }
-    
+
     func saveSampleImage(_ imageData: Data, name: String) -> URL? {
-        // Ensure directory exists
-        if !createImagesDirectory() {
-            return nil
-        }
-        
+        let mode = MediaDataSource.shared.activeLibraryMode
+        guard createImagesDirectory(for: mode) else { return nil }
+
         let filename = "sample_\(name).jpg"
-        let fileURL = getImagesDirectory().appendingPathComponent(filename)
-        
-        // Only write if file doesn't exist
+        let fileURL = getImagesDirectory(for: mode).appendingPathComponent(filename)
+
         if !fileManager.fileExists(atPath: fileURL.path) {
             do {
                 try imageData.write(to: fileURL, options: [.atomic])
@@ -95,22 +137,19 @@ class ImageStorage {
                 return nil
             }
         }
-        
+
         return fileURL
     }
-    
+
     // MARK: - Video Management
-    
+
     func saveReceivedVideo(_ videoData: Data) -> URL? {
-        // Ensure directory exists
-        if !createImagesDirectory() {
-            return nil
-        }
-        
+        let mode = MediaDataSource.shared.activeLibraryMode
+        guard createImagesDirectory(for: mode) else { return nil }
+
         let filename = "\(UUID().uuidString).mp4"
-        let fileURL = getImagesDirectory().appendingPathComponent(filename)
-        
-        // Write on background thread as recommended
+        let fileURL = getImagesDirectory(for: mode).appendingPathComponent(filename)
+
         do {
             try videoData.write(to: fileURL, options: [.atomic])
             logger.info("Saved video to: \(fileURL.path)")
@@ -120,51 +159,71 @@ class ImageStorage {
             return nil
         }
     }
-    
+
     // MARK: - Cleanup
 
-    /// Removes files in the media directory that the library no longer references —
-    /// e.g. leftovers from an interrupted receive or a legacy code path. Compares by
-    /// file name so a media-directory relocation doesn't orphan everything at once.
-    ///
-    /// This intentionally replaces the old "keep the N most recent files" sweep, which
-    /// was never wired up and would have deleted files still in the library once it
-    /// grew past the cap. Runs on a utility queue; safe to call at launch.
+    /// Removes files under each mode directory that no library bucket references.
     func cleanupOrphanedFiles(keeping referencedPaths: [String]) {
-        let imagesDir = getImagesDirectory()
-        let referencedNames = Set(referencedPaths.map { ($0 as NSString).lastPathComponent })
-        DispatchQueue.global(qos: .utility).async { [logger] in
+        let referencedNamesByMode: [EclipseShareProtocol.LibraryMode: Set<String>] = {
+            var map: [EclipseShareProtocol.LibraryMode: Set<String>] = [
+                .landscape: [], .vertical: []
+            ]
+            for path in referencedPaths {
+                let name = (path as NSString).lastPathComponent
+                if path.contains("/Vertical/") {
+                    map[.vertical, default: []].insert(name)
+                } else {
+                    map[.landscape, default: []].insert(name)
+                }
+            }
+            return map
+        }()
+
+        DispatchQueue.global(qos: .utility).async { [logger, mediaRootDirectory] in
             let fm = FileManager.default
-            guard let files = try? fm.contentsOfDirectory(at: imagesDir,
-                                                          includingPropertiesForKeys: nil) else { return }
-            for fileURL in files where !referencedNames.contains(fileURL.lastPathComponent) {
-                do {
-                    try fm.removeItem(at: fileURL)
-                    logger.info("Removed orphaned media file: \(fileURL.lastPathComponent, privacy: .public)")
-                } catch {
-                    logger.error("Failed to remove orphaned file: \(error.localizedDescription)")
+            for mode in EclipseShareProtocol.LibraryMode.allCases {
+                let dir = mediaRootDirectory.appendingPathComponent(
+                    mode.directoryName, isDirectory: true
+                )
+                let keep = referencedNamesByMode[mode] ?? []
+                guard let files = try? fm.contentsOfDirectory(
+                    at: dir, includingPropertiesForKeys: nil
+                ) else { continue }
+                for fileURL in files where !keep.contains(fileURL.lastPathComponent) {
+                    do {
+                        try fm.removeItem(at: fileURL)
+                        logger.info(
+                            "Removed orphaned media file: \(fileURL.lastPathComponent, privacy: .public)"
+                        )
+                    } catch {
+                        logger.error("Failed to remove orphaned file: \(error.localizedDescription)")
+                    }
                 }
             }
         }
     }
-    
+
     // MARK: - File Operations
-    
+
     func fileExists(at path: String) -> Bool {
-        return fileManager.fileExists(atPath: path)
+        fileManager.fileExists(atPath: path)
     }
-    
-    func getDirectoryContents() -> [URL]? {
-        let imagesDir = getImagesDirectory()
+
+    func getDirectoryContents(
+        for mode: EclipseShareProtocol.LibraryMode = MediaDataSource.shared.activeLibraryMode
+    ) -> [URL]? {
+        let imagesDir = getImagesDirectory(for: mode)
         do {
-            return try fileManager.contentsOfDirectory(at: imagesDir, 
-                                                     includingPropertiesForKeys: [.creationDateKey])
+            return try fileManager.contentsOfDirectory(
+                at: imagesDir,
+                includingPropertiesForKeys: [.creationDateKey]
+            )
         } catch {
             logger.error("Error getting directory contents: \(error.localizedDescription)")
             return nil
         }
     }
-    
+
     func removeFile(at url: URL) -> Bool {
         do {
             try fileManager.removeItem(at: url)
@@ -175,4 +234,4 @@ class ImageStorage {
             return false
         }
     }
-} 
+}
