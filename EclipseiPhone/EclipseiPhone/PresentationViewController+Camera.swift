@@ -12,9 +12,10 @@ import AVFoundation
 
 extension PresentationViewController {
 
-    /// Shows the live camera preview on the external display.
+    /// Shows the live camera preview on the external display (primary underlay).
     func showCamera() {
         hideWeb()
+        hidePDF()
         hideMediaContainer()
         messageLabel.text = nil
         imageView.isHidden = true
@@ -22,12 +23,14 @@ extension PresentationViewController {
         activityIndicator.stopAnimating()
 
         cameraContainer.isHidden = false
-        // Letterbox into the Display Mode panel (9:16 Vertical / 16:9 Landscape),
-        // matching the phone camera stage.
+        let gravity: AVLayerVideoGravity =
+            ExternalOutputSettings.isVerticalMode ? .resizeAspectFill : .resizeAspect
         cameraPreviewView.attach(
             session: CameraManager.shared.captureSession,
-            videoGravity: .resizeAspect
+            videoGravity: gravity
         )
+        cameraPreviewView.syncDisplayModeOrientation()
+        refreshCameraFrameOverlay()
         applyCameraLayout()
     }
 
@@ -37,11 +40,28 @@ extension PresentationViewController {
         cameraContainer.isHidden = true
         cameraPreviewView.transform = .identity
         cameraPreviewView.bounds = .zero
+        cameraFrameOverlayView.image = nil
+        cameraFrameOverlayView.isHidden = true
+        cameraFrameOverlayView.transform = .identity
+        cameraFrameOverlayView.bounds = .zero
     }
 
     /// Fills the AirPlay surface with the mode-aspect camera panel (rotates when Vertical).
     func applyCameraLayout() {
         guard !cameraContainer.isHidden else { return }
         applyRotatedLayout(to: cameraPreviewView, in: cameraContainer, scale: 1)
+        cameraPreviewView.syncDisplayModeOrientation()
+        applyRotatedLayout(to: cameraFrameOverlayView, in: cameraContainer, scale: 1)
+        cameraContainer.bringSubviewToFront(cameraFrameOverlayView)
+    }
+
+    /// Syncs the AirPlay PNG frame overlay from `CameraFrameStore`.
+    func refreshCameraFrameOverlay() {
+        let image = CameraFrameStore.shared.selectedImage
+        cameraFrameOverlayView.image = image
+        cameraFrameOverlayView.isHidden = image == nil || cameraContainer.isHidden
+        if !cameraContainer.isHidden {
+            applyCameraLayout()
+        }
     }
 }

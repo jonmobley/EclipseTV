@@ -22,6 +22,32 @@ class iPhoneMainViewController: UIViewController {
     /// The library grid is the home screen; it's embedded as a child view controller.
     lazy var libraryViewController = LibraryGridViewController(connectionManager: connectionManager)
 
+    /// Music page embedded to the right of the library grid (swipe left to open).
+    lazy var audioLibraryViewController = AudioLibraryViewController(embedded: true)
+
+    /// Horizontal pager hosting Library (page 0) and Music (page 1).
+    let homePagerScrollView: UIScrollView = {
+        let scroll = UIScrollView()
+        scroll.isPagingEnabled = true
+        scroll.showsHorizontalScrollIndicator = false
+        scroll.showsVerticalScrollIndicator = false
+        scroll.bounces = false
+        scroll.isDirectionalLockEnabled = true
+        scroll.translatesAutoresizingMaskIntoConstraints = false
+        return scroll
+    }()
+
+    /// Navigation stack for the Music page (playlist detail pushes).
+    var audioLibraryNavController: UINavigationController?
+    /// 0 = Library, 1 = Music.
+    var homePageIndex = 0
+    /// True when Library and Music share the home screen (regular width).
+    var isHomeSplitLayout = false
+    /// Width of the Library page (full pager width, or remaining space in split).
+    var libraryPageWidthConstraint: NSLayoutConstraint?
+    /// Width of the Music page (full pager width, or sidebar in split).
+    var musicPageWidthConstraint: NSLayoutConstraint?
+
     /// Transient transfer/status message overlaid on top of the library while sending.
     let statusLabel: PaddedLabel = {
         let label = PaddedLabel()
@@ -70,6 +96,26 @@ class iPhoneMainViewController: UIViewController {
     var pendingVideoCropPreviewSize: CGSize?
     /// When set, the cropper is re-editing an existing library item (not a new add).
     var pendingEditItemId: String?
+    /// When set, the next successfully added media item is also appended to this album.
+    var pendingAlbumId: UUID?
+    /// When set with `pendingSlideshowName`, the next image batch becomes a Slideshow.
+    var pendingSlideshowShowId: UUID?
+    /// Name for the Slideshow created from the next image-only import batch.
+    var pendingSlideshowName: String?
+    /// When true, the next image pick updates the Logo tile instead of the library.
+    var pendingLogoPick = false
+    /// Distinguishes PDF vs audio document-picker results.
+    var pendingDocumentKind: PendingDocumentKind = .pdf
+
+    enum PendingDocumentKind {
+        case pdf
+        case audio
+    }
+
+    /// Footer mini player for ambient music.
+    let audioMiniPlayer = AudioMiniPlayerView()
+    var audioMiniHeightConstraint: NSLayoutConstraint?
+    var audioPlayerObserver: NSObjectProtocol?
     
     // MARK: - Lifecycle
     
@@ -96,6 +142,19 @@ class iPhoneMainViewController: UIViewController {
                 startSearching()
             }
         }
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        updateHomeSplitLayoutIfNeeded()
+        syncHomePagerOffsetIfNeeded()
+    }
+
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        guard previousTraitCollection?.horizontalSizeClass
+            != traitCollection.horizontalSizeClass else { return }
+        updateHomeSplitLayoutIfNeeded()
     }
     
     override func viewWillDisappear(_ animated: Bool) {
@@ -135,7 +194,7 @@ class iPhoneMainViewController: UIViewController {
         let previewController = VideoThumbnailPreviewViewController(videoURL: videoURL)
         previewController.delegate = self
         previewController.modalPresentationStyle = .overFullScreen
-        present(previewController, animated: true)
+        presentationAnchor.present(previewController, animated: true)
     }
 
     func showImagePreview(for image: UIImage) {
@@ -145,7 +204,7 @@ class iPhoneMainViewController: UIViewController {
         )
         previewController.delegate = self
         previewController.modalPresentationStyle = .overFullScreen
-        present(previewController, animated: true)
+        presentationAnchor.present(previewController, animated: true)
     }
 
     /// In Vertical mode, forces a 9:16 crop when the image isn't already that aspect;
@@ -157,7 +216,7 @@ class iPhoneMainViewController: UIViewController {
             let cropper = AspectCropViewController(image: image, targetAspect: MediaAspect.vertical)
             cropper.delegate = self
             cropper.modalPresentationStyle = .overFullScreen
-            present(cropper, animated: true)
+            presentationAnchor.present(cropper, animated: true)
             return
         }
         showImagePreview(for: image)

@@ -30,6 +30,11 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // Begin watching for an AirPlay-mirrored Apple TV (external display) so the
         // selected item can be presented fullscreen on it.
         ExternalDisplayManager.shared.start()
+
+        // Warm website tile previews in the background (favicon + page snapshot).
+        DispatchQueue.main.async {
+            WebThumbnailPrefetcher.shared.prefetchAllSavedPages()
+        }
     }
 
     // Note: app lifecycle work (reconnecting, pausing auto-connect timers) is handled via

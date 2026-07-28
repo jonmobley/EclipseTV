@@ -12,15 +12,17 @@ import os.log
 ///
 /// When iOS offers a `.windowExternalDisplayNonInteractive` scene, attaching a
 /// window replaces system mirroring with app-owned fullscreen content. The phone
-/// keeps its normal UI; the TV shows the selected item / camera / web page.
+/// keeps its normal UI; the TV shows the selected item / camera / web / PDF.
 ///
 /// No companion app, entitlement, or Apple TV-side change is required.
+@MainActor
 final class ExternalDisplayManager {
 
     /// Overlay content that takes priority over the library live item.
     enum OverlaySource: Equatable {
         case camera
         case web(URL)
+        case pdf(URL)
     }
 
     /// Shared instance; started once from the main scene delegate.
@@ -37,16 +39,28 @@ final class ExternalDisplayManager {
     /// Posted when web presentation ends so the phone preview can dismiss.
     static let webDidEndNotification = Notification.Name("ExternalDisplayManager.webDidEnd")
 
+    /// Posted when PDF presentation ends so the phone reader can dismiss.
+    static let pdfDidEndNotification = Notification.Name("ExternalDisplayManager.pdfDidEnd")
+
     /// Whether an external display scene is attached and showing app content.
     private(set) var isConnected = false
 
-    /// Active overlay (camera or web), if any.
+    /// Active overlay (camera, web, or PDF), if any.
     private(set) var overlaySource: OverlaySource?
 
-    /// Whether the live camera is the active presentation source (AirPlay path).
-    var isCameraLive: Bool {
+    /// Camera overlay is active, but AirPlay is temporarily showing Logo.
+    /// Phone camera UI stays open; session keeps running.
+    private(set) var isCameraParkedOnLogo = false
+
+    /// Whether camera mode owns the overlay (session may still be running).
+    var isCameraModeActive: Bool {
         if case .camera = overlaySource { return true }
         return false
+    }
+
+    /// Whether the live camera is the active AirPlay presentation source.
+    var isCameraLive: Bool {
+        isCameraModeActive && !isCameraParkedOnLogo
     }
 
     /// Whether a web page is the active presentation source (AirPlay path).
@@ -55,7 +69,23 @@ final class ExternalDisplayManager {
         return false
     }
 
-    /// Whether any overlay (camera or web) is currently live.
+    /// Whether a PDF is the active presentation source (AirPlay path).
+    var isPDFLive: Bool {
+        if case .pdf = overlaySource { return true }
+        return false
+    }
+
+    /// Bookmark that owns the live web overlay (survives closing the phone browser).
+    private(set) var liveWebPageId: UUID?
+
+    /// Bookmark that owns the live PDF overlay (survives closing the phone reader).
+    private(set) var livePDFDocumentId: UUID?
+
+    /// Whether a joined (cloud) album item is sticky-live on the external display.
+    /// Survives closing the Join browser; cleared when home-grid content takes over.
+    private(set) var isJoinedLive = false
+
+    /// Whether any overlay (camera, web, or PDF) is currently live.
     var isOverlayLive: Bool { overlaySource != nil }
 
     /// Supplies the source to show when a screen connects with nothing presented yet
@@ -90,9 +120,11 @@ final class ExternalDisplayManager {
                 object: nil,
                 queue: .main
             ) { [weak self] _ in
-                self?.disconnectWorkItem?.cancel()
-                self?.refreshConnection()
-                self?.keepPresentationAlive()
+                Task { @MainActor in
+                    self?.disconnectWorkItem?.cancel()
+                    self?.refreshConnection()
+                    self?.keepPresentationAlive()
+                }
             },
             center.addObserver(
                 forName: UIApplication.willResignActiveNotification,
@@ -101,24 +133,30 @@ final class ExternalDisplayManager {
             ) { [weak self] _ in
                 // App switcher / Control Center: keep the TV window unhidden so iOS
                 // doesn't fall back to phone mirroring.
-                self?.keepPresentationAlive()
+                Task { @MainActor in
+                    self?.keepPresentationAlive()
+                }
             },
             center.addObserver(
                 forName: UIApplication.didEnterBackgroundNotification,
                 object: nil,
                 queue: .main
             ) { [weak self] _ in
-                self?.beginBackgroundPresentationTask()
-                self?.keepPresentationAlive()
+                Task { @MainActor in
+                    self?.beginBackgroundPresentationTask()
+                    self?.keepPresentationAlive()
+                }
             },
             center.addObserver(
                 forName: UIScene.didActivateNotification,
                 object: nil,
                 queue: .main
             ) { [weak self] _ in
-                self?.disconnectWorkItem?.cancel()
-                self?.refreshConnection()
-                self?.keepPresentationAlive()
+                Task { @MainActor in
+                    self?.disconnectWorkItem?.cancel()
+                    self?.refreshConnection()
+                    self?.keepPresentationAlive()
+                }
             }
         ]
         refreshConnection()
@@ -282,13 +320,19 @@ final class ExternalDisplayManager {
     /// Updates the external display with `source`. A no-op visually when no display is
     /// connected, but the source is remembered and applied as soon as one connects.
     /// Non-overlay sources tear down any active camera/web overlay.
-    func present(_ source: PresentationSource) {
+    /// Clears joined sticky state unless `asJoined` is true.
+    func present(_ source: PresentationSource, asJoined: Bool = false) {
         refreshConnection()
+        isJoinedLive = asJoined
+        AudioAmbientPolicy.applyYieldIfNeeded(for: source)
         switch source.content {
         case .camera:
             beginOverlay(.camera, endingOther: true)
+            isCameraParkedOnLogo = false
         case .web(let url):
             beginOverlay(.web(url), endingOther: true)
+        case .pdf(let url):
+            beginOverlay(.pdf(url), endingOther: true)
         default:
             if overlaySource != nil {
                 endOverlay(notify: true)
@@ -299,14 +343,79 @@ final class ExternalDisplayManager {
         updateIdleTimer()
     }
 
+    /// Presents a joined-album item and keeps it sticky after the Join browser closes.
+    func presentJoined(_ source: PresentationSource) {
+        present(source, asJoined: true)
+    }
+
+    /// Drops joined sticky state without changing what's on screen.
+    func clearJoinedLive() {
+        isJoinedLive = false
+    }
+
     /// Starts presenting the live camera on the external display (and remembers it).
+    ///
+    /// If AirPlay was Logo-parked, resumes the live feed — callers that want the
+    /// camera (phone UI open / re-open) should never leave the TV stuck on Logo.
     func presentCamera() {
+        if isCameraParkedOnLogo {
+            resumeCameraFromLogoPark()
+            return
+        }
         present(.camera)
     }
 
+    /// Parks AirPlay on Logo without ending camera mode or stopping the session.
+    func parkCameraOnLogo() {
+        guard isCameraModeActive, !isCameraParkedOnLogo else { return }
+        guard let url = LogoStore.shared.fileURL else { return }
+        refreshConnection()
+        isCameraParkedOnLogo = true
+        let source = PresentationSource.image(url)
+        AudioAmbientPolicy.applyYieldIfNeeded(for: source)
+        lastSource = source
+        presentationVC?.show(source)
+        updateIdleTimer()
+    }
+
+    /// Restores live camera on AirPlay after `parkCameraOnLogo()`.
+    func resumeCameraFromLogoPark() {
+        guard isCameraParkedOnLogo, isCameraModeActive else {
+            isCameraParkedOnLogo = false
+            return
+        }
+        isCameraParkedOnLogo = false
+        refreshConnection()
+        let source = PresentationSource.camera
+        AudioAmbientPolicy.applyYieldIfNeeded(for: source)
+        lastSource = source
+        presentationVC?.show(source)
+        updateIdleTimer()
+    }
+
     /// Starts presenting a web page on the external display.
-    func presentWeb(_ url: URL) {
+    /// - Parameter pageId: Saved bookmark id so the home tile stays live after the
+    ///   phone browser is closed (and after in-page navigation changes the URL).
+    func presentWeb(_ url: URL, pageId: UUID? = nil) {
+        if let pageId {
+            liveWebPageId = pageId
+        }
         present(.web(url))
+    }
+
+    /// Starts presenting a PDF on the external display.
+    /// - Parameter documentId: Saved id so the home tile stays live after the
+    ///   phone reader is closed.
+    func presentPDF(_ url: URL, documentId: UUID? = nil) {
+        if let documentId {
+            livePDFDocumentId = documentId
+        }
+        present(.pdf(url))
+    }
+
+    /// Presents a solid black screen on the external display.
+    func presentBlack() {
+        present(.black)
     }
 
     /// Stops the camera session and restores the library live item when available.
@@ -315,9 +424,44 @@ final class ExternalDisplayManager {
         restoreLibraryOrIdle()
     }
 
+    /// Posted after Close applies a non-camera destination so the home grid can
+    /// update Black / Logo selection. `userInfo["destination"]` is the raw value.
+    static let didApplyCameraCloseDestinationNotification =
+        Notification.Name("ExternalDisplayManager.didApplyCameraCloseDestination")
+
+    /// Stops the camera and presents Logo or Black per `cameraCloseDestination`.
+    /// No-op when the preference is `.camera` (Close leaves the feed live).
+    func stopCameraAndApplyCloseDestination() {
+        let destination = ExternalOutputSettings.cameraCloseDestination
+        guard destination != .camera else { return }
+
+        endOverlay(notify: true)
+
+        let applied: CameraCloseDestination
+        if destination == .logo, let url = LogoStore.shared.fileURL {
+            present(.image(url))
+            applied = .logo
+        } else {
+            present(.black)
+            applied = .black
+        }
+
+        NotificationCenter.default.post(
+            name: Self.didApplyCameraCloseDestinationNotification,
+            object: self,
+            userInfo: ["destination": applied.rawValue]
+        )
+    }
+
     /// Stops web presentation and restores the library live item when available.
     func stopWebAndRestoreLibrary() {
-        endOverlay(notify: false)
+        endOverlay(notify: true)
+        restoreLibraryOrIdle()
+    }
+
+    /// Stops PDF presentation and restores the library live item when available.
+    func stopPDFAndRestoreLibrary() {
+        endOverlay(notify: true)
         restoreLibraryOrIdle()
     }
 
@@ -326,19 +470,26 @@ final class ExternalDisplayManager {
         if overlaySource != nil {
             endOverlay(notify: true)
         }
+        isJoinedLive = false
         lastSource = nil
         presentationVC?.showIdle()
         updateIdleTimer()
     }
 
-    /// Re-presents the live item from `currentSourceProvider` (e.g. after closing a
-    /// temporary album preview), or clears the display when nothing is live.
+    /// Re-presents the live item from `currentSourceProvider`, or clears the display
+    /// when nothing is live. No-op while a joined album item is sticky-live.
     func restoreCurrentSource() {
+        if isJoinedLive, let lastSource {
+            present(lastSource, asJoined: true)
+            return
+        }
         switch overlaySource {
         case .camera:
             present(.camera)
         case .web(let url):
             present(.web(url))
+        case .pdf(let url):
+            present(.pdf(url))
         case .none:
             if let source = currentSourceProvider?() {
                 present(source)
@@ -381,6 +532,33 @@ final class ExternalDisplayManager {
         presentationVC?.scrollWebToTop()
     }
 
+    /// Mirrors an HTML5 media play/pause/seek event onto the AirPlay WebView.
+    func syncWebMedia(_ event: EclipseWebMediaSync.Event) {
+        presentationVC?.applyWebMediaSync(event)
+    }
+
+    // MARK: - PDF Preview Forwarders
+
+    /// Jumps the external PDF to a page index (used with scroll progress).
+    func setPDFPageIndex(_ index: Int) {
+        presentationVC?.setPDFPageIndex(index)
+    }
+
+    /// Mirrors normalized vertical scroll progress (0...1) onto the external PDF view.
+    func setPDFScrollProgress(_ progress: CGFloat) {
+        presentationVC?.setPDFScrollProgress(progress)
+    }
+
+    /// Mirrors zoom relative to fit-scale onto the external PDF view.
+    func setPDFRelativeScale(_ relative: CGFloat) {
+        presentationVC?.setPDFRelativeScale(relative)
+    }
+
+    /// Relayouts the external PDF view after Display Mode changes.
+    func reloadPDFLayout() {
+        presentationVC?.applyPDFLayout()
+    }
+
     // MARK: - Connection Helpers
 
     private func markConnected(presentationVC: PresentationViewController) {
@@ -421,7 +599,11 @@ final class ExternalDisplayManager {
     private func beginOverlay(_ next: OverlaySource, endingOther: Bool) {
         if endingOther, let current = overlaySource, current != next {
             tearDown(current)
+            clearLiveOverlayId(for: current)
             notifyOverlayEnd(current)
+        }
+        if case .camera = next {} else {
+            isCameraParkedOnLogo = false
         }
         overlaySource = next
     }
@@ -430,10 +612,23 @@ final class ExternalDisplayManager {
         guard let current = overlaySource else { return }
         tearDown(current)
         overlaySource = nil
+        isCameraParkedOnLogo = false
+        clearLiveOverlayId(for: current)
         if notify {
             notifyOverlayEnd(current)
         }
         updateIdleTimer()
+    }
+
+    private func clearLiveOverlayId(for source: OverlaySource) {
+        switch source {
+        case .web:
+            liveWebPageId = nil
+        case .pdf:
+            livePDFDocumentId = nil
+        case .camera:
+            break
+        }
     }
 
     private func tearDown(_ source: OverlaySource) {
@@ -442,6 +637,8 @@ final class ExternalDisplayManager {
             CameraManager.shared.stopSession()
         case .web:
             presentationVC?.teardownWeb()
+        case .pdf:
+            presentationVC?.teardownPDF()
         }
     }
 
@@ -451,11 +648,14 @@ final class ExternalDisplayManager {
             NotificationCenter.default.post(name: Self.cameraDidEndNotification, object: self)
         case .web:
             NotificationCenter.default.post(name: Self.webDidEndNotification, object: self)
+        case .pdf:
+            NotificationCenter.default.post(name: Self.pdfDidEndNotification, object: self)
         }
     }
 
     private func restoreLibraryOrIdle() {
         lastSource = nil
+        isJoinedLive = false
         if let source = currentSourceProvider?() {
             present(source)
         } else {

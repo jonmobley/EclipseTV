@@ -32,6 +32,10 @@
     </array>
     <key>UIUserInterfaceStyle</key>
     <string>Automatic</string>
+    <key>ITSAppUsesNonExemptEncryption</key>
+    <false/>
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.entertainment</string>
     <key>NSLocalNetworkUsageDescription</key>
     <string>Eclipse TV needs access to the local network to receive images from your iPhone</string>
     <key>NSBonjourServices</key>

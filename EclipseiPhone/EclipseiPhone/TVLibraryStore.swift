@@ -227,7 +227,8 @@ final class TVLibraryStore {
         ]
     }
 
-    private static func videoPreviewImage(at url: URL) -> UIImage? {
+    /// Generates a still from a local video file. Safe to call off the main actor.
+    nonisolated private static func videoPreviewImage(at url: URL) -> UIImage? {
         let asset = AVURLAsset(url: url)
         let generator = AVAssetImageGenerator(asset: asset)
         generator.appliesPreferredTrackTransform = true
@@ -314,6 +315,8 @@ final class TVLibraryStore {
         // Keep full-res copies that still exist on disk even if the TV omitted them.
         let localKeep = keepIds.union(Set(LocalMediaStore.shared.storedIds(for: mode)))
         LocalMediaStore.shared.prune(keeping: localKeep, mode: mode)
+        LocalAlbumStore.shared.pruneMissingItems(keeping: keepIds)
+        SlideshowStore.shared.pruneMissingItems(keeping: keepIds)
         persistManifest()
 
         delegate?.libraryStoreDidUpdateItems(self)
@@ -347,6 +350,8 @@ final class TVLibraryStore {
             persistManifest()
         }
         if currentId == id { currentId = nil }
+        LocalAlbumStore.shared.removeItemFromAllAlbums(itemId: id)
+        SlideshowStore.shared.removeItemFromAllSlideshows(itemId: id)
         delegate?.libraryStoreDidUpdateItems(self)
     }
 
@@ -402,9 +407,16 @@ final class TVLibraryStore {
     }
 
     private func recoverOrphanedLocalMedia() {
+        // Drop hyphenated / underscore twins created by older orphan matching first.
+        dedupeItemsSharingLocalFile()
+
         let mode = activeLibraryMode
-        let existing = Set(items.map(\.id))
-        let orphans = LocalMediaStore.shared.storedIds(for: mode).filter { !existing.contains($0) }
+        // Compare against sanitized filenames — disk ids never keep UUID hyphens.
+        let existingCanonical = Set(
+            items.map { LocalMediaStore.canonicalFileName(forId: $0.id) }
+        )
+        let orphans = LocalMediaStore.shared.storedIds(for: mode)
+            .filter { !existingCanonical.contains($0) }
         guard !orphans.isEmpty else { return }
 
         logger.info(
@@ -432,6 +444,44 @@ final class TVLibraryStore {
                 persistThumbnail(image, forId: id)
             }
         }
+        persistManifest()
+    }
+
+    /// Removes duplicate library rows that point at the same on-disk LocalMedia file.
+    ///
+    /// Older builds listed UUID ids with hyphens while disk used underscores; orphan
+    /// recovery then re-added the disk name as a second item.
+    private func dedupeItemsSharingLocalFile() {
+        let mode = activeLibraryMode
+        var seenCanonical = Set<String>()
+        var kept: [LibraryItemDTO] = []
+        var removedIds: [String] = []
+
+        for item in items {
+            let canonical = LocalMediaStore.canonicalFileName(forId: item.id)
+            if seenCanonical.contains(canonical) {
+                removedIds.append(item.id)
+                continue
+            }
+            seenCanonical.insert(canonical)
+            kept.append(item)
+        }
+
+        guard !removedIds.isEmpty else { return }
+        logger.info(
+            "Removed \(removedIds.count) duplicate \(mode.rawValue, privacy: .public) library rows"
+        )
+        for id in removedIds {
+            PendingUploadStore.shared.remove(id: id, mode: mode)
+            thumbnails[id] = nil
+            if currentId == id {
+                currentId = kept.first(where: {
+                    LocalMediaStore.canonicalFileName(forId: $0.id)
+                        == LocalMediaStore.canonicalFileName(forId: id)
+                })?.id
+            }
+        }
+        items = kept
         persistManifest()
     }
 

@@ -43,7 +43,7 @@ extension ImageViewController {
             if isInGridMode {
                 hideGridView()
             } else {
-                displayImageAtCurrentIndex()
+                displayCurrentWithPreferredTransition()
             }
             if action == .play || action == .toggle {
                 return

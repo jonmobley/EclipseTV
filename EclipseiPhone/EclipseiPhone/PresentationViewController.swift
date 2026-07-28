@@ -9,10 +9,11 @@
 import UIKit
 import AVFoundation
 import WebKit
+import PDFKit
 import os.log
 
 /// Fullscreen, non-interactive view shown on an AirPlay-connected external display.
-/// Renders the currently selected item (image, video, camera, or web page) while the
+/// Renders the currently selected item (image, video, camera, web, or PDF) while the
 /// phone keeps its normal UI. Driven entirely by `ExternalDisplayManager`.
 final class PresentationViewController: UIViewController {
 
@@ -39,6 +40,7 @@ final class PresentationViewController: UIViewController {
     let imageView: UIImageView = {
         let view = UIImageView()
         view.contentMode = .scaleAspectFit
+        view.clipsToBounds = true
         view.backgroundColor = .black
         view.translatesAutoresizingMaskIntoConstraints = false
         return view
@@ -98,6 +100,20 @@ final class PresentationViewController: UIViewController {
 
     let cameraPreviewView = CameraPreviewView()
 
+    /// PNG frame overlay on AirPlay camera (matches phone framing).
+    let cameraFrameOverlayView: UIImageView = {
+        let view = UIImageView()
+        view.contentMode = .scaleAspectFit
+        view.clipsToBounds = true
+        view.isUserInteractionEnabled = false
+        view.isHidden = true
+        view.translatesAutoresizingMaskIntoConstraints = true
+        return view
+    }()
+
+    /// Incoming transition camera frame overlay.
+    var incomingCameraFrameOverlay: UIImageView?
+
     /// Host for the scaled/rotated web view on the external display.
     let webContainer: UIView = {
         let view = UIView()
@@ -110,12 +126,68 @@ final class PresentationViewController: UIViewController {
 
     var webView: WKWebView?
 
+    /// Host for the scaled/rotated PDF view on the external display.
+    let pdfContainer: UIView = {
+        let view = UIView()
+        view.backgroundColor = .black
+        view.isHidden = true
+        view.clipsToBounds = true
+        view.translatesAutoresizingMaskIntoConstraints = false
+        return view
+    }()
+
+    var pdfView: PDFView?
+
+    /// Incoming dual-layer host — next content builds here while underlay stays live.
+    let transitionOverlayContainer: UIView = {
+        let view = UIView()
+        view.backgroundColor = .black
+        view.isHidden = true
+        view.alpha = 0
+        view.clipsToBounds = true
+        return view
+    }()
+
+    // MARK: - Incoming transition state
+
+    var pendingTransitionSource: PresentationSource?
+    var isTransitionInFlight = false
+    /// True while Cut/Crossfade reveal is scheduled or running.
+    var isRevealScheduled = false
+    /// True while promoting overlay → primary (suppresses nested ready signals).
+    var isCommittingTransition = false
+    var transitionFallbackWorkItem: DispatchWorkItem?
+    var transitionGeneration = 0
+
+    var incomingMediaHost: UIView?
+    var incomingImageView: UIImageView?
+    var incomingImageRequest: RemoteImageRequest?
+    var incomingPlayer: AVPlayer?
+    var incomingPlayerLayer: AVPlayerLayer?
+    var incomingLoopObserver: NSObjectProtocol?
+    var incomingVideoReadyObservation: NSKeyValueObservation?
+    var incomingCameraPreview: CameraPreviewView?
+    var incomingWebView: WKWebView?
+    var incomingWebNavigation: NSObject?
+    var incomingPDFView: PDFView?
+
     var playerLayer: AVPlayerLayer?
     var player: AVPlayer?
     var loopObserver: NSObjectProtocol?
     var imageRequest: RemoteImageRequest?
     var imageLoadGeneration = 0
     var settingsObserver: NSObjectProtocol?
+    var cameraFrameStoreObserver: NSObjectProtocol?
+
+    /// Observes AirPlay video item readiness for primary install.
+    var videoReadyObservation: NSKeyValueObservation?
+
+    /// Corner badge while ambient music plays under non-video content.
+    var audioNowPlayingBadge: UIVisualEffectView?
+    var audioNowPlayingLabel: UILabel?
+    var audioPlayerObserver: NSObjectProtocol?
+    /// True while the external display is showing library video.
+    var isPresentingVideo = false
 
     let logger = Logger(subsystem: "com.eclipseapp.ios", category: "Presentation")
 
@@ -133,10 +205,23 @@ final class PresentationViewController: UIViewController {
         view.addSubview(activityIndicator)
         view.addSubview(cameraContainer)
         view.addSubview(webContainer)
+        view.addSubview(pdfContainer)
+        view.addSubview(transitionOverlayContainer)
         cameraContainer.addSubview(cameraPreviewView)
+        cameraContainer.addSubview(cameraFrameOverlayView)
         // Frame-driven via applyRotatedLayout — Auto Layout size constraints
         // collapse the preview to zero and black the TV (same as mediaContentView).
         cameraPreviewView.translatesAutoresizingMaskIntoConstraints = true
+        transitionOverlayContainer.translatesAutoresizingMaskIntoConstraints = false
+
+        cameraFrameStoreObserver = NotificationCenter.default.addObserver(
+            forName: CameraFrameStore.didChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.refreshCameraFrameOverlay()
+            self?.refreshIncomingCameraFrameOverlay()
+        }
 
         NSLayoutConstraint.activate([
             mediaContainer.topAnchor.constraint(equalTo: view.topAnchor),
@@ -144,8 +229,6 @@ final class PresentationViewController: UIViewController {
             mediaContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             mediaContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor),
 
-            // mediaContentView is positioned by applyRotatedLayout (bounds/center/transform),
-            // not Auto Layout — constraints here would collapse it to zero and black the TV.
             imageView.topAnchor.constraint(equalTo: mediaContentView.topAnchor),
             imageView.bottomAnchor.constraint(equalTo: mediaContentView.bottomAnchor),
             imageView.leadingAnchor.constraint(equalTo: mediaContentView.leadingAnchor),
@@ -156,8 +239,12 @@ final class PresentationViewController: UIViewController {
 
             messageLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             messageLabel.centerYAnchor.constraint(equalTo: view.centerYAnchor),
-            messageLabel.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor, constant: 60),
-            messageLabel.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -60),
+            messageLabel.leadingAnchor.constraint(
+                greaterThanOrEqualTo: view.leadingAnchor, constant: 60
+            ),
+            messageLabel.trailingAnchor.constraint(
+                lessThanOrEqualTo: view.trailingAnchor, constant: -60
+            ),
 
             activityIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             activityIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor),
@@ -170,7 +257,17 @@ final class PresentationViewController: UIViewController {
             webContainer.topAnchor.constraint(equalTo: view.topAnchor),
             webContainer.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             webContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            webContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor)
+            webContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+
+            pdfContainer.topAnchor.constraint(equalTo: view.topAnchor),
+            pdfContainer.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            pdfContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            pdfContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+
+            transitionOverlayContainer.topAnchor.constraint(equalTo: view.topAnchor),
+            transitionOverlayContainer.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            transitionOverlayContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            transitionOverlayContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor)
         ])
 
         settingsObserver = NotificationCenter.default.addObserver(
@@ -181,7 +278,11 @@ final class PresentationViewController: UIViewController {
             self?.applyMediaLayout()
             self?.applyCameraLayout()
             self?.applyWebLayout()
+            self?.applyPDFLayout()
+            self?.layoutIncomingOverlayContent()
         }
+
+        setupAudioNowPlayingOverlay()
     }
 
     override func viewDidLayoutSubviews() {
@@ -195,6 +296,12 @@ final class PresentationViewController: UIViewController {
         if !webContainer.isHidden {
             applyWebLayout()
         }
+        if !pdfContainer.isHidden {
+            applyPDFLayout()
+        }
+        if !transitionOverlayContainer.isHidden {
+            layoutIncomingOverlayContent()
+        }
     }
 
     deinit {
@@ -204,25 +311,47 @@ final class PresentationViewController: UIViewController {
         if let settingsObserver = settingsObserver {
             NotificationCenter.default.removeObserver(settingsObserver)
         }
+        if let audioPlayerObserver {
+            NotificationCenter.default.removeObserver(audioPlayerObserver)
+        }
+        if let cameraFrameStoreObserver {
+            NotificationCenter.default.removeObserver(cameraFrameStoreObserver)
+        }
+        if let incomingLoopObserver {
+            NotificationCenter.default.removeObserver(incomingLoopObserver)
+        }
     }
 
     // MARK: - Presentation
 
-    /// Replaces the displayed content. Safe to call repeatedly as the selection changes.
+    /// Replaces the displayed content via dual-layer hold (live underlay → incoming).
     func show(_ source: PresentationSource) {
+        performContentTransition(to: source)
+    }
+
+    /// Installs `source` into the primary containers. Caller must cover with the
+    /// opaque transition overlay when replacing live camera/video.
+    func applyShowDirect(_ source: PresentationSource) {
         teardownPlayer()
         imageRequest?.cancel()
         imageRequest = nil
         setIdleBrandVisible(false)
+        if case .video = source.content {
+            isPresentingVideo = true
+        } else {
+            isPresentingVideo = false
+        }
 
         switch source.content {
         case .image(let url):
             hideCamera()
             hideWeb()
+            hidePDF()
             showImage(at: url)
         case .video(let url, let isLooping, let isMuted):
             hideCamera()
             hideWeb()
+            hidePDF()
             showVideo(at: url, isLooping: isLooping, isMuted: isMuted)
         case .camera:
             hideMediaContainer()
@@ -230,19 +359,49 @@ final class PresentationViewController: UIViewController {
         case .web(let url):
             hideMediaContainer()
             showWeb(url: url)
+        case .pdf(let url):
+            hideMediaContainer()
+            showPDF(url: url)
+        case .black:
+            showBlack()
         case .unavailable(let thumbnail, _):
             hideCamera()
             hideWeb()
+            hidePDF()
             showUnavailable(thumbnail: thumbnail)
         }
     }
 
-    /// Clears content and shows the idle Eclipse brand on the AirPlay display.
-    func showIdle() {
+    /// Solid black — no idle brand, media, camera, web, or PDF chrome.
+    func showBlack() {
         teardownPlayer()
         hideCamera()
         hideMediaContainer()
         teardownWeb()
+        teardownPDF()
+        imageRequest?.cancel()
+        imageRequest = nil
+        imageView.image = nil
+        imageView.isHidden = true
+        activityIndicator.stopAnimating()
+        messageLabel.text = nil
+        setIdleBrandVisible(false)
+    }
+
+    /// Clears content and shows the idle Eclipse brand on the AirPlay display.
+    func showIdle() {
+        transitionFallbackWorkItem?.cancel()
+        clearIncomingOverlay(animated: false)
+        pendingTransitionSource = nil
+        isTransitionInFlight = false
+        isRevealScheduled = false
+        isCommittingTransition = false
+
+        teardownPlayer()
+        hideCamera()
+        hideMediaContainer()
+        teardownWeb()
+        teardownPDF()
         imageRequest?.cancel()
         imageRequest = nil
         imageView.image = nil
@@ -255,110 +414,6 @@ final class PresentationViewController: UIViewController {
     /// Shows or hides the centered phone + "Eclipse" idle mark.
     func setIdleBrandVisible(_ visible: Bool) {
         idleBrandView.isHidden = !visible
-    }
-
-    // MARK: - Image
-
-    private func showImage(at url: URL) {
-        messageLabel.text = nil
-        imageView.isHidden = false
-        imageView.image = nil
-        imageView.alpha = 1.0
-        showMediaContainer()
-        activityIndicator.startAnimating()
-
-        // Local files load directly; HTTPS album URLs go through the shared loader (cache).
-        if url.isFileURL {
-            imageLoadGeneration += 1
-            let generation = imageLoadGeneration
-            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-                let image = UIImage(contentsOfFile: url.path)
-                DispatchQueue.main.async {
-                    guard let self = self, generation == self.imageLoadGeneration else { return }
-                    self.activityIndicator.stopAnimating()
-                    self.imageView.image = image
-                }
-            }
-        } else {
-            imageRequest = RemoteImageLoader.shared.loadImage(from: url) { [weak self] image in
-                self?.activityIndicator.stopAnimating()
-                self?.imageView.image = image
-            }
-        }
-    }
-
-    // MARK: - Video
-
-    private func showVideo(at url: URL, isLooping: Bool, isMuted: Bool) {
-        messageLabel.text = nil
-        imageView.isHidden = true
-        activityIndicator.stopAnimating()
-        showMediaContainer()
-
-        configureAudioSession(muted: isMuted)
-
-        let player = AVPlayer(url: url)
-        player.isMuted = isMuted
-        player.actionAtItemEnd = isLooping ? .none : .pause
-
-        let layer = AVPlayerLayer(player: player)
-        layer.videoGravity = .resizeAspect
-        mediaContentView.layer.insertSublayer(layer, at: 0)
-
-        self.player = player
-        self.playerLayer = layer
-        applyMediaLayout()
-
-        if isLooping {
-            loopObserver = NotificationCenter.default.addObserver(
-                forName: .AVPlayerItemDidPlayToEndTime,
-                object: player.currentItem,
-                queue: .main) { [weak player] _ in
-                    player?.seek(to: .zero)
-                    player?.play()
-                }
-        }
-
-        player.play()
-    }
-
-    private func configureAudioSession(muted: Bool) {
-        guard !muted else { return }
-        let session = AVAudioSession.sharedInstance()
-        do {
-            try session.setCategory(.playback, mode: .moviePlayback)
-            try session.setActive(true)
-        } catch {
-            logger.error("Failed to configure audio session: \(error.localizedDescription)")
-        }
-    }
-
-    private func teardownPlayer() {
-        if let loopObserver = loopObserver {
-            NotificationCenter.default.removeObserver(loopObserver)
-            self.loopObserver = nil
-        }
-        player?.pause()
-        player = nil
-        playerLayer?.removeFromSuperlayer()
-        playerLayer = nil
-    }
-
-    // MARK: - Unavailable
-
-    private func showUnavailable(thumbnail: UIImage?) {
-        activityIndicator.stopAnimating()
-        messageLabel.text = nil
-        imageView.alpha = 1.0
-        imageView.image = thumbnail
-        imageView.isHidden = thumbnail == nil
-        if thumbnail != nil {
-            setIdleBrandVisible(false)
-            showMediaContainer()
-        } else {
-            hideMediaContainer()
-            setIdleBrandVisible(true)
-        }
     }
 
 }

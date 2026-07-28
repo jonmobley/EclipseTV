@@ -95,42 +95,6 @@ extension ImageViewController {
         }
     }
 
-    internal func displayVideoWithTransition(_ mediaItem: MediaItem) {
-        logger.info("Displaying video with transition: \(mediaItem.fileName)")
-
-        Task { @MainActor in
-            // Create player with seamless looping support
-            let player = self.setupPlayer(for: mediaItem)
-
-            await MainActor.run {
-                // Hide image view immediately
-                self.imageView.isHidden = true
-
-                // Set up player
-                self.setupPlayerView()
-                self.playerView.view.alpha = 0
-                self.playerView.view.isHidden = false
-                self.playerView.player = player
-                self.isVideo = true
-
-                // Add observer for playback end (removes any prior observers first)
-                self.installVideoEndObserver(for: player, mediaItem: mediaItem)
-                self.installPlaybackStatusObserver(on: player)
-
-                // Fade in the player only once the first frame is ready to avoid the spinner
-                self.startWhenReady(player) {
-                    UIView.animate(withDuration: 0.4, animations: {
-                        self.playerView.view.alpha = 1
-                    }) { (_: Bool) in
-                        self.activityIndicator.stopAnimating()
-                        self.setNeedsFocusUpdate()
-                        self.updateFocusIfNeeded()
-                    }
-                }
-            }
-        }
-    }
-
     private func handleVideoPlaybackEnd(for mediaItem: MediaItem) {
         let settings = viewModel.getVideoSettings(for: mediaItem)
 

@@ -22,6 +22,16 @@ final class CameraPreviewView: UIView {
         layer as! AVCaptureVideoPreviewLayer
     }
 
+    /// Capture-connection angle: 90° fills an upright Vertical (9:16) panel;
+    /// 0° fills Landscape (16:9). AirPlay still applies view rotation for a
+    /// portrait-mounted TV — every preview layer uses the same angle.
+    var preferredVideoRotationAngle: CGFloat = 0 {
+        didSet {
+            guard preferredVideoRotationAngle != oldValue else { return }
+            applyPreviewOrientation()
+        }
+    }
+
     /// Binds this view to `session` and sets video gravity.
     func attach(session: AVCaptureSession,
                 videoGravity: AVLayerVideoGravity = .resizeAspect) {
@@ -36,17 +46,34 @@ final class CameraPreviewView: UIView {
         videoPreviewLayer.session = nil
     }
 
+    /// Syncs `preferredVideoRotationAngle` from the current Display Mode.
+    func syncDisplayModeOrientation() {
+        preferredVideoRotationAngle =
+            ExternalOutputSettings.isVerticalMode ? 90 : 0
+        applyPreviewOrientation()
+    }
+
+    /// Still of the current preview (for home-tile freeze after camera stops).
+    func snapshotImage() -> UIImage? {
+        guard bounds.width > 1, bounds.height > 1 else { return nil }
+        let format = UIGraphicsImageRendererFormat.default()
+        format.opaque = true
+        format.scale = window?.screen.scale ?? UIScreen.main.scale
+        let renderer = UIGraphicsImageRenderer(bounds: bounds, format: format)
+        return renderer.image { _ in
+            drawHierarchy(in: bounds, afterScreenUpdates: false)
+        }
+    }
+
     override func layoutSubviews() {
         super.layoutSubviews()
         applyPreviewOrientation()
     }
 
-    /// Keeps the capture connection upright for phone + AirPlay panels.
+    /// Applies the preferred capture-connection rotation once a connection exists.
     private func applyPreviewOrientation() {
         guard let connection = videoPreviewLayer.connection else { return }
-        // 0° = upright portrait. Phone stage and TV logical panel are upright
-        // before any Vertical TV rotation transform is applied on the view.
-        let angle: CGFloat = 0
+        let angle = preferredVideoRotationAngle
         if connection.isVideoRotationAngleSupported(angle),
            connection.videoRotationAngle != angle {
             connection.videoRotationAngle = angle

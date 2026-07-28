@@ -37,31 +37,6 @@ extension ImageViewController {
         }
     }
     
-    /// Displays the image at the current index with smooth transition coordination
-    private func displayImageAtCurrentIndexWithTransition() {
-        guard let currentPath = currentDisplayPath() else {
-            logger.error("❌ [DISPLAY] No current path available for displayImageAtCurrentIndexWithTransition")
-            ErrorHandler.shared.handle(.emptyLibrary, context: "displayImageAtCurrentIndexWithTransition")
-            return
-        }
-        
-        logger.info("🖼️ [DISPLAY] Starting displayImageAtCurrentIndexWithTransition for path: \(currentPath)")
-        let currentItem = MediaItem(path: currentPath)
-        logger.debug("🖼️ [DISPLAY] Media item created - isVideo: \(currentItem.isVideo), fileName: \(currentItem.fileName)")
-        
-        PerformanceMonitor.shared.measureUIOperation("displayImageAtCurrentIndexWithTransition") {
-            hideInstructions()
-            
-            if currentItem.isVideo {
-                logger.info("🎬 [DISPLAY] Displaying video: \(currentItem.fileName)")
-                displayVideoWithTransition(currentItem)
-            } else {
-                logger.info("🖼️ [DISPLAY] Displaying image: \(currentItem.fileName)")
-                displayImageWithTransition(currentItem)
-            }
-        }
-    }
-    
     private func displayImage(_ mediaItem: MediaItem) {
         logger.info("Displaying image: \(mediaItem.fileName)")
         
@@ -87,35 +62,6 @@ extension ImageViewController {
                 }
                 
                 self.activityIndicator.stopAnimating()
-            }
-        }
-    }
-    
-    private func displayImageWithTransition(_ mediaItem: MediaItem) {
-        Task {
-            let fullSizeImage = await AsyncImageLoader.shared.loadImage(from: mediaItem.path, targetSize: self.view.bounds.size)
-            DispatchQueue.main.async { [self] in
-                if let image = fullSizeImage {
-                    self.imageView.isHidden = false
-                    self.imageView.image = image
-                    self.imageView.alpha = 0
-                    
-                    // Apply stored position for this image
-                    self.applyStoredImagePosition(for: mediaItem.path)
-                    
-                    UIView.animate(withDuration: 0.5, delay: 0, options: [.curveEaseOut]) {
-                        self.imageView.alpha = 1
-                    } completion: { (finished: Bool) in
-                        // self.activityIndicator.stopAnimating()  // Hidden per user request
-                        self.setNeedsFocusUpdate()
-                        self.updateFocusIfNeeded()
-                    }
-                } else {
-                    self.logger.error("❌ [IMAGE-TRANSITION] Failed to load image, going back to grid view")
-                    // self.activityIndicator.stopAnimating()  // Hidden per user request
-                    ErrorHandler.shared.handle(.fileNotFound(path: mediaItem.path), context: "displayImageWithTransition")
-                    self.showGridView()
-                }
             }
         }
     }
@@ -221,7 +167,7 @@ extension ImageViewController {
             if activeCollection == .library {
                 VideoCacheManager.shared.preloadVideosAroundIndex(dataSource.currentIndex, in: dataSource)
             }
-            displayImageAtCurrentIndexWithDissolveTransition()
+            displayCurrentWithPreferredTransition()
         } else {
             logger.debug("📍 [NAVIGATION] nextImage() - already at last item")
         }
@@ -235,9 +181,18 @@ extension ImageViewController {
             if activeCollection == .library {
                 VideoCacheManager.shared.preloadVideosAroundIndex(dataSource.currentIndex, in: dataSource)
             }
-            displayImageAtCurrentIndexWithDissolveTransition()
+            displayCurrentWithPreferredTransition()
         } else {
             logger.debug("📍 [NAVIGATION] previousImage() - already at first item")
+        }
+    }
+
+    /// Cut (default) or Crossfade, matching the companion Settings preference.
+    func displayCurrentWithPreferredTransition() {
+        if ContentTransitionSettings.style == .crossfade {
+            displayImageAtCurrentIndexWithDissolveTransition()
+        } else {
+            displayImageAtCurrentIndex()
         }
     }
     
@@ -258,8 +213,8 @@ extension ImageViewController {
         
         // Start loading content immediately
         // activityIndicator.startAnimating()  // Hidden per user request
-        logger.debug("🔄 [GRID→FULLSCREEN] Calling displayImageAtCurrentIndexWithTransition")
-        displayImageAtCurrentIndexWithTransition()
+        logger.debug("🔄 [GRID→FULLSCREEN] Calling displayCurrentWithPreferredTransition")
+        displayCurrentWithPreferredTransition()
         
         // Ensure fullscreen content will appear on top when it fades in
         view.bringSubviewToFront(imageView)

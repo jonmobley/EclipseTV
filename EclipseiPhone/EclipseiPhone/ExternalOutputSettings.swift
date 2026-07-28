@@ -20,9 +20,28 @@ enum ExternalOutputOrientation: String, CaseIterable {
         self == .landscape ? 16.0 / 9.0 : 9.0 / 16.0
     }
 
-    /// Library / albums grid column count for this mode.
+    /// Phone baseline column count for this mode (Landscape 2, Vertical 3).
     var gridColumnCount: CGFloat {
         self == .landscape ? 2 : 3
+    }
+
+    /// Preferred cell width so iPad / wide panes add columns instead of huge tiles.
+    var preferredGridItemWidth: CGFloat {
+        self == .landscape ? 180 : 110
+    }
+
+    /// Column count for a collection width, never below the phone baseline.
+    func gridColumnCount(
+        forWidth width: CGFloat,
+        sectionInset: CGFloat,
+        spacing: CGFloat
+    ) -> Int {
+        let base = Int(gridColumnCount)
+        let available = width - sectionInset * 2
+        guard available > 0 else { return base }
+        let preferred = preferredGridItemWidth
+        let fitted = Int(floor((available + spacing) / (preferred + spacing)))
+        return max(base, fitted)
     }
 
     /// Cell height ÷ width: 16:9 cells in Landscape, 9:16 cells in Vertical.
@@ -75,6 +94,19 @@ enum WebTextSize: String, CaseIterable {
     }
 }
 
+/// How the AirPlay / TV surface replaces one piece of content with another.
+enum ContentTransitionStyle: String, CaseIterable {
+    case cut = "Cut"
+    case crossfade = "Crossfade"
+}
+
+/// What AirPlay shows after the user closes the camera control screen.
+enum CameraCloseDestination: String, CaseIterable {
+    case camera = "Camera"
+    case logo = "Logo"
+    case black = "Black"
+}
+
 /// Persisted external-display preferences shared by camera and web presentation.
 ///
 /// Orientation keys keep their original `EclipseTV.camera.*` names so existing
@@ -83,8 +115,10 @@ enum ExternalOutputSettings {
     private static let orientationKey = "EclipseTV.camera.outputOrientation"
     private static let rotationKey = "EclipseTV.camera.rotationDirection"
     private static let textSizeKey = "EclipseTV.web.textSize"
+    private static let transitionKey = "EclipseTV.contentTransition"
+    private static let cameraCloseKey = "EclipseTV.camera.closeDestination"
 
-    /// Posted when orientation, rotation, or text size changes.
+    /// Posted when orientation, rotation, text size, transition, or camera-close changes.
     static let didChangeNotification = Notification.Name("ExternalOutputSettings.didChange")
 
     static var orientation: ExternalOutputOrientation {
@@ -137,6 +171,36 @@ enum ExternalOutputSettings {
         }
         set {
             UserDefaults.standard.set(newValue.rawValue, forKey: textSizeKey)
+            NotificationCenter.default.post(name: didChangeNotification, object: nil)
+        }
+    }
+
+    /// Cut (default) or crossfade when switching live content.
+    static var contentTransition: ContentTransitionStyle {
+        get {
+            guard let raw = UserDefaults.standard.string(forKey: transitionKey),
+                  let value = ContentTransitionStyle(rawValue: raw) else {
+                return .cut
+            }
+            return value
+        }
+        set {
+            UserDefaults.standard.set(newValue.rawValue, forKey: transitionKey)
+            NotificationCenter.default.post(name: didChangeNotification, object: nil)
+        }
+    }
+
+    /// AirPlay target after closing the camera screen. Default keeps the live camera.
+    static var cameraCloseDestination: CameraCloseDestination {
+        get {
+            guard let raw = UserDefaults.standard.string(forKey: cameraCloseKey),
+                  let value = CameraCloseDestination(rawValue: raw) else {
+                return .camera
+            }
+            return value
+        }
+        set {
+            UserDefaults.standard.set(newValue.rawValue, forKey: cameraCloseKey)
             NotificationCenter.default.post(name: didChangeNotification, object: nil)
         }
     }

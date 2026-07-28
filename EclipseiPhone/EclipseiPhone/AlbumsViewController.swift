@@ -8,9 +8,9 @@
 // AlbumsViewController.swift
 import UIKit
 
-/// Browses the account's albums on the phone: one section per album (header = album
-/// name), thumbnails loaded directly from the manifest's HTTPS URLs. Read-only — tapping
-/// an item opens a fullscreen preview. Reachable with or without an Apple TV connection.
+/// Browses joined cloud albums on the phone: one section per album (header = album
+/// name), thumbnails from the manifest's HTTPS URLs. Read-only — tapping an item
+/// presents on AirPlay and opens a phone preview. Works with or without Apple TV.
 final class AlbumsViewController: UIViewController {
 
     private let store = AlbumBrowserStore.shared
@@ -22,15 +22,21 @@ final class AlbumsViewController: UIViewController {
     private let refreshControl = UIRefreshControl()
     private var settingsObserver: NSObjectProtocol?
 
-    /// Invoked when the user enters/changes the account code here, so the parent can also
-    /// push it to a connected Apple TV. Local browsing is updated regardless.
+    /// Invoked when the user enters/changes the join code, so the parent can push it
+    /// to a connected Apple TV. Local browsing updates regardless.
     var onCodeEntered: ((String) -> Void)?
+
+    /// Invoked when a joined item becomes live on the external display.
+    var onBecameLive: (() -> Void)?
+
+    /// Invoked after the user leaves the joined presentation (code cleared).
+    var onLeftPresentation: (() -> Void)?
 
     // MARK: - Lifecycle
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = "Albums"
+        title = "Join"
         view.backgroundColor = .systemBackground
         setupNavigationItems()
         setupCollectionView()
@@ -65,8 +71,35 @@ final class AlbumsViewController: UIViewController {
         navigationItem.leftBarButtonItem = UIBarButtonItem(
             barButtonSystemItem: .close, target: self, action: #selector(closeTapped))
         navigationItem.rightBarButtonItem = UIBarButtonItem(
-            image: UIImage(systemName: "number"), style: .plain,
-            target: self, action: #selector(changeCodeTapped))
+            image: UIImage(systemName: "ellipsis.circle"),
+            menu: makeOverflowMenu()
+        )
+    }
+
+    private func makeOverflowMenu() -> UIMenu {
+        let joinTitle = store.hasAccountConfigured ? "Change Join Code…" : "Enter Join Code…"
+        let join = UIAction(title: joinTitle, image: UIImage(systemName: "number")) { [weak self] _ in
+            self?.changeCodeTapped()
+        }
+        var actions: [UIMenuElement] = [join]
+        if store.hasAccountConfigured {
+            let leave = UIAction(
+                title: "Leave Presentation",
+                image: UIImage(systemName: "rectangle.portrait.and.arrow.right"),
+                attributes: .destructive
+            ) { [weak self] _ in
+                self?.leavePresentation()
+            }
+            actions.append(leave)
+        }
+        return UIMenu(children: actions)
+    }
+
+    private func refreshOverflowMenu() {
+        navigationItem.rightBarButtonItem = UIBarButtonItem(
+            image: UIImage(systemName: "ellipsis.circle"),
+            menu: makeOverflowMenu()
+        )
     }
 
     private func setupCollectionView() {
@@ -134,17 +167,21 @@ final class AlbumsViewController: UIViewController {
         if let message = message {
             emptyLabel.text = message
         } else if !store.hasAccountConfigured {
-            emptyLabel.text = "Enter your \(AlbumConfig.codeLength)-digit account code to see your albums.\n\nTap the number button above."
+            emptyLabel.text = "Enter your \(AlbumConfig.codeLength)-digit join code to open a shared presentation.\n\nTap the menu button above."
         } else {
-            emptyLabel.text = "No albums yet for this account."
+            emptyLabel.text = "No content yet for this join code."
         }
     }
 
     private func cellSize() -> CGSize {
         let orientation = ExternalOutputSettings.orientation
-        let columns = orientation.gridColumnCount
         let spacing: CGFloat = 12
         let inset: CGFloat = 16
+        let columns = CGFloat(orientation.gridColumnCount(
+            forWidth: collectionView.bounds.width,
+            sectionInset: inset,
+            spacing: spacing
+        ))
         let available = collectionView.bounds.width - (inset * 2) - (spacing * (columns - 1))
         let width = floor(available / columns)
         return CGSize(width: width, height: width * orientation.gridCellHeightOverWidth)
@@ -153,15 +190,14 @@ final class AlbumsViewController: UIViewController {
     // MARK: - Actions
 
     @objc private func closeTapped() {
-        // Leaving the album browser hands the external display back to the live TV item.
-        ExternalDisplayManager.shared.restoreCurrentSource()
+        // Keep joined AirPlay sticky; do not restore the prior library item.
         dismiss(animated: true)
     }
 
-    @objc private func changeCodeTapped() {
+    private func changeCodeTapped() {
         let alert = UIAlertController(
-            title: store.hasAccountConfigured ? "Change Account Code" : "Enter Account Code",
-            message: "Type your \(AlbumConfig.codeLength)-digit account code.",
+            title: store.hasAccountConfigured ? "Change Join Code" : "Enter Join Code",
+            message: "Type your \(AlbumConfig.codeLength)-digit join code.",
             preferredStyle: .alert)
         alert.addTextField { field in
             field.placeholder = String(repeating: "0", count: AlbumConfig.codeLength)
@@ -170,7 +206,7 @@ final class AlbumsViewController: UIViewController {
             field.text = self.store.accountCode
         }
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        alert.addAction(UIAlertAction(title: "Show Albums", style: .default) { [weak self, weak alert] _ in
+        alert.addAction(UIAlertAction(title: "Join", style: .default) { [weak self, weak alert] _ in
             guard let self = self else { return }
             let raw = alert?.textFields?.first?.text ?? ""
             guard self.store.setAccountCode(raw) else {
@@ -178,16 +214,35 @@ final class AlbumsViewController: UIViewController {
                 return
             }
             self.onCodeEntered?(AlbumConfig.normalize(raw))
+            self.refreshOverflowMenu()
             self.collectionView.reloadData()
             self.refresh()
         })
         present(alert, animated: true)
     }
 
+    private func leavePresentation() {
+        let alert = UIAlertController(
+            title: "Leave Presentation?",
+            message: "This removes the join code from this iPhone. A connected Apple TV keeps its copy until changed there.",
+            preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Leave", style: .destructive) { [weak self] _ in
+            guard let self else { return }
+            self.store.clearAccount()
+            self.refreshOverflowMenu()
+            self.collectionView.reloadData()
+            self.updateEmptyState()
+            self.onLeftPresentation?()
+        })
+        present(alert, animated: true)
+    }
+
     private func presentInvalidCodeAlert() {
-        let alert = UIAlertController(title: "Invalid Code",
-                                      message: "Enter your \(AlbumConfig.codeLength)-digit account code.",
-                                      preferredStyle: .alert)
+        let alert = UIAlertController(
+            title: "Invalid Code",
+            message: "Enter your \(AlbumConfig.codeLength)-digit join code.",
+            preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "OK", style: .default))
         present(alert, animated: true)
     }
@@ -231,13 +286,15 @@ extension AlbumsViewController: UICollectionViewDataSource, UICollectionViewDele
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         collectionView.deselectItem(at: indexPath, animated: true)
         guard let item = store.albums[safe: indexPath.section]?.items[safe: indexPath.item] else { return }
-        // Mirror the selected album item onto any connected AirPlay display (full quality,
-        // streamed from HTTPS) while the phone shows its own preview.
         if let url = item.remoteURL {
             let source: PresentationSource = item.isVideo
                 ? .video(url, isLooping: false, isMuted: false)
                 : .image(url)
-            ExternalDisplayManager.shared.present(source)
+            if item.isVideo {
+                AudioPlayerController.shared.stop()
+            }
+            ExternalDisplayManager.shared.presentJoined(source)
+            onBecameLive?()
         }
         let preview = AlbumItemPreviewViewController(item: item)
         preview.modalPresentationStyle = .overFullScreen

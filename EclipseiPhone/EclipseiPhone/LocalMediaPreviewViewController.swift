@@ -5,26 +5,43 @@
 //  Copyright © 2026 Moxie LLC. All rights reserved.
 //
 
-// LocalMediaPreviewViewController.swift
 import UIKit
 import AVKit
 
-/// Fullscreen, read-only preview of a media file stored on the phone (in `LocalMediaStore`).
+/// One locally stored media file that can be shown in the phone preview gallery.
+struct LocalMediaPreviewItem {
+    let id: String
+    let fileURL: URL
+    let isVideo: Bool
+}
+
+/// Fullscreen swipeable gallery of media stored on the phone (`LocalMediaStore`).
 ///
-/// Used when the user taps a library item while no Apple TV is connected: instead of an
-/// error, the item is shown on the phone (and mirrored to any connected AirPlay display
-/// by the caller). Images render from the local file; videos play via an `AVPlayer`.
+/// Opened from long-press → Preview. Swipe left/right to move through `items`.
 final class LocalMediaPreviewViewController: UIViewController {
 
-    private let fileURL: URL
-    private let isVideo: Bool
-    private let imageView = UIImageView()
+    private let items: [LocalMediaPreviewItem]
     private let closeButton = UIButton(type: .system)
-    private var player: AVPlayer?
+    private var pageController: UIPageViewController!
 
-    init(fileURL: URL, isVideo: Bool) {
-        self.fileURL = fileURL
-        self.isVideo = isVideo
+    /// Builds preview items from library DTOs that have a local full-res copy.
+    static func previewableItems(from items: [LibraryItemDTO]) -> [LocalMediaPreviewItem] {
+        items.compactMap { item in
+            guard let url = LocalMediaStore.shared.localURL(forId: item.id) else { return nil }
+            return LocalMediaPreviewItem(id: item.id, fileURL: url, isVideo: item.isVideo)
+        }
+    }
+
+    private let startIndex: Int
+
+    /// - Parameters:
+    ///   - items: Ordered gallery entries (must be non-empty).
+    ///   - startIndex: Initial page within `items`.
+    init(items: [LocalMediaPreviewItem], startIndex: Int) {
+        precondition(!items.isEmpty)
+        precondition(items.indices.contains(startIndex))
+        self.items = items
+        self.startIndex = startIndex
         super.init(nibName: nil, bundle: nil)
         modalPresentationStyle = .fullScreen
     }
@@ -36,66 +53,89 @@ final class LocalMediaPreviewViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .black
-
-        if isVideo {
-            setupVideo()
-        } else {
-            setupImage()
-        }
+        setupPager()
         setupCloseButton()
-    }
-
-    override func viewDidDisappear(_ animated: Bool) {
-        super.viewDidDisappear(animated)
-        player?.pause()
     }
 
     // MARK: - Setup
 
+    private func setupPager() {
+        let pager = UIPageViewController(
+            transitionStyle: .scroll,
+            navigationOrientation: .horizontal,
+            options: nil
+        )
+        pager.dataSource = self
+        pager.delegate = self
+        addChild(pager)
+        pager.view.frame = view.bounds
+        pager.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        view.addSubview(pager.view)
+        pager.didMove(toParent: self)
+        pageController = pager
+
+        let first = LocalMediaPreviewPageViewController(item: items[startIndex], index: startIndex)
+        pager.setViewControllers([first], direction: .forward, animated: false)
+    }
+
     private func setupCloseButton() {
         let config = UIImage.SymbolConfiguration(pointSize: 28, weight: .semibold)
-        closeButton.setImage(UIImage(systemName: "xmark.circle.fill", withConfiguration: config), for: .normal)
+        closeButton.setImage(
+            UIImage(systemName: "xmark.circle.fill", withConfiguration: config),
+            for: .normal
+        )
         closeButton.tintColor = UIColor.white.withAlphaComponent(0.9)
         closeButton.translatesAutoresizingMaskIntoConstraints = false
         closeButton.addTarget(self, action: #selector(closeTapped), for: .touchUpInside)
         view.addSubview(closeButton)
         NSLayoutConstraint.activate([
-            closeButton.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
-            closeButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16)
+            closeButton.topAnchor.constraint(
+                equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
+            closeButton.trailingAnchor.constraint(
+                equalTo: view.trailingAnchor, constant: -16)
         ])
     }
 
-    private func setupImage() {
-        imageView.contentMode = .scaleAspectFit
-        imageView.translatesAutoresizingMaskIntoConstraints = false
-        imageView.image = UIImage(contentsOfFile: fileURL.path)
-        view.addSubview(imageView)
-        NSLayoutConstraint.activate([
-            imageView.topAnchor.constraint(equalTo: view.topAnchor),
-            imageView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            imageView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            imageView.trailingAnchor.constraint(equalTo: view.trailingAnchor)
-        ])
+    private func page(at index: Int) -> LocalMediaPreviewPageViewController? {
+        guard items.indices.contains(index) else { return nil }
+        return LocalMediaPreviewPageViewController(item: items[index], index: index)
     }
-
-    private func setupVideo() {
-        let player = AVPlayer(url: fileURL)
-        self.player = player
-
-        let controller = AVPlayerViewController()
-        controller.player = player
-        addChild(controller)
-        controller.view.frame = view.bounds
-        controller.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        view.addSubview(controller.view)
-        controller.didMove(toParent: self)
-
-        player.play()
-    }
-
-    // MARK: - Actions
 
     @objc private func closeTapped() {
         dismiss(animated: true)
+    }
+}
+
+// MARK: - UIPageViewControllerDataSource & Delegate
+
+extension LocalMediaPreviewViewController: UIPageViewControllerDataSource,
+                                          UIPageViewControllerDelegate {
+
+    func pageViewController(
+        _ pageViewController: UIPageViewController,
+        viewControllerBefore viewController: UIViewController
+    ) -> UIViewController? {
+        guard let page = viewController as? LocalMediaPreviewPageViewController else { return nil }
+        return self.page(at: page.index - 1)
+    }
+
+    func pageViewController(
+        _ pageViewController: UIPageViewController,
+        viewControllerAfter viewController: UIViewController
+    ) -> UIViewController? {
+        guard let page = viewController as? LocalMediaPreviewPageViewController else { return nil }
+        return self.page(at: page.index + 1)
+    }
+
+    func pageViewController(
+        _ pageViewController: UIPageViewController,
+        didFinishAnimating finished: Bool,
+        previousViewControllers: [UIViewController],
+        transitionCompleted completed: Bool
+    ) {
+        guard completed else { return }
+        for previous in previousViewControllers {
+            (previous as? LocalMediaPreviewPageViewController)?.pausePlayback()
+        }
     }
 }

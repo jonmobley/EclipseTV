@@ -56,8 +56,8 @@ final class WebPagesViewController: UITableViewController {
 
     @objc private func addTapped() {
         let alert = UIAlertController(
-            title: "Add Page",
-            message: "Enter a title and HTTPS address to pin for AirPlay.",
+            title: "Add Website",
+            message: "Enter a title and HTTPS address.",
             preferredStyle: .alert
         )
         alert.addTextField { field in
@@ -90,7 +90,7 @@ final class WebPagesViewController: UITableViewController {
 
     private func presentError(_ error: Error) {
         let alert = UIAlertController(
-            title: "Couldn't Add Page",
+            title: "Couldn't Add Website",
             message: error.localizedDescription,
             preferredStyle: .alert
         )
@@ -99,7 +99,7 @@ final class WebPagesViewController: UITableViewController {
     }
 
     private func presentPage(_ page: WebPage) {
-        ExternalDisplayManager.shared.presentWeb(page.url)
+        ExternalDisplayManager.shared.presentWeb(page.url, pageId: page.id)
         let preview = WebRemoteViewController(page: page)
         navigationController?.pushViewController(preview, animated: true)
     }
@@ -112,7 +112,7 @@ final class WebPagesViewController: UITableViewController {
 
     override func tableView(_ tableView: UITableView,
                             titleForFooterInSection section: Int) -> String? {
-        "Web pages open full-bleed on your AirPlay TV. Use Landscape or Vertical in Settings to match how the TV is mounted."
+        nil
     }
 
     override func tableView(_ tableView: UITableView,
@@ -157,9 +157,24 @@ final class WebPagesViewController: UITableViewController {
         guard !store.pages.isEmpty else { return nil }
         let page = store.pages[indexPath.row]
         let delete = UIContextualAction(style: .destructive, title: "Delete") { [weak self] _, _, done in
-            self?.store.remove(id: page.id)
-            done(true)
+            self?.confirmDelete(page: page, completion: done)
         }
         return UISwipeActionsConfiguration(actions: [delete])
+    }
+
+    private func confirmDelete(page: WebPage, completion: @escaping (Bool) -> Void) {
+        let alert = UIAlertController(
+            title: "Delete Website?",
+            message: "“\(page.title)” will be removed from this iPhone.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in
+            completion(false)
+        })
+        alert.addAction(UIAlertAction(title: "Delete", style: .destructive) { [weak self] _ in
+            self?.store.remove(id: page.id)
+            completion(true)
+        })
+        present(alert, animated: true)
     }
 }

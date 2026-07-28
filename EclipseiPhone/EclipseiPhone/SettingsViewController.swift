@@ -27,15 +27,16 @@ final class SettingsViewController: UITableViewController {
     var onStopConnecting: (() -> Void)?
     /// Invoked when a known TV is chosen (switch library / reconnect).
     var onSelectTV: ((String) -> Void)?
-    /// Invoked when Arrange is chosen (host should dismiss then enter arrange mode).
-    var onArrange: (() -> Void)?
-    /// Invoked when Set Up Album is chosen.
-    var onSetUpAlbum: (() -> Void)?
+    /// Invoked when Join Presentation is chosen (host should dismiss then open Join).
+    var onJoinPresentation: (() -> Void)?
     /// Current Multipeer link state; host updates via `setConnectionState(_:)`.
     private(set) var connectionState: ConnectionDisplayState = .paused
 
     private enum Section: Int, CaseIterable {
         case displayMode
+        case transition
+        case cameraClose
+        case join
         case eclipseTV
         case sync
         case appleTVs
@@ -86,6 +87,15 @@ final class SettingsViewController: UITableViewController {
         tableView.reloadSections(section, with: .none)
     }
 
+    /// Scrolls the Eclipse TV App section into view (e.g. after opening from Ready).
+    func scrollToEclipseTVSection() {
+        guard isViewLoaded else { return }
+        let section = Section.eclipseTV.rawValue
+        guard tableView.numberOfRows(inSection: section) > 0 else { return }
+        let indexPath = IndexPath(row: 0, section: section)
+        tableView.scrollToRow(at: indexPath, at: .middle, animated: true)
+    }
+
     private func makeCopyrightFooter() -> UIView {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
         let label = UILabel()
@@ -108,8 +118,14 @@ final class SettingsViewController: UITableViewController {
     }
 
     @objc private func displayModeDidChange() {
-        let section = IndexSet(integer: Section.displayMode.rawValue)
-        tableView.reloadSections(section, with: .none)
+        tableView.reloadSections(
+            IndexSet(arrayLiteral:
+                Section.displayMode.rawValue,
+                Section.transition.rawValue,
+                Section.cameraClose.rawValue
+            ),
+            with: .none
+        )
     }
 
     // MARK: - Table Data
@@ -124,9 +140,15 @@ final class SettingsViewController: UITableViewController {
             return ExternalOutputSettings.isVerticalMode
                 ? ExternalOutputOrientation.allCases.count + ExternalRotationDirection.allCases.count
                 : ExternalOutputOrientation.allCases.count
+        case .transition:
+            return ContentTransitionStyle.allCases.count
+        case .cameraClose:
+            return CameraCloseDestination.allCases.count
+        case .join:
+            return 1
         case .eclipseTV:
             switch connectionState {
-            case .connected: return 2
+            case .connected: return 1
             case .disconnected: return 2
             case .paused: return 1
             }
@@ -140,7 +162,10 @@ final class SettingsViewController: UITableViewController {
                             titleForHeaderInSection section: Int) -> String? {
         switch Section(rawValue: section) {
         case .displayMode: return "Display Mode"
-        case .eclipseTV: return "Eclipse TV App"
+        case .transition: return "Content Transition"
+        case .cameraClose: return "When Camera Closes"
+        case .join: return "Shared Presentation"
+        case .eclipseTV: return "EclipseTV"
         case .sync: return "Sync"
         case .appleTVs: return "Apple TVs"
         case .none: return nil
@@ -151,13 +176,19 @@ final class SettingsViewController: UITableViewController {
                             titleForFooterInSection section: Int) -> String? {
         switch Section(rawValue: section) {
         case .displayMode:
-            return "Landscape is 16:9. Vertical is 9:16 for a portrait-mounted TV."
+            return "Landscape is 16:9. Vertical is 9:16 for a portrait-mounted TV. Home shows Black, Logo, Camera, and your Shows. Linking EclipseTV syncs media across Shows."
+        case .transition:
+            return "Previous live content (including camera/video) stays up while the next item prepares. Cut reveals instantly when ready; Crossfade dissolves the next layer over it."
+        case .cameraClose:
+            return "After you close the camera screen, keep the live camera or switch AirPlay to Logo or Black."
+        case .join:
+            return "Enter a join code to open a shared cloud presentation on this iPhone. AirPlay works without EclipseTV. Linking EclipseTV also syncs that join code to the room display."
         case .eclipseTV:
-            return "Optional. AirPlay still works for Camera, Albums, and Web without linking the TV app."
+            return "Optional link to the Eclipse app on Apple TV for media sync. Separate from AirPlay and from the join code. Camera, Join, Web, and PDF still work over AirPlay without this."
         case .sync:
-            return "When on, library changes are sent to every Apple TV you're connected to, and newly connected TVs are caught up to match. Only media you've sent from this iPhone can be mirrored to other TVs."
+            return "When on, media changes are sent to every Apple TV you're linked to with EclipseTV, and newly linked TVs are caught up to match. Only media you've sent from this iPhone can be mirrored to other TVs."
         case .appleTVs:
-            return "Tap a TV to view its library. Swipe to remove and clear its cached library on this iPhone."
+            return "Tap a TV to view its Shows. Swipe to remove and clear its cached media on this iPhone."
         case .none:
             return nil
         }
@@ -167,6 +198,9 @@ final class SettingsViewController: UITableViewController {
                             cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         switch Section(rawValue: indexPath.section) {
         case .displayMode: return displayModeCell(at: indexPath.row)
+        case .transition: return transitionCell(at: indexPath.row)
+        case .cameraClose: return cameraCloseCell(at: indexPath.row)
+        case .join: return joinCell()
         case .eclipseTV: return eclipseTVCell(at: indexPath.row)
         case .sync: return syncCell()
         case .appleTVs: return appleTVCell(at: indexPath)
@@ -179,6 +213,20 @@ final class SettingsViewController: UITableViewController {
         switch Section(rawValue: indexPath.section) {
         case .displayMode:
             selectDisplayMode(at: indexPath.row)
+        case .transition:
+            ExternalOutputSettings.contentTransition =
+                ContentTransitionStyle.allCases[indexPath.row]
+            tableView.reloadSections(
+                IndexSet(integer: Section.transition.rawValue), with: .none
+            )
+        case .cameraClose:
+            ExternalOutputSettings.cameraCloseDestination =
+                CameraCloseDestination.allCases[indexPath.row]
+            tableView.reloadSections(
+                IndexSet(integer: Section.cameraClose.rawValue), with: .none
+            )
+        case .join:
+            onJoinPresentation?()
         case .eclipseTV:
             handleEclipseTVAction(at: indexPath.row)
         case .appleTVs:
@@ -219,30 +267,60 @@ final class SettingsViewController: UITableViewController {
         }
     }
 
-    // MARK: - Eclipse TV App
+    private func transitionCell(at row: Int) -> UITableViewCell {
+        let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
+        let style = ContentTransitionStyle.allCases[row]
+        cell.textLabel?.text = style.rawValue
+        cell.accessoryType =
+            ExternalOutputSettings.contentTransition == style ? .checkmark : .none
+        cell.selectionStyle = .default
+        return cell
+    }
+
+    private func cameraCloseCell(at row: Int) -> UITableViewCell {
+        let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
+        let destination = CameraCloseDestination.allCases[row]
+        cell.textLabel?.text = destination.rawValue
+        cell.accessoryType =
+            ExternalOutputSettings.cameraCloseDestination == destination
+            ? .checkmark : .none
+        cell.selectionStyle = .default
+        return cell
+    }
+
+    // MARK: - Join / Eclipse TV App
+
+    private func joinCell() -> UITableViewCell {
+        let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
+        cell.selectionStyle = .default
+        let joined = AlbumBrowserStore.shared.hasAccountConfigured
+        cell.textLabel?.text = joined ? "Open Joined Presentation…" : "Join Presentation…"
+        cell.imageView?.image = UIImage(systemName: "person.2.badge.key")
+        cell.imageView?.tintColor = .label
+        cell.accessoryType = .disclosureIndicator
+        return cell
+    }
 
     private func eclipseTVCell(at row: Int) -> UITableViewCell {
         let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
         cell.selectionStyle = .default
         switch connectionState {
         case .connected:
-            if row == 0 {
-                cell.textLabel?.text = "Arrange"
-                cell.imageView?.image = UIImage(systemName: "arrow.up.arrow.down")
-            } else {
-                cell.textLabel?.text = "Set Up Album…"
-                cell.imageView?.image = UIImage(systemName: "rectangle.stack.badge.plus")
-            }
+            cell.textLabel?.text = "Linked"
+            cell.imageView?.image = UIImage(systemName: "checkmark.circle.fill")
+            cell.imageView?.tintColor = .systemGreen
+            cell.selectionStyle = .none
+            return cell
         case .disconnected:
             if row == 0 {
                 cell.textLabel?.text = "Connect / Enter Pairing Code…"
                 cell.imageView?.image = UIImage(systemName: "wifi")
             } else {
-                cell.textLabel?.text = "Stop Connecting to Eclipse TV"
+                cell.textLabel?.text = "Stop Connecting to EclipseTV"
                 cell.imageView?.image = UIImage(systemName: "pause.circle")
             }
         case .paused:
-            cell.textLabel?.text = "Connect Eclipse TV App…"
+            cell.textLabel?.text = "Connect EclipseTV…"
             cell.imageView?.image = UIImage(systemName: "wifi")
         }
         cell.imageView?.tintColor = .label
@@ -252,7 +330,7 @@ final class SettingsViewController: UITableViewController {
     private func handleEclipseTVAction(at row: Int) {
         switch connectionState {
         case .connected:
-            if row == 0 { onArrange?() } else { onSetUpAlbum?() }
+            break
         case .disconnected:
             if row == 0 { onConnect?() } else { onStopConnecting?() }
         case .paused:
@@ -316,20 +394,35 @@ final class SettingsViewController: UITableViewController {
             return nil
         }
         let action = UIContextualAction(style: .destructive, title: "Remove") { [weak self] _, _, done in
-            self?.forgetTV(at: indexPath)
-            done(true)
+            self?.confirmForgetTV(at: indexPath, completion: done)
         }
         return UISwipeActionsConfiguration(actions: [action])
     }
 
-    private func forgetTV(at indexPath: IndexPath) {
+    private func confirmForgetTV(at indexPath: IndexPath, completion: @escaping (Bool) -> Void) {
         let tv = knownTVs[indexPath.row]
-        KnownTVRegistry.shared.forget(name: tv.name)
-        TVLibraryStore.shared.reset(tvName: tv.name)
-        MultiTVSyncCoordinator.shared.forget(tvNamed: tv.name)
-        PairedPeerStore.shared.forget(displayName: tv.name)
+        let alert = UIAlertController(
+            title: "Remove \(tv.name)?",
+            message: "Clears this Apple TV from the list and removes its cached media on this iPhone.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in
+            completion(false)
+        })
+        alert.addAction(UIAlertAction(title: "Remove", style: .destructive) { [weak self] _ in
+            self?.forgetTV(named: tv.name)
+            completion(true)
+        })
+        present(alert, animated: true)
+    }
 
-        if UserDefaults.standard.string(forKey: preferredTVNameKey) == tv.name {
+    private func forgetTV(named name: String) {
+        KnownTVRegistry.shared.forget(name: name)
+        TVLibraryStore.shared.reset(tvName: name)
+        MultiTVSyncCoordinator.shared.forget(tvNamed: name)
+        PairedPeerStore.shared.forget(displayName: name)
+
+        if UserDefaults.standard.string(forKey: preferredTVNameKey) == name {
             UserDefaults.standard.removeObject(forKey: preferredTVNameKey)
         }
 

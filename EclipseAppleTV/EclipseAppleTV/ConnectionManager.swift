@@ -288,6 +288,12 @@ class ConnectionManager: NSObject {
             DispatchQueue.main.async {
                 MediaDataSource.shared.setActiveLibraryMode(mode)
             }
+        case .setContentTransition:
+            let style = envelope.contentTransition ?? "Cut"
+            logger.info("Received set_content_transition: \(style, privacy: .public)")
+            DispatchQueue.main.async {
+                ContentTransitionSettings.apply(wireValue: style)
+            }
         case .playRequest:
             guard let id = envelope.id else { return }
             logger.info("Received play request for id: \(id, privacy: .public)")

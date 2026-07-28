@@ -58,19 +58,19 @@ extension iPhoneMainViewController {
 
     // MARK: - Pause / Resume
 
-    /// Suspends Multipeer connection attempts to the Eclipse TV app.
-    /// AirPlay for Camera/Web still works. Reconnect from the status pill or Settings.
+    /// Suspends Multipeer connection attempts to EclipseTV.
+    /// AirPlay for Camera/Web still works. Reconnect from Settings → EclipseTV.
     func pauseConnection(announce: Bool = true) {
         isConnectionPaused = true
         connectionManager.autoConnectEnabled = false
         stopSearching()
         headerBar.setConnectionState(.paused)
         if announce {
-            showTemporaryStatus("Stopped Eclipse TV app link. AirPlay is unchanged.")
+            showTemporaryStatus("Stopped EclipseTV link. AirPlay is unchanged.")
         }
     }
 
-    /// Starts linking to the Eclipse TV app. If a paired TV is already known, begins
+    /// Starts linking to EclipseTV. If a paired TV is already known, begins
     /// searching; otherwise prompts for the pairing code shown on the Apple TV.
     func resumeConnection() {
         guard !isConnected() else { return }
@@ -86,11 +86,11 @@ extension iPhoneMainViewController {
         presentPairingPINEntry()
     }
 
-    /// Asks the user for the 6-digit code displayed on the Apple TV, then invites.
+    /// Asks for the 6-digit code shown in the Eclipse app on Apple TV, then invites.
     func presentPairingPINEntry(for peer: MCPeerID? = nil) {
         let alert = UIAlertController(
-            title: "Pair with Apple TV",
-            message: "Enter the 6-digit pairing code shown in the Eclipse app on your Apple TV.",
+            title: "Connect EclipseTV",
+            message: "Enter the 6-digit code from the Eclipse app on Apple TV. This is not AirPlay pairing.",
             preferredStyle: .alert
         )
         alert.addTextField { field in
@@ -109,8 +109,10 @@ extension iPhoneMainViewController {
             let raw = alert.textFields?.first?.text ?? ""
             let pin = PeerPairing.normalizePIN(raw)
             guard PeerPairing.isValidPIN(pin) else {
-                self.showAlert(title: "Invalid Code",
-                               message: "Enter the 6-digit pairing code shown on your Apple TV.")
+                self.showAlert(
+                    title: "Invalid Code",
+                    message: "Enter the 6-digit code shown in the Eclipse app on your Apple TV."
+                )
                 self.pauseConnection(announce: false)
                 return
             }
@@ -126,7 +128,7 @@ extension iPhoneMainViewController {
                 self.connectionManager.invitePeer(target)
             }
         })
-        present(alert, animated: true)
+        presentationAnchor.present(alert, animated: true)
     }
 
     /// Cancels any leftover troubleshooting hint timer.
@@ -202,6 +204,6 @@ extension iPhoneMainViewController {
     func showAlert(title: String, message: String) {
         let alertController = UIAlertController(title: title, message: message, preferredStyle: .alert)
         alertController.addAction(UIAlertAction(title: "OK", style: .default))
-        present(alertController, animated: true)
+        presentationAnchor.present(alertController, animated: true)
     }
 }

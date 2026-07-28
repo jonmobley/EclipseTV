@@ -76,6 +76,10 @@ final class PlaybackControlsView: UIView {
 
         let playConfig = UIImage.SymbolConfiguration(pointSize: 30, weight: .bold)
         configureControlButton(playPauseButton, systemName: "play.fill", config: playConfig)
+        playPauseButton.accessibilityLabel = "Play/Pause"
+        skipBackButton.accessibilityLabel = "Skip back 10 seconds"
+        skipForwardButton.accessibilityLabel = "Skip forward 10 seconds"
+        slider.accessibilityLabel = "Playback position"
 
         skipBackButton.addTarget(self, action: #selector(skipBackTapped), for: .touchUpInside)
         skipForwardButton.addTarget(self, action: #selector(skipForwardTapped), for: .touchUpInside)
@@ -125,6 +129,12 @@ final class PlaybackControlsView: UIView {
     private func configureControlButton(_ button: UIButton, systemName: String, config: UIImage.SymbolConfiguration) {
         button.setImage(UIImage(systemName: systemName, withConfiguration: config), for: .normal)
         button.tintColor = .white
+        switch systemName {
+        case "gobackward.10": button.accessibilityLabel = "Skip back 10 seconds"
+        case "goforward.10": button.accessibilityLabel = "Skip forward 10 seconds"
+        case "play.fill", "pause.fill": button.accessibilityLabel = "Play/Pause"
+        default: break
+        }
     }
 
     private func configureTimeLabel(_ label: UILabel) {

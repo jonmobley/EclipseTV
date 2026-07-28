@@ -8,19 +8,19 @@
 // LibraryThumbnailCell.swift
 import UIKit
 
-/// Grid cell showing a single Apple TV library item: thumbnail, video badge,
-/// optional duration, and a highlight when the item is currently live.
+/// Grid cell for home-library media or special tiles (Black, Camera, Web, Album).
 final class LibraryThumbnailCell: UICollectionViewCell {
 
     static let reuseIdentifier = "LibraryThumbnailCell"
 
     // MARK: - Subviews
 
-    private let imageView = UIImageView()
-    private let placeholderIcon = UIImageView()
+    let imageView = UIImageView()
+    let placeholderIcon = UIImageView()
+    let captionLabel = UILabel()
     private let videoBadge = UIImageView()
     private let durationLabel = PaddedLabel()
-    private let liveBadge = PaddedLabel()
+    let liveBadge = PaddedLabel()
     private let unavailableBadge = PaddedLabel()
 
     // MARK: - Init
@@ -51,6 +51,14 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         placeholderIcon.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(placeholderIcon)
 
+        captionLabel.font = .systemFont(ofSize: 13, weight: .semibold)
+        captionLabel.textColor = .white
+        captionLabel.textAlignment = .center
+        captionLabel.numberOfLines = 2
+        captionLabel.isHidden = true
+        captionLabel.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(captionLabel)
+
         let badgeConfig = UIImage.SymbolConfiguration(pointSize: 34, weight: .bold)
         videoBadge.image = UIImage(systemName: "play.circle.fill", withConfiguration: badgeConfig)
         videoBadge.tintColor = UIColor.white.withAlphaComponent(0.95)
@@ -79,9 +87,13 @@ final class LibraryThumbnailCell: UICollectionViewCell {
             imageView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
 
             placeholderIcon.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
-            placeholderIcon.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
+            placeholderIcon.centerYAnchor.constraint(equalTo: contentView.centerYAnchor, constant: -10),
             placeholderIcon.widthAnchor.constraint(equalToConstant: 36),
             placeholderIcon.heightAnchor.constraint(equalToConstant: 36),
+
+            captionLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 8),
+            captionLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -8),
+            captionLabel.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -10),
 
             videoBadge.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
             videoBadge.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
@@ -109,6 +121,9 @@ final class LibraryThumbnailCell: UICollectionViewCell {
     // MARK: - Configuration
 
     func configure(with item: LibraryItemDTO, thumbnail: UIImage?, isLive: Bool) {
+        resetChrome()
+        contentView.backgroundColor = .secondarySystemBackground
+
         // nil or true means available; only an explicit false marks a purged item.
         let isUnavailable = (item.isAvailable == false)
 
@@ -116,6 +131,7 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         imageView.alpha = isUnavailable ? 0.35 : 1.0
         placeholderIcon.isHidden = thumbnail != nil
         placeholderIcon.image = UIImage(systemName: item.isVideo ? "film" : "photo")
+        placeholderIcon.tintColor = .tertiaryLabel
 
         // Suppress the play/duration/live affordances for purged items; they can't play.
         videoBadge.isHidden = isUnavailable || !(item.isVideo && thumbnail != nil)
@@ -123,28 +139,101 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         if !isUnavailable, item.isVideo, item.duration > 0 {
             durationLabel.text = Self.formatDuration(item.duration)
             durationLabel.isHidden = false
-        } else {
-            durationLabel.isHidden = true
         }
 
         unavailableBadge.isHidden = !isUnavailable
+        setLive(isLive && !isUnavailable)
+        var a11y = item.name
+        if item.isVideo { a11y += ", video" }
+        if isUnavailable { a11y += ", unavailable" }
+        if isLive && !isUnavailable { a11y += ", live" }
+        accessibilityLabel = a11y
+        isAccessibilityElement = true
+    }
 
-        let showLive = isLive && !isUnavailable
-        liveBadge.isHidden = !showLive
-        contentView.layer.borderWidth = showLive ? 3 : 0
-        contentView.layer.borderColor = showLive ? UIColor.systemRed.cgColor : UIColor.clear.cgColor
+    /// Dashed-style action tile (New Show / Add media).
+    func configureActionTile(title: String, systemImage: String = "plus") {
+        resetChrome()
+        contentView.backgroundColor = UIColor.secondarySystemBackground
+        contentView.layer.borderWidth = 1.5
+        contentView.layer.borderColor = UIColor.separator.cgColor
+        placeholderIcon.image = UIImage(systemName: systemImage)
+        placeholderIcon.tintColor = .secondaryLabel
+        placeholderIcon.isHidden = false
+        captionLabel.text = title
+        captionLabel.textColor = .secondaryLabel
+        captionLabel.isHidden = false
+        accessibilityLabel = title
+        isAccessibilityElement = true
+    }
+
+    /// Configures a non-media home tile (Logo, Camera, Show, Website).
+    /// - Parameter outlined: When true, draws a light stroke so a dark fill doesn't
+    ///   disappear into the grid background.
+    /// - Parameter thumbnailContentMode: `.scaleAspectFit` suits favicons; fill for snapshots.
+    func configureSpecial(
+        title: String,
+        systemImage: String?,
+        thumbnail: UIImage?,
+        fillColor: UIColor,
+        isLive: Bool,
+        outlined: Bool = false,
+        thumbnailContentMode: UIView.ContentMode = .scaleAspectFill
+    ) {
+        resetChrome()
+        contentView.backgroundColor = fillColor
+        imageView.contentMode = thumbnailContentMode
+        imageView.image = thumbnail
+        imageView.alpha = thumbnail == nil ? 0 : 1
+        if let systemImage {
+            placeholderIcon.image = UIImage(systemName: systemImage)
+            placeholderIcon.tintColor = UIColor.white.withAlphaComponent(0.85)
+            placeholderIcon.isHidden = thumbnail != nil
+        } else {
+            placeholderIcon.isHidden = true
+        }
+        captionLabel.text = title
+        captionLabel.textColor = .white
+        captionLabel.isHidden = false
+        setLive(isLive)
+        if outlined && !isLive {
+            contentView.layer.borderWidth = 1
+            contentView.layer.borderColor = UIColor.separator.cgColor
+        }
+        accessibilityLabel = isLive ? "\(title), live" : title
+        isAccessibilityElement = true
+    }
+
+    func resetChrome() {
+        imageView.image = nil
+        imageView.alpha = 1.0
+        imageView.contentMode = .scaleAspectFill
+        placeholderIcon.isHidden = false
+        captionLabel.isHidden = true
+        captionLabel.text = nil
+        captionLabel.textColor = .white
+        hideMediaBadges()
+        liveBadge.isHidden = true
+        contentView.layer.borderWidth = 0
+    }
+
+    /// Clears play/duration/unavailable chrome used only by media cells.
+    func hideMediaBadges() {
+        videoBadge.isHidden = true
+        durationLabel.isHidden = true
+        unavailableBadge.isHidden = true
+    }
+
+    func setLive(_ isLive: Bool) {
+        liveBadge.isHidden = !isLive
+        contentView.layer.borderWidth = isLive ? 3 : 0
+        contentView.layer.borderColor = isLive ? UIColor.systemRed.cgColor : UIColor.clear.cgColor
     }
 
     override func prepareForReuse() {
         super.prepareForReuse()
-        imageView.image = nil
-        imageView.alpha = 1.0
-        placeholderIcon.isHidden = false
-        videoBadge.isHidden = true
-        durationLabel.isHidden = true
-        liveBadge.isHidden = true
-        unavailableBadge.isHidden = true
-        contentView.layer.borderWidth = 0
+        resetChrome()
+        contentView.backgroundColor = .secondarySystemBackground
     }
 
     // MARK: - Helpers

@@ -105,7 +105,7 @@ final class ImagePreviewViewController: UIViewController {
             instructionLabel.text = "Send this image to your Apple TV?"
             confirmButton.setTitle("Send", for: .normal)
         } else {
-            instructionLabel.text = "Add this image to your library?"
+            instructionLabel.text = "Add this image to your Show?"
             confirmButton.setTitle("Add", for: .normal)
         }
     }

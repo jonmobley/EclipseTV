@@ -76,41 +76,23 @@ extension iPhoneMainViewController {
         view.backgroundColor = .systemBackground
 
         setupHeaderBar()
-        embedLibrary()
+        embedHomePager()
+        setupAudioMiniPlayer()
         setupTransferOverlay()
     }
 
     /// Pins the header bar (status + "+") to the top safe area.
     private func setupHeaderBar() {
         headerBar.translatesAutoresizingMaskIntoConstraints = false
-        headerBar.onAddTapped = { [weak self] in
-            self?.mediaPickerButtonTapped()
-        }
-        headerBar.onArrangeDone = { [weak self] in
-            guard let self = self else { return }
-            if self.libraryViewController.commitArranging() {
-                self.headerBar.setArranging(false)
-            }
-        }
-        headerBar.onArrangeCancel = { [weak self] in
-            guard let self = self else { return }
-            self.libraryViewController.cancelArranging()
-            self.headerBar.setArranging(false)
-        }
-        headerBar.onBrowseAlbums = { [weak self] in
-            self?.presentAlbums()
-        }
-        headerBar.onBrowseWeb = { [weak self] in
-            self?.presentPages()
-        }
+        headerBar.setAddMenu(makeAddMenu())
         headerBar.onOpenSettings = { [weak self] in
             self?.presentSettings()
         }
-        headerBar.onConnect = { [weak self] in
-            self?.resumeConnection()
+        headerBar.onStatusTapped = { [weak self] in
+            self?.presentSettings(focusEclipseTV: true)
         }
-        headerBar.onPresentCamera = { [weak self] in
-            self?.presentCameraLive()
+        headerBar.onPresentBlack = { [weak self] in
+            self?.libraryViewController.presentBlackLive()
         }
         view.addSubview(headerBar)
 
@@ -121,33 +103,103 @@ extension iPhoneMainViewController {
             headerBar.heightAnchor.constraint(equalToConstant: 52)
         ])
 
-        // Populate the dropdown with any remembered Apple TVs and the active library.
         refreshLibraryMenu()
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(libraryMenuContextDidChange),
+            name: LocalAlbumStore.didChangeNotification,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(libraryMenuContextDidChange),
+            name: ExternalOutputSettings.didChangeNotification,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(libraryMenuContextDidChange),
+            name: PDFStore.didChangeNotification,
+            object: nil
+        )
 
         // Reflect any display already connected at launch.
         headerBar.setPresenting(ExternalDisplayManager.shared.isConnected)
     }
 
-    /// Embeds the library grid as a child controller filling the area below the header.
-    private func embedLibrary() {
-        libraryViewController.onRequestResend = { [weak self] id in
-            self?.beginResend(forItemId: id)
+    /// Pins the ambient music mini player above the home safe-area bottom.
+    private func setupAudioMiniPlayer() {
+        audioMiniPlayer.translatesAutoresizingMaskIntoConstraints = false
+        audioMiniPlayer.isHidden = true
+        audioMiniPlayer.onOpenLibrary = { [weak self] in
+            self?.presentNowPlaying()
         }
-        libraryViewController.onRequestEdit = { [weak self] id in
-            self?.beginEditCrop(forItemId: id)
+        audioMiniPlayer.onTogglePlayPause = {
+            AudioPlayerController.shared.togglePlayPause()
         }
+        audioMiniPlayer.onSkipNext = {
+            AudioPlayerController.shared.playNext()
+        }
+        audioMiniPlayer.onToggleMute = {
+            let player = AudioPlayerController.shared
+            player.setMuted(!player.isMuted)
+        }
+        view.addSubview(audioMiniPlayer)
 
-        addChild(libraryViewController)
-        let gridView = libraryViewController.view!
-        gridView.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(gridView)
+        let height = audioMiniPlayer.heightAnchor.constraint(equalToConstant: 0)
+        audioMiniHeightConstraint = height
         NSLayoutConstraint.activate([
-            gridView.topAnchor.constraint(equalTo: headerBar.bottomAnchor),
-            gridView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            gridView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            gridView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+            audioMiniPlayer.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            audioMiniPlayer.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            audioMiniPlayer.bottomAnchor.constraint(
+                equalTo: view.safeAreaLayoutGuide.bottomAnchor
+            ),
+            height
         ])
-        libraryViewController.didMove(toParent: self)
+
+        audioPlayerObserver = NotificationCenter.default.addObserver(
+            forName: AudioPlayerController.didChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.refreshAudioMiniPlayer()
+        }
+        refreshAudioMiniPlayer()
+    }
+
+    /// Shows or hides the mini player and insets Library + Music pages.
+    func refreshAudioMiniPlayer() {
+        let active = AudioPlayerController.shared.hasActiveSession
+        audioMiniPlayer.reload()
+        let height: CGFloat = active ? AudioMiniPlayerView.preferredHeight : 0
+        audioMiniHeightConstraint?.constant = height
+        audioMiniPlayer.isHidden = !active
+        libraryViewController.miniPlayerBottomInset = height
+        audioLibraryViewController.miniPlayerBottomInset = height
+        view.layoutIfNeeded()
+    }
+
+    /// Reveals the Music page to the right of the media grid (no-op when split).
+    func presentAudioLibrary() {
+        guard !isHomeSplitLayout else { return }
+        showMusicPage(animated: true)
+    }
+
+    /// Presents the expanded Now Playing sheet for the ambient player.
+    func presentNowPlaying() {
+        let nowPlaying = AudioNowPlayingViewController()
+        nowPlaying.onOpenLibrary = { [weak self] in
+            self?.dismiss(animated: true) {
+                guard let self, !self.isHomeSplitLayout else { return }
+                self.showMusicPage(animated: true)
+            }
+        }
+        let nav = UINavigationController(rootViewController: nowPlaying)
+        if let sheet = nav.sheetPresentationController {
+            sheet.detents = [.medium(), .large()]
+            sheet.prefersGrabberVisible = true
+        }
+        presentationAnchor.present(nav, animated: true)
     }
 
     /// Adds the transfer status overlay (message + cancel) above the library content.
@@ -188,8 +240,20 @@ extension iPhoneMainViewController {
         connectionManager.syncCoordinator = coordinator
     }
 
-    /// Presents the live camera control surface for AirPlay output.
+    /// Presents the camera control surface (preview first; Go Live for AirPlay).
+    ///
+    /// The home tile is only a launcher / LIVE indicator — no mini preview.
     func presentCameraLive() {
+        if presentedViewController is CameraLiveViewController { return }
+        SlideshowPlaybackController.shared.stop()
+        // Warm capture for phone framing — AirPlay waits for Go Live.
+        if !ExternalDisplayManager.shared.isCameraModeActive {
+            Task { @MainActor in
+                let granted = await CameraManager.shared.checkPermissions()
+                guard granted else { return }
+                CameraManager.shared.prepareAndStart { }
+            }
+        }
         let cameraVC = CameraLiveViewController()
         cameraVC.modalPresentationStyle = .fullScreen
         present(cameraVC, animated: true)

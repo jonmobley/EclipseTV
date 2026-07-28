@@ -1,0 +1,31 @@
+Eclipse Review Notes
+====================
+
+Eclipse is a companion pair: iPhone remote + Apple TV display.
+Please install BOTH apps on devices on the SAME Wi‑Fi network.
+
+Demo path
+---------
+1. Launch Eclipse on Apple TV.
+2. Launch Eclipse on iPhone.
+3. When prompted, allow Local Network on both devices.
+4. On iPhone, connect/pair to the Apple TV (Settings or connection pill).
+5. Pick a photo/video from the library and send it to the TV, or present via AirPlay.
+6. Optional cloud albums: enter demo account code ______ on iPhone or TV.
+
+Permissions used
+----------------
+- Local Network / Bonjour: discover and connect iPhone ↔ Apple TV (Multipeer).
+- Photo Library: choose media to send/present.
+- Camera: live camera feed presentation (AirPlay).
+- Background audio: continue ambient/local audio playback.
+
+Encryption
+----------
+Uses only standard OS encryption (HTTPS, MultipeerConnectivity required encryption).
+No custom proprietary crypto.
+
+Support
+-------
+Contact: ________________
+Privacy policy: ________________

@@ -52,9 +52,17 @@ extension iPhoneMainViewController: iPhoneConnectionManagerDelegate {
         preferredTVName = peer.displayName
         updateConnectedState(true, peer: peer)
         refreshLibraryMenu()
-        // Align TV library bucket with the phone's Display Mode, then flush that mode.
+        // Align TV library bucket + transition preference, then flush that mode.
         let mode = ExternalOutputSettings.libraryMode
         connectionManager.sendSetDisplayMode(mode)
+        connectionManager.sendSetContentTransition(
+            ExternalOutputSettings.contentTransition.rawValue
+        )
+        // Forward saved join code so the TV syncs the same shared presentation.
+        if let code = AlbumBrowserStore.shared.accountCode,
+           AlbumBrowserStore.shared.hasAccountConfigured {
+            _ = connectionManager.sendSetAccount(code: code)
+        }
         let pendingCount = PendingUploadStore.shared.uploads(for: mode).count
         if pendingCount > 0 {
             showTemporaryStatus(

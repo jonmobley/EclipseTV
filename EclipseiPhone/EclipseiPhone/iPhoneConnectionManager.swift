@@ -180,11 +180,12 @@ class iPhoneConnectionManager: NSObject {
         }
     }
 
-    /// Keeps the TV's active library bucket aligned with the phone's Display Mode,
-    /// then flushes any pending uploads for the newly active mode.
+    /// Keeps the TV aligned with Display Mode / transition settings, then flushes
+    /// pending uploads for the active library mode.
     @objc private func handleDisplayModeDidChange() {
         let mode = ExternalOutputSettings.libraryMode
         sendSetDisplayMode(mode)
+        sendSetContentTransition(ExternalOutputSettings.contentTransition.rawValue)
         Task { @MainActor in
             self.flushPendingUploads(for: mode)
         }
@@ -486,6 +487,16 @@ class iPhoneConnectionManager: NSObject {
     @discardableResult
     func sendSetDisplayMode(_ mode: EclipseShareProtocol.LibraryMode) -> Bool {
         return sendCommand(.setDisplayMode(mode), description: "set display mode", broadcast: true)
+    }
+
+    /// Tells connected Apple TVs to use Cut or Crossfade for content switches.
+    @discardableResult
+    func sendSetContentTransition(_ style: String) -> Bool {
+        return sendCommand(
+            .setContentTransition(style),
+            description: "set content transition",
+            broadcast: true
+        )
     }
 
     /// Sends a control envelope. When `broadcast` is true and "keep all in sync" is on,

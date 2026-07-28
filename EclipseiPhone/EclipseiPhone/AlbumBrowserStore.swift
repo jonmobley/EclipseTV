@@ -9,7 +9,7 @@
 import Foundation
 import os.log
 
-/// Backs the iPhone's album browser. Holds the configured account code and the albums
+/// Backs the iPhone's joined-presentation browser. Holds the join code and the albums
 /// fetched from the account manifest over HTTPS, persisting both so the last-seen albums
 /// show immediately on relaunch (thumbnails come from `RemoteImageLoader`'s disk cache).
 ///
@@ -33,9 +33,9 @@ final class AlbumBrowserStore {
 
         var errorDescription: String? {
             switch self {
-            case .notConfigured: return "No account code set"
-            case .invalidURL, .invalidCode: return "That account code looks invalid"
-            case .unknownCode: return "No account found for that code"
+            case .notConfigured: return "No join code set"
+            case .invalidURL, .invalidCode: return "That join code looks invalid"
+            case .unknownCode: return "No presentation found for that code"
             case .rateLimited: return "Too many requests — please try again in a moment"
             case .badResponse(let status): return "Server error (\(status))"
             case .decodeFailed: return "Couldn't read the album data"
@@ -84,9 +84,18 @@ final class AlbumBrowserStore {
         }
         accountCode = normalized
         KeychainStore.set(normalized, forKey: codeKey)
-        // The code is the account secret; keep it out of plaintext logs.
-        logger.info("Account code set: \(normalized, privacy: .private)")
+        // The code is the join secret; keep it out of plaintext logs.
+        logger.info("Join code set: \(normalized, privacy: .private)")
         return true
+    }
+
+    /// Clears the join code and cached manifest (Leave presentation).
+    func clearAccount() {
+        accountCode = nil
+        albums = []
+        KeychainStore.removeValue(forKey: codeKey)
+        defaults.removeObject(forKey: manifestKey)
+        logger.info("Join code cleared")
     }
 
     // MARK: - Fetch

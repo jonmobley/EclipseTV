@@ -12,6 +12,40 @@ import UniformTypeIdentifiers
 import AVFoundation
 import os
 
+// MARK: - UIDocumentPickerDelegate
+
+extension iPhoneMainViewController: UIDocumentPickerDelegate {
+    func documentPicker(_ controller: UIDocumentPickerViewController,
+                        didPickDocumentsAt urls: [URL]) {
+        isShowingPicker = false
+        guard let url = urls.first else { return }
+        switch pendingDocumentKind {
+        case .pdf:
+            do {
+                let doc = try PDFStore.shared.add(from: url, title: nil)
+                libraryViewController.presentPDF(doc)
+            } catch {
+                showAlert(title: "Couldn't Add PDF", message: error.localizedDescription)
+            }
+        case .audio:
+            Task {
+                do {
+                    _ = try await AudioStore.shared.add(from: url, title: nil)
+                } catch {
+                    showAlert(
+                        title: "Couldn't Add Music",
+                        message: error.localizedDescription
+                    )
+                }
+            }
+        }
+    }
+
+    func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+        isShowingPicker = false
+    }
+}
+
 // MARK: - PHPickerViewControllerDelegate
 
 extension iPhoneMainViewController: PHPickerViewControllerDelegate {
@@ -20,17 +54,63 @@ extension iPhoneMainViewController: PHPickerViewControllerDelegate {
         isShowingPicker = false
         picker.dismiss(animated: true)
 
-        guard let provider = results.first?.itemProvider else {
+        guard !results.isEmpty else {
             // User cancelled: drop any pending re-send so a later normal send isn't
             // mistaken for a restore.
             connectionManager.pendingRestoreId = nil
+            pendingAlbumId = nil
+            pendingSlideshowShowId = nil
+            pendingSlideshowName = nil
+            pendingLogoPick = false
             return
         }
 
+        if pendingLogoPick {
+            let provider = results[0].itemProvider
+            guard provider.canLoadObject(ofClass: UIImage.self) else {
+                pendingLogoPick = false
+                showAlert(title: "Image Error", message: "Choose a photo for the Logo.")
+                return
+            }
+            handlePickedLogo(provider)
+            return
+        }
+
+        // Slideshow create: images only, skip crop, group as one tile.
+        if pendingSlideshowShowId != nil {
+            importPickedMediaBatch(results)
+            return
+        }
+
+        // Multi-select Import: skip crop/confirm and ingest directly.
+        if results.count > 1 {
+            importPickedMediaBatch(results)
+            return
+        }
+
+        let provider = results[0].itemProvider
         if provider.hasItemConformingToTypeIdentifier(UTType.movie.identifier) {
             handlePickedVideo(provider)
         } else if provider.canLoadObject(ofClass: UIImage.self) {
             handlePickedImage(provider)
+        }
+    }
+
+    private func handlePickedLogo(_ provider: NSItemProvider) {
+        provider.loadObject(ofClass: UIImage.self) { [weak self] object, _ in
+            guard let self else { return }
+            DispatchQueue.main.async {
+                self.pendingLogoPick = false
+                guard let image = object as? UIImage else {
+                    self.showAlert(
+                        title: "Image Error",
+                        message: "Could not load the selected image. Please try again."
+                    )
+                    return
+                }
+                LogoStore.shared.save(image)
+                self.libraryViewController.presentLogoLive()
+            }
         }
     }
 
@@ -289,7 +369,7 @@ extension iPhoneMainViewController: VideoThumbnailPreviewDelegate {
             )
             cropper.delegate = self
             cropper.modalPresentationStyle = .overFullScreen
-            self.present(cropper, animated: true)
+            self.presentationAnchor.present(cropper, animated: true)
         }
     }
 

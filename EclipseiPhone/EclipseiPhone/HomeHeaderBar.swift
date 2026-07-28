@@ -7,15 +7,13 @@
 
 import UIKit
 
-/// Top header for the home (library) screen.
+/// Top header for the home screen.
 ///
-/// Shows a connection-status pill (Ready / Presenting / TV App), a center Library
-/// dropdown (Camera / Albums / Web), and trailing settings (gear) + "+" controls.
-///
-/// While arranging, it switches to Cancel / Arrange / Done.
+/// Shows a connection-status pill, a center Eclipse menu (Shows), and trailing
+/// Black + settings (gear) + "+" controls.
 final class HomeHeaderBar: UIView {
 
-    /// Multipeer Eclipse TV app link state. `.paused` is the AirPlay-first default.
+    /// Multipeer EclipseTV link state. `.paused` is the AirPlay-first default.
     enum ConnectionDisplayState {
         case connected
         case disconnected
@@ -27,35 +25,22 @@ final class HomeHeaderBar: UIView {
     private let libraryButton = UIButton(type: .system)
     private let statusDot = UIView()
     private let statusLabel = UILabel()
-    /// Transparent overlay over the status pill; tappable to connect when not linked.
+    /// Transparent overlay over the status pill; opens Settings.
     private let statusButton = UIButton(type: .system)
-    private let presentingIcon = UIImageView()
+    private let blackButton = UIButton(type: .system)
     private let menuButton = UIButton(type: .system)
     private let addButton = UIButton(type: .system)
 
-    private let titleLabel = UILabel()
-    private let cancelButton = UIButton(type: .system)
-    private let doneButton = UIButton(type: .system)
-
-    /// Invoked when the "+" button is tapped.
-    var onAddTapped: (() -> Void)?
-    /// Invoked when "Done" is tapped while arranging.
-    var onArrangeDone: (() -> Void)?
-    /// Invoked when "Cancel" is tapped while arranging.
-    var onArrangeCancel: (() -> Void)?
     /// Invoked when the gear is tapped.
     var onOpenSettings: (() -> Void)?
-    /// Invoked when the status pill is tapped while not linked (opens connect flow).
-    var onConnect: (() -> Void)?
-    /// Invoked when "Camera" is chosen from the library dropdown.
-    var onPresentCamera: (() -> Void)?
-    /// Invoked when "Albums" is chosen from the library dropdown.
-    var onBrowseAlbums: (() -> Void)?
-    /// Invoked when "Web" is chosen from the library dropdown.
-    var onBrowseWeb: (() -> Void)?
+    /// Invoked when the status pill is tapped (opens Settings → EclipseTV).
+    var onStatusTapped: (() -> Void)?
+    /// Invoked when Black is tapped (AirPlay goes to a solid black frame).
+    var onPresentBlack: (() -> Void)?
 
     private var connectionState: ConnectionDisplayState = .paused
     private var isAirPlayConnected = false
+    private var isBlackLive = false
 
     // MARK: - Init
 
@@ -63,8 +48,6 @@ final class HomeHeaderBar: UIView {
         super.init(frame: frame)
         setupViews()
         setConnectionState(.paused)
-        setArranging(false)
-        rebuildLibraryMenu()
     }
 
     required init?(coder: NSCoder) {
@@ -74,24 +57,37 @@ final class HomeHeaderBar: UIView {
     // MARK: - Setup
 
     private func setupViews() {
-        var config = UIButton.Configuration.plain()
-        config.image = UIImage(systemName: "chevron.down",
-                               withConfiguration: UIImage.SymbolConfiguration(pointSize: 11, weight: .bold))
-        config.imagePlacement = .trailing
-        config.imagePadding = 4
-        config.baseForegroundColor = .label
-        config.contentInsets = .zero
-        libraryButton.configuration = config
+        var libraryConfig = UIButton.Configuration.plain()
+        libraryConfig.title = "Eclipse"
+        libraryConfig.image = UIImage(
+            systemName: "chevron.down",
+            withConfiguration: UIImage.SymbolConfiguration(pointSize: 10, weight: .semibold)
+        )
+        libraryConfig.imagePlacement = .trailing
+        libraryConfig.imagePadding = 4
+        libraryConfig.baseForegroundColor = .label
+        libraryConfig.contentInsets = NSDirectionalEdgeInsets(
+            top: 8, leading: 8, bottom: 8, trailing: 8
+        )
+        libraryConfig.titleTextAttributesTransformer =
+            UIConfigurationTextAttributesTransformer { incoming in
+                var outgoing = incoming
+                outgoing.font = .systemFont(ofSize: 17, weight: .semibold)
+                return outgoing
+            }
+        libraryButton.configuration = libraryConfig
         libraryButton.showsMenuAsPrimaryAction = true
+        libraryButton.accessibilityLabel = "Eclipse, Shows menu"
+        libraryButton.accessibilityHint = "Shows your Shows and creates a new Show"
         libraryButton.translatesAutoresizingMaskIntoConstraints = false
         addSubview(libraryButton)
-        setLibraryTitle(nil)
 
         statusDot.layer.cornerRadius = 5
         statusDot.translatesAutoresizingMaskIntoConstraints = false
         addSubview(statusDot)
 
-        statusLabel.font = .systemFont(ofSize: 15, weight: .semibold)
+        statusLabel.font = .preferredFont(forTextStyle: .subheadline)
+        statusLabel.adjustsFontForContentSizeCategory = true
         statusLabel.translatesAutoresizingMaskIntoConstraints = false
         addSubview(statusLabel)
 
@@ -99,48 +95,38 @@ final class HomeHeaderBar: UIView {
         statusButton.addTarget(self, action: #selector(statusTapped), for: .touchUpInside)
         addSubview(statusButton)
 
-        // Kept for layout compatibility; always hidden — an AirPlay glyph next to the
-        // status pill read like a named TV device identity.
-        presentingIcon.isHidden = true
-        presentingIcon.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(presentingIcon)
+        blackButton.translatesAutoresizingMaskIntoConstraints = false
+        blackButton.accessibilityLabel = "Black"
+        blackButton.accessibilityHint = "Shows a black screen on AirPlay"
+        blackButton.addTarget(self, action: #selector(blackTapped), for: .touchUpInside)
+        addSubview(blackButton)
+        applyBlackButtonAppearance()
 
-        let menuConfig = UIImage.SymbolConfiguration(pointSize: 20, weight: .semibold)
-        menuButton.setImage(UIImage(systemName: "gearshape", withConfiguration: menuConfig), for: .normal)
-        menuButton.tintColor = .label
+        let symbolConfig = UIImage.SymbolConfiguration(pointSize: 22, weight: .regular)
+
+        var gearConfig = UIButton.Configuration.plain()
+        gearConfig.image = UIImage(systemName: "gearshape", withConfiguration: symbolConfig)
+        gearConfig.contentInsets = NSDirectionalEdgeInsets(
+            top: 10, leading: 10, bottom: 10, trailing: 10
+        )
+        menuButton.configuration = gearConfig
+        menuButton.tintColor = .systemBlue
         menuButton.translatesAutoresizingMaskIntoConstraints = false
         menuButton.accessibilityLabel = "Settings"
         menuButton.addTarget(self, action: #selector(settingsTapped), for: .touchUpInside)
         addSubview(menuButton)
 
-        let plusConfig = UIImage.SymbolConfiguration(pointSize: 20, weight: .bold)
-        addButton.setImage(UIImage(systemName: "plus", withConfiguration: plusConfig), for: .normal)
-        addButton.tintColor = .white
-        addButton.backgroundColor = .systemBlue
-        addButton.layer.cornerRadius = 18
-        addButton.clipsToBounds = true
+        var addConfig = UIButton.Configuration.plain()
+        addConfig.image = UIImage(systemName: "plus", withConfiguration: symbolConfig)
+        addConfig.contentInsets = NSDirectionalEdgeInsets(
+            top: 10, leading: 10, bottom: 10, trailing: 10
+        )
+        addButton.configuration = addConfig
+        addButton.tintColor = .systemBlue
         addButton.translatesAutoresizingMaskIntoConstraints = false
-        addButton.addTarget(self, action: #selector(addTapped), for: .touchUpInside)
+        addButton.accessibilityLabel = "Add"
+        addButton.showsMenuAsPrimaryAction = true
         addSubview(addButton)
-
-        titleLabel.font = .systemFont(ofSize: 17, weight: .semibold)
-        titleLabel.text = "Arrange"
-        titleLabel.textColor = .label
-        titleLabel.textAlignment = .center
-        titleLabel.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(titleLabel)
-
-        cancelButton.setTitle("Cancel", for: .normal)
-        cancelButton.titleLabel?.font = .systemFont(ofSize: 17, weight: .regular)
-        cancelButton.translatesAutoresizingMaskIntoConstraints = false
-        cancelButton.addTarget(self, action: #selector(cancelTapped), for: .touchUpInside)
-        addSubview(cancelButton)
-
-        doneButton.setTitle("Done", for: .normal)
-        doneButton.titleLabel?.font = .systemFont(ofSize: 17, weight: .semibold)
-        doneButton.translatesAutoresizingMaskIntoConstraints = false
-        doneButton.addTarget(self, action: #selector(doneTapped), for: .touchUpInside)
-        addSubview(doneButton)
 
         NSLayoutConstraint.activate([
             libraryButton.centerXAnchor.constraint(equalTo: centerXAnchor),
@@ -159,87 +145,75 @@ final class HomeHeaderBar: UIView {
             statusButton.topAnchor.constraint(equalTo: topAnchor),
             statusButton.bottomAnchor.constraint(equalTo: bottomAnchor),
 
-            presentingIcon.leadingAnchor.constraint(equalTo: statusLabel.trailingAnchor, constant: 8),
-            presentingIcon.centerYAnchor.constraint(equalTo: centerYAnchor),
-            presentingIcon.widthAnchor.constraint(equalToConstant: 22),
-            presentingIcon.heightAnchor.constraint(equalToConstant: 18),
-
-            addButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
+            addButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
             addButton.centerYAnchor.constraint(equalTo: centerYAnchor),
-            addButton.widthAnchor.constraint(equalToConstant: 36),
-            addButton.heightAnchor.constraint(equalToConstant: 36),
+            addButton.widthAnchor.constraint(equalToConstant: 44),
+            addButton.heightAnchor.constraint(equalToConstant: 44),
 
-            menuButton.trailingAnchor.constraint(equalTo: addButton.leadingAnchor, constant: -12),
+            menuButton.trailingAnchor.constraint(equalTo: addButton.leadingAnchor, constant: -2),
             menuButton.centerYAnchor.constraint(equalTo: centerYAnchor),
-            menuButton.widthAnchor.constraint(equalToConstant: 36),
-            menuButton.heightAnchor.constraint(equalToConstant: 36),
+            menuButton.widthAnchor.constraint(equalToConstant: 44),
+            menuButton.heightAnchor.constraint(equalToConstant: 44),
 
-            statusLabel.trailingAnchor.constraint(lessThanOrEqualTo: libraryButton.leadingAnchor, constant: -8),
+            blackButton.trailingAnchor.constraint(
+                equalTo: menuButton.leadingAnchor, constant: -6),
+            blackButton.centerYAnchor.constraint(equalTo: centerYAnchor),
+            blackButton.widthAnchor.constraint(equalToConstant: 28),
+            blackButton.heightAnchor.constraint(equalToConstant: 28),
 
-            cancelButton.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
-            cancelButton.centerYAnchor.constraint(equalTo: centerYAnchor),
-
-            doneButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
-            doneButton.centerYAnchor.constraint(equalTo: centerYAnchor),
-
-            titleLabel.centerXAnchor.constraint(equalTo: centerXAnchor),
-            titleLabel.centerYAnchor.constraint(equalTo: centerYAnchor)
+            statusLabel.trailingAnchor.constraint(
+                lessThanOrEqualTo: libraryButton.leadingAnchor, constant: -4
+            ),
+            libraryButton.trailingAnchor.constraint(
+                lessThanOrEqualTo: blackButton.leadingAnchor, constant: -4
+            )
         ])
     }
 
-    // MARK: - Library Dropdown
+    // MARK: - Menus
 
-    /// Sets the center title. Pass a Multipeer-linked Eclipse TV app name, or `nil`
-    /// for the AirPlay-first default ("Library").
-    func setLibraryTitle(_ name: String?) {
-        let title = (name?.isEmpty == false) ? name! : "Library"
-        libraryButton.configuration?.attributedTitle = AttributedString(
-            title, attributes: AttributeContainer([.font: UIFont.systemFont(ofSize: 17, weight: .bold)]))
+    /// Sets the center control title (`"Eclipse"` on Home, show name in Show mode).
+    func setCenterTitle(_ title: String) {
+        guard var config = libraryButton.configuration else { return }
+        config.title = title
+        libraryButton.configuration = config
+        libraryButton.accessibilityLabel = "\(title), menu"
     }
 
-    private func rebuildLibraryMenu() {
-        let camera = UIAction(title: "Camera",
-                              image: UIImage(systemName: "camera.fill")) { [weak self] _ in
-            self?.onPresentCamera?()
-        }
-        let albums = UIAction(title: "Albums",
-                              image: UIImage(systemName: "rectangle.stack")) { [weak self] _ in
-            self?.onBrowseAlbums?()
-        }
-        let web = UIAction(title: "Web",
-                           image: UIImage(systemName: "safari")) { [weak self] _ in
-            self?.onBrowseWeb?()
-        }
-        libraryButton.menu = UIMenu(children: [camera, albums, web])
+    /// Attaches the Shows menu to the center Eclipse control.
+    func setLibraryMenu(_ menu: UIMenu) {
+        libraryButton.menu = menu
+    }
+
+    /// Attaches the system add menu to the "+" control (primary action).
+    func setAddMenu(_ menu: UIMenu) {
+        addButton.menu = menu
     }
 
     // MARK: - Actions
 
-    @objc private func addTapped() {
-        onAddTapped?()
-    }
-
-    @objc private func cancelTapped() {
-        onArrangeCancel?()
-    }
-
     @objc private func statusTapped() {
-        guard connectionState != .connected else { return }
-        onConnect?()
-    }
-
-    @objc private func doneTapped() {
-        onArrangeDone?()
+        onStatusTapped?()
     }
 
     @objc private func settingsTapped() {
         onOpenSettings?()
     }
 
+    @objc private func blackTapped() {
+        onPresentBlack?()
+    }
+
     // MARK: - State
 
-    /// Reflects Eclipse TV app (Multipeer) state. AirPlay presentation is shown via
-    /// `setPresenting` when the TV app isn't linked.
+    /// Reflects whether Black is the live AirPlay source (red stroke + LIVE a11y).
+    func setBlackLive(_ live: Bool) {
+        guard isBlackLive != live else { return }
+        isBlackLive = live
+        applyBlackButtonAppearance()
+    }
+
+    /// Reflects EclipseTV (Multipeer) state. Combined with `setPresenting` for AirPlay.
     func setConnectionState(_ state: ConnectionDisplayState) {
         connectionState = state
         applyStatusAppearance()
@@ -251,35 +225,43 @@ final class HomeHeaderBar: UIView {
     /// Updates whether an external display is available for presentation.
     func setPresenting(_ presenting: Bool) {
         isAirPlayConnected = presenting
-        presentingIcon.isHidden = true
         applyStatusAppearance()
     }
 
-    /// Status pill: Multipeer TV app link vs external-display presentation.
+    /// Status pill: Multipeer EclipseTV link vs AirPlay external display.
     private func applyStatusAppearance() {
         switch connectionState {
         case .connected:
-            statusDot.backgroundColor = .systemGreen
-            statusLabel.text = "TV App"
-            statusLabel.textColor = .systemGreen
-            statusLabel.accessibilityLabel = "Eclipse TV app linked"
+            if isAirPlayConnected {
+                statusDot.backgroundColor = .systemGreen
+                statusLabel.text = "EclipseTV · AirPlay"
+                statusLabel.textColor = .systemGreen
+                statusLabel.accessibilityLabel =
+                    "EclipseTV linked and AirPlay display available. Double tap for Settings."
+            } else {
+                statusDot.backgroundColor = .systemGreen
+                statusLabel.text = "EclipseTV"
+                statusLabel.textColor = .systemGreen
+                statusLabel.accessibilityLabel = "EclipseTV linked. Double tap for Settings."
+            }
         case .disconnected:
             statusDot.backgroundColor = .systemGray
             statusLabel.text = "Connecting…"
             statusLabel.textColor = .secondaryLabel
-            statusLabel.accessibilityLabel = "Connecting to Eclipse TV app"
+            statusLabel.accessibilityLabel = "Connecting to EclipseTV. Double tap for Settings."
         case .paused:
             if isAirPlayConnected {
                 statusDot.backgroundColor = .systemBlue
-                statusLabel.text = "Presenting"
+                statusLabel.text = "AirPlay"
                 statusLabel.textColor = .systemBlue
                 statusLabel.accessibilityLabel =
-                    "External display available for presentation"
+                    "AirPlay display available. Double tap for Settings."
             } else {
                 statusDot.backgroundColor = .systemGray
                 statusLabel.text = "Ready"
                 statusLabel.textColor = .secondaryLabel
-                statusLabel.accessibilityLabel = "Ready"
+                statusLabel.accessibilityLabel =
+                    "Ready. Double tap to open Settings and connect EclipseTV."
             }
         }
     }
@@ -290,20 +272,20 @@ final class HomeHeaderBar: UIView {
         addButton.alpha = enabled ? 1.0 : 0.4
     }
 
-    /// Toggles between the normal layout and the arranging (Cancel / Done) layout.
-    func setArranging(_ arranging: Bool) {
-        libraryButton.isHidden = arranging
-        statusDot.isHidden = arranging
-        statusLabel.isHidden = arranging
-        statusButton.isHidden = arranging
-        presentingIcon.isHidden = true
-        menuButton.isHidden = arranging
-        addButton.isHidden = arranging
-        titleLabel.isHidden = !arranging
-        cancelButton.isHidden = !arranging
-        doneButton.isHidden = !arranging
-    }
-
     /// The "+" button, exposed so callers can anchor popovers (iPad action sheets) to it.
     var addAnchor: UIView { addButton }
+
+    /// The Eclipse title control, for anchoring Show-related popovers.
+    var libraryAnchor: UIView { libraryButton }
+
+    private func applyBlackButtonAppearance() {
+        var config = UIButton.Configuration.plain()
+        config.background.backgroundColor = .black
+        config.background.cornerRadius = 8
+        config.background.strokeColor = isBlackLive ? .systemRed : .separator
+        config.background.strokeWidth = isBlackLive ? 3 : 1
+        config.contentInsets = .zero
+        blackButton.configuration = config
+        blackButton.accessibilityValue = isBlackLive ? "Live" : nil
+    }
 }

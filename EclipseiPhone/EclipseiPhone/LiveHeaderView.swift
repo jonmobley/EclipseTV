@@ -25,6 +25,11 @@ final class LiveHeaderView: UIView {
     /// Remote transport controls, shown only when the live item is a video.
     private let controls = PlaybackControlsView()
 
+    /// Identity of the last applied live content; used to skip no-op crossfades.
+    private var presentedContentKey: String?
+    /// In-flight dissolve overlay (removed when the next transition starts).
+    private var transitionSnapshot: UIView?
+
     /// Forwarded from the transport controls (play/pause, skip ±10s, absolute seek).
     var onTogglePlayPause: (() -> Void)?
     var onSkip: ((Double) -> Void)?
@@ -47,6 +52,13 @@ final class LiveHeaderView: UIView {
         backgroundColor = .secondarySystemBackground
         layer.cornerRadius = 16
         layer.masksToBounds = true
+        // Thin outline so Black / dark live content doesn't blend into the screen.
+        layer.borderWidth = 1
+        layer.borderColor = UIColor.separator.cgColor
+        registerForTraitChanges([UITraitUserInterfaceStyle.self]) {
+            (view: Self, _: UITraitCollection) in
+            view.layer.borderColor = UIColor.separator.cgColor
+        }
 
         imageView.contentMode = .scaleAspectFill
         imageView.clipsToBounds = true
@@ -133,32 +145,77 @@ final class LiveHeaderView: UIView {
     /// Shows the live item, or a placeholder when `item` is nil (nothing live).
     func configure(with item: LibraryItemDTO?, thumbnail: UIImage?, isOnline: Bool) {
         guard let item = item else {
-            showPlaceholder(isOnline: isOnline)
+            applyContent(key: "placeholder") {
+                self.showPlaceholder()
+            }
             return
         }
 
-        imageView.image = thumbnail
-        imageView.isHidden = false
-        placeholderIcon.isHidden = thumbnail != nil
-        placeholderIcon.image = UIImage(systemName: item.isVideo ? "film" : "photo")
+        let thumbToken = thumbnail.map { "\(ObjectIdentifier($0))" } ?? "nil"
+        let key = "media:\(item.id):\(thumbToken):\(isOnline)"
+        applyContent(key: key) {
+            self.backgroundColor = .secondarySystemBackground
+            self.imageView.image = thumbnail
+            self.imageView.isHidden = false
+            self.placeholderIcon.isHidden = thumbnail != nil
+            self.placeholderIcon.image = UIImage(systemName: item.isVideo ? "film" : "photo")
+            self.placeholderIcon.tintColor = .tertiaryLabel
 
-        // Keep the live preview clean: show only the LIVE badge, not the item's title
-        // or type overlay (and so no bottom gradient is needed).
-        gradientLayer.isHidden = true
-        liveBadge.isHidden = false
-        titleLabel.isHidden = true
-        subtitleLabel.isHidden = true
-        isUserInteractionEnabled = true
-
-        // Transport controls only apply to videos (and only while connected).
-        controls.isHidden = !(item.isVideo && isOnline)
+            // LIVE badge + name on the bottom gradient (hidden when video controls show).
+            let showControls = item.isVideo && isOnline
+            self.gradientLayer.isHidden = false
+            self.liveBadge.isHidden = false
+            self.titleLabel.isHidden = true
+            self.subtitleLabel.text = item.name
+            self.subtitleLabel.isHidden = showControls
+            self.isUserInteractionEnabled = true
+            self.accessibilityLabel = "Live, \(item.name)"
+            self.controls.isHidden = !showControls
+        }
     }
 
-    private func showPlaceholder(isOnline _: Bool) {
+    /// Live overlay (website / camera / black) — never shows leftover media art.
+    func configureOverlay(
+        title: String,
+        systemImage: String?,
+        fillColor: UIColor,
+        thumbnail: UIImage? = nil
+    ) {
+        let thumbToken = thumbnail.map { "\(ObjectIdentifier($0))" } ?? "nil"
+        let key = "overlay:\(title):\(systemImage ?? ""):\(thumbToken)"
+        applyContent(key: key) {
+            self.backgroundColor = fillColor
+            self.imageView.image = thumbnail
+            self.imageView.isHidden = thumbnail == nil
+            if let systemImage {
+                self.placeholderIcon.image = UIImage(systemName: systemImage)
+                self.placeholderIcon.tintColor = UIColor.white.withAlphaComponent(0.55)
+                self.placeholderIcon.isHidden = thumbnail != nil
+            } else {
+                self.placeholderIcon.isHidden = true
+            }
+
+            self.gradientLayer.isHidden = true
+            self.liveBadge.isHidden = false
+            self.subtitleLabel.isHidden = true
+            self.controls.isHidden = true
+
+            self.titleLabel.isHidden = thumbnail != nil
+            self.titleLabel.textColor = UIColor.white.withAlphaComponent(0.85)
+            self.titleLabel.font = .systemFont(ofSize: 16, weight: .semibold)
+            self.titleLabel.textAlignment = .center
+            self.titleLabel.text = title
+            self.isUserInteractionEnabled = false
+        }
+    }
+
+    private func showPlaceholder() {
+        backgroundColor = .secondarySystemBackground
         imageView.image = nil
         imageView.isHidden = true
         placeholderIcon.isHidden = false
         placeholderIcon.image = UIImage(systemName: "tv")
+        placeholderIcon.tintColor = .tertiaryLabel
 
         gradientLayer.isHidden = true
         liveBadge.isHidden = true
@@ -176,5 +233,49 @@ final class LiveHeaderView: UIView {
     /// Applies the latest playback state to the transport controls.
     func updatePlayback(_ state: PlaybackState) {
         controls.update(isPlaying: state.isPlaying, currentTime: state.currentTime, duration: state.duration)
+    }
+
+    // MARK: - Crossfade
+
+    /// Instant update (Cut / same content) or snapshot dissolve matching AirPlay.
+    private func applyContent(key: String, update: () -> Void) {
+        let shouldCrossfade = ExternalOutputSettings.contentTransition == .crossfade
+            && presentedContentKey != nil
+            && presentedContentKey != key
+            && window != nil
+            && bounds.width > 0
+
+        presentedContentKey = key
+        guard shouldCrossfade else {
+            update()
+            return
+        }
+
+        transitionSnapshot?.removeFromSuperview()
+        let snapshot = snapshotView(afterScreenUpdates: false)
+        update()
+
+        guard let snapshot else { return }
+        snapshot.frame = bounds
+        snapshot.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        addSubview(snapshot)
+        // Keep chrome above the dissolve (LIVE badge / transport).
+        bringSubviewToFront(liveBadge)
+        bringSubviewToFront(controls)
+        transitionSnapshot = snapshot
+
+        // Brief hold so thumbnail/layout can settle under the snapshot.
+        UIView.animate(
+            withDuration: 0.35,
+            delay: 0.08,
+            options: [.curveEaseInOut, .allowUserInteraction]
+        ) {
+            snapshot.alpha = 0
+        } completion: { [weak self] _ in
+            snapshot.removeFromSuperview()
+            if self?.transitionSnapshot === snapshot {
+                self?.transitionSnapshot = nil
+            }
+        }
     }
 }

@@ -85,7 +85,7 @@ extension ImageViewController {
         if isInGridMode {
             hideGridView()
         } else {
-            displayImageAtCurrentIndex()
+            displayCurrentWithPreferredTransition()
         }
     }
 
@@ -119,7 +119,7 @@ extension ImageViewController {
             if dataSource.isEmpty {
                 showGridView()
             } else {
-                displayImageAtCurrentIndex()
+                displayCurrentWithPreferredTransition()
             }
         }
     }

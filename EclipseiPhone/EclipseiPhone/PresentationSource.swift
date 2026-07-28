@@ -22,6 +22,10 @@ struct PresentationSource: Equatable {
         case camera
         /// A web page rendered full-bleed on the external display (AirPlay only).
         case web(URL)
+        /// A PDF rendered full-bleed on the external display (AirPlay only).
+        case pdf(URL)
+        /// Solid black screen with no idle brand chrome.
+        case black
         /// The full-resolution file isn't on this device; show `thumbnail` (if any) with a
         /// short explanatory caption instead.
         case unavailable(thumbnail: UIImage?, message: String)
@@ -47,6 +51,16 @@ struct PresentationSource: Equatable {
     /// Web page for AirPlay presentation.
     static func web(_ url: URL) -> PresentationSource {
         PresentationSource(content: .web(url))
+    }
+
+    /// PDF for AirPlay presentation.
+    static func pdf(_ url: URL) -> PresentationSource {
+        PresentationSource(content: .pdf(url))
+    }
+
+    /// Solid black output for the external display.
+    static var black: PresentationSource {
+        PresentationSource(content: .black)
     }
 
     static func unavailable(thumbnail: UIImage?, message: String) -> PresentationSource {

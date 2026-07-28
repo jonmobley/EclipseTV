@@ -166,6 +166,14 @@ final class LocalMediaStore {
         }
     }
 
+    /// On-disk / library id for `id` (e.g. UUID hyphens → underscores).
+    ///
+    /// Use this whenever comparing manifest ids to `storedIds()` so orphan recovery
+    /// does not treat the same file as a new item.
+    static func canonicalFileName(forId id: String) -> String {
+        fileName(forId: id)
+    }
+
     private static func fileName(forId id: String) -> String {
         let component = (id as NSString).lastPathComponent
         let ext = (component as NSString).pathExtension

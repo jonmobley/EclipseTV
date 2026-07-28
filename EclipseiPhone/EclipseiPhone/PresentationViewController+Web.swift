@@ -10,7 +10,7 @@ import WebKit
 
 // MARK: - Web Presentation
 
-extension PresentationViewController {
+extension PresentationViewController: WKNavigationDelegate {
 
     /// Mobile Safari user agent so responsive sites serve their phone breakpoint.
     static let mobileUserAgent =
@@ -22,15 +22,17 @@ extension PresentationViewController {
     func ensureWebView() -> WKWebView {
         if let webView = webView { return webView }
 
-        let config = WKWebViewConfiguration()
-        config.allowsInlineMediaPlayback = true
-        config.mediaTypesRequiringUserActionForPlayback = []
-
-        let view = WKWebView(frame: .zero, configuration: config)
+        // Same persistent store + process pool as the phone browser.
+        let view = WKWebView(
+            frame: .zero,
+            configuration: EclipseWebKit.makeConfiguration()
+        )
         view.customUserAgent = Self.mobileUserAgent
+        view.navigationDelegate = self
         view.scrollView.showsVerticalScrollIndicator = false
         view.scrollView.showsHorizontalScrollIndicator = false
         view.scrollView.bounces = false
+        view.scrollView.contentInsetAdjustmentBehavior = .never
         view.isOpaque = false
         view.backgroundColor = .black
         view.scrollView.backgroundColor = .black
@@ -45,6 +47,7 @@ extension PresentationViewController {
     /// Loads `url` into the external web view and applies Vertical/scale layout.
     func showWeb(url: URL) {
         hideCamera()
+        hidePDF()
         hideMediaContainer()
         messageLabel.text = nil
         imageView.isHidden = true
@@ -131,5 +134,19 @@ extension PresentationViewController {
         guard let webView = webView else { return }
         webView.scrollView.setContentOffset(.zero, animated: false)
         webView.evaluateJavaScript("window.scrollTo(0, 0);", completionHandler: nil)
+    }
+
+    /// Applies a phone HTML5 media event to the external WebView (play/pause/seek).
+    func applyWebMediaSync(_ event: EclipseWebMediaSync.Event) {
+        guard let webView, !webContainer.isHidden else { return }
+        if event.action == "play"
+            || (event.action == "timeupdate" && !event.paused)
+            || (event.action == "seeked" && !event.paused) {
+            configureAudioSession(muted: event.muted)
+        }
+        guard let data = try? JSONEncoder().encode(event),
+              let json = String(data: data, encoding: .utf8) else { return }
+        let js = EclipseWebMediaSync.applyJavaScript(jsonPayload: json)
+        webView.evaluateJavaScript(js, completionHandler: nil)
     }
 }

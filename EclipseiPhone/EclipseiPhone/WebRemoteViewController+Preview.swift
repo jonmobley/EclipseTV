@@ -10,12 +10,18 @@ import WebKit
 
 // MARK: - Matched Viewport Browser
 
-extension WebRemoteViewController: UIScrollViewDelegate, WKNavigationDelegate {
+extension WebRemoteViewController: UIScrollViewDelegate,
+                                   WKNavigationDelegate,
+                                   WKScriptMessageHandler {
+
+    /// Inset from the safe area so the 9:16 / 16:9 panel clears device corner radii.
+    private var webStageCornerInset: CGFloat { 12 }
 
     /// Creates the phone web stage (9:16 or 16:9) and loads the page.
     ///
     /// The stage uses the same logical viewport as AirPlay so responsive sites
-    /// reflow identically on phone and TV.
+    /// reflow identically on phone and TV. It sits inset inside the safe area so
+    /// the centered panel is not clipped by rounded display corners.
     func setupPreviewWebView() {
         let stage = UIView()
         stage.backgroundColor = .black
@@ -24,23 +30,30 @@ extension WebRemoteViewController: UIScrollViewDelegate, WKNavigationDelegate {
         view.insertSubview(stage, at: 0)
         webStageView = stage
 
+        let inset = webStageCornerInset
+        let guide = view.safeAreaLayoutGuide
         NSLayoutConstraint.activate([
-            stage.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            stage.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            stage.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            stage.trailingAnchor.constraint(equalTo: view.trailingAnchor)
+            stage.topAnchor.constraint(equalTo: guide.topAnchor, constant: inset),
+            stage.bottomAnchor.constraint(equalTo: guide.bottomAnchor, constant: -inset),
+            stage.leadingAnchor.constraint(equalTo: guide.leadingAnchor, constant: inset),
+            stage.trailingAnchor.constraint(equalTo: guide.trailingAnchor, constant: -inset)
         ])
 
-        let config = WKWebViewConfiguration()
-        config.allowsInlineMediaPlayback = true
-        config.mediaTypesRequiringUserActionForPlayback = []
-
-        let web = WKWebView(frame: .zero, configuration: config)
+        // Shared persistent store so logins survive close / reopen.
+        // Media handler reports HTML5 play/pause/seek to the AirPlay WebView.
+        let web = WKWebView(
+            frame: .zero,
+            configuration: EclipseWebKit.makeConfiguration(mediaHandler: self)
+        )
         web.customUserAgent = PresentationViewController.mobileUserAgent
         web.scrollView.delegate = self
         web.navigationDelegate = self
+        web.uiDelegate = self
         web.backgroundColor = .black
         web.scrollView.backgroundColor = .black
+        // Stage is already inside the safe area; automatic insets leave a blank
+        // strip that gets baked into home-grid thumbnails.
+        web.scrollView.contentInsetAdjustmentBehavior = .never
         web.isOpaque = true
 
         stage.addSubview(web)
@@ -90,20 +103,55 @@ extension WebRemoteViewController: UIScrollViewDelegate, WKNavigationDelegate {
 
     func webView(_ webView: WKWebView,
                  didCommit navigation: WKNavigation!) {
+        updateBrowserChrome()
         guard let url = webView.url else { return }
         ExternalDisplayManager.shared.loadWeb(url: url)
-        if let title = webView.title, !title.isEmpty {
-            self.title = title
-        }
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        if let title = webView.title, !title.isEmpty {
-            self.title = title
-        }
+        updateBrowserChrome()
         let scroll = webView.scrollView
         let maxY = scroll.contentSize.height - scroll.bounds.height
         let progress = maxY > 0 ? min(max(scroll.contentOffset.y / maxY, 0), 1) : 0
         ExternalDisplayManager.shared.setWebScrollProgress(progress)
+        // Refresh the home-grid preview from what the user is actually viewing.
+        if let url = webView.url, url.scheme != "about" {
+            WebThumbnailPrefetcher.shared.captureVisibleWebView(webView, for: page.id)
+        }
+    }
+
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!,
+                 withError error: Error) {
+        updateBrowserChrome()
+        presentWebLoadFailure(error)
+    }
+
+    func webView(_ webView: WKWebView,
+                 didFailProvisionalNavigation navigation: WKNavigation!,
+                 withError error: Error) {
+        updateBrowserChrome()
+        presentWebLoadFailure(error)
+    }
+
+    /// Surfaces a load failure unless the navigation was cancelled (e.g. new request).
+    private func presentWebLoadFailure(_ error: Error) {
+        let nsError = error as NSError
+        if nsError.domain == NSURLErrorDomain, nsError.code == NSURLErrorCancelled {
+            return
+        }
+        showPresentationToast("Couldn't load this page")
+    }
+
+    // MARK: - WKScriptMessageHandler (HTML5 media → AirPlay)
+
+    func userContentController(
+        _ userContentController: WKUserContentController,
+        didReceive message: WKScriptMessage
+    ) {
+        guard message.name == EclipseWebMediaSync.messageName,
+              let event = EclipseWebMediaSync.Event(messageBody: message.body) else {
+            return
+        }
+        ExternalDisplayManager.shared.syncWebMedia(event)
     }
 }

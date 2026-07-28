@@ -54,6 +54,7 @@ final class WebPageStore {
         let page = WebPage(title: trimmedTitle, url: url)
         pages.insert(page, at: 0)
         persist()
+        WebThumbnailPrefetcher.shared.enqueue([page])
         return page
     }
 
@@ -62,6 +63,7 @@ final class WebPageStore {
         let before = pages.count
         pages.removeAll { $0.id == id }
         guard pages.count != before else { return }
+        WebThumbnailStore.shared.remove(id: id)
         persist()
     }
 

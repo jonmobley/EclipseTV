@@ -44,6 +44,8 @@ enum EclipseShareProtocol {
         case setAccount = "set_account"
         /// Companion switches the TV's active Landscape / Vertical library bucket.
         case setDisplayMode = "set_display_mode"
+        /// Companion sets Cut vs Crossfade for TV content switches.
+        case setContentTransition = "set_content_transition"
     }
 
     /// Separate media libraries: Landscape (16:9) vs Vertical (9:16).
@@ -167,6 +169,8 @@ struct EclipseShareEnvelope: Codable {
     /// `"landscape"` / `"vertical"` — which library bucket this message applies to.
     /// Optional for backward compatibility with older peers.
     var libraryMode: String? = nil
+    /// `"Cut"` / `"Crossfade"` — content switch style for the TV app.
+    var contentTransition: String? = nil
 
     var kind: EclipseShareProtocol.Kind? {
         EclipseShareProtocol.Kind(rawValue: eclipseMsg)
@@ -305,6 +309,14 @@ struct EclipseShareEnvelope: Codable {
         EclipseShareEnvelope(
             eclipseMsg: EclipseShareProtocol.Kind.setDisplayMode.rawValue,
             libraryMode: mode.rawValue
+        )
+    }
+
+    /// Tells the TV to use Cut or Crossfade when switching content.
+    static func setContentTransition(_ style: String) -> EclipseShareEnvelope {
+        EclipseShareEnvelope(
+            eclipseMsg: EclipseShareProtocol.Kind.setContentTransition.rawValue,
+            contentTransition: style
         )
     }
 
