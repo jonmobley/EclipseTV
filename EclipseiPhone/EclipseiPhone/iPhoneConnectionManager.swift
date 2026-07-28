@@ -204,7 +204,7 @@ class iPhoneConnectionManager: NSObject {
             }
         }
         guard !payload.isEmpty else { return }
-        uploadPending(payload)
+        uploadPending(payload, mode: mode)
     }
     
     // MARK: - Multipeer Connectivity
@@ -548,9 +548,12 @@ class iPhoneConnectionManager: NSObject {
 
     /// Sends a media file to one specific peer without progress UI (used by the sync
     /// coordinator to replay the library to a replica TV).
-    func sendMedia(at url: URL, id: String, to peer: MCPeerID) {
+    func sendMedia(at url: URL, id: String,
+                   mode: EclipseShareProtocol.LibraryMode = ExternalOutputSettings.libraryMode,
+                   to peer: MCPeerID) {
         guard let session = session, session.connectedPeers.contains(peer) else { return }
-        session.sendResource(at: url, withName: id, toPeer: peer) { [weak self] error in
+        let wireName = EclipseShareProtocol.mediaResourceName(for: id, mode: mode)
+        session.sendResource(at: url, withName: wireName, toPeer: peer) { [weak self] error in
             if let error = error {
                 self?.logger.error("Replica media send failed for \(id, privacy: .public): \(error.localizedDescription)")
             }
@@ -576,6 +579,7 @@ class iPhoneConnectionManager: NSObject {
     func replayLibrary(_ items: [(id: String, url: URL)],
                        orderedIds: [String],
                        toPeerNamed name: String,
+                       mode: EclipseShareProtocol.LibraryMode = ExternalOutputSettings.libraryMode,
                        completion: @escaping (Bool) -> Void) {
         guard let session = session, let peer = connectedPeer(named: name), !items.isEmpty else {
             completion(false)
@@ -584,7 +588,8 @@ class iPhoneConnectionManager: NSObject {
         let group = DispatchGroup()
         for item in items {
             group.enter()
-            session.sendResource(at: item.url, withName: item.id, toPeer: peer) { [weak self] error in
+            let wireName = EclipseShareProtocol.mediaResourceName(for: item.id, mode: mode)
+            session.sendResource(at: item.url, withName: wireName, toPeer: peer) { [weak self] error in
                 if let error = error {
                     self?.logger.error("Replay send failed for \(item.id, privacy: .public): \(error.localizedDescription)")
                 }

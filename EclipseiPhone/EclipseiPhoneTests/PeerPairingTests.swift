@@ -37,4 +37,13 @@ struct PeerPairingTests {
         #expect(decoded?.kind == .playRequest)
         #expect(decoded?.id == "photo.jpg")
     }
+
+    @Test func mediaResourceNameRoundTripsWithMode() {
+        let wire = EclipseShareProtocol.mediaResourceName(
+            for: "thumbnail_clip.mp4", mode: .landscape
+        )
+        let parsed = EclipseShareProtocol.parseMediaResourceName(wire)
+        #expect(parsed.fileName == "thumbnail_clip.mp4")
+        #expect(parsed.mode == .landscape)
+    }
 }

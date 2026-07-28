@@ -334,7 +334,8 @@ class ConnectionManager: NSObject {
         case .restoreItem:
             guard let id = envelope.id else { return }
             logger.info("Received restore request for id: \(id, privacy: .public)")
-            // Activate mode so the next inbound file lands in the right subdirectory.
+            // Activate mode so restore slot placement runs against the right ledger/UI.
+            // File placement itself is stamped on the Multipeer resource name.
             DispatchQueue.main.async { [weak self] in
                 self?.activateModeIfNeeded(from: envelope)
             }
@@ -574,14 +575,22 @@ extension ConnectionManager: MCSessionDelegate {
             try? FileManager.default.removeItem(at: localURL)
             return
         }
-        
+
+        // Mode is stamped in the wire name (`eclmode_<mode>_<file>`). Fall back to the
+        // active library for legacy unprefixed peers.
+        let parsed = EclipseShareProtocol.parseMediaResourceName(safeName)
+        let fileName = parsed.fileName
+        let libraryMode = parsed.mode ?? MediaDataSource.shared.activeLibraryMode
+
         // Check if this is a custom thumbnail
-        if safeName.hasPrefix("thumbnail_") {
-            let videoFileName = String(safeName.dropFirst(10))
+        if fileName.hasPrefix("thumbnail_") {
+            let videoFileName = String(fileName.dropFirst(10))
             if !videoFileName.isEmpty,
                ReceivedMediaValidator.isValidImage(at: localURL),
                let thumbnailImage = UIImage(contentsOfFile: localURL.path) {
-                let videoPath = ImageStorage.shared.getImagesDirectory().appendingPathComponent(videoFileName).path
+                let videoPath = ImageStorage.shared
+                    .getImagesDirectory(for: libraryMode)
+                    .appendingPathComponent(videoFileName).path
                 VideoThumbnailCache.shared.cacheThumbnail(thumbnailImage, for: videoPath)
                 logger.info("Cached custom thumbnail for video: \(videoFileName, privacy: .public)")
             }
@@ -589,8 +598,8 @@ extension ConnectionManager: MCSessionDelegate {
             return
         }
 
-        guard let kind = ReceivedMediaValidator.kind(forExtension: (safeName as NSString).pathExtension) else {
-            logger.error("Rejected resource with unsupported extension: \(safeName, privacy: .public)")
+        guard let kind = ReceivedMediaValidator.kind(forExtension: (fileName as NSString).pathExtension) else {
+            logger.error("Rejected resource with unsupported extension: \(fileName, privacy: .public)")
             try? FileManager.default.removeItem(at: localURL)
             return
         }
@@ -608,9 +617,12 @@ extension ConnectionManager: MCSessionDelegate {
             }
             return
         }
-        
+
         let fileManager = FileManager.default
-        let destinationURL = ImageStorage.shared.getImagesDirectory().appendingPathComponent(safeName)
+        _ = ImageStorage.shared.createImagesDirectory(for: libraryMode)
+        let destinationURL = ImageStorage.shared
+            .getImagesDirectory(for: libraryMode)
+            .appendingPathComponent(fileName)
         do {
             if fileManager.fileExists(atPath: destinationURL.path) {
                 try fileManager.removeItem(at: destinationURL)

@@ -23,6 +23,10 @@ import Foundation
 enum EclipseShareProtocol {
     /// Resource-name prefix used when streaming a library thumbnail TV -> iPhone.
     static let thumbnailResourcePrefix = "libthumb_"
+    /// Resource-name prefix that stamps Landscape / Vertical onto Multipeer media sends
+    /// (`eclmode_<mode>_<fileName>`). Keeps mode atomic with the file so a mid-transfer
+    /// display-mode switch cannot mis-bucket the receive.
+    static let mediaModeResourcePrefix = "eclmode_"
 
     /// Discriminator values for the `eclipseMsg` envelope field.
     enum Kind: String {
@@ -83,6 +87,35 @@ enum EclipseShareProtocol {
         guard name.hasPrefix(thumbnailResourcePrefix) else { return nil }
         let id = String(name.dropFirst(thumbnailResourcePrefix.count))
         return id.isEmpty ? nil : id
+    }
+
+    /// Wire name for a media (or `thumbnail_…`) Multipeer resource, stamped with `mode`.
+    static func mediaResourceName(for fileName: String, mode: LibraryMode) -> String {
+        mediaModeResourcePrefix + mode.rawValue + "_" + fileName
+    }
+
+    /// Parses a Multipeer media resource name into the on-disk file name and optional mode.
+    /// Unprefixed legacy names return `mode == nil` (caller falls back to active library).
+    static func parseMediaResourceName(_ resourceName: String) -> (fileName: String, mode: LibraryMode?) {
+        guard resourceName.hasPrefix(mediaModeResourcePrefix) else {
+            return (resourceName, nil)
+        }
+        let rest = String(resourceName.dropFirst(mediaModeResourcePrefix.count))
+        for mode in LibraryMode.allCases {
+            let token = mode.rawValue + "_"
+            if rest.hasPrefix(token) {
+                let fileName = String(rest.dropFirst(token.count))
+                guard !fileName.isEmpty else { return (resourceName, nil) }
+                return (fileName, mode)
+            }
+        }
+        return (resourceName, nil)
+    }
+
+    /// Infers library mode from an on-disk media path under `…/Landscape/` or `…/Vertical/`.
+    static func libraryMode(inferredFromPath path: String) -> LibraryMode {
+        if path.contains("/\(LibraryMode.vertical.directoryName)/") { return .vertical }
+        return .landscape
     }
 }
 

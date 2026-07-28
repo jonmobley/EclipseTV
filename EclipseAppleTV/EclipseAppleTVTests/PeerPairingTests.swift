@@ -71,4 +71,28 @@ struct PeerPairingTests {
         #expect(ReceivedMediaValidator.kind(forExtension: "MP4") == .video)
         #expect(ReceivedMediaValidator.kind(forExtension: "exe") == nil)
     }
+
+    @Test func mediaResourceNameRoundTripsWithMode() {
+        let wire = EclipseShareProtocol.mediaResourceName(for: "clip.mp4", mode: .vertical)
+        let parsed = EclipseShareProtocol.parseMediaResourceName(wire)
+        #expect(parsed.fileName == "clip.mp4")
+        #expect(parsed.mode == .vertical)
+
+        let legacy = EclipseShareProtocol.parseMediaResourceName("photo.jpg")
+        #expect(legacy.fileName == "photo.jpg")
+        #expect(legacy.mode == nil)
+    }
+
+    @Test func libraryModeInferredFromPath() {
+        #expect(
+            EclipseShareProtocol.libraryMode(
+                inferredFromPath: "/Caches/Media/Vertical/a.jpg"
+            ) == .vertical
+        )
+        #expect(
+            EclipseShareProtocol.libraryMode(
+                inferredFromPath: "/Caches/Media/Landscape/a.jpg"
+            ) == .landscape
+        )
+    }
 }

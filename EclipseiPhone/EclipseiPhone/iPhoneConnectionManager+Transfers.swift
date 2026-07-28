@@ -26,13 +26,15 @@ extension iPhoneConnectionManager {
         sendPendingRestoreIfNeeded(to: peer, via: session)
 
         let fileName = imageURL.lastPathComponent
+        let mode = ExternalOutputSettings.libraryMode
         // Keep a full-resolution copy on the phone so it can be presented on an external
-        // AirPlay display without the TV-side companion app. Keyed by the resource name,
-        // which becomes this item's id in the TV library.
-        LocalMediaStore.shared.store(fileURL: imageURL, forId: fileName)
+        // AirPlay display without the TV-side companion app. Keyed by the library id
+        // (plain file name), not the mode-stamped Multipeer wire name.
+        LocalMediaStore.shared.store(fileURL: imageURL, forId: fileName, mode: mode)
         // Replicate to other synced TVs (no progress UI for those).
-        fanOutMediaToReplicas(url: imageURL, id: fileName, excluding: peer)
-        let progress = session.sendResource(at: imageURL, withName: fileName, toPeer: peer) { [weak self] error in
+        fanOutMediaToReplicas(url: imageURL, id: fileName, mode: mode, excluding: peer)
+        let wireName = EclipseShareProtocol.mediaResourceName(for: fileName, mode: mode)
+        let progress = session.sendResource(at: imageURL, withName: wireName, toPeer: peer) { [weak self] error in
             DispatchQueue.main.async {
                 guard let self = self, self.transferGeneration == generation else { return }
                 
@@ -106,6 +108,9 @@ extension iPhoneConnectionManager {
         // Clean up any existing progress observer before starting new transfer
         cleanupCurrentProgress()
 
+        // Capture mode once so a mid-transfer display-mode switch can't mis-bucket.
+        let mode = ExternalOutputSettings.libraryMode
+
         // Check if there's a custom thumbnail to send first
         let fileName = videoURL.lastPathComponent
         if let customThumbnailPath = UserDefaults.standard.string(forKey: "customThumbnail_\(fileName)"),
@@ -114,9 +119,11 @@ extension iPhoneConnectionManager {
             // Send custom thumbnail first, then send the video only once the thumbnail
             // transfer completes so the Apple TV always has the thumbnail before the video.
             let thumbnailURL = URL(fileURLWithPath: customThumbnailPath)
-            let thumbnailFileName = "thumbnail_\(fileName)"
-            
-            session.sendResource(at: thumbnailURL, withName: thumbnailFileName, toPeer: peer) { [weak self] error in
+            let thumbnailWireName = EclipseShareProtocol.mediaResourceName(
+                for: "thumbnail_\(fileName)", mode: mode
+            )
+
+            session.sendResource(at: thumbnailURL, withName: thumbnailWireName, toPeer: peer) { [weak self] error in
                 if let error = error {
                     self?.logger.error("Custom thumbnail transfer failed: \(error.localizedDescription)")
                 } else {
@@ -130,12 +137,13 @@ extension iPhoneConnectionManager {
                 DispatchQueue.main.async {
                     guard let self = self, self.transferGeneration == generation else { return }
                     self.beginVideoResourceSend(videoURL, session: session, peer: peer,
-                                                generation: generation)
+                                                generation: generation, mode: mode)
                 }
             }
         } else {
             // No custom thumbnail; send the video immediately
-            beginVideoResourceSend(videoURL, session: session, peer: peer, generation: generation)
+            beginVideoResourceSend(videoURL, session: session, peer: peer,
+                                   generation: generation, mode: mode)
         }
         
         return true
@@ -143,7 +151,8 @@ extension iPhoneConnectionManager {
 
     /// Performs the actual video resource transfer and wires up progress observation.
     private func beginVideoResourceSend(_ videoURL: URL, session: MCSession, peer: MCPeerID,
-                                        generation: UInt64) {
+                                        generation: UInt64,
+                                        mode: EclipseShareProtocol.LibraryMode) {
         guard transferGeneration == generation, !isTransferCancelled else {
             logger.info("Video transfer cancelled before it began")
             return
@@ -154,10 +163,11 @@ extension iPhoneConnectionManager {
         let fileName = videoURL.lastPathComponent
         // Keep a full-resolution copy on the phone for external AirPlay presentation
         // (see sendImage for rationale).
-        LocalMediaStore.shared.store(fileURL: videoURL, forId: fileName)
+        LocalMediaStore.shared.store(fileURL: videoURL, forId: fileName, mode: mode)
         // Replicate to other synced TVs (no progress UI for those).
-        fanOutMediaToReplicas(url: videoURL, id: fileName, excluding: peer)
-        let progress = session.sendResource(at: videoURL, withName: fileName, toPeer: peer) { [weak self] error in
+        fanOutMediaToReplicas(url: videoURL, id: fileName, mode: mode, excluding: peer)
+        let wireName = EclipseShareProtocol.mediaResourceName(for: fileName, mode: mode)
+        let progress = session.sendResource(at: videoURL, withName: wireName, toPeer: peer) { [weak self] error in
             DispatchQueue.main.async {
                 guard let self = self, self.transferGeneration == generation else { return }
                 
@@ -193,7 +203,11 @@ extension iPhoneConnectionManager {
     /// Uses a single `transferGeneration` for the whole batch so `cancelCurrentTransfer`
     /// invalidates every outstanding completion without each item cancelling the previous.
     /// Replicas receive the same fan-out as a normal send.
-    func uploadPending(_ items: [(id: String, url: URL)]) {
+    ///
+    /// - Parameter mode: Library bucket the batch belongs to. Captured by the caller so a
+    ///   mid-flush display-mode switch cannot remove (or leave) the wrong queue entries.
+    func uploadPending(_ items: [(id: String, url: URL)],
+                       mode: EclipseShareProtocol.LibraryMode) {
         guard let session = session, let peer = activeTargetPeer, !items.isEmpty else { return }
 
         transferGeneration &+= 1
@@ -201,8 +215,9 @@ extension iPhoneConnectionManager {
         isTransferCancelled = false
 
         for item in items {
-            fanOutMediaToReplicas(url: item.url, id: item.id, excluding: peer)
-            session.sendResource(at: item.url, withName: item.id, toPeer: peer) { [weak self] error in
+            fanOutMediaToReplicas(url: item.url, id: item.id, mode: mode, excluding: peer)
+            let wireName = EclipseShareProtocol.mediaResourceName(for: item.id, mode: mode)
+            session.sendResource(at: item.url, withName: wireName, toPeer: peer) { [weak self] error in
                 DispatchQueue.main.async {
                     guard let self = self, self.transferGeneration == generation else { return }
                     if let error = error {
@@ -213,10 +228,7 @@ extension iPhoneConnectionManager {
                     }
                     self.logger.info("Uploaded queued item \(item.id, privacy: .public)")
                     Task { @MainActor in
-                        PendingUploadStore.shared.remove(
-                            id: item.id,
-                            mode: ExternalOutputSettings.libraryMode
-                        )
+                        PendingUploadStore.shared.remove(id: item.id, mode: mode)
                     }
                 }
             }
@@ -225,10 +237,12 @@ extension iPhoneConnectionManager {
 
     /// Fans a just-sent media file out to every connected replica TV (all connected peers
     /// except the active one). No-op unless syncing all.
-    private func fanOutMediaToReplicas(url: URL, id: String, excluding active: MCPeerID) {
+    private func fanOutMediaToReplicas(url: URL, id: String,
+                                       mode: EclipseShareProtocol.LibraryMode,
+                                       excluding active: MCPeerID) {
         guard syncAllEnabled, let session = session else { return }
         for peer in session.connectedPeers where peer != active {
-            sendMedia(at: url, id: id, to: peer)
+            sendMedia(at: url, id: id, mode: mode, to: peer)
         }
     }
 

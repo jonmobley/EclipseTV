@@ -18,6 +18,7 @@ extension ImageViewController {
 
     func connectionManager(_ manager: ConnectionManager, didReceiveImageAt path: String) {
         let startTime = Date()
+        let mode = EclipseShareProtocol.libraryMode(inferredFromPath: path)
 
         // Check if we're in move mode or showing a menu - if so, queue the content
         if isMoveMode || presentedViewController != nil {
@@ -29,8 +30,8 @@ extension ImageViewController {
             return
         }
 
-        // Add the newly received image without making it live or stealing selection/focus.
-        dataSource.addMediaSilently(at: path)
+        // Add into the path's library bucket (may differ from the on-screen active mode).
+        dataSource.addMediaSilently(at: path, mode: mode)
 
         let endTime = Date()
         let duration = endTime.timeIntervalSince(startTime)
@@ -229,6 +230,8 @@ extension ImageViewController {
             self.logger.error("Video file does not exist at path: \(path)")
         }
 
+        let mode = EclipseShareProtocol.libraryMode(inferredFromPath: path)
+
         // Check if we're in move mode or showing a menu - if so, queue the content
         if isMoveMode || presentedViewController != nil {
             logger.info("Queuing received video as app is in move mode or settings: \(path)")
@@ -239,8 +242,8 @@ extension ImageViewController {
             return
         }
 
-        // Add the newly received video without making it live or stealing selection/focus.
-        dataSource.addMediaSilently(at: path)
+        // Add into the path's library bucket (may differ from the on-screen active mode).
+        dataSource.addMediaSilently(at: path, mode: mode)
 
         let endTime = Date()
         let duration = endTime.timeIntervalSince(startTime)
@@ -327,7 +330,8 @@ extension ImageViewController {
         var addedCount = 0
 
         for queuedItem in self.queuedContent {
-            if self.dataSource.addMediaSilently(at: queuedItem.path) {
+            let mode = EclipseShareProtocol.libraryMode(inferredFromPath: queuedItem.path)
+            if self.dataSource.addMediaSilently(at: queuedItem.path, mode: mode) {
                 addedCount += 1
             }
         }
