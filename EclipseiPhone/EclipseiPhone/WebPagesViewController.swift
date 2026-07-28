@@ -25,7 +25,7 @@ final class WebPagesViewController: UITableViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = "Pages"
+        title = "Web"
         navigationItem.leftBarButtonItem = UIBarButtonItem(
             barButtonSystemItem: .done, target: self, action: #selector(doneTapped))
         navigationItem.rightBarButtonItem = UIBarButtonItem(
@@ -80,7 +80,7 @@ final class WebPagesViewController: UITableViewController {
             let urlString = alert?.textFields?[1].text ?? ""
             do {
                 let page = try self.store.add(title: title, urlString: urlString)
-                self.presentRemote(for: page)
+                self.presentPage(page)
             } catch {
                 self.presentError(error)
             }
@@ -98,10 +98,10 @@ final class WebPagesViewController: UITableViewController {
         present(alert, animated: true)
     }
 
-    private func presentRemote(for page: WebPage) {
+    private func presentPage(_ page: WebPage) {
         ExternalDisplayManager.shared.presentWeb(page.url)
-        let remote = WebRemoteViewController(page: page)
-        navigationController?.pushViewController(remote, animated: true)
+        let preview = WebRemoteViewController(page: page)
+        navigationController?.pushViewController(preview, animated: true)
     }
 
     // MARK: - Table
@@ -112,7 +112,7 @@ final class WebPagesViewController: UITableViewController {
 
     override func tableView(_ tableView: UITableView,
                             titleForFooterInSection section: Int) -> String? {
-        "Pages open full-bleed on your AirPlay TV. Use Landscape or Portrait to match how the TV is mounted."
+        "Web pages open full-bleed on your AirPlay TV. Use Landscape or Vertical in Settings to match how the TV is mounted."
     }
 
     override func tableView(_ tableView: UITableView,
@@ -142,7 +142,7 @@ final class WebPagesViewController: UITableViewController {
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
         guard !store.pages.isEmpty else { return }
-        presentRemote(for: store.pages[indexPath.row])
+        presentPage(store.pages[indexPath.row])
     }
 
     override func tableView(_ tableView: UITableView,

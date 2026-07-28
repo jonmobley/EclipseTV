@@ -79,11 +79,143 @@ extension iPhoneMainViewController: PHPickerViewControllerDelegate {
             }
 
             DispatchQueue.main.async {
-                // Let the user review the image before it's sent. The actual downscale +
-                // transfer happens only once they confirm in the preview.
-                self.showImagePreview(for: image)
+                // Vertical + non-9:16 → crop first; otherwise confirm preview.
+                self.presentImageAddFlow(for: image)
             }
         }
+    }
+}
+
+// MARK: - AspectCropDelegate
+
+extension iPhoneMainViewController: AspectCropDelegate {
+    func aspectCrop(_ controller: AspectCropViewController,
+                    didFinishWith image: UIImage,
+                    cropRectInSource: CGRect) {
+        if let videoURL = pendingVideoCropURL {
+            let thumb = pendingVideoThumbnail ?? image
+            let previewSize = pendingVideoCropPreviewSize ?? image.size
+            let editId = pendingEditItemId
+            pendingVideoCropURL = nil
+            pendingVideoThumbnail = nil
+            pendingVideoCropPreviewSize = nil
+            controller.dismiss(animated: true) { [weak self] in
+                self?.finishVerticalVideoCrop(
+                    sourceURL: videoURL,
+                    previewSize: previewSize,
+                    cropRectInPreview: cropRectInSource,
+                    thumbnail: thumb,
+                    croppedStill: image,
+                    replacingItemId: editId
+                )
+            }
+            return
+        }
+
+        if let editId = pendingEditItemId {
+            pendingEditItemId = nil
+            controller.dismiss(animated: true) { [weak self] in
+                self?.replaceEditedImage(image, itemId: editId)
+            }
+            return
+        }
+
+        // Crop confirm is the add decision — skip the second "Add to library?" prompt.
+        controller.dismiss(animated: true) { [weak self] in
+            self?.sendImageToAppleTV(image)
+        }
+    }
+
+    func aspectCropDidCancel(_ controller: AspectCropViewController) {
+        // Editing uses the library file as the crop source — never delete it on cancel.
+        if pendingEditItemId == nil, let videoURL = pendingVideoCropURL {
+            cleanupTempFile(at: videoURL)
+        }
+        pendingVideoCropURL = nil
+        pendingVideoThumbnail = nil
+        pendingVideoCropPreviewSize = nil
+        pendingEditItemId = nil
+        controller.dismiss(animated: true) { [weak self] in
+            self?.connectionManager.pendingRestoreId = nil
+        }
+    }
+
+    /// Scales the preview crop into video display pixels, exports, then adds or replaces.
+    private func finishVerticalVideoCrop(sourceURL: URL,
+                                         previewSize: CGSize,
+                                         cropRectInPreview: CGRect,
+                                         thumbnail: UIImage,
+                                         croppedStill: UIImage,
+                                         replacingItemId: String?) {
+        guard previewSize.width > 0, previewSize.height > 0 else {
+            showTemporaryStatus("Couldn't crop that video. Try another.")
+            if replacingItemId == nil { cleanupTempFile(at: sourceURL) }
+            pendingEditItemId = nil
+            return
+        }
+
+        showTemporaryStatus("Cropping video…", duration: 60)
+        Task { @MainActor in
+            guard let videoSize = await MediaAspect.videoDisplaySize(at: sourceURL) else {
+                self.showTemporaryStatus("Couldn't crop that video. Try another.")
+                if replacingItemId == nil { self.cleanupTempFile(at: sourceURL) }
+                self.pendingEditItemId = nil
+                return
+            }
+
+            let scaleX = videoSize.width / previewSize.width
+            let scaleY = videoSize.height / previewSize.height
+            let videoCrop = CGRect(
+                x: cropRectInPreview.origin.x * scaleX,
+                y: cropRectInPreview.origin.y * scaleY,
+                width: cropRectInPreview.size.width * scaleX,
+                height: cropRectInPreview.size.height * scaleY
+            )
+
+            do {
+                let croppedURL = try await VideoCropExporter.export(
+                    sourceURL: sourceURL, cropRect: videoCrop
+                )
+                if replacingItemId == nil {
+                    self.cleanupTempFile(at: sourceURL)
+                }
+                let croppedThumb = MediaAspect.crop(
+                    MediaAspect.normalized(thumbnail),
+                    to: self.scaledRect(
+                        cropRectInPreview, from: previewSize, to: thumbnail.size
+                    )
+                ) ?? croppedStill
+
+                if let editId = replacingItemId {
+                    self.pendingEditItemId = nil
+                    self.statusLabel.alpha = 0
+                    self.replaceEditedVideo(
+                        at: croppedURL, itemId: editId, thumbnail: croppedThumb
+                    )
+                } else {
+                    self.currentTempFileURL = croppedURL
+                    self.saveCustomThumbnail(croppedThumb, for: croppedURL)
+                    self.addMedia(
+                        localURL: croppedURL, isVideo: true,
+                        thumbnail: croppedThumb, duration: 0
+                    )
+                }
+            } catch {
+                self.showTemporaryStatus("Couldn't crop that video. Try another.")
+                if replacingItemId == nil { self.cleanupTempFile(at: sourceURL) }
+                self.pendingEditItemId = nil
+            }
+        }
+    }
+
+    private func scaledRect(_ rect: CGRect, from fromSize: CGSize, to toSize: CGSize) -> CGRect {
+        guard fromSize.width > 0, fromSize.height > 0 else { return rect }
+        return CGRect(
+            x: rect.origin.x * (toSize.width / fromSize.width),
+            y: rect.origin.y * (toSize.height / fromSize.height),
+            width: rect.size.width * (toSize.width / fromSize.width),
+            height: rect.size.height * (toSize.height / fromSize.height)
+        )
     }
 }
 
@@ -117,13 +249,11 @@ extension iPhoneMainViewController: ImagePreviewDelegate {
 // MARK: - VideoThumbnailPreviewDelegate
 
 extension iPhoneMainViewController: VideoThumbnailPreviewDelegate {
-    func videoThumbnailPreview(_ controller: VideoThumbnailPreviewViewController, didFinishWithVideoURL videoURL: URL, selectedThumbnail: UIImage) {
+    func videoThumbnailPreview(_ controller: VideoThumbnailPreviewViewController,
+                               didFinishWithVideoURL videoURL: URL,
+                               selectedThumbnail: UIImage) {
         controller.dismiss(animated: true) { [weak self] in
-            // Save the custom thumbnail for later use
-            self?.saveCustomThumbnail(selectedThumbnail, for: videoURL)
-            // Add to the library (shown immediately, uploaded now if connected, otherwise
-            // queued for the next connection).
-            self?.addMedia(localURL: videoURL, isVideo: true, thumbnail: selectedThumbnail, duration: 0)
+            self?.continueVideoAdd(videoURL: videoURL, thumbnail: selectedThumbnail)
         }
     }
 
@@ -131,7 +261,44 @@ extension iPhoneMainViewController: VideoThumbnailPreviewDelegate {
         controller.dismiss(animated: true)
     }
 
-    private func saveCustomThumbnail(_ thumbnail: UIImage, for videoURL: URL) {
+    /// Adds the video, or opens a 9:16 crop first when Vertical mode requires it.
+    private func continueVideoAdd(videoURL: URL, thumbnail: UIImage) {
+        guard MediaAspect.requiresVerticalCrop else {
+            finishVideoAdd(videoURL: videoURL, thumbnail: thumbnail)
+            return
+        }
+
+        showTemporaryStatus("Preparing crop…", duration: 30)
+        Task { @MainActor in
+            let size = await MediaAspect.videoDisplaySize(at: videoURL)
+            guard let size, !MediaAspect.matches(size, target: MediaAspect.vertical) else {
+                self.statusLabel.alpha = 0
+                self.finishVideoAdd(videoURL: videoURL, thumbnail: thumbnail)
+                return
+            }
+
+            let frame = await VideoCropExporter.previewFrame(at: videoURL) ?? thumbnail
+            self.statusLabel.alpha = 0
+            self.pendingVideoCropURL = videoURL
+            self.pendingVideoThumbnail = thumbnail
+            self.pendingVideoCropPreviewSize = MediaAspect.normalized(frame).size
+            let cropper = AspectCropViewController(
+                image: frame,
+                targetAspect: MediaAspect.vertical,
+                instruction: "Drag and pinch to frame your Vertical video crop"
+            )
+            cropper.delegate = self
+            cropper.modalPresentationStyle = .overFullScreen
+            self.present(cropper, animated: true)
+        }
+    }
+
+    private func finishVideoAdd(videoURL: URL, thumbnail: UIImage) {
+        saveCustomThumbnail(thumbnail, for: videoURL)
+        addMedia(localURL: videoURL, isVideo: true, thumbnail: thumbnail, duration: 0)
+    }
+
+    func saveCustomThumbnail(_ thumbnail: UIImage, for videoURL: URL) {
         // Save the custom thumbnail to a temporary location
         // We'll use this when the video is received on the Apple TV side
         guard let thumbnailData = thumbnail.jpegData(compressionQuality: 0.8) else { return }

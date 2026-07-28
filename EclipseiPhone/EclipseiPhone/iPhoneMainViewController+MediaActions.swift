@@ -27,6 +27,141 @@ extension iPhoneMainViewController {
         mediaPickerButtonTapped()
     }
 
+    /// Opens the aspect cropper so the user can re-frame an existing library item.
+    func beginEditCrop(forItemId id: String) {
+        guard let item = TVLibraryStore.shared.items.first(where: { $0.id == id }) else { return }
+        let target = MediaAspect.activeTarget
+        let modeName = ExternalOutputSettings.isVerticalMode ? "Vertical" : "Landscape"
+        let instruction = "Drag and pinch to reframe your \(modeName) crop"
+
+        if item.isVideo {
+            guard let url = LocalMediaStore.shared.localURL(forId: id) else {
+                showTemporaryStatus("Couldn't edit that video.")
+                return
+            }
+            showTemporaryStatus("Preparing crop…", duration: 30)
+            Task { @MainActor in
+                guard let frame = await VideoCropExporter.previewFrame(at: url) else {
+                    self.showTemporaryStatus("Couldn't edit that video.")
+                    return
+                }
+                self.statusLabel.alpha = 0
+                self.pendingEditItemId = id
+                self.pendingVideoCropURL = url
+                self.pendingVideoThumbnail = TVLibraryStore.shared.thumbnail(for: id) ?? frame
+                self.pendingVideoCropPreviewSize = MediaAspect.normalized(frame).size
+                let cropper = AspectCropViewController(
+                    image: frame,
+                    targetAspect: target,
+                    instruction: instruction,
+                    confirmTitle: "Save"
+                )
+                cropper.delegate = self
+                cropper.modalPresentationStyle = .overFullScreen
+                self.present(cropper, animated: true)
+            }
+            return
+        }
+
+        let image: UIImage?
+        if let url = LocalMediaStore.shared.localURL(forId: id) {
+            image = UIImage(contentsOfFile: url.path)
+        } else {
+            image = TVLibraryStore.shared.thumbnail(for: id)
+        }
+        guard let image else {
+            showTemporaryStatus("Couldn't edit that image.")
+            return
+        }
+
+        pendingEditItemId = id
+        let cropper = AspectCropViewController(
+            image: image,
+            targetAspect: target,
+            instruction: instruction,
+            confirmTitle: "Save"
+        )
+        cropper.delegate = self
+        cropper.modalPresentationStyle = .overFullScreen
+        present(cropper, animated: true)
+    }
+
+    /// Writes a re-cropped still over the existing library item and re-sends if linked.
+    func replaceEditedImage(_ image: UIImage, itemId: String) {
+        let optimized = MediaValidator.downscaleImage(image)
+        guard let data = optimized.jpegData(compressionQuality: 0.85) else {
+            showTemporaryStatus("Couldn't save the cropped image.")
+            return
+        }
+
+        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(itemId)
+        do {
+            try data.write(to: tempURL, options: .atomic)
+        } catch {
+            showTemporaryStatus("Couldn't save the cropped image.")
+            return
+        }
+
+        LocalMediaStore.shared.store(fileURL: tempURL, forId: itemId)
+        TVLibraryStore.shared.setThumbnail(optimized, forId: itemId)
+        refreshAirPlayIfLive(itemId: itemId)
+
+        guard isConnected() else {
+            cleanupTempFile(at: tempURL)
+            return
+        }
+
+        connectionManager.pendingRestoreId = itemId
+        currentTempFileURL = tempURL
+        showTransferUI()
+        if !connectionManager.sendImage(at: tempURL) {
+            showTemporaryStatus("Failed to update image on Apple TV.")
+            hideTransferUI()
+            cleanupTempFile(at: tempURL)
+            currentTempFileURL = nil
+            connectionManager.pendingRestoreId = nil
+        }
+    }
+
+    /// Writes a re-cropped video over the existing library item and re-sends if linked.
+    func replaceEditedVideo(at croppedURL: URL, itemId: String, thumbnail: UIImage) {
+        let namedURL = FileManager.default.temporaryDirectory.appendingPathComponent(itemId)
+        try? FileManager.default.removeItem(at: namedURL)
+        do {
+            try FileManager.default.copyItem(at: croppedURL, to: namedURL)
+        } catch {
+            showTemporaryStatus("Couldn't save the cropped video.")
+            cleanupTempFile(at: croppedURL)
+            return
+        }
+        cleanupTempFile(at: croppedURL)
+
+        LocalMediaStore.shared.store(fileURL: namedURL, forId: itemId)
+        TVLibraryStore.shared.setThumbnail(thumbnail, forId: itemId)
+        saveCustomThumbnail(thumbnail, for: namedURL)
+        refreshAirPlayIfLive(itemId: itemId)
+
+        guard isConnected() else {
+            cleanupTempFile(at: namedURL)
+            return
+        }
+
+        connectionManager.pendingRestoreId = itemId
+        currentTempFileURL = namedURL
+        sendMediaToAppleTV(namedURL)
+    }
+
+    /// If `itemId` is currently live, refreshes the AirPlay surface with the new file.
+    private func refreshAirPlayIfLive(itemId: String) {
+        guard TVLibraryStore.shared.currentId == itemId,
+              let item = TVLibraryStore.shared.items.first(where: { $0.id == itemId }) else {
+            return
+        }
+        ExternalDisplayManager.shared.present(
+            .forLibraryItem(item, thumbnail: TVLibraryStore.shared.thumbnail(for: itemId))
+        )
+    }
+
     @objc func mediaPickerButtonTapped() {
         // Adding works whether or not an Apple TV is connected: offline additions are
         // shown immediately and uploaded automatically once a TV connects.
@@ -168,10 +303,7 @@ extension iPhoneMainViewController {
                                   isAvailable: true)
         TVLibraryStore.shared.addLocalItem(item, thumbnail: thumbnail)
 
-        guard isConnected() else {
-            showTemporaryStatus("Added. It'll upload to your Apple TV once you connect.")
-            return
-        }
+        guard isConnected() else { return }
 
         if isVideo {
             sendMediaToAppleTV(localURL)

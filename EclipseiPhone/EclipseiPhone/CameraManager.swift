@@ -57,6 +57,11 @@ final class CameraManager {
 
     /// Configures the session with the back wide-angle camera. Safe to call repeatedly.
     func configureSession() {
+        configureSession(completion: nil)
+    }
+
+    /// Configures on the session queue, then invokes `completion` on the main queue.
+    func configureSession(completion: (() -> Void)?) {
         let session = captureSession
 
         sessionQueue.async { [weak self, session] in
@@ -71,6 +76,9 @@ final class CameraManager {
                 ) else {
                     self?.logger.error("No back wide-angle camera available")
                     session.commitConfiguration()
+                    if let completion {
+                        DispatchQueue.main.async(execute: completion)
+                    }
                     return
                 }
 
@@ -87,6 +95,9 @@ final class CameraManager {
             }
 
             session.commitConfiguration()
+            if let completion {
+                DispatchQueue.main.async(execute: completion)
+            }
         }
     }
 
@@ -97,12 +108,24 @@ final class CameraManager {
         let session = captureSession
 
         sessionQueue.async { [weak self, session] in
-            guard !session.isRunning else { return }
+            guard !session.isRunning else {
+                DispatchQueue.main.async { self?.isSessionRunning = true }
+                return
+            }
             session.startRunning()
             let isRunning = session.isRunning
             DispatchQueue.main.async {
                 self?.isSessionRunning = isRunning
             }
+        }
+    }
+
+    /// Configures (if needed), starts capture, then runs `completion` on the main queue.
+    func prepareAndStart(completion: @escaping () -> Void) {
+        configureSession { [weak self] in
+            self?.startSession()
+            // Allow the session a tick to publish frames before attaching UI.
+            DispatchQueue.main.async(execute: completion)
         }
     }
 

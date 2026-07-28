@@ -10,11 +10,27 @@ import AVFoundation
 
 /// Phone-side control surface for AirPlay camera presentation.
 ///
-/// Shows a live preview, output orientation controls, and Stop. The external
-/// display receives a chrome-free feed via `ExternalDisplayManager`.
+/// Preview is staged in a 9:16 (Vertical) or 16:9 (Landscape) panel — the same
+/// Display Mode aspect AirPlay uses — so framing matches the TV. Mode is set from
+/// Home ⋯, not on this screen.
 final class CameraLiveViewController: UIViewController {
 
     // MARK: - Subviews
+
+    private let stageView: UIView = {
+        let view = UIView()
+        view.backgroundColor = .black
+        view.clipsToBounds = true
+        view.translatesAutoresizingMaskIntoConstraints = false
+        return view
+    }()
+
+    private let panelView: UIView = {
+        let view = UIView()
+        view.backgroundColor = .black
+        view.clipsToBounds = true
+        return view
+    }()
 
     private let previewView = CameraPreviewView()
 
@@ -31,21 +47,14 @@ final class CameraLiveViewController: UIViewController {
         return label
     }()
 
-    private let orientationControl: UISegmentedControl = {
-        let control = UISegmentedControl(items: ExternalOutputOrientation.allCases.map(\.rawValue))
-        control.selectedSegmentIndex = ExternalOutputOrientation.allCases
-            .firstIndex(of: ExternalOutputSettings.orientation) ?? 0
-        control.translatesAutoresizingMaskIntoConstraints = false
-        return control
-    }()
-
-    private let rotationControl: UISegmentedControl = {
-        let items = ExternalRotationDirection.allCases.map(\.rawValue)
-        let control = UISegmentedControl(items: items)
-        control.selectedSegmentIndex = ExternalRotationDirection.allCases
-            .firstIndex(of: ExternalOutputSettings.rotationDirection) ?? 0
-        control.translatesAutoresizingMaskIntoConstraints = false
-        return control
+    private let modeLabel: UILabel = {
+        let label = UILabel()
+        label.textColor = UIColor.white.withAlphaComponent(0.75)
+        label.font = .systemFont(ofSize: 13, weight: .medium)
+        label.textAlignment = .center
+        label.numberOfLines = 2
+        label.translatesAutoresizingMaskIntoConstraints = false
+        return label
     }()
 
     private let stopButton: UIButton = {
@@ -75,20 +84,22 @@ final class CameraLiveViewController: UIViewController {
         view.backgroundColor = .black
         modalPresentationStyle = .fullScreen
 
-        previewView.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(previewView)
+        view.addSubview(stageView)
+        stageView.addSubview(panelView)
+        panelView.addSubview(previewView)
+        // Frame-driven like AirPlay camera — avoid Auto Layout fighting bounds.
+        previewView.translatesAutoresizingMaskIntoConstraints = true
         view.addSubview(airPlayBanner)
         view.addSubview(controlsStack)
 
-        controlsStack.addArrangedSubview(orientationControl)
-        controlsStack.addArrangedSubview(rotationControl)
+        controlsStack.addArrangedSubview(modeLabel)
         controlsStack.addArrangedSubview(stopButton)
 
         NSLayoutConstraint.activate([
-            previewView.topAnchor.constraint(equalTo: view.topAnchor),
-            previewView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            previewView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            previewView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            stageView.topAnchor.constraint(equalTo: view.topAnchor),
+            stageView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            stageView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            stageView.bottomAnchor.constraint(equalTo: controlsStack.topAnchor, constant: -12),
 
             airPlayBanner.topAnchor.constraint(
                 equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 16),
@@ -108,13 +119,9 @@ final class CameraLiveViewController: UIViewController {
                 equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -20)
         ])
 
-        orientationControl.addTarget(self, action: #selector(orientationChanged),
-                                     for: .valueChanged)
-        rotationControl.addTarget(self, action: #selector(rotationChanged),
-                                  for: .valueChanged)
         stopButton.addTarget(self, action: #selector(stopTapped), for: .touchUpInside)
 
-        updateRotationVisibility()
+        updateModeLabel()
         updateAirPlayBanner()
 
         NotificationCenter.default.addObserver(
@@ -129,10 +136,24 @@ final class CameraLiveViewController: UIViewController {
             name: ExternalDisplayManager.cameraDidEndNotification,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(outputSettingsChanged),
+            name: ExternalOutputSettings.didChangeNotification,
+            object: nil
+        )
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        layoutPhoneCameraViewport()
     }
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        ExternalDisplayManager.shared.refreshConnection()
+        updateAirPlayBanner()
+        updateModeLabel()
         startCameraIfNeeded()
     }
 
@@ -150,6 +171,25 @@ final class CameraLiveViewController: UIViewController {
         NotificationCenter.default.removeObserver(self)
     }
 
+    // MARK: - Viewport
+
+    /// Stages the preview in a Display Mode aspect panel (no TV rotation on phone).
+    private func layoutPhoneCameraViewport() {
+        let bounds = stageView.bounds
+        guard bounds.width > 0, bounds.height > 0 else { return }
+
+        let panel = ExternalOutputSettings.displayModePanelRect(in: bounds)
+        panelView.frame = panel
+
+        // Same upright fill the TV uses inside its (possibly rotated) panel.
+        PresentationViewController.applyRotatedLayout(
+            to: previewView,
+            in: panelView,
+            scale: 1,
+            rotationDegrees: 0
+        )
+    }
+
     // MARK: - Camera Session
 
     private func startCameraIfNeeded() {
@@ -159,14 +199,17 @@ final class CameraLiveViewController: UIViewController {
                 presentPermissionAlert()
                 return
             }
-            CameraManager.shared.configureSession()
-            previewView.attach(
-                session: CameraManager.shared.captureSession,
-                videoGravity: .resizeAspect
-            )
-            CameraManager.shared.startSession()
-            ExternalDisplayManager.shared.presentCamera()
-            updateAirPlayBanner()
+            CameraManager.shared.prepareAndStart { [weak self] in
+                guard let self else { return }
+                // Attach after inputs exist so phone + AirPlay aren't blank.
+                self.previewView.attach(
+                    session: CameraManager.shared.captureSession,
+                    videoGravity: .resizeAspect
+                )
+                self.layoutPhoneCameraViewport()
+                ExternalDisplayManager.shared.presentCamera()
+                self.updateAirPlayBanner()
+            }
         }
     }
 
@@ -189,19 +232,6 @@ final class CameraLiveViewController: UIViewController {
 
     // MARK: - Actions
 
-    @objc private func orientationChanged() {
-        let index = orientationControl.selectedSegmentIndex
-        guard ExternalOutputOrientation.allCases.indices.contains(index) else { return }
-        ExternalOutputSettings.orientation = ExternalOutputOrientation.allCases[index]
-        updateRotationVisibility()
-    }
-
-    @objc private func rotationChanged() {
-        let index = rotationControl.selectedSegmentIndex
-        guard ExternalRotationDirection.allCases.indices.contains(index) else { return }
-        ExternalOutputSettings.rotationDirection = ExternalRotationDirection.allCases[index]
-    }
-
     @objc private func stopTapped() {
         previewView.detach()
         ExternalDisplayManager.shared.stopCameraAndRestoreLibrary()
@@ -218,10 +248,21 @@ final class CameraLiveViewController: UIViewController {
         dismiss(animated: true)
     }
 
+    @objc private func outputSettingsChanged() {
+        updateModeLabel()
+        layoutPhoneCameraViewport()
+    }
+
     // MARK: - UI State
 
-    private func updateRotationVisibility() {
-        rotationControl.isHidden = ExternalOutputSettings.orientation != .portrait
+    private func updateModeLabel() {
+        let mode = ExternalOutputSettings.orientation.rawValue
+        if ExternalOutputSettings.isVerticalMode {
+            let rotation = ExternalOutputSettings.rotationDirection.rawValue
+            modeLabel.text = "Display Mode: \(mode) · \(rotation)\nChange in Settings"
+        } else {
+            modeLabel.text = "Display Mode: \(mode)\nChange in Settings"
+        }
     }
 
     private func updateAirPlayBanner() {

@@ -12,15 +12,8 @@ import os.log
 /// A persistent queue of media the user added on the phone that still needs to be pushed
 /// to an Apple TV.
 ///
-/// The companion is normally a remote for the TV library, but the user can also add
-/// photos and videos while no Apple TV is connected. Those additions are shown
-/// immediately in the grid (see `TVLibraryStore.addLocalItem`), their full-resolution
-/// files are kept in `LocalMediaStore`, and their metadata is recorded here so they can
-/// be uploaded automatically the next time a TV connects.
-///
-/// Entries are keyed by the same id `TVLibraryStore`/`LocalMediaStore` use (the resource
-/// name the phone sends, i.e. the file's `lastPathComponent`). Once the TV confirms an
-/// item by including it in a fresh manifest, it is removed from this queue.
+/// Entries are tagged with a `libraryMode` so Landscape and Vertical libraries flush
+/// independently. Legacy untagged entries migrate to landscape.
 @MainActor
 final class PendingUploadStore {
 
@@ -30,6 +23,8 @@ final class PendingUploadStore {
     /// A single queued upload: the library entry to display plus enough to re-send it.
     struct PendingUpload: Codable, Equatable {
         let item: LibraryItemDTO
+        /// `"landscape"` / `"vertical"`; nil means legacy (treated as landscape).
+        var libraryMode: String?
     }
 
     private(set) var uploads: [PendingUpload] = []
@@ -43,33 +38,58 @@ final class PendingUploadStore {
 
     // MARK: - Reads
 
-    /// The library entries for every queued upload, in the order they were added.
-    var items: [LibraryItemDTO] { uploads.map { $0.item } }
+    /// All queued uploads (both modes). Prefer `uploads(for:)` for mode-scoped work.
+    var allUploads: [PendingUpload] { uploads }
 
-    /// The set of ids currently awaiting upload. Used to protect their local files and
-    /// thumbnails from pruning while they haven't yet been confirmed by a TV.
-    var pendingIds: Set<String> { Set(uploads.map { $0.item.id }) }
+    /// Queued uploads for a library mode (legacy nil → landscape).
+    func uploads(for mode: EclipseShareProtocol.LibraryMode) -> [PendingUpload] {
+        uploads.filter { EclipseShareProtocol.LibraryMode.resolved(from: $0.libraryMode) == mode }
+    }
+
+    /// Library entries for the given mode, in queue order.
+    func items(for mode: EclipseShareProtocol.LibraryMode) -> [LibraryItemDTO] {
+        uploads(for: mode).map(\.item)
+    }
+
+    /// Ids awaiting upload in the given mode.
+    func pendingIds(for mode: EclipseShareProtocol.LibraryMode) -> Set<String> {
+        Set(uploads(for: mode).map { $0.item.id })
+    }
+
+    /// Convenience for the active display mode.
+    var items: [LibraryItemDTO] {
+        items(for: ExternalOutputSettings.libraryMode)
+    }
+
+    var pendingIds: Set<String> {
+        pendingIds(for: ExternalOutputSettings.libraryMode)
+    }
 
     var isEmpty: Bool { uploads.isEmpty }
 
-    func contains(id: String) -> Bool {
-        uploads.contains { $0.item.id == id }
+    func contains(id: String,
+                  mode: EclipseShareProtocol.LibraryMode = ExternalOutputSettings.libraryMode) -> Bool {
+        uploads(for: mode).contains { $0.item.id == id }
     }
 
     // MARK: - Writes
 
-    /// Adds an item to the queue (no-op if already queued).
-    func enqueue(_ item: LibraryItemDTO) {
-        guard !contains(id: item.id) else { return }
-        uploads.append(PendingUpload(item: item))
+    /// Adds an item to the queue for `mode` (no-op if already queued in that mode).
+    func enqueue(_ item: LibraryItemDTO,
+                 mode: EclipseShareProtocol.LibraryMode = ExternalOutputSettings.libraryMode) {
+        guard !contains(id: item.id, mode: mode) else { return }
+        uploads.append(PendingUpload(item: item, libraryMode: mode.rawValue))
         persist()
     }
 
-    /// Removes an item from the queue, e.g. after the TV confirms it or the user deletes
-    /// it before it ever synced.
-    func remove(id: String) {
+    /// Removes an item from the queue for `mode`.
+    func remove(id: String,
+                mode: EclipseShareProtocol.LibraryMode = ExternalOutputSettings.libraryMode) {
         let before = uploads.count
-        uploads.removeAll { $0.item.id == id }
+        uploads.removeAll {
+            $0.item.id == id
+                && EclipseShareProtocol.LibraryMode.resolved(from: $0.libraryMode) == mode
+        }
         if uploads.count != before { persist() }
     }
 
@@ -87,7 +107,16 @@ final class PendingUploadStore {
               let decoded = try? JSONDecoder().decode([PendingUpload].self, from: data) else {
             return
         }
-        uploads = decoded
+        // Migrate legacy untagged entries → landscape.
+        var migrated = false
+        uploads = decoded.map { entry in
+            guard entry.libraryMode == nil else { return entry }
+            migrated = true
+            var copy = entry
+            copy.libraryMode = EclipseShareProtocol.LibraryMode.landscape.rawValue
+            return copy
+        }
+        if migrated { persist() }
     }
 
     private func persist() {

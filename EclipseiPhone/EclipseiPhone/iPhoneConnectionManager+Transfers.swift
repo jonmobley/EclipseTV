@@ -213,7 +213,10 @@ extension iPhoneConnectionManager {
                     }
                     self.logger.info("Uploaded queued item \(item.id, privacy: .public)")
                     Task { @MainActor in
-                        PendingUploadStore.shared.remove(id: item.id)
+                        PendingUploadStore.shared.remove(
+                            id: item.id,
+                            mode: ExternalOutputSettings.libraryMode
+                        )
                     }
                 }
             }
@@ -234,7 +237,9 @@ extension iPhoneConnectionManager {
     private func sendPendingRestoreIfNeeded(to peer: MCPeerID, via session: MCSession) {
         guard let restoreId = pendingRestoreId else { return }
         pendingRestoreId = nil
-        if let data = EclipseShareEnvelope.restoreItem(id: restoreId).encoded() {
+        let envelope = EclipseShareEnvelope.restoreItem(id: restoreId)
+            .withLibraryMode(ExternalOutputSettings.libraryMode)
+        if let data = envelope.encoded() {
             try? session.send(data, toPeers: [peer], with: .reliable)
             logger.info("Sent restore_item for id: \(restoreId)")
         }

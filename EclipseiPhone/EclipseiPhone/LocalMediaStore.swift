@@ -11,67 +11,98 @@ import os.log
 
 /// Persistent store of the full-resolution media the phone has sent to an Apple TV.
 ///
-/// The companion normally only mirrors thumbnails of the TV library, but the AirPlay
-/// presentation feature needs the original file on the phone so it can render the
-/// selected item fullscreen on an external display without the TV-side companion app.
-///
-/// Files are keyed by the same identifier the TV uses for a `LibraryItemDTO`: the
-/// resource name the phone sent, which is `url.lastPathComponent`. Keeping the key
-/// identical means a local copy can be looked up directly from `TVLibraryStore.currentId`.
+/// Files live under `LocalMedia/<Landscape|Vertical>/` so the same filename can exist
+/// in both libraries. Legacy flat files under `LocalMedia/` migrate to Landscape.
 final class LocalMediaStore {
 
     /// Shared instance written at send time and read when presenting on an external display.
     static let shared = LocalMediaStore()
 
-    private let directory: URL
+    private let rootDirectory: URL
     private let ioQueue = DispatchQueue(label: "com.eclipseapp.ios.LocalMediaStore", qos: .utility)
     private let logger = Logger(subsystem: "com.eclipseapp.ios", category: "LocalMediaStore")
 
     private init() {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        directory = base.appendingPathComponent("LocalMedia", isDirectory: true)
-        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        excludeFromBackup(directory)
+        rootDirectory = base.appendingPathComponent("LocalMedia", isDirectory: true)
+        try? FileManager.default.createDirectory(at: rootDirectory, withIntermediateDirectories: true)
+        excludeFromBackup(rootDirectory)
+        for mode in EclipseShareProtocol.LibraryMode.allCases {
+            let dir = directory(for: mode)
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            excludeFromBackup(dir)
+        }
+        migrateLegacyFlatFilesIfNeeded()
     }
 
     // MARK: - Reads
 
-    /// The local full-resolution file for `id`, or nil if the phone never kept a copy
-    /// (e.g. the item was sent from another device).
-    func localURL(forId id: String) -> URL? {
-        let url = fileURL(forId: id)
+    /// The local full-resolution file for `id` in `mode`, or nil if absent.
+    func localURL(
+        forId id: String,
+        mode: EclipseShareProtocol.LibraryMode = ExternalOutputSettings.libraryMode
+    ) -> URL? {
+        let url = fileURL(forId: id, mode: mode)
         return FileManager.default.fileExists(atPath: url.path) ? url : nil
     }
 
-    func hasMedia(forId id: String) -> Bool {
-        localURL(forId: id) != nil
+    func hasMedia(
+        forId id: String,
+        mode: EclipseShareProtocol.LibraryMode = ExternalOutputSettings.libraryMode
+    ) -> Bool {
+        localURL(forId: id, mode: mode) != nil
+    }
+
+    /// Ids of full-resolution files still on disk for `mode` (filename = library id).
+    func storedIds(
+        for mode: EclipseShareProtocol.LibraryMode = ExternalOutputSettings.libraryMode
+    ) -> [String] {
+        let dir = directory(for: mode)
+        guard let files = try? FileManager.default.contentsOfDirectory(
+            at: dir, includingPropertiesForKeys: [.isDirectoryKey]
+        ) else { return [] }
+        return files.compactMap { url in
+            let isDir = (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
+            guard !isDir else { return nil }
+            return url.lastPathComponent
+        }
     }
 
     // MARK: - Writes
 
-    /// Keeps a persistent copy of `fileURL` keyed by `id`. The copy runs off the main
-    /// thread; the source (a temporary send file) is read-only here, so it is safe to
-    /// copy concurrently with the MultipeerConnectivity transfer that reads the same file.
-    func store(fileURL sourceURL: URL, forId id: String) {
-        let destination = fileURL(forId: id)
+    /// Keeps a persistent copy of `fileURL` keyed by `id` under the mode subdirectory.
+    func store(
+        fileURL sourceURL: URL,
+        forId id: String,
+        mode: EclipseShareProtocol.LibraryMode = ExternalOutputSettings.libraryMode
+    ) {
+        let destination = fileURL(forId: id, mode: mode)
         ioQueue.async { [weak self] in
             guard let self = self else { return }
             let fm = FileManager.default
             do {
+                try fm.createDirectory(
+                    at: destination.deletingLastPathComponent(),
+                    withIntermediateDirectories: true
+                )
                 if fm.fileExists(atPath: destination.path) {
                     try fm.removeItem(at: destination)
                 }
                 try fm.copyItem(at: sourceURL, to: destination)
             } catch {
-                self.logger.error("Failed to store full-res media for \(id, privacy: .public): \(error.localizedDescription)")
+                self.logger.error(
+                    "Failed to store full-res media for \(id, privacy: .public): \(error.localizedDescription)"
+                )
             }
         }
     }
 
-    /// Deletes the stored copy for a single id, if present (e.g. the user removed a
-    /// not-yet-synced local item).
-    func remove(id: String) {
-        let url = fileURL(forId: id)
+    /// Deletes the stored copy for a single id in `mode`, if present.
+    func remove(
+        id: String,
+        mode: EclipseShareProtocol.LibraryMode = ExternalOutputSettings.libraryMode
+    ) {
+        let url = fileURL(forId: id, mode: mode)
         ioQueue.async {
             try? FileManager.default.removeItem(at: url)
         }
@@ -79,14 +110,17 @@ final class LocalMediaStore {
 
     // MARK: - Maintenance
 
-    /// Removes any stored files whose ids are not in `liveIds`, mirroring the thumbnail
-    /// pruning in `TVLibraryStore` so deleting an item on the TV frees the phone copy.
-    func prune(keeping liveIds: Set<String>) {
-        ioQueue.async { [weak self] in
-            guard let self = self else { return }
+    /// Removes stored files in `mode` whose ids are not in `liveIds`.
+    func prune(
+        keeping liveIds: Set<String>,
+        mode: EclipseShareProtocol.LibraryMode = ExternalOutputSettings.libraryMode
+    ) {
+        let dir = directory(for: mode)
+        ioQueue.async {
             let fm = FileManager.default
-            guard let files = try? fm.contentsOfDirectory(at: self.directory,
-                                                          includingPropertiesForKeys: nil) else { return }
+            guard let files = try? fm.contentsOfDirectory(
+                at: dir, includingPropertiesForKeys: nil
+            ) else { return }
             let keepNames = Set(liveIds.map { Self.fileName(forId: $0) })
             for file in files where !keepNames.contains(file.lastPathComponent) {
                 try? fm.removeItem(at: file)
@@ -96,17 +130,42 @@ final class LocalMediaStore {
 
     // MARK: - Helpers
 
-    private func fileURL(forId id: String) -> URL {
-        directory.appendingPathComponent(Self.fileName(forId: id))
+    private func directory(for mode: EclipseShareProtocol.LibraryMode) -> URL {
+        rootDirectory.appendingPathComponent(mode.directoryName, isDirectory: true)
     }
 
-    /// Maps an id to a filesystem-safe file name while preserving its extension so the
-    /// stored file can be type-sniffed (image vs video) and played back correctly.
-    ///
-    /// Mirrors the Apple TV's inbound sanitizer: the id is first collapsed to its last
-    /// path component so traversal sequences ("../", absolute prefixes) can't survive,
-    /// then both the stem and extension are reduced to alphanumerics. Ids are normally
-    /// already bare file names, so real entries map to the same names as before.
+    private func fileURL(forId id: String, mode: EclipseShareProtocol.LibraryMode) -> URL {
+        directory(for: mode).appendingPathComponent(Self.fileName(forId: id))
+    }
+
+    /// Moves loose files under `LocalMedia/` into `LocalMedia/Landscape/`.
+    private func migrateLegacyFlatFilesIfNeeded() {
+        guard let contents = try? FileManager.default.contentsOfDirectory(
+            at: rootDirectory,
+            includingPropertiesForKeys: [.isDirectoryKey]
+        ) else { return }
+
+        let landscape = directory(for: .landscape)
+        try? FileManager.default.createDirectory(at: landscape, withIntermediateDirectories: true)
+
+        for url in contents {
+            let isDir = (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
+            if isDir { continue }
+            let dest = landscape.appendingPathComponent(url.lastPathComponent)
+            if FileManager.default.fileExists(atPath: dest.path) {
+                try? FileManager.default.removeItem(at: url)
+                continue
+            }
+            do {
+                try FileManager.default.moveItem(at: url, to: dest)
+            } catch {
+                logger.error(
+                    "Failed to migrate local media \(url.lastPathComponent, privacy: .public): \(error.localizedDescription)"
+                )
+            }
+        }
+    }
+
     private static func fileName(forId id: String) -> String {
         let component = (id as NSString).lastPathComponent
         let ext = (component as NSString).pathExtension
@@ -114,8 +173,6 @@ final class LocalMediaStore {
         let safeBase = base.unicodeScalars.map {
             CharacterSet.alphanumerics.contains($0) ? Character($0) : "_"
         }
-        // Degenerate ids ("", ".", "..") collapse to a constant, stable name rather than
-        // a per-process hash so the mapping survives relaunches.
         var name = String(safeBase)
         if name.isEmpty || name.allSatisfy({ $0 == "_" }) { name = "item" }
         let safeExt = ext.unicodeScalars

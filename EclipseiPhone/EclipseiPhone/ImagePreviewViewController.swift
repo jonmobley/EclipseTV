@@ -13,15 +13,17 @@ protocol ImagePreviewDelegate: AnyObject {
     func imagePreviewDidCancel(_ controller: ImagePreviewViewController)
 }
 
-/// A lightweight confirmation screen shown after the user picks an image, so they can
-/// review it before it is sent to the Apple TV. Mirrors the modal style of
-/// `VideoThumbnailPreviewViewController`.
+/// A lightweight confirmation screen shown after the user picks an image.
+/// Copy reflects whether Multipeer is linked to the Eclipse TV app (Send) or the
+/// image is only being added to the phone library (Add).
 final class ImagePreviewViewController: UIViewController {
 
     // MARK: - Properties
 
     weak var delegate: ImagePreviewDelegate?
     private let image: UIImage
+    /// True when the Eclipse TV Multipeer link is up — confirms a send, not just an add.
+    private let sendsToAppleTV: Bool
 
     // MARK: - UI Elements
 
@@ -48,7 +50,6 @@ final class ImagePreviewViewController: UIViewController {
         label.font = UIFont.systemFont(ofSize: 16)
         label.textAlignment = .center
         label.numberOfLines = 0
-        label.text = "Send this image to your Apple TV?"
         return label
     }()
 
@@ -70,9 +71,8 @@ final class ImagePreviewViewController: UIViewController {
         return button
     }()
 
-    private let sendButton: UIButton = {
+    private let confirmButton: UIButton = {
         let button = UIButton(type: .system)
-        button.setTitle("Send", for: .normal)
         button.titleLabel?.font = UIFont.systemFont(ofSize: 18, weight: .medium)
         button.setTitleColor(.white, for: .normal)
         button.backgroundColor = .systemBlue
@@ -82,8 +82,11 @@ final class ImagePreviewViewController: UIViewController {
 
     // MARK: - Initialization
 
-    init(image: UIImage) {
+    /// - Parameter sendsToAppleTV: When true, copy asks to send to the TV app; otherwise
+    ///   it asks to add to the phone library.
+    init(image: UIImage, sendsToAppleTV: Bool) {
         self.image = image
+        self.sendsToAppleTV = sendsToAppleTV
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -98,6 +101,13 @@ final class ImagePreviewViewController: UIViewController {
         setupUI()
         setupActions()
         imageView.image = image
+        if sendsToAppleTV {
+            instructionLabel.text = "Send this image to your Apple TV?"
+            confirmButton.setTitle("Send", for: .normal)
+        } else {
+            instructionLabel.text = "Add this image to your library?"
+            confirmButton.setTitle("Add", for: .normal)
+        }
     }
 
     // MARK: - Setup
@@ -111,7 +121,7 @@ final class ImagePreviewViewController: UIViewController {
         containerView.addSubview(buttonStackView)
 
         buttonStackView.addArrangedSubview(cancelButton)
-        buttonStackView.addArrangedSubview(sendButton)
+        buttonStackView.addArrangedSubview(confirmButton)
 
         containerView.translatesAutoresizingMaskIntoConstraints = false
         imageView.translatesAutoresizingMaskIntoConstraints = false
@@ -127,7 +137,11 @@ final class ImagePreviewViewController: UIViewController {
             imageView.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 20),
             imageView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 20),
             imageView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -20),
-            imageView.heightAnchor.constraint(equalTo: imageView.widthAnchor, multiplier: 9.0 / 16.0),
+            // Preview chrome matches active library: 16:9 Landscape or 9:16 Vertical.
+            imageView.heightAnchor.constraint(
+                equalTo: imageView.widthAnchor,
+                multiplier: ExternalOutputSettings.isVerticalMode ? (16.0 / 9.0) : (9.0 / 16.0)
+            ),
 
             instructionLabel.topAnchor.constraint(equalTo: imageView.bottomAnchor, constant: 16),
             instructionLabel.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 20),
@@ -143,7 +157,7 @@ final class ImagePreviewViewController: UIViewController {
 
     private func setupActions() {
         cancelButton.addTarget(self, action: #selector(cancelTapped), for: .touchUpInside)
-        sendButton.addTarget(self, action: #selector(sendTapped), for: .touchUpInside)
+        confirmButton.addTarget(self, action: #selector(confirmTapped), for: .touchUpInside)
     }
 
     // MARK: - Actions
@@ -152,7 +166,7 @@ final class ImagePreviewViewController: UIViewController {
         delegate?.imagePreviewDidCancel(self)
     }
 
-    @objc private func sendTapped() {
+    @objc private func confirmTapped() {
         delegate?.imagePreview(self, didConfirm: image)
     }
 }

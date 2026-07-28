@@ -217,20 +217,27 @@ class ConnectionManager: NSObject {
 
     /// Sends the full ordered library manifest (plus which item is live) to all peers.
     func sendLibraryManifest(items: [LibraryItemDTO], currentId: String?) {
-        sendControlMessage(.manifest(items: items, currentId: currentId))
+        let mode = MediaDataSource.shared.activeLibraryMode
+        sendControlMessage(
+            .manifest(items: items, currentId: currentId).withLibraryMode(mode)
+        )
     }
 
     /// Sends a lightweight update telling the companion which item is now live.
     func sendCurrentChanged(currentId: String?) {
-        sendControlMessage(.currentChanged(currentId: currentId))
+        let mode = MediaDataSource.shared.activeLibraryMode
+        sendControlMessage(.currentChanged(currentId: currentId).withLibraryMode(mode))
     }
 
     /// Reports the live video's playback state to the companion. Sent frequently while
     /// playing, so it travels unreliably to avoid head-of-line blocking behind transfers.
     func sendPlaybackStatus(currentId: String?, isPlaying: Bool, position: Double, duration: Double) {
+        let mode = MediaDataSource.shared.activeLibraryMode
         guard let session = session, !session.connectedPeers.isEmpty,
-              let data = EclipseShareEnvelope.playbackStatus(currentId: currentId, isPlaying: isPlaying,
-                                                             position: position, duration: duration).encoded() else {
+              let data = EclipseShareEnvelope.playbackStatus(
+                currentId: currentId, isPlaying: isPlaying,
+                position: position, duration: duration
+              ).withLibraryMode(mode).encoded() else {
             return
         }
         try? session.send(data, toPeers: session.connectedPeers, with: .unreliable)
@@ -264,14 +271,29 @@ class ConnectionManager: NSObject {
         }
     }
 
+    /// Ensures the active library matches the envelope's mode before applying a command.
+    private func activateModeIfNeeded(from envelope: EclipseShareEnvelope) {
+        let mode = envelope.resolvedLibraryMode
+        if MediaDataSource.shared.activeLibraryMode != mode {
+            MediaDataSource.shared.setActiveLibraryMode(mode)
+        }
+    }
+
     /// Routes a decoded control envelope received from a peer.
     private func handleControlEnvelope(_ envelope: EclipseShareEnvelope, from peerID: MCPeerID) {
         switch envelope.kind {
+        case .setDisplayMode:
+            let mode = envelope.resolvedLibraryMode
+            logger.info("Received set_display_mode: \(mode.rawValue, privacy: .public)")
+            DispatchQueue.main.async {
+                MediaDataSource.shared.setActiveLibraryMode(mode)
+            }
         case .playRequest:
             guard let id = envelope.id else { return }
             logger.info("Received play request for id: \(id, privacy: .public)")
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
+                self.activateModeIfNeeded(from: envelope)
                 self.delegate?.connectionManager(self, didReceivePlayRequestForId: id)
             }
         case .deleteItem:
@@ -279,6 +301,7 @@ class ConnectionManager: NSObject {
             logger.info("Received delete request for id: \(id, privacy: .public)")
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
+                self.activateModeIfNeeded(from: envelope)
                 self.delegate?.connectionManager(self, didReceiveDeleteRequestForId: id)
             }
         case .moveItem:
@@ -286,6 +309,7 @@ class ConnectionManager: NSObject {
             logger.info("Received move request for id: \(id, privacy: .public) -> \(toIndex)")
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
+                self.activateModeIfNeeded(from: envelope)
                 self.delegate?.connectionManager(self, didReceiveMoveRequestForId: id, toIndex: toIndex)
             }
         case .reorderItems:
@@ -293,6 +317,7 @@ class ConnectionManager: NSObject {
             logger.info("Received reorder request for \(orderedIds.count) items")
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
+                self.activateModeIfNeeded(from: envelope)
                 self.delegate?.connectionManager(self, didReceiveReorderRequest: orderedIds)
             }
         case .setVideoSetting:
@@ -302,14 +327,17 @@ class ConnectionManager: NSObject {
             logger.info("Received video setting for id: \(id, privacy: .public)")
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
+                self.activateModeIfNeeded(from: envelope)
                 self.delegate?.connectionManager(self, didReceiveVideoSettingForId: id,
                                                   isLooping: isLooping, isMuted: isMuted)
             }
         case .restoreItem:
             guard let id = envelope.id else { return }
             logger.info("Received restore request for id: \(id, privacy: .public)")
-            // The next media resource from this peer is the restore. Recorded on the
-            // session delegate queue, where the resource callback also runs.
+            // Activate mode so the next inbound file lands in the right subdirectory.
+            DispatchQueue.main.async { [weak self] in
+                self?.activateModeIfNeeded(from: envelope)
+            }
             pendingRestore = (ledgerId: id, expires: Date().addingTimeInterval(restoreWindow))
         case .playbackCommand:
             guard let raw = envelope.playbackAction,
@@ -318,6 +346,7 @@ class ConnectionManager: NSObject {
             logger.info("Received playback command: \(raw, privacy: .public)")
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
+                self.activateModeIfNeeded(from: envelope)
                 self.delegate?.connectionManager(self, didReceivePlaybackCommand: action, position: position)
             }
         case .setAccount:

@@ -105,20 +105,21 @@ final class LiveHeaderView: UIView {
             imageView.trailingAnchor.constraint(equalTo: trailingAnchor),
 
             placeholderIcon.centerXAnchor.constraint(equalTo: centerXAnchor),
-            placeholderIcon.centerYAnchor.constraint(equalTo: centerYAnchor),
+            placeholderIcon.centerYAnchor.constraint(equalTo: centerYAnchor, constant: -14),
             placeholderIcon.widthAnchor.constraint(equalToConstant: 52),
             placeholderIcon.heightAnchor.constraint(equalToConstant: 52),
 
             liveBadge.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
             liveBadge.topAnchor.constraint(equalTo: topAnchor, constant: 14),
 
-            titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
-            titleLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
-            titleLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -14),
+            titleLabel.centerXAnchor.constraint(equalTo: centerXAnchor),
+            titleLabel.topAnchor.constraint(equalTo: placeholderIcon.bottomAnchor, constant: 10),
+            titleLabel.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 14),
+            titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -14),
 
             subtitleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
             subtitleLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
-            subtitleLabel.bottomAnchor.constraint(equalTo: titleLabel.topAnchor, constant: -4)
+            subtitleLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -14)
         ])
     }
 
@@ -153,7 +154,7 @@ final class LiveHeaderView: UIView {
         controls.isHidden = !(item.isVideo && isOnline)
     }
 
-    private func showPlaceholder(isOnline: Bool) {
+    private func showPlaceholder(isOnline _: Bool) {
         imageView.image = nil
         imageView.isHidden = true
         placeholderIcon.isHidden = false
@@ -168,7 +169,7 @@ final class LiveHeaderView: UIView {
         titleLabel.textColor = .secondaryLabel
         titleLabel.font = .systemFont(ofSize: 16, weight: .semibold)
         titleLabel.textAlignment = .center
-        titleLabel.text = isOnline ? "Nothing live yet" : "Apple TV not connected"
+        titleLabel.text = "Eclipse"
         isUserInteractionEnabled = false
     }
 

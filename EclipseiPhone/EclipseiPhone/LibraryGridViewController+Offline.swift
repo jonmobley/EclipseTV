@@ -41,32 +41,48 @@ extension LibraryGridViewController {
         }
     }
 
-    /// Shows a locally-stored item fullscreen on the phone when no Apple TV is connected,
-    /// mirroring it to any connected AirPlay display. Falls back to an informational alert
-    /// when the phone has no local copy (e.g. a thumbnail-only mirror of a TV item).
+    /// Shows an item when the Eclipse TV app isn't linked: prefer AirPlay when connected,
+    /// otherwise phone fullscreen preview from the local full-res copy.
     func presentOfflinePreview(for item: LibraryItemDTO) {
-        guard let url = LocalMediaStore.shared.localURL(forId: item.id) else {
+        let thumbnail = store.thumbnail(for: item.id)
+        let source = PresentationSource.forLibraryItem(item, thumbnail: thumbnail)
+        let localURL = LocalMediaStore.shared.localURL(forId: item.id)
+        let airPlayConnected = ExternalDisplayManager.shared.isConnected
+
+        // AirPlay-first: drive the TV even without Multipeer / local full-res.
+        if airPlayConnected {
+            ExternalDisplayManager.shared.present(source)
+            store.updateCurrentId(item.id)
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            if let url = localURL {
+                let preview = LocalMediaPreviewViewController(
+                    fileURL: url, isVideo: item.isVideo)
+                present(preview, animated: true)
+            }
+            return
+        }
+
+        guard let url = localURL else {
             let alert = UIAlertController(
-                title: "Not Connected",
-                message: "Connect to your Apple TV to show this item on the big screen.",
+                title: "Can't Show Item",
+                message: "Connect AirPlay to show this on your TV, or add it from Photos so a copy is stored on this phone.",
                 preferredStyle: .alert
             )
             alert.addAction(UIAlertAction(title: "OK", style: .default))
             present(alert, animated: true)
             return
         }
+
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        ExternalDisplayManager.shared.present(
-            .forLibraryItem(item, thumbnail: store.thumbnail(for: item.id))
-        )
+        store.updateCurrentId(item.id)
         let preview = LocalMediaPreviewViewController(fileURL: url, isVideo: item.isVideo)
         present(preview, animated: true)
     }
 
     func presentNotConnectedAlert() {
         let alert = UIAlertController(
-            title: "Not Connected",
-            message: "Reconnect to your Apple TV and try again.",
+            title: "Eclipse TV App Not Linked",
+            message: "Connect the Eclipse TV app from Settings, or use AirPlay for Camera, Web, and local media.",
             preferredStyle: .alert
         )
         alert.addAction(UIAlertAction(title: "OK", style: .default))

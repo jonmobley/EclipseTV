@@ -13,6 +13,9 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
         guard let windowScene = (scene as? UIWindowScene) else { return }
+
+        // Library / AirPlay chrome start in Landscape; Vertical is opt-in via Settings.
+        ExternalOutputSettings.applyLaunchDefault()
         
         window = UIWindow(windowScene: windowScene)
         

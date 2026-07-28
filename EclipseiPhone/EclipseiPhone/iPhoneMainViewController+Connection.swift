@@ -29,81 +29,49 @@ extension iPhoneMainViewController {
     func startSearching() {
         // Check if we already have a connection
         if isConnected() {
-            // Already connected, just update UI
             updateConnectedState(true, peer: selectedPeer)
             return
         }
 
-        // Honor the user's choice to use the app offline: don't browse, auto-connect,
-        // or nag with the troubleshooting hint until they ask to reconnect.
+        // Don't browse or auto-connect until the user asks (AirPlay-first default).
         guard !isConnectionPaused else {
             headerBar.setConnectionState(.paused)
             return
         }
 
-        // Update UI to show searching (disconnected until we actually connect).
         headerBar.setConnectionState(.disconnected)
 
-        // Start browsing if not already browsing
         if !connectionManager.isBrowsing {
             connectionManager.startBrowsing()
         }
 
-        // Create auto-connect timer that tries to find and connect to the first Apple TV every few seconds
         if autoConnectTimer == nil {
-            autoConnectTimer = Timer.scheduledTimer(timeInterval: 2.0, target: self, selector: #selector(tryAutoConnect), userInfo: nil, repeats: true)
-        }
-
-        // If we still aren't connected after a grace period, surface troubleshooting help
-        // (covers denied Local Network permission, wrong Wi-Fi, or TV app not open).
-        scheduleConnectionHint()
-    }
-
-    // MARK: - Troubleshooting Hint
-
-    /// Arms a one-shot timer that reveals the troubleshooting hint if we haven't connected.
-    private func scheduleConnectionHint() {
-        connectionHintTimer?.invalidate()
-        connectionHintTimer = Timer.scheduledTimer(withTimeInterval: 12.0, repeats: false) { [weak self] _ in
-            self?.showConnectionHint()
-        }
-    }
-
-    private func showConnectionHint() {
-        guard !isConnected() else { return }
-        guard presentedViewController == nil else { return }
-        logger.info("[Eclipse:CONN] iPhone no connection after grace period. discoveredPeers=\(self.connectionManager.discoveredPeers.count, privacy: .public), browsing=\(self.connectionManager.isBrowsing, privacy: .public)")
-        DispatchQueue.main.async {
-            guard !self.isConnected(), self.presentedViewController == nil else { return }
-            let alert = UIAlertController(
-                title: "Still connecting?",
-                message: "Make sure the Eclipse app is open on your Apple TV, both devices are on the same Wi-Fi, and that Local Network access is enabled for Eclipse.",
-                preferredStyle: .alert)
-            alert.addAction(UIAlertAction(title: "Open Settings", style: .default) { [weak self] _ in
-                self?.openAppSettings()
-            })
-            alert.addAction(UIAlertAction(title: "Use Without Apple TV", style: .default) { [weak self] _ in
-                self?.pauseConnection()
-            })
-            alert.addAction(UIAlertAction(title: "Keep Waiting", style: .cancel))
-            self.present(alert, animated: true)
+            autoConnectTimer = Timer.scheduledTimer(
+                timeInterval: 2.0,
+                target: self,
+                selector: #selector(tryAutoConnect),
+                userInfo: nil,
+                repeats: true
+            )
         }
     }
 
     // MARK: - Pause / Resume
 
-    /// Suspends all connection attempts so the user can browse their cached library
-    /// offline. Reconnect on demand from the status pill or the "…" menu. Session-only.
-    func pauseConnection() {
+    /// Suspends Multipeer connection attempts to the Eclipse TV app.
+    /// AirPlay for Camera/Web still works. Reconnect from the status pill or Settings.
+    func pauseConnection(announce: Bool = true) {
         isConnectionPaused = true
         connectionManager.autoConnectEnabled = false
         stopSearching()
         headerBar.setConnectionState(.paused)
-        showTemporaryStatus("Using Eclipse without Apple TV. Tap “Offline” or the … menu to connect.")
+        if announce {
+            showTemporaryStatus("Stopped Eclipse TV app link. AirPlay is unchanged.")
+        }
     }
 
-    /// Re-enables auto-connect. If any discovered TV is already paired, starts searching
-    /// immediately; otherwise prompts for the pairing code shown on the Apple TV.
+    /// Starts linking to the Eclipse TV app. If a paired TV is already known, begins
+    /// searching; otherwise prompts for the pairing code shown on the Apple TV.
     func resumeConnection() {
         guard !isConnected() else { return }
         isConnectionPaused = false
@@ -133,6 +101,8 @@ extension iPhoneMainViewController {
         }
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { [weak self] _ in
             self?.connectionManager.clearPendingPairingPIN()
+            // Pairing is opt-in; cancel returns to the AirPlay-first idle state.
+            self?.pauseConnection(announce: false)
         })
         alert.addAction(UIAlertAction(title: "Connect", style: .default) { [weak self] _ in
             guard let self else { return }
@@ -141,8 +111,11 @@ extension iPhoneMainViewController {
             guard PeerPairing.isValidPIN(pin) else {
                 self.showAlert(title: "Invalid Code",
                                message: "Enter the 6-digit pairing code shown on your Apple TV.")
+                self.pauseConnection(announce: false)
                 return
             }
+            self.isConnectionPaused = false
+            self.connectionManager.autoConnectEnabled = true
             self.connectionManager.setPendingPairingPIN(pin)
             self.startSearching()
             let target = peer
@@ -156,7 +129,7 @@ extension iPhoneMainViewController {
         present(alert, animated: true)
     }
 
-    /// Cancels the pending troubleshooting hint timer (e.g. once connected).
+    /// Cancels any leftover troubleshooting hint timer.
     func hideConnectionHint() {
         connectionHintTimer?.invalidate()
         connectionHintTimer = nil
@@ -169,23 +142,19 @@ extension iPhoneMainViewController {
     }
 
     @objc private func tryAutoConnect() {
-        // Stop auto-connecting while the user is using the app offline.
         if isConnectionPaused {
             autoConnectTimer?.invalidate()
             autoConnectTimer = nil
             return
         }
 
-        // If we already have a selected peer and it's connected, no need to auto-connect
         if isConnected() {
             autoConnectTimer?.invalidate()
             autoConnectTimer = nil
             return
         }
 
-        // If we have a selected peer but it's not connected, try to invite it
         if let peer = selectedPeer {
-            // Only invite if we're not already connected to them
             if !connectionManager.isConnectedToPeer(peer) {
                 connectionManager.invitePeer(peer)
             }
@@ -201,9 +170,6 @@ extension iPhoneMainViewController {
         if let peer = preferredPeer(from: candidates) ?? candidates.first {
             selectedPeer = peer
             connectionManager.invitePeer(peer)
-
-            // Don't update UI state to connected until we actually connect.
-            // Stop the timer safely
             autoConnectTimer?.invalidate()
             autoConnectTimer = nil
         }
@@ -211,8 +177,6 @@ extension iPhoneMainViewController {
 
     func stopSearching() {
         connectionManager.stopBrowsing()
-
-        // Clean invalidate timer safely
         autoConnectTimer?.invalidate()
         autoConnectTimer = nil
         hideConnectionHint()
@@ -221,19 +185,15 @@ extension iPhoneMainViewController {
     func updateConnectedState(_ connected: Bool, peer: MCPeerID?) {
         DispatchQueue.main.async {
             if connected, let peer = peer {
-                // Connected: drop any pending troubleshooting hint and enable sending.
-                // A live connection always clears the paused state.
                 self.hideConnectionHint()
                 self.isConnectionPaused = false
                 self.connectionManager.autoConnectEnabled = true
                 self.selectedPeer = peer
                 self.headerBar.setConnectionState(.connected)
             } else {
-                // Only clear selectedPeer if explicitly told to
                 if peer == nil {
                     self.selectedPeer = nil
                 }
-                // Preserve the offline pill while paused; otherwise show disconnected.
                 self.headerBar.setConnectionState(self.isConnectionPaused ? .paused : .disconnected)
             }
         }

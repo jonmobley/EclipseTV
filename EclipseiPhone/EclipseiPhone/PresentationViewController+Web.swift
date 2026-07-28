@@ -34,7 +34,7 @@ extension PresentationViewController {
         view.isOpaque = false
         view.backgroundColor = .black
         view.scrollView.backgroundColor = .black
-        // Non-interactive on the TV; the phone remote drives scrolling.
+        // Non-interactive on the TV; the phone preview drives scrolling/navigation.
         view.isUserInteractionEnabled = false
 
         webContainer.addSubview(view)
@@ -42,9 +42,10 @@ extension PresentationViewController {
         return view
     }
 
-    /// Loads `url` into the external web view and applies portrait/scale layout.
+    /// Loads `url` into the external web view and applies Vertical/scale layout.
     func showWeb(url: URL) {
         hideCamera()
+        hideMediaContainer()
         messageLabel.text = nil
         imageView.isHidden = true
         imageView.image = nil
@@ -78,27 +79,46 @@ extension PresentationViewController {
     /// Applies scale-up + portrait rotation from `ExternalOutputSettings`.
     func applyWebLayout() {
         guard !webContainer.isHidden, let webView = webView else { return }
-
-        let screenSize = webContainer.bounds.size
-        guard screenSize.width > 0, screenSize.height > 0 else { return }
-
-        let contentSize: CGSize
-        if ExternalOutputSettings.orientation == .portrait {
-            contentSize = CGSize(width: screenSize.height, height: screenSize.width)
-        } else {
-            contentSize = screenSize
-        }
-
-        let logicalWidth = ExternalOutputSettings.webTextSize.logicalWidth
-        let scale = contentSize.width / logicalWidth
-        applyRotatedLayout(to: webView, in: webContainer, scale: scale)
+        Self.applyWebOutputLayout(to: webView, in: webContainer)
     }
 
-    /// Scrolls the page by `delta` points in the web view's logical coordinate space.
-    func scrollWeb(by delta: CGPoint) {
+    /// Loads `url` into the live web view without tearing down the overlay.
+    func loadWeb(url: URL) {
+        guard !webContainer.isHidden else {
+            showWeb(url: url)
+            return
+        }
+        let view = ensureWebView()
+        if view.url != url {
+            view.load(URLRequest(url: url))
+        }
+    }
+
+    /// Sets the page scroll offset to match the phone browser (1:1 logical space).
+    func setWebContentOffset(_ offset: CGPoint) {
         guard let webView = webView, !webContainer.isHidden else { return }
-        let script = "window.scrollBy(\(delta.x), \(delta.y));"
-        webView.evaluateJavaScript(script, completionHandler: nil)
+        let scroll = webView.scrollView
+        let maxX = max(0, scroll.contentSize.width - scroll.bounds.width)
+        let maxY = max(0, scroll.contentSize.height - scroll.bounds.height)
+        let clamped = CGPoint(
+            x: min(max(0, offset.x), maxX),
+            y: min(max(0, offset.y), maxY)
+        )
+        if scroll.contentOffset != clamped {
+            scroll.contentOffset = clamped
+        }
+    }
+
+    /// Sets vertical scroll from normalized progress (0...1) for mismatched viewports.
+    func setWebScrollProgress(_ progress: CGFloat) {
+        guard let webView = webView, !webContainer.isHidden else { return }
+        let scroll = webView.scrollView
+        let maxY = max(0, scroll.contentSize.height - scroll.bounds.height)
+        let clampedProgress = min(max(progress, 0), 1)
+        let offset = CGPoint(x: scroll.contentOffset.x, y: clampedProgress * maxY)
+        if scroll.contentOffset != offset {
+            scroll.contentOffset = offset
+        }
     }
 
     /// Reloads the current page.
@@ -108,6 +128,8 @@ extension PresentationViewController {
 
     /// Scrolls the page to the top.
     func scrollWebToTop() {
-        webView?.evaluateJavaScript("window.scrollTo(0, 0);", completionHandler: nil)
+        guard let webView = webView else { return }
+        webView.scrollView.setContentOffset(.zero, animated: false)
+        webView.evaluateJavaScript("window.scrollTo(0, 0);", completionHandler: nil)
     }
 }

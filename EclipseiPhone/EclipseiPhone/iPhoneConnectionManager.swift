@@ -55,14 +55,10 @@ class iPhoneConnectionManager: NSObject {
     var isBrowsing: Bool = false
     var discoveredPeers = [MCPeerID]() // Track discovered peers for auto-connection
 
-    /// When false, the manager's own automatic reconnection behaviors are suspended:
-    /// it won't re-browse or re-invite on app-active, browser failure, or disconnect.
-    /// Set to false while the user is using the app offline ("paused"); flipped back to
-    /// true the moment they ask to connect again. Does not tear down an existing session.
-    ///
-    /// Pausing also cancels any in-flight exponential-backoff retry so a stale timer/count
-    /// can't fire a reconnect after the user chose to stay offline.
-    var autoConnectEnabled = true {
+    /// When false (the default), the manager won't browse or invite on its own.
+    /// Flipped to true only after the user explicitly starts connecting. Pausing also
+    /// cancels any in-flight exponential-backoff retry.
+    var autoConnectEnabled = false {
         didSet {
             if !autoConnectEnabled { resetRetryCount() }
         }
@@ -144,6 +140,10 @@ class iPhoneConnectionManager: NSObject {
                                                selector: #selector(handleAppDidBecomeActive),
                                                name: UIApplication.didBecomeActiveNotification,
                                                object: nil)
+        NotificationCenter.default.addObserver(self,
+                                               selector: #selector(handleDisplayModeDidChange),
+                                               name: ExternalOutputSettings.didChangeNotification,
+                                               object: nil)
     }
     
     deinit {
@@ -178,6 +178,33 @@ class iPhoneConnectionManager: NSObject {
             // If we don't have any discovered peers, start browsing
             startBrowsing()
         }
+    }
+
+    /// Keeps the TV's active library bucket aligned with the phone's Display Mode,
+    /// then flushes any pending uploads for the newly active mode.
+    @objc private func handleDisplayModeDidChange() {
+        let mode = ExternalOutputSettings.libraryMode
+        sendSetDisplayMode(mode)
+        Task { @MainActor in
+            self.flushPendingUploads(for: mode)
+        }
+    }
+
+    /// Uploads queued offline additions for `mode` when a peer is connected.
+    @MainActor
+    func flushPendingUploads(for mode: EclipseShareProtocol.LibraryMode) {
+        let pending = PendingUploadStore.shared.uploads(for: mode)
+        guard !pending.isEmpty, activeTargetPeer != nil else { return }
+        var payload: [(id: String, url: URL)] = []
+        for entry in pending {
+            if let url = LocalMediaStore.shared.localURL(forId: entry.item.id, mode: mode) {
+                payload.append((id: entry.item.id, url: url))
+            } else {
+                PendingUploadStore.shared.remove(id: entry.item.id, mode: mode)
+            }
+        }
+        guard !payload.isEmpty else { return }
+        uploadPending(payload)
     }
     
     // MARK: - Multipeer Connectivity
@@ -455,12 +482,19 @@ class iPhoneConnectionManager: NSObject {
         return sendCommand(.setAccount(code: code), description: "set account")
     }
 
+    /// Tells connected Apple TVs to switch their active Landscape / Vertical library.
+    @discardableResult
+    func sendSetDisplayMode(_ mode: EclipseShareProtocol.LibraryMode) -> Bool {
+        return sendCommand(.setDisplayMode(mode), description: "set display mode", broadcast: true)
+    }
+
     /// Sends a control envelope. When `broadcast` is true and "keep all in sync" is on,
     /// the message goes to every connected Apple TV; otherwise it targets only the active
     /// TV (preserving single-TV behavior for live-selection and playback commands).
     @discardableResult
     private func sendCommand(_ envelope: EclipseShareEnvelope, description: String, broadcast: Bool = false) -> Bool {
-        guard let session = session, let data = envelope.encoded() else {
+        let stamped = envelope.withLibraryMode(ExternalOutputSettings.libraryMode)
+        guard let session = session, let data = stamped.encoded() else {
             logger.error("Cannot send \(description): no session or failed to encode")
             return false
         }
@@ -500,8 +534,9 @@ class iPhoneConnectionManager: NSObject {
     /// catch a replica TV up). Returns false if the peer isn't connected.
     @discardableResult
     func sendEnvelope(_ envelope: EclipseShareEnvelope, to peer: MCPeerID) -> Bool {
+        let stamped = envelope.withLibraryMode(ExternalOutputSettings.libraryMode)
         guard let session = session, session.connectedPeers.contains(peer),
-              let data = envelope.encoded() else { return false }
+              let data = stamped.encoded() else { return false }
         do {
             try session.send(data, toPeers: [peer], with: .reliable)
             return true

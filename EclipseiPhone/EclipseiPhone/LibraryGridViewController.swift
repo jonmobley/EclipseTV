@@ -9,9 +9,9 @@
 import UIKit
 import os
 
-/// Two-column grid mirroring the Apple TV media library. Tapping an item asks the
-/// Apple TV to make it live (fullscreen). Reads from `TVLibraryStore.shared`, which
-/// is populated by `iPhoneConnectionManager`.
+/// Library grid mirroring the Apple TV media library (2-col 16:9 in Landscape,
+/// 3-col 9:16 in Vertical). Tapping an item asks the Apple TV / AirPlay surface
+/// to make it live. Reads from `TVLibraryStore.shared`.
 final class LibraryGridViewController: UIViewController {
 
     // MARK: - Properties
@@ -23,12 +23,23 @@ final class LibraryGridViewController: UIViewController {
     /// Invoked when the user chooses to re-send a purged item from Photos. The host VC
     /// owns the picker flow and the `pendingRestoreId` handshake.
     var onRequestResend: ((String) -> Void)?
+    /// Invoked when the user chooses Edit — host opens the crop tool for that item.
+    var onRequestEdit: ((String) -> Void)?
 
     private let sectionInset: CGFloat = 16
     private let interitemSpacing: CGFloat = 12
     private let headerInset: CGFloat = 16
     /// Black gap inserted between the hero banner and the grid below it.
     private let heroBottomPadding: CGFloat = 16
+    /// Caps Vertical-mode hero height so a 9:16 frame doesn't fill the phone.
+    private let verticalHeroMaxHeight: CGFloat = 280
+
+    private var heroHeightConstraint: NSLayoutConstraint?
+    private var heroWidthConstraint: NSLayoutConstraint?
+    private var heroLeadingConstraint: NSLayoutConstraint?
+    private var heroTrailingConstraint: NSLayoutConstraint?
+    private var heroCenterXConstraint: NSLayoutConstraint?
+    private var settingsObserver: NSObjectProtocol?
 
     /// True while the user is dragging items to rearrange them.
     var isArranging = false
@@ -86,7 +97,7 @@ final class LibraryGridViewController: UIViewController {
 
     private let emptyLabel: UILabel = {
         let label = UILabel()
-        label.text = "Nothing on Apple TV yet.\nSend a photo or video to get started."
+        label.text = "Nothing here yet.\nTap + to add a photo or video."
         label.textColor = .secondaryLabel
         label.font = .systemFont(ofSize: 16)
         label.textAlignment = .center
@@ -130,11 +141,30 @@ final class LibraryGridViewController: UIViewController {
         view.addSubview(emptyLabel)
 
         let safeArea = view.safeAreaLayoutGuide
+        let heroTop = liveHeader.topAnchor.constraint(
+            equalTo: safeArea.topAnchor, constant: headerInset)
+        let heroLeading = liveHeader.leadingAnchor.constraint(
+            equalTo: view.leadingAnchor, constant: headerInset)
+        let heroTrailing = liveHeader.trailingAnchor.constraint(
+            equalTo: view.trailingAnchor, constant: -headerInset)
+        let heroCenterX = liveHeader.centerXAnchor.constraint(equalTo: view.centerXAnchor)
+        heroCenterX.isActive = false
+        let heroWidth = liveHeader.widthAnchor.constraint(equalToConstant: 160)
+        heroWidth.isActive = false
+        let heroHeight = liveHeader.heightAnchor.constraint(
+            equalTo: liveHeader.widthAnchor, multiplier: 9.0 / 16.0)
+
+        heroLeadingConstraint = heroLeading
+        heroTrailingConstraint = heroTrailing
+        heroCenterXConstraint = heroCenterX
+        heroWidthConstraint = heroWidth
+        heroHeightConstraint = heroHeight
+
         NSLayoutConstraint.activate([
-            liveHeader.topAnchor.constraint(equalTo: safeArea.topAnchor, constant: headerInset),
-            liveHeader.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: headerInset),
-            liveHeader.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -headerInset),
-            liveHeader.heightAnchor.constraint(equalTo: liveHeader.widthAnchor, multiplier: 9.0 / 16.0),
+            heroTop,
+            heroLeading,
+            heroTrailing,
+            heroHeight,
 
             heroSpacer.topAnchor.constraint(equalTo: liveHeader.bottomAnchor),
             heroSpacer.leadingAnchor.constraint(equalTo: view.leadingAnchor),
@@ -151,6 +181,21 @@ final class LibraryGridViewController: UIViewController {
             emptyLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 40),
             emptyLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -40)
         ])
+
+        applyLayoutMode()
+        settingsObserver = NotificationCenter.default.addObserver(
+            forName: ExternalOutputSettings.didChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.applyLayoutMode()
+        }
+    }
+
+    deinit {
+        if let settingsObserver {
+            NotificationCenter.default.removeObserver(settingsObserver)
+        }
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -178,9 +223,13 @@ final class LibraryGridViewController: UIViewController {
 
     private func updateEmptyState() {
         if store.isEmpty {
-            emptyLabel.text = store.isOnline
-                ? "Nothing on Apple TV yet.\nTap + to add a photo or video."
-                : "Nothing here yet.\nTap + to add photos and videos — they'll sync to your Apple TV when you connect."
+            if store.inactiveModeHasContent() {
+                let other = ExternalOutputSettings.isVerticalMode ? "Landscape" : "Vertical"
+                emptyLabel.text =
+                    "Nothing in \(ExternalOutputSettings.orientation.rawValue) yet.\nYour media may be under \(other) in Settings → Display Mode."
+            } else {
+                emptyLabel.text = "Nothing here yet.\nTap + to add a photo or video."
+            }
         }
         emptyLabel.isHidden = !store.isEmpty
     }
@@ -297,10 +346,44 @@ final class LibraryGridViewController: UIViewController {
     }
 
     private func itemSize(for width: CGFloat) -> CGSize {
-        let columns: CGFloat = 2
+        let orientation = ExternalOutputSettings.orientation
+        let columns = orientation.gridColumnCount
         let totalSpacing = sectionInset * 2 + interitemSpacing * (columns - 1)
         let itemWidth = ((width - totalSpacing) / columns).rounded(.down)
-        return CGSize(width: itemWidth, height: (itemWidth * 9 / 16).rounded(.down))
+        let itemHeight = (itemWidth * orientation.gridCellHeightOverWidth).rounded(.down)
+        return CGSize(width: itemWidth, height: itemHeight)
+    }
+
+    /// Applies Landscape vs Vertical chrome and reloads the active mode's library.
+    private func applyLayoutMode() {
+        // TVLibraryStore also observes this notification and swaps buckets first.
+        store.syncLibraryModeFromSettings()
+        let isVertical = ExternalOutputSettings.isVerticalMode
+        if isVertical {
+            heroLeadingConstraint?.isActive = false
+            heroTrailingConstraint?.isActive = false
+            heroCenterXConstraint?.isActive = true
+            heroWidthConstraint?.isActive = true
+            let height = verticalHeroMaxHeight
+            let width = (height * 9.0 / 16.0).rounded(.down)
+            heroWidthConstraint?.constant = width
+            heroHeightConstraint?.isActive = false
+            let heightConstraint = liveHeader.heightAnchor.constraint(equalToConstant: height)
+            heightConstraint.isActive = true
+            heroHeightConstraint = heightConstraint
+        } else {
+            heroCenterXConstraint?.isActive = false
+            heroWidthConstraint?.isActive = false
+            heroLeadingConstraint?.isActive = true
+            heroTrailingConstraint?.isActive = true
+            heroHeightConstraint?.isActive = false
+            let aspect = liveHeader.heightAnchor.constraint(
+                equalTo: liveHeader.widthAnchor, multiplier: 9.0 / 16.0)
+            aspect.isActive = true
+            heroHeightConstraint = aspect
+        }
+        collectionView.collectionViewLayout.invalidateLayout()
+        collectionView.reloadData()
     }
 }
 
@@ -382,40 +465,19 @@ extension LibraryGridViewController: UICollectionViewDelegateFlowLayout {
                                   attributes: .destructive) { [weak self] _ in
                 self?.runCommand { self?.connectionManager.sendDeleteRequest(id: id) ?? false }
             }
-            return UIMenu(title: item.name, children: [resend, remove])
+            return UIMenu(children: [resend, remove])
         }
 
-        // Tapping a thumbnail already makes it live, so that action is omitted here.
-        var actions: [UIMenuElement] = []
-
-        if item.isVideo {
-            let loopOn = item.isLooping ?? false
-            actions.append(UIAction(title: loopOn ? "Turn Loop Off" : "Turn Loop On",
-                                    image: UIImage(systemName: "repeat")) { [weak self] _ in
-                self?.runCommand { self?.connectionManager.sendVideoSetting(id: id, isLooping: !loopOn, isMuted: nil) ?? false }
-            })
-
-            let muted = item.isMuted ?? false
-            actions.append(UIAction(title: muted ? "Unmute" : "Mute",
-                                    image: UIImage(systemName: muted ? "speaker.slash" : "speaker.wave.2")) { [weak self] _ in
-                self?.runCommand { self?.connectionManager.sendVideoSetting(id: id, isLooping: nil, isMuted: !muted) ?? false }
-            })
+        let edit = UIAction(title: "Edit",
+                            image: UIImage(systemName: "crop")) { [weak self] _ in
+            self?.onRequestEdit?(id)
         }
-
         let delete = UIAction(title: "Delete",
                               image: UIImage(systemName: "trash"),
                               attributes: .destructive) { [weak self] _ in
             self?.confirmDelete(id: id, name: item.name)
         }
-
-        // Group the toggles (videos only) above the destructive Delete, omitting the
-        // empty group for photos.
-        var children: [UIMenuElement] = []
-        if !actions.isEmpty {
-            children.append(UIMenu(title: "", options: .displayInline, children: actions))
-        }
-        children.append(delete)
-        return UIMenu(title: item.name, children: children)
+        return UIMenu(children: [edit, delete])
     }
 }
 
