@@ -60,8 +60,8 @@ final class CameraManager: NSObject {
 
     /// Latest still from `AVCaptureVideoDataOutput` (home-tile freeze source).
     ///
-    /// Downscaled to `tileStillMaxEdge`. Photo capture asks for its own
-    /// full-resolution sample via `requestStill(timeout:completion:)`.
+    /// Always downscaled to `tileStillMaxEdge`, so it is never a valid source for a
+    /// saved photo. Photo capture renders its own full-resolution sample instead.
     var latestSampleImage: UIImage?
     /// Throttle sample→UIImage conversion while the session runs.
     var lastSampleAt: CFAbsoluteTime = 0
@@ -71,9 +71,9 @@ final class CameraManager: NSObject {
     let sampleInterval: CFAbsoluteTime = 1.5
     /// Longest-edge ceiling for the throttled tile still.
     static let tileStillMaxEdge: CGFloat = 1280
-    /// One-shot full-resolution still requests awaiting the next sample.
-    /// Access on `frameQueue`.
-    var stillRequests: [(UIImage?) -> Void] = []
+    /// One-shot still requests awaiting the next sample, each with the longest-edge
+    /// ceiling it asked for (nil meaning sensor resolution). Access on `frameQueue`.
+    var stillRequests: [(maxPixelEdge: CGFloat?, deliver: (UIImage?) -> Void)] = []
     private let videoDataOutput = AVCaptureVideoDataOutput()
     let frameQueue = DispatchQueue(label: "com.eclipseapp.ios.camera.frames")
     let ciContext = CIContext(options: [.useSoftwareRenderer: false])
@@ -140,10 +140,12 @@ final class CameraManager: NSObject {
     /// Stores the latest camera sample (preferred) or a non-black preview snapshot.
     ///
     /// Since tile stills are sampled coarsely, this also asks for a fresh frame and
-    /// upgrades `lastFrame` if one arrives before the session stops.
+    /// upgrades `lastFrame` if one arrives before the session stops. Tile-sized on
+    /// purpose: `saveLastFrame` re-encodes whatever it is handed to disk, and a tile
+    /// has no use for sensor resolution.
     @discardableResult
     func captureLastFrame(from preview: CameraPreviewView?) -> Bool {
-        requestStill { [weak self] still in
+        requestStill(maxPixelEdge: Self.tileStillMaxEdge) { [weak self] still in
             guard let self, let still, !Self.isNearlyBlack(still) else { return }
             self.saveLastFrame(still)
         }

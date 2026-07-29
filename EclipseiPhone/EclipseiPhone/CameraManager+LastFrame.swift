@@ -23,10 +23,13 @@ extension CameraManager: AVCaptureVideoDataOutputSampleBufferDelegate {
         if !stillRequests.isEmpty {
             let requests = stillRequests
             stillRequests.removeAll()
-            let image = imageFromSampleBuffer(sampleBuffer)
-            DispatchQueue.main.async { [weak self] in
-                if let image { self?.latestSampleImage = image }
-                for request in requests { request(image) }
+            // Rendered per request rather than once: the sizes differ, and deliberately
+            // not stored in `latestSampleImage`, which must stay tile-sized.
+            let images = requests.map {
+                imageFromSampleBuffer(sampleBuffer, maxPixelEdge: $0.maxPixelEdge)
+            }
+            DispatchQueue.main.async {
+                for (request, image) in zip(requests, images) { request.deliver(image) }
             }
             return
         }
@@ -43,15 +46,17 @@ extension CameraManager: AVCaptureVideoDataOutputSampleBufferDelegate {
         }
     }
 
-    /// Converts the next camera sample into a full-resolution upright still.
+    /// Converts the next camera sample into an upright still.
     ///
     /// On demand rather than continuous: rendering every frame cost a full-resolution
     /// Core Image pass several times a second, and a shutter press wants the frame as it
     /// was pressed rather than a stale sample.
     /// - Parameters:
+    ///   - maxPixelEdge: Longest-edge ceiling, or nil for sensor resolution.
     ///   - timeout: Reports nil if no sample arrives within this window.
     ///   - completion: Called exactly once, on the main queue.
     func requestStill(
+        maxPixelEdge: CGFloat? = nil,
         timeout: TimeInterval = 0.6,
         completion: @escaping (UIImage?) -> Void
     ) {
@@ -68,7 +73,7 @@ extension CameraManager: AVCaptureVideoDataOutputSampleBufferDelegate {
             return
         }
         frameQueue.async { [weak self] in
-            self?.stillRequests.append(finish)
+            self?.stillRequests.append((maxPixelEdge: maxPixelEdge, deliver: finish))
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + timeout) { finish(nil) }
     }

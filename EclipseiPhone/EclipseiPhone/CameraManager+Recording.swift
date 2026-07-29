@@ -16,14 +16,20 @@ extension CameraManager: AVCaptureFileOutputRecordingDelegate {
     // MARK: - Photo
 
     /// Saves a full-resolution still of the current frame to Photos.
+    ///
+    /// Deliberately has no fallback to `latestSampleImage` or `lastFrame`. Both are
+    /// downscaled to `tileStillMaxEdge`, and `lastFrame` outlives the session that
+    /// produced it, so falling back would quietly write a stale thumbnail to the user's
+    /// library instead of the frame they pressed the shutter on. Reporting `noFrame`
+    /// ("No camera frame is ready yet.") is the honest answer.
     func capturePhotoToLibrary(completion: @escaping (Result<Void, Error>) -> Void) {
         requestStill { [weak self] still in
             guard let self else { return }
-            guard let image = still ?? self.latestSampleImage ?? self.lastFrame else {
+            guard let still else {
                 completion(.failure(CaptureError.noFrame))
                 return
             }
-            self.saveImageToPhotos(image, completion: completion)
+            self.saveImageToPhotos(still, completion: completion)
         }
     }
 
