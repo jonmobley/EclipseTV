@@ -69,7 +69,7 @@ extension LibraryGridViewController {
                         spacing: spacing
                     )
                 }
-                return Self.showsRibbonSection(
+                return Self.showsGridSection(
                     containerWidth: width,
                     sectionInset: sectionInset,
                     spacing: spacing
@@ -98,19 +98,24 @@ extension LibraryGridViewController {
         return max((usable / columns).rounded(.down), minimumTileSide)
     }
 
+    /// Tools sit on the same column grid as the Show media below them, so the two
+    /// bands line up: 2-up for 16:9 Landscape cards, 3-up for 9:16 Vertical ones.
     private static func toolsSection(
         containerWidth: CGFloat,
         sectionInset: CGFloat,
         spacing: CGFloat
     ) -> NSCollectionLayoutSection {
-        let columns: CGFloat = 3
+        let orientation = ExternalOutputSettings.orientation
+        let columns = max(CGFloat(orientation.gridColumnCount(
+            forWidth: containerWidth, sectionInset: sectionInset, spacing: spacing
+        )), 1)
         let itemWidth = columnWidth(
             containerWidth: containerWidth,
             sectionInset: sectionInset,
             spacing: spacing,
             columns: columns
         )
-        let aspect = ExternalOutputSettings.orientation.gridCellHeightOverWidth
+        let aspect = orientation.gridCellHeightOverWidth
         let cardHeight = max((itemWidth * aspect).rounded(.down), minimumTileSide)
         // Landscape: Logo / Camera / Website labels sit under the 16:9 cards.
         let captionReserve = ExternalOutputSettings.isVerticalMode
@@ -135,6 +140,8 @@ extension LibraryGridViewController {
         group.interItemSpacing = .fixed(spacing)
 
         let section = NSCollectionLayoutSection(group: group)
+        // Fewer columns than tools means the row wraps.
+        section.interGroupSpacing = spacing
         section.contentInsets = NSDirectionalEdgeInsets(
             top: 8, leading: sectionInset,
             bottom: 8, trailing: sectionInset
@@ -142,8 +149,26 @@ extension LibraryGridViewController {
         return section
     }
 
-    /// Recent Shows tile edge — square, on the same 3-up grid as the tools row.
-    static func showsRibbonTileSide(
+    /// Top padding above the Recent Shows header.
+    static let showsGridTopInset: CGFloat = 20
+
+    /// Target Show-tile edge. Wider panes gain columns instead of bigger tiles.
+    private static let showsTilePreferredWidth: CGFloat = 120
+
+    /// Recent Shows columns — 3-up on a phone, more once there's room.
+    static func showsGridColumnCount(
+        containerWidth: CGFloat,
+        sectionInset: CGFloat,
+        spacing: CGFloat
+    ) -> Int {
+        let available = containerWidth - sectionInset * 2
+        guard available > 0 else { return 3 }
+        let fitted = Int(floor((available + spacing) / (showsTilePreferredWidth + spacing)))
+        return max(3, fitted)
+    }
+
+    /// Recent Shows tile edge — square, derived from the current column count.
+    static func showsTileSide(
         containerWidth: CGFloat,
         sectionInset: CGFloat,
         spacing: CGFloat
@@ -152,20 +177,26 @@ extension LibraryGridViewController {
             containerWidth: containerWidth,
             sectionInset: sectionInset,
             spacing: spacing,
-            columns: 3
+            columns: CGFloat(showsGridColumnCount(
+                containerWidth: containerWidth,
+                sectionInset: sectionInset,
+                spacing: spacing
+            ))
         )
     }
 
-    /// Top padding above the Recent Shows header.
-    static let showsRibbonTopInset: CGFloat = 20
-
-    /// Recent Shows on Home: horizontal ribbon aligned with tool tile width.
-    private static func showsRibbonSection(
+    /// Recent Shows on Home: square tiles wrapping down the page.
+    private static func showsGridSection(
         containerWidth: CGFloat,
         sectionInset: CGFloat,
         spacing: CGFloat
     ) -> NSCollectionLayoutSection {
-        let side = showsRibbonTileSide(
+        let columns = showsGridColumnCount(
+            containerWidth: containerWidth,
+            sectionInset: sectionInset,
+            spacing: spacing
+        )
+        let side = showsTileSide(
             containerWidth: containerWidth,
             sectionInset: sectionInset,
             spacing: spacing
@@ -177,19 +208,20 @@ extension LibraryGridViewController {
         )
         let item = NSCollectionLayoutItem(layoutSize: itemSize)
         let groupSize = NSCollectionLayoutSize(
-            widthDimension: .absolute(side),
+            widthDimension: .fractionalWidth(1),
             heightDimension: .absolute(side)
         )
         let group = NSCollectionLayoutGroup.horizontal(
             layoutSize: groupSize,
-            subitems: [item]
+            repeatingSubitem: item,
+            count: columns
         )
+        group.interItemSpacing = .fixed(spacing)
 
         let section = NSCollectionLayoutSection(group: group)
-        section.orthogonalScrollingBehavior = .continuous
         section.interGroupSpacing = spacing
         section.contentInsets = NSDirectionalEdgeInsets(
-            top: showsRibbonTopInset, leading: sectionInset,
+            top: showsGridTopInset, leading: sectionInset,
             bottom: sectionInset, trailing: sectionInset
         )
 

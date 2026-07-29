@@ -69,17 +69,9 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             let name = activeLiveSlideshow()?.name ?? "Slideshow"
             header.configure(title: name)
         case .shows:
-            if isShowMode {
-                header.configure(title: "")
-            } else {
-                header.configure(
-                    title: "Recent Shows",
-                    actionTitle: "See All >",
-                    action: { [weak self] in
-                        self?.onSeeAllShows?()
-                    }
-                )
-            }
+            // The Home grid lists every Show in this Display Mode, so it needs no
+            // "See All" escape hatch. The other mode's Shows are in the Eclipse menu.
+            header.configure(title: isShowMode ? "" : "Recent Shows")
         case .none:
             header.configure(title: "")
         }
@@ -102,7 +94,6 @@ extension LibraryGridViewController: UICollectionViewDataSource,
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
         guard scrollView === collectionView else { return }
-        pinHomeScrollIfContentFits()
         updateHeroCollapse()
     }
 

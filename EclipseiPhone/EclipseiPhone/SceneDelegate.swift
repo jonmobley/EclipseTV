@@ -36,9 +36,10 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // selected item can be presented fullscreen on it.
         ExternalDisplayManager.shared.start()
 
-        // Warm every website card (real WKWebView) so taps are instant + hero-ready.
-        DispatchQueue.main.async {
-            WarmWebSessionPool.shared.warmAll()
+        // Warm the Website tile (real WKWebView) so its tap is instant + hero-ready.
+        // Saved bookmarks warm as they scroll into view instead of all at launch.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            WarmWebSessionPool.shared.warmFreeBrowse()
         }
     }
 

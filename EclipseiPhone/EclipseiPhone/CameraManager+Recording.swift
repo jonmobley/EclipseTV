@@ -15,13 +15,16 @@ extension CameraManager: AVCaptureFileOutputRecordingDelegate {
 
     // MARK: - Photo
 
-    /// Saves the latest camera sample to Photos.
+    /// Saves a full-resolution still of the current frame to Photos.
     func capturePhotoToLibrary(completion: @escaping (Result<Void, Error>) -> Void) {
-        guard let image = latestSampleImage ?? lastFrame else {
-            completion(.failure(CaptureError.noFrame))
-            return
+        requestStill { [weak self] still in
+            guard let self else { return }
+            guard let image = still ?? self.latestSampleImage ?? self.lastFrame else {
+                completion(.failure(CaptureError.noFrame))
+                return
+            }
+            self.saveImageToPhotos(image, completion: completion)
         }
-        saveImageToPhotos(image, completion: completion)
     }
 
     // MARK: - Video

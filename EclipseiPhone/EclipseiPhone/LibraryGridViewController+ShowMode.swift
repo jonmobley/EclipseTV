@@ -34,7 +34,7 @@ extension LibraryGridViewController {
         collectionView.reloadData()
         scrollGridToTop()
         updateEmptyState()
-        updateHomeScrollLock()
+        updateHeroCollapse()
         onOpenShowChanged?(nil)
     }
 

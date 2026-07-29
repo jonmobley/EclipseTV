@@ -14,37 +14,6 @@ import UIKit
 /// Opening a Show from the other mode switches Display Mode first.
 extension iPhoneMainViewController {
 
-    /// Lists every Show, both Display Modes, for the Recent Shows “See All >” link.
-    func presentAllShows() {
-        let sheet = UIAlertController(
-            title: "Shows",
-            message: nil,
-            preferredStyle: .actionSheet
-        )
-        for show in LocalAlbumStore.shared.albumsActiveModeFirst {
-            sheet.addAction(
-                UIAlertAction(title: show.showPickerSheetTitle, style: .default) { [weak self] _ in
-                    self?.openShowFromPicker(id: show.id)
-                }
-            )
-        }
-        sheet.addAction(UIAlertAction(title: "New Show…", style: .default) { [weak self] _ in
-            self?.promptNewAlbum()
-        })
-        sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        if let popover = sheet.popoverPresentationController {
-            popover.sourceView = libraryViewController.view
-            popover.sourceRect = CGRect(
-                x: libraryViewController.view.bounds.midX,
-                y: libraryViewController.view.bounds.minY + 80,
-                width: 1,
-                height: 1
-            )
-            popover.permittedArrowDirections = []
-        }
-        present(sheet, animated: true)
-    }
-
     /// "Open Show" submenu for the Eclipse dropdown, or `nil` when nothing is openable.
     ///
     /// Nested rather than inline so the top level stays a short list of verbs.

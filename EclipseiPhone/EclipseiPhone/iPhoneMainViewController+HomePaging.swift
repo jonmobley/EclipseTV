@@ -35,10 +35,19 @@ extension iPhoneMainViewController: UIScrollViewDelegate, UINavigationController
         // bar from the first frame (no post-swipe jump when the header hides).
         topToHeader.isActive = false
 
+        // Side edges follow the safe area so both pages clear the Dynamic Island in
+        // landscape. Insetting the pager rather than its pages is what makes this
+        // stable: UIKit's own safe-area forwarding into a paging scroll view depends
+        // on each page's position in the content, so the Library page was handed the
+        // left inset but never the right one.
         NSLayoutConstraint.activate([
             topToSafeArea,
-            homePagerScrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            homePagerScrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            homePagerScrollView.leadingAnchor.constraint(
+                equalTo: view.safeAreaLayoutGuide.leadingAnchor
+            ),
+            homePagerScrollView.trailingAnchor.constraint(
+                equalTo: view.safeAreaLayoutGuide.trailingAnchor
+            ),
             homePagerScrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
 
@@ -193,9 +202,11 @@ extension iPhoneMainViewController: UIScrollViewDelegate, UINavigationController
             homePagerScrollView.isScrollEnabled = false
             return
         }
-        // Grid|preview owns the horizontal axis in phone landscape; Music stays
-        // reachable via the Add menu / mini player.
-        if traitCollection.verticalSizeClass == .compact {
+        // An open Show puts preview|grid on the horizontal axis in phone landscape,
+        // so Music is reachable there only via the Add menu / mini player. Home has
+        // no such split and keeps the swipe.
+        if traitCollection.verticalSizeClass == .compact,
+           libraryViewController.isShowMode {
             homePagerScrollView.isScrollEnabled = false
             return
         }
@@ -224,9 +235,6 @@ extension iPhoneMainViewController: UIScrollViewDelegate, UINavigationController
         }
         libraryViewController.onCreateShow = { [weak self] in
             self?.promptNewAlbum()
-        }
-        libraryViewController.onSeeAllShows = { [weak self] in
-            self?.presentAllShows()
         }
         libraryViewController.onOpenShowChanged = { [weak self] _ in
             self?.refreshLibraryMenu()

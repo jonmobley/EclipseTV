@@ -22,6 +22,10 @@ final class WarmWebSession: NSObject {
     let pageId: UUID
     private(set) var isAdopted = false
 
+    /// One-shot callback fired once a warm load settles (loaded, failed, or already
+    /// current). Lets the pool warm pages one at a time instead of all at once.
+    var onWarmSettled: (() -> Void)?
+
     var currentURL: URL? { webView?.url }
 
     /// Whether this session currently holds a live `WKWebView` (and web content process).
@@ -44,12 +48,16 @@ final class WarmWebSession: NSObject {
     /// Ensures the web view exists and has loaded `url` when idle.
     func warm(url: URL) {
         let web = ensureWebView()
-        guard !isAdopted else { return }
+        guard !isAdopted else {
+            settleWarm()
+            return
+        }
         if needsLoad(web: web, target: url) {
             logger.info("Warming page \(self.pageId.uuidString, privacy: .public)")
             web.load(URLRequest(url: url))
         } else {
             captureThumbnailIfPossible()
+            settleWarm()
         }
     }
 
@@ -155,6 +163,13 @@ final class WarmWebSession: NSObject {
 
     // MARK: - Private Helpers
 
+    /// Fires and clears the one-shot warm callback.
+    private func settleWarm() {
+        let settled = onWarmSettled
+        onWarmSettled = nil
+        settled?()
+    }
+
     private func ensureWebView() -> WKWebView {
         if let webView { return webView }
 
@@ -250,6 +265,7 @@ final class WarmWebSession: NSObject {
 extension WarmWebSession: WKNavigationDelegate {
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        settleWarm()
         guard !isAdopted else { return }
         captureThumbnailIfPossible()
     }
@@ -260,6 +276,7 @@ extension WarmWebSession: WKNavigationDelegate {
         withError error: Error
     ) {
         logger.error("Warm load failed: \(error.localizedDescription)")
+        settleWarm()
     }
 
     func webView(
@@ -268,6 +285,7 @@ extension WarmWebSession: WKNavigationDelegate {
         withError error: Error
     ) {
         logger.error("Warm provisional failed: \(error.localizedDescription)")
+        settleWarm()
     }
 }
 

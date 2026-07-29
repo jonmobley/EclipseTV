@@ -22,9 +22,19 @@ final class WarmWebSessionPool {
 
     /// Hard cap on simultaneously live web views, including the unbound Website tile.
     private let maxWebViews = 6
+    /// Gap between staggered warm loads, so warming never competes with a tap or scroll.
+    private let warmSpacing: TimeInterval = 1.5
+    /// Stop waiting on a warm load that never reports back.
+    private let warmTimeout: TimeInterval = 8
+
     private var sessions: [UUID: WarmWebSession] = [:]
     /// Least-recently-used order (oldest at front).
     private var lru: [UUID] = []
+    /// Pages waiting their turn to warm.
+    private var warmQueue: [WebPage] = []
+    /// Page currently loading in the background, if any.
+    private var warmInFlight: UUID?
+    private var warmWatchdog: DispatchWorkItem?
     private let logger = Logger(subsystem: "com.eclipseapp.ios", category: "WarmWebPool")
 
     /// Number of sessions currently holding a live web view.
@@ -61,27 +71,50 @@ final class WarmWebSessionPool {
     ///
     /// Opportunistic: skipped when the pool is already at its web-view cap and every
     /// live session is pinned (adopted by a browser, live on AirPlay, or free-browse).
-    func warmIfNeeded(for page: WebPage) {
+    /// - Returns: Whether a warm load was attempted.
+    @discardableResult
+    func warmIfNeeded(for page: WebPage) -> Bool {
+        warmQueue.removeAll { $0.id == page.id }
         let session = session(for: page)
         if session.hasWebView {
             session.warm(url: page.url)
-            return
+            return true
         }
         guard makeRoomForNewWebView(retaining: page.id) else {
             logger.notice(
                 "Warm pool at capacity; skipping warm for \(page.id.uuidString, privacy: .public)"
             )
-            return
+            return false
         }
         session.warm(url: page.url)
+        return true
     }
 
-    /// Warms the unbound Website tile (Google) plus every saved bookmark.
-    func warmAll() {
-        warmIfNeeded(for: WebPage.freeBrowse)
-        for page in WebPageStore.shared.pages {
-            warmIfNeeded(for: page)
+    /// Warms the unbound Website tile (Google) only.
+    ///
+    /// Launch used to warm every saved bookmark at once. Each warm page is a real web
+    /// content process parsing and running JavaScript, so a handful of them competed
+    /// with the first frame and left the whole app sluggish. Bookmarks now warm as they
+    /// scroll into view, via `warmSoon(_:)`.
+    func warmFreeBrowse() {
+        warmSoon([WebPage.freeBrowse])
+    }
+
+    /// Queues `pages` to warm in the background, one load at a time.
+    ///
+    /// Pages that already hold a live web view are skipped, so this is safe to call
+    /// repeatedly from scroll-driven hooks.
+    func warmSoon(_ pages: [WebPage]) {
+        for page in pages {
+            guard sessions[page.id]?.hasWebView != true,
+                  page.id != warmInFlight,
+                  !warmQueue.contains(where: { $0.id == page.id })
+            else {
+                continue
+            }
+            warmQueue.append(page)
         }
+        pumpWarmQueue()
     }
 
     /// Hands a warm web view to the phone browser for `page`.
@@ -117,9 +150,45 @@ final class WarmWebSessionPool {
     /// Drops a session when a bookmark is deleted.
     func remove(pageId: UUID) {
         guard pageId != WebPage.freeBrowseId else { return }
+        warmQueue.removeAll { $0.id == pageId }
         sessions[pageId]?.destroy()
         sessions[pageId] = nil
         lru.removeAll { $0 == pageId }
+    }
+
+    // MARK: - Staggered Warming
+
+    /// Warms the next queued page once the previous one has settled.
+    private func pumpWarmQueue() {
+        guard warmInFlight == nil, !warmQueue.isEmpty else { return }
+        let page = warmQueue.removeFirst()
+        warmInFlight = page.id
+
+        session(for: page).onWarmSettled = { [weak self] in
+            self?.finishWarm(page.id)
+        }
+        let watchdog = DispatchWorkItem { [weak self] in
+            self?.finishWarm(page.id)
+        }
+        warmWatchdog = watchdog
+        DispatchQueue.main.asyncAfter(deadline: .now() + warmTimeout, execute: watchdog)
+
+        if !warmIfNeeded(for: page) {
+            finishWarm(page.id)
+        }
+    }
+
+    private func finishWarm(_ pageId: UUID) {
+        guard warmInFlight == pageId else { return }
+        warmWatchdog?.cancel()
+        warmWatchdog = nil
+        warmInFlight = nil
+        sessions[pageId]?.onWarmSettled = nil
+
+        guard !warmQueue.isEmpty else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + warmSpacing) { [weak self] in
+            self?.pumpWarmQueue()
+        }
     }
 
     // MARK: - Private Helpers

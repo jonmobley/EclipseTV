@@ -36,10 +36,8 @@ final class LibraryGridViewController: UIViewController {
     var onAddMediaToAlbum: ((UUID) -> Void)?
     /// Invoked when the user wants to create a Slideshow in a Show.
     var onCreateSlideshow: ((UUID) -> Void)?
-    /// Invoked when the Recent ribbon New Show tile is tapped.
+    /// Invoked when the Recent Shows New Show tile is tapped.
     var onCreateShow: (() -> Void)?
-    /// Invoked by the Recent Shows “See All >” header link.
-    var onSeeAllShows: (() -> Void)?
     /// Invoked when Show mode opens/closes or the open Show's metadata changes.
     var onOpenShowChanged: ((LocalAlbum?) -> Void)?
     /// Invoked when Show-grid arrange mode starts or ends.
@@ -253,9 +251,7 @@ final class LibraryGridViewController: UIViewController {
         )
         let view = UICollectionView(frame: .zero, collectionViewLayout: layout)
         view.backgroundColor = .systemBackground
-        // Home is a fixed composition (tools + horizontal Recent); bounce felt like
-        // the whole page drifting. Show mode re-enables vertical scroll.
-        view.alwaysBounceVertical = false
+        view.alwaysBounceVertical = true
         view.register(
             LibraryThumbnailCell.self,
             forCellWithReuseIdentifier: LibraryThumbnailCell.reuseIdentifier
@@ -465,7 +461,7 @@ final class LibraryGridViewController: UIViewController {
         super.viewDidAppear(animated)
         // Cold launch: viewWillAppear can run before the app is active; retry here.
         warmHomeCameraPreview()
-        updateHomeScrollLock()
+        updateHeroCollapse()
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -491,14 +487,14 @@ final class LibraryGridViewController: UIViewController {
             emptyLabel.text =
                 "No Shows in \(ExternalOutputSettings.orientation.rawValue) yet.\nYour content may be under \(other) in Settings → Display Mode."
             emptyLabel.isHidden = false
-            // Sit just below the Recent Shows ribbon rather than over it.
-            let tileSide = Self.showsRibbonTileSide(
+            // Sit just below the lone New Show tile rather than over it.
+            let tileSide = Self.showsTileSide(
                 containerWidth: collectionView.bounds.width,
                 sectionInset: sectionInset,
                 spacing: interitemSpacing
             )
             emptyTopConstraint?.constant = collectionView.contentInset.top
-                + Self.showsRibbonTopInset
+                + Self.showsGridTopInset
                 + Self.sectionHeaderEstimatedHeight
                 + tileSide
                 + sectionInset * 2
@@ -507,7 +503,7 @@ final class LibraryGridViewController: UIViewController {
         }
     }
 
-    /// Rebuilds the compositional layout for Home ribbon vs Show grid.
+    /// Rebuilds the compositional layout for the Recent Shows vs Show grid.
     func applyCollectionLayout() {
         let layout = Self.makeHomeLayout(
             sectionInset: sectionInset,
@@ -516,27 +512,7 @@ final class LibraryGridViewController: UIViewController {
             showsSlideshowRibbon: showsLiveSlideshowRibbon
         )
         collectionView.setCollectionViewLayout(layout, animated: false)
-        updateHomeScrollLock()
-    }
-
-    /// Home stays pinned while it fits; Show mode can scroll the media grid.
-    func updateHomeScrollLock() {
-        collectionView.alwaysBounceVertical = isShowMode
-        pinHomeScrollIfContentFits()
         updateHeroCollapse()
-    }
-
-    /// Home is a fixed composition, so bouncing read as the whole page drifting
-    /// under the floating hero. Only pin it while everything fits — on small screens
-    /// or at large text sizes Home overflows and must stay scrollable.
-    func pinHomeScrollIfContentFits() {
-        guard !isShowMode, maxVerticalScroll() <= 0.5 else { return }
-        let top = -collectionView.adjustedContentInset.top
-        guard abs(collectionView.contentOffset.y - top) > 0.5 else { return }
-        collectionView.contentOffset = CGPoint(
-            x: collectionView.contentOffset.x,
-            y: top
-        )
     }
 
     /// Reloads only the Camera tile (live preview / last-frame updates).

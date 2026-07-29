@@ -26,18 +26,10 @@ extension iPhoneMainViewController {
     }
 
     /// Home: Open Show + New Show + Settings. An open Show adds an Edit submenu.
+    ///
+    /// Arrange mode needs no entry here: the header disables this dropdown and
+    /// offers Done as the single way to finish.
     func makeLibraryMenu() -> UIMenu {
-        if libraryViewController.isArranging {
-            let done = UIAction(
-                title: "Done Arranging",
-                image: UIImage(systemName: "checkmark")
-            ) { [weak self] _ in
-                _ = self?.libraryViewController.commitArranging()
-                self?.refreshLibraryMenu()
-            }
-            return UIMenu(children: [done, settingsMenuAction()])
-        }
-
         let openShow = libraryViewController.openShow
         var children: [UIMenuElement] = []
         if let shows = openShowSubmenu(excluding: openShow?.id) {

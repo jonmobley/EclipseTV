@@ -75,11 +75,16 @@ extension LibraryGridViewController {
         )
         heroTopConstraint = heroTop
         // Portrait: grid fills the safe area; hero floats above and content scrolls under it.
+        //
+        // Leading/trailing follow the safe area, not the view. The two are identical in
+        // portrait, but this layout also serves landscape Home (no hero), where pinning
+        // to the view left the grid a full notch-width wider than its visible area and
+        // pushed the last column off screen.
         portraitChromeConstraints = [
             heroTop,
             collectionView.topAnchor.constraint(equalTo: safe.topAnchor),
-            collectionView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            collectionView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            collectionView.leadingAnchor.constraint(equalTo: safe.leadingAnchor),
+            collectionView.trailingAnchor.constraint(equalTo: safe.trailingAnchor),
             collectionView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             // Park the unused spacer so it never shows a black band.
             heroSpacer.topAnchor.constraint(equalTo: view.topAnchor),
@@ -245,8 +250,8 @@ extension LibraryGridViewController {
 
     private static let sideBySideGutter: CGFloat = 12
     /// Keeps the grid usable when the 16:9 hero would otherwise dominate.
-    private static let sideBySideMinGridWidth: CGFloat = 240
-    private static let sideBySideMaxHeroWidthFraction: CGFloat = 0.58
+    private static let sideBySideMinGridWidth: CGFloat = 300
+    private static let sideBySideMaxHeroWidthFraction: CGFloat = 0.46
 
     private func applyChromeAxis(sideBySide: Bool) {
         isSideBySideChrome = sideBySide

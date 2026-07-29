@@ -102,8 +102,14 @@ extension iPhoneMainViewController {
 
         NSLayoutConstraint.activate([
             headerBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            headerBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            headerBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            // Same side edges as the pager, so the header controls line up with the
+            // content columns and keep clear of the Dynamic Island in landscape.
+            headerBar.leadingAnchor.constraint(
+                equalTo: view.safeAreaLayoutGuide.leadingAnchor
+            ),
+            headerBar.trailingAnchor.constraint(
+                equalTo: view.safeAreaLayoutGuide.trailingAnchor
+            ),
             headerBar.heightAnchor.constraint(equalToConstant: 52)
         ])
 

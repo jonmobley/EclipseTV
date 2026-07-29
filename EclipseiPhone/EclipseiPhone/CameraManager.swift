@@ -59,12 +59,23 @@ final class CameraManager: NSObject {
     }()
 
     /// Latest still from `AVCaptureVideoDataOutput` (home-tile freeze source).
+    ///
+    /// Downscaled to `tileStillMaxEdge`. Photo capture asks for its own
+    /// full-resolution sample via `requestStill(timeout:completion:)`.
     var latestSampleImage: UIImage?
     /// Throttle sample→UIImage conversion while the session runs.
     var lastSampleAt: CFAbsoluteTime = 0
-    let sampleInterval: CFAbsoluteTime = 0.2
+    /// Kept coarse on purpose: the tile shows the live preview layer while the session
+    /// runs and only needs a bitmap when parking, so converting frames rapidly burned
+    /// CPU for a still almost nothing read.
+    let sampleInterval: CFAbsoluteTime = 1.5
+    /// Longest-edge ceiling for the throttled tile still.
+    static let tileStillMaxEdge: CGFloat = 1280
+    /// One-shot full-resolution still requests awaiting the next sample.
+    /// Access on `frameQueue`.
+    var stillRequests: [(UIImage?) -> Void] = []
     private let videoDataOutput = AVCaptureVideoDataOutput()
-    private let frameQueue = DispatchQueue(label: "com.eclipseapp.ios.camera.frames")
+    let frameQueue = DispatchQueue(label: "com.eclipseapp.ios.camera.frames")
     let ciContext = CIContext(options: [.useSoftwareRenderer: false])
 
     /// Movie file output for hold-to-record (attached lazily).
@@ -127,8 +138,15 @@ final class CameraManager: NSObject {
     }
 
     /// Stores the latest camera sample (preferred) or a non-black preview snapshot.
+    ///
+    /// Since tile stills are sampled coarsely, this also asks for a fresh frame and
+    /// upgrades `lastFrame` if one arrives before the session stops.
     @discardableResult
     func captureLastFrame(from preview: CameraPreviewView?) -> Bool {
+        requestStill { [weak self] still in
+            guard let self, let still, !Self.isNearlyBlack(still) else { return }
+            self.saveLastFrame(still)
+        }
         if let image = latestSampleImage, !Self.isNearlyBlack(image) {
             saveLastFrame(image)
             return true

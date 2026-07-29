@@ -140,6 +140,13 @@ final class WebPagesViewController: UITableViewController {
         return cell
     }
 
+    override func tableView(_ tableView: UITableView,
+                            willDisplay cell: UITableViewCell,
+                            forRowAt indexPath: IndexPath) {
+        guard !store.pages.isEmpty else { return }
+        WarmWebSessionPool.shared.warmSoon([store.pages[indexPath.row]])
+    }
+
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
         guard !store.pages.isEmpty else { return }

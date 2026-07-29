@@ -9,15 +9,15 @@ import Foundation
 
 /// Phone-only home-grid item. Specials are never part of the Apple TV Multipeer manifest.
 ///
-/// Home has two bands: fixed tools (Logo / Camera / Website), then a Recent Shows
-/// ribbon. Opening a Show keeps the tools band and replaces Recent with that Show's
-/// media grid. Black is a header control. Saved bookmarks and PDFs live under +.
+/// Home is a single Recent Shows grid. Opening a Show adds the tools band
+/// (Logo / Camera / Website) and replaces Recent with that Show's media grid.
+/// Black is a header control. Saved bookmarks and PDFs live under +.
 enum HomeGridItem: Equatable {
     case logo
     case camera
     case website
     case show(LocalAlbum)
-    /// Trailing ribbon tile — creates a Show (also the empty-ribbon placeholder).
+    /// Trailing grid tile — creates a Show (also the empty-grid placeholder).
     case createShow
 
     /// Fixed tools row (section 0).
@@ -26,14 +26,9 @@ enum HomeGridItem: Equatable {
     /// Leading pinned tool count.
     static var specialCount: Int { tools.count }
 
-    /// Recent Shows ribbon (section 1), always ending with `createShow`.
-    static func recentShows(
-        from albums: [LocalAlbum],
-        limit: Int = 12
-    ) -> [HomeGridItem] {
-        var items = Array(albums.prefix(limit)).map { HomeGridItem.show($0) }
-        items.append(.createShow)
-        return items
+    /// Every Show in the current Display Mode, always ending with `createShow`.
+    static func recentShows(from albums: [LocalAlbum]) -> [HomeGridItem] {
+        albums.map { HomeGridItem.show($0) } + [.createShow]
     }
 }
 

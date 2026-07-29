@@ -55,7 +55,9 @@ final class TVLibraryStore {
     /// Live playback state for the currently playing video on the Apple TV. Not persisted.
     private(set) var playback = PlaybackState()
 
-    private var thumbnails: [String: UIImage] = [:]
+    /// Decoded grid thumbnails, bounded so a large library can't pin hundreds of
+    /// megabytes of bitmaps.
+    private let thumbnails = ThumbnailMemoryCache(megabyteLimit: 48)
 
     /// Ids with a disk load already in flight, so a scrolling grid doesn't kick off
     /// duplicate reads for the same cell.
@@ -121,7 +123,7 @@ final class TVLibraryStore {
         guard mode != activeLibraryMode else { return }
         persistManifest()
         activeLibraryMode = mode
-        thumbnails = [:]
+        thumbnails.removeAll()
         pendingDiskLoads.removeAll()
         ensureThumbnailDirectory()
         loadPersistedManifest()
@@ -146,7 +148,7 @@ final class TVLibraryStore {
         UserDefaults.standard.set(name, forKey: activeTVNameKey)
 
         migrateLegacyKeysIfNeeded(for: name)
-        thumbnails = [:]
+        thumbnails.removeAll()
         ensureThumbnailDirectory()
         loadPersistedManifest()
         mergePendingUploads()
@@ -183,18 +185,23 @@ final class TVLibraryStore {
 
         ioQueue.async {
             var image: UIImage?
+            // Only a thumb rebuilt from another location needs writing back; the active
+            // mode's own cache file would otherwise be re-encoded on every single load.
+            var needsPersist = true
+
             for url in thumbURLs {
-                if let loaded = UIImage(contentsOfFile: url.path)?.preparingForDisplay() {
+                if let loaded = ThumbnailDecoder.decode(fileURL: url) {
                     image = loaded
+                    needsPersist = url != thumbURLs.first
                     break
                 }
             }
             if image == nil {
                 for url in mediaURLs {
                     if isVideo {
-                        image = Self.videoPreviewImage(at: url)?.preparingForDisplay()
+                        image = Self.videoPreviewImage(at: url)
                     } else {
-                        image = UIImage(contentsOfFile: url.path)?.preparingForDisplay()
+                        image = ThumbnailDecoder.decode(fileURL: url)
                     }
                     if image != nil { break }
                 }
@@ -208,7 +215,9 @@ final class TVLibraryStore {
                 if self.thumbnails[id] == nil {
                     self.thumbnails[id] = image
                 }
-                self.persistThumbnail(image, forId: id)
+                if needsPersist {
+                    self.persistThumbnail(image, forId: id)
+                }
                 self.delegate?.libraryStore(self, didUpdateThumbnailFor: id)
             }
         }
@@ -313,7 +322,7 @@ final class TVLibraryStore {
 
         let keepIds = Set(self.items.map { $0.id })
             .union(PendingUploadStore.shared.pendingIds(for: mode))
-        thumbnails = thumbnails.filter { keepIds.contains($0.key) }
+        thumbnails.retain(ids: keepIds)
         pruneDiskThumbnails(keeping: keepIds)
         // Keep full-res copies that still exist on disk even if the TV omitted them.
         let localKeep = keepIds.union(Set(LocalMediaStore.shared.storedIds(for: mode)))
@@ -332,8 +341,9 @@ final class TVLibraryStore {
         let mode = activeLibraryMode
         PendingUploadStore.shared.enqueue(item, mode: mode)
         if let thumbnail = thumbnail {
-            thumbnails[item.id] = thumbnail
-            persistThumbnail(thumbnail, forId: item.id)
+            let thumb = ThumbnailDecoder.downsample(thumbnail)
+            thumbnails[item.id] = thumb
+            persistThumbnail(thumb, forId: item.id)
         }
         if !items.contains(where: { $0.id == item.id }) {
             items.append(item)
@@ -456,7 +466,7 @@ final class TVLibraryStore {
             }
             if let url = LocalMediaStore.shared.localURL(forId: id, mode: mode),
                !isVideo,
-               let image = UIImage(contentsOfFile: url.path) {
+               let image = ThumbnailDecoder.decode(fileURL: url) {
                 thumbnails[id] = image
                 persistThumbnail(image, forId: id)
             }
@@ -555,7 +565,7 @@ final class TVLibraryStore {
             forKey: "EclipseTV.camera.outputOrientation"
         )
         activeLibraryMode = .vertical
-        thumbnails = [:]
+        thumbnails.removeAll()
         pendingDiskLoads.removeAll()
         ensureThumbnailDirectory()
         loadPersistedManifest()
@@ -607,8 +617,9 @@ final class TVLibraryStore {
     }
 
     func setThumbnail(_ image: UIImage, forId id: String) {
-        thumbnails[id] = image
-        persistThumbnail(image, forId: id)
+        let thumb = ThumbnailDecoder.downsample(image)
+        thumbnails[id] = thumb
+        persistThumbnail(thumb, forId: id)
         delegate?.libraryStore(self, didUpdateThumbnailFor: id)
     }
 
@@ -629,7 +640,7 @@ final class TVLibraryStore {
         guard tvName == activeTVName else { return }
         items = []
         currentId = nil
-        thumbnails = [:]
+        thumbnails.removeAll()
         delegate?.libraryStoreDidUpdateItems(self)
         delegate?.libraryStoreDidUpdateCurrent(self)
     }
