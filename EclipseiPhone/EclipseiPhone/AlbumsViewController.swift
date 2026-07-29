@@ -280,8 +280,11 @@ extension AlbumsViewController: UICollectionViewDataSource, UICollectionViewDele
     func collectionView(_ collectionView: UICollectionView,
                         viewForSupplementaryElementOfKind kind: String,
                         at indexPath: IndexPath) -> UICollectionReusableView {
-        let header = collectionView.dequeueReusableSupplementaryView(
-            ofKind: kind, withReuseIdentifier: headerReuseId, for: indexPath) as! AlbumSectionHeaderView
+        guard let header = collectionView.dequeueReusableSupplementaryView(
+            ofKind: kind, withReuseIdentifier: headerReuseId, for: indexPath
+        ) as? AlbumSectionHeaderView else {
+            return UICollectionReusableView()
+        }
         header.titleLabel.text = store.albums[safe: indexPath.section]?.resolvedName
         return header
     }

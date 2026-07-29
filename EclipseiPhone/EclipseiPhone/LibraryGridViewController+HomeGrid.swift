@@ -56,11 +56,13 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         viewForSupplementaryElementOfKind kind: String,
         at indexPath: IndexPath
     ) -> UICollectionReusableView {
-        let header = collectionView.dequeueReusableSupplementaryView(
+        guard let header = collectionView.dequeueReusableSupplementaryView(
             ofKind: kind,
             withReuseIdentifier: HomeSectionHeaderView.reuseIdentifier,
             for: indexPath
-        ) as! HomeSectionHeaderView
+        ) as? HomeSectionHeaderView else {
+            return UICollectionReusableView()
+        }
         switch homeSection(at: indexPath.section) {
         case .tools:
             // The tools row is Show-only and carries no title.

@@ -84,7 +84,10 @@ actor AsyncImageLoader {
         }
 
         let url = URL(fileURLWithPath: path)
-        guard let image = Self.downsampledImage(at: url, targetSize: targetSize) else {
+        let scale = await displayScale()
+        guard let image = Self.downsampledImage(
+            at: url, targetSize: targetSize, scale: scale
+        ) else {
             logger.error("Failed to decode image: \(path, privacy: .public)")
             return nil
         }
@@ -94,12 +97,29 @@ actor AsyncImageLoader {
         return image
     }
 
+    /// Screen scale, sampled once on the main actor.
+    ///
+    /// Callers pass `targetSize` in points but ImageIO wants pixels, and the loader's own
+    /// executor can't touch `UIScreen`. It's a constant for the life of the process, so
+    /// one hop is cheaper than threading it through every call site.
+    private var cachedDisplayScale: CGFloat?
+
+    private func displayScale() async -> CGFloat {
+        if let cachedDisplayScale { return cachedDisplayScale }
+        let scale = await MainActor.run { UIScreen.main.scale }
+        cachedDisplayScale = scale
+        return scale
+    }
+
     /// Creates a thumbnail-sized `UIImage` using `CGImageSourceCreateThumbnailAtIndex`.
     /// When `targetSize` is nil, still caps at 3840px on the long edge to bound memory.
-    private static func downsampledImage(at url: URL, targetSize: CGSize?) -> UIImage? {
+    private static func downsampledImage(
+        at url: URL,
+        targetSize: CGSize?,
+        scale: CGFloat
+    ) -> UIImage? {
         let maxPixel: CGFloat
         if let targetSize {
-            let scale = UIScreen.main.scale
             maxPixel = max(targetSize.width, targetSize.height) * scale
         } else {
             maxPixel = 3840

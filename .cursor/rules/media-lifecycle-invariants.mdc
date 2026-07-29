@@ -1,0 +1,78 @@
+---
+description: Deliberate media/capture/sync lifecycle decisions that look like cleanup targets but are load-bearing.
+alwaysApply: true
+---
+
+# Media Lifecycle Invariants — Read Before "Simplifying"
+
+Each item below came out of a full-app audit that fixed a real bug. In every case the
+*pre-fix* version looks like the simpler, more obvious code, so these are exactly the
+lines a future cleanup pass tends to revert. Keep the behaviour unless the user asks
+for a change and names the item.
+
+## Warm web views are capped and destroyed, not just dropped
+
+`WarmWebSessionPool` enforces `maxWebViews` and calls `WarmWebSession.destroy()` on
+eviction. Each warm page is a real web content process; releasing the reference without
+tearing down the `WKWebView`, its message handler, and its delegates leaks the process.
+
+Launch warms **only** the free-browse tile (`warmFreeBrowse()`); saved bookmarks warm
+one at a time as they scroll into view (`warmSoon(_:)`), spaced and watchdogged. Do not
+reintroduce a `warmAll()` that warms every bookmark up front — that competed with the
+first frame and made the whole app sluggish at launch.
+
+## Ambient audio pauses, it never stops
+
+`AudioAmbientPolicy.applyYieldIfNeeded(for:)` calls `pause()`. `stop()` tears down the
+queue and mini player, so yielding the output to a presentation would silently discard
+the user's playback state. Pausing is the point, not an oversight.
+
+## Photo capture has no fallback
+
+`capturePhotoToLibrary` uses only the full-resolution frame it renders on demand and
+reports `CaptureError.noFrame` otherwise. Do not "improve" it by falling back to
+`latestSampleImage` or `lastFrame`: both are downscaled to `tileStillMaxEdge`, and
+`lastFrame` is persisted and can outlive the session that produced it, so a fallback
+writes a stale thumbnail into the user's photo library instead of failing honestly.
+
+Related: `latestSampleImage` must keep exactly one writer (the throttled tile path) so
+it stays tile-sized. A second writer storing full-resolution frames is what made the
+above bug possible.
+
+## Grid layout floors its tile dimensions
+
+`LibraryGridViewController+HomeLayout` routes tile sizing through `columnWidth(...)`,
+which floors the result at `minimumTileSide`. `NSCollectionLayoutDimension.absolute`
+throws on a non-positive value, and the container width is briefly zero during early
+layout, so the `max(...)` is a crash guard rather than defensive noise.
+
+## Sync only reports success it can back up
+
+`iPhoneConnectionManager.replayLibrary` counts per-item send failures and calls
+`completion(false)` unless every item transferred. Reporting unconditional success made
+`MultiTVSyncCoordinator` mark a replica caught up when it wasn't, which suppressed the
+retry. Similarly, `pendingRestoreId` clears only *after* a successful send, and
+cancelling a transfer must also cancel the replica fan-out.
+
+## Unreadable saved pages are preserved, not overwritten
+
+`WebPageStore.load()` salvages entries individually and, when it still can't decode,
+copies the raw bytes to a backup key and starts empty. It must never write over data it
+failed to read — that turns a decode bug into permanent loss of the user's bookmarks.
+
+## tvOS: one teardown path for the video player
+
+Stopping playback goes through `ImageViewController.retireCurrentPlayer(...)`. Ad-hoc
+teardown is how videos ended up still playing audio after a transition to an image or
+the grid, with companions left showing a stale playing state.
+
+## tvOS: granular data-source updates do not also reload
+
+`MediaDataSource`'s add/remove/move notify only their specific delegate callback. They
+must not also call `mediaDataDidChange()`; pairing a batch update with a full
+`reloadData()` stomps the animation and can crash. Selection is re-validated in the
+batch-update completion instead.
+
+---
+
+If one of these genuinely needs to change, STOP and ask the user first, naming the item.

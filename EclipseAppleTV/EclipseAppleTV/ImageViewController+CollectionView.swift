@@ -29,7 +29,11 @@ extension ImageViewController: UICollectionViewDataSource, UICollectionViewDeleg
     
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
         return PerformanceMonitor.shared.measureUIOperation("cellForItemAt") {
-            let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "ThumbnailCell", for: indexPath) as! ImageThumbnailCell
+            guard let cell = collectionView.dequeueReusableCell(
+                withReuseIdentifier: "ThumbnailCell", for: indexPath
+            ) as? ImageThumbnailCell else {
+                return UICollectionViewCell()
+            }
 
             // Read-only album sections are configured separately (no move/delete gesture).
             if indexPath.section != ImageViewController.librarySectionIndex {

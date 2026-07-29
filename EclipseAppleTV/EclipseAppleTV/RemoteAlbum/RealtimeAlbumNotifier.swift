@@ -67,7 +67,16 @@ final class RealtimeAlbumNotifier {
         listenTask = Task { [weak self] in
             // Register the broadcast handler before subscribing, per the Realtime SDK.
             let stream = channel.broadcastStream(event: AlbumConfig.realtimeChangeEvent)
-            await channel.subscribe()
+            do {
+                try await channel.subscribeWithError()
+            } catch {
+                // Previously swallowed: a failed subscribe left us awaiting a stream that
+                // would never deliver, so album pushes silently stopped arriving.
+                self?.logger.error(
+                    "Realtime subscribe failed: \(error.localizedDescription, privacy: .public)"
+                )
+                return
+            }
             for await _ in stream {
                 if Task.isCancelled { break }
                 self?.scheduleChange()
