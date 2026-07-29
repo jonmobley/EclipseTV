@@ -34,8 +34,13 @@ final class WebPageStore {
 
     private(set) var pages: [WebPage] = []
 
+    /// True when the stored payload could not be read on launch. The undecodable bytes
+    /// are preserved under `backupKey` so the pages are recoverable rather than lost.
+    private(set) var didFailToLoad = false
+
     private let defaults: UserDefaults
     private let itemsKey = "EclipseTV.pages.items"
+    private let backupKey = "EclipseTV.pages.items.unreadableBackup"
     private let logger = Logger(subsystem: "com.eclipseapp.ios", category: "WebPageStore")
 
     init(defaults: UserDefaults = .standard) {
@@ -54,7 +59,7 @@ final class WebPageStore {
         let page = WebPage(title: trimmedTitle, url: url)
         pages.insert(page, at: 0)
         persist()
-        WebThumbnailPrefetcher.shared.enqueue([page])
+        WarmWebSessionPool.shared.warmIfNeeded(for: page)
         return page
     }
 
@@ -63,6 +68,7 @@ final class WebPageStore {
         let before = pages.count
         pages.removeAll { $0.id == id }
         guard pages.count != before else { return }
+        WarmWebSessionPool.shared.remove(pageId: id)
         WebThumbnailStore.shared.remove(id: id)
         persist()
     }
@@ -90,14 +96,43 @@ final class WebPageStore {
 
     // MARK: - Persistence
 
+    /// Decodes one element without failing its whole container.
+    ///
+    /// Lets a single malformed or future-schema entry be dropped instead of taking every
+    /// saved page with it — the previous behaviour reset `pages` to empty, and the next
+    /// write then destroyed the user's bookmarks permanently.
+    private struct SalvagedPage: Decodable {
+        let page: WebPage?
+
+        init(from decoder: Decoder) throws {
+            page = try? WebPage(from: decoder)
+        }
+    }
+
     private func load() {
         guard let data = defaults.data(forKey: itemsKey) else { return }
-        do {
-            pages = try JSONDecoder().decode([WebPage].self, from: data)
-        } catch {
-            logger.error("Failed to decode saved pages: \(error.localizedDescription)")
-            pages = []
+
+        if let decoded = try? JSONDecoder().decode([WebPage].self, from: data) {
+            pages = decoded
+            return
         }
+
+        // Salvage whatever individual entries still decode before giving up.
+        if let salvaged = try? JSONDecoder().decode([SalvagedPage].self, from: data) {
+            pages = salvaged.compactMap(\.page)
+            logger.error("Recovered \(self.pages.count) of \(salvaged.count) saved pages")
+            if pages.count != salvaged.count {
+                defaults.set(data, forKey: backupKey)
+            }
+            return
+        }
+
+        // Container itself is unreadable. Keep the bytes so the pages can be recovered,
+        // and start empty rather than writing over them.
+        logger.error("Saved pages payload is unreadable; preserving a backup copy")
+        defaults.set(data, forKey: backupKey)
+        pages = []
+        didFailToLoad = true
     }
 
     private func persist() {

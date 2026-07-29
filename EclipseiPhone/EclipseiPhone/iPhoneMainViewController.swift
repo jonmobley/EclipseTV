@@ -47,6 +47,10 @@ class iPhoneMainViewController: UIViewController {
     var libraryPageWidthConstraint: NSLayoutConstraint?
     /// Width of the Music page (full pager width, or sidebar in split).
     var musicPageWidthConstraint: NSLayoutConstraint?
+    /// Pager pinned under the library header (Library page / split).
+    var homePagerTopToHeaderConstraint: NSLayoutConstraint?
+    /// Pager pinned to the safe area (compact Music page — Music has its own nav bar).
+    var homePagerTopToSafeAreaConstraint: NSLayoutConstraint?
 
     /// Transient transfer/status message overlaid on top of the library while sending.
     let statusLabel: PaddedLabel = {
@@ -124,7 +128,18 @@ class iPhoneMainViewController: UIViewController {
         setupUI()
         setupConnectionManager()
         setupNotificationObservers()
-        
+        registerForTraitChanges(
+            [UITraitHorizontalSizeClass.self]
+        ) { (self: Self, _: UITraitCollection) in
+            self.updateHomeSplitLayoutIfNeeded()
+        }
+        registerForTraitChanges(
+            [UITraitVerticalSizeClass.self]
+        ) { (self: Self, _: UITraitCollection) in
+            // Phone landscape disables Library↔Music paging (grid|preview split).
+            self.setHomePagingEnabled(true)
+        }
+
         navigationController?.isNavigationBarHidden = true
     }
     
@@ -150,13 +165,6 @@ class iPhoneMainViewController: UIViewController {
         syncHomePagerOffsetIfNeeded()
     }
 
-    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
-        super.traitCollectionDidChange(previousTraitCollection)
-        guard previousTraitCollection?.horizontalSizeClass
-            != traitCollection.horizontalSizeClass else { return }
-        updateHomeSplitLayoutIfNeeded()
-    }
-    
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         

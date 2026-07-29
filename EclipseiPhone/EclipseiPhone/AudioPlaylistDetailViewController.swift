@@ -43,7 +43,8 @@ final class AudioPlaylistDetailViewController: UITableViewController {
         )
         navigationItem.rightBarButtonItems = [editButtonItem, play]
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: cellReuseId)
-        tableView.rowHeight = 56
+        tableView.rowHeight = UITableView.automaticDimension
+        tableView.estimatedRowHeight = 72
 
         NotificationCenter.default.addObserver(
             self,

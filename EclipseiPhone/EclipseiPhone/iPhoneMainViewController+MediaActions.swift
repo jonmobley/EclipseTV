@@ -166,17 +166,6 @@ extension iPhoneMainViewController {
     /// System menu for the header "+" control: import types, then create containers.
     /// In Show mode, Image/Video add into the open Show.
     func makeAddMenu() -> UIMenu {
-        var pdfChildren: [UIMenuElement] = PDFStore.shared.documents.map { doc in
-            UIAction(title: doc.title, image: UIImage(systemName: "doc.richtext")) { [weak self] _ in
-                self?.libraryViewController.presentPDF(doc)
-            }
-        }
-        pdfChildren.append(UIAction(
-            title: "Add PDF…",
-            image: UIImage(systemName: "plus")
-        ) { [weak self] _ in
-            self?.showPDFPicker()
-        })
         let music = UIMenu(
             title: "Music",
             image: UIImage(systemName: "music.note"),
@@ -196,20 +185,27 @@ extension iPhoneMainViewController {
             ]
         )
         let extras = UIMenu(title: "", options: .displayInline, children: [
-            UIAction(title: "Web…", image: UIImage(systemName: "globe")) { [weak self] _ in
+            UIAction(
+                title: "Library…",
+                image: UIImage(systemName: "square.grid.2x2")
+            ) { [weak self] _ in
+                self?.presentMediaLibrary()
+            },
+            UIAction(title: "Web", image: UIImage(systemName: "globe")) { [weak self] _ in
                 self?.presentPages()
             },
-            UIMenu(
+            UIAction(
                 title: "PDF",
-                image: UIImage(systemName: "doc.richtext"),
-                children: pdfChildren
-            ),
+                image: UIImage(systemName: "doc.richtext")
+            ) { [weak self] _ in
+                self?.showPDFPicker()
+            },
             music
         ])
 
         if let albumId = libraryViewController.openShowId {
             let importAction = UIAction(
-                title: "Import…",
+                title: "Photos",
                 image: UIImage(systemName: "photo.on.rectangle.angled")
             ) { [weak self] _ in
                 self?.pendingSlideshowShowId = nil
@@ -218,7 +214,7 @@ extension iPhoneMainViewController {
                 self?.showImportPicker()
             }
             let slideshowAction = UIAction(
-                title: "New Slideshow…",
+                title: "Slideshow",
                 image: UIImage(systemName: "rectangle.stack.badge.play")
             ) { [weak self] _ in
                 self?.promptNewSlideshow(inShowId: albumId)
@@ -261,17 +257,22 @@ extension iPhoneMainViewController {
         present(sheet, animated: true)
     }
 
-    /// Creates a Show: name, then Display Mode; opens the new Show.
+    /// Creates a Show in the current Display Mode and opens it.
+    ///
+    /// Mode is whatever Display Mode is active now — no cross-mode picker.
     func promptNewAlbum() {
+        let mode = ExternalOutputSettings.orientation.rawValue
         let alert = UIAlertController(
-            title: "New Show", message: nil, preferredStyle: .alert
+            title: "New \(mode) Show",
+            message: "This Show will only appear while Display Mode is \(mode).",
+            preferredStyle: .alert
         )
         alert.addTextField { field in
             field.placeholder = "Show name"
             field.autocapitalizationType = .words
         }
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        alert.addAction(UIAlertAction(title: "Next", style: .default) { [weak self] _ in
+        alert.addAction(UIAlertAction(title: "Create", style: .default) { [weak self] _ in
             let name = alert.textFields?.first?.text ?? ""
             let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else {
@@ -281,40 +282,17 @@ extension iPhoneMainViewController {
                 )
                 return
             }
-            self?.promptAlbumDisplayMode(name: trimmed)
+            self?.createLocalAlbum(
+                name: trimmed,
+                orientation: ExternalOutputSettings.orientation
+            )
         })
         present(alert, animated: true)
     }
 
-    /// Picks Landscape or Vertical for a new Show, then creates and opens it.
-    func promptAlbumDisplayMode(name: String) {
-        let sheet = UIAlertController(
-            title: "Display Mode",
-            message: "Same presentation in both formats. Choose where this Show starts.",
-            preferredStyle: .actionSheet
-        )
-        for mode in ExternalOutputOrientation.allCases {
-            let label = mode == ExternalOutputSettings.orientation
-                ? "\(mode.rawValue) (Current)"
-                : mode.rawValue
-            sheet.addAction(UIAlertAction(title: label, style: .default) { [weak self] _ in
-                self?.createLocalAlbum(name: name, orientation: mode)
-            })
-        }
-        sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        if let popover = sheet.popoverPresentationController {
-            popover.sourceView = headerBar.libraryAnchor
-            popover.sourceRect = headerBar.libraryAnchor.bounds
-        }
-        present(sheet, animated: true)
-    }
-
-    /// Switches Display Mode if needed, creates the Show, and opens it.
+    /// Creates the Show in `orientation` and opens it (caller passes the active mode).
     func createLocalAlbum(name: String, orientation: ExternalOutputOrientation) {
         do {
-            if ExternalOutputSettings.orientation != orientation {
-                ExternalOutputSettings.orientation = orientation
-            }
             let show = try LocalAlbumStore.shared.create(name: name, orientation: orientation)
             libraryViewController.openLocalAlbum(id: show.id)
         } catch {
@@ -344,7 +322,7 @@ extension iPhoneMainViewController {
             asCopy: true
         )
         picker.delegate = self
-        picker.allowsMultipleSelection = false
+        picker.allowsMultipleSelection = true
         presentationAnchor.present(picker, animated: true)
     }
 

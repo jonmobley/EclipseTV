@@ -26,7 +26,9 @@ extension ImageViewController {
     /// Apply settings to currently playing video (if any)
     func applySettingsToCurrentVideo() {
         guard isVideo, let player = playerView.player else { return }
-        guard let currentPath = dataSource.getCurrentPath() else { return }
+        // `currentDisplayPath()` follows the active collection; reading the library data
+        // source directly applied the wrong item's settings while an album was playing.
+        guard let currentPath = currentDisplayPath() else { return }
 
         // Get settings from the new system (viewModel)
         let mediaItem = MediaItem(path: currentPath)

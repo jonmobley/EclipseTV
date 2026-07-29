@@ -24,6 +24,9 @@ protocol ConnectionManagerDelegate: AnyObject {
     func connectionManager(_ manager: ConnectionManager, didReceiveReorderRequest orderedIds: [String])
     /// The companion requested a per-item video setting change. Nil fields are unchanged.
     func connectionManager(_ manager: ConnectionManager, didReceiveVideoSettingForId id: String, isLooping: Bool?, isMuted: Bool?)
+    /// The companion changed a still's Fit / Fill framing (already stored); re-frame it if
+    /// it is the item on screen.
+    func connectionManager(_ manager: ConnectionManager, didReceiveImageFitForId id: String)
     /// A purged item was just re-sent: the freshly received file is at `newPath` and the
     /// unavailable ledger entry keyed by `ledgerId` (the original file name) should be
     /// cleared and the new item moved back into its original slot.
@@ -297,9 +300,15 @@ class ConnectionManager: NSObject {
         case .playRequest:
             guard let id = envelope.id else { return }
             logger.info("Received play request for id: \(id, privacy: .public)")
+            let isFill = envelope.isFill
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
                 self.activateModeIfNeeded(from: envelope)
+                // Stamped on the request so a still is framed like the companion's own
+                // output from the first frame.
+                if let isFill {
+                    ImageFitSettings.setFill(isFill, forFileName: id)
+                }
                 self.delegate?.connectionManager(self, didReceivePlayRequestForId: id)
             }
         case .deleteItem:
@@ -336,6 +345,15 @@ class ConnectionManager: NSObject {
                 self.activateModeIfNeeded(from: envelope)
                 self.delegate?.connectionManager(self, didReceiveVideoSettingForId: id,
                                                   isLooping: isLooping, isMuted: isMuted)
+            }
+        case .setImageFit:
+            guard let id = envelope.id, let isFill = envelope.isFill else { return }
+            logger.info("Received image fit for id: \(id, privacy: .public) fill: \(isFill)")
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                self.activateModeIfNeeded(from: envelope)
+                ImageFitSettings.setFill(isFill, forFileName: id)
+                self.delegate?.connectionManager(self, didReceiveImageFitForId: id)
             }
         case .restoreItem:
             guard let id = envelope.id else { return }

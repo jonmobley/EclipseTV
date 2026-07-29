@@ -100,9 +100,10 @@ enum ContentTransitionStyle: String, CaseIterable {
     case crossfade = "Crossfade"
 }
 
-/// What AirPlay shows after the user closes the camera control screen.
+/// What AirPlay shows after the user slides the shutter off live.
 enum CameraCloseDestination: String, CaseIterable {
-    case camera = "Camera"
+    /// Restore whatever was on AirPlay before camera went live.
+    case previous = "Previous"
     case logo = "Logo"
     case black = "Black"
 }
@@ -190,12 +191,14 @@ enum ExternalOutputSettings {
         }
     }
 
-    /// AirPlay target after closing the camera screen. Default keeps the live camera.
+    /// AirPlay target after stopping camera live. Default is Logo.
+    ///
+    /// Legacy stored `"Camera"` no longer matches an enum case and resolves to Logo.
     static var cameraCloseDestination: CameraCloseDestination {
         get {
             guard let raw = UserDefaults.standard.string(forKey: cameraCloseKey),
                   let value = CameraCloseDestination(rawValue: raw) else {
-                return .camera
+                return .logo
             }
             return value
         }

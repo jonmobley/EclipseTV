@@ -16,30 +16,36 @@ extension LibraryGridViewController {
         guard isShowMode, openShowItems.count >= 2, !isArranging else { return }
         isArranging = true
         reorderGesture.isEnabled = true
-        collectionView.reloadData()
+        reloadForArrangeChange()
         onArrangingChanged?(true)
-        showPresentationToast("Drag photos to reorder")
+        UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+        showPresentationToast("Drag to reorder, then tap Done")
     }
 
     func cancelArranging() {
         guard isArranging else { return }
-        isArranging = false
-        reorderGesture.isEnabled = false
-        arrangeItems = nil
-        collectionView.reloadData()
-        onArrangingChanged?(false)
+        endArrangeMode()
     }
 
     /// Ends arrange mode (order already persisted on each move).
     @discardableResult
     func commitArranging() -> Bool {
         guard isArranging else { return true }
-        isArranging = false
-        reorderGesture.isEnabled = false
-        arrangeItems = nil
-        collectionView.reloadData()
-        onArrangingChanged?(false)
+        endArrangeMode()
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
         return true
+    }
+
+    /// Wiggles the tiles the user can drag and dims the ones pinned in place.
+    func applyArrangeAppearance(to cell: LibraryThumbnailCell, at indexPath: IndexPath) {
+        guard isArranging else {
+            cell.setArranging(false)
+            cell.alpha = 1
+            return
+        }
+        let movable = collectionView(collectionView, canMoveItemAt: indexPath)
+        cell.setArranging(movable)
+        cell.alpha = movable ? 1 : 0.4
     }
 
     @objc func handleReorderGesture(_ gesture: UILongPressGestureRecognizer) {
@@ -115,6 +121,27 @@ extension LibraryGridViewController {
         guard mediaCount > 0 else { return originalIndexPath }
         let clamped = min(max(proposedIndexPath.item, offset), offset + mediaCount - 1)
         return IndexPath(item: clamped, section: showsSection)
+    }
+
+    // MARK: - Private
+
+    private func endArrangeMode() {
+        isArranging = false
+        reorderGesture.isEnabled = false
+        arrangeItems = nil
+        reloadForArrangeChange()
+        onArrangingChanged?(false)
+    }
+
+    /// Cross-fades the grid so tiles ease into (and out of) the wiggle.
+    private func reloadForArrangeChange() {
+        UIView.transition(
+            with: collectionView,
+            duration: 0.2,
+            options: .transitionCrossDissolve
+        ) {
+            self.collectionView.reloadData()
+        }
     }
 
     /// Media rows are movable; slideshow tiles stay pinned at the front.

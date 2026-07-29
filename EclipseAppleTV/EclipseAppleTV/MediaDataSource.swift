@@ -122,8 +122,10 @@ class MediaDataSource: ObservableObject {
 
         mediaPaths.append(path)
         persistActiveBucket()
+        // Granular callback only. Also posting `mediaDataDidChange` queued a full
+        // `reloadData()` behind the insert animation, cancelling it and re-running the
+        // selection work the granular handler had just done.
         delegate?.mediaData(self, didAddItemAt: mediaPaths.count - 1)
-        delegate?.mediaDataDidChange()
     }
 
     /// Appends media without changing `currentIndex` or nudging grid selection/focus.
@@ -194,7 +196,6 @@ class MediaDataSource: ObservableObject {
 
         persistActiveBucket()
         delegate?.mediaData(self, didRemoveItemAt: index)
-        delegate?.mediaDataDidChange()
     }
 
     /// Removes an item by file-name id in the given mode (or active if nil).
@@ -244,7 +245,6 @@ class MediaDataSource: ObservableObject {
 
         persistActiveBucket()
         delegate?.mediaData(self, didMoveItemFrom: sourceIndex, to: targetIndex)
-        delegate?.mediaDataDidChange()
     }
 
     /// Reorders the live list so item file names match `orderedIds`.
@@ -254,7 +254,7 @@ class MediaDataSource: ObservableObject {
             applyOrderActive(orderedIds: orderedIds)
             return
         }
-        var paths = offlinePaths[target] ?? []
+        let paths = offlinePaths[target] ?? []
         guard !orderedIds.isEmpty, !paths.isEmpty else { return }
         let currentPath: String? = {
             let idx = offlineIndex[target] ?? 0

@@ -5,23 +5,37 @@
 //  Copyright © 2026 Moxie LLC. All rights reserved.
 //
 
-// LibraryThumbnailCell.swift
 import UIKit
 
-/// Grid cell for home-library media or special tiles (Black, Camera, Web, Album).
+/// Grid cell for home-library media or special tiles (Logo, Camera, Web, Album).
 final class LibraryThumbnailCell: UICollectionViewCell {
 
     static let reuseIdentifier = "LibraryThumbnailCell"
 
     // MARK: - Subviews
 
+    /// Rounded media / tool surface (caption may sit below this in Landscape).
+    let cardView = UIView()
     let imageView = UIImageView()
     let placeholderIcon = UIImageView()
     let captionLabel = UILabel()
+    /// Bottom fade under overlaid captions (Vertical tools / Show titles).
+    let captionScrimView = GradientView()
     private let videoBadge = UIImageView()
     private let durationLabel = PaddedLabel()
     let liveBadge = PaddedLabel()
     private let unavailableBadge = PaddedLabel()
+    /// Warm live feed for the home Camera tile (nil until first idle configure).
+    var cameraPreview: CameraPreviewView?
+    /// Hides the last-frame freeze once the tile preview is painting.
+    var cameraFreezeRevealWorkItem: DispatchWorkItem?
+
+    /// Active while caption is overlaid on the card (Vertical / media).
+    var cardFillConstraints: [NSLayoutConstraint] = []
+    /// Active while caption sits under the card (Landscape tools).
+    var cardAboveCaptionConstraints: [NSLayoutConstraint] = []
+    /// Tracks the last applied caption placement.
+    var captionBelowCard = false
 
     // MARK: - Init
 
@@ -37,19 +51,34 @@ final class LibraryThumbnailCell: UICollectionViewCell {
     // MARK: - Setup
 
     private func setupViews() {
-        contentView.backgroundColor = .secondarySystemBackground
-        contentView.layer.cornerRadius = 12
-        contentView.layer.masksToBounds = true
+        contentView.backgroundColor = .clear
+        contentView.clipsToBounds = false
+
+        cardView.backgroundColor = .secondarySystemBackground
+        cardView.layer.cornerRadius = 12
+        cardView.clipsToBounds = true
+        cardView.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(cardView)
 
         imageView.contentMode = .scaleAspectFill
         imageView.clipsToBounds = true
         imageView.translatesAutoresizingMaskIntoConstraints = false
-        contentView.addSubview(imageView)
+        cardView.addSubview(imageView)
 
         placeholderIcon.tintColor = .tertiaryLabel
         placeholderIcon.contentMode = .scaleAspectFit
         placeholderIcon.translatesAutoresizingMaskIntoConstraints = false
-        contentView.addSubview(placeholderIcon)
+        cardView.addSubview(placeholderIcon)
+
+        captionScrimView.colors = [
+            UIColor.clear,
+            UIColor.black.withAlphaComponent(0.72)
+        ]
+        captionScrimView.locations = [0, 1]
+        captionScrimView.isHidden = true
+        captionScrimView.isUserInteractionEnabled = false
+        captionScrimView.translatesAutoresizingMaskIntoConstraints = false
+        cardView.addSubview(captionScrimView)
 
         captionLabel.font = .systemFont(ofSize: 13, weight: .semibold)
         captionLabel.textColor = .white
@@ -64,49 +93,52 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         videoBadge.tintColor = UIColor.white.withAlphaComponent(0.95)
         videoBadge.translatesAutoresizingMaskIntoConstraints = false
         videoBadge.isHidden = true
-        contentView.addSubview(videoBadge)
+        cardView.addSubview(videoBadge)
 
         configurePill(durationLabel, background: UIColor.black.withAlphaComponent(0.6), textColor: .white)
         durationLabel.isHidden = true
-        contentView.addSubview(durationLabel)
+        cardView.addSubview(durationLabel)
 
         configurePill(liveBadge, background: .systemRed, textColor: .white)
         liveBadge.text = "LIVE"
         liveBadge.isHidden = true
-        contentView.addSubview(liveBadge)
+        cardView.addSubview(liveBadge)
 
         configurePill(unavailableBadge, background: UIColor.black.withAlphaComponent(0.7), textColor: .white)
         unavailableBadge.text = "Unavailable"
         unavailableBadge.isHidden = true
-        contentView.addSubview(unavailableBadge)
+        cardView.addSubview(unavailableBadge)
 
         NSLayoutConstraint.activate([
-            imageView.topAnchor.constraint(equalTo: contentView.topAnchor),
-            imageView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
-            imageView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
-            imageView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            imageView.topAnchor.constraint(equalTo: cardView.topAnchor),
+            imageView.bottomAnchor.constraint(equalTo: cardView.bottomAnchor),
+            imageView.leadingAnchor.constraint(equalTo: cardView.leadingAnchor),
+            imageView.trailingAnchor.constraint(equalTo: cardView.trailingAnchor),
 
-            placeholderIcon.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
-            placeholderIcon.centerYAnchor.constraint(equalTo: contentView.centerYAnchor, constant: -10),
+            placeholderIcon.centerXAnchor.constraint(equalTo: cardView.centerXAnchor),
+            placeholderIcon.centerYAnchor.constraint(equalTo: cardView.centerYAnchor, constant: -10),
             placeholderIcon.widthAnchor.constraint(equalToConstant: 36),
             placeholderIcon.heightAnchor.constraint(equalToConstant: 36),
 
-            captionLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 8),
-            captionLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -8),
-            captionLabel.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -10),
+            captionScrimView.leadingAnchor.constraint(equalTo: cardView.leadingAnchor),
+            captionScrimView.trailingAnchor.constraint(equalTo: cardView.trailingAnchor),
+            captionScrimView.bottomAnchor.constraint(equalTo: cardView.bottomAnchor),
+            captionScrimView.heightAnchor.constraint(equalTo: cardView.heightAnchor, multiplier: 0.42),
 
-            videoBadge.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
-            videoBadge.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
+            videoBadge.centerXAnchor.constraint(equalTo: cardView.centerXAnchor),
+            videoBadge.centerYAnchor.constraint(equalTo: cardView.centerYAnchor),
 
-            durationLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -8),
-            durationLabel.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -8),
+            durationLabel.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -8),
+            durationLabel.bottomAnchor.constraint(equalTo: cardView.bottomAnchor, constant: -8),
 
-            liveBadge.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 8),
-            liveBadge.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
+            liveBadge.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 8),
+            liveBadge.topAnchor.constraint(equalTo: cardView.topAnchor, constant: 8),
 
-            unavailableBadge.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
-            unavailableBadge.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -8)
+            unavailableBadge.centerXAnchor.constraint(equalTo: cardView.centerXAnchor),
+            unavailableBadge.bottomAnchor.constraint(equalTo: cardView.bottomAnchor, constant: -8)
         ])
+
+        applyCaptionPlacement(belowCard: false)
     }
 
     private func configurePill(_ label: PaddedLabel, background: UIColor, textColor: UIColor) {
@@ -122,9 +154,9 @@ final class LibraryThumbnailCell: UICollectionViewCell {
 
     func configure(with item: LibraryItemDTO, thumbnail: UIImage?, isLive: Bool) {
         resetChrome()
-        contentView.backgroundColor = .secondarySystemBackground
+        applyCaptionPlacement(belowCard: false)
+        cardView.backgroundColor = .secondarySystemBackground
 
-        // nil or true means available; only an explicit false marks a purged item.
         let isUnavailable = (item.isAvailable == false)
 
         imageView.image = thumbnail
@@ -133,7 +165,6 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         placeholderIcon.image = UIImage(systemName: item.isVideo ? "film" : "photo")
         placeholderIcon.tintColor = .tertiaryLabel
 
-        // Suppress the play/duration/live affordances for purged items; they can't play.
         videoBadge.isHidden = isUnavailable || !(item.isVideo && thumbnail != nil)
 
         if !isUnavailable, item.isVideo, item.duration > 0 {
@@ -154,15 +185,16 @@ final class LibraryThumbnailCell: UICollectionViewCell {
     /// Dashed-style action tile (New Show / Add media).
     func configureActionTile(title: String, systemImage: String = "plus") {
         resetChrome()
-        contentView.backgroundColor = UIColor.secondarySystemBackground
-        contentView.layer.borderWidth = 1.5
-        contentView.layer.borderColor = UIColor.separator.cgColor
+        applyCaptionPlacement(belowCard: false)
+        cardView.backgroundColor = UIColor.secondarySystemBackground
+        cardView.layer.borderWidth = 1.5
+        cardView.layer.borderColor = UIColor.separator.cgColor
         placeholderIcon.image = UIImage(systemName: systemImage)
         placeholderIcon.tintColor = .secondaryLabel
         placeholderIcon.isHidden = false
         captionLabel.text = title
-        captionLabel.textColor = .secondaryLabel
         captionLabel.isHidden = false
+        updateCaptionScrim()
         accessibilityLabel = title
         isAccessibilityElement = true
     }
@@ -171,6 +203,8 @@ final class LibraryThumbnailCell: UICollectionViewCell {
     /// - Parameter outlined: When true, draws a light stroke so a dark fill doesn't
     ///   disappear into the grid background.
     /// - Parameter thumbnailContentMode: `.scaleAspectFit` suits favicons; fill for snapshots.
+    /// - Parameter captionBelowInLandscape: Logo / Camera / Website use under-card
+    ///   labels in Landscape; Show covers keep an overlay title.
     func configureSpecial(
         title: String,
         systemImage: String?,
@@ -178,10 +212,13 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         fillColor: UIColor,
         isLive: Bool,
         outlined: Bool = false,
-        thumbnailContentMode: UIView.ContentMode = .scaleAspectFill
+        thumbnailContentMode: UIView.ContentMode = .scaleAspectFill,
+        captionBelowInLandscape: Bool = false
     ) {
         resetChrome()
-        contentView.backgroundColor = fillColor
+        let below = captionBelowInLandscape && !ExternalOutputSettings.isVerticalMode
+        applyCaptionPlacement(belowCard: below)
+        cardView.backgroundColor = fillColor
         imageView.contentMode = thumbnailContentMode
         imageView.image = thumbnail
         imageView.alpha = thumbnail == nil ? 0 : 1
@@ -193,12 +230,12 @@ final class LibraryThumbnailCell: UICollectionViewCell {
             placeholderIcon.isHidden = true
         }
         captionLabel.text = title
-        captionLabel.textColor = .white
         captionLabel.isHidden = false
+        updateCaptionScrim()
         setLive(isLive)
         if outlined && !isLive {
-            contentView.layer.borderWidth = 1
-            contentView.layer.borderColor = UIColor.separator.cgColor
+            cardView.layer.borderWidth = 1
+            cardView.layer.borderColor = UIColor.separator.cgColor
         }
         accessibilityLabel = isLive ? "\(title), live" : title
         isAccessibilityElement = true
@@ -211,10 +248,12 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         placeholderIcon.isHidden = false
         captionLabel.isHidden = true
         captionLabel.text = nil
-        captionLabel.textColor = .white
+        captionScrimView.isHidden = true
         hideMediaBadges()
         liveBadge.isHidden = true
-        contentView.layer.borderWidth = 0
+        cardView.layer.borderWidth = 0
+        recycleCameraPreview()
+        stopArrangeWiggle()
     }
 
     /// Clears play/duration/unavailable chrome used only by media cells.
@@ -226,14 +265,15 @@ final class LibraryThumbnailCell: UICollectionViewCell {
 
     func setLive(_ isLive: Bool) {
         liveBadge.isHidden = !isLive
-        contentView.layer.borderWidth = isLive ? 3 : 0
-        contentView.layer.borderColor = isLive ? UIColor.systemRed.cgColor : UIColor.clear.cgColor
+        cardView.layer.borderWidth = isLive ? 3 : 0
+        cardView.layer.borderColor = isLive ? UIColor.systemRed.cgColor : UIColor.clear.cgColor
     }
 
     override func prepareForReuse() {
         super.prepareForReuse()
         resetChrome()
-        contentView.backgroundColor = .secondarySystemBackground
+        applyCaptionPlacement(belowCard: false)
+        cardView.backgroundColor = .secondarySystemBackground
     }
 
     // MARK: - Helpers
@@ -256,5 +296,39 @@ final class PaddedLabel: UILabel {
         let size = super.intrinsicContentSize
         return CGSize(width: size.width + insets.left + insets.right,
                       height: size.height + insets.top + insets.bottom)
+    }
+}
+
+/// Vertical `CAGradientLayer` host for caption readability scrims.
+final class GradientView: UIView {
+    var colors: [UIColor] = [] {
+        didSet { updateColors() }
+    }
+    var locations: [NSNumber] = [0, 1] {
+        didSet { gradient.locations = locations }
+    }
+
+    private let gradient = CAGradientLayer()
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        gradient.startPoint = CGPoint(x: 0.5, y: 0)
+        gradient.endPoint = CGPoint(x: 0.5, y: 1)
+        layer.addSublayer(gradient)
+        updateColors()
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        gradient.frame = bounds
+    }
+
+    private func updateColors() {
+        gradient.colors = colors.map(\.cgColor)
+        gradient.locations = locations
     }
 }

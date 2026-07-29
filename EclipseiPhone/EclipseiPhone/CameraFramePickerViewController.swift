@@ -25,7 +25,8 @@ final class CameraFramePickerViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
-        title = "Camera Frame"
+        let mode = ExternalOutputSettings.orientation.rawValue
+        title = "\(mode) Frames"
         navigationItem.rightBarButtonItem = UIBarButtonItem(
             barButtonSystemItem: .done,
             target: self,
@@ -56,10 +57,12 @@ final class CameraFramePickerViewController: UIViewController {
         dataSource = UICollectionViewDiffableDataSource(
             collectionView: collectionView
         ) { [weak self] collectionView, indexPath, item in
-            let cell = collectionView.dequeueReusableCell(
+            guard let cell = collectionView.dequeueReusableCell(
                 withReuseIdentifier: FramePickerCell.reuseId,
                 for: indexPath
-            ) as! FramePickerCell
+            ) as? FramePickerCell else {
+                return UICollectionViewCell()
+            }
             self?.configure(cell, with: item)
             return cell
         }
@@ -85,7 +88,9 @@ final class CameraFramePickerViewController: UIViewController {
         let spacing = layout.minimumInteritemSpacing
         let width = collectionView.bounds.width - inset
         let side = floor((width - spacing * 2) / 3)
-        layout.itemSize = CGSize(width: side, height: side * 16 / 9 + 28)
+        // Thumbnail aspect matches the active Display Mode card.
+        let aspect = ExternalOutputSettings.orientation.gridCellHeightOverWidth
+        layout.itemSize = CGSize(width: side, height: side * aspect + 28)
     }
 
     // MARK: - Data
@@ -137,14 +142,15 @@ final class CameraFramePickerViewController: UIViewController {
     }
 
     private var remainingFrameSlots: Int {
-        max(0, CameraFrameStore.maxFrameCount - CameraFrameStore.shared.frames.count)
+        CameraFrameStore.shared.remainingSlots
     }
 
     private func importFrames() {
         guard remainingFrameSlots > 0 else {
+            let mode = ExternalOutputSettings.orientation.rawValue
             let alert = UIAlertController(
                 title: "Frame Library Full",
-                message: "Remove a frame before importing more (max \(CameraFrameStore.maxFrameCount)).",
+                message: "Remove a \(mode) frame before importing more (max \(CameraFrameStore.maxFrameCount) per mode).",
                 preferredStyle: .alert
             )
             alert.addAction(UIAlertAction(title: "OK", style: .default))
@@ -152,9 +158,10 @@ final class CameraFramePickerViewController: UIViewController {
             return
         }
 
+        let mode = ExternalOutputSettings.orientation.rawValue
         let sheet = UIAlertController(
-            title: "Import Frames",
-            message: "Select one or more images (up to \(remainingFrameSlots) more).",
+            title: "Import \(mode) Frames",
+            message: "Images are saved only for \(mode) (up to \(remainingFrameSlots) more).",
             preferredStyle: .actionSheet
         )
         sheet.addAction(UIAlertAction(title: "Photo Library", style: .default) { [weak self] _ in
@@ -197,7 +204,7 @@ final class CameraFramePickerViewController: UIViewController {
         var added = 0
         var stoppedForCapacity = false
         for image in images {
-            if store.frames.count >= CameraFrameStore.maxFrameCount {
+            if store.remainingSlots == 0 {
                 stoppedForCapacity = true
                 break
             }
@@ -214,9 +221,10 @@ final class CameraFramePickerViewController: UIViewController {
             alert.addAction(UIAlertAction(title: "OK", style: .default))
             present(alert, animated: true)
         } else if stoppedForCapacity {
+            let mode = ExternalOutputSettings.orientation.rawValue
             let alert = UIAlertController(
                 title: "Library Full",
-                message: "Imported \(added). Remove frames to import more (max \(CameraFrameStore.maxFrameCount)).",
+                message: "Imported \(added). Remove \(mode) frames to import more (max \(CameraFrameStore.maxFrameCount) per mode).",
                 preferredStyle: .alert
             )
             alert.addAction(UIAlertAction(title: "OK", style: .default))

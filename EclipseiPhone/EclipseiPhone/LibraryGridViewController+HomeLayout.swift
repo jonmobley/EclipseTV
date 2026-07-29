@@ -18,12 +18,16 @@ extension LibraryGridViewController {
     }
 
     /// Section order for the current Home / Show / live-ribbon state.
+    ///
+    /// Home is Recent Shows only. The Logo / Camera / Website row belongs to an
+    /// open Show, where those tools act on the Show you're looking at.
     static func visibleHomeSections(
         isShowMode: Bool,
         showsSlideshowRibbon: Bool
     ) -> [HomeSection] {
+        guard isShowMode else { return [.shows] }
         var sections: [HomeSection] = [.tools]
-        if isShowMode, showsSlideshowRibbon {
+        if showsSlideshowRibbon {
             sections.append(.slideshowRibbon)
         }
         sections.append(.shows)
@@ -41,7 +45,7 @@ extension LibraryGridViewController {
             isShowMode: isShowMode,
             showsSlideshowRibbon: showsSlideshowRibbon
         )
-        return UICollectionViewCompositionalLayout { sectionIndex, environment in
+        return HomeGridLayout { sectionIndex, environment in
             let width = environment.container.effectiveContentSize.width
             guard visible.indices.contains(sectionIndex) else { return nil }
             switch visible[sectionIndex] {
@@ -74,16 +78,45 @@ extension LibraryGridViewController {
         }
     }
 
+    /// Smallest tile edge the layout will emit.
+    private static let minimumTileSide: CGFloat = 1
+
+    /// Item edge for an `n`-up row, floored to a positive value.
+    ///
+    /// `NSCollectionLayoutDimension.absolute` throws on a non-positive value. The container
+    /// width is briefly zero during early layout (and can be tiny in a narrow split-view
+    /// column), which made this subtraction go negative and take the app down.
+    private static func columnWidth(
+        containerWidth: CGFloat,
+        sectionInset: CGFloat,
+        spacing: CGFloat,
+        columns: CGFloat
+    ) -> CGFloat {
+        let columns = max(columns, 1)
+        let totalSpacing = sectionInset * 2 + spacing * (columns - 1)
+        let usable = containerWidth - totalSpacing
+        return max((usable / columns).rounded(.down), minimumTileSide)
+    }
+
     private static func toolsSection(
         containerWidth: CGFloat,
         sectionInset: CGFloat,
         spacing: CGFloat
     ) -> NSCollectionLayoutSection {
         let columns: CGFloat = 3
-        let totalSpacing = sectionInset * 2 + spacing * (columns - 1)
-        let itemWidth = ((containerWidth - totalSpacing) / columns).rounded(.down)
+        let itemWidth = columnWidth(
+            containerWidth: containerWidth,
+            sectionInset: sectionInset,
+            spacing: spacing,
+            columns: columns
+        )
         let aspect = ExternalOutputSettings.orientation.gridCellHeightOverWidth
-        let itemHeight = (itemWidth * aspect).rounded(.down)
+        let cardHeight = max((itemWidth * aspect).rounded(.down), minimumTileSide)
+        // Landscape: Logo / Camera / Website labels sit under the 16:9 cards.
+        let captionReserve = ExternalOutputSettings.isVerticalMode
+            ? 0
+            : LibraryThumbnailCell.landscapeCaptionReserve
+        let itemHeight = cardHeight + captionReserve
 
         let itemSize = NSCollectionLayoutSize(
             widthDimension: .absolute(itemWidth),
@@ -103,21 +136,40 @@ extension LibraryGridViewController {
 
         let section = NSCollectionLayoutSection(group: group)
         section.contentInsets = NSDirectionalEdgeInsets(
-            top: sectionInset, leading: sectionInset,
+            top: 8, leading: sectionInset,
             bottom: 8, trailing: sectionInset
         )
         return section
     }
 
+    /// Recent Shows tile edge — square, on the same 3-up grid as the tools row.
+    static func showsRibbonTileSide(
+        containerWidth: CGFloat,
+        sectionInset: CGFloat,
+        spacing: CGFloat
+    ) -> CGFloat {
+        columnWidth(
+            containerWidth: containerWidth,
+            sectionInset: sectionInset,
+            spacing: spacing,
+            columns: 3
+        )
+    }
+
+    /// Top padding above the Recent Shows header.
+    static let showsRibbonTopInset: CGFloat = 20
+
+    /// Recent Shows on Home: horizontal ribbon aligned with tool tile width.
     private static func showsRibbonSection(
         containerWidth: CGFloat,
         sectionInset: CGFloat,
         spacing: CGFloat
     ) -> NSCollectionLayoutSection {
-        // Match tool tile width so the ribbon aligns with the row above.
-        let columns: CGFloat = 3
-        let totalSpacing = sectionInset * 2 + spacing * (columns - 1)
-        let side = ((containerWidth - totalSpacing) / columns).rounded(.down)
+        let side = showsRibbonTileSide(
+            containerWidth: containerWidth,
+            sectionInset: sectionInset,
+            spacing: spacing
+        )
 
         let itemSize = NSCollectionLayoutSize(
             widthDimension: .absolute(side),
@@ -137,20 +189,11 @@ extension LibraryGridViewController {
         section.orthogonalScrollingBehavior = .continuous
         section.interGroupSpacing = spacing
         section.contentInsets = NSDirectionalEdgeInsets(
-            top: 8, leading: sectionInset,
+            top: showsRibbonTopInset, leading: sectionInset,
             bottom: sectionInset, trailing: sectionInset
         )
 
-        let headerSize = NSCollectionLayoutSize(
-            widthDimension: .fractionalWidth(1),
-            heightDimension: .estimated(28)
-        )
-        let header = NSCollectionLayoutBoundarySupplementaryItem(
-            layoutSize: headerSize,
-            elementKind: UICollectionView.elementKindSectionHeader,
-            alignment: .top
-        )
-        section.boundarySupplementaryItems = [header]
+        section.boundarySupplementaryItems = [Self.sectionHeaderItem()]
         return section
     }
 
@@ -160,9 +203,13 @@ extension LibraryGridViewController {
         sectionInset: CGFloat,
         spacing: CGFloat
     ) -> NSCollectionLayoutSection {
-        let columns: CGFloat = 3
-        let totalSpacing = sectionInset * 2 + spacing * (columns - 1)
-        let side = ((containerWidth - totalSpacing) / columns).rounded(.down) * 0.72
+        let full = columnWidth(
+            containerWidth: containerWidth,
+            sectionInset: sectionInset,
+            spacing: spacing,
+            columns: 3
+        )
+        let side = max((full * 0.72).rounded(.down), minimumTileSide)
 
         let itemSize = NSCollectionLayoutSize(
             widthDimension: .absolute(side),
@@ -186,17 +233,23 @@ extension LibraryGridViewController {
             bottom: 4, trailing: sectionInset
         )
 
+        section.boundarySupplementaryItems = [Self.sectionHeaderItem()]
+        return section
+    }
+
+    /// Nominal section-header height; also used to place the empty-state hint.
+    static let sectionHeaderEstimatedHeight: CGFloat = 28
+
+    private static func sectionHeaderItem() -> NSCollectionLayoutBoundarySupplementaryItem {
         let headerSize = NSCollectionLayoutSize(
             widthDimension: .fractionalWidth(1),
-            heightDimension: .estimated(28)
+            heightDimension: .estimated(sectionHeaderEstimatedHeight)
         )
-        let header = NSCollectionLayoutBoundarySupplementaryItem(
+        return NSCollectionLayoutBoundarySupplementaryItem(
             layoutSize: headerSize,
             elementKind: UICollectionView.elementKindSectionHeader,
             alignment: .top
         )
-        section.boundarySupplementaryItems = [header]
-        return section
     }
 
     /// Vertical grid of Show media (same column/aspect math as tools).
@@ -206,12 +259,18 @@ extension LibraryGridViewController {
         spacing: CGFloat
     ) -> NSCollectionLayoutSection {
         let orientation = ExternalOutputSettings.orientation
-        let columns = CGFloat(orientation.gridColumnCount(
+        let columns = max(CGFloat(orientation.gridColumnCount(
             forWidth: containerWidth, sectionInset: sectionInset, spacing: spacing
-        ))
-        let totalSpacing = sectionInset * 2 + spacing * (columns - 1)
-        let itemWidth = ((containerWidth - totalSpacing) / columns).rounded(.down)
-        let itemHeight = (itemWidth * orientation.gridCellHeightOverWidth).rounded(.down)
+        )), 1)
+        let itemWidth = columnWidth(
+            containerWidth: containerWidth,
+            sectionInset: sectionInset,
+            spacing: spacing,
+            columns: columns
+        )
+        let itemHeight = max(
+            (itemWidth * orientation.gridCellHeightOverWidth).rounded(.down), minimumTileSide
+        )
 
         let itemSize = NSCollectionLayoutSize(
             widthDimension: .absolute(itemWidth),

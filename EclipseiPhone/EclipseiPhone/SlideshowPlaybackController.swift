@@ -66,17 +66,8 @@ final class SlideshowPlaybackController {
 
     /// Stops the timer and clears active state (keeps last frame on screen).
     func stop() {
-        timer?.invalidate()
-        timer = nil
         let hadActive = activeSlideshowId != nil
-        activeSlideshowId = nil
-        activeSlideIds = []
-        currentSlideIndex = 0
-        autoplay = false
-        loop = false
-        let manager = connectionManager
-        connectionManager = nil
-        restoreTransitionOverride(using: manager)
+        resetPlaybackState()
         if hadActive { notifyChanged() }
     }
 
@@ -98,23 +89,45 @@ final class SlideshowPlaybackController {
 
     // MARK: - Private
 
+    /// Presents the current slide, dropping any whose media has since gone away.
+    ///
+    /// A slide deleted mid-run used to blank the display and leave the show apparently
+    /// stalled on it, because the old version simply returned without advancing.
     private func presentCurrent() {
-        guard activeSlideIds.indices.contains(currentSlideIndex),
-              let item = TVLibraryStore.shared.items.first(
-                where: { $0.id == activeSlideIds[currentSlideIndex] }
-              )
-        else { return }
+        while !activeSlideIds.isEmpty {
+            guard activeSlideIds.indices.contains(currentSlideIndex) else {
+                currentSlideIndex = 0
+                continue
+            }
+            if presentSlide(at: currentSlideIndex) { return }
+            activeSlideIds.remove(at: currentSlideIndex)
+            if currentSlideIndex >= activeSlideIds.count { currentSlideIndex = 0 }
+        }
+        finishPlayback()
+    }
 
+    /// - Returns: Whether the slide could actually be shown.
+    private func presentSlide(at index: Int) -> Bool {
         let store = TVLibraryStore.shared
+        guard let item = store.items.first(where: { $0.id == activeSlideIds[index] }) else {
+            return false
+        }
+
         if let connectionManager, connectionManager.sendPlayRequest(id: item.id) {
             store.updateCurrentId(item.id)
             ExternalDisplayManager.shared.present(
                 .forLibraryItem(item, thumbnail: store.thumbnail(for: item.id))
             )
-        } else if let url = LocalMediaStore.shared.localURL(forId: item.id) {
-            store.updateCurrentId(item.id)
-            ExternalDisplayManager.shared.present(.image(url))
+            return true
         }
+        if let url = LocalMediaStore.shared.localURL(forId: item.id) {
+            store.updateCurrentId(item.id)
+            ExternalDisplayManager.shared.present(
+                .image(url, fill: MediaFitSettings.isFill(forId: item.id))
+            )
+            return true
+        }
+        return false
     }
 
     private func rescheduleAutoplayIfNeeded() {
@@ -150,14 +163,28 @@ final class SlideshowPlaybackController {
             notifyChanged()
             return
         }
-        // Autoplay finished without loop — clear live chrome, keep last frame.
-        let manager = connectionManager
-        activeSlideshowId = nil
-        activeSlideIds = []
+        finishPlayback()
+    }
+
+    /// Ends a run, keeping the last frame on screen. Shares `stop()`'s reset so a stale
+    /// `connectionManager`, `autoplay`, or `loop` can't leak into the next slideshow —
+    /// the previous inline version cleared only some of those fields.
+    private func finishPlayback() {
+        resetPlaybackState()
+        notifyChanged()
+    }
+
+    private func resetPlaybackState() {
         timer?.invalidate()
         timer = nil
+        activeSlideshowId = nil
+        activeSlideIds = []
+        currentSlideIndex = 0
+        autoplay = false
+        loop = false
+        let manager = connectionManager
+        connectionManager = nil
         restoreTransitionOverride(using: manager)
-        notifyChanged()
     }
 
     private func notifyChanged() {

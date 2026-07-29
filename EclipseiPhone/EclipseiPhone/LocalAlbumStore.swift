@@ -46,6 +46,13 @@ final class LocalAlbumStore {
         return albums.filter { $0.orientation == mode }
     }
 
+    /// Every album for cross-mode pickers: active Display Mode first, then the other.
+    var albumsActiveModeFirst: [LocalAlbum] {
+        let mode = ExternalOutputSettings.orientation
+        return albums.filter { $0.orientation == mode }
+            + albums.filter { $0.orientation != mode }
+    }
+
     /// Creates an empty album in `orientation` and inserts it at the front.
     @discardableResult
     func create(

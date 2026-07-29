@@ -13,13 +13,18 @@ import os.log
 ///
 /// Session work runs on a dedicated queue. Multiple `CameraPreviewView`s can attach
 /// to the same session.
-final class CameraManager {
+final class CameraManager: NSObject {
 
     static let shared = CameraManager()
 
     /// Posted when `lastFrame` is updated (home Camera tile freeze-frame).
     static let lastFrameDidChangeNotification = Notification.Name(
         "CameraManager.lastFrameDidChange"
+    )
+
+    /// Posted on the main queue when `isSessionRunning` changes.
+    static let sessionRunningDidChangeNotification = Notification.Name(
+        "CameraManager.sessionRunningDidChange"
     )
 
     /// Whether the capture session is currently running.
@@ -31,6 +36,9 @@ final class CameraManager {
     /// Last still from the live preview — shown on the home Camera tile when not LIVE.
     private(set) var lastFrame: UIImage?
 
+    /// True while a caller wants the session running (home tile / fullscreen / AirPlay).
+    private(set) var wantsSessionRunning = false
+
     /// Shared capture session used by phone and external preview layers.
     var captureSession: AVCaptureSession {
         if _captureSession == nil {
@@ -39,27 +47,76 @@ final class CameraManager {
         return _captureSession ?? AVCaptureSession()
     }
 
-    private let sessionQueue = DispatchQueue(label: "com.eclipseapp.ios.camera.session")
+    let sessionQueue = DispatchQueue(label: "com.eclipseapp.ios.camera.session")
     private var _captureSession: AVCaptureSession?
-    private var videoDevice: AVCaptureDevice?
-    private let logger = Logger(subsystem: "com.eclipseapp.ios", category: "Camera")
+    var videoDevice: AVCaptureDevice?
+    let logger = Logger(subsystem: "com.eclipseapp.ios", category: "Camera")
     /// Soft cap so digital zoom stays usable (device max can be extreme).
-    private let preferredMaxZoom: CGFloat = 6
+    let preferredMaxZoom: CGFloat = 6
     private let lastFrameURL: URL = {
         let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
         return base.appendingPathComponent("CameraLastFrame.jpg")
     }()
 
-    private init() {
-        if let image = UIImage(contentsOfFile: lastFrameURL.path) {
-            lastFrame = image
+    /// Latest still from `AVCaptureVideoDataOutput` (home-tile freeze source).
+    var latestSampleImage: UIImage?
+    /// Throttle sample→UIImage conversion while the session runs.
+    var lastSampleAt: CFAbsoluteTime = 0
+    let sampleInterval: CFAbsoluteTime = 0.2
+    private let videoDataOutput = AVCaptureVideoDataOutput()
+    private let frameQueue = DispatchQueue(label: "com.eclipseapp.ios.camera.frames")
+    let ciContext = CIContext(options: [.useSoftwareRenderer: false])
+
+    /// Movie file output for hold-to-record (attached lazily).
+    let movieFileOutput = AVCaptureMovieFileOutput()
+    /// Optional mic input added when recording with audio permission.
+    var audioDeviceInput: AVCaptureDeviceInput?
+    /// Whether a movie file is currently being written.
+    private(set) var isRecording = false
+    /// Completion invoked when `stopRecording` finishes writing/saving.
+    var stopRecordingCompletion: ((Result<Void, Error>) -> Void)?
+
+    /// One-shot waiter used when start is deferred until the app is active.
+    var activeStartObserver: NSObjectProtocol?
+    /// True after interruption / runtime-error observers are installed.
+    var didInstallSessionRecovery = false
+
+    /// Posted on the main queue when `isRecording` changes.
+    static let recordingDidChangeNotification = Notification.Name(
+        "CameraManager.recordingDidChange"
+    )
+
+    /// Updates `isRecording` and notifies observers (main queue).
+    func publishRecording(_ recording: Bool) {
+        if !Thread.isMainThread {
+            DispatchQueue.main.async { [weak self] in
+                self?.publishRecording(recording)
+            }
+            return
         }
+        guard isRecording != recording else { return }
+        isRecording = recording
+        NotificationCenter.default.post(
+            name: Self.recordingDidChangeNotification, object: self
+        )
+    }
+
+    private override init() {
+        super.init()
+        if let image = UIImage(contentsOfFile: lastFrameURL.path),
+           !Self.isNearlyBlack(image) {
+            lastFrame = image
+        } else {
+            try? FileManager.default.removeItem(at: lastFrameURL)
+        }
+        installSessionRecoveryIfNeeded()
     }
 
     // MARK: - Last Frame
 
     /// Remembers a freeze-frame for the home Camera tile (memory + disk).
     func saveLastFrame(_ image: UIImage) {
+        guard !Self.isNearlyBlack(image) else { return }
         lastFrame = image
         NotificationCenter.default.post(name: Self.lastFrameDidChangeNotification, object: self)
         let url = lastFrameURL
@@ -69,10 +126,19 @@ final class CameraManager {
         }
     }
 
-    /// Snapshots `preview` (if possible) and stores it as the last frame.
+    /// Stores the latest camera sample (preferred) or a non-black preview snapshot.
     @discardableResult
     func captureLastFrame(from preview: CameraPreviewView?) -> Bool {
-        guard let preview, let image = preview.snapshotImage() else { return false }
+        if let image = latestSampleImage, !Self.isNearlyBlack(image) {
+            saveLastFrame(image)
+            return true
+        }
+        guard let preview,
+              let image = preview.snapshotImage(),
+              !Self.isNearlyBlack(image)
+        else {
+            return false
+        }
         saveLastFrame(image)
         return true
     }
@@ -137,6 +203,8 @@ final class CameraManager {
                 self?.videoDevice = (session.inputs.first as? AVCaptureDeviceInput)?.device
             }
 
+            self?.attachVideoDataOutput(to: session)
+
             session.commitConfiguration()
             if let completion {
                 DispatchQueue.main.async(execute: completion)
@@ -144,98 +212,74 @@ final class CameraManager {
         }
     }
 
-    // MARK: - Zoom
-
-    /// Current video zoom factor (1 = no zoom).
-    var zoomFactor: CGFloat {
-        videoDevice?.videoZoomFactor ?? 1
-    }
-
-    /// Minimum zoom supported by the active camera.
-    var minZoomFactor: CGFloat {
-        videoDevice?.minAvailableVideoZoomFactor ?? 1
-    }
-
-    /// Maximum zoom used by pinch (capped for quality).
-    var maxZoomFactor: CGFloat {
-        guard let device = videoDevice else { return 1 }
-        return min(device.maxAvailableVideoZoomFactor, preferredMaxZoom)
-    }
-
-    /// Sets device zoom; affects phone preview and AirPlay together.
-    func setZoomFactor(_ factor: CGFloat) {
-        sessionQueue.async { [weak self] in
-            guard let self, let device = self.videoDevice else { return }
-            let clamped = min(max(factor, self.minZoomFactor), self.maxZoomFactor)
-            guard abs(device.videoZoomFactor - clamped) > 0.001 else { return }
-            do {
-                try device.lockForConfiguration()
-                device.videoZoomFactor = clamped
-                device.unlockForConfiguration()
-            } catch {
-                self.logger.error(
-                    "Zoom failed: \(error.localizedDescription)"
-                )
-            }
+    /// Adds a frame tap so home-tile freezes use real camera samples.
+    private func attachVideoDataOutput(to session: AVCaptureSession) {
+        guard !session.outputs.contains(videoDataOutput) else { return }
+        videoDataOutput.alwaysDiscardsLateVideoFrames = true
+        videoDataOutput.videoSettings = [
+            kCVPixelBufferPixelFormatTypeKey as String: Int(kCVPixelFormatType_32BGRA)
+        ]
+        videoDataOutput.setSampleBufferDelegate(self, queue: frameQueue)
+        guard session.canAddOutput(videoDataOutput) else {
+            logger.error("Could not add camera video data output")
+            return
         }
-    }
-
-    /// Resets zoom to 1×.
-    func resetZoom() {
-        setZoomFactor(minZoomFactor)
+        session.addOutput(videoDataOutput)
     }
 
     // MARK: - Session Lifecycle
 
+    /// Publishes `isSessionRunning` on the main queue.
+    /// - Parameter running: Whether the capture session is running.
+    func publishSessionRunning(_ running: Bool) {
+        if !Thread.isMainThread {
+            DispatchQueue.main.async { [weak self] in
+                self?.publishSessionRunning(running)
+            }
+            return
+        }
+        guard isSessionRunning != running else { return }
+        isSessionRunning = running
+        NotificationCenter.default.post(
+            name: Self.sessionRunningDidChangeNotification,
+            object: self
+        )
+    }
+
     /// Starts the capture session if not already running.
     func startSession() {
-        let session = captureSession
-
-        sessionQueue.async { [weak self, session] in
-            guard !session.isRunning else {
-                DispatchQueue.main.async { self?.isSessionRunning = true }
-                return
-            }
-            session.startRunning()
-            let isRunning = session.isRunning
-            DispatchQueue.main.async {
-                self?.isSessionRunning = isRunning
-            }
-        }
+        wantsSessionRunning = true
+        startCaptureIfPossible(attempt: 0, completion: {})
     }
 
     /// Configures (if needed), starts capture, then runs `completion` on the main queue.
     ///
-    /// Completion runs after `startRunning` returns on the session queue so preview
-    /// layers attach to a live session (avoids a blank first frame / missing connection).
+    /// Defers `startRunning` until the app is active and retries briefly when the
+    /// capture server is not ready yet (common on cold launch).
     func prepareAndStart(completion: @escaping () -> Void) {
+        wantsSessionRunning = true
+        installSessionRecoveryIfNeeded()
         configureSession { [weak self] in
             guard let self else {
                 DispatchQueue.main.async(execute: completion)
                 return
             }
-            let session = self.captureSession
-            self.sessionQueue.async {
-                if !session.isRunning {
-                    session.startRunning()
-                }
-                let isRunning = session.isRunning
-                DispatchQueue.main.async {
-                    self.isSessionRunning = isRunning
-                    completion()
-                }
-            }
+            self.startCaptureIfPossible(attempt: 0, completion: completion)
         }
     }
 
     /// Stops the capture session if currently running.
     func stopSession() {
+        wantsSessionRunning = false
+        clearActiveStartWait()
         let session = captureSession
 
         sessionQueue.async { [weak self, session] in
-            guard session.isRunning else { return }
+            guard session.isRunning else {
+                self?.publishSessionRunning(false)
+                return
+            }
             session.stopRunning()
-            // Reset zoom so the next session starts at 1×.
             if let device = self?.videoDevice {
                 do {
                     try device.lockForConfiguration()
@@ -245,9 +289,7 @@ final class CameraManager {
                     // Best-effort reset.
                 }
             }
-            DispatchQueue.main.async {
-                self?.isSessionRunning = false
-            }
+            self?.publishSessionRunning(false)
         }
     }
 }

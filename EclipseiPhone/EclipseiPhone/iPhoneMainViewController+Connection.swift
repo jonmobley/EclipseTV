@@ -16,8 +16,8 @@ extension iPhoneMainViewController {
     /// The Apple TV (by device name) the user last chose to view. Auto-connect prefers
     /// it over the first-discovered peer. Nil means "no preference" (legacy behavior).
     var preferredTVName: String? {
-        get { UserDefaults.standard.string(forKey: "EclipseTV.companion.preferredTVName") }
-        set { UserDefaults.standard.set(newValue, forKey: "EclipseTV.companion.preferredTVName") }
+        get { CompanionSettings.preferredTVName }
+        set { CompanionSettings.preferredTVName = newValue }
     }
 
     /// Returns the discovered peer matching `preferredTVName`, if any.

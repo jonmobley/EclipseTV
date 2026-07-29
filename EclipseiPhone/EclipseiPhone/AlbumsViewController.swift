@@ -261,8 +261,11 @@ extension AlbumsViewController: UICollectionViewDataSource, UICollectionViewDele
     }
 
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
-        let cell = collectionView.dequeueReusableCell(
-            withReuseIdentifier: AlbumThumbnailCell.reuseIdentifier, for: indexPath) as! AlbumThumbnailCell
+        guard let cell = collectionView.dequeueReusableCell(
+            withReuseIdentifier: AlbumThumbnailCell.reuseIdentifier,
+            for: indexPath) as? AlbumThumbnailCell else {
+            return UICollectionViewCell()
+        }
         if let item = store.albums[safe: indexPath.section]?.items[safe: indexPath.item] {
             cell.configure(with: item, cellSize: cellSize())
         }

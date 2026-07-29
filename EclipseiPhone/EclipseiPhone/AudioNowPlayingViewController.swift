@@ -7,7 +7,7 @@
 
 import UIKit
 
-/// Expanded ambient Now Playing sheet with transport + scrubber.
+/// Compact Now Playing sheet: transport on top, queue list for quick track changes.
 final class AudioNowPlayingViewController: UIViewController {
 
     var onOpenLibrary: (() -> Void)?
@@ -16,39 +16,42 @@ final class AudioNowPlayingViewController: UIViewController {
         let view = UIImageView()
         view.contentMode = .scaleAspectFill
         view.clipsToBounds = true
-        view.layer.cornerRadius = 12
-        view.backgroundColor = UIColor(white: 0.2, alpha: 1)
+        view.layer.cornerRadius = 8
+        view.backgroundColor = .tertiarySystemFill
         view.translatesAutoresizingMaskIntoConstraints = false
         return view
     }()
 
     private let titleLabel: UILabel = {
         let label = UILabel()
-        label.font = .systemFont(ofSize: 22, weight: .semibold)
-        label.textAlignment = .center
-        label.numberOfLines = 2
+        label.font = .preferredFont(forTextStyle: .headline)
+        label.adjustsFontForContentSizeCategory = true
+        label.numberOfLines = 1
         label.translatesAutoresizingMaskIntoConstraints = false
         return label
     }()
 
     private let subtitleLabel: UILabel = {
         let label = UILabel()
-        label.font = .systemFont(ofSize: 15)
+        label.font = .preferredFont(forTextStyle: .footnote)
+        label.adjustsFontForContentSizeCategory = true
         label.textColor = .secondaryLabel
-        label.textAlignment = .center
+        label.numberOfLines = 1
         label.translatesAutoresizingMaskIntoConstraints = false
         return label
     }()
 
     private let scrubber: UISlider = {
         let slider = UISlider()
+        slider.accessibilityLabel = "Playback position"
         slider.translatesAutoresizingMaskIntoConstraints = false
         return slider
     }()
 
     private let elapsedLabel: UILabel = {
         let label = UILabel()
-        label.font = .monospacedDigitSystemFont(ofSize: 12, weight: .regular)
+        label.font = AudioNowPlayingViewController.monospacedCaption()
+        label.adjustsFontForContentSizeCategory = true
         label.textColor = .secondaryLabel
         label.translatesAutoresizingMaskIntoConstraints = false
         return label
@@ -56,18 +59,41 @@ final class AudioNowPlayingViewController: UIViewController {
 
     private let remainingLabel: UILabel = {
         let label = UILabel()
-        label.font = .monospacedDigitSystemFont(ofSize: 12, weight: .regular)
+        label.font = AudioNowPlayingViewController.monospacedCaption()
+        label.adjustsFontForContentSizeCategory = true
         label.textColor = .secondaryLabel
         label.textAlignment = .right
         label.translatesAutoresizingMaskIntoConstraints = false
         return label
     }()
 
+    private let queueHeaderLabel: UILabel = {
+        let label = UILabel()
+        label.text = "Up Next"
+        label.font = .preferredFont(forTextStyle: .subheadline)
+        label.adjustsFontForContentSizeCategory = true
+        label.textColor = .secondaryLabel
+        label.accessibilityTraits = .header
+        label.translatesAutoresizingMaskIntoConstraints = false
+        return label
+    }()
+
+    /// Caption-sized monospaced digits that still scale with Dynamic Type.
+    private static func monospacedCaption() -> UIFont {
+        let descriptor = UIFontDescriptor.preferredFontDescriptor(withTextStyle: .caption1)
+        let base = UIFont.monospacedDigitSystemFont(
+            ofSize: descriptor.pointSize, weight: .regular
+        )
+        return UIFontMetrics(forTextStyle: .caption1).scaledFont(for: base)
+    }
+
+    private let tableView = UITableView(frame: .zero, style: .plain)
     private let playButton = UIButton(type: .system)
     private let prevButton = UIButton(type: .system)
     private let nextButton = UIButton(type: .system)
     private var isScrubbing = false
     private var observer: NSObjectProtocol?
+    private let cellReuseId = "queueCell"
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -81,9 +107,12 @@ final class AudioNowPlayingViewController: UIViewController {
         )
 
         configureButtons()
+        configureTable()
         layout()
         scrubber.addTarget(self, action: #selector(scrubBegan), for: .touchDown)
-        scrubber.addTarget(self, action: #selector(scrubEnded), for: [.touchUpInside, .touchUpOutside])
+        scrubber.addTarget(
+            self, action: #selector(scrubEnded), for: [.touchUpInside, .touchUpOutside]
+        )
         scrubber.addTarget(self, action: #selector(scrubChanged), for: .valueChanged)
 
         observer = NotificationCenter.default.addObserver(
@@ -103,9 +132,11 @@ final class AudioNowPlayingViewController: UIViewController {
     // MARK: - Private
 
     private func configureButtons() {
-        let large = UIImage.SymbolConfiguration(pointSize: 28, weight: .semibold)
-        let mid = UIImage.SymbolConfiguration(pointSize: 22, weight: .semibold)
-        playButton.setImage(UIImage(systemName: "play.fill", withConfiguration: large), for: .normal)
+        let large = UIImage.SymbolConfiguration(pointSize: 26, weight: .semibold)
+        let mid = UIImage.SymbolConfiguration(pointSize: 20, weight: .semibold)
+        playButton.setImage(
+            UIImage(systemName: "play.fill", withConfiguration: large), for: .normal
+        )
         prevButton.setImage(
             UIImage(systemName: "backward.fill", withConfiguration: mid), for: .normal
         )
@@ -116,12 +147,30 @@ final class AudioNowPlayingViewController: UIViewController {
             button.translatesAutoresizingMaskIntoConstraints = false
             button.tintColor = .label
         }
+        playButton.accessibilityLabel = "Play"
+        prevButton.accessibilityLabel = "Previous track"
+        nextButton.accessibilityLabel = "Next track"
         playButton.addTarget(self, action: #selector(playTapped), for: .touchUpInside)
         prevButton.addTarget(self, action: #selector(prevTapped), for: .touchUpInside)
         nextButton.addTarget(self, action: #selector(nextTapped), for: .touchUpInside)
     }
 
+    private func configureTable() {
+        tableView.translatesAutoresizingMaskIntoConstraints = false
+        tableView.dataSource = self
+        tableView.delegate = self
+        tableView.register(UITableViewCell.self, forCellReuseIdentifier: cellReuseId)
+        tableView.rowHeight = 56
+        tableView.tableFooterView = UIView()
+        tableView.keyboardDismissMode = .onDrag
+    }
+
     private func layout() {
+        let textStack = UIStackView(arrangedSubviews: [titleLabel, subtitleLabel])
+        textStack.axis = .vertical
+        textStack.spacing = 2
+        textStack.translatesAutoresizingMaskIntoConstraints = false
+
         let transport = UIStackView(arrangedSubviews: [prevButton, playButton, nextButton])
         transport.axis = .horizontal
         transport.alignment = .center
@@ -129,43 +178,55 @@ final class AudioNowPlayingViewController: UIViewController {
         transport.translatesAutoresizingMaskIntoConstraints = false
 
         view.addSubview(artworkView)
-        view.addSubview(titleLabel)
-        view.addSubview(subtitleLabel)
+        view.addSubview(textStack)
         view.addSubview(scrubber)
         view.addSubview(elapsedLabel)
         view.addSubview(remainingLabel)
         view.addSubview(transport)
+        view.addSubview(queueHeaderLabel)
+        view.addSubview(tableView)
 
         NSLayoutConstraint.activate([
             artworkView.topAnchor.constraint(
-                equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 24
+                equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12
             ),
-            artworkView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            artworkView.widthAnchor.constraint(equalToConstant: 220),
-            artworkView.heightAnchor.constraint(equalToConstant: 220),
+            artworkView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            artworkView.widthAnchor.constraint(equalToConstant: 56),
+            artworkView.heightAnchor.constraint(equalToConstant: 56),
 
-            titleLabel.topAnchor.constraint(equalTo: artworkView.bottomAnchor, constant: 24),
-            titleLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
-            titleLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
+            textStack.leadingAnchor.constraint(equalTo: artworkView.trailingAnchor, constant: 12),
+            textStack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            textStack.centerYAnchor.constraint(equalTo: artworkView.centerYAnchor),
 
-            subtitleLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 6),
-            subtitleLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
-            subtitleLabel.trailingAnchor.constraint(equalTo: titleLabel.trailingAnchor),
+            scrubber.topAnchor.constraint(equalTo: artworkView.bottomAnchor, constant: 14),
+            scrubber.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            scrubber.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
 
-            scrubber.topAnchor.constraint(equalTo: subtitleLabel.bottomAnchor, constant: 28),
-            scrubber.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
-            scrubber.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
-
-            elapsedLabel.topAnchor.constraint(equalTo: scrubber.bottomAnchor, constant: 4),
+            elapsedLabel.topAnchor.constraint(equalTo: scrubber.bottomAnchor, constant: 2),
             elapsedLabel.leadingAnchor.constraint(equalTo: scrubber.leadingAnchor),
 
             remainingLabel.centerYAnchor.constraint(equalTo: elapsedLabel.centerYAnchor),
             remainingLabel.trailingAnchor.constraint(equalTo: scrubber.trailingAnchor),
 
-            transport.topAnchor.constraint(equalTo: elapsedLabel.bottomAnchor, constant: 28),
+            transport.topAnchor.constraint(equalTo: elapsedLabel.bottomAnchor, constant: 10),
             transport.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 48),
             transport.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -48),
-            transport.heightAnchor.constraint(equalToConstant: 48)
+            transport.heightAnchor.constraint(equalToConstant: 40),
+
+            queueHeaderLabel.topAnchor.constraint(
+                equalTo: transport.bottomAnchor, constant: 16
+            ),
+            queueHeaderLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            queueHeaderLabel.trailingAnchor.constraint(
+                equalTo: view.trailingAnchor, constant: -20
+            ),
+
+            tableView.topAnchor.constraint(
+                equalTo: queueHeaderLabel.bottomAnchor, constant: 6
+            ),
+            tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
     }
 
@@ -196,8 +257,13 @@ final class AudioNowPlayingViewController: UIViewController {
         remainingLabel.text = "-" + format(max(0, duration - player.currentTime))
 
         let symbol = player.isPlaying ? "pause.fill" : "play.fill"
-        let large = UIImage.SymbolConfiguration(pointSize: 28, weight: .semibold)
+        let large = UIImage.SymbolConfiguration(pointSize: 26, weight: .semibold)
         playButton.setImage(UIImage(systemName: symbol, withConfiguration: large), for: .normal)
+        playButton.accessibilityLabel = player.isPlaying ? "Pause" : "Play"
+
+        let count = player.queue.count
+        queueHeaderLabel.text = count > 1 ? "Up Next · \(count) tracks" : "Now Playing"
+        tableView.reloadData()
     }
 
     private func format(_ seconds: TimeInterval) -> String {
@@ -221,5 +287,43 @@ final class AudioNowPlayingViewController: UIViewController {
     @objc private func scrubEnded() {
         isScrubbing = false
         AudioPlayerController.shared.seek(to: TimeInterval(scrubber.value))
+    }
+}
+
+// MARK: - Queue Table
+
+extension AudioNowPlayingViewController: UITableViewDataSource, UITableViewDelegate {
+
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        AudioPlayerController.shared.queue.count
+    }
+
+    func tableView(
+        _ tableView: UITableView,
+        cellForRowAt indexPath: IndexPath
+    ) -> UITableViewCell {
+        let cell = tableView.dequeueReusableCell(withIdentifier: cellReuseId, for: indexPath)
+        var config = cell.defaultContentConfiguration()
+        let player = AudioPlayerController.shared
+        let trackId = player.queue[indexPath.row]
+        let track = AudioStore.shared.track(id: trackId)
+        config.text = track?.title ?? "Missing Track"
+        config.secondaryText = track?.subtitle
+        config.image = UIImage(systemName: "music.note")
+        config.imageProperties.tintColor = .secondaryLabel
+        let isCurrent = indexPath.row == player.currentIndex
+        config.textProperties.font = .systemFont(
+            ofSize: 16, weight: isCurrent ? .semibold : .regular
+        )
+        config.textProperties.color = isCurrent ? .systemBlue : .label
+        cell.contentConfiguration = config
+        cell.accessoryType = isCurrent ? .checkmark : .none
+        cell.selectionStyle = .default
+        return cell
+    }
+
+    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        tableView.deselectRow(at: indexPath, animated: true)
+        AudioPlayerController.shared.play(at: indexPath.row)
     }
 }

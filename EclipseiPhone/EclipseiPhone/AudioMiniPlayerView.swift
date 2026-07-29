@@ -109,6 +109,8 @@ final class AudioMiniPlayerView: UIView {
         muteButton.setImage(
             UIImage(systemName: muteSymbol, withConfiguration: muteConfig), for: .normal
         )
+        muteButton.accessibilityLabel = player.isMuted ? "Unmute" : "Mute"
+        playButton.accessibilityLabel = player.isPlaying ? "Pause" : "Play"
     }
 
     // MARK: - Private
@@ -161,8 +163,8 @@ final class AudioMiniPlayerView: UIView {
             muteButton.heightAnchor.constraint(equalToConstant: 44)
         ])
 
-        playButton.accessibilityLabel = "Play/Pause"
-        nextButton.accessibilityLabel = "Next"
+        playButton.accessibilityLabel = "Play"
+        nextButton.accessibilityLabel = "Next track"
         muteButton.accessibilityLabel = "Mute"
         accessibilityLabel = "Now Playing"
         accessibilityHint = "Double tap to open Now Playing"

@@ -39,6 +39,7 @@ extension LibraryGridViewController {
             SlideshowStore.shared.removeItemFromAllSlideshows(itemId: id)
         }
         if sent || wasPending {
+            MediaFitSettings.clear(forId: id)
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
         } else {
             presentNotConnectedAlert()

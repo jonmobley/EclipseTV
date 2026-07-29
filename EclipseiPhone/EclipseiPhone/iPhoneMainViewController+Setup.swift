@@ -6,6 +6,7 @@
 //
 
 // iPhoneMainViewController+Setup.swift
+import AVFoundation
 import UIKit
 import os
 
@@ -88,11 +89,14 @@ extension iPhoneMainViewController {
         headerBar.onOpenSettings = { [weak self] in
             self?.presentSettings()
         }
-        headerBar.onStatusTapped = { [weak self] in
-            self?.presentSettings(focusEclipseTV: true)
-        }
         headerBar.onPresentBlack = { [weak self] in
             self?.libraryViewController.presentBlackLive()
+        }
+        headerBar.onDoneArranging = { [weak self] in
+            self?.libraryViewController.commitArranging()
+        }
+        headerBar.onGoHome = { [weak self] in
+            self?.libraryViewController.closeOpenShow()
         }
         view.addSubview(headerBar)
 
@@ -114,12 +118,6 @@ extension iPhoneMainViewController {
             self,
             selector: #selector(libraryMenuContextDidChange),
             name: ExternalOutputSettings.didChangeNotification,
-            object: nil
-        )
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(libraryMenuContextDidChange),
-            name: PDFStore.didChangeNotification,
             object: nil
         )
 
@@ -197,6 +195,7 @@ extension iPhoneMainViewController {
         let nav = UINavigationController(rootViewController: nowPlaying)
         if let sheet = nav.sheetPresentationController {
             sheet.detents = [.medium(), .large()]
+            sheet.selectedDetentIdentifier = .medium
             sheet.prefersGrabberVisible = true
         }
         presentationAnchor.present(nav, animated: true)
@@ -240,19 +239,18 @@ extension iPhoneMainViewController {
         connectionManager.syncCoordinator = coordinator
     }
 
-    /// Presents the camera control surface (preview first; Go Live for AirPlay).
+    /// Presents the camera control surface (preview first; slide shutter for AirPlay).
     ///
-    /// The home tile is only a launcher / LIVE indicator — no mini preview.
+    /// Parks the home tile on a still first so the shared preview handoff doesn't
+    /// flash black; keeps the session running for a live fullscreen open.
     func presentCameraLive() {
         if presentedViewController is CameraLiveViewController { return }
         SlideshowPlaybackController.shared.stop()
-        // Warm capture for phone framing — AirPlay waits for Go Live.
-        if !ExternalDisplayManager.shared.isCameraModeActive {
-            Task { @MainActor in
-                let granted = await CameraManager.shared.checkPermissions()
-                guard granted else { return }
-                CameraManager.shared.prepareAndStart { }
-            }
+        libraryViewController.parkHomeCameraTileForFullscreen()
+        if AVCaptureDevice.authorizationStatus(for: .video) == .authorized,
+           !ExternalDisplayManager.shared.isCameraModeActive,
+           !CameraManager.shared.isSessionRunning {
+            CameraManager.shared.prepareAndStart { }
         }
         let cameraVC = CameraLiveViewController()
         cameraVC.modalPresentationStyle = .fullScreen
@@ -265,5 +263,27 @@ extension iPhoneMainViewController {
         let nav = UINavigationController(rootViewController: pagesVC)
         nav.modalPresentationStyle = .fullScreen
         present(nav, animated: true)
+    }
+
+    /// Presents a filterable sheet of existing images, videos, and PDFs.
+    func presentMediaLibrary() {
+        let picker = MediaLibraryPickerViewController()
+        let nav = UINavigationController(rootViewController: picker)
+        nav.modalPresentationStyle = .pageSheet
+        if let sheet = nav.sheetPresentationController {
+            sheet.detents = [.large()]
+            sheet.prefersGrabberVisible = true
+        }
+        picker.onSelectMedia = { [weak self, weak nav] item in
+            nav?.dismiss(animated: true) {
+                self?.libraryViewController.presentMedia(item)
+            }
+        }
+        picker.onSelectPDF = { [weak self, weak nav] doc in
+            nav?.dismiss(animated: true) {
+                self?.libraryViewController.presentPDF(doc)
+            }
+        }
+        presentationAnchor.present(nav, animated: true)
     }
 }

@@ -57,7 +57,7 @@ extension AudioPlayerController {
         }
         var info: [String: Any] = [
             MPMediaItemPropertyTitle: track.title,
-            MPMediaItemPropertyPlaybackDuration: track.duration,
+            MPMediaItemPropertyPlaybackDuration: duration,
             MPNowPlayingInfoPropertyElapsedPlaybackTime: currentTime,
             MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? 1.0 : 0.0
         ]
@@ -83,6 +83,9 @@ extension AudioPlayerController {
         }
         info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = currentTime
         info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? 1.0 : 0.0
+        // The asset's real duration only becomes available after the item loads, so keep
+        // refreshing it rather than leaving the import-time estimate on the lock screen.
+        info[MPMediaItemPropertyPlaybackDuration] = duration
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
     }
 }

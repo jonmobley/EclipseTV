@@ -12,8 +12,11 @@ import UIKit
 extension LibraryGridViewController {
 
     /// Opens a Show from the Eclipse menu or a home-grid tile.
+    ///
+    /// A Show from the other Display Mode is ignored; pickers switch the mode first.
     func openLocalAlbum(id: UUID) {
-        guard let album = LocalAlbumStore.shared.album(id: id) else { return }
+        guard let album = LocalAlbumStore.shared.album(id: id),
+              album.orientation == ExternalOutputSettings.orientation else { return }
         enterShowMode(album)
     }
 
@@ -23,10 +26,15 @@ extension LibraryGridViewController {
         if isArranging {
             cancelArranging()
         }
+        // Freeze the tile on a still while it's still on screen to grab from.
+        stopHomeCameraPreviewIfNeeded()
         openShowId = nil
         applyCollectionLayout()
+        updateHeroVisibility()
         collectionView.reloadData()
+        scrollGridToTop()
         updateEmptyState()
+        updateHomeScrollLock()
         onOpenShowChanged?(nil)
     }
 
@@ -76,23 +84,41 @@ extension LibraryGridViewController {
         present(alert, animated: true)
     }
 
+    /// Returns the grid to the top when the section contents change wholesale.
+    ///
+    /// Home and a Show have unrelated content heights, so carrying the old offset across
+    /// the transition dropped the user into the middle of the new content — or past the
+    /// end of it, staring at blank space.
+    private func scrollGridToTop() {
+        let top = -collectionView.adjustedContentInset.top
+        guard collectionView.contentOffset.y != top else { return }
+        collectionView.setContentOffset(CGPoint(x: 0, y: top), animated: false)
+    }
+
     // MARK: - Enter
 
     private func enterShowMode(_ album: LocalAlbum) {
+        guard album.orientation == ExternalOutputSettings.orientation else { return }
         if isArranging {
             cancelArranging()
         }
         LocalAlbumStore.shared.touchRecentlyOpened(id: album.id)
-        if ExternalOutputSettings.orientation != album.orientation {
-            ExternalOutputSettings.orientation = album.orientation
-        }
         let wasShowMode = isShowMode
         openShowId = album.id
         if !wasShowMode {
             applyCollectionLayout()
+            updateHeroVisibility()
         }
         collectionView.reloadData()
+        scrollGridToTop()
         updateEmptyState()
+        if !wasShowMode {
+            refreshLiveHeader()
+            // The Camera tile only exists once the new sections are laid out, and
+            // an already-running session won't fire a start notification to retry on.
+            collectionView.layoutIfNeeded()
+            warmHomeCameraPreview()
+        }
         onOpenShowChanged?(album)
     }
 
@@ -141,7 +167,9 @@ extension LibraryGridViewController {
         guard items.indices.contains(indexPath.item) else { return }
         switch items[indexPath.item] {
         case .add:
-            presentShowAddSheet()
+            if let id = openShowId {
+                onAddMediaToAlbum?(id)
+            }
         case .slideshow(let show):
             isBlackSelected = false
             isLogoSelected = false
@@ -200,23 +228,6 @@ extension LibraryGridViewController {
 
     // MARK: - Private
 
-    private func presentShowAddSheet() {
-        guard let id = openShowId else { return }
-        let sheet = UIAlertController(title: nil, message: nil, preferredStyle: .actionSheet)
-        sheet.addAction(UIAlertAction(title: "Import…", style: .default) { [weak self] _ in
-            self?.onAddMediaToAlbum?(id)
-        })
-        sheet.addAction(UIAlertAction(title: "New Slideshow…", style: .default) { [weak self] _ in
-            self?.onCreateSlideshow?(id)
-        })
-        sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        if let popover = sheet.popoverPresentationController {
-            popover.sourceView = collectionView
-            popover.sourceRect = collectionView.bounds
-        }
-        present(sheet, animated: true)
-    }
-
     private func slideshowContextMenu(_ show: Slideshow) -> UIMenu {
         let edit = UIAction(
             title: "Edit",
@@ -265,7 +276,19 @@ extension LibraryGridViewController {
             guard let self, let id = self.openShowId else { return }
             LocalAlbumStore.shared.remove(itemId: item.id, fromAlbumId: id)
         }
-        return UIMenu(children: [preview, cover, remove])
+        let arrange = UIAction(
+            title: "Arrange",
+            image: UIImage(systemName: "arrow.up.arrow.down"),
+            attributes: items.count < 2 ? [.disabled] : []
+        ) { [weak self] _ in
+            self?.beginArranging()
+        }
+        var children: [UIMenuElement] = [preview]
+        if !item.isVideo {
+            children.append(screenFitMenu(for: item))
+        }
+        children.append(contentsOf: [cover, arrange, remove])
+        return UIMenu(children: children)
     }
 
     private func promptRenameSlideshow(_ show: Slideshow) {

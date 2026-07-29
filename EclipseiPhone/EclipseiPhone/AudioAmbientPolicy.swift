@@ -20,10 +20,13 @@ enum AudioAmbientPolicy {
         }
     }
 
-    /// Stops ambient audio when `source` is video; no-op otherwise.
+    /// Pauses ambient audio when `source` is video; no-op otherwise.
+    ///
+    /// Pauses rather than stops: `stop()` clears the queue and hides the mini player, so
+    /// playing one video would cost the user their whole ambient session.
     @MainActor
     static func applyYieldIfNeeded(for source: PresentationSource) {
         guard shouldYield(to: source) else { return }
-        AudioPlayerController.shared.stop()
+        AudioPlayerController.shared.pause()
     }
 }

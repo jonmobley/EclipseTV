@@ -89,6 +89,13 @@ extension ImageViewController: MediaDataSourceDelegate {
         }
     }
 
+    /// Selection bookkeeping every granular grid update needs once its animation settles.
+    /// Previously came for free from the full `reloadData()` these updates raced against.
+    private func validateSelectionAfterDataChange() {
+        simpleSelectionManager.validateSelectionState()
+        validateSelectionSync()
+    }
+
     func mediaData(_ dataSource: MediaDataSource, didAddItemAt index: Int) {
         DispatchQueue.main.async {
             // Animate insertion
@@ -100,6 +107,7 @@ extension ImageViewController: MediaDataSourceDelegate {
                 self.simpleSelectionManager.selectItem(at: indexPath)
                 self.setNeedsFocusUpdate()
                 self.updateFocusIfNeeded()
+                self.validateSelectionAfterDataChange()
             }
         }
     }
@@ -158,7 +166,7 @@ extension ImageViewController: MediaDataSourceDelegate {
                         self.updateFocusIfNeeded()
 
                         // Validate selection synchronization after deletion
-                        self.validateSelectionSync()
+                        self.validateSelectionAfterDataChange()
 
                         self.logger.debug("🗑️ Selection update complete - focus system re-enabled")
                     }
@@ -183,6 +191,7 @@ extension ImageViewController: MediaDataSourceDelegate {
                 // Maintain selection on moved item
                 let currentIndexPath = IndexPath(item: dataSource.currentIndex, section: 0)
                 self.simpleSelectionManager.selectItem(at: currentIndexPath)
+                self.validateSelectionAfterDataChange()
             }
         }
     }

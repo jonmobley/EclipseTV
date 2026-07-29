@@ -14,8 +14,9 @@ import UIKit
 struct PresentationSource: Equatable {
 
     enum Content: Equatable {
-        /// A still image at `url` (a local file or an HTTPS URL).
-        case image(URL)
+        /// A still image at `url` (a local file or an HTTPS URL). `fill` crops the image
+        /// to fill the panel instead of letterboxing it.
+        case image(url: URL, fill: Bool)
         /// A video at `url` (a local file or an HTTPS URL), with playback options.
         case video(url: URL, isLooping: Bool, isMuted: Bool)
         /// Live back-camera feed from `CameraManager` (AirPlay only).
@@ -35,8 +36,8 @@ struct PresentationSource: Equatable {
 
     // MARK: - Convenience builders
 
-    static func image(_ url: URL) -> PresentationSource {
-        PresentationSource(content: .image(url))
+    static func image(_ url: URL, fill: Bool = false) -> PresentationSource {
+        PresentationSource(content: .image(url: url, fill: fill))
     }
 
     static func video(_ url: URL, isLooping: Bool, isMuted: Bool) -> PresentationSource {
@@ -69,6 +70,8 @@ struct PresentationSource: Equatable {
 
     /// Builds a source for a mirrored TV-library item, using the phone's local full-res
     /// copy when present and falling back to its thumbnail otherwise.
+    ///
+    /// Stills carry the item's saved Fit / Fill framing (`MediaFitSettings`).
     static func forLibraryItem(_ item: LibraryItemDTO, thumbnail: UIImage?) -> PresentationSource {
         guard let localURL = LocalMediaStore.shared.localURL(forId: item.id) else {
             return .unavailable(thumbnail: thumbnail,
@@ -77,6 +80,6 @@ struct PresentationSource: Equatable {
         if item.isVideo {
             return .video(localURL, isLooping: item.isLooping ?? false, isMuted: item.isMuted ?? false)
         }
-        return .image(localURL)
+        return .image(localURL, fill: MediaFitSettings.isFill(forId: item.id))
     }
 }

@@ -26,10 +26,9 @@ final class WebRemoteViewController: UIViewController {
     var isSyncingScroll = false
 
     /// Pill that holds the URL field + inline reload (Safari-style).
-    let urlBarContainer: UIView = {
-        let view = UIView()
+    let urlBarContainer: WebURLBarView = {
+        let view = WebURLBarView()
         view.backgroundColor = .secondarySystemBackground
-        view.layer.cornerRadius = 22
         view.clipsToBounds = true
         return view
     }()
@@ -39,7 +38,7 @@ final class WebRemoteViewController: UIViewController {
         field.placeholder = "Search or enter website"
         field.textAlignment = .center
         field.borderStyle = .none
-        field.font = .systemFont(ofSize: 17, weight: .medium)
+        field.font = .systemFont(ofSize: 17, weight: .semibold)
         field.autocapitalizationType = .none
         field.autocorrectionType = .no
         field.keyboardType = .URL
@@ -52,10 +51,10 @@ final class WebRemoteViewController: UIViewController {
 
     let reloadButton: UIButton = {
         var config = UIButton.Configuration.plain()
-        let symbol = UIImage.SymbolConfiguration(pointSize: 16, weight: .semibold)
+        let symbol = UIImage.SymbolConfiguration(pointSize: 14, weight: .semibold)
         config.image = UIImage(systemName: "arrow.clockwise", withConfiguration: symbol)
         config.contentInsets = NSDirectionalEdgeInsets(
-            top: 8, leading: 8, bottom: 8, trailing: 10
+            top: 6, leading: 6, bottom: 6, trailing: 6
         )
         config.baseForegroundColor = .label
         let button = UIButton(configuration: config)
@@ -96,9 +95,17 @@ final class WebRemoteViewController: UIViewController {
         refreshBookmarksMenu()
     }
 
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        guard isBeingDismissed || isMovingFromParent else { return }
+        // Park the warm session (home LiveHeader reclaims it if still live).
+        WarmWebSessionPool.shared.relinquish(pageId: page.id, from: self)
+        webView = nil
+    }
+
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        // Free-browse starts blank — jump straight into the address field.
+        // Only focus the omnibox when free-browse has no real page yet.
         if page.isFreeBrowse, isBlankBrowserURL(webView?.url ?? page.url) {
             urlField.becomeFirstResponder()
         }

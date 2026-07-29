@@ -121,8 +121,9 @@ extension ImageViewController {
             let mediaItem = MediaItem(path: videoPath)
             self.viewModel.updateVideoSetting(for: mediaItem, keyPath: \.isMuted, value: isMuted)
             
-            // Apply settings to currently playing video if this is the active video
-            if let currentPath = self.dataSource.getCurrentPath(), currentPath == videoPath {
+            // Apply settings to currently playing video if this is the active video.
+            // Must go through `currentDisplayPath()` so album playback is covered too.
+            if let currentPath = self.currentDisplayPath(), currentPath == videoPath {
                 self.applySettingsToCurrentVideo()
             }
             
@@ -158,8 +159,9 @@ extension ImageViewController {
             let mediaItem = MediaItem(path: videoPath)
             self.viewModel.updateVideoSetting(for: mediaItem, keyPath: \.isLooping, value: isLooping)
             
-            // Apply settings to currently playing video if this is the active video
-            if let currentPath = self.dataSource.getCurrentPath(), currentPath == videoPath {
+            // Apply settings to currently playing video if this is the active video.
+            // Must go through `currentDisplayPath()` so album playback is covered too.
+            if let currentPath = self.currentDisplayPath(), currentPath == videoPath {
                 self.applySettingsToCurrentVideo()
             }
             

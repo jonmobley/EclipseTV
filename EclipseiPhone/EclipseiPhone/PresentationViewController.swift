@@ -343,11 +343,11 @@ final class PresentationViewController: UIViewController {
         }
 
         switch source.content {
-        case .image(let url):
+        case .image(let url, let fill):
             hideCamera()
             hideWeb()
             hidePDF()
-            showImage(at: url)
+            showImage(at: url, fill: fill)
         case .video(let url, let isLooping, let isMuted):
             hideCamera()
             hideWeb()

@@ -7,6 +7,11 @@ import MultipeerConnectivity
 /// Exponential-backoff reconnection to the active Apple TV after an unexpected drop.
 /// Replica TVs are not retried here; they are re-invited on rediscovery.
 extension iPhoneConnectionManager {
+
+    /// Ceiling for the reconnect delay, so a raised `maxRetries` can never push the last
+    /// attempt minutes out.
+    private static let maxReconnectDelay: TimeInterval = 30
+
     func scheduleReconnectAttempt(to peer: MCPeerID) {
         // `Timer.scheduledTimer` attaches to the *current* run loop. If this runs on a
         // background queue (e.g. an MCSession delegate callback) that run loop isn't
@@ -27,8 +32,11 @@ extension iPhoneConnectionManager {
         }
         
         retryCount += 1
-        let delay = TimeInterval(retryCount * 2) // Exponential backoff: 2s, 4s, 6s
-        
+        // Actually exponential (the old `retryCount * 2` was linear), capped, and jittered
+        // so several companions dropped by one Wi-Fi blip don't retry in lockstep.
+        let backoff = min(pow(2.0, Double(retryCount)), Self.maxReconnectDelay)
+        let delay = backoff + Double.random(in: 0...0.5)
+
         logger.debug("Scheduling reconnect attempt \(self.retryCount)/\(self.maxRetries) in \(delay)s")
         
         retryTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in

@@ -111,8 +111,9 @@ extension ImageViewController {
                 if player.rate > 0 {
                     player.pause()
                 } else {
-                    // Get the current media item to check for custom playback rate
-                    if let currentPath = dataSource.getCurrentPath() {
+                    // Get the current media item to check for custom playback rate.
+                    // Resolved against the active collection so albums behave the same.
+                    if let currentPath = currentDisplayPath() {
                         let mediaItem = MediaItem(path: currentPath)
                         let settings = viewModel.getVideoSettings(for: mediaItem)
                         

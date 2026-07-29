@@ -29,7 +29,9 @@ final class WebThumbnailPrefetcher: NSObject, WKNavigationDelegate {
         super.init()
     }
 
-    /// Enqueues every saved page (launch / store change).
+    /// Enqueues pages for off-screen snapshot capture (legacy / on-demand).
+    ///
+    /// Preferred path: `WarmWebSessionPool.warmAll()` keeps real WKWebViews ready.
     func prefetchAllSavedPages() {
         enqueue(WebPageStore.shared.pages)
     }

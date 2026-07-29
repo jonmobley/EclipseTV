@@ -34,12 +34,14 @@ extension PresentationViewController {
     }
 
     /// Shows a still on the primary media surface.
-    func showImage(at url: URL) {
+    /// - Parameter fill: Crops the image to fill the panel instead of letterboxing it.
+    ///   The Logo always fills regardless of this flag.
+    func showImage(at url: URL, fill: Bool) {
         messageLabel.text = nil
         imageView.isHidden = false
         imageView.image = nil
         imageView.alpha = 1.0
-        imageView.contentMode = LogoStore.shared.isLogoFileURL(url)
+        imageView.contentMode = fill || LogoStore.shared.isLogoFileURL(url)
             ? .scaleAspectFill
             : .scaleAspectFit
         showMediaContainer()

@@ -15,20 +15,35 @@ final class LiveHeaderView: UIView {
 
     // MARK: - Subviews
 
-    private let imageView = UIImageView()
-    private let placeholderIcon = UIImageView()
-    private let gradientLayer = CAGradientLayer()
-    private let liveBadge = PaddedLabel()
-    private let titleLabel = UILabel()
+    let imageView = UIImageView()
+    let placeholderIcon = UIImageView()
+    let gradientLayer = CAGradientLayer()
+    let liveBadge = PaddedLabel()
+    let titleLabel = UILabel()
     private let subtitleLabel = UILabel()
 
     /// Remote transport controls, shown only when the live item is a video.
-    private let controls = PlaybackControlsView()
+    let controls = PlaybackControlsView()
+
+    /// Host for a warm `WKWebView` when a website is live (in-app preview).
+    var webPreviewHost: UIView?
+    /// Page id currently attached to `webPreviewHost`, if any.
+    var webPreviewPageId: UUID?
 
     /// Identity of the last applied live content; used to skip no-op crossfades.
     private var presentedContentKey: String?
     /// In-flight dissolve overlay (removed when the next transition starts).
     private var transitionSnapshot: UIView?
+    /// Whether playback transport should show when not in compact presentation.
+    var wantsPlaybackControls = false
+    /// Scroll-linked collapse progress (0 = full hero, 1 = tucked mini preview).
+    /// Owned by `applyCollapse(progress:scale:)`.
+    var collapseProgress: CGFloat = 0
+    /// Uniform transform scale the host controller currently applies to this view.
+    var collapseScale: CGFloat = 1
+
+    /// True once the hero reads as a trailing mini preview rather than a full hero.
+    var isCompactPresentation: Bool { collapseProgress > 0.5 }
 
     /// Forwarded from the transport controls (play/pause, skip ±10s, absolute seek).
     var onTogglePlayPause: (() -> Void)?
@@ -138,12 +153,14 @@ final class LiveHeaderView: UIView {
     override func layoutSubviews() {
         super.layoutSubviews()
         gradientLayer.frame = bounds
+        applyBadgeCounterScale()
     }
 
     // MARK: - Configuration
 
     /// Shows the live item, or a placeholder when `item` is nil (nothing live).
     func configure(with item: LibraryItemDTO?, thumbnail: UIImage?, isOnline: Bool) {
+        clearWebPreview(parking: true)
         guard let item = item else {
             applyContent(key: "placeholder") {
                 self.showPlaceholder()
@@ -155,22 +172,32 @@ final class LiveHeaderView: UIView {
         let key = "media:\(item.id):\(thumbToken):\(isOnline)"
         applyContent(key: key) {
             self.backgroundColor = .secondarySystemBackground
+            // The hero card is the output panel's aspect, so frame the art the way the
+            // external screen / Apple TV does: videos letterbox, stills follow Fit / Fill.
+            self.imageView.contentMode = item.isVideo
+                ? .scaleAspectFit
+                : MediaFitSettings.mode(forId: item.id).contentMode
             self.imageView.image = thumbnail
             self.imageView.isHidden = false
+            self.imageView.alpha = 1
             self.placeholderIcon.isHidden = thumbnail != nil
+            self.placeholderIcon.alpha = 1
             self.placeholderIcon.image = UIImage(systemName: item.isVideo ? "film" : "photo")
             self.placeholderIcon.tintColor = .tertiaryLabel
 
-            // LIVE badge + name on the bottom gradient (hidden when video controls show).
+            // LIVE badge; video transport uses the bottom gradient. Never show
+            // image titles on the preview — art alone is enough.
             let showControls = item.isVideo && isOnline
-            self.gradientLayer.isHidden = false
+            self.wantsPlaybackControls = showControls
+            self.gradientLayer.isHidden = !showControls
             self.liveBadge.isHidden = false
             self.titleLabel.isHidden = true
-            self.subtitleLabel.text = item.name
-            self.subtitleLabel.isHidden = showControls
-            self.isUserInteractionEnabled = true
-            self.accessibilityLabel = "Live, \(item.name)"
+            self.subtitleLabel.isHidden = true
             self.controls.isHidden = !showControls
+            self.applyCollapseChrome()
+            self.accessibilityLabel = self.isCompactPresentation
+                ? "Live, \(item.name), tap to expand"
+                : "Live, \(item.name)"
         }
     }
 
@@ -179,12 +206,18 @@ final class LiveHeaderView: UIView {
         title: String,
         systemImage: String?,
         fillColor: UIColor,
-        thumbnail: UIImage? = nil
+        thumbnail: UIImage? = nil,
+        keepWebPreview: Bool = false
     ) {
+        if !keepWebPreview {
+            clearWebPreview(parking: true)
+        }
         let thumbToken = thumbnail.map { "\(ObjectIdentifier($0))" } ?? "nil"
-        let key = "overlay:\(title):\(systemImage ?? ""):\(thumbToken)"
+        let key = "overlay:\(title):\(systemImage ?? ""):\(thumbToken):web\(keepWebPreview)"
         applyContent(key: key) {
             self.backgroundColor = fillColor
+            // Logo / website / camera art always fills the hero.
+            self.imageView.contentMode = .scaleAspectFill
             self.imageView.image = thumbnail
             self.imageView.isHidden = thumbnail == nil
             if let systemImage {
@@ -195,28 +228,75 @@ final class LiveHeaderView: UIView {
                 self.placeholderIcon.isHidden = true
             }
 
+            self.wantsPlaybackControls = false
             self.gradientLayer.isHidden = true
             self.liveBadge.isHidden = false
             self.subtitleLabel.isHidden = true
             self.controls.isHidden = true
 
-            self.titleLabel.isHidden = thumbnail != nil
+            self.titleLabel.isHidden = thumbnail != nil || keepWebPreview
             self.titleLabel.textColor = UIColor.white.withAlphaComponent(0.85)
             self.titleLabel.font = .systemFont(ofSize: 16, weight: .semibold)
             self.titleLabel.textAlignment = .center
             self.titleLabel.text = title
-            self.isUserInteractionEnabled = false
+            self.applyCollapseChrome()
+            self.accessibilityLabel = self.isCompactPresentation
+                ? "\(title), tap to expand"
+                : title
+            if keepWebPreview {
+                self.setStaticPreviewHidden(true)
+            }
         }
     }
 
+    /// Creates the web-preview host once, pinned under LIVE chrome.
+    func ensureWebPreviewHost() {
+        if webPreviewHost != nil { return }
+        let host = UIView()
+        host.backgroundColor = .black
+        host.clipsToBounds = true
+        host.isUserInteractionEnabled = false
+        host.translatesAutoresizingMaskIntoConstraints = false
+        host.isHidden = true
+        insertSubview(host, at: 0)
+        NSLayoutConstraint.activate([
+            host.topAnchor.constraint(equalTo: topAnchor),
+            host.bottomAnchor.constraint(equalTo: bottomAnchor),
+            host.leadingAnchor.constraint(equalTo: leadingAnchor),
+            host.trailingAnchor.constraint(equalTo: trailingAnchor)
+        ])
+        webPreviewHost = host
+    }
+
+    /// Hides the static thumb/placeholder while a live WKWebView fills the hero.
+    func setStaticPreviewHidden(_ hidden: Bool) {
+        imageView.alpha = hidden ? 0 : 1
+        placeholderIcon.alpha = hidden ? 0 : 1
+    }
+
+    /// Keeps LIVE badge / labels above the embedded website preview.
+    func bringWebPreviewChromeToFront() {
+        if let host = webPreviewHost {
+            insertSubview(host, at: 0)
+        }
+        bringSubviewToFront(liveBadge)
+        bringSubviewToFront(titleLabel)
+        bringSubviewToFront(subtitleLabel)
+        bringSubviewToFront(controls)
+    }
+
     private func showPlaceholder() {
+        clearWebPreview(parking: true)
         backgroundColor = .secondarySystemBackground
         imageView.image = nil
         imageView.isHidden = true
+        imageView.alpha = 1
         placeholderIcon.isHidden = false
+        placeholderIcon.alpha = 1
         placeholderIcon.image = UIImage(systemName: "tv")
         placeholderIcon.tintColor = .tertiaryLabel
 
+        wantsPlaybackControls = false
         gradientLayer.isHidden = true
         liveBadge.isHidden = true
         subtitleLabel.isHidden = true
@@ -227,7 +307,15 @@ final class LiveHeaderView: UIView {
         titleLabel.font = .systemFont(ofSize: 16, weight: .semibold)
         titleLabel.textAlignment = .center
         titleLabel.text = "Eclipse"
-        isUserInteractionEnabled = false
+        applyCollapseChrome()
+        accessibilityLabel = isCompactPresentation
+            ? "Eclipse preview, tap to expand"
+            : "Eclipse"
+    }
+
+    /// Tap-to-expand while tucked; transport taps while the full hero shows.
+    func applyInteractionForPresentation() {
+        isUserInteractionEnabled = isCompactPresentation || wantsPlaybackControls
     }
 
     /// Applies the latest playback state to the transport controls.
@@ -239,11 +327,15 @@ final class LiveHeaderView: UIView {
 
     /// Instant update (Cut / same content) or snapshot dissolve matching AirPlay.
     private func applyContent(key: String, update: () -> Void) {
+        // A snapshot added as our own subview would inherit the collapse transform on
+        // top of the scale it was captured at, so cut instead of dissolving while
+        // the hero is anything but fully expanded.
         let shouldCrossfade = ExternalOutputSettings.contentTransition == .crossfade
             && presentedContentKey != nil
             && presentedContentKey != key
             && window != nil
             && bounds.width > 0
+            && collapseProgress <= 0.01
 
         presentedContentKey = key
         guard shouldCrossfade else {

@@ -53,7 +53,8 @@ final class CameraPreviewView: UIView {
         applyPreviewOrientation()
     }
 
-    /// Still of the current preview (for home-tile freeze after camera stops).
+    /// Fallback still of the preview hierarchy. Prefer `CameraManager`'s sample
+    /// buffer — `AVCaptureVideoPreviewLayer` often renders black here.
     func snapshotImage() -> UIImage? {
         guard bounds.width > 1, bounds.height > 1 else { return nil }
         let format = UIGraphicsImageRendererFormat.default()

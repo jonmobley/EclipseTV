@@ -70,7 +70,8 @@ final class LocalMediaPreviewPageViewController: UIViewController {
     // MARK: - Setup
 
     private func setupImage() {
-        imageView.contentMode = .scaleAspectFit
+        // Match the framing the item gets on the external screen / Apple TV.
+        imageView.contentMode = MediaFitSettings.mode(forId: item.id).contentMode
         imageView.translatesAutoresizingMaskIntoConstraints = false
         imageView.image = UIImage(contentsOfFile: item.fileURL.path)
         view.addSubview(imageView)

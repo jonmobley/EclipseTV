@@ -15,6 +15,33 @@ import ObjectiveC
 
 extension ImageViewController {
 
+    /// Retires the player currently in `playerView` before other content replaces it.
+    ///
+    /// `cleanupPlayerLooper()` on its own leaves the end-of-item notification and the KVO
+    /// observations registered against the outgoing player, so they stacked up across
+    /// navigation and kept firing for media no longer on screen. Switching to a still also
+    /// only hid the player view, leaving the video playing (and audible) behind it.
+    /// - Parameters:
+    ///   - stopBroadcasting: Also stop streaming playback state to companions. Pass false
+    ///     when a replacement player is about to reinstall the observer.
+    ///   - detachPlayer: Clear `playerView.player`. Pass false to keep the last frame on
+    ///     screen for a crossfade, then clear it when the animation finishes.
+    internal func retireCurrentPlayer(stopBroadcasting: Bool, detachPlayer: Bool = true) {
+        if let player = playerView.player {
+            player.pause()
+            resourceManager.removePlayerObservers(for: player)
+        }
+        resourceManager.removeNotificationObservers(for: .AVPlayerItemDidPlayToEndTime)
+        cleanupPlayerLooper()
+        if detachPlayer {
+            playerView.player = nil
+        }
+        if stopBroadcasting {
+            removePlaybackStatusObserver()
+            broadcastPlaybackStopped()
+        }
+    }
+
     /// Installs the end-of-playback observer for the given player, first removing any
     /// previously installed end observers so they do not stack across video navigation.
     private func installVideoEndObserver(for player: AVPlayer, mediaItem: MediaItem) {
@@ -374,8 +401,7 @@ extension ImageViewController {
         let resumeTime = playerView.player?.currentTime() ?? .zero
 
         // Tear down the existing player/looper before swapping in a new one.
-        playerView.player?.pause()
-        cleanupPlayerLooper()
+        retireCurrentPlayer(stopBroadcasting: false, detachPlayer: false)
 
         let player = setupPlayer(for: mediaItem)
         playerView.player = player
@@ -422,11 +448,8 @@ extension ImageViewController {
 
                 self.view.addSubview(tempOverlay)
 
-                // Stop and clean up old video
-                if self.isVideo {
-                    self.playerView.player?.pause()
-                    self.cleanupPlayerLooper()
-                }
+                // Retire the outgoing video; the new player reinstalls the status observer.
+                self.retireCurrentPlayer(stopBroadcasting: false, detachPlayer: false)
 
                 // Set up the main player view with the new player
                 self.setupPlayerView()

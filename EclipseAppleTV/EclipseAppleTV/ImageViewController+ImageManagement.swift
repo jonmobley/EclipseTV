@@ -12,11 +12,27 @@ import AVKit
 
 // Use the app module name to fully qualify the class
 extension ImageViewController {
-    
+
+    /// Clears the stage and shows the "send media from your phone" instructions.
+    ///
+    /// Deleting the last item used to log an error and return, leaving the previous photo
+    /// — or a still-playing video — on screen with nothing to indicate the library is now
+    /// empty.
+    private func presentEmptyLibraryState(context: String) {
+        ErrorHandler.shared.handle(.emptyLibrary, context: context)
+        retireCurrentPlayer(stopBroadcasting: true)
+        imageView.image = nil
+        imageView.isHidden = true
+        playerView.view.isHidden = true
+        isVideo = false
+        activityIndicator.stopAnimating()
+        showInstructions()
+    }
+
     /// Displays the image at the current index
     internal func displayImageAtCurrentIndex() {
         guard let currentPath = currentDisplayPath() else {
-            ErrorHandler.shared.handle(.emptyLibrary, context: "displayImageAtCurrentIndex")
+            presentEmptyLibraryState(context: "displayImageAtCurrentIndex")
             return
         }
         
@@ -46,14 +62,17 @@ extension ImageViewController {
             
             await MainActor.run {
                 if let image = image {
+                    self.imageView.contentMode =
+                        ImageFitSettings.mode(forPath: mediaItem.path).contentMode
                     self.imageView.image = image
                     self.imageView.isHidden = false
                     self.playerView.view.isHidden = true
                     self.isVideo = false
 
-                    // Switched to a photo: stop streaming playback state to companions.
-                    self.removePlaybackStatusObserver()
-                    self.broadcastPlaybackStopped()
+                    // Switched to a photo: fully retire the video (hiding the player view
+                    // alone left it playing, audio included) and stop streaming playback
+                    // state to companions.
+                    self.retireCurrentPlayer(stopBroadcasting: true)
 
                     // Apply stored position for this image
                     self.applyStoredImagePosition(for: mediaItem.path)
@@ -70,7 +89,7 @@ extension ImageViewController {
     private func displayImageAtCurrentIndexWithDissolveTransition() {
         guard let currentPath = currentDisplayPath() else {
             logger.error("❌ [DISSOLVE] No current path available")
-            ErrorHandler.shared.handle(.emptyLibrary, context: "displayImageAtCurrentIndexWithDissolveTransition")
+            presentEmptyLibraryState(context: "displayImageAtCurrentIndexWithDissolveTransition")
             return
         }
         
@@ -101,15 +120,15 @@ extension ImageViewController {
                     return
                 }
                 
-                // Stop current video if playing
-                if self.isVideo {
-                    self.playerView.player?.pause()
-                    self.cleanupPlayerLooper()
-                }
-                
+                // Retire the outgoing video but keep its last frame for the crossfade;
+                // the player is detached once the animation finishes.
+                self.retireCurrentPlayer(stopBroadcasting: true, detachPlayer: false)
+
+                let fitMode = ImageFitSettings.mode(forPath: mediaItem.path).contentMode
+
                 // Create temp image view for smooth transition
                 let tempImageView = UIImageView(image: image)
-                tempImageView.contentMode = .scaleAspectFill
+                tempImageView.contentMode = fitMode
                 tempImageView.clipsToBounds = true
                 tempImageView.frame = self.view.bounds
                 tempImageView.alpha = 0
@@ -124,6 +143,7 @@ extension ImageViewController {
                     tempImageView.alpha = 1
                 }) { _ in
                                     // Update main image view
+                self.imageView.contentMode = fitMode
                 self.imageView.image = image
                 self.imageView.alpha = 1
                 self.imageView.isHidden = false
@@ -253,22 +273,12 @@ extension ImageViewController {
         // Stop activity indicator
         activityIndicator.stopAnimating()
         
-        // Stop and clean up video playback first
+        // Stop and clean up video playback first. Also stops streaming the position and
+        // tells companions it's paused so their scrubber settles.
         if isVideo {
             logger.debug("🔄 [FULLSCREEN→GRID] Stopping video playback")
-            if let currentPlayer = playerView.player {
-                currentPlayer.pause()
-                resourceManager.removeNotificationObserver(for: .AVPlayerItemDidPlayToEndTime, object: currentPlayer.currentItem)
-                resourceManager.removePlayerObservers(for: currentPlayer)
-            }
-            
-            cleanupPlayerLooper()
         }
-
-        // The live video is no longer playing fullscreen: stop streaming its position and
-        // tell companions it's paused so their scrubber settles.
-        removePlaybackStatusObserver()
-        broadcastPlaybackStopped()
+        retireCurrentPlayer(stopBroadcasting: true, detachPlayer: false)
         
         // Bring fullscreen content to front during transition so it fades out on top
         view.bringSubviewToFront(imageView)
@@ -360,6 +370,15 @@ extension ImageViewController {
         }
     }
     
+    // MARK: - Image Fit
+
+    /// Re-frames the still already on screen, e.g. after the companion switches it
+    /// between Fit and Fill.
+    internal func applyImageFitToCurrentImage() {
+        guard !isVideo, let path = currentDisplayPath() else { return }
+        imageView.contentMode = ImageFitSettings.mode(forPath: path).contentMode
+    }
+
     // MARK: - Image Positioning
     
     /// Resets the image transform so every image is shown centered.

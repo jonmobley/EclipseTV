@@ -63,7 +63,10 @@ final class AudioLibraryViewController: UITableViewController {
             barButtonSystemItem: .add, target: self, action: #selector(addTapped)
         )
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: cellReuseId)
-        tableView.rowHeight = 56
+        // Title + secondary line need more than a single-line row (56 clipped
+        // subtitles into the “dots” along the bottom of each cell).
+        tableView.rowHeight = UITableView.automaticDimension
+        tableView.estimatedRowHeight = 72
 
         let names: [Notification.Name] = [
             AudioStore.didChangeNotification,

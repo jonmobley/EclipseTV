@@ -23,17 +23,22 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         let mainViewController = iPhoneMainViewController()
         window?.rootViewController = UINavigationController(rootViewController: mainViewController)
         window?.makeKeyAndVisible()
-        
+
         // Set app to dark mode
         window?.overrideUserInterfaceStyle = .dark
+
+        // Bridge the static launch storyboard into the live UI with a short fade.
+        if let window {
+            LaunchSplashView.present(over: window)
+        }
 
         // Begin watching for an AirPlay-mirrored Apple TV (external display) so the
         // selected item can be presented fullscreen on it.
         ExternalDisplayManager.shared.start()
 
-        // Warm website tile previews in the background (favicon + page snapshot).
+        // Warm every website card (real WKWebView) so taps are instant + hero-ready.
         DispatchQueue.main.async {
-            WebThumbnailPrefetcher.shared.prefetchAllSavedPages()
+            WarmWebSessionPool.shared.warmAll()
         }
     }
 

@@ -17,12 +17,15 @@ struct WebPage: Codable, Equatable, Identifiable, Hashable {
     /// Stable id for the home-grid free browser (not a saved bookmark).
     static let freeBrowseId = UUID(uuidString: "00000000-0000-4000-8000-0000000000EB")!
 
-    /// Ephemeral session for the home Website tile.
+    /// Default homepage for the home Website tile.
+    static let freeBrowseURL = URL(string: "https://www.google.com")!
+
+    /// Ephemeral session for the home Website tile (defaults to Google).
     static var freeBrowse: WebPage {
         WebPage(
             id: freeBrowseId,
             title: "Website",
-            url: URL(string: "about:blank")!
+            url: freeBrowseURL
         )
     }
 

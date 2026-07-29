@@ -14,14 +14,13 @@ extension WebRemoteViewController: UIScrollViewDelegate,
                                    WKNavigationDelegate,
                                    WKScriptMessageHandler {
 
-    /// Inset from the safe area so the 9:16 / 16:9 panel clears device corner radii.
-    private var webStageCornerInset: CGFloat { 12 }
+    /// Side inset so the rounded 16:9 / 9:16 card clears device corner radii.
+    private var webPanelSideInset: CGFloat { 12 }
 
-    /// Creates the phone web stage (9:16 or 16:9) and loads the page.
+    /// Creates the phone web stage and adopts the warm page.
     ///
-    /// The stage uses the same logical viewport as AirPlay so responsive sites
-    /// reflow identically on phone and TV. It sits inset inside the safe area so
-    /// the centered panel is not clipped by rounded display corners.
+    /// Stage is full-bleed under the nav; the aspect card (Landscape 16:9 /
+    /// Vertical 9:16) is laid out on top so sites match the AirPlay viewport.
     func setupPreviewWebView() {
         let stage = UIView()
         stage.backgroundColor = .black
@@ -30,63 +29,82 @@ extension WebRemoteViewController: UIScrollViewDelegate,
         view.insertSubview(stage, at: 0)
         webStageView = stage
 
-        let inset = webStageCornerInset
         let guide = view.safeAreaLayoutGuide
         NSLayoutConstraint.activate([
-            stage.topAnchor.constraint(equalTo: guide.topAnchor, constant: inset),
-            stage.bottomAnchor.constraint(equalTo: guide.bottomAnchor, constant: -inset),
-            stage.leadingAnchor.constraint(equalTo: guide.leadingAnchor, constant: inset),
-            stage.trailingAnchor.constraint(equalTo: guide.trailingAnchor, constant: -inset)
+            stage.topAnchor.constraint(equalTo: guide.topAnchor, constant: 6),
+            stage.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            stage.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            stage.trailingAnchor.constraint(equalTo: view.trailingAnchor)
         ])
 
-        // Shared persistent store so logins survive close / reopen.
-        // Media handler reports HTML5 play/pause/seek to the AirPlay WebView.
-        let web = WKWebView(
-            frame: .zero,
-            configuration: EclipseWebKit.makeConfiguration(mediaHandler: self)
-        )
-        web.customUserAgent = PresentationViewController.mobileUserAgent
-        web.scrollView.delegate = self
-        web.navigationDelegate = self
-        web.uiDelegate = self
-        web.backgroundColor = .black
-        web.scrollView.backgroundColor = .black
-        // Stage is already inside the safe area; automatic insets leave a blank
-        // strip that gets baked into home-grid thumbnails.
-        web.scrollView.contentInsetAdjustmentBehavior = .never
-        web.isOpaque = true
-
+        // Reuse a launch-warmed session so the page is already loaded.
+        let web = WarmWebSessionPool.shared.adopt(page: page, into: self)
+        web.translatesAutoresizingMaskIntoConstraints = true
         stage.addSubview(web)
         webView = web
-
-        web.load(URLRequest(url: page.url))
     }
 
     /// Fits a Display Mode aspect panel inside the stage, then applies the shared
     /// logical web viewport (no TV rotation on the phone).
+    ///
+    /// Landscape → full-width 16:9 card (top-aligned). Vertical → full-width 9:16.
     func layoutPhoneWebViewport() {
         guard let stage = webStageView, let web = webView else { return }
         let bounds = stage.bounds
         guard bounds.width > 0, bounds.height > 0 else { return }
 
-        let panel = ExternalOutputSettings.displayModePanelRect(in: bounds)
+        let panel = phoneWebPanelRect(in: bounds)
 
         // Host the web view in an intermediate panel so layout math matches the TV.
         if webPanelView == nil {
             let panelView = UIView(frame: panel)
             panelView.backgroundColor = .black
             panelView.clipsToBounds = true
+            panelView.layer.cornerRadius = 32
+            panelView.layer.maskedCorners = [
+                .layerMinXMinYCorner, .layerMaxXMinYCorner,
+                .layerMinXMaxYCorner, .layerMaxXMaxYCorner
+            ]
             stage.addSubview(panelView)
             webPanelView = panelView
+            web.translatesAutoresizingMaskIntoConstraints = true
             panelView.addSubview(web)
         }
         webPanelView?.frame = panel
 
         guard let panelView = webPanelView else { return }
+        web.translatesAutoresizingMaskIntoConstraints = true
         PresentationViewController.applyWebOutputLayout(
             to: web,
             in: panelView,
             rotationDegrees: 0
+        )
+    }
+
+    /// Display Mode card: Landscape locks 16:9; Vertical locks 9:16.
+    ///
+    /// Full width (minus a small side inset), top-aligned — same framing idea as
+    /// Camera Live so horizontal shows read as a landscape stage on the phone.
+    private func phoneWebPanelRect(in bounds: CGRect) -> CGRect {
+        let inset = webPanelSideInset
+        let aspect = ExternalOutputSettings.orientation.aspectRatio
+        let width = max(0, bounds.width - inset * 2)
+        var height = width / aspect
+        if height > bounds.height {
+            height = bounds.height
+            let fittedWidth = height * aspect
+            return CGRect(
+                x: bounds.midX - fittedWidth / 2,
+                y: 0,
+                width: fittedWidth,
+                height: height
+            )
+        }
+        return CGRect(
+            x: inset,
+            y: 0,
+            width: width,
+            height: height
         )
     }
 
@@ -114,7 +132,7 @@ extension WebRemoteViewController: UIScrollViewDelegate,
         let maxY = scroll.contentSize.height - scroll.bounds.height
         let progress = maxY > 0 ? min(max(scroll.contentOffset.y / maxY, 0), 1) : 0
         ExternalDisplayManager.shared.setWebScrollProgress(progress)
-        // Refresh the home-grid preview from what the user is actually viewing.
+        // Home Website defaults to Google, then tracks whatever the user opens next.
         if let url = webView.url, url.scheme != "about" {
             WebThumbnailPrefetcher.shared.captureVisibleWebView(webView, for: page.id)
         }

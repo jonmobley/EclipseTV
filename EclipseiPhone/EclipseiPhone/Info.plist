@@ -39,8 +39,12 @@
     </array>
     <key>NSPhotoLibraryUsageDescription</key>
     <string>Eclipse needs access to your photos to send them to your Apple TV</string>
+    <key>NSPhotoLibraryAddUsageDescription</key>
+    <string>Eclipse saves camera photos and videos to your Photos library</string>
     <key>NSCameraUsageDescription</key>
     <string>Eclipse needs camera access to present a live camera feed on your TV via AirPlay</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Eclipse needs microphone access to record video with sound</string>
     <key>UIBackgroundModes</key>
     <array>
         <string>audio</string>

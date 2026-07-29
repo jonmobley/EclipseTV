@@ -178,6 +178,15 @@ extension ImageViewController {
         }
     }
 
+    /// The companion switched a still between Fit and Fill. Re-frame it in place when it's
+    /// the item currently on screen; otherwise the stored choice applies on its next show.
+    func connectionManager(_ manager: ConnectionManager, didReceiveImageFitForId id: String) {
+        guard activeCollection == .library, !isInGridMode, !isVideo,
+              let index = libraryIndex(forItemId: id),
+              index == dataSource.currentIndex else { return }
+        applyImageFitToCurrentImage()
+    }
+
     /// A purged item was re-sent from the companion: the fresh file was just added via
     /// the normal image/video path. Drop the ledger entry and move the new item back to
     /// the slot the original occupied.

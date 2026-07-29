@@ -86,10 +86,26 @@ final class SlideshowDetailViewController: UITableViewController {
             field.autocapitalizationType = .words
         }
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        alert.addAction(UIAlertAction(title: "Save", style: .default) { _ in
+        alert.addAction(UIAlertAction(title: "Save", style: .default) { [weak self] _ in
             let name = alert.textFields?.first?.text ?? ""
-            try? SlideshowStore.shared.rename(id: slideshow.id, to: name)
+            do {
+                try SlideshowStore.shared.rename(id: slideshow.id, to: name)
+            } catch {
+                // An empty name used to fail silently, leaving the user believing the
+                // rename had taken effect.
+                self?.presentRenameFailure(error)
+            }
         })
+        present(alert, animated: true)
+    }
+
+    private func presentRenameFailure(_ error: Error) {
+        let message = (error as? LocalizedError)?.errorDescription
+            ?? "That name couldn't be used."
+        let alert = UIAlertController(
+            title: "Couldn't Rename", message: message, preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
         present(alert, animated: true)
     }
 
@@ -160,7 +176,7 @@ final class SlideshowDetailViewController: UITableViewController {
         moveRowAt sourceIndexPath: IndexPath,
         to destinationIndexPath: IndexPath
     ) {
-        guard let slideshow,
+        guard slideshow != nil,
               Section(rawValue: sourceIndexPath.section) == .slides,
               Section(rawValue: destinationIndexPath.section) == .slides else { return }
         var ids = slides.map(\.id)

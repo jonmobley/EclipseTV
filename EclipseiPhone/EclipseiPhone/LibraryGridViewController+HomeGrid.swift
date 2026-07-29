@@ -29,10 +29,14 @@ extension LibraryGridViewController: UICollectionViewDataSource,
 
     func collectionView(_ collectionView: UICollectionView,
                         cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
-        let cell = collectionView.dequeueReusableCell(
+        guard let cell = collectionView.dequeueReusableCell(
             withReuseIdentifier: LibraryThumbnailCell.reuseIdentifier,
             for: indexPath
-        ) as! LibraryThumbnailCell
+        ) as? LibraryThumbnailCell else {
+            return UICollectionViewCell()
+        }
+        // Every exit path, so a recycled cell never keeps a stale wiggle or dim.
+        defer { applyArrangeAppearance(to: cell, at: indexPath) }
 
         guard let section = homeSection(at: indexPath.section) else { return cell }
         switch section {
@@ -58,11 +62,26 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             for: indexPath
         ) as! HomeSectionHeaderView
         switch homeSection(at: indexPath.section) {
+        case .tools:
+            // The tools row is Show-only and carries no title.
+            header.configure(title: "")
         case .slideshowRibbon:
             let name = activeLiveSlideshow()?.name ?? "Slideshow"
             header.configure(title: name)
-        default:
-            header.configure(title: "Recent")
+        case .shows:
+            if isShowMode {
+                header.configure(title: "")
+            } else {
+                header.configure(
+                    title: "Recent Shows",
+                    actionTitle: "See All >",
+                    action: { [weak self] in
+                        self?.onSeeAllShows?()
+                    }
+                )
+            }
+        case .none:
+            header.configure(title: "")
         }
         return header
     }
@@ -79,6 +98,12 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             guard let item = homeItem(at: indexPath) else { return }
             handleTap(item)
         }
+    }
+
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        guard scrollView === collectionView else { return }
+        pinHomeScrollIfContentFits()
+        updateHeroCollapse()
     }
 
     func collectionView(
@@ -115,12 +140,14 @@ extension LibraryGridViewController: UICollectionViewDataSource,
                 thumbnail: LogoStore.shared.image,
                 fillColor: UIColor(white: 0.16, alpha: 1),
                 isLive: isLogoSelected && !ExternalDisplayManager.shared.isOverlayLive,
-                thumbnailContentMode: .scaleAspectFill
+                thumbnailContentMode: .scaleAspectFill,
+                captionBelowInLandscape: true
             )
         case .camera:
             cell.configureCamera(
                 isLive: ExternalDisplayManager.shared.isCameraLive,
-                lastFrame: CameraManager.shared.lastFrame
+                lastFrame: CameraManager.shared.lastFrame,
+                warmPreview: !isCameraControlPresented && !homeCameraWarmPreviewSuspended
             )
         case .website:
             let mgr = ExternalDisplayManager.shared
@@ -130,7 +157,8 @@ extension LibraryGridViewController: UICollectionViewDataSource,
                 systemImage: "safari",
                 thumbnail: WebThumbnailStore.shared.image(for: WebPage.freeBrowseId),
                 fillColor: UIColor(white: 0.16, alpha: 1),
-                isLive: isLive
+                isLive: isLive,
+                captionBelowInLandscape: true
             )
         case .createShow:
             cell.configureActionTile(title: "New Show", systemImage: "plus")
@@ -180,6 +208,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         SlideshowPlaybackController.shared.stop()
         isBlackSelected = true
         isLogoSelected = false
+        store.updateCurrentId(nil)
         ExternalDisplayManager.shared.presentBlack()
         warnIfNoExternalDisplay()
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -196,6 +225,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         SlideshowPlaybackController.shared.stop()
         isBlackSelected = false
         isLogoSelected = true
+        store.updateCurrentId(nil)
         ExternalDisplayManager.shared.present(.image(url))
         warnIfNoExternalDisplay()
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -211,13 +241,23 @@ extension LibraryGridViewController: UICollectionViewDataSource,
            case .web(let url) = mgr.overlaySource,
            url.absoluteString != "about:blank" {
             page = WebPage(id: WebPage.freeBrowseId, title: "Website", url: url)
+        } else if let warmURL = WarmWebSessionPool.shared.currentURL(for: WebPage.freeBrowseId),
+                  warmURL.scheme != "about" {
+            // Keep the warm session's page — don't reload Google over it.
+            page = WebPage(id: WebPage.freeBrowseId, title: "Website", url: warmURL)
         }
         presentWebPage(page)
     }
 
     /// Presents a website (saved bookmark or home free-browse session).
+    ///
+    /// Marks the page live for the home hero (works without AirPlay), warms the
+    /// session, then opens the phone browser which adopts that same web view.
     func presentWebPage(_ page: WebPage) {
         SlideshowPlaybackController.shared.stop()
+        WarmWebSessionPool.shared.warmIfNeeded(for: page)
+        // Park any in-hero preview before adopt so Auto Layout pins don't stick.
+        liveHeader.clearWebPreview(parking: true)
         ExternalDisplayManager.shared.presentWeb(page.url, pageId: page.id)
         let remote = WebRemoteViewController(page: page)
         let nav = UINavigationController(rootViewController: remote)
@@ -226,10 +266,11 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             remote.warnIfNoExternalDisplay()
         }
         collectionView.reloadData()
+        // After adopt: hero shows a static thumb (live preview is in the browser).
         refreshLiveHeader()
     }
 
-    /// Presents a saved PDF (from + → PDF).
+    /// Presents a saved PDF (from + → Library…, or after importing).
     func presentPDF(_ doc: SavedPDF) {
         SlideshowPlaybackController.shared.stop()
         guard let url = PDFStore.shared.fileURL(for: doc.id) else {

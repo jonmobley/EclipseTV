@@ -17,7 +17,7 @@ class ImageThumbnailCell: UICollectionViewCell {
     
     private let imageView: UIImageView = {
         let view = UIImageView()
-        view.contentMode = .scaleAspectFill  // Match fullscreen view behavior
+        view.contentMode = .scaleAspectFill  // Thumbnails always fill their tile
         view.clipsToBounds = true
         view.backgroundColor = .black
         return view

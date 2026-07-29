@@ -92,6 +92,9 @@ final class TVLibraryStore {
             loadPersistedManifest()
         }
         runLaunchRecovery()
+        // Live selection is session-scoped. Restoring a previous `currentId` made
+        // Show tiles look live on launch even when nothing was selected this session.
+        clearCurrentIdForColdLaunch()
 
         settingsObserver = NotificationCenter.default.addObserver(
             forName: ExternalOutputSettings.didChangeNotification,
@@ -383,6 +386,20 @@ final class TVLibraryStore {
             adoptVerticalIfLandscapeEmpty()
         }
         warmMissingThumbnails()
+    }
+
+    /// Drops any persisted live item so launch starts with nothing selected.
+    /// A connected Apple TV can reassert live via `current_changed` / manifest.
+    private func clearCurrentIdForColdLaunch() {
+        currentId = nil
+        guard let name = activeTVName else { return }
+        let hash = Self.stableHash(name)
+        for mode in EclipseShareProtocol.LibraryMode.allCases {
+            UserDefaults.standard.removeObject(
+                forKey: currentIdKeyPrefix + hash + "." + mode.rawValue
+            )
+        }
+        UserDefaults.standard.removeObject(forKey: currentIdKeyPrefix + hash)
     }
 
     /// Kicks off disk / LocalMedia thumbnail rebuilds for items missing a preview.

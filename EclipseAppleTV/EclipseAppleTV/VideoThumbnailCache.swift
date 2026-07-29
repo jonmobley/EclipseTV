@@ -13,6 +13,12 @@ import os.log
 class VideoThumbnailCache {
     static let shared = VideoThumbnailCache()
     
+    /// Decoded-thumbnail memory budget. A count limit alone says nothing about bytes: 100
+    /// grid-sized thumbnails can be hundreds of megabytes on a 4K TV layout.
+    private static let memoryCostLimit = 40 * 1024 * 1024
+    /// Disk budget for the thumbnail directory, which otherwise grew without bound.
+    private static let diskByteLimit = 60 * 1024 * 1024
+
     private var cache = NSCache<NSString, UIImage>()
     private let fileManager = FileManager.default
     private let cacheDirectory: URL
@@ -21,6 +27,7 @@ class VideoThumbnailCache {
     private init() {
         // Set up in-memory cache
         cache.countLimit = 100
+        cache.totalCostLimit = Self.memoryCostLimit
         
         // Set up disk cache
         let appSupportDir = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first!
@@ -33,6 +40,11 @@ class VideoThumbnailCache {
             } catch {
                 logger.error("Failed to create thumbnail cache directory: \(error.localizedDescription)")
             }
+        }
+
+        let directory = cacheDirectory
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            self?.pruneDiskCache(at: directory)
         }
     }
     
@@ -49,7 +61,7 @@ class VideoThumbnailCache {
         if fileManager.fileExists(atPath: thumbnailURL.path),
            let diskCachedImage = UIImage(contentsOfFile: thumbnailURL.path) {
             // Load to memory cache
-            cache.setObject(diskCachedImage, forKey: key)
+            cache.setObject(diskCachedImage, forKey: key, cost: Self.cost(of: diskCachedImage))
             return diskCachedImage
         }
         
@@ -60,15 +72,54 @@ class VideoThumbnailCache {
         let key = NSString(string: videoPath)
         
         // Save to memory cache
-        cache.setObject(thumbnail, forKey: key)
+        cache.setObject(thumbnail, forKey: key, cost: Self.cost(of: thumbnail))
         
         // Save to disk cache
         let thumbnailURL = thumbnailFileURL(for: videoPath)
         if let data = thumbnail.jpegData(compressionQuality: 0.8) {
             do {
-                try data.write(to: thumbnailURL)
+                try data.write(to: thumbnailURL, options: .atomic)
             } catch {
                 logger.error("Failed to write thumbnail to disk: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    /// Approximate decoded byte size, used as the `NSCache` cost.
+    private static func cost(of image: UIImage) -> Int {
+        if let cgImage = image.cgImage {
+            return cgImage.bytesPerRow * cgImage.height
+        }
+        let pixels = image.size.width * image.scale * image.size.height * image.scale
+        return Int(pixels * 4)
+    }
+
+    /// Trims the disk cache to `diskByteLimit`, dropping the oldest files first.
+    private func pruneDiskCache(at directory: URL) {
+        let keys: [URLResourceKey] = [.fileSizeKey, .contentModificationDateKey]
+        guard let entries = try? fileManager.contentsOfDirectory(
+            at: directory, includingPropertiesForKeys: keys
+        ) else { return }
+
+        var files: [(url: URL, size: Int, modified: Date)] = []
+        var totalBytes = 0
+        for url in entries {
+            guard let values = try? url.resourceValues(forKeys: Set(keys)),
+                  let size = values.fileSize else { continue }
+            files.append((url, size, values.contentModificationDate ?? .distantPast))
+            totalBytes += size
+        }
+
+        guard totalBytes > Self.diskByteLimit else { return }
+        logger.info("Pruning thumbnail cache from \(totalBytes) bytes")
+
+        for file in files.sorted(by: { $0.modified < $1.modified }) {
+            guard totalBytes > Self.diskByteLimit else { break }
+            do {
+                try fileManager.removeItem(at: file.url)
+                totalBytes -= file.size
+            } catch {
+                logger.error("Prune failed for \(file.url.lastPathComponent, privacy: .public)")
             }
         }
     }

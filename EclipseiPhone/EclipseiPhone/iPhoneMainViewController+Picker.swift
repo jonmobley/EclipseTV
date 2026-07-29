@@ -18,9 +18,10 @@ extension iPhoneMainViewController: UIDocumentPickerDelegate {
     func documentPicker(_ controller: UIDocumentPickerViewController,
                         didPickDocumentsAt urls: [URL]) {
         isShowingPicker = false
-        guard let url = urls.first else { return }
+        guard !urls.isEmpty else { return }
         switch pendingDocumentKind {
         case .pdf:
+            guard let url = urls.first else { return }
             do {
                 let doc = try PDFStore.shared.add(from: url, title: nil)
                 libraryViewController.presentPDF(doc)
@@ -29,14 +30,25 @@ extension iPhoneMainViewController: UIDocumentPickerDelegate {
             }
         case .audio:
             Task {
-                do {
-                    _ = try await AudioStore.shared.add(from: url, title: nil)
-                } catch {
-                    showAlert(
-                        title: "Couldn't Add Music",
-                        message: error.localizedDescription
-                    )
+                var failures = 0
+                var lastError: Error?
+                for audioURL in urls {
+                    do {
+                        _ = try await AudioStore.shared.add(from: audioURL, title: nil)
+                    } catch {
+                        failures += 1
+                        lastError = error
+                    }
                 }
+                guard failures > 0, let lastError else { return }
+                let message: String
+                if urls.count == 1 {
+                    message = lastError.localizedDescription
+                } else {
+                    let added = urls.count - failures
+                    message = "Added \(added) of \(urls.count). \(lastError.localizedDescription)"
+                }
+                showAlert(title: "Couldn't Add Music", message: message)
             }
         }
     }

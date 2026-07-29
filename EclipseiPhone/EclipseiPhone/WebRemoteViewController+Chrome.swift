@@ -33,25 +33,27 @@ extension WebRemoteViewController: UITextFieldDelegate {
 
         NSLayoutConstraint.activate([
             urlField.leadingAnchor.constraint(
-                equalTo: urlBarContainer.leadingAnchor, constant: 12),
+                equalTo: urlBarContainer.leadingAnchor, constant: 14),
             urlField.trailingAnchor.constraint(
                 equalTo: reloadButton.leadingAnchor, constant: -2),
-            urlField.topAnchor.constraint(equalTo: urlBarContainer.topAnchor),
-            urlField.bottomAnchor.constraint(equalTo: urlBarContainer.bottomAnchor),
+            urlField.topAnchor.constraint(
+                equalTo: urlBarContainer.topAnchor, constant: 4),
+            urlField.bottomAnchor.constraint(
+                equalTo: urlBarContainer.bottomAnchor, constant: -4),
 
             reloadButton.trailingAnchor.constraint(
                 equalTo: urlBarContainer.trailingAnchor, constant: -4),
             reloadButton.centerYAnchor.constraint(equalTo: urlBarContainer.centerYAnchor),
-            reloadButton.widthAnchor.constraint(equalToConstant: 40),
-            reloadButton.heightAnchor.constraint(equalToConstant: 40)
+            reloadButton.widthAnchor.constraint(equalToConstant: 32),
+            reloadButton.heightAnchor.constraint(equalToConstant: 32)
         ])
         navigationItem.titleView = urlBarContainer
 
-        // Give the bar room for a taller Safari-style pill.
         let appearance = UINavigationBarAppearance()
         appearance.configureWithDefaultBackground()
         navigationItem.standardAppearance = appearance
         navigationItem.scrollEdgeAppearance = appearance
+        navigationItem.compactAppearance = appearance
 
         bookmarksButton = UIBarButtonItem(
             image: UIImage(systemName: "ellipsis"),
@@ -61,13 +63,23 @@ extension WebRemoteViewController: UITextFieldDelegate {
     }
 
     /// Sizes the URL pill between Back and ⋯.
+    ///
+    /// Height must fit the nav bar (~36). A taller title view gets vertically
+    /// compressed while `cornerRadius` stayed at half of 52 — that clips into
+    /// the pointed “almond” shape.
     func layoutURLBarWidth() {
         guard let navBar = navigationController?.navigationBar else { return }
         let reserved: CGFloat = 120
         let width = max(navBar.bounds.width - reserved, 160)
-        let height: CGFloat = 44
-        urlBarContainer.frame = CGRect(x: 0, y: 0, width: width, height: height)
-        urlBarContainer.layer.cornerRadius = height / 2
+        let height: CGFloat = 36
+        let size = CGSize(width: width, height: height)
+        guard abs(urlBarContainer.bounds.width - size.width) > 0.5
+            || abs(urlBarContainer.bounds.height - size.height) > 0.5
+        else { return }
+        urlBarContainer.bounds = CGRect(origin: .zero, size: size)
+        urlBarContainer.frame = CGRect(origin: .zero, size: size)
+        // Re-assign so UINavigationBar picks up the new title view size.
+        navigationItem.titleView = urlBarContainer
     }
 
     /// Syncs URL display and Back affordance with `webView`.
@@ -173,5 +185,13 @@ extension WebRemoteViewController: UITextFieldDelegate {
             }
         }
         return true
+    }
+}
+
+/// Navigation title pill that keeps a true capsule corner radius as it resizes.
+final class WebURLBarView: UIView {
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        layer.cornerRadius = bounds.height / 2
     }
 }

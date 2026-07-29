@@ -14,17 +14,18 @@ extension iPhoneMainViewController {
 
     /// Rebuilds the center title/menu and "+" menu for Home or open Show.
     func refreshLibraryMenu() {
-        if let show = libraryViewController.openShow {
-            headerBar.setCenterTitle(show.name)
-        } else {
-            headerBar.setCenterTitle("Eclipse")
-        }
+        let openShow = libraryViewController.openShow
+        headerBar.setCenterTitle(openShow?.name ?? "Eclipse")
+        // Arrange mode keeps the user in the Show until they tap Done.
+        headerBar.setShowingBackToHome(
+            openShow != nil && !libraryViewController.isArranging
+        )
         headerBar.setLibraryMenu(makeLibraryMenu())
         headerBar.setAddMenu(makeAddMenu())
         refreshPresentedSettingsConnectionState()
     }
 
-    /// Home: Shows + New Show. Show mode: Home, Shows, New Show, arrange actions.
+    /// Home: Open Show + New Show + Settings. An open Show adds an Edit submenu.
     func makeLibraryMenu() -> UIMenu {
         if libraryViewController.isArranging {
             let done = UIAction(
@@ -34,62 +35,34 @@ extension iPhoneMainViewController {
                 _ = self?.libraryViewController.commitArranging()
                 self?.refreshLibraryMenu()
             }
-            return UIMenu(children: [done])
+            return UIMenu(children: [done, settingsMenuAction()])
         }
 
-        if let open = libraryViewController.openShow {
-            return makeOpenShowMenu(openShow: open)
+        let openShow = libraryViewController.openShow
+        var children: [UIMenuElement] = []
+        if let shows = openShowSubmenu(excluding: openShow?.id) {
+            children.append(shows)
         }
-
-        let shows = LocalAlbumStore.shared.albumsForCurrentMode
-        let showActions: [UIAction] = shows.map { show in
-            UIAction(
-                title: show.name,
-                image: UIImage(systemName: "rectangle.stack")
-            ) { [weak self] _ in
-                self?.libraryViewController.openLocalAlbum(id: show.id)
-            }
+        children.append(newShowAction())
+        if openShow != nil {
+            children.append(editShowSubmenu())
         }
-        let newShow = UIAction(
-            title: "New Show…",
-            image: UIImage(systemName: "plus")
-        ) { [weak self] _ in
-            self?.promptNewAlbum()
-        }
-        guard !showActions.isEmpty else {
-            return UIMenu(children: [newShow])
-        }
-        let showGroup = UIMenu(title: "", options: .displayInline, children: showActions)
-        return UIMenu(children: [showGroup, newShow])
+        children.append(settingsMenuAction())
+        return UIMenu(children: children)
     }
 
-    private func makeOpenShowMenu(openShow: LocalAlbum) -> UIMenu {
-        let home = UIAction(
-            title: "Home",
-            image: UIImage(systemName: "house")
-        ) { [weak self] _ in
-            self?.libraryViewController.closeOpenShow()
-        }
-
-        let others = LocalAlbumStore.shared.albumsForCurrentMode
-            .filter { $0.id != openShow.id }
-            .map { show in
-                UIAction(
-                    title: show.name,
-                    image: UIImage(systemName: "rectangle.stack")
-                ) { [weak self] _ in
-                    self?.libraryViewController.openLocalAlbum(id: show.id)
-                }
-            }
-
-        let newShow = UIAction(
+    private func newShowAction() -> UIAction {
+        UIAction(
             title: "New Show…",
             image: UIImage(systemName: "plus")
         ) { [weak self] _ in
             self?.promptNewAlbum()
         }
+    }
 
-        var arrange = UIAction(
+    /// Arrange / Rename / Delete for the open Show, grouped under one entry.
+    private func editShowSubmenu() -> UIMenu {
+        let arrange = UIAction(
             title: "Arrange",
             image: UIImage(systemName: "arrow.up.arrow.down")
         ) { [weak self] _ in
@@ -114,17 +87,24 @@ extension iPhoneMainViewController {
             self?.libraryViewController.confirmDeleteOpenShow()
         }
 
-        var children: [UIMenuElement] = [home]
-        if !others.isEmpty {
-            children.append(UIMenu(title: "", options: .displayInline, children: others))
+        return UIMenu(
+            title: "Edit",
+            image: UIImage(systemName: "square.and.pencil"),
+            children: [
+                UIMenu(title: "", options: .displayInline, children: [arrange, rename]),
+                UIMenu(title: "", options: .displayInline, children: [delete])
+            ]
+        )
+    }
+
+    /// Settings entry for the Eclipse header dropdown.
+    private func settingsMenuAction() -> UIAction {
+        UIAction(
+            title: "Settings",
+            image: UIImage(systemName: "gearshape")
+        ) { [weak self] _ in
+            self?.presentSettings()
         }
-        children.append(newShow)
-        children.append(UIMenu(
-            title: "",
-            options: .displayInline,
-            children: [arrange, rename, delete]
-        ))
-        return UIMenu(children: children)
     }
 
     @objc func libraryMenuContextDidChange() {
@@ -165,8 +145,8 @@ extension iPhoneMainViewController {
         return .disconnected
     }
 
-    /// Presents Settings (display mode, EclipseTV, sync, known TVs).
-    /// When `focusEclipseTV` is true, scrolls to the EclipseTV section.
+    /// Presents Settings (playback prefs + EclipseTV drill-in).
+    /// When `focusEclipseTV` is true, opens the EclipseTV detail page.
     func presentSettings(focusEclipseTV: Bool = false) {
         let settings = SettingsViewController()
         settings.setConnectionState(settingsConnectionState())
@@ -175,8 +155,11 @@ extension iPhoneMainViewController {
             self?.libraryViewController.collectionView.reloadData()
         }
         settings.onSyncPreferenceChanged = { [weak self] isOn in
-            self?.connectionManager.syncAllEnabled = isOn
+            // Clear caught-up state before flipping the switch: the setter immediately
+            // invites replicas, and a peer that connects first would have its fresh
+            // signature wiped by a later reset.
             MultiTVSyncCoordinator.shared.reset()
+            self?.connectionManager.syncAllEnabled = isOn
         }
         settings.onConnect = { [weak self, weak settings] in
             self?.resumeConnection()

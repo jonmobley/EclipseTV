@@ -59,9 +59,21 @@ final class AudioPlayerController: NSObject {
     }
 
     /// Duration of the current item in seconds.
+    ///
+    /// Prefers the loaded asset's duration over the value captured at import: embedded
+    /// metadata is missing or wrong often enough that trusting it puts a bogus range on
+    /// the scrubber and the lock screen.
     var duration: TimeInterval {
-        currentTrack?.duration ?? 0
+        if let assetDuration = player?.currentItem?.duration {
+            let seconds = CMTimeGetSeconds(assetDuration)
+            if seconds.isFinite, seconds > 0 { return seconds }
+        }
+        return currentTrack?.duration ?? 0
     }
+
+    /// Whether playback was active when the system interrupted us.
+    /// Read and written by `AudioPlayerController+Session`.
+    var wasPlayingBeforeInterruption = false
 
     private override init() {
         super.init()
@@ -71,6 +83,13 @@ final class AudioPlayerController: NSObject {
             name: Self.trackRemovedNotification,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handlePlaylistsChanged),
+            name: AudioPlaylistStore.didChangeNotification,
+            object: nil
+        )
+        installSessionObservers()
         setupRemoteCommands()
     }
 
@@ -114,8 +133,18 @@ final class AudioPlayerController: NSObject {
     func play() {
         guard currentTrack != nil else { return }
         if player == nil { reloadCurrentItem() }
+        // `reloadCurrentItem` leaves the player nil when the file is gone from disk.
+        // Reporting `isPlaying` here would show an active mini player and lock-screen
+        // transport over silence, with no way to recover.
+        guard let player else {
+            logger.error("No player for current track; not reporting playback")
+            isPlaying = false
+            updateNowPlayingPlayback()
+            notify()
+            return
+        }
         activateSession()
-        player?.play()
+        player.play()
         isPlaying = true
         updateNowPlayingPlayback()
         notify()
@@ -155,6 +184,18 @@ final class AudioPlayerController: NSObject {
             return
         }
         currentIndex = (currentIndex - 1 + queue.count) % queue.count
+        reloadCurrentItem()
+        play()
+    }
+
+    /// Jumps to a queue index and starts playback.
+    func play(at index: Int) {
+        guard queue.indices.contains(index) else { return }
+        guard index != currentIndex else {
+            play()
+            return
+        }
+        currentIndex = index
         reloadCurrentItem()
         play()
     }
@@ -267,14 +308,66 @@ final class AudioPlayerController: NSObject {
 
     @objc private func handleTrackRemoved(_ note: Notification) {
         guard let id = note.userInfo?["id"] as? UUID else { return }
+        let removedPositions = queue.indices.filter { queue[$0] == id }
+        guard !removedPositions.isEmpty else { return }
+
+        let removedCurrent = removedPositions.contains(currentIndex)
+        // Shift the cursor by however many entries disappeared ahead of it, otherwise it
+        // ends up pointing one past the playing track and gets clamped back to zero.
+        let removedBefore = removedPositions.filter { $0 < currentIndex }.count
+
         queue.removeAll { $0 == id }
         if queue.isEmpty {
             stop()
             return
         }
-        if currentIndex >= queue.count {
-            currentIndex = 0
+        currentIndex = min(max(0, currentIndex - removedBefore), queue.count - 1)
+
+        guard removedCurrent else {
+            // Some other track left the queue; leave the current item playing untouched.
+            notify()
+            return
         }
+        reloadCurrentItem()
+        if isPlaying { play() } else { notify() }
+    }
+
+    /// Keeps a playing playlist queue in step with edits made in the playlist detail view.
+    @objc private func handlePlaylistsChanged() {
+        guard let playlistId else { return }
+
+        guard let playlist = AudioPlaylistStore.shared.playlist(id: playlistId) else {
+            // Playlist was deleted mid-playback: drop the association so the lock screen
+            // stops advertising a playlist that no longer exists.
+            self.playlistId = nil
+            playlistName = nil
+            publishNowPlaying()
+            notify()
+            return
+        }
+
+        playlistName = playlist.name
+        let updated = playlist.trackIds.filter { AudioStore.shared.track(id: $0) != nil }
+        guard updated != queue else {
+            publishNowPlaying()
+            notify()
+            return
+        }
+
+        let playingId = currentTrack?.id
+        queue = updated
+        if queue.isEmpty {
+            stop()
+            return
+        }
+        if let playingId, let stillThere = queue.firstIndex(of: playingId) {
+            // Same track, new position: keep it playing rather than restarting.
+            currentIndex = stillThere
+            publishNowPlaying()
+            notify()
+            return
+        }
+        currentIndex = min(currentIndex, queue.count - 1)
         reloadCurrentItem()
         if isPlaying { play() } else { notify() }
     }

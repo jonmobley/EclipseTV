@@ -87,11 +87,23 @@ extension iPhoneConnectionManager {
         isTransferCancelled = true
         currentTransferTask?.cancel()
         currentTransferTask = nil
-        
+
+        // Cancelling only the active TV's send left the same file still uploading to every
+        // sync replica, so a cancelled item appeared on the replicas but not the active TV.
+        cancelReplicaFanOut()
+
         // Use the centralized cleanup method
         cleanupCurrentProgress()
         
         isTransferringVideo = false
+    }
+
+    /// Cancels in-flight replica sends and forgets their progress objects.
+    private func cancelReplicaFanOut() {
+        for progress in replicaTransferProgress {
+            progress.cancel()
+        }
+        replicaTransferProgress.removeAll()
     }
 
     func sendVideoData(_ videoURL: URL) -> Bool {
@@ -241,8 +253,11 @@ extension iPhoneConnectionManager {
                                        mode: EclipseShareProtocol.LibraryMode,
                                        excluding active: MCPeerID) {
         guard syncAllEnabled, let session = session else { return }
+        cancelReplicaFanOut()
         for peer in session.connectedPeers where peer != active {
-            sendMedia(at: url, id: id, mode: mode, to: peer)
+            if let progress = sendMedia(at: url, id: id, mode: mode, to: peer) {
+                replicaTransferProgress.append(progress)
+            }
         }
     }
 
@@ -250,12 +265,24 @@ extension iPhoneConnectionManager {
     /// item, then clears the flag so subsequent normal sends aren't treated as restores.
     private func sendPendingRestoreIfNeeded(to peer: MCPeerID, via session: MCSession) {
         guard let restoreId = pendingRestoreId else { return }
-        pendingRestoreId = nil
         let envelope = EclipseShareEnvelope.restoreItem(id: restoreId)
             .withLibraryMode(ExternalOutputSettings.libraryMode)
-        if let data = envelope.encoded() {
-            try? session.send(data, toPeers: [peer], with: .reliable)
+
+        guard let data = envelope.encoded() else {
+            logger.error("Could not encode restore_item for \(restoreId, privacy: .public)")
+            pendingRestoreId = nil
+            return
+        }
+
+        do {
+            try session.send(data, toPeers: [peer], with: .reliable)
+            // Clear only once the TV has actually been told. Clearing up front meant a
+            // failed send consumed the intent, and the resource that followed was filed
+            // as a brand-new item instead of restoring the purged one.
+            pendingRestoreId = nil
             logger.info("Sent restore_item for id: \(restoreId)")
+        } catch {
+            logger.error("restore_item send failed: \(error.localizedDescription)")
         }
     }
 }

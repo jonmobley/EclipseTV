@@ -99,6 +99,7 @@ final class WebPagesViewController: UITableViewController {
     }
 
     private func presentPage(_ page: WebPage) {
+        WarmWebSessionPool.shared.warmIfNeeded(for: page)
         ExternalDisplayManager.shared.presentWeb(page.url, pageId: page.id)
         let preview = WebRemoteViewController(page: page)
         navigationController?.pushViewController(preview, animated: true)

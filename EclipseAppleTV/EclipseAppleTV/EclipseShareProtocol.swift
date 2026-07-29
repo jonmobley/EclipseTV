@@ -46,6 +46,8 @@ enum EclipseShareProtocol {
         case setDisplayMode = "set_display_mode"
         /// Companion sets Cut vs Crossfade for TV content switches.
         case setContentTransition = "set_content_transition"
+        /// Companion sets whether a still fills (crops to) the TV screen or letterboxes.
+        case setImageFit = "set_image_fit"
     }
 
     /// Separate media libraries: Landscape (16:9) vs Vertical (9:16).
@@ -151,6 +153,10 @@ struct EclipseShareEnvelope: Codable {
     var id: String?
     var isLooping: Bool? = nil
     var isMuted: Bool? = nil
+    /// Fit / Fill framing for a still. `true` fills (and crops to) the screen, `false`
+    /// letterboxes it. Carried on `playRequest` so the TV frames the first show
+    /// correctly, and on `setImageFit` when the choice changes while an item is live.
+    var isFill: Bool? = nil
     var toIndex: Int? = nil
     /// Full ordered list of item ids (file names) for a `reorderItems` message.
     var orderedIds: [String]? = nil
@@ -207,12 +213,16 @@ struct EclipseShareEnvelope: Codable {
         )
     }
 
-    static func playRequest(id: String) -> EclipseShareEnvelope {
+    /// Makes an item live on the TV.
+    /// - Parameter isFill: Fit / Fill framing for a still, so the TV matches the phone on
+    ///   the first show. Nil leaves the TV's stored choice untouched.
+    static func playRequest(id: String, isFill: Bool? = nil) -> EclipseShareEnvelope {
         EclipseShareEnvelope(
             eclipseMsg: EclipseShareProtocol.Kind.playRequest.rawValue,
             currentId: nil,
             items: nil,
-            id: id
+            id: id,
+            isFill: isFill
         )
     }
 
@@ -225,6 +235,17 @@ struct EclipseShareEnvelope: Codable {
             id: id,
             isLooping: isLooping,
             isMuted: isMuted
+        )
+    }
+
+    /// Sets whether a still fills (crops to) the TV screen instead of letterboxing.
+    static func setImageFit(id: String, isFill: Bool) -> EclipseShareEnvelope {
+        EclipseShareEnvelope(
+            eclipseMsg: EclipseShareProtocol.Kind.setImageFit.rawValue,
+            currentId: nil,
+            items: nil,
+            id: id,
+            isFill: isFill
         )
     }
 

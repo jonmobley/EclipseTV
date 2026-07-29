@@ -69,6 +69,10 @@ class iPhoneConnectionManager: NSObject {
     var isTransferringVideo = false
     var currentProgress: Progress?
 
+    /// In-flight replica fan-out sends for the current transfer, so cancelling the
+    /// user-visible send also stops the copies going to the sync replicas.
+    var replicaTransferProgress: [Progress] = []
+
     /// Monotonic id for the in-flight user transfer. Thumbnail completions and cancel
     /// paths check this so a stale custom-thumbnail callback can't start a video send
     /// after a newer image/video transfer (or cancel) has begun.
@@ -91,15 +95,13 @@ class iPhoneConnectionManager: NSObject {
     /// `+Session` extension drives this on connect/disconnect).
     private(set) var activePeer: MCPeerID?
 
-    private let syncAllKey = "EclipseTV.companion.syncAllTVs"
-
     /// When true, library mutations fan out to every connected Apple TV and the manager
     /// keeps additional discovered TVs connected as sync replicas. The active TV still
-    /// drives the mirrored UI. Backed by the same UserDefaults key the Settings toggle writes.
+    /// drives the mirrored UI. Backed by the same key the Settings toggle writes.
     var syncAllEnabled: Bool {
-        get { UserDefaults.standard.bool(forKey: syncAllKey) }
+        get { CompanionSettings.syncAllTVs }
         set {
-            UserDefaults.standard.set(newValue, forKey: syncAllKey)
+            CompanionSettings.syncAllTVs = newValue
             if newValue {
                 inviteAllDiscoveredPeersForSync()
             } else {
@@ -434,9 +436,15 @@ class iPhoneConnectionManager: NSObject {
     }
 
     /// Asks the Apple TV to make the item with the given id (file name) live/fullscreen.
+    ///
+    /// Carries the item's Fit / Fill choice so a still is framed on the TV exactly as it
+    /// is on this phone's own external output.
     @discardableResult
     func sendPlayRequest(id: String) -> Bool {
-        return sendCommand(.playRequest(id: id), description: "play request")
+        return sendCommand(
+            .playRequest(id: id, isFill: MediaFitSettings.isFill(forId: id)),
+            description: "play request"
+        )
     }
 
     /// Asks the Apple TV to delete the item with the given id. Broadcast to all synced
@@ -467,6 +475,14 @@ class iPhoneConnectionManager: NSObject {
     func sendVideoSetting(id: String, isLooping: Bool?, isMuted: Bool?) -> Bool {
         return sendCommand(.setVideoSetting(id: id, isLooping: isLooping, isMuted: isMuted),
                            description: "video setting", broadcast: true)
+    }
+
+    /// Asks the Apple TV to letterbox (Fit) or crop (Fill) a still. Broadcast to all
+    /// synced TVs so every screen frames the item the same way.
+    @discardableResult
+    func sendImageFit(id: String, isFill: Bool) -> Bool {
+        return sendCommand(.setImageFit(id: id, isFill: isFill),
+                           description: "image fit", broadcast: true)
     }
 
     /// Sends a remote playback command for the live video. `position` is the absolute
@@ -559,12 +575,14 @@ class iPhoneConnectionManager: NSObject {
 
     /// Sends a media file to one specific peer without progress UI (used by the sync
     /// coordinator to replay the library to a replica TV).
+    /// - Returns: The send's `Progress`, so callers can cancel an in-flight fan-out.
+    @discardableResult
     func sendMedia(at url: URL, id: String,
                    mode: EclipseShareProtocol.LibraryMode = ExternalOutputSettings.libraryMode,
-                   to peer: MCPeerID) {
-        guard let session = session, session.connectedPeers.contains(peer) else { return }
+                   to peer: MCPeerID) -> Progress? {
+        guard let session = session, session.connectedPeers.contains(peer) else { return nil }
         let wireName = EclipseShareProtocol.mediaResourceName(for: id, mode: mode)
-        session.sendResource(at: url, withName: wireName, toPeer: peer) { [weak self] error in
+        return session.sendResource(at: url, withName: wireName, toPeer: peer) { [weak self] error in
             if let error = error {
                 self?.logger.error("Replica media send failed for \(id, privacy: .public): \(error.localizedDescription)")
             }
@@ -597,19 +615,42 @@ class iPhoneConnectionManager: NSObject {
             return
         }
         let group = DispatchGroup()
+        // Multipeer invokes these completions on its own queue, so the failure count needs
+        // a lock. Reporting success unconditionally let the sync coordinator record a
+        // replica as caught up even when every resource send had failed, and it was then
+        // never retried.
+        let failureLock = NSLock()
+        var failureCount = 0
+
         for item in items {
             group.enter()
             let wireName = EclipseShareProtocol.mediaResourceName(for: item.id, mode: mode)
             session.sendResource(at: item.url, withName: wireName, toPeer: peer) { [weak self] error in
                 if let error = error {
                     self?.logger.error("Replay send failed for \(item.id, privacy: .public): \(error.localizedDescription)")
+                    failureLock.lock()
+                    failureCount += 1
+                    failureLock.unlock()
                 }
                 group.leave()
             }
         }
+
+        let total = items.count
         group.notify(queue: .main) { [weak self] in
-            self?.sendEnvelope(.reorderItems(orderedIds: orderedIds), to: peer)
-            completion(true)
+            failureLock.lock()
+            let failed = failureCount
+            failureLock.unlock()
+
+            if failed < total {
+                self?.sendEnvelope(.reorderItems(orderedIds: orderedIds), to: peer)
+            }
+            if failed > 0 {
+                self?.logger.error(
+                    "Replay to \(name, privacy: .public) failed for \(failed)/\(total) item(s)"
+                )
+            }
+            completion(failed == 0)
         }
     }
 }

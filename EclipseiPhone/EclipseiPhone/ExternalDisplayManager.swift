@@ -96,6 +96,10 @@ final class ExternalDisplayManager {
     private var externalWindow: UIWindow?
     private var presentationVC: PresentationViewController?
     private var lastSource: PresentationSource?
+    /// AirPlay source captured just before camera went live (for Previous restore).
+    private var preCameraSource: PresentationSource?
+    /// Whether `preCameraSource` was a joined sticky live item.
+    private var preCameraWasJoined = false
     private var lifecycleObservers: [NSObjectProtocol] = []
     /// Coalesces transient `sceneDidDisconnect` during app-switcher / background.
     private var disconnectWorkItem: DispatchWorkItem?
@@ -248,6 +252,14 @@ final class ExternalDisplayManager {
             return
         }
         logger.info("External display disconnected")
+        // Release the presented content before dropping our references. Otherwise the web
+        // view, `AVPlayer`, and attached camera preview stayed alive behind a window nobody
+        // can see, and the app still reported an overlay as live — camera session running,
+        // home tiles showing LIVE, phone browser refusing to let go of the page.
+        presentationVC?.showIdle()
+        endOverlay(notify: true)
+        isJoinedLive = false
+
         // Do not set `window.windowScene = nil` — that forces mirroring.
         externalWindow = nil
         presentationVC = nil
@@ -357,12 +369,27 @@ final class ExternalDisplayManager {
     ///
     /// If AirPlay was Logo-parked, resumes the live feed — callers that want the
     /// camera (phone UI open / re-open) should never leave the TV stuck on Logo.
+    /// Snapshots the prior non-camera source the first time camera goes live.
     func presentCamera() {
         if isCameraParkedOnLogo {
             resumeCameraFromLogoPark()
             return
         }
+        if !isCameraModeActive {
+            snapshotPreCameraSource()
+        }
         present(.camera)
+    }
+
+    /// Remembers what AirPlay showed before camera took over.
+    private func snapshotPreCameraSource() {
+        if let last = lastSource, last.content != .camera {
+            preCameraSource = last
+            preCameraWasJoined = isJoinedLive
+            return
+        }
+        preCameraSource = currentSourceProvider?()
+        preCameraWasJoined = false
     }
 
     /// Parks AirPlay on Logo without ending camera mode or stopping the session.
@@ -424,24 +451,37 @@ final class ExternalDisplayManager {
         restoreLibraryOrIdle()
     }
 
-    /// Posted after Close applies a non-camera destination so the home grid can
+    /// Posted after stop-live applies a close destination so the home grid can
     /// update Black / Logo selection. `userInfo["destination"]` is the raw value.
     static let didApplyCameraCloseDestinationNotification =
         Notification.Name("ExternalDisplayManager.didApplyCameraCloseDestination")
 
-    /// Stops the camera and presents Logo or Black per `cameraCloseDestination`.
-    /// No-op when the preference is `.camera` (Close leaves the feed live).
+    /// Stops camera live and presents Previous / Logo / Black per settings.
+    ///
+    /// Keeps the capture session running and does not dismiss the phone camera UI
+    /// (`cameraDidEnd` is not posted).
     func stopCameraAndApplyCloseDestination() {
+        guard isCameraModeActive else { return }
+
+        // Drop overlay without tearDown — preview/session stay warm on the phone.
+        overlaySource = nil
+        isCameraParkedOnLogo = false
+
         let destination = ExternalOutputSettings.cameraCloseDestination
-        guard destination != .camera else { return }
-
-        endOverlay(notify: true)
-
         let applied: CameraCloseDestination
-        if destination == .logo, let url = LogoStore.shared.fileURL {
-            present(.image(url))
-            applied = .logo
-        } else {
+        switch destination {
+        case .previous:
+            restorePreCameraSource()
+            applied = .previous
+        case .logo:
+            if let url = LogoStore.shared.fileURL {
+                present(.image(url))
+                applied = .logo
+            } else {
+                present(.black)
+                applied = .black
+            }
+        case .black:
             present(.black)
             applied = .black
         }
@@ -451,6 +491,25 @@ final class ExternalDisplayManager {
             object: self,
             userInfo: ["destination": applied.rawValue]
         )
+        updateIdleTimer()
+    }
+
+    /// Restores `preCameraSource`, else the library live item, else Black.
+    private func restorePreCameraSource() {
+        if let prior = preCameraSource, prior.content != .camera {
+            let joined = preCameraWasJoined
+            preCameraSource = nil
+            preCameraWasJoined = false
+            present(prior, asJoined: joined)
+            return
+        }
+        preCameraSource = nil
+        preCameraWasJoined = false
+        if let source = currentSourceProvider?() {
+            present(source)
+        } else {
+            present(.black)
+        }
     }
 
     /// Stops web presentation and restores the library live item when available.

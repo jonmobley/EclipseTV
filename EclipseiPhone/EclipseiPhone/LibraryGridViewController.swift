@@ -9,8 +9,9 @@
 import UIKit
 import os
 
-/// Home: tools row (Logo / Camera / Website) + Recent Shows ribbon.
-/// Opening a Show keeps this shell and swaps Recent for that Show's media grid.
+/// Home: the Recent Shows ribbon, and nothing else.
+/// Opening a Show keeps this shell and adds that Show's live preview hero, the
+/// tools row (Logo / Camera / Website), and its media grid in place of Recent.
 /// Black is a header control. Live media still drives AirPlay / EclipseTV.
 final class LibraryGridViewController: UIViewController {
 
@@ -27,6 +28,8 @@ final class LibraryGridViewController: UIViewController {
     var onRequestEdit: ((String) -> Void)?
     /// Invoked when the Camera tile is tapped.
     var onPresentCamera: (() -> Void)?
+    /// True while fullscreen Camera is opening/open — keep the tile on a still.
+    var homeCameraWarmPreviewSuspended = false
     /// Invoked when the Logo tile needs a new image from Photos.
     var onChooseLogo: (() -> Void)?
     /// Invoked when the user wants to add media into a Show.
@@ -35,6 +38,8 @@ final class LibraryGridViewController: UIViewController {
     var onCreateSlideshow: ((UUID) -> Void)?
     /// Invoked when the Recent ribbon New Show tile is tapped.
     var onCreateShow: (() -> Void)?
+    /// Invoked by the Recent Shows “See All >” header link.
+    var onSeeAllShows: (() -> Void)?
     /// Invoked when Show mode opens/closes or the open Show's metadata changes.
     var onOpenShowChanged: ((LocalAlbum?) -> Void)?
     /// Invoked when Show-grid arrange mode starts or ends.
@@ -42,29 +47,47 @@ final class LibraryGridViewController: UIViewController {
 
     let sectionInset: CGFloat = 16
     let interitemSpacing: CGFloat = 12
-    private let headerInset: CGFloat = 16
+    let headerInset: CGFloat = 16
     /// Black gap inserted between the hero banner and the grid below it.
-    private let heroBottomPadding: CGFloat = 16
+    let heroBottomPadding: CGFloat = 16
     /// Caps Vertical-mode hero height so a 9:16 frame doesn't fill the phone.
     /// Also used to height-cap Landscape heroes on wide (iPad) panes.
-    private let verticalHeroMaxHeight: CGFloat = 280
+    let verticalHeroMaxHeight: CGFloat = 280
     /// Last width used for hero / grid sizing; avoids redundant layout work.
-    private var lastLayoutWidth: CGFloat = 0
+    var lastLayoutWidth: CGFloat = 0
+    /// Last height used for side-by-side chrome; avoids redundant layout work.
+    var lastLayoutHeight: CGFloat = 0
+    /// True while grid|preview are side-by-side (phone landscape).
+    var isSideBySideChrome = false
 
-    private var heroHeightConstraint: NSLayoutConstraint?
-    private var heroWidthConstraint: NSLayoutConstraint?
-    private var heroLeadingConstraint: NSLayoutConstraint?
-    private var heroTrailingConstraint: NSLayoutConstraint?
-    private var heroCenterXConstraint: NSLayoutConstraint?
-    private var settingsObserver: NSObjectProtocol?
-    private var pagesObserver: NSObjectProtocol?
-    private var albumsObserver: NSObjectProtocol?
-    private var slideshowsObserver: NSObjectProtocol?
-    private var slideshowPlaybackObserver: NSObjectProtocol?
-    private var webThumbsObserver: NSObjectProtocol?
-    private var logoObserver: NSObjectProtocol?
-    private var pdfsObserver: NSObjectProtocol?
-    private var pdfThumbsObserver: NSObjectProtocol?
+    var heroHeightConstraint: NSLayoutConstraint?
+    var heroWidthConstraint: NSLayoutConstraint?
+    var heroLeadingConstraint: NSLayoutConstraint?
+    var heroTrailingConstraint: NSLayoutConstraint?
+    var heroCenterXConstraint: NSLayoutConstraint?
+    /// Portrait hero top inset (safe area + padding).
+    var heroTopConstraint: NSLayoutConstraint?
+    /// Stacked hero-above-grid constraints (phone portrait / iPad).
+    var portraitChromeConstraints: [NSLayoutConstraint] = []
+    /// Preview-left / grid-right constraints (phone landscape).
+    var landscapeChromeConstraints: [NSLayoutConstraint] = []
+    /// Portrait-only: how far the hero has collapsed toward the trailing mini
+    /// preview (0 = full hero, 1 = tucked). Derived from `contentOffset`; never set
+    /// directly outside `updateHeroCollapse()`.
+    var heroCollapseProgress: CGFloat = 0
+    /// Tap mini preview to restore the full hero.
+    lazy var heroExpandTapRecognizer: UITapGestureRecognizer = {
+        let tap = UITapGestureRecognizer(
+            target: self,
+            action: #selector(handleHeroExpandTap)
+        )
+        tap.isEnabled = false
+        return tap
+    }()
+    /// Every notification token this controller owns, so `deinit` can drain them in one
+    /// place. One property per observer meant six of the fifteen registrations here were
+    /// never torn down at all, and each new one was an opportunity to forget another.
+    var observerTokens: [NSObjectProtocol] = []
 
     /// True while Black is the selected presentation source.
     var isBlackSelected = false
@@ -84,6 +107,10 @@ final class LibraryGridViewController: UIViewController {
     lazy var reorderGesture: UILongPressGestureRecognizer = {
         let gesture = UILongPressGestureRecognizer(target: self, action: #selector(handleReorderGesture(_:)))
         gesture.isEnabled = false
+        // A brief hold grabs a tile so dragging feels immediate; a swipe still
+        // scrolls the grid because the gesture fails once the touch travels.
+        gesture.minimumPressDuration = 0.15
+        gesture.allowableMovement = 8
         return gesture
     }()
 
@@ -202,16 +229,17 @@ final class LibraryGridViewController: UIViewController {
         return items[index]
     }
 
-    private let liveHeader: LiveHeaderView = {
+    let liveHeader: LiveHeaderView = {
         let header = LiveHeaderView()
         header.translatesAutoresizingMaskIntoConstraints = false
         return header
     }()
 
-    /// Solid black padding strip below the hero banner, separating it from the grid.
-    private let heroSpacer: UIView = {
+    /// Parked view kept only so landscape chrome constraints stay unambiguous.
+    let heroSpacer: UIView = {
         let view = UIView()
-        view.backgroundColor = .black
+        view.isHidden = true
+        view.isUserInteractionEnabled = false
         view.translatesAutoresizingMaskIntoConstraints = false
         return view
     }()
@@ -225,7 +253,9 @@ final class LibraryGridViewController: UIViewController {
         )
         let view = UICollectionView(frame: .zero, collectionViewLayout: layout)
         view.backgroundColor = .systemBackground
-        view.alwaysBounceVertical = true
+        // Home is a fixed composition (tools + horizontal Recent); bounce felt like
+        // the whole page drifting. Show mode re-enables vertical scroll.
+        view.alwaysBounceVertical = false
         view.register(
             LibraryThumbnailCell.self,
             forCellWithReuseIdentifier: LibraryThumbnailCell.reuseIdentifier
@@ -241,7 +271,7 @@ final class LibraryGridViewController: UIViewController {
         return view
     }()
 
-    private let emptyLabel: UILabel = {
+    let emptyLabel: UILabel = {
         let label = UILabel()
         label.textColor = .secondaryLabel
         label.font = .preferredFont(forTextStyle: .footnote)
@@ -253,7 +283,7 @@ final class LibraryGridViewController: UIViewController {
         return label
     }()
 
-    private var emptyTopConstraint: NSLayoutConstraint?
+    var emptyTopConstraint: NSLayoutConstraint?
 
     // MARK: - Init
 
@@ -271,6 +301,18 @@ final class LibraryGridViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
+        installHomeCameraPreviewObservers()
+        observe(WarmWebSession.didRelinquishNotification) { [weak self] _ in
+            self?.refreshLiveHeader()
+        }
+        registerForTraitChanges(
+            [UITraitVerticalSizeClass.self]
+        ) { (self: Self, _: UITraitCollection) in
+            // Bounds may not have updated yet; clear cache so layout reapplies.
+            self.lastLayoutWidth = 0
+            self.lastLayoutHeight = 0
+            self.updateChromeLayoutIfNeeded()
+        }
 
         liveHeader.onTogglePlayPause = { [weak self] in
             self?.connectionManager.sendPlaybackCommand(action: .toggle, position: nil)
@@ -284,179 +326,92 @@ final class LibraryGridViewController: UIViewController {
 
         collectionView.addGestureRecognizer(reorderGesture)
 
-        view.addSubview(liveHeader)
-        view.addSubview(heroSpacer)
+        // Grid under the floating live hero so content can scroll beneath it.
         view.addSubview(collectionView)
+        view.addSubview(heroSpacer)
+        view.addSubview(liveHeader)
         view.addSubview(emptyLabel)
-
-        let safeArea = view.safeAreaLayoutGuide
-        let heroTop = liveHeader.topAnchor.constraint(
-            equalTo: safeArea.topAnchor, constant: headerInset)
-        let heroLeading = liveHeader.leadingAnchor.constraint(
-            equalTo: view.leadingAnchor, constant: headerInset)
-        let heroTrailing = liveHeader.trailingAnchor.constraint(
-            equalTo: view.trailingAnchor, constant: -headerInset)
-        let heroCenterX = liveHeader.centerXAnchor.constraint(equalTo: view.centerXAnchor)
-        heroCenterX.isActive = false
-        let heroWidth = liveHeader.widthAnchor.constraint(equalToConstant: 160)
-        heroWidth.isActive = false
-        let heroHeight = liveHeader.heightAnchor.constraint(
-            equalTo: liveHeader.widthAnchor, multiplier: 9.0 / 16.0)
-
-        heroLeadingConstraint = heroLeading
-        heroTrailingConstraint = heroTrailing
-        heroCenterXConstraint = heroCenterX
-        heroWidthConstraint = heroWidth
-        heroHeightConstraint = heroHeight
-
-        NSLayoutConstraint.activate([
-            heroTop,
-            heroLeading,
-            heroTrailing,
-            heroHeight,
-
-            heroSpacer.topAnchor.constraint(equalTo: liveHeader.bottomAnchor),
-            heroSpacer.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            heroSpacer.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            heroSpacer.heightAnchor.constraint(equalToConstant: heroBottomPadding),
-
-            collectionView.topAnchor.constraint(equalTo: heroSpacer.bottomAnchor),
-            collectionView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            collectionView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            collectionView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-
-            emptyLabel.centerXAnchor.constraint(equalTo: collectionView.centerXAnchor),
-            emptyLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 40),
-            emptyLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -40)
-        ])
-        let emptyTop = emptyLabel.topAnchor.constraint(
-            equalTo: collectionView.topAnchor, constant: 160
-        )
-        emptyTop.isActive = true
-        emptyTopConstraint = emptyTop
-
+        liveHeader.addGestureRecognizer(heroExpandTapRecognizer)
+        installChromeLayout()
+        updateHeroVisibility()
         applyLayoutMode()
-        settingsObserver = NotificationCenter.default.addObserver(
-            forName: ExternalOutputSettings.didChangeNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
+        observe(ExternalOutputSettings.didChangeNotification) { [weak self] _ in
             self?.applyLayoutMode()
             self?.validateOpenShow()
+            self?.refreshVisibleCameraTilePreview()
         }
-        pagesObserver = NotificationCenter.default.addObserver(
-            forName: WebPageStore.didChangeNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            self?.collectionView.reloadData()
+        observe(WebPageStore.didChangeNotification) { [weak self] _ in
+            self?.reloadGridIfSafe()
             self?.updateEmptyState()
         }
-        albumsObserver = NotificationCenter.default.addObserver(
-            forName: LocalAlbumStore.didChangeNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
+        observe(LocalAlbumStore.didChangeNotification) { [weak self] _ in
             self?.validateOpenShow()
-            self?.collectionView.reloadData()
+            self?.reloadGridIfSafe()
             self?.updateEmptyState()
         }
-        slideshowsObserver = NotificationCenter.default.addObserver(
-            forName: SlideshowStore.didChangeNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
+        observe(SlideshowStore.didChangeNotification) { [weak self] _ in
             self?.refreshSlideshowRibbonPresentation()
-            self?.collectionView.reloadData()
+            self?.reloadGridIfSafe()
             self?.updateEmptyState()
         }
-        slideshowPlaybackObserver = NotificationCenter.default.addObserver(
-            forName: SlideshowPlaybackController.didChangeNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
+        observe(SlideshowPlaybackController.didChangeNotification) { [weak self] _ in
             self?.refreshSlideshowRibbonPresentation()
-            self?.collectionView.reloadData()
+            self?.reloadGridIfSafe()
             self?.refreshLiveHeader()
             self?.scrollLiveSlideshowRibbonToCurrentSlide()
         }
-        webThumbsObserver = NotificationCenter.default.addObserver(
-            forName: WebThumbnailStore.didChangeNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            self?.collectionView.reloadData()
+        observe(WebThumbnailStore.didChangeNotification) { [weak self] _ in
+            self?.reloadGridIfSafe()
             self?.refreshLiveHeader()
         }
-        logoObserver = NotificationCenter.default.addObserver(
-            forName: LogoStore.didChangeNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            self?.collectionView.reloadData()
+        observe(LogoStore.didChangeNotification) { [weak self] _ in
+            self?.reloadGridIfSafe()
             self?.refreshLiveHeader()
         }
-        pdfsObserver = NotificationCenter.default.addObserver(
-            forName: PDFStore.didChangeNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            self?.collectionView.reloadData()
+        observe(PDFStore.didChangeNotification) { [weak self] _ in
+            self?.reloadGridIfSafe()
             self?.updateEmptyState()
         }
-        pdfThumbsObserver = NotificationCenter.default.addObserver(
-            forName: PDFThumbnailStore.didChangeNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            self?.collectionView.reloadData()
+        observe(PDFThumbnailStore.didChangeNotification) { [weak self] _ in
+            self?.reloadGridIfSafe()
             self?.refreshLiveHeader()
         }
-        NotificationCenter.default.addObserver(
-            forName: CameraManager.lastFrameDidChangeNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
+        observe(CameraManager.lastFrameDidChangeNotification) { [weak self] _ in
             self?.reloadCameraTile()
         }
+
         let overlayReload: (Notification) -> Void = { [weak self] _ in
-            self?.collectionView.reloadData()
+            self?.reloadGridIfSafe()
             self?.refreshLiveHeader()
         }
-        NotificationCenter.default.addObserver(
-            forName: ExternalDisplayManager.didChangeNotification,
-            object: nil,
-            queue: .main,
-            using: overlayReload
-        )
-        NotificationCenter.default.addObserver(
-            forName: ExternalDisplayManager.cameraDidEndNotification,
-            object: nil,
-            queue: .main,
-            using: overlayReload
-        )
-        NotificationCenter.default.addObserver(
-            forName: ExternalDisplayManager.webDidEndNotification,
-            object: nil,
-            queue: .main,
-            using: overlayReload
-        )
-        NotificationCenter.default.addObserver(
-            forName: ExternalDisplayManager.pdfDidEndNotification,
-            object: nil,
-            queue: .main,
-            using: overlayReload
-        )
-        NotificationCenter.default.addObserver(
-            forName: ExternalDisplayManager.didApplyCameraCloseDestinationNotification,
-            object: nil,
-            queue: .main
+        observe(ExternalDisplayManager.didChangeNotification, using: overlayReload)
+        observe(ExternalDisplayManager.webDidEndNotification, using: overlayReload)
+        observe(ExternalDisplayManager.pdfDidEndNotification, using: overlayReload)
+        observe(ExternalDisplayManager.cameraDidEndNotification) { [weak self] note in
+            overlayReload(note)
+            // AirPlay tore down the session — warm the home tile again.
+            self?.warmHomeCameraPreview()
+        }
+        observe(
+            ExternalDisplayManager.didApplyCameraCloseDestinationNotification
         ) { [weak self] note in
             self?.applyCameraCloseDestination(from: note)
         }
     }
 
-    /// Syncs Black / Logo home selection after Close applies a camera-close setting.
+    /// Registers a main-queue observer and keeps its token for teardown.
+    func observe(
+        _ name: Notification.Name,
+        using handler: @escaping (Notification) -> Void
+    ) {
+        observerTokens.append(
+            NotificationCenter.default.addObserver(
+                forName: name, object: nil, queue: .main, using: handler
+            )
+        )
+    }
+
+    /// Syncs Black / Logo home selection after stop-live applies a camera-close setting.
     private func applyCameraCloseDestination(from note: Notification) {
         let raw = note.userInfo?["destination"] as? String
         let destination = raw.flatMap(CameraCloseDestination.init(rawValue:))
@@ -467,7 +422,11 @@ final class LibraryGridViewController: UIViewController {
         case .black:
             isBlackSelected = true
             isLogoSelected = false
-        case .camera, .none:
+        case .previous:
+            // Prior content may be library/web/etc. — clear forced Logo/Black.
+            isBlackSelected = false
+            isLogoSelected = false
+        case .none:
             return
         }
         collectionView.reloadData()
@@ -475,42 +434,17 @@ final class LibraryGridViewController: UIViewController {
     }
 
     deinit {
-        if let settingsObserver {
-            NotificationCenter.default.removeObserver(settingsObserver)
-        }
-        if let pagesObserver {
-            NotificationCenter.default.removeObserver(pagesObserver)
-        }
-        if let albumsObserver {
-            NotificationCenter.default.removeObserver(albumsObserver)
-        }
-        if let slideshowsObserver {
-            NotificationCenter.default.removeObserver(slideshowsObserver)
-        }
-        if let slideshowPlaybackObserver {
-            NotificationCenter.default.removeObserver(slideshowPlaybackObserver)
-        }
-        if let webThumbsObserver {
-            NotificationCenter.default.removeObserver(webThumbsObserver)
-        }
-        if let logoObserver {
-            NotificationCenter.default.removeObserver(logoObserver)
-        }
-        if let pdfsObserver {
-            NotificationCenter.default.removeObserver(pdfsObserver)
-        }
-        if let pdfThumbsObserver {
-            NotificationCenter.default.removeObserver(pdfThumbsObserver)
+        for token in observerTokens {
+            NotificationCenter.default.removeObserver(token)
         }
     }
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        let width = view.bounds.width
-        guard width > 0, abs(width - lastLayoutWidth) > 0.5 else { return }
-        lastLayoutWidth = width
-        applyHeroChrome()
-        collectionView.collectionViewLayout.invalidateLayout()
+        updateChromeLayoutIfNeeded()
+        // Hero bounds are only trustworthy after layout; re-derive the collapse so
+        // rotation / Display Mode changes land on the right transform.
+        updateHeroCollapse()
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -524,6 +458,14 @@ final class LibraryGridViewController: UIViewController {
         updateEmptyState()
         refreshLiveHeader()
         pushCurrentToExternalDisplay()
+        warmHomeCameraPreview()
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        // Cold launch: viewWillAppear can run before the app is active; retry here.
+        warmHomeCameraPreview()
+        updateHomeScrollLock()
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -532,6 +474,7 @@ final class LibraryGridViewController: UIViewController {
             store.delegate = nil
         }
         ExternalDisplayManager.shared.currentSourceProvider = nil
+        stopHomeCameraPreviewIfNeeded()
     }
 
     // MARK: - Helpers
@@ -548,8 +491,17 @@ final class LibraryGridViewController: UIViewController {
             emptyLabel.text =
                 "No Shows in \(ExternalOutputSettings.orientation.rawValue) yet.\nYour content may be under \(other) in Settings → Display Mode."
             emptyLabel.isHidden = false
-            let rowHeight = itemSize(for: collectionView.bounds.width).height
-            emptyTopConstraint?.constant = sectionInset + rowHeight + 100
+            // Sit just below the Recent Shows ribbon rather than over it.
+            let tileSide = Self.showsRibbonTileSide(
+                containerWidth: collectionView.bounds.width,
+                sectionInset: sectionInset,
+                spacing: interitemSpacing
+            )
+            emptyTopConstraint?.constant = collectionView.contentInset.top
+                + Self.showsRibbonTopInset
+                + Self.sectionHeaderEstimatedHeight
+                + tileSide
+                + sectionInset * 2
         } else {
             emptyLabel.isHidden = true
         }
@@ -564,6 +516,27 @@ final class LibraryGridViewController: UIViewController {
             showsSlideshowRibbon: showsLiveSlideshowRibbon
         )
         collectionView.setCollectionViewLayout(layout, animated: false)
+        updateHomeScrollLock()
+    }
+
+    /// Home stays pinned while it fits; Show mode can scroll the media grid.
+    func updateHomeScrollLock() {
+        collectionView.alwaysBounceVertical = isShowMode
+        pinHomeScrollIfContentFits()
+        updateHeroCollapse()
+    }
+
+    /// Home is a fixed composition, so bouncing read as the whole page drifting
+    /// under the floating hero. Only pin it while everything fits — on small screens
+    /// or at large text sizes Home overflows and must stay scrollable.
+    func pinHomeScrollIfContentFits() {
+        guard !isShowMode, maxVerticalScroll() <= 0.5 else { return }
+        let top = -collectionView.adjustedContentInset.top
+        guard abs(collectionView.contentOffset.y - top) > 0.5 else { return }
+        collectionView.contentOffset = CGPoint(
+            x: collectionView.contentOffset.x,
+            y: top
+        )
     }
 
     /// Reloads only the Camera tile (live preview / last-frame updates).
@@ -579,23 +552,40 @@ final class LibraryGridViewController: UIViewController {
     }
 
     /// Updates the fixed hero banner to reflect the currently live item (or a placeholder).
+    ///
+    /// Home has no hero, but the Blackout chrome callback still has to fire — the
+    /// header's moon button reflects live state on both screens.
     func refreshLiveHeader() {
         let mgr = ExternalDisplayManager.shared
         let blackLive = isBlackSelected && !mgr.isOverlayLive
         onBlackLiveChanged?(blackLive)
+        guard showsLiveHero else {
+            liveHeader.clearWebPreview(parking: true)
+            return
+        }
         if mgr.isWebLive {
-            let page = WebPageStore.shared.pages
-                .first(where: { $0.id == mgr.liveWebPageId })
-            let title = page?.title ?? "Website"
-            let thumb = mgr.liveWebPageId.flatMap {
-                WebThumbnailStore.shared.image(for: $0)
+            let pageId = mgr.liveWebPageId
+            let page = pageId.flatMap { id in
+                id == WebPage.freeBrowseId
+                    ? WebPage.freeBrowse
+                    : WebPageStore.shared.pages.first(where: { $0.id == id })
             }
+            let title = page?.title ?? "Website"
+            let thumb = pageId.flatMap { WebThumbnailStore.shared.image(for: $0) }
+            let canShowLivePreview = pageId.map {
+                !WarmWebSessionPool.shared.isAdopted(pageId: $0)
+            } ?? false
             liveHeader.configureOverlay(
                 title: title,
                 systemImage: "safari",
                 fillColor: UIColor(white: 0.12, alpha: 1),
-                thumbnail: thumb
+                thumbnail: thumb,
+                keepWebPreview: canShowLivePreview
             )
+            if let pageId, canShowLivePreview {
+                // In-app hero shows the warm page even with no AirPlay display.
+                liveHeader.showWebPreview(pageId: pageId)
+            }
             liveHeader.updatePlayback(PlaybackState())
             return
         }
@@ -624,8 +614,8 @@ final class LibraryGridViewController: UIViewController {
         }
         if isBlackSelected {
             liveHeader.configureOverlay(
-                title: "Black",
-                systemImage: nil,
+                title: "Blackout",
+                systemImage: "moon.fill",
                 fillColor: .black
             )
             liveHeader.updatePlayback(PlaybackState())
@@ -688,6 +678,17 @@ final class LibraryGridViewController: UIViewController {
         } else {
             ExternalDisplayManager.shared.clear()
         }
+    }
+
+    /// Reloads the grid unless an interactive reorder is in flight.
+    ///
+    /// Background stores (thumbnails, slideshows, albums, PDFs, overlay state) post changes
+    /// at any time. A `reloadData()` in the middle of `UICollectionView`'s interactive move
+    /// invalidates the drag's index paths, which drops the drag and can throw outright.
+    /// The order reconciles from the Apple TV's next manifest once arranging finishes.
+    func reloadGridIfSafe() {
+        guard !isArranging else { return }
+        collectionView.reloadData()
     }
 
     /// Clears home-grid live selection when a joined album item becomes the live output.
@@ -782,58 +783,6 @@ final class LibraryGridViewController: UIViewController {
         return CGSize(width: itemWidth, height: itemHeight)
     }
 
-    /// Applies Landscape vs Vertical chrome and reloads the active mode's library.
-    private func applyLayoutMode() {
-        // TVLibraryStore also observes this notification and swaps buckets first.
-        store.syncLibraryModeFromSettings()
-        applyHeroChrome()
-        collectionView.collectionViewLayout.invalidateLayout()
-        collectionView.reloadData()
-    }
-
-    /// Sizes the live hero for Vertical (always capped) or Landscape (full-bleed /
-    /// capped on wide panes).
-    private func applyHeroChrome() {
-        if ExternalOutputSettings.isVerticalMode {
-            applyCappedHero(aspectWidthOverHeight: 9.0 / 16.0)
-            return
-        }
-        let bleedWidth = max(0, view.bounds.width - headerInset * 2)
-        let bleedHeight = bleedWidth * 9.0 / 16.0
-        if bleedHeight > verticalHeroMaxHeight + 0.5 {
-            applyCappedHero(aspectWidthOverHeight: 16.0 / 9.0)
-        } else {
-            applyFullBleedLandscapeHero()
-        }
-    }
-
-    /// Centers a fixed-height hero (Vertical always; Landscape on wide panes).
-    private func applyCappedHero(aspectWidthOverHeight: CGFloat) {
-        heroLeadingConstraint?.isActive = false
-        heroTrailingConstraint?.isActive = false
-        heroCenterXConstraint?.isActive = true
-        heroWidthConstraint?.isActive = true
-        let height = verticalHeroMaxHeight
-        let width = (height * aspectWidthOverHeight).rounded(.down)
-        heroWidthConstraint?.constant = width
-        heroHeightConstraint?.isActive = false
-        let heightConstraint = liveHeader.heightAnchor.constraint(equalToConstant: height)
-        heightConstraint.isActive = true
-        heroHeightConstraint = heightConstraint
-    }
-
-    /// Pins Landscape hero leading/trailing with a 16:9 height.
-    private func applyFullBleedLandscapeHero() {
-        heroCenterXConstraint?.isActive = false
-        heroWidthConstraint?.isActive = false
-        heroLeadingConstraint?.isActive = true
-        heroTrailingConstraint?.isActive = true
-        heroHeightConstraint?.isActive = false
-        let aspect = liveHeader.heightAnchor.constraint(
-            equalTo: liveHeader.widthAnchor, multiplier: 9.0 / 16.0)
-        aspect.isActive = true
-        heroHeightConstraint = aspect
-    }
 }
 
 // MARK: - TVLibraryStoreDelegate

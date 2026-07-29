@@ -17,8 +17,8 @@ extension PresentationViewController {
     /// Builds the next source inside `transitionOverlayContainer` (underlay stays live).
     func installIncoming(_ source: PresentationSource, generation: Int) {
         switch source.content {
-        case .image(let url):
-            installIncomingImage(url: url, generation: generation)
+        case .image(let url, let fill):
+            installIncomingImage(url: url, fill: fill, generation: generation)
         case .video(let url, let isLooping, let isMuted):
             installIncomingVideo(
                 url: url, isLooping: isLooping, isMuted: isMuted, generation: generation
@@ -39,9 +39,9 @@ extension PresentationViewController {
 
     // MARK: - Image
 
-    private func installIncomingImage(url: URL, generation: Int) {
+    private func installIncomingImage(url: URL, fill: Bool, generation: Int) {
         let imageView = makeIncomingImageView()
-        imageView.contentMode = LogoStore.shared.isLogoFileURL(url)
+        imageView.contentMode = fill || LogoStore.shared.isLogoFileURL(url)
             ? .scaleAspectFill : .scaleAspectFit
 
         if url.isFileURL {
