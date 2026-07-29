@@ -1,0 +1,117 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A newer push makes an in-flight run obsolete; don't pay for both.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  # The wire protocol is a verbatim copy in each project because the two apps don't
+  # share a module. This costs seconds on Linux, so run it before any macOS minutes.
+  shared-sources:
+    name: Shared sources in sync
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Verify duplicated sources match across targets
+        run: Scripts/verify_shared_sources.sh
+
+  build-and-test:
+    name: ${{ matrix.name }}
+    needs: shared-sources
+    runs-on: macos-26
+    strategy:
+      # One platform breaking shouldn't hide the other's result.
+      fail-fast: false
+      matrix:
+        include:
+          - name: iPhone
+            slug: iphone
+            project: EclipseiPhone/EclipseiPhone.xcodeproj
+            scheme: EclipseiPhone
+            test_target: EclipseiPhoneTests
+            device_platform: iOS
+            simulator_platform: iOS Simulator
+            simulator_prefix: iPhone
+          - name: Apple TV
+            slug: appletv
+            project: EclipseAppleTV/EclipseAppleTV.xcodeproj
+            scheme: EclipseAppleTV
+            test_target: EclipseAppleTVTests
+            device_platform: tvOS
+            simulator_platform: tvOS Simulator
+            simulator_prefix: Apple TV
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Select Xcode
+        run: |
+          # Prefer the version the project is developed against, but keep working when
+          # the runner image rotates it out rather than failing the whole run.
+          if [ -d /Applications/Xcode_26.6.app ]; then
+            sudo xcode-select -s /Applications/Xcode_26.6.app
+          fi
+          xcodebuild -version
+
+      - name: Cache Swift packages
+        uses: actions/cache@v6
+        with:
+          path: ~/Library/Caches/org.swift.swiftpm
+          key: spm-${{ hashFiles('**/Package.resolved') }}
+          restore-keys: spm-
+
+      # Catches anything that compiles for the simulator but not for real hardware.
+      - name: Build for device
+        run: |
+          xcodebuild build \
+            -project "${{ matrix.project }}" \
+            -scheme "${{ matrix.scheme }}" \
+            -destination "generic/platform=${{ matrix.device_platform }}" \
+            -configuration Debug \
+            -quiet \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Pick a simulator
+        id: sim
+        run: |
+          udid=$(xcrun simctl list devices available -j \
+            | jq -r --arg prefix '^${{ matrix.simulator_prefix }}' \
+              '[.devices[][] | select(.name | test($prefix))][0].udid')
+          if [ -z "$udid" ] || [ "$udid" = "null" ]; then
+            echo "::error::No available '${{ matrix.simulator_prefix }}' simulator on this image"
+            xcrun simctl list devices available
+            exit 1
+          fi
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+
+      # Unit tests only. The UI test targets need a booted simulator and app launch,
+      # which is slow and flaky enough that it belongs in its own job if we want it.
+      - name: Run unit tests
+        run: |
+          xcodebuild test \
+            -project "${{ matrix.project }}" \
+            -scheme "${{ matrix.scheme }}" \
+            -destination "platform=${{ matrix.simulator_platform }},id=${{ steps.sim.outputs.udid }}" \
+            -only-testing:"${{ matrix.test_target }}" \
+            -resultBundlePath "TestResults-${{ matrix.slug }}.xcresult" \
+            -quiet \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-${{ matrix.slug }}
+          path: TestResults-${{ matrix.slug }}.xcresult
+          retention-days: 7
