@@ -71,7 +71,17 @@ final class MultiTVSyncCoordinator {
             return
         }
 
-        let signature = Self.signature(for: items)
+        // In-app captures are phone-owned and only merged into this mirror so they can
+        // appear in the phone's grid — they are never on a TV. Excluding them from the
+        // order envelope too matters: a reorder naming ids the replica doesn't have
+        // leaves it with a partial library in the wrong order.
+        let replayable = items.filter { !CaptureStore.shared.contains(id: $0.id) }
+        guard !replayable.isEmpty else {
+            logger.info("Only captures to replay to \(name, privacy: .public); skipping")
+            return
+        }
+
+        let signature = Self.signature(for: replayable)
         if syncedSignatureByTV[name] == signature {
             logger.info("Replica \(name, privacy: .public) already in sync; skipping replay")
             return
@@ -79,7 +89,7 @@ final class MultiTVSyncCoordinator {
 
         // Resolve the locally-stored full-resolution copies, preserving the active order.
         var payload: [(id: String, url: URL)] = []
-        for item in items {
+        for item in replayable {
             if let url = LocalMediaStore.shared.localURL(forId: item.id) {
                 payload.append((id: item.id, url: url))
             } else {
@@ -92,8 +102,10 @@ final class MultiTVSyncCoordinator {
             return
         }
 
-        let orderedIds = items.map { $0.id }
-        logger.info("Replaying \(payload.count) of \(items.count) item(s) to replica \(name, privacy: .public)")
+        let orderedIds = replayable.map { $0.id }
+        logger.info(
+            "Replaying \(payload.count) of \(replayable.count) item(s) to replica \(name, privacy: .public)"
+        )
         connectionManager?.replayLibrary(payload, orderedIds: orderedIds, toPeerNamed: name) { [weak self] sent in
             guard let self, sent else { return }
             // Record only the items we could actually replay; if the local set later grows

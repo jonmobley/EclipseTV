@@ -20,28 +20,46 @@ enum ExternalOutputOrientation: String, CaseIterable {
         self == .landscape ? 16.0 / 9.0 : 9.0 / 16.0
     }
 
-    /// Phone baseline column count for this mode (Landscape 2, Vertical 3).
+    /// Phone-portrait baseline column count (Landscape 2, Vertical 3).
     var gridColumnCount: CGFloat {
         self == .landscape ? 2 : 3
     }
 
     /// Preferred cell width so iPad / wide panes add columns instead of huge tiles.
+    ///
+    /// Vertical uses a wider target than Landscape's per-column density so a
+    /// phone turned sideways lands on 4-up rather than packing 5–6 skinny tiles.
     var preferredGridItemWidth: CGFloat {
-        self == .landscape ? 180 : 110
+        self == .landscape ? 180 : 160
     }
 
+    /// Width at which a Vertical grid gains its phone-landscape column (3 → 4).
+    ///
+    /// Below this, the portrait baseline (3) wins; at a turned phone's safe
+    /// width (~600+) the floor becomes 4 before iPad fitted counts take over.
+    private static let verticalLandscapeMinWidth: CGFloat = 600
+
     /// Column count for a collection width, never below the phone baseline.
+    ///
+    /// Vertical: 3-up in portrait, 4-up once the pane is phone-landscape wide,
+    /// then more on iPad. Landscape: 2-up on a phone, more on wider panes.
     func gridColumnCount(
         forWidth width: CGFloat,
         sectionInset: CGFloat,
         spacing: CGFloat
     ) -> Int {
         let base = Int(gridColumnCount)
+        let minimum: Int
+        if self == .portrait, width >= Self.verticalLandscapeMinWidth {
+            minimum = base + 1
+        } else {
+            minimum = base
+        }
         let available = width - sectionInset * 2
-        guard available > 0 else { return base }
+        guard available > 0 else { return minimum }
         let preferred = preferredGridItemWidth
         let fitted = Int(floor((available + spacing) / (preferred + spacing)))
-        return max(base, fitted)
+        return max(minimum, fitted)
     }
 
     /// Cell height ÷ width: 16:9 cells in Landscape, 9:16 cells in Vertical.
@@ -96,15 +114,16 @@ enum WebTextSize: String, CaseIterable {
 
 /// How the AirPlay / TV surface replaces one piece of content with another.
 enum ContentTransitionStyle: String, CaseIterable {
-    case cut = "Cut"
     case crossfade = "Crossfade"
+    case cut = "Cut"
 }
 
 /// What AirPlay shows after the user slides the shutter off live.
 enum CameraCloseDestination: String, CaseIterable {
     /// Restore whatever was on AirPlay before camera went live.
     case previous = "Previous"
-    case logo = "Logo"
+    /// Show Background tile image (stored raw value was `"Logo"` before the rename).
+    case logo = "Background"
     case black = "Black"
 }
 
@@ -118,8 +137,10 @@ enum ExternalOutputSettings {
     private static let textSizeKey = "EclipseTV.web.textSize"
     private static let transitionKey = "EclipseTV.contentTransition"
     private static let cameraCloseKey = "EclipseTV.camera.closeDestination"
+    private static let includeFrameInCapturesKey = "EclipseTV.camera.includeFrameInCaptures"
 
-    /// Posted when orientation, rotation, text size, transition, or camera-close changes.
+    /// Posted when orientation, rotation, text size, transition, camera-close, or
+    /// frame-in-captures changes.
     static let didChangeNotification = Notification.Name("ExternalOutputSettings.didChange")
 
     static var orientation: ExternalOutputOrientation {
@@ -176,12 +197,12 @@ enum ExternalOutputSettings {
         }
     }
 
-    /// Cut (default) or crossfade when switching live content.
+    /// Crossfade (default) or cut when switching live content.
     static var contentTransition: ContentTransitionStyle {
         get {
             guard let raw = UserDefaults.standard.string(forKey: transitionKey),
                   let value = ContentTransitionStyle(rawValue: raw) else {
-                return .cut
+                return .crossfade
             }
             return value
         }
@@ -191,19 +212,35 @@ enum ExternalOutputSettings {
         }
     }
 
-    /// AirPlay target after stopping camera live. Default is Logo.
+    /// AirPlay target after stopping camera live. Default is Background.
     ///
-    /// Legacy stored `"Camera"` no longer matches an enum case and resolves to Logo.
+    /// Legacy `"Camera"` and pre-rename `"Logo"` resolve to Background.
     static var cameraCloseDestination: CameraCloseDestination {
         get {
-            guard let raw = UserDefaults.standard.string(forKey: cameraCloseKey),
-                  let value = CameraCloseDestination(rawValue: raw) else {
+            guard let raw = UserDefaults.standard.string(forKey: cameraCloseKey) else {
                 return .logo
             }
-            return value
+            if raw == "Logo" || raw == "Camera" { return .logo }
+            return CameraCloseDestination(rawValue: raw) ?? .logo
         }
         set {
             UserDefaults.standard.set(newValue.rawValue, forKey: cameraCloseKey)
+            NotificationCenter.default.post(name: didChangeNotification, object: nil)
+        }
+    }
+
+    /// When true, the selected camera frame is burned into saved photos and videos.
+    ///
+    /// Defaults on. Live preview always shows the overlay regardless of this setting.
+    static var includeFrameInCaptures: Bool {
+        get {
+            guard UserDefaults.standard.object(forKey: includeFrameInCapturesKey) != nil else {
+                return true
+            }
+            return UserDefaults.standard.bool(forKey: includeFrameInCapturesKey)
+        }
+        set {
+            UserDefaults.standard.set(newValue, forKey: includeFrameInCapturesKey)
             NotificationCenter.default.post(name: didChangeNotification, object: nil)
         }
     }

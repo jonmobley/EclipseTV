@@ -87,6 +87,12 @@ extension CameraManager {
         )
         center.addObserver(
             self,
+            selector: #selector(handleAppWillResignActiveForCapture),
+            name: UIApplication.willResignActiveNotification,
+            object: nil
+        )
+        center.addObserver(
+            self,
             selector: #selector(handleAppDidEnterBackgroundForCapture),
             name: UIApplication.didEnterBackgroundNotification,
             object: nil
@@ -95,26 +101,59 @@ extension CameraManager {
 
     /// Stops capture for backgrounding while remembering that a caller still wants it.
     ///
-    /// The system tears the session down when the app leaves the foreground. Without this
-    /// the manager keeps publishing `isSessionRunning == true` over a dead session, so the
-    /// home tile and AirPlay stage keep a frozen LIVE badge until something restarts it.
+    /// Finishes any in-flight movie *before* `stopRunning` — tearing the session down
+    /// mid-write truncates the file. The system also tears the session down when the
+    /// app leaves the foreground; without this the manager keeps publishing
+    /// `isSessionRunning == true` over a dead session.
     func suspendCaptureForBackground() {
         clearActiveStartWait()
-        closeOutRecordingIfNeeded()
-
-        let session = captureSession
-        sessionQueue.async { [weak self, session] in
-            if session.isRunning {
-                session.stopRunning()
-            }
-            self?.publishSessionRunning(false)
+        sessionQueue.async { [weak self] in
+            guard let self else { return }
+            if self.deferSessionStopUntilRecordingFinishesLocked() { return }
+            self.stopCaptureSessionLocked()
         }
     }
 
+    /// Hands the session stop off to `fileOutput` when a movie is still being written.
+    ///
+    /// Returns true when the caller must not stop the session itself.
+    func deferSessionStopUntilRecordingFinishesLocked() -> Bool {
+        guard movieFileOutput.isRecording || isStoppingRecording else { return false }
+        logger.notice("Finishing movie before stopping session")
+        stopSessionWhenRecordingFinishes = true
+        if movieFileOutput.isRecording, !isStoppingRecording {
+            isStoppingRecording = true
+            movieFileOutput.stopRecording()
+        }
+        return true
+    }
+
+    /// Returns the lens to its minimum zoom (session queue, best effort).
+    func resetZoomToMinimumLocked() {
+        guard let device = videoDevice else { return }
+        do {
+            try device.lockForConfiguration()
+            device.videoZoomFactor = device.minAvailableVideoZoomFactor
+            device.unlockForConfiguration()
+        } catch {
+            // Best-effort reset.
+        }
+    }
+
+    /// Stops `captureSession` if running and clears the running flag (session queue).
+    func stopCaptureSessionLocked() {
+        if captureSession.isRunning {
+            captureSession.stopRunning()
+        }
+        publishSessionRunning(false)
+    }
+
     /// Finishes any in-flight movie so the footage so far is saved rather than truncated.
+    ///
+    /// Used on lock / resign-active and when the camera UI goes away without the normal
+    /// stop path. Prefer `CameraLiveViewController.finalizeRecordingIfNeeded` when the
+    /// UI is still up so last-capture preview can update.
     func closeOutRecordingIfNeeded() {
-        guard isRecording else { return }
-        logger.notice("Closing out recording because capture is going away")
         stopRecording()
     }
 
@@ -190,6 +229,12 @@ extension CameraManager {
     @objc func handleAppDidBecomeActiveForCapture() {
         guard wantsSessionRunning, !isSessionRunning else { return }
         startCaptureIfPossible(attempt: 0, completion: {})
+    }
+
+    /// Lock screen / app switcher — start closing the movie early for more time
+    /// before the process is suspended.
+    @objc func handleAppWillResignActiveForCapture() {
+        closeOutRecordingIfNeeded()
     }
 
     @objc func handleAppDidEnterBackgroundForCapture() {

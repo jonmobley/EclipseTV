@@ -85,6 +85,8 @@ final class LocalMediaPreviewPageViewController: UIViewController {
 
     private func setupVideo() {
         let player = AVPlayer(url: item.fileURL)
+        player.isMuted = item.isMuted
+        player.actionAtItemEnd = item.isLooping ? .none : .pause
         self.player = player
 
         let layer = AVPlayerLayer(player: player)
@@ -96,13 +98,15 @@ final class LocalMediaPreviewPageViewController: UIViewController {
         let tap = UITapGestureRecognizer(target: self, action: #selector(togglePlayback))
         view.addGestureRecognizer(tap)
 
-        endObserver = NotificationCenter.default.addObserver(
-            forName: .AVPlayerItemDidPlayToEndTime,
-            object: player.currentItem,
-            queue: .main
-        ) { [weak player] _ in
-            player?.seek(to: .zero)
-            player?.play()
+        if item.isLooping {
+            endObserver = NotificationCenter.default.addObserver(
+                forName: .AVPlayerItemDidPlayToEndTime,
+                object: player.currentItem,
+                queue: .main
+            ) { [weak player] _ in
+                player?.seek(to: .zero)
+                player?.play()
+            }
         }
     }
 

@@ -88,6 +88,17 @@ extension iPhoneMainViewController: UIScrollViewDelegate, UINavigationController
     func updateHomeSplitLayoutIfNeeded() {
         let width = homePagerScrollView.bounds.width
         guard width > 0 else { return }
+        applyHomePageWidths(forTotalWidth: width)
+    }
+
+    /// Applies Library/Music page widths for `totalWidth` (pager bounds or transition size).
+    ///
+    /// Called from layout and from `viewWillTransition` with the destination width so a
+    /// phone turn doesn't leave the portrait page width stuck — that kept Vertical at
+    /// 3-up with a dead band of black beside the grid.
+    @discardableResult
+    func applyHomePageWidths(forTotalWidth width: CGFloat) -> Bool {
+        guard width > 0 else { return false }
 
         let wantSplit = traitCollection.horizontalSizeClass == .regular
         let musicWidth = wantSplit ? musicSidebarWidth(for: width) : width
@@ -98,7 +109,9 @@ extension iPhoneMainViewController: UIScrollViewDelegate, UINavigationController
             abs((libraryPageWidthConstraint?.constant ?? -1) - libraryWidth) > 0.5
         let musicWidthChanged =
             abs((musicPageWidthConstraint?.constant ?? -1) - musicWidth) > 0.5
-        guard splitChanged || libraryWidthChanged || musicWidthChanged else { return }
+        guard splitChanged || libraryWidthChanged || musicWidthChanged else {
+            return false
+        }
 
         isHomeSplitLayout = wantSplit
         libraryPageWidthConstraint?.constant = libraryWidth
@@ -115,8 +128,10 @@ extension iPhoneMainViewController: UIScrollViewDelegate, UINavigationController
         }
 
         audioLibraryViewController.showsEmbeddedBackButton = !wantSplit
+        libraryViewController.setMusicPagingAvailable(!wantSplit)
         applyHomePagerTopAttachment()
         updateHomeChromeForCurrentPage()
+        return true
     }
 
     /// Keeps the current page aligned after rotation / bounds changes.
@@ -145,13 +160,18 @@ extension iPhoneMainViewController: UIScrollViewDelegate, UINavigationController
     // MARK: - UIScrollViewDelegate
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
-        guard scrollView === homePagerScrollView, !isHomeSplitLayout else { return }
+        guard scrollView === homePagerScrollView else { return }
+        // Horizontal pager only — never let the whole Library/Music page ride
+        // vertically under the fixed header.
+        if abs(scrollView.contentOffset.y) > 0.5 {
+            scrollView.contentOffset.y = 0
+        }
+        guard !isHomeSplitLayout else { return }
         let width = scrollView.bounds.width
         guard width > 0 else { return }
-        // Fade only — pager height stays fixed so Music does not jump.
-        let showingMusic = scrollView.contentOffset.x / width > 0.5
-        headerBar.alpha = showingMusic ? 0 : 1
-        headerBar.isUserInteractionEnabled = !showingMusic
+        // Progress-tied chrome — pager height stays fixed so Music does not jump.
+        let progress = min(1, max(0, scrollView.contentOffset.x / width))
+        applyHomeLibraryHeaderMusicProgress(progress)
     }
 
     func scrollViewDidEndDragging(
@@ -198,13 +218,15 @@ extension iPhoneMainViewController: UIScrollViewDelegate, UINavigationController
     /// Paging stays on only at Music root (and never while arranging, split,
     /// or phone-landscape side-by-side chrome).
     private func refreshHomePagerScrollEnabled() {
-        if isHomeSplitLayout || libraryViewController.isArranging {
+        if isHomeSplitLayout
+            || libraryViewController.isArranging
+            || libraryViewController.isSelecting {
             homePagerScrollView.isScrollEnabled = false
             return
         }
         // An open Show puts preview|grid on the horizontal axis in phone landscape,
-        // so Music is reachable there only via the Add menu / mini player. Home has
-        // no such split and keeps the swipe.
+        // so Music is reachable there only via the Home dropdown / mini player. Home
+        // has no such split and keeps the swipe.
         if traitCollection.verticalSizeClass == .compact,
            libraryViewController.isShowMode {
             homePagerScrollView.isScrollEnabled = false
@@ -221,20 +243,35 @@ extension iPhoneMainViewController: UIScrollViewDelegate, UINavigationController
         libraryViewController.onRequestEdit = { [weak self] id in
             self?.beginEditCrop(forItemId: id)
         }
+        libraryViewController.onRequestVideoThumbnail = { [weak self] id in
+            self?.beginChangeVideoThumbnail(forItemId: id)
+        }
         libraryViewController.onPresentCamera = { [weak self] in
             self?.presentCameraLive()
         }
         libraryViewController.onChooseLogo = { [weak self] in
             self?.showLogoPicker()
         }
+        libraryViewController.onChooseScreensaver = { [weak self] in
+            self?.showScreensaverPicker()
+        }
         libraryViewController.onAddMediaToAlbum = { [weak self] albumId in
             self?.promptAddMedia(toAlbumId: albumId)
+        }
+        libraryViewController.onAddWebsiteToAlbum = { [weak self] albumId in
+            self?.promptAddWebsite(toAlbumId: albumId)
+        }
+        libraryViewController.addMenuProvider = { [weak self] in
+            self?.makeAddMenu() ?? UIMenu(children: [])
         }
         libraryViewController.onCreateSlideshow = { [weak self] albumId in
             self?.promptNewSlideshow(inShowId: albumId)
         }
         libraryViewController.onCreateShow = { [weak self] in
             self?.promptNewAlbum()
+        }
+        libraryViewController.onRequestEclipseTVConnect = { [weak self] in
+            self?.resumeConnection()
         }
         libraryViewController.onOpenShowChanged = { [weak self] _ in
             self?.refreshLibraryMenu()
@@ -245,8 +282,20 @@ extension iPhoneMainViewController: UIScrollViewDelegate, UINavigationController
             self?.refreshLibraryMenu()
             self?.refreshHomePagerScrollEnabled()
         }
+        libraryViewController.onSelectingChanged = { [weak self] selecting in
+            guard let self else { return }
+            self.headerBar.setSelecting(
+                selecting,
+                actionsMenu: self.libraryViewController.selectActionsMenu()
+            )
+            self.refreshLibraryMenu()
+            self.refreshHomePagerScrollEnabled()
+        }
         libraryViewController.onBlackLiveChanged = { [weak self] live in
             self?.headerBar.setBlackLive(live)
+        }
+        libraryViewController.onLiveOutputLockChanged = { [weak self] locked in
+            self?.headerBar.setLiveLocked(locked)
         }
 
         addChild(libraryViewController)
@@ -322,6 +371,9 @@ extension iPhoneMainViewController: UIScrollViewDelegate, UINavigationController
 
     private func setHomePage(_ index: Int, animated: Bool) {
         guard !isHomeSplitLayout else { return }
+        if index == 1 {
+            libraryViewController.dismissMusicSwipeHint()
+        }
         let width = homePagerScrollView.bounds.width
         guard width > 0 else {
             homePageIndex = index
@@ -331,7 +383,7 @@ extension iPhoneMainViewController: UIScrollViewDelegate, UINavigationController
         homePageIndex = index
         let offset = CGPoint(x: CGFloat(index) * width, y: 0)
         homePagerScrollView.setContentOffset(offset, animated: animated)
-        // Animated scrolls update chrome from `scrollViewDidScroll` at the midpoint.
+        // Animated scrolls drive chrome from `scrollViewDidScroll`.
         if !animated {
             updateHomeChromeForCurrentPage()
         }
@@ -349,6 +401,8 @@ extension iPhoneMainViewController: UIScrollViewDelegate, UINavigationController
         updateHomeChromeForCurrentPage()
         if homePageIndex == 0 {
             audioLibraryNavController?.popToRootViewController(animated: false)
+        } else {
+            libraryViewController.dismissMusicSwipeHint()
         }
     }
 
@@ -373,18 +427,52 @@ extension iPhoneMainViewController: UIScrollViewDelegate, UINavigationController
         }
     }
 
-    /// Shows or hides the library header without changing pager height.
+    /// Settled show/hide for the library header without changing pager height.
     private func applyHomeLibraryHeaderVisible(_ visible: Bool) {
-        let shouldHide = !visible
-        guard headerBar.isHidden != shouldHide
-            || headerBar.alpha != (visible ? 1 : 0)
-        else { return }
+        applyHomeLibraryHeaderMusicProgress(visible ? 0 : 1)
+        headerBar.isHidden = !visible
+    }
 
-        headerBar.alpha = visible ? 1 : 0
-        headerBar.isHidden = shouldHide
-        headerBar.isUserInteractionEnabled = visible
-        if visible {
+    /// Library→Music progress (0…1): fades and nudges the header with the swipe.
+    private func applyHomeLibraryHeaderMusicProgress(_ progress: CGFloat) {
+        let p = min(1, max(0, progress))
+        let slide: CGFloat = 28
+        if headerBar.isHidden, p < 1 {
+            headerBar.isHidden = false
+        }
+        headerBar.alpha = 1 - p
+        headerBar.transform = CGAffineTransform(translationX: -p * slide, y: 0)
+        headerBar.isUserInteractionEnabled = p < 0.5
+        if p < 1 {
             view.bringSubviewToFront(headerBar)
         }
+    }
+}
+
+// MARK: - Rotation
+
+extension iPhoneMainViewController {
+
+    override func viewWillTransition(
+        to size: CGSize,
+        with coordinator: UIViewControllerTransitionCoordinator
+    ) {
+        super.viewWillTransition(to: size, with: coordinator)
+        // Re-measure during the turn. Waiting only on `viewDidLayoutSubviews` left the
+        // Library page at its portrait width, so Vertical stayed 3-up with a black band
+        // beside the grid. Use the pager's bounds (safe-area width), not `size`
+        // (full view), so pages don't spill under the landscape notch.
+        let refresh = { [weak self] in
+            guard let self else { return }
+            self.updateHomeSplitLayoutIfNeeded()
+            self.libraryViewController.collectionView.collectionViewLayout
+                .invalidateLayout()
+        }
+        coordinator.animate(alongsideTransition: { _ in
+            refresh()
+        }, completion: { _ in
+            refresh()
+            self.syncHomePagerOffsetIfNeeded()
+        })
     }
 }

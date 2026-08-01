@@ -9,29 +9,42 @@ import UIKit
 
 extension UIViewController {
 
-    /// Brief bottom banner for presentation feedback (e.g. no AirPlay display).
-    func showPresentationToast(_ message: String, duration: TimeInterval = 2.2) {
-        let existing = view.subviews.first {
-            $0.accessibilityIdentifier == PresentationToastView.accessibilityID
-        }
-        existing?.removeFromSuperview()
+    /// Brief toast for presentation feedback.
+    /// - Parameter centeredIn: When set, centers in that view; otherwise bottom of `view`.
+    func showPresentationToast(
+        _ message: String,
+        duration: TimeInterval = 2.2,
+        centeredIn host: UIView? = nil
+    ) {
+        removePresentationToast()
 
+        let container = host ?? view!
         let toast = PresentationToastView(message: message)
         toast.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(toast)
+        container.addSubview(toast)
+        container.bringSubviewToFront(toast)
 
-        NSLayoutConstraint.activate([
-            toast.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+        var constraints: [NSLayoutConstraint] = [
+            toast.centerXAnchor.constraint(equalTo: container.centerXAnchor),
             toast.leadingAnchor.constraint(
-                greaterThanOrEqualTo: view.leadingAnchor, constant: 24
+                greaterThanOrEqualTo: container.leadingAnchor, constant: 24
             ),
             toast.trailingAnchor.constraint(
-                lessThanOrEqualTo: view.trailingAnchor, constant: -24
-            ),
-            toast.bottomAnchor.constraint(
-                equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -16
+                lessThanOrEqualTo: container.trailingAnchor, constant: -24
             )
-        ])
+        ]
+        if host != nil {
+            constraints.append(
+                toast.centerYAnchor.constraint(equalTo: container.centerYAnchor)
+            )
+        } else {
+            constraints.append(
+                toast.bottomAnchor.constraint(
+                    equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -16
+                )
+            )
+        }
+        NSLayoutConstraint.activate(constraints)
 
         toast.alpha = 0
         toast.transform = CGAffineTransform(translationX: 0, y: 8)
@@ -53,16 +66,18 @@ extension UIViewController {
         }
     }
 
-    /// Tip when an AirPlay-only action runs with no external display.
-    /// Soft-repeats every few attempts so users aren't stranded after the first tip.
-    func warnIfNoExternalDisplay() {
-        guard !ExternalDisplayManager.shared.isConnected else { return }
-        let countKey = "EclipseTV.tip.airPlayConnectCount"
-        let count = UserDefaults.standard.integer(forKey: countKey) + 1
-        UserDefaults.standard.set(count, forKey: countKey)
-        guard count == 1 || count % 4 == 0 else { return }
-        showPresentationToast("Connect AirPlay to present on the TV")
+    private func removePresentationToast() {
+        let id = PresentationToastView.accessibilityID
+        var stack: [UIView] = [view]
+        while let current = stack.popLast() {
+            if current.accessibilityIdentifier == id {
+                current.removeFromSuperview()
+                return
+            }
+            stack.append(contentsOf: current.subviews)
+        }
     }
+
 }
 
 // MARK: - View

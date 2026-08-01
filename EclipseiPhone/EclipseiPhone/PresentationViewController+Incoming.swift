@@ -23,6 +23,8 @@ extension PresentationViewController {
             installIncomingVideo(
                 url: url, isLooping: isLooping, isMuted: isMuted, generation: generation
             )
+        case .screensaver(let url):
+            installIncomingScreensaver(url: url, generation: generation)
         case .camera:
             installIncomingCamera(generation: generation)
         case .web(let url):
@@ -133,6 +135,27 @@ extension PresentationViewController {
             notifyIfCurrent(generation)
         }
         player.play()
+    }
+
+    // MARK: - Screensaver
+
+    private func installIncomingScreensaver(url: URL, generation: Int) {
+        let host = makeIncomingMediaHost()
+        let screensaver = SeamlessLoopPlayerView(url: url)
+        screensaver.translatesAutoresizingMaskIntoConstraints = false
+        host.addSubview(screensaver)
+        NSLayoutConstraint.activate([
+            screensaver.topAnchor.constraint(equalTo: host.topAnchor),
+            screensaver.bottomAnchor.constraint(equalTo: host.bottomAnchor),
+            screensaver.leadingAnchor.constraint(equalTo: host.leadingAnchor),
+            screensaver.trailingAnchor.constraint(equalTo: host.trailingAnchor)
+        ])
+        incomingScreensaverView = screensaver
+        layoutIncomingMediaHost()
+        screensaver.onReady = { [weak self] in
+            self?.notifyIfCurrent(generation)
+        }
+        screensaver.play()
     }
 
     // MARK: - Camera

@@ -82,21 +82,33 @@ extension iPhoneMainViewController {
         setupTransferOverlay()
     }
 
-    /// Pins the header bar (status + "+") to the top safe area.
+    /// Pins the header bar to the top safe area.
     private func setupHeaderBar() {
         headerBar.translatesAutoresizingMaskIntoConstraints = false
         headerBar.setAddMenu(makeAddMenu())
         headerBar.onOpenSettings = { [weak self] in
             self?.presentSettings()
         }
+        headerBar.onOpenOutputStatus = { [weak self] in
+            self?.presentOutputStatusOptions()
+        }
+        headerBar.onToggleLiveLock = { [weak self] in
+            self?.libraryViewController.toggleLiveOutputLock()
+        }
         headerBar.onPresentBlack = { [weak self] in
-            self?.libraryViewController.presentBlackLive()
+            self?.libraryViewController.toggleBlackLive()
+        }
+        headerBar.onOpenGettingStarted = { [weak self] in
+            self?.presentGettingStarted()
+        }
+        headerBar.onNewShow = { [weak self] in
+            self?.promptNewAlbum()
         }
         headerBar.onDoneArranging = { [weak self] in
             self?.libraryViewController.commitArranging()
         }
-        headerBar.onGoHome = { [weak self] in
-            self?.libraryViewController.closeOpenShow()
+        headerBar.onDoneSelecting = { [weak self] in
+            self?.libraryViewController.cancelSelecting()
         }
         view.addSubview(headerBar)
 
@@ -131,7 +143,7 @@ extension iPhoneMainViewController {
         headerBar.setPresenting(ExternalDisplayManager.shared.isConnected)
     }
 
-    /// Pins the ambient music mini player above the home safe-area bottom.
+    /// Pins the ambient music mini player / bubble above the home safe-area bottom.
     private func setupAudioMiniPlayer() {
         audioMiniPlayer.translatesAutoresizingMaskIntoConstraints = false
         audioMiniPlayer.isHidden = true
@@ -141,14 +153,25 @@ extension iPhoneMainViewController {
         audioMiniPlayer.onTogglePlayPause = {
             AudioPlayerController.shared.togglePlayPause()
         }
-        audioMiniPlayer.onSkipNext = {
-            AudioPlayerController.shared.playNext()
-        }
-        audioMiniPlayer.onToggleMute = {
-            let player = AudioPlayerController.shared
-            player.setMuted(!player.isMuted)
+        audioMiniPlayer.onMinimize = { [weak self] in
+            self?.setAudioMiniCollapsed(true, animated: true)
         }
         view.addSubview(audioMiniPlayer)
+
+        audioMiniBubble.translatesAutoresizingMaskIntoConstraints = false
+        audioMiniBubble.isHidden = true
+        audioMiniBubble.onExpand = { [weak self] in
+            self?.setAudioMiniCollapsed(false, animated: true)
+        }
+        audioMiniBubble.onStop = { [weak self] in
+            AudioPlayerController.shared.stop()
+            self?.audioMiniCollapsed = true
+            self?.isAudioMiniChromeAnimating = false
+            HomeMusicSwipeHint.markEligibleAfterMiniPlayerClose()
+            self?.libraryViewController.refreshMusicSwipeHintVisibility()
+            self?.refreshAudioMiniPlayer()
+        }
+        view.addSubview(audioMiniBubble)
 
         let height = audioMiniPlayer.heightAnchor.constraint(equalToConstant: 0)
         audioMiniHeightConstraint = height
@@ -158,7 +181,14 @@ extension iPhoneMainViewController {
             audioMiniPlayer.bottomAnchor.constraint(
                 equalTo: view.safeAreaLayoutGuide.bottomAnchor
             ),
-            height
+            height,
+
+            audioMiniBubble.trailingAnchor.constraint(
+                equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16
+            ),
+            audioMiniBubble.bottomAnchor.constraint(
+                equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -12
+            )
         ])
 
         audioPlayerObserver = NotificationCenter.default.addObserver(
@@ -171,18 +201,6 @@ extension iPhoneMainViewController {
         refreshAudioMiniPlayer()
     }
 
-    /// Shows or hides the mini player and insets Library + Music pages.
-    func refreshAudioMiniPlayer() {
-        let active = AudioPlayerController.shared.hasActiveSession
-        audioMiniPlayer.reload()
-        let height: CGFloat = active ? AudioMiniPlayerView.preferredHeight : 0
-        audioMiniHeightConstraint?.constant = height
-        audioMiniPlayer.isHidden = !active
-        libraryViewController.miniPlayerBottomInset = height
-        audioLibraryViewController.miniPlayerBottomInset = height
-        view.layoutIfNeeded()
-    }
-
     /// Reveals the Music page to the right of the media grid (no-op when split).
     func presentAudioLibrary() {
         guard !isHomeSplitLayout else { return }
@@ -190,7 +208,11 @@ extension iPhoneMainViewController {
     }
 
     /// Presents the expanded Now Playing sheet for the ambient player.
+    ///
+    /// One at a time: the mini player is a plain button, and this goes up through
+    /// `presentationAnchor`, which would happily stack a second sheet on the first.
     func presentNowPlaying() {
+        guard !isAlreadyOpen(AudioNowPlayingViewController.self) else { return }
         let nowPlaying = AudioNowPlayingViewController()
         nowPlaying.onOpenLibrary = { [weak self] in
             self?.dismiss(animated: true) {
@@ -250,7 +272,7 @@ extension iPhoneMainViewController {
     /// Parks the home tile on a still first so the shared preview handoff doesn't
     /// flash black; keeps the session running for a live fullscreen open.
     func presentCameraLive() {
-        if presentedViewController is CameraLiveViewController { return }
+        guard !isAlreadyOpen(CameraLiveViewController.self) else { return }
         SlideshowPlaybackController.shared.stop()
         libraryViewController.parkHomeCameraTileForFullscreen()
         if AVCaptureDevice.authorizationStatus(for: .video) == .authorized,
@@ -259,20 +281,37 @@ extension iPhoneMainViewController {
             CameraManager.shared.prepareAndStart { }
         }
         let cameraVC = CameraLiveViewController()
+        // Opened from inside a Show: what you shoot becomes a card in that Show.
+        cameraVC.captureDestinationShowId = libraryViewController.openShow?.id
         cameraVC.modalPresentationStyle = .fullScreen
         present(cameraVC, animated: true)
     }
 
-    /// Presents the saved Web list for AirPlay web display.
+    /// Presents History for managing saved sites (one list at a time).
     func presentPages() {
+        if let open = openController(ofType: WebPagesViewController.self) {
+            open.navigationController?.popToViewController(open, animated: true)
+            return
+        }
+        if let compose = openController(ofType: AddWebsiteViewController.self),
+           let nav = compose.navigationController {
+            let history = WebPagesViewController()
+            nav.pushViewController(history, animated: true)
+            return
+        }
         let pagesVC = WebPagesViewController()
-        let nav = UINavigationController(rootViewController: pagesVC)
+        // The browser pushed from this list rotates with Landscape Display Mode.
+        let nav = DisplayModeNavigationController(rootViewController: pagesVC)
         nav.modalPresentationStyle = .fullScreen
         present(nav, animated: true)
     }
 
     /// Presents a filterable sheet of existing images, videos, and PDFs.
+    ///
+    /// With an open Show: multi-select and **Add** appends cards (never goes live).
+    /// Without a Show: tap presents the item (legacy path).
     func presentMediaLibrary() {
+        guard !isAlreadyOpen(MediaLibraryPickerViewController.self) else { return }
         let picker = MediaLibraryPickerViewController()
         let nav = UINavigationController(rootViewController: picker)
         nav.modalPresentationStyle = .pageSheet
@@ -280,14 +319,26 @@ extension iPhoneMainViewController {
             sheet.detents = [.large()]
             sheet.prefersGrabberVisible = true
         }
-        picker.onSelectMedia = { [weak self, weak nav] item in
-            nav?.dismiss(animated: true) {
-                self?.libraryViewController.presentMedia(item)
+        if let showId = libraryViewController.openShowId {
+            picker.targetShowId = showId
+            picker.onAddToShow = { mediaIds, pdfIds in
+                for id in mediaIds {
+                    LocalAlbumStore.shared.add(itemId: id, toAlbumId: showId)
+                }
+                for id in pdfIds {
+                    LocalAlbumStore.shared.add(itemId: id.uuidString, toAlbumId: showId)
+                }
             }
-        }
-        picker.onSelectPDF = { [weak self, weak nav] doc in
-            nav?.dismiss(animated: true) {
-                self?.libraryViewController.presentPDF(doc)
+        } else {
+            picker.onSelectMedia = { [weak self, weak nav] item in
+                nav?.dismiss(animated: true) {
+                    self?.libraryViewController.presentMedia(item)
+                }
+            }
+            picker.onSelectPDF = { [weak self, weak nav] doc in
+                nav?.dismiss(animated: true) {
+                    self?.libraryViewController.presentPDF(doc)
+                }
             }
         }
         presentationAnchor.present(nav, animated: true)

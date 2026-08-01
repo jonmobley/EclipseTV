@@ -38,7 +38,21 @@ extension CameraLiveViewController {
     /// In Landscape Display Mode the camera is orientation-locked to landscape, where
     /// a sheet fills the screen with no grabber and no swipe-to-dismiss — so the bar
     /// button is the only way out. Edge attachment keeps it a card instead.
+    ///
+    /// An in-flight movie is finished and saved first — settings must not open over a
+    /// live recording (no UI left on the shutter to stop it cleanly).
     @objc func settingsButtonTapped() {
+        if CameraManager.shared.isRecording {
+            finalizeRecordingIfNeeded { [weak self] in
+                self?.presentCameraSettings()
+            }
+            return
+        }
+        presentCameraSettings()
+    }
+
+    /// Presents the Camera settings sheet.
+    private func presentCameraSettings() {
         let settings = CameraSettingsViewController()
         let nav = UINavigationController(rootViewController: settings)
         nav.modalPresentationStyle = .pageSheet

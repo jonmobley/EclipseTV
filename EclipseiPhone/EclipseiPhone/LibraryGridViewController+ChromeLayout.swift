@@ -24,22 +24,44 @@ extension LibraryGridViewController {
     ///
     /// Hiding parks any embedded web preview so a hidden view can't hold the warm
     /// session, and drops the collapse transform so re-showing starts expanded.
+    /// Always re-applies the Home vs Show visibility — never leave a live preview
+    /// sitting on top of the Home marketing carousel.
     func updateHeroVisibility() {
         let shouldHide = !showsLiveHero
-        guard liveHeader.isHidden != shouldHide else { return }
+        let visibilityChanged = liveHeader.isHidden != shouldHide
         liveHeader.isHidden = shouldHide
+        liveHeader.isUserInteractionEnabled = !shouldHide
         if shouldHide {
             liveHeader.clearWebPreview(parking: true)
+            liveHeader.clearScreensaverPreview()
             liveHeader.transform = .identity
             liveHeader.applyCollapse(progress: 0, scale: 1)
             heroCollapseProgress = 0
             heroExpandTapRecognizer.isEnabled = false
+            refreshForeignLivePreview()
         }
+        // Always relayout when hiding — a stuck visible hero can already report
+        // `isHidden == true` after a partial teardown (See All page-sheet dismiss
+        // often skips `viewWillAppear`), and skipping layout leaves it on screen.
+        guard visibilityChanged || shouldHide else { return }
         // Force the guarded work in `updateChromeLayoutIfNeeded` to run: the axis
         // and the grid's top inset both depend on whether the hero is on screen.
         lastLayoutWidth = 0
         lastLayoutHeight = 0
         updateChromeLayoutIfNeeded()
+    }
+
+    /// Home-only: force the live preview off the marketing carousel.
+    ///
+    /// Call after leaving a Show, when See All dismisses, and on appear while Home
+    /// is showing — page sheets often skip `viewWillAppear` on the presenter.
+    func enforceHomeLiveHeroTeardownIfNeeded() {
+        guard !isShowMode else { return }
+        isScreensaverSelected = false
+        isLogoSelected = false
+        updateHeroVisibility()
+        applyHeroChrome()
+        refreshLiveHeader()
     }
 
     /// Installs portrait + landscape constraint sets; activates the stacked layout.
@@ -171,6 +193,15 @@ extension LibraryGridViewController {
 
     /// Sizes the live hero for the active chrome axis and Display Mode.
     func applyHeroChrome() {
+        // Home keeps the marketing carousel only — never size/front the live preview.
+        guard showsLiveHero else {
+            liveHeader.isHidden = true
+            liveHeader.clearWebPreview(parking: true)
+            liveHeader.clearScreensaverPreview()
+            syncHeroOverlayInsets(preservingProgress: currentHeroScrollProgress())
+            updateHeroCollapse()
+            return
+        }
         // Use the applied axis (`isSideBySideChrome`), not traits alone — traits can
         // flip before bounds/constraints catch up (e.g. cold launch in landscape).
         if isSideBySideChrome {
@@ -205,16 +236,23 @@ extension LibraryGridViewController {
         let top = (isSideBySideChrome || !showsLiveHero)
             ? 0
             : expandedHeroOverlayInset()
+        // Home already pads via section insets + safe area; the extra sectionInset
+        // on contentInset.bottom was a ~16pt dead scroll bump. Show mode still
+        // wants that breathing room under the last media row.
+        let bottom = isShowMode
+            ? miniPlayerBottomInset + sectionInset
+            : miniPlayerBottomInset
 
         var inset = collectionView.contentInset
         let topChanged = abs(inset.top - top) > 0.5
+        let bottomChanged = abs(inset.bottom - bottom) > 0.5
         inset.top = top
-        inset.bottom = miniPlayerBottomInset + sectionInset
+        inset.bottom = bottom
         collectionView.contentInset = inset
         collectionView.verticalScrollIndicatorInsets.top = top
         collectionView.verticalScrollIndicatorInsets.bottom = miniPlayerBottomInset
 
-        if topChanged {
+        if topChanged || bottomChanged {
             // Re-pin the same content under the finger (avoid UIKit inset/offset
             // fights), clamped so a bigger viewport can't strand us past the end.
             let pinned = min(max(0, preservingProgress), maxVerticalScroll())
@@ -224,8 +262,10 @@ extension LibraryGridViewController {
             )
         }
 
-        // Keep the empty-state hint below the floating hero.
-        if !isSideBySideChrome {
+        // Keep the empty-state hint below the floating hero / Recent Shows row.
+        if !isShowMode {
+            updateEmptyState()
+        } else if !isSideBySideChrome {
             emptyTopConstraint?.constant = top + 24
         }
     }
@@ -263,7 +303,9 @@ extension LibraryGridViewController {
         } else {
             NSLayoutConstraint.deactivate(landscapeChromeConstraints)
             NSLayoutConstraint.activate(portraitChromeConstraints)
-            view.bringSubviewToFront(liveHeader)
+            if showsLiveHero {
+                view.bringSubviewToFront(liveHeader)
+            }
         }
         heroSpacer.isHidden = true
     }
@@ -279,6 +321,8 @@ extension LibraryGridViewController {
     /// Portrait: full-bleed 16:9 or capped centered hero (Vertical / wide panes).
     /// Always the expanded size — the scroll-linked collapse is a transform on top.
     func applyStackedHeroChrome() {
+        // Don't promote a hidden live preview over Home's marketing carousel.
+        guard showsLiveHero else { return }
         view.bringSubviewToFront(liveHeader)
         if ExternalOutputSettings.isVerticalMode {
             applyCappedHero(aspectWidthOverHeight: 9.0 / 16.0)

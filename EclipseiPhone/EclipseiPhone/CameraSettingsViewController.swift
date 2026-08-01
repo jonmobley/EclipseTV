@@ -7,13 +7,22 @@
 
 import UIKit
 
-/// Camera-page settings: Frames and When Camera Closes.
+/// Camera-page settings: shutter guide, frame burn-in, and When Camera Closes.
+///
+/// Frame picking / import lives on the camera Frame button drawer, not here.
 final class CameraSettingsViewController: UITableViewController {
 
     private enum Section: Int, CaseIterable {
-        case frames
+        case buttonGuide
+        case frameCaptures
         case cameraClose
     }
+
+    private static let buttonGuideRows = [
+        "Slide button to toggle LIVE",
+        "Tap button to take a photo",
+        "Hold down to start/stop recording"
+    ]
 
     init() {
         super.init(style: .insetGrouped)
@@ -31,12 +40,6 @@ final class CameraSettingsViewController: UITableViewController {
             self,
             selector: #selector(reload),
             name: ExternalOutputSettings.didChangeNotification,
-            object: nil
-        )
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(reload),
-            name: CameraFrameStore.didChangeNotification,
             object: nil
         )
     }
@@ -65,7 +68,9 @@ final class CameraSettingsViewController: UITableViewController {
         numberOfRowsInSection section: Int
     ) -> Int {
         switch Section(rawValue: section) {
-        case .frames:
+        case .buttonGuide:
+            return Self.buttonGuideRows.count
+        case .frameCaptures:
             return 1
         case .cameraClose:
             return CameraCloseDestination.allCases.count
@@ -79,9 +84,13 @@ final class CameraSettingsViewController: UITableViewController {
         titleForHeaderInSection section: Int
     ) -> String? {
         switch Section(rawValue: section) {
+        case .buttonGuide:
+            return "Button Guide"
+        case .frameCaptures:
+            return "Frames"
         case .cameraClose:
             return "When Camera Closes"
-        case .frames, .none:
+        case .none:
             return nil
         }
     }
@@ -91,10 +100,13 @@ final class CameraSettingsViewController: UITableViewController {
         titleForFooterInSection section: Int
     ) -> String? {
         switch Section(rawValue: section) {
+        case .frameCaptures:
+            return "When on, the selected frame is saved into photos and video recordings. "
+                + "Live view always shows the frame. Choose frames with the Frame button."
         case .cameraClose:
-            return "When you slide the shutter off live, switch AirPlay to Logo, "
+            return "When you slide the shutter off live, switch AirPlay to Background, "
                 + "Black, or whatever was live before the camera."
-        case .frames, .none:
+        case .buttonGuide, .none:
             return nil
         }
     }
@@ -106,21 +118,38 @@ final class CameraSettingsViewController: UITableViewController {
         let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
         var config = cell.defaultContentConfiguration()
         cell.selectionStyle = .default
+        cell.accessoryType = .none
+        cell.accessoryView = nil
+        config.secondaryText = nil
+        config.image = nil
 
         switch Section(rawValue: indexPath.section) {
-        case .frames:
-            config.text = "Frames"
-            config.secondaryText = frameSummary()
-            config.image = UIImage(systemName: "rectangle.dashed")
-            cell.accessoryType = .disclosureIndicator
+        case .buttonGuide:
+            config.text = Self.buttonGuideRows[indexPath.row]
+            config.textProperties.color = .secondaryLabel
+            cell.selectionStyle = .none
+        case .frameCaptures:
+            config.text = "Include in Photos & Videos"
+            config.textProperties.color = .label
+            config.image = UIImage(systemName: "square.and.arrow.down")
+            cell.selectionStyle = .none
+            let toggle = UISwitch()
+            toggle.isOn = ExternalOutputSettings.includeFrameInCaptures
+            toggle.addTarget(
+                self,
+                action: #selector(includeFrameToggleChanged(_:)),
+                for: .valueChanged
+            )
+            cell.accessoryView = toggle
         case .cameraClose:
             let destination = CameraCloseDestination.allCases[indexPath.row]
             config.text = destination.rawValue
+            config.textProperties.color = .label
             switch destination {
             case .previous:
-                config.secondaryText = "Restore what was on AirPlay before camera"
+                config.secondaryText = "Show what was previously live"
             case .logo, .black:
-                config.secondaryText = nil
+                break
             }
             cell.accessoryType =
                 ExternalOutputSettings.cameraCloseDestination == destination
@@ -136,19 +165,15 @@ final class CameraSettingsViewController: UITableViewController {
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
         switch Section(rawValue: indexPath.section) {
-        case .frames:
-            navigationController?.pushViewController(
-                CameraFramePickerViewController(), animated: true
-            )
         case .cameraClose:
             ExternalOutputSettings.cameraCloseDestination =
                 CameraCloseDestination.allCases[indexPath.row]
-        case .none:
+        case .buttonGuide, .frameCaptures, .none:
             break
         }
     }
 
-    private func frameSummary() -> String {
-        CameraFrameStore.shared.selectedImage == nil ? "None" : "Selected"
+    @objc private func includeFrameToggleChanged(_ sender: UISwitch) {
+        ExternalOutputSettings.includeFrameInCaptures = sender.isOn
     }
 }

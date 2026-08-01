@@ -36,7 +36,6 @@ extension LibraryGridViewController {
         let ids = playback.activeSlideIds
         guard ids.indices.contains(indexPath.item) else { return }
         let id = ids[indexPath.item]
-        let isCurrent = indexPath.item == playback.currentSlideIndex
         cell.configure(
             with: LibraryItemDTO(
                 id: id,
@@ -46,7 +45,7 @@ extension LibraryGridViewController {
                 isAvailable: true
             ),
             thumbnail: store.thumbnail(for: id),
-            isLive: isCurrent
+            isLive: false
         )
     }
 

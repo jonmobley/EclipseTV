@@ -75,7 +75,11 @@ final class SettingsDisplayModeViewController: UITableViewController {
     ) -> String? {
         switch Section(rawValue: section) {
         case .orientation:
-            return "Landscape is 16:9. Vertical is 9:16 for a portrait-mounted TV."
+            return """
+            Landscape is 16:9. Vertical is 9:16 for a portrait-mounted TV. \
+            Each Show and its media belong to one mode — switching hides the other \
+            mode’s Shows (they are not deleted). Open any Show to switch to its mode.
+            """
         case .rotation:
             return "Which way the image rotates for a vertically mounted display."
         case .none:

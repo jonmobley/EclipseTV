@@ -59,17 +59,17 @@ extension LibraryGridViewController {
         let source = PresentationSource.forLibraryItem(item, thumbnail: thumbnail)
         store.updateCurrentId(item.id)
         ExternalDisplayManager.shared.present(source)
-        warnIfNoExternalDisplay()
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 
-    /// Fullscreen swipeable gallery of local full-res copies (long-press → Preview).
+    /// Fullscreen swipeable gallery of local full-res copies (⋯ Preview, or tap when locked).
     func presentLocalPreview(for item: LibraryItemDTO) {
         presentLocalPreview(for: item, in: displayItems)
     }
 
     /// Presents a swipeable preview gallery over `neighbors`, starting at `item`.
     func presentLocalPreview(for item: LibraryItemDTO, in neighbors: [LibraryItemDTO]) {
+        guard !isAlreadyOpen(LocalMediaPreviewViewController.self) else { return }
         let previewable = LocalMediaPreviewViewController.previewableItems(from: neighbors)
         guard let index = previewable.firstIndex(where: { $0.id == item.id }) else {
             let alert = UIAlertController(
@@ -87,13 +87,56 @@ extension LibraryGridViewController {
         present(preview, animated: true)
     }
 
+    /// Phone Preview for Background (⋯ Preview, or tap when live output is locked).
+    func presentLogoPhonePreview() {
+        guard let url = LogoStore.shared.fileURL else {
+            onChooseLogo?()
+            return
+        }
+        presentPhonePreview(
+            id: ShowToolToken.logo, fileURL: url, isVideo: false
+        )
+    }
+
+    /// Phone Preview for Screensaver (⋯ Preview, or tap when live output is locked).
+    func presentScreensaverPhonePreview() {
+        guard let source = ScreensaverStore.shared.presentationSource else { return }
+        switch source.content {
+        case .image(let url, _):
+            presentPhonePreview(
+                id: ShowToolToken.screensaver, fileURL: url, isVideo: false
+            )
+        case .screensaver(let url), .video(let url, _, _):
+            presentPhonePreview(
+                id: ShowToolToken.screensaver, fileURL: url, isVideo: true
+            )
+        case .camera, .web, .pdf, .black, .unavailable:
+            break
+        }
+    }
+
+    /// Single-item fullscreen Preview (Show tools; not a gallery swipe).
+    func presentPhonePreview(id: String, fileURL: URL, isVideo: Bool) {
+        guard !isAlreadyOpen(LocalMediaPreviewViewController.self) else { return }
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        let item = LocalMediaPreviewItem(id: id, fileURL: fileURL, isVideo: isVideo)
+        present(
+            LocalMediaPreviewViewController(items: [item], startIndex: 0),
+            animated: true
+        )
+    }
+
     func presentNotConnectedAlert() {
         let alert = UIAlertController(
-            title: "Not Connected",
-            message: "Connect EclipseTV in Settings to complete this action. AirPlay alone is not enough for this.",
+            title: "EclipseTV Not Linked",
+            message: "This action needs a link to the Eclipse TV app (pairing code). "
+                + "AirPlay alone is enough to present, but not for this.",
             preferredStyle: .alert
         )
-        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Connect…", style: .default) { [weak self] _ in
+            self?.onRequestEclipseTVConnect?()
+        })
         present(alert, animated: true)
     }
 }

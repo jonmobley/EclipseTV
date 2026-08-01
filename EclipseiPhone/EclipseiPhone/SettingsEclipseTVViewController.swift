@@ -104,7 +104,8 @@ final class SettingsEclipseTVViewController: UITableViewController {
         switch Section(rawValue: section) {
         case .connection:
             return "Optional link to the Eclipse app on Apple TV for media sync. "
-                + "Separate from AirPlay and from the join code."
+                + "Uses the pairing code on the TV. Separate from AirPlay and from "
+                + "Share Code (shared Shows)."
         case .sync:
             return "When on, media changes go to every linked Apple TV, and newly "
                 + "linked TVs are caught up. Only media sent from this iPhone can "

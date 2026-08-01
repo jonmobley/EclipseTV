@@ -19,6 +19,8 @@ struct PresentationSource: Equatable {
         case image(url: URL, fill: Bool)
         /// A video at `url` (a local file or an HTTPS URL), with playback options.
         case video(url: URL, isLooping: Bool, isMuted: Bool)
+        /// Muted looping Screensaver; aspect-fill with a seamless crossfade at the loop.
+        case screensaver(url: URL)
         /// Live back-camera feed from `CameraManager` (AirPlay only).
         case camera
         /// A web page rendered full-bleed on the external display (AirPlay only).
@@ -42,6 +44,11 @@ struct PresentationSource: Equatable {
 
     static func video(_ url: URL, isLooping: Bool, isMuted: Bool) -> PresentationSource {
         PresentationSource(content: .video(url: url, isLooping: isLooping, isMuted: isMuted))
+    }
+
+    /// Muted seamless-loop Screensaver for AirPlay presentation.
+    static func screensaver(_ url: URL) -> PresentationSource {
+        PresentationSource(content: .screensaver(url: url))
     }
 
     /// Live camera feed for AirPlay presentation.

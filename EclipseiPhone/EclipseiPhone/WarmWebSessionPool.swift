@@ -9,7 +9,7 @@ import UIKit
 import WebKit
 import os.log
 
-/// Shared warm `WKWebView` sessions for the home Website tile and saved bookmarks.
+/// Shared warm `WKWebView` sessions for saved website cards (bookmarks / Show members).
 ///
 /// Session objects are cheap; the live `WKWebView` each one can hold is not. The cap
 /// therefore bounds *web views*, not sessions: opportunistic warming is skipped once the
@@ -20,10 +20,15 @@ final class WarmWebSessionPool {
 
     static let shared = WarmWebSessionPool()
 
-    /// Hard cap on simultaneously live web views, including the unbound Website tile.
+    /// Hard cap on simultaneously live web views.
     private let maxWebViews = 6
     /// Gap between staggered warm loads, so warming never competes with a tap or scroll.
     private let warmSpacing: TimeInterval = 1.5
+    /// Pause before the first opportunistic warm so present/scroll finish first.
+    ///
+    /// `WKWebView` creation is main-thread heavy; kicking it off from `willDisplay`
+    /// during a Bookmarks present froze the whole app for seconds.
+    private let warmStartDelay: TimeInterval = 0.45
     /// Stop waiting on a warm load that never reports back.
     private let warmTimeout: TimeInterval = 8
 
@@ -35,6 +40,8 @@ final class WarmWebSessionPool {
     /// Page currently loading in the background, if any.
     private var warmInFlight: UUID?
     private var warmWatchdog: DispatchWorkItem?
+    /// Coalesced start of the first opportunistic warm.
+    private var pendingPumpWork: DispatchWorkItem?
     private let logger = Logger(subsystem: "com.eclipseapp.ios", category: "WarmWebPool")
 
     /// Number of sessions currently holding a live web view.
@@ -70,7 +77,7 @@ final class WarmWebSessionPool {
     /// Starts loading `page` in a warm web view when idle.
     ///
     /// Opportunistic: skipped when the pool is already at its web-view cap and every
-    /// live session is pinned (adopted by a browser, live on AirPlay, or free-browse).
+    /// live session is pinned (adopted by a browser or live on AirPlay).
     /// - Returns: Whether a warm load was attempted.
     @discardableResult
     func warmIfNeeded(for page: WebPage) -> Bool {
@@ -90,20 +97,11 @@ final class WarmWebSessionPool {
         return true
     }
 
-    /// Warms the unbound Website tile (Google) only.
-    ///
-    /// Launch used to warm every saved bookmark at once. Each warm page is a real web
-    /// content process parsing and running JavaScript, so a handful of them competed
-    /// with the first frame and left the whole app sluggish. Bookmarks now warm as they
-    /// scroll into view, via `warmSoon(_:)`.
-    func warmFreeBrowse() {
-        warmSoon([WebPage.freeBrowse])
-    }
-
     /// Queues `pages` to warm in the background, one load at a time.
     ///
     /// Pages that already hold a live web view are skipped, so this is safe to call
-    /// repeatedly from scroll-driven hooks.
+    /// repeatedly from scroll-driven hooks. The first load is deferred so callers
+    /// like Bookmarks `willDisplay` never spin up WebKit mid-gesture.
     func warmSoon(_ pages: [WebPage]) {
         for page in pages {
             guard sessions[page.id]?.hasWebView != true,
@@ -114,7 +112,7 @@ final class WarmWebSessionPool {
             }
             warmQueue.append(page)
         }
-        pumpWarmQueue()
+        schedulePumpWarmQueue()
     }
 
     /// Hands a warm web view to the phone browser for `page`.
@@ -149,7 +147,6 @@ final class WarmWebSessionPool {
 
     /// Drops a session when a bookmark is deleted.
     func remove(pageId: UUID) {
-        guard pageId != WebPage.freeBrowseId else { return }
         warmQueue.removeAll { $0.id == pageId }
         sessions[pageId]?.destroy()
         sessions[pageId] = nil
@@ -158,9 +155,23 @@ final class WarmWebSessionPool {
 
     // MARK: - Staggered Warming
 
+    /// Starts the warm queue after `warmStartDelay`, coalescing rapid enqueue bursts.
+    private func schedulePumpWarmQueue() {
+        guard warmInFlight == nil, !warmQueue.isEmpty else { return }
+        pendingPumpWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            self?.pendingPumpWork = nil
+            self?.pumpWarmQueue()
+        }
+        pendingPumpWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + warmStartDelay, execute: work)
+    }
+
     /// Warms the next queued page once the previous one has settled.
     private func pumpWarmQueue() {
         guard warmInFlight == nil, !warmQueue.isEmpty else { return }
+        pendingPumpWork?.cancel()
+        pendingPumpWork = nil
         let page = warmQueue.removeFirst()
         warmInFlight = page.id
 
@@ -215,7 +226,6 @@ final class WarmWebSessionPool {
     private func evictionCandidate(retaining pageId: UUID) -> UUID? {
         lru.first { id in
             id != pageId
-                && id != WebPage.freeBrowseId
                 && id != ExternalDisplayManager.shared.liveWebPageId
                 && sessions[id]?.hasWebView == true
                 && sessions[id]?.isAdopted != true

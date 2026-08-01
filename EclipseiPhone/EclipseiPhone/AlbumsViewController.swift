@@ -36,7 +36,7 @@ final class AlbumsViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = "Join"
+        title = "Shared Show"
         view.backgroundColor = .systemBackground
         setupNavigationItems()
         setupCollectionView()
@@ -77,14 +77,14 @@ final class AlbumsViewController: UIViewController {
     }
 
     private func makeOverflowMenu() -> UIMenu {
-        let joinTitle = store.hasAccountConfigured ? "Change Join Code…" : "Enter Join Code…"
+        let joinTitle = store.hasAccountConfigured ? "Change Share Code…" : "Enter Share Code…"
         let join = UIAction(title: joinTitle, image: UIImage(systemName: "number")) { [weak self] _ in
             self?.changeCodeTapped()
         }
         var actions: [UIMenuElement] = [join]
         if store.hasAccountConfigured {
             let leave = UIAction(
-                title: "Leave Presentation",
+                title: "Leave Shared Show",
                 image: UIImage(systemName: "rectangle.portrait.and.arrow.right"),
                 attributes: .destructive
             ) { [weak self] _ in
@@ -167,9 +167,9 @@ final class AlbumsViewController: UIViewController {
         if let message = message {
             emptyLabel.text = message
         } else if !store.hasAccountConfigured {
-            emptyLabel.text = "Enter your \(AlbumConfig.codeLength)-digit join code to open a shared presentation.\n\nTap the menu button above."
+            emptyLabel.text = "Enter a \(AlbumConfig.codeLength)-digit share code to open a shared show."
         } else {
-            emptyLabel.text = "No content yet for this join code."
+            emptyLabel.text = "No content yet for this share code."
         }
     }
 
@@ -196,8 +196,8 @@ final class AlbumsViewController: UIViewController {
 
     private func changeCodeTapped() {
         let alert = UIAlertController(
-            title: store.hasAccountConfigured ? "Change Join Code" : "Enter Join Code",
-            message: "Type your \(AlbumConfig.codeLength)-digit join code.",
+            title: store.hasAccountConfigured ? "Change Share Code" : "Enter Share Code",
+            message: "Type your \(AlbumConfig.codeLength)-digit share code.",
             preferredStyle: .alert)
         alert.addTextField { field in
             field.placeholder = String(repeating: "0", count: AlbumConfig.codeLength)
@@ -223,8 +223,8 @@ final class AlbumsViewController: UIViewController {
 
     private func leavePresentation() {
         let alert = UIAlertController(
-            title: "Leave Presentation?",
-            message: "This removes the join code from this iPhone. A connected Apple TV keeps its copy until changed there.",
+            title: "Leave Shared Show?",
+            message: "This removes the share code from this iPhone. A connected Apple TV keeps its copy until changed there.",
             preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         alert.addAction(UIAlertAction(title: "Leave", style: .destructive) { [weak self] _ in
@@ -241,7 +241,7 @@ final class AlbumsViewController: UIViewController {
     private func presentInvalidCodeAlert() {
         let alert = UIAlertController(
             title: "Invalid Code",
-            message: "Enter your \(AlbumConfig.codeLength)-digit join code.",
+            message: "Enter your \(AlbumConfig.codeLength)-digit share code.",
             preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "OK", style: .default))
         present(alert, animated: true)
@@ -291,6 +291,9 @@ extension AlbumsViewController: UICollectionViewDataSource, UICollectionViewDele
 
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         collectionView.deselectItem(at: indexPath, animated: true)
+        // A second tap while the preview is up (or still animating in) would restart the
+        // item on AirPlay for a preview UIKit then refuses to present.
+        guard !isAlreadyOpen(AlbumItemPreviewViewController.self) else { return }
         guard let item = store.albums[safe: indexPath.section]?.items[safe: indexPath.item] else { return }
         if let url = item.remoteURL {
             let source: PresentationSource = item.isVideo

@@ -202,8 +202,14 @@ class iPhoneConnectionManager: NSObject {
         for entry in pending {
             if let url = LocalMediaStore.shared.localURL(forId: entry.item.id, mode: mode) {
                 payload.append((id: entry.item.id, url: url))
-            } else {
+            } else if !TVLibraryStore.shared.items.contains(where: { $0.id == entry.item.id }) {
+                // Gone from the library for good — drop the queue entry. A transient
+                // missing file is kept so the next connect can retry.
                 PendingUploadStore.shared.remove(id: entry.item.id, mode: mode)
+            } else {
+                logger.info(
+                    "Queued upload \(entry.item.id, privacy: .public) has no local file yet; keeping"
+                )
             }
         }
         guard !payload.isEmpty else { return }
@@ -642,10 +648,11 @@ class iPhoneConnectionManager: NSObject {
             let failed = failureCount
             failureLock.unlock()
 
-            if failed < total {
+            // Ordering a library the replica only partially received leaves it wrong,
+            // not just incomplete — wait until every send succeeded.
+            if failed == 0 {
                 self?.sendEnvelope(.reorderItems(orderedIds: orderedIds), to: peer)
-            }
-            if failed > 0 {
+            } else {
                 self?.logger.error(
                     "Replay to \(name, privacy: .public) failed for \(failed)/\(total) item(s)"
                 )

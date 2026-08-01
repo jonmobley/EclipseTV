@@ -292,7 +292,7 @@ class ConnectionManager: NSObject {
                 MediaDataSource.shared.setActiveLibraryMode(mode)
             }
         case .setContentTransition:
-            let style = envelope.contentTransition ?? "Cut"
+            let style = envelope.contentTransition ?? "Crossfade"
             logger.info("Received set_content_transition: \(style, privacy: .public)")
             DispatchQueue.main.async {
                 ContentTransitionSettings.apply(wireValue: style)

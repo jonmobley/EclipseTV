@@ -56,7 +56,7 @@ struct Slideshow: Codable, Equatable, Identifiable, Hashable {
         autoplay: Bool = false,
         autoplaySeconds: SlideshowAutoplaySeconds = .default,
         loop: Bool = false,
-        crossfade: Bool = false,
+        crossfade: Bool = true,
         showRibbonWhenLive: Bool = false,
         createdAt: Date = Date()
     ) {
@@ -100,7 +100,7 @@ struct Slideshow: Codable, Equatable, Identifiable, Hashable {
             SlideshowAutoplaySeconds.self, forKey: .autoplaySeconds
         ) ?? .default
         loop = try c.decodeIfPresent(Bool.self, forKey: .loop) ?? false
-        crossfade = try c.decodeIfPresent(Bool.self, forKey: .crossfade) ?? false
+        crossfade = try c.decodeIfPresent(Bool.self, forKey: .crossfade) ?? true
         showRibbonWhenLive = try c.decodeIfPresent(
             Bool.self, forKey: .showRibbonWhenLive
         ) ?? false

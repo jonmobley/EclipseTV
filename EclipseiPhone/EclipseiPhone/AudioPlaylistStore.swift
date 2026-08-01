@@ -46,31 +46,69 @@ final class AudioPlaylistStore {
     /// Creates an empty playlist and inserts it at the front.
     @discardableResult
     func create(name: String) throws -> AudioPlaylist {
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { throw StoreError.emptyName }
+        guard let trimmed = UserDisplayName.normalized(name) else {
+            throw StoreError.emptyName
+        }
         let playlist = AudioPlaylist(name: trimmed)
         playlists.insert(playlist, at: 0)
         persist()
         return playlist
     }
 
-    /// Renames the playlist with `id` when present.
+    /// Renames the playlist with `id` when present. Protected playlists are ignored.
     func rename(id: UUID, to name: String) throws {
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { throw StoreError.emptyName }
+        guard let trimmed = UserDisplayName.normalized(name) else {
+            throw StoreError.emptyName
+        }
         guard let index = playlists.firstIndex(where: { $0.id == id }) else { return }
+        guard !playlists[index].isProtected else { return }
         playlists[index].name = trimmed
         persist()
     }
 
-    /// Deletes the playlist with `id` when present.
+    /// Deletes the playlist with `id` when present. Protected playlists are ignored.
     func delete(id: UUID) {
+        guard let existing = playlists.first(where: { $0.id == id }),
+              !existing.isProtected else { return }
         let before = playlists.count
         playlists.removeAll { $0.id == id }
         guard playlists.count != before else { return }
         if lastPlayedPlaylistId == id {
             lastPlayedPlaylistId = nil
         }
+        persist()
+    }
+
+    /// Inserts or repairs a protected system playlist and ensures membership.
+    func ensureProtectedPlaylist(id: UUID, name: String, trackIds: [UUID]) {
+        if let index = playlists.firstIndex(where: { $0.id == id }) {
+            var playlist = playlists[index]
+            var changed = false
+            if !playlist.isProtected {
+                playlist.isProtected = true
+                changed = true
+            }
+            if playlist.name != name {
+                playlist.name = name
+                changed = true
+            }
+            for trackId in trackIds where !playlist.trackIds.contains(trackId) {
+                playlist.trackIds.insert(trackId, at: 0)
+                changed = true
+            }
+            if changed {
+                playlists[index] = playlist
+                persist()
+            }
+            return
+        }
+        let playlist = AudioPlaylist(
+            id: id,
+            name: name,
+            trackIds: trackIds,
+            isProtected: true
+        )
+        playlists.insert(playlist, at: 0)
         persist()
     }
 
@@ -85,8 +123,15 @@ final class AudioPlaylistStore {
     }
 
     /// Removes `trackId` from the playlist when present.
+    /// Protected tracks cannot leave a protected playlist.
     func remove(trackId: UUID, fromPlaylistId playlistId: UUID) {
         guard let index = playlists.firstIndex(where: { $0.id == playlistId }) else {
+            return
+        }
+        let playlist = playlists[index]
+        if playlist.isProtected,
+           let track = AudioStore.shared.track(id: trackId),
+           track.isProtected {
             return
         }
         playlists[index].trackIds.removeAll { $0 == trackId }
@@ -102,10 +147,12 @@ final class AudioPlaylistStore {
         persist()
     }
 
-    /// Drops `trackId` from every playlist.
+    /// Drops `trackId` from every playlist (skips protected membership).
     func removeTrackFromAllPlaylists(trackId: UUID) {
+        let trackProtected = AudioStore.shared.track(id: trackId)?.isProtected == true
         var changed = false
         for index in playlists.indices {
+            if playlists[index].isProtected && trackProtected { continue }
             let before = playlists[index].trackIds.count
             playlists[index].trackIds.removeAll { $0 == trackId }
             if playlists[index].trackIds.count != before { changed = true }
@@ -136,13 +183,12 @@ final class AudioPlaylistStore {
     // MARK: - Persistence
 
     private func load() {
-        guard let data = defaults.data(forKey: itemsKey) else { return }
-        do {
-            playlists = try JSONDecoder().decode([AudioPlaylist].self, from: data)
-        } catch {
-            logger.error("Failed to decode playlists: \(error.localizedDescription)")
-            playlists = []
-        }
+        playlists = SalvagingListDecoder.decodeList(
+            AudioPlaylist.self,
+            forKey: itemsKey,
+            from: defaults,
+            logger: logger
+        ).elements
     }
 
     private func persist() {

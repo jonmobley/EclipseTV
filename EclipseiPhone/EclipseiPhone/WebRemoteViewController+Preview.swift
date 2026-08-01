@@ -47,7 +47,8 @@ extension WebRemoteViewController: UIScrollViewDelegate,
     /// Fits a Display Mode aspect panel inside the stage, then applies the shared
     /// logical web viewport (no TV rotation on the phone).
     ///
-    /// Landscape → full-width 16:9 card (top-aligned). Vertical → full-width 9:16.
+    /// The card's size changes with the device orientation but its logical viewport does
+    /// not, so rotating never reflows the page or moves it out of step with the TV.
     func layoutPhoneWebViewport() {
         guard let stage = webStageView, let web = webView else { return }
         let bounds = stage.bounds
@@ -83,38 +84,84 @@ extension WebRemoteViewController: UIScrollViewDelegate,
 
     /// Display Mode card: Landscape locks 16:9; Vertical locks 9:16.
     ///
-    /// Full width (minus a small side inset), top-aligned — same framing idea as
-    /// Camera Live so horizontal shows read as a landscape stage on the phone.
+    /// Vertical is a full-width card top-aligned under the nav bar. Landscape runs on a
+    /// turned phone, so the card is the largest 16:9 that fits and is centred in the
+    /// stage — same framing idea as Camera Live.
     private func phoneWebPanelRect(in bounds: CGRect) -> CGRect {
-        let inset = webPanelSideInset
+        let isVertical = ExternalOutputSettings.isVerticalMode
+        let available = bounds.inset(by: webPanelInsets(isVertical: isVertical))
+        guard available.width > 1, available.height > 1 else { return .zero }
+
         let aspect = ExternalOutputSettings.orientation.aspectRatio
-        let width = max(0, bounds.width - inset * 2)
+        var width = available.width
         var height = width / aspect
-        if height > bounds.height {
-            height = bounds.height
-            let fittedWidth = height * aspect
-            return CGRect(
-                x: bounds.midX - fittedWidth / 2,
-                y: 0,
-                width: fittedWidth,
-                height: height
-            )
+        if height > available.height {
+            height = available.height
+            width = height * aspect
         }
+        let y = isVertical ? available.minY : available.midY - height / 2
         return CGRect(
-            x: inset,
-            y: 0,
+            x: available.midX - width / 2,
+            y: y,
             width: width,
             height: height
         )
+    }
+
+    /// Insets from the stage edges in to the card.
+    ///
+    /// The stage already begins below the nav bar, so only the sides and bottom need the
+    /// device safe area — and only in Landscape, where turning the phone puts the sensor
+    /// housing and home indicator along the card's long edges.
+    private func webPanelInsets(isVertical: Bool) -> UIEdgeInsets {
+        let inset = webPanelSideInset
+        guard !isVertical else {
+            return UIEdgeInsets(top: 0, left: inset, bottom: 0, right: inset)
+        }
+        let safe = view.safeAreaInsets
+        return UIEdgeInsets(
+            top: 0,
+            left: max(safe.left, inset),
+            bottom: max(safe.bottom, inset),
+            right: max(safe.right, inset)
+        )
+    }
+
+    // MARK: - External Display Sync
+
+    /// Sends the browser's normalized scroll position to the external display.
+    ///
+    /// Normalized rather than absolute: the TV renders the same logical viewport at a
+    /// different scale, so its content height need not match the phone's exactly.
+    func pushWebScrollProgress() {
+        guard let scroll = webView?.scrollView else { return }
+        let maxY = scroll.contentSize.height - scroll.bounds.height
+        let progress = maxY > 0 ? min(max(scroll.contentOffset.y / maxY, 0), 1) : 0
+        ExternalDisplayManager.shared.setWebScrollProgress(progress)
+    }
+
+    /// Re-asserts URL and scroll position on the external display after a rotation.
+    ///
+    /// Turning the phone changes the window scene's geometry, which iOS can answer by
+    /// re-offering the external scene, so the TV is told where the page is again rather
+    /// than assumed to still match.
+    func resyncExternalWeb() {
+        let manager = ExternalDisplayManager.shared
+        manager.refreshConnection()
+        // Only re-assert an overlay that is already ours; never claim the display back
+        // from whatever replaced this page.
+        guard manager.isWebLive else { return }
+        if let url = webView?.url, !isBlankBrowserURL(url) {
+            manager.loadWeb(url: url)
+        }
+        pushWebScrollProgress()
     }
 
     // MARK: - UIScrollViewDelegate
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
         guard !isSyncingScroll, scrollView === webView?.scrollView else { return }
-        let maxY = scrollView.contentSize.height - scrollView.bounds.height
-        let progress = maxY > 0 ? min(max(scrollView.contentOffset.y / maxY, 0), 1) : 0
-        ExternalDisplayManager.shared.setWebScrollProgress(progress)
+        pushWebScrollProgress()
     }
 
     // MARK: - WKNavigationDelegate
@@ -128,11 +175,7 @@ extension WebRemoteViewController: UIScrollViewDelegate,
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         updateBrowserChrome()
-        let scroll = webView.scrollView
-        let maxY = scroll.contentSize.height - scroll.bounds.height
-        let progress = maxY > 0 ? min(max(scroll.contentOffset.y / maxY, 0), 1) : 0
-        ExternalDisplayManager.shared.setWebScrollProgress(progress)
-        // Home Website defaults to Google, then tracks whatever the user opens next.
+        pushWebScrollProgress()
         if let url = webView.url, url.scheme != "about" {
             WebThumbnailPrefetcher.shared.captureVisibleWebView(webView, for: page.id)
         }
@@ -171,5 +214,6 @@ extension WebRemoteViewController: UIScrollViewDelegate,
             return
         }
         ExternalDisplayManager.shared.syncWebMedia(event)
+        AudioAmbientPolicy.applyYieldIfNeeded(forWebMedia: event)
     }
 }

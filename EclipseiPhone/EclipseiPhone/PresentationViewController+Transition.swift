@@ -41,7 +41,6 @@ extension PresentationViewController {
         if let badge = audioNowPlayingBadge {
             view.bringSubviewToFront(badge)
         }
-
         installIncoming(source, generation: generation)
 
         let fallback = DispatchWorkItem { [weak self] in
@@ -126,6 +125,10 @@ extension PresentationViewController {
         incomingPlayer = nil
         incomingPlayerLayer?.removeFromSuperlayer()
         incomingPlayerLayer = nil
+
+        incomingScreensaverView?.stop()
+        incomingScreensaverView?.removeFromSuperview()
+        incomingScreensaverView = nil
 
         incomingCameraPreview?.detach()
         incomingCameraPreview?.removeFromSuperview()

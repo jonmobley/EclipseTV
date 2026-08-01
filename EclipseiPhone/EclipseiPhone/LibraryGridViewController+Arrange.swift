@@ -7,16 +7,36 @@
 
 import UIKit
 
-// MARK: - Arrange (Show mode media order)
+// MARK: - Arrange (Show mode surface order)
 
 extension LibraryGridViewController {
 
-    /// Starts drag-to-reorder for the open Show's media grid (slideshows stay pinned).
+    /// Starts drag-to-reorder for the open Show's grid (slideshows stay pinned last).
     func beginArranging() {
-        guard isShowMode, openShowItems.count >= 2, !isArranging else { return }
+        beginArranging(preservingGesture: false)
+    }
+
+    /// - Parameter preservingGesture: When true (long-press enter), skip reload so the
+    ///   same touch can begin an interactive move.
+    private func beginArranging(preservingGesture: Bool) {
+        guard isShowMode, openShowMovableCount >= 2, !isArranging else { return }
+        if isSelecting {
+            cancelSelecting()
+        }
+        // Add tile drops out of the data source when arranging; must reload or
+        // the collection view count disagrees with `openShowGridItems`.
+        let mustReload = showsShowAddTile || !preservingGesture
         isArranging = true
-        reorderGesture.isEnabled = true
-        reloadForArrangeChange()
+        reorderGesture.minimumPressDuration = 0.15
+        if mustReload {
+            reloadForArrangeChange()
+        } else {
+            for case let cell as LibraryThumbnailCell in collectionView.visibleCells {
+                guard let indexPath = collectionView.indexPath(for: cell) else { continue }
+                applyArrangeAppearance(to: cell, at: indexPath)
+                cell.clearMoreMenu()
+            }
+        }
         onArrangingChanged?(true)
         UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
         showPresentationToast("Drag to reorder, then tap Done")
@@ -49,26 +69,34 @@ extension LibraryGridViewController {
     }
 
     @objc func handleReorderGesture(_ gesture: UILongPressGestureRecognizer) {
-        guard isArranging, isShowMode else {
-            if gesture.state == .began || gesture.state == .changed {
-                collectionView.cancelInteractiveMovement()
-            }
-            return
-        }
+        let location = gesture.location(in: collectionView)
+
         switch gesture.state {
         case .began:
-            let location = gesture.location(in: collectionView)
+            guard isShowMode, !isSelecting else { return }
+            guard let startPath = collectionView.indexPathForItem(at: location),
+                  homeSection(at: startPath.section) == .shows else { return }
+
+            if !isArranging {
+                guard openShowMovableCount >= 2 else { return }
+                beginArranging(preservingGesture: true)
+            }
+
+            // Hit-test again — entering arrange may reload (Add tile drops out).
             guard let indexPath = collectionView.indexPathForItem(at: location),
                   homeSection(at: indexPath.section) == .shows,
                   canMoveItemAtShowIndex(indexPath.item) else { return }
             collectionView.beginInteractiveMovementForItem(at: indexPath)
             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+
         case .changed:
-            collectionView.updateInteractiveMovementTargetPosition(
-                gesture.location(in: collectionView)
-            )
+            guard isArranging else { return }
+            collectionView.updateInteractiveMovementTargetPosition(location)
+
         case .ended:
+            guard isArranging else { return }
             collectionView.endInteractiveMovement()
+
         default:
             collectionView.cancelInteractiveMovement()
         }
@@ -78,7 +106,6 @@ extension LibraryGridViewController {
                         canMoveItemAt indexPath: IndexPath) -> Bool {
         isArranging
             && isShowMode
-            && !showsShowAddTile
             && homeSection(at: indexPath.section) == .shows
             && canMoveItemAtShowIndex(indexPath.item)
     }
@@ -91,19 +118,17 @@ extension LibraryGridViewController {
               homeSection(at: destinationIndexPath.section) == .shows,
               sourceIndexPath.item != destinationIndexPath.item,
               let albumId = openShowId,
-              let ids = openShow?.itemIds else { return }
-        let offset = openShowSlideshows.count
-        let sourceMedia = sourceIndexPath.item - offset
-        let destMedia = destinationIndexPath.item - offset
-        var visibleIds = openShowItems.map(\.id)
-        guard visibleIds.indices.contains(sourceMedia),
-              destMedia >= 0 else { return }
-        let moved = visibleIds.remove(at: sourceMedia)
-        let dest = min(destMedia, visibleIds.count)
-        visibleIds.insert(moved, at: dest)
-        let visibleSet = Set(visibleIds)
-        let orphans = ids.filter { !visibleSet.contains($0) }
-        LocalAlbumStore.shared.reorder(itemIds: visibleIds + orphans, inAlbumId: albumId)
+              let album = openShow else { return }
+        // Surface leads the grid; slideshows are pinned after it.
+        let sourceSurface = sourceIndexPath.item
+        let destSurface = destinationIndexPath.item
+        var surface = album.resolvedSurfaceIds
+        guard surface.indices.contains(sourceSurface),
+              destSurface >= 0 else { return }
+        let moved = surface.remove(at: sourceSurface)
+        let dest = min(destSurface, surface.count)
+        surface.insert(moved, at: dest)
+        LocalAlbumStore.shared.reorderSurface(surface, albumId: albumId)
     }
 
     func collectionView(
@@ -116,10 +141,9 @@ extension LibraryGridViewController {
               let showsSection = sectionIndex(for: .shows) else {
             return originalIndexPath
         }
-        let offset = openShowSlideshows.count
-        let mediaCount = openShowItems.count
-        guard mediaCount > 0 else { return originalIndexPath }
-        let clamped = min(max(proposedIndexPath.item, offset), offset + mediaCount - 1)
+        let surfaceCount = openShow?.resolvedSurfaceIds.count ?? 0
+        guard surfaceCount > 0 else { return originalIndexPath }
+        let clamped = min(max(proposedIndexPath.item, 0), surfaceCount - 1)
         return IndexPath(item: clamped, section: showsSection)
     }
 
@@ -127,8 +151,8 @@ extension LibraryGridViewController {
 
     private func endArrangeMode() {
         isArranging = false
-        reorderGesture.isEnabled = false
         arrangeItems = nil
+        reorderGesture.minimumPressDuration = 0.45
         reloadForArrangeChange()
         onArrangingChanged?(false)
     }
@@ -144,9 +168,9 @@ extension LibraryGridViewController {
         }
     }
 
-    /// Media rows are movable; slideshow tiles stay pinned at the front.
+    /// Surface rows (tools + members) are movable; trailing slideshow tiles stay pinned.
     private func canMoveItemAtShowIndex(_ item: Int) -> Bool {
-        let offset = openShowSlideshows.count
-        return item >= offset && item < offset + openShowItems.count
+        let surfaceCount = openShow?.resolvedSurfaceIds.count ?? 0
+        return item >= 0 && item < surfaceCount
     }
 }

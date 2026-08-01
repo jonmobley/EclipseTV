@@ -31,6 +31,7 @@ extension PresentationViewController {
         guard !mediaContainer.isHidden else { return }
         applyRotatedLayout(to: mediaContentView, in: mediaContainer, scale: 1)
         playerLayer?.frame = mediaContentView.bounds
+        screensaverView?.frame = mediaContentView.bounds
     }
 
     /// Shows a still on the primary media surface.
@@ -44,6 +45,7 @@ extension PresentationViewController {
         imageView.contentMode = fill || LogoStore.shared.isLogoFileURL(url)
             ? .scaleAspectFill
             : .scaleAspectFit
+        teardownScreensaver()
         showMediaContainer()
         activityIndicator.startAnimating()
 
@@ -71,6 +73,7 @@ extension PresentationViewController {
         messageLabel.text = nil
         imageView.isHidden = true
         activityIndicator.stopAnimating()
+        teardownScreensaver()
         showMediaContainer()
 
         configureAudioSession(muted: isMuted)
@@ -102,6 +105,23 @@ extension PresentationViewController {
         player.play()
     }
 
+    /// Plays the muted seamless-loop Screensaver (aspect fill).
+    func showScreensaver(at url: URL) {
+        messageLabel.text = nil
+        imageView.isHidden = true
+        activityIndicator.stopAnimating()
+        showMediaContainer()
+
+        teardownScreensaver()
+        let view = SeamlessLoopPlayerView(url: url)
+        view.frame = mediaContentView.bounds
+        view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        mediaContentView.insertSubview(view, at: 0)
+        screensaverView = view
+        applyMediaLayout()
+        view.play()
+    }
+
     /// Activates playback audio for AirPlay video / web media (no-op when muted).
     func configureAudioSession(muted: Bool) {
         guard !muted else { return }
@@ -124,6 +144,14 @@ extension PresentationViewController {
         player = nil
         playerLayer?.removeFromSuperlayer()
         playerLayer = nil
+        teardownScreensaver()
+    }
+
+    /// Stops and removes the seamless Screensaver host.
+    func teardownScreensaver() {
+        screensaverView?.stop()
+        screensaverView?.removeFromSuperview()
+        screensaverView = nil
     }
 
     /// Shows an unavailable placeholder thumbnail on the primary media surface.

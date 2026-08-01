@@ -93,6 +93,17 @@ final class PendingUploadStore {
         if uploads.count != before { persist() }
     }
 
+    /// Replaces a queued item’s DTO (e.g. after loop / mute changes) when still pending.
+    func update(_ item: LibraryItemDTO,
+                mode: EclipseShareProtocol.LibraryMode = ExternalOutputSettings.libraryMode) {
+        guard let index = uploads.firstIndex(where: {
+            $0.item.id == item.id
+                && EclipseShareProtocol.LibraryMode.resolved(from: $0.libraryMode) == mode
+        }) else { return }
+        uploads[index] = PendingUpload(item: item, libraryMode: mode.rawValue)
+        persist()
+    }
+
     /// Clears the in-memory queue and persisted UserDefaults entry. Intended for unit tests.
     func removeAll() {
         guard !uploads.isEmpty || UserDefaults.standard.data(forKey: defaultsKey) != nil else { return }

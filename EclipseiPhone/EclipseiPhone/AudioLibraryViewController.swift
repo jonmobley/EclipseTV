@@ -21,6 +21,9 @@ final class AudioLibraryViewController: UITableViewController {
     private let cellReuseId = "audioCell"
     /// When true, lives as the home Music page (swipe from Library) instead of a modal.
     private let isEmbedded: Bool
+    private lazy var addBarButton = UIBarButtonItem(
+        barButtonSystemItem: .add, target: self, action: #selector(addTapped)
+    )
 
     var onAddMusic: (() -> Void)?
     /// Invoked by the embedded back control to return to the Library page.
@@ -58,15 +61,13 @@ final class AudioLibraryViewController: UITableViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         title = "Music"
+        navigationItem.largeTitleDisplayMode = .never
         updateLeftBarButton()
-        navigationItem.rightBarButtonItem = UIBarButtonItem(
-            barButtonSystemItem: .add, target: self, action: #selector(addTapped)
-        )
+        updateRightBarButton()
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: cellReuseId)
-        // Title + secondary line need more than a single-line row (56 clipped
-        // subtitles into the “dots” along the bottom of each cell).
         tableView.rowHeight = UITableView.automaticDimension
-        tableView.estimatedRowHeight = 72
+        tableView.estimatedRowHeight = 52
+        editButtonItem.accessibilityHint = "Reorder tracks"
 
         let names: [Notification.Name] = [
             AudioStore.didChangeNotification,
@@ -142,6 +143,7 @@ final class AudioLibraryViewController: UITableViewController {
         alert.addTextField {
             $0.placeholder = "Name"
             $0.autocapitalizationType = .words
+            UserDisplayName.configureTextField($0)
         }
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         alert.addAction(UIAlertAction(title: "Create", style: .default) { [weak self] _ in
@@ -150,7 +152,7 @@ final class AudioLibraryViewController: UITableViewController {
                 let playlist = try AudioPlaylistStore.shared.create(name: name)
                 self?.openPlaylist(playlist)
             } catch {
-                self?.presentError(error)
+                self?.presentError(error, title: "Couldn't Create Playlist")
             }
         })
         present(alert, animated: true)
@@ -161,9 +163,9 @@ final class AudioLibraryViewController: UITableViewController {
         navigationController?.pushViewController(detail, animated: true)
     }
 
-    private func presentError(_ error: Error) {
+    private func presentError(_ error: Error, title: String = "Couldn't Save") {
         let alert = UIAlertController(
-            title: "Couldn't Create Playlist",
+            title: title,
             message: error.localizedDescription,
             preferredStyle: .alert
         )
@@ -171,12 +173,19 @@ final class AudioLibraryViewController: UITableViewController {
         present(alert, animated: true)
     }
 
-    private func formatDuration(_ seconds: TimeInterval) -> String {
-        guard seconds.isFinite, seconds > 0 else { return "" }
-        let total = Int(seconds.rounded())
-        let m = total / 60
-        let s = total % 60
-        return String(format: "%d:%02d", m, s)
+    override func setEditing(_ editing: Bool, animated: Bool) {
+        super.setEditing(editing, animated: animated)
+        updateRightBarButton()
+        tableView.reloadData()
+    }
+
+    private func updateRightBarButton() {
+        navigationItem.rightBarButtonItem = isEditing ? editButtonItem : addBarButton
+    }
+
+    private func beginArrangingTracks() {
+        guard trackStore.tracks.count >= 2 else { return }
+        setEditing(true, animated: true)
     }
 
     // MARK: - Table
@@ -208,43 +217,53 @@ final class AudioLibraryViewController: UITableViewController {
         let cell = tableView.dequeueReusableCell(withIdentifier: cellReuseId, for: indexPath)
         var config = cell.defaultContentConfiguration()
         cell.accessoryType = .none
+        cell.accessoryView = nil
         cell.selectionStyle = .default
+        cell.showsReorderControl = false
 
         switch Section(rawValue: indexPath.section)! {
         case .playlists:
             if playlistStore.playlists.isEmpty {
                 config.text = "No playlists yet"
-                config.secondaryText = "Tap + to create one"
                 config.textProperties.color = .secondaryLabel
                 cell.selectionStyle = .none
             } else {
                 let playlist = playlistStore.playlists[indexPath.row]
+                let isCurrent = player.playlistId == playlist.id
                 config.text = playlist.name
-                let count = playlist.trackIds.count
-                config.secondaryText = count == 1 ? "1 song" : "\(count) songs"
+                config.secondaryText = nil
                 config.image = UIImage(systemName: "music.note.list")
-                cell.accessoryType = .disclosureIndicator
+                applyNowPlayingStyle(&config, isCurrent: isCurrent)
+                if !isEditing {
+                    cell.accessoryView = AudioMusicRowViews.playlistAccessory(
+                        songCount: playlist.trackIds.count
+                    )
+                }
             }
         case .tracks:
             if trackStore.tracks.isEmpty {
                 config.text = "No music yet"
-                config.secondaryText = "Tap + to add a file"
                 config.textProperties.color = .secondaryLabel
                 cell.selectionStyle = .none
             } else {
                 let track = trackStore.tracks[indexPath.row]
+                let isCurrent = player.currentTrack?.id == track.id
                 config.text = track.title
-                let duration = formatDuration(track.duration)
-                if track.subtitle.isEmpty {
-                    config.secondaryText = duration
-                } else if duration.isEmpty {
-                    config.secondaryText = track.subtitle
+                config.secondaryText = track.subtitle.isEmpty ? nil : track.subtitle
+                let symbol = isCurrent && player.isPlaying
+                    ? "speaker.wave.2.fill" : "music.note"
+                config.image = UIImage(systemName: symbol)
+                applyNowPlayingStyle(&config, isCurrent: isCurrent)
+                cell.showsReorderControl = isEditing
+                if isEditing {
+                    cell.accessoryView = AudioMusicRowViews.durationAccessory(
+                        duration: track.duration
+                    )
                 } else {
-                    config.secondaryText = "\(track.subtitle) · \(duration)"
-                }
-                config.image = UIImage(systemName: "music.note")
-                if player.currentTrack?.id == track.id, player.isPlaying {
-                    config.imageProperties.tintColor = .systemBlue
+                    cell.accessoryView = AudioMusicRowViews.trackAccessory(
+                        duration: track.duration,
+                        menu: trackMoreMenu(for: track)
+                    )
                 }
             }
         }
@@ -255,6 +274,7 @@ final class AudioLibraryViewController: UITableViewController {
 
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
+        guard !isEditing else { return }
         switch Section(rawValue: indexPath.section)! {
         case .playlists:
             guard !playlistStore.playlists.isEmpty else { return }
@@ -269,9 +289,64 @@ final class AudioLibraryViewController: UITableViewController {
     override func tableView(_ tableView: UITableView,
                             canEditRowAt indexPath: IndexPath) -> Bool {
         switch Section(rawValue: indexPath.section)! {
-        case .playlists: return !playlistStore.playlists.isEmpty
-        case .tracks: return !trackStore.tracks.isEmpty
+        case .playlists:
+            guard !isEditing else { return false }
+            guard !playlistStore.playlists.isEmpty else { return false }
+            return !playlistStore.playlists[indexPath.row].isProtected
+        case .tracks:
+            guard !trackStore.tracks.isEmpty else { return false }
+            return true
         }
+    }
+
+    override func tableView(
+        _ tableView: UITableView,
+        editingStyleForRowAt indexPath: IndexPath
+    ) -> UITableViewCell.EditingStyle {
+        // Arrange is reorder-only; delete stays on ⋯ / swipe.
+        .none
+    }
+
+    override func tableView(
+        _ tableView: UITableView,
+        shouldIndentWhileEditingRowAt indexPath: IndexPath
+    ) -> Bool {
+        false
+    }
+
+    override func tableView(_ tableView: UITableView,
+                            canMoveRowAt indexPath: IndexPath) -> Bool {
+        isEditing
+            && Section(rawValue: indexPath.section) == .tracks
+            && trackStore.tracks.count >= 2
+    }
+
+    override func tableView(
+        _ tableView: UITableView,
+        moveRowAt sourceIndexPath: IndexPath,
+        to destinationIndexPath: IndexPath
+    ) {
+        guard Section(rawValue: sourceIndexPath.section) == .tracks,
+              Section(rawValue: destinationIndexPath.section) == .tracks
+        else { return }
+        var ids = trackStore.tracks.map(\.id)
+        let moved = ids.remove(at: sourceIndexPath.row)
+        ids.insert(moved, at: destinationIndexPath.row)
+        trackStore.reorder(trackIds: ids)
+    }
+
+    override func tableView(
+        _ tableView: UITableView,
+        targetIndexPathForMoveFromRowAt sourceIndexPath: IndexPath,
+        toProposedIndexPath proposedIndexPath: IndexPath
+    ) -> IndexPath {
+        guard Section(rawValue: proposedIndexPath.section) == .tracks else {
+            return IndexPath(
+                row: sourceIndexPath.row,
+                section: Section.tracks.rawValue
+            )
+        }
+        return proposedIndexPath
     }
 
     override func tableView(
@@ -282,6 +357,7 @@ final class AudioLibraryViewController: UITableViewController {
         case .playlists:
             guard !playlistStore.playlists.isEmpty else { return nil }
             let playlist = playlistStore.playlists[indexPath.row]
+            guard !playlist.isProtected else { return nil }
             let delete = UIContextualAction(style: .destructive, title: "Delete") { [weak self] _, _, done in
                 self?.confirmDeletePlaylist(playlist, completion: done)
             }
@@ -289,15 +365,20 @@ final class AudioLibraryViewController: UITableViewController {
         case .tracks:
             guard !trackStore.tracks.isEmpty else { return nil }
             let track = trackStore.tracks[indexPath.row]
-            let delete = UIContextualAction(style: .destructive, title: "Delete") { [weak self] _, _, done in
-                self?.confirmDeleteTrack(track, completion: done)
+            var actions: [UIContextualAction] = []
+            if !track.isProtected {
+                let delete = UIContextualAction(style: .destructive, title: "Delete") { [weak self] _, _, done in
+                    self?.confirmDeleteTrack(track, completion: done)
+                }
+                actions.append(delete)
             }
             let add = UIContextualAction(style: .normal, title: "Add to…") { [weak self] _, _, done in
                 self?.promptAddToPlaylist(trackId: track.id)
                 done(true)
             }
             add.backgroundColor = .systemBlue
-            return UISwipeActionsConfiguration(actions: [delete, add])
+            actions.append(add)
+            return UISwipeActionsConfiguration(actions: actions)
         }
     }
 
@@ -344,24 +425,124 @@ final class AudioLibraryViewController: UITableViewController {
         contextMenuConfigurationForRowAt indexPath: IndexPath,
         point: CGPoint
     ) -> UIContextMenuConfiguration? {
-        guard Section(rawValue: indexPath.section) == .tracks,
-              !trackStore.tracks.isEmpty else { return nil }
-        let track = trackStore.tracks[indexPath.row]
-        return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { [weak self] _ in
-            let add = UIAction(
-                title: "Add to Playlist",
-                image: UIImage(systemName: "text.badge.plus")
-            ) { _ in
-                self?.promptAddToPlaylist(trackId: track.id)
+        switch Section(rawValue: indexPath.section)! {
+        case .playlists:
+            guard !playlistStore.playlists.isEmpty else { return nil }
+            let playlist = playlistStore.playlists[indexPath.row]
+            return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) {
+                [weak self] _ in
+                let open = UIAction(
+                    title: "Open",
+                    image: UIImage(systemName: "music.note.list")
+                ) { _ in
+                    self?.openPlaylist(playlist)
+                }
+                var children: [UIMenuElement] = [open]
+                if !playlist.isProtected {
+                    let rename = UIAction(
+                        title: "Rename",
+                        image: UIImage(systemName: "pencil")
+                    ) { _ in
+                        self?.promptRenamePlaylist(playlist)
+                    }
+                    let delete = UIAction(
+                        title: "Delete",
+                        image: UIImage(systemName: "trash"),
+                        attributes: .destructive
+                    ) { _ in
+                        self?.confirmDeletePlaylist(playlist) { _ in }
+                    }
+                    children.append(contentsOf: [rename, delete])
+                }
+                return UIMenu(children: children)
             }
-            let play = UIAction(
-                title: "Play",
-                image: UIImage(systemName: "play.fill")
-            ) { _ in
-                AudioPlayerController.shared.playAll(startingAt: track.id)
+        case .tracks:
+            guard !trackStore.tracks.isEmpty, !isEditing else { return nil }
+            let track = trackStore.tracks[indexPath.row]
+            return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) {
+                [weak self] _ in
+                self?.trackMoreMenu(for: track)
             }
-            return UIMenu(children: [play, add])
         }
+    }
+
+    /// ⋯ / long-press menu for a library track (Play is row tap, not listed here).
+    private func trackMoreMenu(for track: AudioTrack) -> UIMenu {
+        let arrange = UIAction(
+            title: "Arrange",
+            image: UIImage(systemName: "arrow.up.arrow.down"),
+            attributes: trackStore.tracks.count < 2 ? [.disabled] : []
+        ) { [weak self] _ in
+            self?.beginArrangingTracks()
+        }
+        let add = UIAction(
+            title: "Add to Playlist",
+            image: UIImage(systemName: "text.badge.plus")
+        ) { [weak self] _ in
+            self?.promptAddToPlaylist(trackId: track.id)
+        }
+        var children: [UIMenuElement] = [arrange, add]
+        if !track.isProtected {
+            let rename = UIAction(
+                title: "Rename",
+                image: UIImage(systemName: "pencil")
+            ) { [weak self] _ in
+                self?.promptRenameTrack(track)
+            }
+            let delete = UIAction(
+                title: "Delete",
+                image: UIImage(systemName: "trash"),
+                attributes: .destructive
+            ) { [weak self] _ in
+                self?.confirmDeleteTrack(track) { _ in }
+            }
+            children.append(contentsOf: [rename, delete])
+        }
+        return UIMenu(children: children)
+    }
+
+    private func promptRenameTrack(_ track: AudioTrack) {
+        let alert = UIAlertController(
+            title: "Rename", message: nil, preferredStyle: .alert
+        )
+        alert.addTextField {
+            $0.text = track.title
+            $0.autocapitalizationType = .words
+            $0.clearButtonMode = .whileEditing
+            UserDisplayName.configureTextField($0)
+        }
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Save", style: .default) { [weak self] _ in
+            let name = alert.textFields?.first?.text ?? ""
+            do {
+                try AudioStore.shared.rename(id: track.id, to: name)
+            } catch {
+                self?.presentError(error, title: "Couldn't Rename")
+            }
+        })
+        present(alert, animated: true)
+    }
+
+    private func promptRenamePlaylist(_ playlist: AudioPlaylist) {
+        let alert = UIAlertController(
+            title: "Rename Playlist", message: nil, preferredStyle: .alert
+        )
+        alert.addTextField {
+            $0.text = playlist.name
+            $0.autocapitalizationType = .words
+            $0.clearButtonMode = .whileEditing
+            UserDisplayName.configureTextField($0)
+        }
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Save", style: .default) { [weak self] _ in
+            let name = alert.textFields?.first?.text ?? ""
+            do {
+                try AudioPlaylistStore.shared.rename(id: playlist.id, to: name)
+            } catch {
+                self?.presentError(error, title: "Couldn't Rename")
+            }
+        })
+        present(alert, animated: true)
     }
 
     private func promptAddToPlaylist(trackId: UUID) {
@@ -387,5 +568,24 @@ final class AudioLibraryViewController: UITableViewController {
             popover.permittedArrowDirections = []
         }
         present(sheet, animated: true)
+    }
+
+    /// Blues + semibold for the active playlist / track row.
+    private func applyNowPlayingStyle(
+        _ config: inout UIListContentConfiguration,
+        isCurrent: Bool
+    ) {
+        let body = UIFont.preferredFont(forTextStyle: .body)
+        if isCurrent {
+            config.textProperties.color = .systemBlue
+            config.textProperties.font = .systemFont(ofSize: body.pointSize, weight: .semibold)
+            config.secondaryTextProperties.color = UIColor.systemBlue.withAlphaComponent(0.7)
+            config.imageProperties.tintColor = .systemBlue
+        } else {
+            config.textProperties.color = .label
+            config.textProperties.font = body
+            config.secondaryTextProperties.color = .secondaryLabel
+            config.imageProperties.tintColor = .secondaryLabel
+        }
     }
 }

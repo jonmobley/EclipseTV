@@ -16,16 +16,17 @@ for a change and names the item.
 eviction. Each warm page is a real web content process; releasing the reference without
 tearing down the `WKWebView`, its message handler, and its delegates leaks the process.
 
-Launch warms **only** the free-browse tile (`warmFreeBrowse()`); saved bookmarks warm
-one at a time as they scroll into view (`warmSoon(_:)`), spaced and watchdogged. Do not
-reintroduce a `warmAll()` that warms every bookmark up front — that competed with the
-first frame and made the whole app sluggish at launch.
+Launch does **not** warm websites. Show website cards warm via `warmSoon(_:)` when a
+Show opens; bookmarks warm one at a time as they scroll into view, spaced and
+watchdogged. Do not reintroduce a launch `warmAll()` that warms every bookmark up
+front — that competed with the first frame and made the whole app sluggish at launch.
 
 ## Ambient audio pauses, it never stops
 
-`AudioAmbientPolicy.applyYieldIfNeeded(for:)` calls `pause()`. `stop()` tears down the
-queue and mini player, so yielding the output to a presentation would silently discard
-the user's playback state. Pausing is the point, not an oversight.
+`AudioAmbientPolicy.applyYieldIfNeeded(for:)` / `forWebMedia:` call `pause()` (with fade).
+`stop()` tears down the queue and mini player, so yielding to audible video or website
+media would silently discard the user's playback state. Pausing is the point, not an
+oversight. Muted library video and silent web pages do not yield.
 
 ## Photo capture has no fallback
 

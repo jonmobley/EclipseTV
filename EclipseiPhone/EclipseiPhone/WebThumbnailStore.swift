@@ -26,14 +26,27 @@ final class WebThumbnailStore {
     /// reads fall back to disk, so eviction only costs a reload.
     private let memory = NSCache<NSUUID, UIImage>()
     private let favicons = NSCache<NSUUID, UIImage>()
+    /// Display-aspect tile art (cropped snapshot or letterboxed favicon).
+    private let display = NSCache<NSUUID, UIImage>()
 
     private init() {
         memory.totalCostLimit = 24 * 1024 * 1024
         favicons.totalCostLimit = 4 * 1024 * 1024
+        display.totalCostLimit = 24 * 1024 * 1024
 
         let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
         rootDirectory = base.appendingPathComponent("WebThumbnails", isDirectory: true)
         try? FileManager.default.createDirectory(at: rootDirectory, withIntermediateDirectories: true)
+
+        NotificationCenter.default.addObserver(
+            forName: ExternalOutputSettings.didChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.invalidateDisplayCache()
+            }
+        }
     }
 
     /// Approximate decoded byte size, used as the `NSCache` cost.
@@ -47,10 +60,21 @@ final class WebThumbnailStore {
 
     // MARK: - Reads
 
-    /// Best available preview: snapshot, else favicon.
+    /// Best available tile preview, always framed to Display Mode aspect (16:9 / 9:16).
     func image(for id: UUID) -> UIImage? {
-        if let snapshot = snapshot(for: id) { return snapshot }
-        return favicon(for: id)
+        if let cached = display.object(forKey: id as NSUUID) { return cached }
+        let framed: UIImage?
+        if let snapshot = snapshot(for: id) {
+            framed = WebThumbnailAspect.croppedToDisplayAspect(snapshot)
+        } else if let icon = favicon(for: id) {
+            framed = WebThumbnailAspect.letterboxedInDisplayAspect(icon)
+        } else {
+            framed = nil
+        }
+        if let framed {
+            display.setObject(framed, forKey: id as NSUUID, cost: Self.cost(of: framed))
+        }
+        return framed
     }
 
     /// Full-page snapshot if one has been captured.
@@ -75,12 +99,14 @@ final class WebThumbnailStore {
 
     /// Persists a page snapshot and notifies the UI.
     func saveSnapshot(_ image: UIImage, for id: UUID) {
-        memory.setObject(image, forKey: id as NSUUID, cost: Self.cost(of: image))
+        let normalized = WebThumbnailAspect.croppedToDisplayAspect(image)
+        memory.setObject(normalized, forKey: id as NSUUID, cost: Self.cost(of: normalized))
+        display.setObject(normalized, forKey: id as NSUUID, cost: Self.cost(of: normalized))
         let url = snapshotURL(for: id)
         ioQueue.async { [weak self] in
             // WKWebView snapshots are AlphaPremulLast even when fully opaque;
             // flattening avoids ImageIO's "ignoring alpha" save warning + decode cost.
-            guard let data = Self.opaqueJPEGData(from: image, quality: 0.82) else { return }
+            guard let data = Self.opaqueJPEGData(from: normalized, quality: 0.82) else { return }
             do {
                 try data.write(to: url, options: .atomic)
             } catch {
@@ -115,6 +141,8 @@ final class WebThumbnailStore {
     /// Persists a favicon and notifies the UI when no snapshot is present yet.
     func saveFavicon(_ image: UIImage, for id: UUID) {
         favicons.setObject(image, forKey: id as NSUUID, cost: Self.cost(of: image))
+        // Drop framed tile art so the next `image(for:)` letterboxes this icon.
+        display.removeObject(forKey: id as NSUUID)
         let url = faviconURL(for: id)
         ioQueue.async { [weak self] in
             guard let data = image.pngData() else { return }
@@ -132,12 +160,19 @@ final class WebThumbnailStore {
     func remove(id: UUID) {
         memory.removeObject(forKey: id as NSUUID)
         favicons.removeObject(forKey: id as NSUUID)
+        display.removeObject(forKey: id as NSUUID)
         let snap = snapshotURL(for: id)
         let icon = faviconURL(for: id)
         ioQueue.async {
             try? FileManager.default.removeItem(at: snap)
             try? FileManager.default.removeItem(at: icon)
         }
+        NotificationCenter.default.post(name: Self.didChangeNotification, object: self)
+    }
+
+    /// Clears framed tile art after Display Mode changes (16:9 ↔ 9:16).
+    private func invalidateDisplayCache() {
+        display.removeAllObjects()
         NotificationCenter.default.post(name: Self.didChangeNotification, object: self)
     }
 

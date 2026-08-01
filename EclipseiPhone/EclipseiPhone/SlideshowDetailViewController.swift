@@ -84,6 +84,7 @@ final class SlideshowDetailViewController: UITableViewController {
         alert.addTextField { field in
             field.text = slideshow.name
             field.autocapitalizationType = .words
+            UserDisplayName.configureTextField(field)
         }
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         alert.addAction(UIAlertAction(title: "Save", style: .default) { [weak self] _ in
@@ -132,7 +133,7 @@ final class SlideshowDetailViewController: UITableViewController {
     ) -> String? {
         switch Section(rawValue: section)! {
         case .preferences: return "Preferences"
-        case .slides: return "Photos"
+        case .slides: return "Images"
         }
     }
 
@@ -286,14 +287,14 @@ final class SlideshowDetailViewController: UITableViewController {
         let cell = tableView.dequeueReusableCell(withIdentifier: slideReuseId, for: indexPath)
         var config = cell.defaultContentConfiguration()
         if slides.isEmpty {
-            config.text = "No photos"
+            config.text = "No images"
             config.secondaryText = "Delete this Slideshow or create a new one."
             config.textProperties.color = .secondaryLabel
             cell.selectionStyle = .none
             cell.accessoryType = .none
         } else {
             let item = slides[indexPath.row]
-            config.text = "Photo \(indexPath.row + 1)"
+            config.text = "Image \(indexPath.row + 1)"
             config.image = TVLibraryStore.shared.thumbnail(for: item.id)
             config.imageProperties.maximumSize = CGSize(width: 44, height: 44)
             config.imageProperties.cornerRadius = 6

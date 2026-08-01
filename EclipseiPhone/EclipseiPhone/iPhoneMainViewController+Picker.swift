@@ -24,8 +24,16 @@ extension iPhoneMainViewController: UIDocumentPickerDelegate {
             guard let url = urls.first else { return }
             do {
                 let doc = try PDFStore.shared.add(from: url, title: nil)
-                libraryViewController.presentPDF(doc)
+                // Show membership only — tap the new card to go live.
+                if let albumId = pendingAlbumId ?? libraryViewController.openShowId {
+                    LocalAlbumStore.shared.add(
+                        itemId: doc.id.uuidString,
+                        toAlbumId: albumId
+                    )
+                }
+                pendingAlbumId = nil
             } catch {
+                pendingAlbumId = nil
                 showAlert(title: "Couldn't Add PDF", message: error.localizedDescription)
             }
         case .audio:
@@ -55,6 +63,9 @@ extension iPhoneMainViewController: UIDocumentPickerDelegate {
 
     func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
         isShowingPicker = false
+        if pendingDocumentKind == .pdf {
+            pendingAlbumId = nil
+        }
     }
 }
 
@@ -62,10 +73,17 @@ extension iPhoneMainViewController: UIDocumentPickerDelegate {
 
 extension iPhoneMainViewController: PHPickerViewControllerDelegate {
     func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
-        // Reset picker flag
         isShowingPicker = false
-        picker.dismiss(animated: true)
 
+        // Confirm / crop sheets must wait until the picker is gone — presenting while
+        // it is still dismissing fails silently ("nothing happens" after a selection).
+        picker.dismiss(animated: true) { [weak self] in
+            self?.finishPhotoLibraryPick(results)
+        }
+    }
+
+    /// Routes a finished Photos pick after the system picker has dismissed.
+    private func finishPhotoLibraryPick(_ results: [PHPickerResult]) {
         guard !results.isEmpty else {
             // User cancelled: drop any pending re-send so a later normal send isn't
             // mistaken for a restore.
@@ -74,6 +92,7 @@ extension iPhoneMainViewController: PHPickerViewControllerDelegate {
             pendingSlideshowShowId = nil
             pendingSlideshowName = nil
             pendingLogoPick = false
+            pendingScreensaverPick = false
             return
         }
 
@@ -81,10 +100,15 @@ extension iPhoneMainViewController: PHPickerViewControllerDelegate {
             let provider = results[0].itemProvider
             guard provider.canLoadObject(ofClass: UIImage.self) else {
                 pendingLogoPick = false
-                showAlert(title: "Image Error", message: "Choose a photo for the Logo.")
+                showAlert(title: "Image Error", message: "Choose an image for the Background.")
                 return
             }
             handlePickedLogo(provider)
+            return
+        }
+
+        if pendingScreensaverPick {
+            handlePickedScreensaver(results[0].itemProvider)
             return
         }
 
@@ -122,6 +146,56 @@ extension iPhoneMainViewController: PHPickerViewControllerDelegate {
                 }
                 LogoStore.shared.save(image)
                 self.libraryViewController.presentLogoLive()
+            }
+        }
+    }
+
+    private func handlePickedScreensaver(_ provider: NSItemProvider) {
+        if provider.hasItemConformingToTypeIdentifier(UTType.movie.identifier) {
+            provider.loadFileRepresentation(forTypeIdentifier: UTType.movie.identifier) {
+                [weak self] url, _ in
+                guard let self else { return }
+                guard let url,
+                      let local = self.copyPickedVideoToSandbox(url) else {
+                    DispatchQueue.main.async {
+                        self.pendingScreensaverPick = false
+                        self.showAlert(
+                            title: "Video Error",
+                            message: "Could not access that video. Please try again."
+                        )
+                    }
+                    return
+                }
+                DispatchQueue.main.async {
+                    self.pendingScreensaverPick = false
+                    ScreensaverStore.shared.saveVideo(from: local)
+                    self.cleanupTempFile(at: local)
+                    self.libraryViewController.presentScreensaverLive()
+                }
+            }
+            return
+        }
+        guard provider.canLoadObject(ofClass: UIImage.self) else {
+            pendingScreensaverPick = false
+            showAlert(
+                title: "Couldn't Replace",
+                message: "Choose an image or video for the Screensaver."
+            )
+            return
+        }
+        provider.loadObject(ofClass: UIImage.self) { [weak self] object, _ in
+            guard let self else { return }
+            DispatchQueue.main.async {
+                self.pendingScreensaverPick = false
+                guard let image = object as? UIImage else {
+                    self.showAlert(
+                        title: "Image Error",
+                        message: "Could not load the selected image. Please try again."
+                    )
+                    return
+                }
+                ScreensaverStore.shared.saveImage(image)
+                self.libraryViewController.presentScreensaverLive()
             }
         }
     }
@@ -344,12 +418,21 @@ extension iPhoneMainViewController: VideoThumbnailPreviewDelegate {
     func videoThumbnailPreview(_ controller: VideoThumbnailPreviewViewController,
                                didFinishWithVideoURL videoURL: URL,
                                selectedThumbnail: UIImage) {
+        let editId = pendingThumbnailEditItemId
+        pendingThumbnailEditItemId = nil
         controller.dismiss(animated: true) { [weak self] in
-            self?.continueVideoAdd(videoURL: videoURL, thumbnail: selectedThumbnail)
+            if let editId {
+                self?.applyVideoThumbnail(
+                    selectedThumbnail, forItemId: editId, videoURL: videoURL
+                )
+            } else {
+                self?.continueVideoAdd(videoURL: videoURL, thumbnail: selectedThumbnail)
+            }
         }
     }
 
     func videoThumbnailPreviewDidCancel(_ controller: VideoThumbnailPreviewViewController) {
+        pendingThumbnailEditItemId = nil
         controller.dismiss(animated: true)
     }
 

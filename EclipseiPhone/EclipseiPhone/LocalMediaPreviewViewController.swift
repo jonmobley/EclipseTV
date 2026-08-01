@@ -13,6 +13,9 @@ struct LocalMediaPreviewItem {
     let id: String
     let fileURL: URL
     let isVideo: Bool
+    /// Honored for in-app preview playback (matches AirPlay / EclipseTV).
+    var isLooping: Bool = false
+    var isMuted: Bool = false
 }
 
 /// Fullscreen swipeable gallery of media stored on the phone (`LocalMediaStore`).
@@ -28,7 +31,13 @@ final class LocalMediaPreviewViewController: UIViewController {
     static func previewableItems(from items: [LibraryItemDTO]) -> [LocalMediaPreviewItem] {
         items.compactMap { item in
             guard let url = LocalMediaStore.shared.localURL(forId: item.id) else { return nil }
-            return LocalMediaPreviewItem(id: item.id, fileURL: url, isVideo: item.isVideo)
+            return LocalMediaPreviewItem(
+                id: item.id,
+                fileURL: url,
+                isVideo: item.isVideo,
+                isLooping: item.isLooping ?? false,
+                isMuted: item.isMuted ?? false
+            )
         }
     }
 

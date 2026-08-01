@@ -55,9 +55,10 @@ final class TVLibraryStore {
     /// Live playback state for the currently playing video on the Apple TV. Not persisted.
     private(set) var playback = PlaybackState()
 
-    /// Decoded grid thumbnails, bounded so a large library can't pin hundreds of
-    /// megabytes of bitmaps.
-    private let thumbnails = ThumbnailMemoryCache(megabyteLimit: 48)
+    /// Decoded grid thumbnails: purgeable `NSCache` + on-screen pins (see cache type).
+    private let thumbnails = ThumbnailMemoryCache(
+        megabyteLimit: ThumbnailMemoryCache.defaultMegabyteLimit()
+    )
 
     /// Ids with a disk load already in flight, so a scrolling grid doesn't kick off
     /// duplicate reads for the same cell.
@@ -166,6 +167,14 @@ final class TVLibraryStore {
         return nil
     }
 
+    /// Pins thumbnails for tiles currently on screen (and the live item for the hero).
+    ///
+    /// Call after layout / reload so go-live memory pressure can’t blank visible cells
+    /// when `NSCache` purges. Off-screen tiles reload from disk when they scroll in.
+    func setVisibleThumbnailIds(_ ids: Set<String>) {
+        thumbnails.setVisibleIds(ids)
+    }
+
     /// Loads a cached thumb, or rebuilds one from LocalMedia / the other mode's cache.
     private func loadThumbnailFromDisk(_ id: String) {
         guard !pendingDiskLoads.contains(id) else { return }
@@ -209,12 +218,12 @@ final class TVLibraryStore {
 
             Task { @MainActor in
                 self.pendingDiskLoads.remove(id)
-                guard let image,
-                      self.activeTVName == tvName,
+                guard self.activeTVName == tvName,
                       self.activeLibraryMode == mode else { return }
-                if self.thumbnails[id] == nil {
-                    self.thumbnails[id] = image
-                }
+                // Miss / failure: leave pending clear so the next configure can retry.
+                guard let image else { return }
+                // Always re-insert — refills NSCache after a memory-pressure purge.
+                self.thumbnails[id] = image
                 if needsPersist {
                     self.persistThumbnail(image, forId: id)
                 }
@@ -318,13 +327,16 @@ final class TVLibraryStore {
         self.items = items
         self.currentId = currentId
         mergePendingUploads()
+        mergeCaptures()
         recoverOrphanedLocalMedia()
 
         let keepIds = Set(self.items.map { $0.id })
             .union(PendingUploadStore.shared.pendingIds(for: mode))
+            .union(CaptureStore.shared.keepIds)
         thumbnails.retain(ids: keepIds)
         pruneDiskThumbnails(keeping: keepIds)
         // Keep full-res copies that still exist on disk even if the TV omitted them.
+        // Captures are never pruned by TV manifests (separate root in LocalMediaStore).
         let localKeep = keepIds.union(Set(LocalMediaStore.shared.storedIds(for: mode)))
         LocalMediaStore.shared.prune(keeping: localKeep, mode: mode)
         LocalAlbumStore.shared.pruneMissingItems(keeping: keepIds)
@@ -377,6 +389,25 @@ final class TVLibraryStore {
         }
     }
 
+    /// Merges phone-owned captures into the display list (never sent to Apple TV).
+    private func mergeCaptures() {
+        let existing = Set(items.map { $0.id })
+        let mode = ExternalOutputSettings.orientation
+        for capture in CaptureStore.shared.capturesForCurrentMode
+        where capture.orientation == mode {
+            let dto = capture.asLibraryItem
+            guard !existing.contains(dto.id) else { continue }
+            items.append(dto)
+        }
+    }
+
+    /// Re-merges captures after CloudKit fetch / local capture changes.
+    func refreshMergedCaptures() {
+        mergeCaptures()
+        persistManifest()
+        delegate?.libraryStoreDidUpdateItems(self)
+    }
+
     /// True when the other Display Mode still has library content.
     func inactiveModeHasContent() -> Bool {
         let other: EclipseShareProtocol.LibraryMode =
@@ -390,6 +421,7 @@ final class TVLibraryStore {
     private func runLaunchRecovery() {
         ensureLibraryIdentity()
         mergePendingUploads()
+        mergeCaptures()
         recoverOrphanedLocalMedia()
         recoverFromCachedManifests()
         if items.isEmpty {
@@ -621,6 +653,27 @@ final class TVLibraryStore {
         thumbnails[id] = thumb
         persistThumbnail(thumb, forId: id)
         delegate?.libraryStore(self, didUpdateThumbnailFor: id)
+    }
+
+    /// Updates loop / mute for a video and persists the manifest (local + pending upload).
+    func updateVideoSetting(id: String, isLooping: Bool?, isMuted: Bool?) {
+        guard let index = items.firstIndex(where: { $0.id == id }) else { return }
+        var item = items[index]
+        guard item.isVideo else { return }
+        var changed = false
+        if let isLooping, item.isLooping != isLooping {
+            item.isLooping = isLooping
+            changed = true
+        }
+        if let isMuted, item.isMuted != isMuted {
+            item.isMuted = isMuted
+            changed = true
+        }
+        guard changed else { return }
+        items[index] = item
+        persistManifest()
+        PendingUploadStore.shared.update(item, mode: activeLibraryMode)
+        delegate?.libraryStoreDidUpdateItems(self)
     }
 
     /// Clears all mirrored state for a single Apple TV (both modes).

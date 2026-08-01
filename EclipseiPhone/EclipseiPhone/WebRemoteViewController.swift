@@ -11,56 +11,22 @@ import WebKit
 /// Phone-side Safari-like browser for a page presented on AirPlay.
 ///
 /// Stages a 9:16 (Vertical) or 16:9 (Landscape) panel matching the AirPlay
-/// viewport. Compact chrome: Back · URL pill with inline Reload · bookmarks.
+/// viewport. Compact chrome: Back · host title · bookmarks ⋯ (Refresh / New / saved).
 final class WebRemoteViewController: UIViewController {
 
     // MARK: - Properties
 
     let page: WebPage
     var webView: WKWebView?
-    /// Full-bleed black host behind the aspect-fitted web panel.
+    /// Full-bleed host behind the aspect-fitted web panel.
     var webStageView: UIView?
     /// Aspect-fitted panel (9:16 or 16:9) that hosts the web view.
     var webPanelView: UIView?
     /// Suppresses scroll sync while applying programmatic scroll changes.
     var isSyncingScroll = false
-
-    /// Pill that holds the URL field + inline reload (Safari-style).
-    let urlBarContainer: WebURLBarView = {
-        let view = WebURLBarView()
-        view.backgroundColor = .secondarySystemBackground
-        view.clipsToBounds = true
-        return view
-    }()
-
-    let urlField: UITextField = {
-        let field = UITextField()
-        field.placeholder = "Search or enter website"
-        field.textAlignment = .center
-        field.borderStyle = .none
-        field.font = .systemFont(ofSize: 17, weight: .semibold)
-        field.autocapitalizationType = .none
-        field.autocorrectionType = .no
-        field.keyboardType = .URL
-        field.textContentType = .URL
-        field.returnKeyType = .go
-        field.clearButtonMode = .whileEditing
-        field.translatesAutoresizingMaskIntoConstraints = false
-        return field
-    }()
-
-    let reloadButton: UIButton = {
-        var config = UIButton.Configuration.plain()
-        let symbol = UIImage.SymbolConfiguration(pointSize: 14, weight: .semibold)
-        config.image = UIImage(systemName: "arrow.clockwise", withConfiguration: symbol)
-        config.contentInsets = NSDirectionalEdgeInsets(
-            top: 6, leading: 6, bottom: 6, trailing: 6
-        )
-        config.baseForegroundColor = .label
-        let button = UIButton(configuration: config)
-        button.translatesAutoresizingMaskIntoConstraints = false
-        return button
-    }()
+    /// True once the browser is on its way out, so the orientation is restored after the
+    /// dismissal rather than while this screen still owns it.
+    private var isLeaving = false
 
     var backButton: UIBarButtonItem!
     var bookmarksButton: UIBarButtonItem!
@@ -91,35 +57,62 @@ final class WebRemoteViewController: UIViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        requestDisplayModeSceneGeometry()
         ExternalDisplayManager.shared.refreshConnection()
         refreshBookmarksMenu()
+    }
+
+    /// Landscape Display Mode → landscape browser; Vertical → portrait.
+    ///
+    /// The card is the AirPlay viewport, so in Landscape the user turns the phone and
+    /// reads, scrolls, and taps the same 16:9 frame the TV is showing.
+    override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
+        ExternalOutputSettings.phoneOrientationMask
+    }
+
+    override var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation {
+        ExternalOutputSettings.preferredPhoneOrientation
+    }
+
+    override var shouldAutorotate: Bool { true }
+
+    override func viewWillTransition(
+        to size: CGSize,
+        with coordinator: UIViewControllerTransitionCoordinator
+    ) {
+        super.viewWillTransition(to: size, with: coordinator)
+        coordinator.animate(alongsideTransition: { [weak self] _ in
+            self?.layoutPhoneWebViewport()
+        }, completion: { [weak self] _ in
+            self?.resyncExternalWeb()
+        })
     }
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         guard isBeingDismissed || isMovingFromParent else { return }
+        isLeaving = true
         // Park the warm session (home LiveHeader reclaims it if still live).
         WarmWebSessionPool.shared.relinquish(pageId: page.id, from: self)
         webView = nil
     }
 
-    override func viewDidAppear(_ animated: Bool) {
-        super.viewDidAppear(animated)
-        // Only focus the omnibox when free-browse has no real page yet.
-        if page.isFreeBrowse, isBlankBrowserURL(webView?.url ?? page.url) {
-            urlField.becomeFirstResponder()
-        }
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        guard isLeaving else { return }
+        // Landscape Display Mode turned the phone for this screen; put it back upright
+        // so the grid behind it isn't left sideways.
+        restoreUprightSceneGeometry()
     }
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        layoutURLBarWidth()
         layoutPhoneWebViewport()
     }
 
     // Closing the phone browser does not stop AirPlay — the site stays live.
 
-    /// Whether `url` is the empty free-browse start page.
+    /// Whether `url` is an empty / about: page (not a real site yet).
     func isBlankBrowserURL(_ url: URL) -> Bool {
         url.absoluteString == "about:blank" || url.scheme == "about"
     }
@@ -157,6 +150,7 @@ final class WebRemoteViewController: UIViewController {
     }
 
     @objc func outputSettingsChanged() {
+        requestDisplayModeSceneGeometry()
         layoutPhoneWebViewport()
         webView?.reload()
         ExternalDisplayManager.shared.reloadWeb()

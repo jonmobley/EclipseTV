@@ -14,12 +14,40 @@ import UIKit
 /// Opening a Show from the other mode switches Display Mode first.
 extension iPhoneMainViewController {
 
-    /// "Open Show" submenu for the Eclipse dropdown, or `nil` when nothing is openable.
+    /// How many Shows the dropdown lists inline before the rest fall to "Open Show".
+    private static let recentShowMenuLimit = 5
+
+    /// The Shows the dropdown offers inline, most recently opened first.
     ///
-    /// Nested rather than inline so the top level stays a short list of verbs.
+    /// Recency is `LocalAlbumStore`'s own order — opening a Show moves it to the front —
+    /// so these match the Home ribbon Show mode covers up. Both Display Modes are listed
+    /// (glyph marks Landscape vs Vertical); opening an other-mode Show switches mode.
     /// - Parameter excludedId: Show to leave out, e.g. the one already open.
-    func openShowSubmenu(excluding excludedId: UUID? = nil) -> UIMenu? {
-        let groups = showMenuGroups(excluding: excludedId)
+    func recentShowsForMenu(excluding excludedId: UUID? = nil) -> [LocalAlbum] {
+        Array(
+            LocalAlbumStore.shared.albums
+                .filter { $0.id != excludedId }
+                .prefix(Self.recentShowMenuLimit)
+        )
+    }
+
+    /// Inline Recent Shows section for the header dropdown (both Display Modes).
+    func recentShowsMenu(_ shows: [LocalAlbum]) -> UIMenu {
+        UIMenu(
+            title: "Recent Shows",
+            options: .displayInline,
+            children: shows.map { openShowAction(for: $0) }
+        )
+    }
+
+    /// "Open Show" submenu for the header dropdown, or `nil` when nothing is openable.
+    ///
+    /// Nested rather than inline so the top level stays a short list of verbs. Callers
+    /// should only exclude the currently open Show — never the Recent list — so this
+    /// entry stays discoverable even when every Show already fits inline.
+    /// - Parameter excludedIds: Shows to leave out, e.g. the one already open.
+    func openShowSubmenu(excluding excludedIds: Set<UUID>) -> UIMenu? {
+        let groups = showMenuGroups(excluding: excludedIds)
         guard !groups.isEmpty else { return nil }
         return UIMenu(
             title: "Open Show",
@@ -29,18 +57,21 @@ extension iPhoneMainViewController {
     }
 
     /// Menu rows for opening a Show: active Display Mode first, then the other mode.
-    /// - Parameter excludedId: Show to leave out, e.g. the one already open.
-    func showMenuGroups(excluding excludedId: UUID? = nil) -> [UIMenuElement] {
+    /// - Parameter excludedIds: Shows to leave out, e.g. the open one and the recents.
+    func showMenuGroups(excluding excludedIds: Set<UUID>) -> [UIMenuElement] {
         let active = ExternalOutputSettings.orientation
-        let shows = LocalAlbumStore.shared.albums.filter { $0.id != excludedId }
-        let groups = [
-            shows.filter { $0.orientation == active },
-            shows.filter { $0.orientation != active }
+        let shows = LocalAlbumStore.shared.albums.filter { !excludedIds.contains($0.id) }
+        let groups: [(ExternalOutputOrientation, [LocalAlbum])] = [
+            (active, shows.filter { $0.orientation == active }),
+            (
+                active == .landscape ? .portrait : .landscape,
+                shows.filter { $0.orientation != active }
+            )
         ]
-        return groups.compactMap { group in
+        return groups.compactMap { mode, group in
             guard !group.isEmpty else { return nil }
             return UIMenu(
-                title: "",
+                title: mode.rawValue,
                 options: .displayInline,
                 children: group.map { openShowAction(for: $0) }
             )
@@ -48,9 +79,9 @@ extension iPhoneMainViewController {
     }
 
     private func openShowAction(for show: LocalAlbum) -> UIAction {
+        // Mode is the glyph only (tall stack vs wide) — no Vertical/Landscape copy.
         UIAction(
             title: show.name,
-            subtitle: show.showPickerModeBadge,
             image: UIImage(systemName: show.showPickerIconName)
         ) { [weak self] _ in
             self?.openShowFromPicker(id: show.id)
@@ -82,20 +113,10 @@ extension LocalAlbum {
             : "rectangle.stack"
     }
 
-    /// Display Mode badge for a Show row, or `nil` when the row needs no marker.
-    ///
-    /// Vertical Shows are always badged. Landscape Shows are badged only while Vertical
-    /// mode is active, where an unbadged row would be the ambiguous one.
-    var showPickerModeBadge: String? {
-        guard orientation == .portrait || ExternalOutputSettings.isVerticalMode else {
-            return nil
-        }
-        return orientation.rawValue
-    }
-
-    /// Action-sheet row title with the mode inline, since sheets can't show icons.
-    var showPickerSheetTitle: String {
-        guard let badge = showPickerModeBadge else { return name }
-        return "\(name) (\(badge))"
+    /// Home tile caption: prefixes Landscape/Vertical when the Show is in the other mode.
+    var homeRecentSubtitle: String {
+        let relative = lastOpenedSubtitle
+        guard orientation != ExternalOutputSettings.orientation else { return relative }
+        return "\(orientation.rawValue) · \(relative)"
     }
 }
