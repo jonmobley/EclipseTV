@@ -78,6 +78,17 @@ final class SlideshowStore {
         return show
     }
 
+    /// Aligns every slideshow under `showId` with the Show's Display Mode format.
+    func setOrientation(_ orientation: ExternalOutputOrientation, forShowId showId: UUID) {
+        var changed = false
+        for index in slideshows.indices where slideshows[index].showId == showId {
+            guard slideshows[index].orientation != orientation else { continue }
+            slideshows[index].orientation = orientation
+            changed = true
+        }
+        if changed { persist() }
+    }
+
     /// Renames the slideshow with `id` when present.
     func rename(id: UUID, to name: String) throws {
         guard let trimmed = UserDisplayName.normalized(name) else {

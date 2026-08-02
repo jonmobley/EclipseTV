@@ -192,11 +192,22 @@ extension LibraryGridViewController {
 
     /// Applies Landscape vs Vertical chrome and reloads the active mode's library.
     func applyLayoutMode() {
-        // TVLibraryStore also observes this notification and swaps buckets first.
+        let modeBefore = store.activeLibraryMode
+        // End arrange/select first so store delegates are not skipped mid-swap.
+        if isArranging {
+            cancelArranging()
+        }
+        if isSelecting {
+            cancelSelecting()
+        }
+        // Sync swaps buckets and reloads via store delegates when the mode changed.
         store.syncLibraryModeFromSettings()
         applyHeroChrome()
         collectionView.collectionViewLayout.invalidateLayout()
-        collectionView.reloadData()
+        // Avoid a second reloadData on top of the bucket-swap delegate cascade.
+        if store.activeLibraryMode == modeBefore {
+            collectionView.reloadData()
+        }
     }
 
     /// Sizes the live hero for the active chrome axis and Display Mode.
