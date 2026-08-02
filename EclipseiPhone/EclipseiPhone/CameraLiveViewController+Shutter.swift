@@ -49,7 +49,8 @@ extension CameraLiveViewController {
             shutterSlideAnchor = 0
             shutterHoldTimer?.invalidate()
             shutterHoldTimer = nil
-            if isAirPlayLive {
+            // Always-record mode owns start/stop with live; hold would fight that.
+            if isAirPlayLive, !ExternalOutputSettings.alwaysRecordWhenLive {
                 shutterHoldTimer = Timer.scheduledTimer(
                     withTimeInterval: Self.shutterHoldDuration,
                     repeats: false
@@ -187,6 +188,7 @@ extension CameraLiveViewController {
             }
             refreshLiveChrome()
             snapShutterProgress(to: 1, animated: true)
+            startAlwaysLiveRecordingIfNeeded()
             return
         }
 
@@ -276,7 +278,24 @@ extension CameraLiveViewController {
         }
         refreshLiveChrome()
         UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+        startRecordingFromShutter()
+    }
 
+    /// Starts recording when Always Record When Live is on and camera is on AirPlay.
+    ///
+    /// No-ops if the preference is off, camera isn't live, a movie is already rolling,
+    /// or a modal (e.g. Camera Settings) is covering the shutter. Used after go-live,
+    /// settings dismiss, and preference changes.
+    func startAlwaysLiveRecordingIfNeeded() {
+        guard ExternalOutputSettings.alwaysRecordWhenLive else { return }
+        guard ExternalDisplayManager.shared.isCameraLive else { return }
+        guard !CameraManager.shared.isRecording else { return }
+        guard presentedViewController == nil else { return }
+        startRecordingFromShutter()
+    }
+
+    /// Starts a movie and refreshes chrome / surfaces capture errors.
+    private func startRecordingFromShutter() {
         CameraManager.shared.startRecording { [weak self] result in
             guard let self else { return }
             self.refreshLiveChrome()

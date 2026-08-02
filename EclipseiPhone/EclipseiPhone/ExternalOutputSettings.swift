@@ -138,9 +138,10 @@ enum ExternalOutputSettings {
     private static let transitionKey = "EclipseTV.contentTransition"
     private static let cameraCloseKey = "EclipseTV.camera.closeDestination"
     private static let includeFrameInCapturesKey = "EclipseTV.camera.includeFrameInCaptures"
+    private static let alwaysRecordWhenLiveKey = "EclipseTV.camera.alwaysRecordWhenLive"
 
-    /// Posted when orientation, rotation, text size, transition, camera-close, or
-    /// frame-in-captures changes.
+    /// Posted when orientation, rotation, text size, transition, camera-close,
+    /// frame-in-captures, or always-record-when-live changes.
     static let didChangeNotification = Notification.Name("ExternalOutputSettings.didChange")
 
     static var orientation: ExternalOutputOrientation {
@@ -241,6 +242,20 @@ enum ExternalOutputSettings {
         }
         set {
             UserDefaults.standard.set(newValue, forKey: includeFrameInCapturesKey)
+            NotificationCenter.default.post(name: didChangeNotification, object: nil)
+        }
+    }
+
+    /// When true, video recording starts automatically whenever camera is live on AirPlay.
+    ///
+    /// Defaults off. Recording stops when the shutter slides off live. Hold-to-record
+    /// is disabled while this is on; tap still takes a photo.
+    static var alwaysRecordWhenLive: Bool {
+        get {
+            UserDefaults.standard.bool(forKey: alwaysRecordWhenLiveKey)
+        }
+        set {
+            UserDefaults.standard.set(newValue, forKey: alwaysRecordWhenLiveKey)
             NotificationCenter.default.post(name: didChangeNotification, object: nil)
         }
     }
