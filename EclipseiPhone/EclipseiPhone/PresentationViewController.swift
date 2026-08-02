@@ -396,7 +396,12 @@ final class PresentationViewController: UIViewController {
             hideCamera()
             hideWeb()
             hidePDF()
-            showVideo(at: url, isLooping: isLooping, isMuted: isMuted)
+            showVideo(
+                at: url,
+                isLooping: isLooping,
+                isMuted: isMuted,
+                startAt: source.videoStartAt
+            )
         case .screensaver(let url):
             hideCamera()
             hideWeb()

@@ -450,10 +450,18 @@ class iPhoneConnectionManager: NSObject {
     ///
     /// Carries the item's Fit / Fill choice so a still is framed on the TV exactly as it
     /// is on this phone's own external output.
+    /// - Parameter startAt: Absolute resume seconds for video; omit / 0 plays from the start.
+    ///   Callers that want parked leave state must pass `VideoResumeStore` themselves —
+    ///   slideshow and other auto-advance paths must not inherit a parked seek.
+    @MainActor
     @discardableResult
-    func sendPlayRequest(id: String) -> Bool {
+    func sendPlayRequest(id: String, startAt: Double? = nil) -> Bool {
         return sendCommand(
-            .playRequest(id: id, isFill: MediaFitSettings.isFill(forId: id)),
+            .playRequest(
+                id: id,
+                isFill: MediaFitSettings.isFill(forId: id),
+                startAt: startAt
+            ),
             description: "play request"
         )
     }

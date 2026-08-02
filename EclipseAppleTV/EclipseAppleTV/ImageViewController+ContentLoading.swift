@@ -57,7 +57,11 @@ extension ImageViewController {
 
     /// The companion asked us to make a specific item live. Resolve it and bring it
     /// to fullscreen, mirroring the behavior of selecting it on the TV.
-    func connectionManager(_ manager: ConnectionManager, didReceivePlayRequestForId id: String) {
+    func connectionManager(
+        _ manager: ConnectionManager,
+        didReceivePlayRequestForId id: String,
+        startAt: Double?
+    ) {
         // A file may have been purged by tvOS since the last sync; catch it now (this
         // moves any missing file into the ledger and rebroadcasts an updated manifest)
         // before we attempt to display it.
@@ -80,6 +84,13 @@ extension ImageViewController {
             return
         }
 
+        // Only arm seek for videos — a still play must not leave a pending seek
+        // that would apply to the next video.
+        if let path = dataSource.getPath(at: index), MediaItem(path: path).isVideo {
+            pendingVideoStartAt = (startAt ?? 0) > 0 ? startAt : nil
+        } else {
+            pendingVideoStartAt = nil
+        }
         dataSource.setCurrentIndex(index)
 
         if isInGridMode {

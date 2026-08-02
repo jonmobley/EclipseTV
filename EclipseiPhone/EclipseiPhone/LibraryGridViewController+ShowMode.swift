@@ -14,13 +14,39 @@ extension LibraryGridViewController {
     /// Opens a Show from the Home menu or a home-grid tile.
     ///
     /// Switches Display Mode first when the Show belongs to the other layout.
+    /// The prior Show is cleared *before* that flip so the Display Mode observer
+    /// cannot rewrite or park a Show the user is leaving.
     func openLocalAlbum(id: UUID) {
         guard let album = LocalAlbumStore.shared.album(id: id) else { return }
         if album.orientation != ExternalOutputSettings.orientation {
+            clearOpenShowForModeSwitch()
             ExternalOutputSettings.orientation = album.orientation
-            applyLayoutMode()
+            // Observer runs `applyLayoutMode()`; do not reload again here.
         }
         enterShowMode(album)
+    }
+
+    /// Drops Show mode state before a Display Mode flip that opens another Show.
+    ///
+    /// Layout and reload stay paired (same as `closeOpenShow`) so UIKit never
+    /// sees Home sections against leftover Show cells.
+    private func clearOpenShowForModeSwitch() {
+        showAwaitingReturnId = nil
+        guard openShowId != nil else { return }
+        if isArranging {
+            cancelArranging()
+        }
+        if isSelecting {
+            cancelSelecting()
+        }
+        stopHomeCameraPreviewIfNeeded()
+        openShowId = nil
+        onOpenShowChanged?(nil)
+        enforceHomeLiveHeroTeardownIfNeeded()
+        UIView.performWithoutAnimation {
+            applyCollectionLayout()
+            reloadLibraryGrid()
+        }
     }
 
     /// Leaves Show mode and restores the Recent Shows ribbon.
@@ -57,8 +83,10 @@ extension LibraryGridViewController {
     /// Closes Show mode when the open Show is missing or in another Display Mode, and
     /// reopens the Show a previous such close set aside once it is valid again.
     ///
-    /// - Parameter adoptingCurrentDisplayMode: When true (Display Mode just changed),
-    ///   move the open Show into the new mode instead of kicking the user Home.
+    /// - Parameter adoptingCurrentDisplayMode: When true (user changed Display Mode
+    ///   in Settings), move the *currently open* Show into the new mode. Cross-mode
+    ///   Show opens clear `openShowId` first so this never rewrites a Show the user
+    ///   is leaving.
     func validateOpenShow(adoptingCurrentDisplayMode: Bool = false) {
         guard let id = openShowId else {
             reopenShowAwaitingReturn()
@@ -255,16 +283,22 @@ extension LibraryGridViewController {
                     : toolContextMenu(token: ShowToolToken.camera)
             )
         case .media(let item):
+            let resume = VideoResumeStore.shared
+            let parked = resume.frame(for: item.id)
             cell.configure(
                 with: item,
-                thumbnail: store.thumbnail(for: item.id),
+                thumbnail: parked ?? store.thumbnail(for: item.id),
                 isLive: live,
                 isLocked: isLiveOutputLocked
             )
             if isArranging || isSelecting {
                 cell.clearMoreMenu()
-            } else if let album = openShow {
-                cell.setMoreMenu(mediaContextMenu(item, in: album))
+                cell.clearRewind()
+            } else {
+                if let album = openShow {
+                    cell.setMoreMenu(mediaContextMenu(item, in: album))
+                }
+                applyVideoRewind(to: cell, item: item, isLive: live)
             }
         case .website(let page):
             cell.configureSpecial(
@@ -669,5 +703,26 @@ extension LibraryGridViewController {
             SlideshowStore.shared.delete(id: show.id)
         })
         present(alert, animated: true)
+    }
+
+    /// Shows a non-live Rewind control when a mid-play leave is parked for `item`.
+    func applyVideoRewind(
+        to cell: LibraryThumbnailCell,
+        item: LibraryItemDTO,
+        isLive: Bool
+    ) {
+        guard item.isVideo,
+              !isLive,
+              VideoResumeStore.shared.hasResume(for: item.id)
+        else {
+            cell.clearRewind()
+            return
+        }
+        let itemId = item.id
+        cell.setRewindHandler { [weak self] in
+            VideoResumeStore.shared.clear(for: itemId)
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            self?.reloadGridIfSafe()
+        }
     }
 }
