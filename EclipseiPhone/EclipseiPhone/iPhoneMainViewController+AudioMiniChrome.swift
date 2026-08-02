@@ -25,6 +25,9 @@ extension iPhoneMainViewController {
             return
         }
 
+        if collapsed {
+            HomeMusicSwipeHint.markEligibleAfterMiniPlayerClose()
+        }
         if isAudioMiniChromeAnimating {
             finishAudioMiniChromeAnimation(collapsed: collapsed)
             return
@@ -75,6 +78,19 @@ extension iPhoneMainViewController {
         applyMiniPlayerBottomInset(height)
         libraryViewController.refreshMusicSwipeHintVisibility()
         view.layoutIfNeeded()
+        if showBubble {
+            offerMusicBubbleTipIfNeeded()
+        }
+    }
+
+    private static let musicBubbleTipKey = "EclipseTV.home.musicBubbleTipShown"
+
+    /// One-time tip when the collapsed music circle first appears.
+    private func offerMusicBubbleTipIfNeeded() {
+        let defaults = UserDefaults.standard
+        guard !defaults.bool(forKey: Self.musicBubbleTipKey) else { return }
+        defaults.set(true, forKey: Self.musicBubbleTipKey)
+        showTemporaryStatus("Tap music to expand · Hold to stop", duration: 4)
     }
 
     // MARK: - Morph animations

@@ -7,7 +7,7 @@
 
 import UIKit
 
-/// Floating Home tip: swipe left for Music. Shown after the first mini-player close.
+/// Floating Home tip for the Music page. Eligible after the first mini-player collapse.
 final class HomeMusicSwipeHint: UIView {
 
     static let dismissedKey = "EclipseTV.home.musicSwipeHintDismissed"
@@ -145,7 +145,7 @@ final class HomeMusicSwipeHint: UIView {
         musicPagingAvailable = available
     }
 
-    /// Marks the hint eligible after the user closes the mini player the first time.
+    /// Marks the hint eligible after the first collapse / stop of the mini player.
     static func markEligibleAfterMiniPlayerClose() {
         guard !UserDefaults.standard.bool(forKey: eligibleKey) else { return }
         UserDefaults.standard.set(true, forKey: eligibleKey)
@@ -158,13 +158,17 @@ final class HomeMusicSwipeHint: UIView {
         reload()
     }
 
-    /// Refreshes visibility from UserDefaults, paging, and active audio session.
+    /// Refreshes visibility from UserDefaults and active audio session.
     func reload() {
         let defaults = UserDefaults.standard
         let eligible = defaults.bool(forKey: Self.eligibleKey)
         let dismissed = defaults.bool(forKey: Self.dismissedKey)
         let sessionActive = AudioPlayerController.shared.hasActiveSession
-        isHidden = !eligible || dismissed || !musicPagingAvailable || sessionActive
+        // Hide while music chrome is up so the tip doesn’t compete with the bubble.
+        isHidden = !eligible || dismissed || sessionActive
+        subtitleLabel.text = musicPagingAvailable
+            ? "Swipe left to open"
+            : "Open from the Home menu"
     }
 
     @objc private func dismissTapped() {

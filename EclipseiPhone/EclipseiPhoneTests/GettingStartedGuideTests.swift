@@ -23,11 +23,22 @@ struct GettingStartedGuideTests {
 
     private static let widths: [CGFloat] = [0, 320, 390, 430, 744, 1024]
 
+    /// A guide whose table is already `tableWidth` wide.
+    ///
+    /// `UITableView` rewrites `tableHeaderView.frame.width` to its own width when the
+    /// header is assigned, so sizing the header to a width the table does not have can
+    /// never settle. The guide only ever passes `tableView.bounds.width`.
+    private static func loadedGuide(tableWidth: CGFloat) -> GettingStartedViewController {
+        let guide = GettingStartedViewController()
+        guide.loadViewIfNeeded()
+        guide.tableView.frame = CGRect(x: 0, y: 0, width: tableWidth, height: 800)
+        return guide
+    }
+
     /// One pass may resize; the next must report nothing left to do.
     @Test func heroHeaderSizingSettlesAfterOnePass() {
         for width in Self.widths {
-            let guide = GettingStartedViewController()
-            guide.loadViewIfNeeded()
+            let guide = Self.loadedGuide(tableWidth: width)
 
             _ = guide.resizeHeroHeader(toWidth: width)
             #expect(
@@ -46,8 +57,7 @@ struct GettingStartedGuideTests {
     }
 
     @Test func heroHeaderGetsRealHeightForTheTableWidth() {
-        let guide = GettingStartedViewController()
-        guide.loadViewIfNeeded()
+        let guide = Self.loadedGuide(tableWidth: 390)
         guide.resizeHeroHeader(toWidth: 390)
 
         guard let header = guide.tableView.tableHeaderView else {

@@ -14,7 +14,7 @@ extension HomeHeaderBar {
     /// Installs the trailing output-status control (visible AirPlay / link state).
     func installOutputStatusButton() {
         outputStatusButton.translatesAutoresizingMaskIntoConstraints = false
-        outputStatusButton.accessibilityLabel = "Output"
+        outputStatusButton.accessibilityLabel = "AirPlay and EclipseTV"
         outputStatusButton.accessibilityHint =
             "Shows AirPlay and EclipseTV link status. Double tap for options."
         outputStatusButton.addTarget(

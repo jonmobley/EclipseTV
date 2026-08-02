@@ -7,7 +7,7 @@
 
 import UIKit
 
-/// In-app overview guide: Shows, presenting, Display Mode, Music, and tips.
+/// In-app overview guide aligned to the five cores: Shows, AirPlay, Camera, Music, EclipseTV.
 final class GettingStartedViewController: UITableViewController {
 
     private struct Topic {
@@ -21,10 +21,9 @@ final class GettingStartedViewController: UITableViewController {
         Topic(
             title: "Welcome",
             body: """
-            Eclipse turns your iPhone into a presentation remote. Build Shows with \
-            images, videos, websites, and PDFs, then put them on a TV with AirPlay. \
-            Linking the Eclipse TV app is optional — only needed for library sync \
-            across Apple TVs.
+            Eclipse is your presentation remote: build Shows, present with AirPlay, \
+            optionally use Camera and ambient Music, and link EclipseTV only when you \
+            want media sync with the TV app.
             """,
             systemImage: "sparkles",
             tint: .systemBlue
@@ -42,41 +41,50 @@ final class GettingStartedViewController: UITableViewController {
         Topic(
             title: "Presenting",
             body: """
-            Start AirPlay from Control Center — that’s enough to present. The live \
-            preview at the top of a Show mirrors what the audience sees; tap any tile \
-            to put it on screen. Link Eclipse TV in Settings only if you want media \
-            sync or multi-TV.
+            Start AirPlay from Control Center — that’s enough to present. Tap any tile \
+            in a Show to put it on screen; the live preview mirrors the audience. The \
+            header AirPlay & EclipseTV control shows connection status — tap it for \
+            Link EclipseTV… or How to AirPlay.
             """,
             systemImage: "airplayvideo",
             tint: .systemTeal
         ),
         Topic(
-            title: "Display Mode",
+            title: "Camera",
             body: """
-            Landscape (16:9) is the default for TVs. Switch to Vertical in Settings → \
-            Display Mode for portrait screens. Each Show belongs to one mode. Home and \
-            Open Show list both; opening a Show from the other mode switches Display Mode.
+            Inside a Show, open Camera to put a live feed on AirPlay. Capture stills or \
+            clips into your Show — those stay on your phones (and can sync with iCloud), \
+            and are never sent to the EclipseTV app library.
             """,
-            systemImage: "rectangle.portrait.rotate",
-            tint: .systemOrange
+            systemImage: "camera.fill",
+            tint: .systemGreen
         ),
         Topic(
             title: "Music",
             body: """
-            Swipe left from Home (or choose Music in the Home menu) to open your music \
-            library. Playlists can keep playing quietly while you present — ambient \
-            audio pauses when a video needs the speakers, then you can resume.
+            Swipe left from Home when you can, or choose Music in the Home menu. A music \
+            circle appears while something is playing — tap to expand controls, hold to \
+            stop. Ambient audio pauses when a video needs the speakers.
             """,
             systemImage: "music.note",
             tint: .systemPink
         ),
         Topic(
-            title: "Blackout & Tools",
+            title: "EclipseTV Link",
             body: """
-            Inside a Show, Blackout blanks the display without leaving your Show. \
-            Background sets a resting image, Screensaver plays a looping video, \
-            and Camera puts a live feed on screen. Use + to add media while a Show \
-            is open.
+            Linking EclipseTV (optional) syncs imported media with the Apple TV app and \
+            enables multi-TV. AirPlay alone is enough for Shows. Use the header status \
+            control or Settings → EclipseTV to link with a pairing code.
+            """,
+            systemImage: "tv",
+            tint: .systemCyan
+        ),
+        Topic(
+            title: "Display Mode & Tools",
+            body: """
+            Landscape (16:9) is the default; Vertical is in Settings → Display Mode. \
+            Inside a Show: Blackout blanks the display, Background sets a resting image, \
+            Screensaver loops a video, and + adds media.
             """,
             systemImage: "moon.fill",
             tint: .systemPurple
@@ -85,9 +93,8 @@ final class GettingStartedViewController: UITableViewController {
             title: "Tips",
             body: """
             On Home, long-press a Show for rename, share, or delete. Inside a Show, \
-            long-press a tile to arrange, or use ⋯ for cover and remove. Websites warm \
-            as you scroll. Other-mode Shows show Landscape or Vertical on the tile — \
-            tap one to switch Display Mode and open it.
+            long-press a tile to arrange, or use ⋯ for Loop, Mute, Thumbnail, cover, \
+            and remove. Getting Started stays in the Home menu anytime.
             """,
             systemImage: "lightbulb.fill",
             tint: .systemYellow
@@ -211,7 +218,7 @@ final class GettingStartedViewController: UITableViewController {
         title.textAlignment = .center
 
         let subtitle = UILabel()
-        subtitle.text = "A quick tour of Shows, presenting, Music, and the tools you’ll use every night."
+        subtitle.text = "Shows, AirPlay, Camera, Music, and optional EclipseTV — the tools you’ll use every night."
         subtitle.font = .preferredFont(forTextStyle: .subheadline)
         subtitle.adjustsFontForContentSizeCategory = true
         subtitle.textColor = .secondaryLabel

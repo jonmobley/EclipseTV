@@ -213,7 +213,7 @@ extension iPhoneMainViewController {
         let linked = isConnected()
         let searching = !isConnectionPaused && !linked
         let sheet = UIAlertController(
-            title: "Output",
+            title: "AirPlay & EclipseTV",
             message: Self.outputStatusMessage(
                 airPlay: airPlay,
                 linked: linked,

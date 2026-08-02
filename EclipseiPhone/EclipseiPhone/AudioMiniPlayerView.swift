@@ -165,7 +165,7 @@ final class AudioMiniPlayerView: UIView, UIGestureRecognizerDelegate {
             top: 12, leading: 12, bottom: 12, trailing: 12
         )
         minimizeButton.configuration = minimizeConfig
-        minimizeButton.accessibilityLabel = "Minimize"
+        minimizeButton.accessibilityLabel = "Collapse"
         minimizeButton.accessibilityHint = "Collapse to a floating button. Music keeps playing."
 
         volumeSlider.minimumValue = 0

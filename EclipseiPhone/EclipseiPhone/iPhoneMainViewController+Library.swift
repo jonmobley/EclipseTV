@@ -30,7 +30,8 @@ extension iPhoneMainViewController {
         present(nav, animated: true)
     }
 
-    /// Home → Open Show → New Show → Library → Music → Settings, then Recent Shows.
+    /// Home → Open Show → New Show → Library → Music → Getting Started → Settings,
+    /// then Recent Shows.
     /// An open Show adds Home (leave Show mode). Show-mode also keeps the header
     /// gear for Settings with Edit Show; Home Settings omits show-specific rows.
     ///
@@ -58,6 +59,7 @@ extension iPhoneMainViewController {
         children.append(newShowAction())
         children.append(mediaLibraryAction())
         children.append(musicAction())
+        children.append(gettingStartedAction())
         children.append(settingsAction())
         let recents = recentShowsForMenu(excluding: openShow?.id)
         if !recents.isEmpty {
@@ -83,6 +85,16 @@ extension iPhoneMainViewController {
             image: UIImage(systemName: "music.note")
         ) { [weak self] _ in
             self?.presentAudioLibrary()
+        }
+    }
+
+    /// Opens Getting Started from the Home / Show dropdown (also on Home via ?).
+    private func gettingStartedAction() -> UIAction {
+        UIAction(
+            title: "Getting Started",
+            image: UIImage(systemName: "questionmark.circle")
+        ) { [weak self] _ in
+            self?.presentGettingStarted()
         }
     }
 
