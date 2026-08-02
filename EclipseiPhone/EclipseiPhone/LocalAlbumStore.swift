@@ -78,13 +78,16 @@ final class LocalAlbumStore {
         return album
     }
 
-    /// Moves a Show into `orientation` (e.g. Landscape ↔ Vertical with Display Mode).
+    /// Moves a Show into `orientation` (e.g. Landscape ↔ Vertical).
+    ///
+    /// Also updates that Show's slideshows so their stored format stays aligned.
     func setOrientation(id: UUID, orientation: ExternalOutputOrientation) {
         guard let index = albums.firstIndex(where: { $0.id == id }) else { return }
         guard albums[index].orientation != orientation else { return }
         albums[index].orientation = orientation
         persist(changedAlbumId: id)
         scheduleShowSaveIfNeeded(id)
+        SlideshowStore.shared.setOrientation(orientation, forShowId: id)
     }
 
     /// Renames the album with `id` when present.
