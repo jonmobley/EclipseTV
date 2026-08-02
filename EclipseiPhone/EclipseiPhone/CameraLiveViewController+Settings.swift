@@ -58,15 +58,32 @@ extension CameraLiveViewController {
         nav.modalPresentationStyle = .pageSheet
         settings.navigationItem.rightBarButtonItem = UIBarButtonItem(
             systemItem: .done,
-            primaryAction: UIAction { [weak nav] _ in
-                nav?.dismiss(animated: true)
+            primaryAction: UIAction { [weak nav, weak self] _ in
+                // Settings finishes any in-flight movie before presenting; resume
+                // Always Record When Live once the sheet is gone.
+                nav?.dismiss(animated: true) {
+                    self?.startAlwaysLiveRecordingIfNeeded()
+                }
             }
         )
+        nav.presentationController?.delegate = self
         if let sheet = nav.sheetPresentationController {
             sheet.detents = [.medium(), .large()]
             sheet.prefersGrabberVisible = true
             sheet.prefersEdgeAttachedInCompactHeight = true
         }
         present(nav, animated: true)
+    }
+}
+
+// MARK: - Settings sheet dismiss
+
+extension CameraLiveViewController: UIAdaptivePresentationControllerDelegate {
+
+    /// Swipe-dismiss path — Done uses the button's completion instead.
+    func presentationControllerDidDismiss(
+        _ presentationController: UIPresentationController
+    ) {
+        startAlwaysLiveRecordingIfNeeded()
     }
 }
