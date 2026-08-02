@@ -54,17 +54,42 @@ extension ImageViewController {
     /// Calls `play()` once the item is ready, prerolling to ensure a first frame is
     /// decoded before we reveal the player (avoids AVPlayerViewController's spinner).
     private func startWhenReady(_ player: AVPlayer, reveal: @escaping () -> Void) {
+        let startAt = pendingVideoStartAt
+        pendingVideoStartAt = nil
+
+        let begin: () -> Void = {
+            let playAndReveal = {
+                player.preroll(atRate: 1.0) { _ in
+                    player.play()
+                    reveal()
+                }
+            }
+            if let startAt, startAt > 0 {
+                let time = CMTime(seconds: startAt, preferredTimescale: 600)
+                player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero) { _ in
+                    playAndReveal()
+                }
+            } else {
+                playAndReveal()
+            }
+        }
+
         guard let item = player.currentItem else {
-            player.play()
-            reveal()
+            if let startAt, startAt > 0 {
+                let time = CMTime(seconds: startAt, preferredTimescale: 600)
+                player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero) { _ in
+                    player.play()
+                    reveal()
+                }
+            } else {
+                player.play()
+                reveal()
+            }
             return
         }
 
         if item.status == .readyToPlay {
-            player.preroll(atRate: 1.0) { _ in
-                player.play()
-                reveal()
-            }
+            begin()
             return
         }
 
@@ -74,10 +99,7 @@ extension ImageViewController {
             if observingItem.status == .readyToPlay {
                 token?.invalidate()
                 token = nil
-                player.preroll(atRate: 1.0) { _ in
-                    player.play()
-                    reveal()
-                }
+                begin()
             }
         }
 
@@ -85,8 +107,7 @@ extension ImageViewController {
             guard token != nil else { return }
             token?.invalidate()
             token = nil
-            player.play()
-            reveal()
+            begin()
         }
     }
 

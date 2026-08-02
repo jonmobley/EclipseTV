@@ -5,6 +5,7 @@
 //  Copyright © 2026 Moxie LLC. All rights reserved.
 //
 
+import AVFoundation
 import UIKit
 import os.log
 
@@ -339,6 +340,39 @@ final class ExternalDisplayManager {
 
     // MARK: - Presentation
 
+    /// Current playback time of the AirPlay library video matching `itemId`, if any.
+    func currentVideoPlaybackTime(forItemId itemId: String) -> TimeInterval? {
+        guard let lastSource,
+              case .video(let url, _, _) = lastSource.content,
+              let local = LocalMediaStore.shared.localURL(forId: itemId),
+              local == url || url.lastPathComponent == itemId,
+              let player = presentationVC?.player
+        else { return nil }
+        let seconds = CMTimeGetSeconds(player.currentTime())
+        guard seconds.isFinite, seconds > 0 else { return nil }
+        return seconds
+    }
+
+    /// Parks resume state when AirPlay leaves a library video for different content.
+    private func parkLeavingVideoIfNeeded(
+        replacing previous: PresentationSource?,
+        with next: PresentationSource
+    ) {
+        guard let previous,
+              case .video(let url, _, _) = previous.content
+        else { return }
+        // Same file again (e.g. mute/loop rebuild) — keep playing, don't park.
+        if case .video(let nextURL, _, _) = next.content, nextURL == url { return }
+        let itemId = TVLibraryStore.shared.items.first(where: { item in
+            guard item.isVideo else { return false }
+            if let local = LocalMediaStore.shared.localURL(forId: item.id) {
+                return local == url
+            }
+            return url.lastPathComponent == item.id
+        })?.id ?? url.lastPathComponent
+        VideoResumeStore.shared.parkLeavingVideoIfNeeded(itemId: itemId)
+    }
+
     /// Updates the external display with `source`. A no-op visually when no display is
     /// connected, but the source is remembered and applied as soon as one connects.
     /// Non-overlay sources tear down any active camera/web overlay.
@@ -360,6 +394,10 @@ final class ExternalDisplayManager {
         preservingCameraOverlay: Bool
     ) {
         refreshConnection()
+        // Capture mid-play leave before teardown — skip blackout (temporary blank).
+        if source.content != .black {
+            parkLeavingVideoIfNeeded(replacing: lastSource, with: source)
+        }
         isJoinedLive = asJoined
         // Any non-black present supersedes a pending blackout restore.
         if source.content != .black {

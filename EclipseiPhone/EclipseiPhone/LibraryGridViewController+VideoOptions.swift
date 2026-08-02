@@ -59,6 +59,8 @@ extension LibraryGridViewController {
     }
 
     /// Re-pushes the live video so AirPlay picks up new loop / mute flags.
+    ///
+    /// Keeps the current playback position so mute/loop does not restart from 0.
     private func refreshLiveVideoPresentationIfNeeded(id: String) {
         guard store.currentId == id,
               let item = store.items.first(where: { $0.id == id }),
@@ -67,8 +69,9 @@ extension LibraryGridViewController {
         guard manager.isConnected,
               !manager.isOverlayLive,
               !manager.isJoinedLive else { return }
+        let startAt = manager.currentVideoPlaybackTime(forItemId: id) ?? 0
         manager.present(
-            .forLibraryItem(item, thumbnail: store.thumbnail(for: id))
+            .forLibraryItem(item, thumbnail: store.thumbnail(for: id), startAt: startAt)
         )
     }
 }

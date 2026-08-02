@@ -547,11 +547,17 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             AudioPlayerController.shared.stop()
         }
 
-        if connectionManager.sendPlayRequest(id: item.id) {
+        let startAt = item.isVideo ? (VideoResumeStore.shared.position(for: item.id) ?? 0) : 0
+        if connectionManager.sendPlayRequest(id: item.id, startAt: startAt) {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            if item.isVideo { VideoResumeStore.shared.clear(for: item.id) }
             store.updateCurrentId(item.id)
             ExternalDisplayManager.shared.present(
-                .forLibraryItem(item, thumbnail: store.thumbnail(for: item.id))
+                .forLibraryItem(
+                    item,
+                    thumbnail: store.thumbnail(for: item.id),
+                    startAt: startAt
+                )
             )
         } else {
             presentOfflineLive(for: item)

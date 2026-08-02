@@ -39,6 +39,8 @@ final class LibraryThumbnailCell: UICollectionViewCell {
     }()
     /// Visible ⋯ control for Show media / Background (same idea as Recent Show tiles).
     let moreButton = UIButton(type: .system)
+    /// Clears a parked mid-play leave without going live.
+    let rewindButton = UIButton(type: .system)
     /// Nudged up when a caption sits under the glyph; 0 for + -only add tiles.
     private var placeholderCenterY: NSLayoutConstraint!
     /// Last media id painted; keeps art when a reload hits a transient cache miss.
@@ -136,6 +138,7 @@ final class LibraryThumbnailCell: UICollectionViewCell {
 
         cardView.addSubview(menuButton)
         installMoreButton()
+        installRewindButton()
 
         NSLayoutConstraint.activate([
             cardView.topAnchor.constraint(equalTo: contentView.topAnchor),
@@ -346,6 +349,7 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         menuButton.isHidden = true
         menuButton.isAccessibilityElement = false
         clearMoreMenu()
+        clearRewind()
         recycleCameraPreview()
         stopArrangeWiggle()
         configuredMediaId = nil

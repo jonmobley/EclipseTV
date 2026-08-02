@@ -221,6 +221,9 @@ class ImageViewController: ManagedViewController, ConnectionManagerDelegate, UIG
     // internal let recentImagesKey = "EclipseTV.recentImagesKey"
     
     internal var isVideo = false
+    /// Absolute seconds to seek when the next video starts (companion resume). Cleared
+    /// after `startWhenReady` consumes it.
+    internal var pendingVideoStartAt: Double?
     
     internal var playerLooper: AVPlayerLooper?
     

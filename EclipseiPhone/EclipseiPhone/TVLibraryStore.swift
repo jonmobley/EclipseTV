@@ -635,6 +635,11 @@ final class TVLibraryStore {
             }
             return
         }
+        let previousId = self.currentId
+        if let previousId, previousId != currentId {
+            // AirPlay player is still on the prior item until `present` runs next.
+            VideoResumeStore.shared.parkLeavingVideoIfNeeded(itemId: previousId)
+        }
         self.currentId = currentId
         if let key = currentIdKey() {
             UserDefaults.standard.set(currentId, forKey: key)
