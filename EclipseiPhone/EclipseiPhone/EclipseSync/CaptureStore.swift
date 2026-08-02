@@ -65,8 +65,8 @@ final class CaptureStore {
 
     /// Captures the CloudKit engine should enqueue — never `.localOnly`.
     ///
-    /// Phone-owned captures stay off iCloud until sync is deliberately turned on for
-    /// them. Bootstrap must not treat every on-disk capture as pending upload.
+    /// New local captures start as `.pendingUpload`. `.localOnly` remains for rare
+    /// opt-out / legacy rows that must stay off iCloud.
     var idsNeedingUpload: [String] {
         records
             .filter { !$0.isDeleted && $0.syncState != .localOnly }
@@ -94,8 +94,8 @@ final class CaptureStore {
     /// tile with nothing behind it, and it is also what would upload a metadata-only
     /// CloudKit record — marked Synced here, undownloadable everywhere else.
     ///
-    /// Captures stay `.localOnly`: cloud sync for captures is deliberately not scheduled
-    /// yet. Turning it on means calling `scheduleCaptureSave` from this completion.
+    /// New captures are `.pendingUpload` so CloudKit can sync them across iPhones.
+    /// They still never enter Multipeer / Apple TV uploads.
     func addLocalCapture(
         fileURL: URL,
         isVideo: Bool,
@@ -113,7 +113,7 @@ final class CaptureStore {
             orientation: orientation,
             showId: showId,
             fileExtension: safeExt,
-            syncState: .localOnly
+            syncState: .pendingUpload
         )
         LocalMediaStore.shared.store(
             fileURL: fileURL,
@@ -148,6 +148,10 @@ final class CaptureStore {
         }
         // Captures reach the grids as library DTOs merged into the TV mirror.
         TVLibraryStore.shared.refreshMergedCaptures()
+        if !EclipseSyncController.shared.isApplyingRemote,
+           record.syncState != .localOnly {
+            EclipseSyncController.shared.backend.scheduleCaptureSave(id: record.id)
+        }
     }
 
     /// Applies a remote (CloudKit) capture without scheduling an upload.

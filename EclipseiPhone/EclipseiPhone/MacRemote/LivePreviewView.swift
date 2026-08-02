@@ -2,7 +2,7 @@
 //  LivePreviewView.swift
 //  EclipseRemote
 //
-//  Description: Live program preview for the native remote (web-parity cue).
+//  Description: Live program preview styled like the Show-page LiveHeaderView.
 //  Thread Safety: Main thread only — SwiftUI view.
 //
 
@@ -19,11 +19,11 @@ struct LivePreviewView: View {
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.black)
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color(.secondarySystemBackground))
 
             previewContent
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
 
             if showLiveBadge {
                 VStack {
@@ -33,14 +33,15 @@ struct LivePreviewView: View {
                     }
                     Spacer()
                 }
-                .padding(10)
+                .padding(14)
             }
         }
         .aspectRatio(16 / 9, contentMode: .fit)
         .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(Color.secondary.opacity(0.25), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(Color(uiColor: .separator), lineWidth: 1)
         )
+        .accessibilityLabel(accessibilityText)
     }
 
     // MARK: - Private Helpers
@@ -48,7 +49,12 @@ struct LivePreviewView: View {
     @ViewBuilder
     private var previewContent: some View {
         if session.snapshot?.isBlackout == true {
-            placeholder("Black")
+            ZStack {
+                Color.black
+                Image(systemName: "moon.fill")
+                    .font(.system(size: 36, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.55))
+            }
         } else if let image = liveThumbnail {
             Image(uiImage: image)
                 .resizable()
@@ -59,8 +65,22 @@ struct LivePreviewView: View {
                     }
                 }
         } else {
-            placeholder(placeholderText)
+            idlePlaceholder
         }
+    }
+
+    private var idlePlaceholder: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "tv")
+                .font(.system(size: 44, weight: .regular))
+                .foregroundStyle(Color(.tertiaryLabel))
+            Text(placeholderText)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Color(.secondaryLabel))
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 16)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var liveThumbnail: UIImage? {
@@ -90,25 +110,22 @@ struct LivePreviewView: View {
         return "No media selected"
     }
 
-    private var liveBadge: some View {
-        HStack(spacing: 5) {
-            Circle()
-                .fill(Color.red)
-                .frame(width: 7, height: 7)
-            Text("LIVE")
-                .font(.caption2.weight(.bold))
+    private var accessibilityText: String {
+        if session.snapshot?.isBlackout == true { return "Blackout" }
+        if showLiveBadge {
+            return liveItem.map { "Live, \($0.title)" } ?? "Live"
         }
-        .foregroundStyle(.white)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(Color.black.opacity(0.55))
-        .clipShape(Capsule())
+        return placeholderText
     }
 
-    private func placeholder(_ text: String) -> some View {
-        Text(text)
-            .font(.subheadline.weight(.medium))
-            .foregroundStyle(.white.opacity(0.7))
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+    /// Matches Show-page `PaddedLabel` LIVE chrome (red fill, 6pt corners).
+    private var liveBadge: some View {
+        Text("LIVE")
+            .font(.system(size: 13, weight: .bold))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Color.red)
+            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
     }
 }

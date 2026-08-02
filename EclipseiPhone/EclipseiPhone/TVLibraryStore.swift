@@ -129,6 +129,7 @@ final class TVLibraryStore {
         ensureThumbnailDirectory()
         loadPersistedManifest()
         mergePendingUploads()
+        mergeCaptures()
         recoverOrphanedLocalMedia()
         warmMissingThumbnails()
         playback = PlaybackState()
@@ -153,6 +154,7 @@ final class TVLibraryStore {
         ensureThumbnailDirectory()
         loadPersistedManifest()
         mergePendingUploads()
+        mergeCaptures()
         recoverOrphanedLocalMedia()
 
         delegate?.libraryStoreDidUpdateItems(self)
@@ -474,8 +476,10 @@ final class TVLibraryStore {
         let existingCanonical = Set(
             items.map { LocalMediaStore.canonicalFileName(forId: $0.id) }
         )
-        let orphans = LocalMediaStore.shared.storedIds(for: mode)
+        // Imported only — captures must never enter PendingUpload / Multipeer.
+        let orphans = LocalMediaStore.shared.storedIds(for: mode, provenance: .imported)
             .filter { !existingCanonical.contains($0) }
+            .filter { !CaptureStore.shared.contains(id: $0) }
         guard !orphans.isEmpty else { return }
 
         logger.info(

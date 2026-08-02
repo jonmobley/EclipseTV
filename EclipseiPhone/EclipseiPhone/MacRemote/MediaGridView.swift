@@ -2,7 +2,7 @@
 //  MediaGridView.swift
 //  EclipseRemote
 //
-//  Description: Media grid with optional LAN thumbnails and live badges.
+//  Description: Media grid styled like Show-page thumbnail tiles.
 //  Thread Safety: Main thread only — SwiftUI view.
 //
 
@@ -10,7 +10,7 @@ import SwiftUI
 
 // MARK: - MediaGridView
 
-/// Title + thumbnail grid for presentation or library media.
+/// Thumbnail grid for presentation or library media.
 ///
 /// Thread Safety: Main thread only.
 struct MediaGridView: View {
@@ -19,8 +19,8 @@ struct MediaGridView: View {
     let onSelect: (RemoteMediaEntry) -> Void
 
     private let columns = [
-        GridItem(.flexible(), spacing: 10),
-        GridItem(.flexible(), spacing: 10)
+        GridItem(.flexible(), spacing: 12),
+        GridItem(.flexible(), spacing: 12)
     ]
 
     var body: some View {
@@ -32,7 +32,7 @@ struct MediaGridView: View {
             )
             .frame(minHeight: 160)
         } else {
-            LazyVGrid(columns: columns, spacing: 10) {
+            LazyVGrid(columns: columns, spacing: 12) {
                 ForEach(items) { item in
                     Button {
                         onSelect(item)
@@ -45,40 +45,60 @@ struct MediaGridView: View {
         }
     }
 
+    /// Full-bleed 16:9 tile with on-card caption — same language as Show media.
     private func cell(for item: RemoteMediaEntry) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            ZStack(alignment: .topTrailing) {
-                thumbnail(for: item)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 88)
-                    .clipped()
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        ZStack(alignment: .bottomLeading) {
+            thumbnail(for: item)
+                .frame(maxWidth: .infinity)
+                .aspectRatio(16 / 9, contentMode: .fit)
+                .clipped()
 
-                if item.isLive || item.isOverlayActive {
-                    Text(item.isLive ? "LIVE" : "ON")
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color.accentColor)
-                        .clipShape(Capsule())
-                        .padding(6)
-                }
+            LinearGradient(
+                colors: [.clear, .black.opacity(0.72)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 56)
+            .frame(maxHeight: .infinity, alignment: .bottom)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.title)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(2)
+                Text(item.type)
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundStyle(.white.opacity(0.78))
+                    .lineLimit(1)
             }
+            .padding(10)
 
-            Text(item.title)
-                .font(.subheadline.weight(.semibold))
-                .lineLimit(2)
-                .foregroundStyle(.primary)
-            Text(item.type)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+            if item.isLive || item.isOverlayActive {
+                VStack {
+                    HStack {
+                        Text(item.isLive ? "LIVE" : "ON")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(item.isLive ? Color.red : Color.accentColor)
+                            .clipShape(
+                                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            )
+                        Spacer()
+                    }
+                    Spacer()
+                }
+                .padding(8)
+            }
         }
-        .padding(10)
-        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.secondary.opacity(item.isLive ? 0.22 : 0.12))
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color(.secondarySystemBackground))
+        )
+        .accessibilityLabel(
+            item.isLive ? "\(item.title), Live" : item.title
         )
     }
 
@@ -90,9 +110,10 @@ struct MediaGridView: View {
                 .scaledToFill()
         } else {
             ZStack {
-                Color.secondary.opacity(0.18)
+                Color(.secondarySystemBackground)
                 Image(systemName: item.hasThumbnail ? "photo" : "rectangle.on.rectangle")
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 28, weight: .medium))
+                    .foregroundStyle(Color(.tertiaryLabel))
             }
         }
     }

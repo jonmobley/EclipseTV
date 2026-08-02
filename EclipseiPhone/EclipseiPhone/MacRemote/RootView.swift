@@ -27,7 +27,8 @@ struct MacRemoteRootView: View {
                 ConnectView(session: session, onClose: onClose)
             }
         }
-        .preferredColorScheme(.dark)
+        // Follow system appearance so the remote matches the Show page, not a
+        // separate dark-only skin.
         .animation(.easeInOut(duration: 0.2), value: session.phase)
     }
 }

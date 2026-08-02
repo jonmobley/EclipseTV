@@ -186,7 +186,11 @@ extension LibraryGridViewController {
     }
 
     /// Same live predicates used when configuring Show tiles.
+    ///
+    /// Always false in browse/Preview mode (no AirPlay / Eclipse TV) so tiles don't
+    /// keep a stale LIVE badge after the destination drops.
     func isShowGridItemLive(_ item: ShowGridItem) -> Bool {
+        guard hasLiveOutputDestination else { return false }
         switch item {
         case .slideshow(let show):
             return SlideshowPlaybackController.shared.isLive(slideshowId: show.id)

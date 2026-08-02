@@ -33,7 +33,7 @@ final class CloudKitAssetDownloader {
         let completion: @MainActor (Result<URL, Error>) -> Void
     }
 
-    private let database: CKDatabase
+    private let container: CKContainer
     private let logger = Logger(
         subsystem: "com.eclipseapp.ios",
         category: "CloudKitAssetDownloader"
@@ -44,8 +44,8 @@ final class CloudKitAssetDownloader {
     /// never arrives leaves that alert on screen for good.
     private var waiters: [String: [Waiter]] = [:]
 
-    init(database: CKDatabase) {
-        self.database = database
+    init(container: CKContainer) {
+        self.container = container
     }
 
     /// Fetches the MediaItem record and copies its asset into Captures storage.
@@ -78,42 +78,87 @@ final class CloudKitAssetDownloader {
         report(0, for: capture.id)
 
         let recordID = CloudKitSchema.mediaRecordID(for: capture.id)
-        database.fetch(withRecordID: recordID) { [weak self] record, error in
+        // Private DB first (owned captures); shared DB for accepted Share participants.
+        fetchRecord(recordID, from: container.privateCloudDatabase) { [weak self] privateResult in
             Task { @MainActor in
                 guard let self else { return }
-                if let error {
-                    CaptureStore.shared.setSyncState(id: capture.id, .remoteOnly)
-                    self.logger.error("Fetch failed: \(error.localizedDescription)")
-                    self.finish(capture.id, .failure(error))
-                    return
-                }
-                guard let record,
-                      let assetURL = CloudKitRecordMapper.mediaAssetURL(from: record)
-                else {
-                    CaptureStore.shared.setSyncState(id: capture.id, .remoteOnly)
-                    self.finish(capture.id, .failure(DownloadError.noAsset))
-                    return
-                }
-                do {
-                    self.report(0.5, for: capture.id)
-                    try LocalMediaStore.shared.storeSynchronously(
-                        fileURL: assetURL,
-                        forId: libraryId,
-                        mode: mode,
-                        provenance: .captured
+                switch privateResult {
+                case .success(let record):
+                    self.storeAsset(
+                        from: record, captureId: capture.id, libraryId: libraryId, mode: mode
                     )
-                    self.report(1, for: capture.id)
-                    CaptureStore.shared.setSyncState(id: capture.id, .synced)
-                    if let url = LocalMediaStore.shared.localURL(forId: libraryId, mode: mode) {
-                        self.finish(capture.id, .success(url))
-                    } else {
-                        self.finish(capture.id, .failure(DownloadError.noAsset))
+                case .failure:
+                    self.fetchRecord(
+                        recordID,
+                        from: self.container.sharedCloudDatabase
+                    ) { [weak self] shared in
+                        Task { @MainActor in
+                            guard let self else { return }
+                            switch shared {
+                            case .success(let record):
+                                self.storeAsset(
+                                    from: record,
+                                    captureId: capture.id,
+                                    libraryId: libraryId,
+                                    mode: mode
+                                )
+                            case .failure(let error):
+                                CaptureStore.shared.setSyncState(id: capture.id, .remoteOnly)
+                                self.logger.error(
+                                    "Fetch failed: \(error.localizedDescription)"
+                                )
+                                self.finish(capture.id, .failure(error))
+                            }
+                        }
                     }
-                } catch {
-                    CaptureStore.shared.setSyncState(id: capture.id, .remoteOnly)
-                    self.finish(capture.id, .failure(error))
                 }
             }
+        }
+    }
+
+    private func fetchRecord(
+        _ recordID: CKRecord.ID,
+        from database: CKDatabase,
+        completion: @escaping (Result<CKRecord, Error>) -> Void
+    ) {
+        database.fetch(withRecordID: recordID) { record, error in
+            if let record {
+                completion(.success(record))
+            } else {
+                completion(.failure(error ?? DownloadError.notFound))
+            }
+        }
+    }
+
+    private func storeAsset(
+        from record: CKRecord,
+        captureId: String,
+        libraryId: String,
+        mode: EclipseShareProtocol.LibraryMode
+    ) {
+        guard let assetURL = CloudKitRecordMapper.mediaAssetURL(from: record) else {
+            CaptureStore.shared.setSyncState(id: captureId, .remoteOnly)
+            finish(captureId, .failure(DownloadError.noAsset))
+            return
+        }
+        do {
+            report(0.5, for: captureId)
+            try LocalMediaStore.shared.storeSynchronously(
+                fileURL: assetURL,
+                forId: libraryId,
+                mode: mode,
+                provenance: .captured
+            )
+            report(1, for: captureId)
+            CaptureStore.shared.setSyncState(id: captureId, .synced)
+            if let url = LocalMediaStore.shared.localURL(forId: libraryId, mode: mode) {
+                finish(captureId, .success(url))
+            } else {
+                finish(captureId, .failure(DownloadError.noAsset))
+            }
+        } catch {
+            CaptureStore.shared.setSyncState(id: captureId, .remoteOnly)
+            finish(captureId, .failure(error))
         }
     }
 

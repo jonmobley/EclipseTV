@@ -198,6 +198,18 @@ final class SlideshowPlaybackController {
             return false
         }
 
+        // Captures are phone-owned — AirPlay / local only, never Multipeer play.
+        if CaptureStore.shared.contains(id: item.id) {
+            guard LocalMediaStore.shared.localURL(forId: item.id) != nil else {
+                return false
+            }
+            store.updateCurrentId(item.id)
+            ExternalDisplayManager.shared.present(
+                .forLibraryItem(item, thumbnail: store.thumbnail(for: item.id))
+            )
+            return true
+        }
+
         if let connectionManager, connectionManager.sendPlayRequest(id: item.id) {
             store.updateCurrentId(item.id)
             ExternalDisplayManager.shared.present(
@@ -208,7 +220,7 @@ final class SlideshowPlaybackController {
         if let url = LocalMediaStore.shared.localURL(forId: item.id) {
             store.updateCurrentId(item.id)
             ExternalDisplayManager.shared.present(
-                .image(url, fill: MediaFitSettings.isFill(forId: item.id))
+                .forLibraryItem(item, thumbnail: store.thumbnail(for: item.id))
             )
             return true
         }

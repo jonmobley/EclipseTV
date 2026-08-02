@@ -40,7 +40,7 @@ extension LibraryGridViewController {
         MediaFitSettings.setMode(mode, forId: item.id)
         UISelectionFeedbackGenerator().selectionChanged()
         connectionManager.sendImageFit(id: item.id, isFill: mode == .fill)
-        collectionView.reloadData()
+        reloadLibraryGrid()
         refreshLiveHeader()
 
         let manager = ExternalDisplayManager.shared

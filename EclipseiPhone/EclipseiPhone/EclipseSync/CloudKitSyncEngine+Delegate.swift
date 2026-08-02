@@ -113,12 +113,12 @@ extension CloudKitSyncEngine: CKSyncEngineDelegate {
                 remote: remote,
                 remoteModified: remoteModified
             )
-            LocalAlbumStore.shared.applySynced(
-                merged,
-                modifiedAt: max(localModified, remoteModified)
-            )
+            let winning = max(localModified, remoteModified)
+            LocalAlbumStore.shared.applySynced(merged, modifiedAt: winning)
+            rememberShowModified(id: remote.id, at: winning)
         } else {
             LocalAlbumStore.shared.applySynced(remote, modifiedAt: remoteModified)
+            rememberShowModified(id: remote.id, at: remoteModified)
         }
     }
 

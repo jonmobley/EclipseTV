@@ -2,6 +2,25 @@
 
 Phase 1 leaves Apple TV out of CloudKit (`EclipseSyncTVPolicy.appleTVParticipates == false`).
 
+## Where CloudKit fits (product map)
+
+| Plane | Primary? | Carries |
+|-------|----------|---------|
+| **Multipeer → Eclipse Apple TV** | Yes for TV media | Imported library files + control |
+| **CloudKit Eclipse Sync** | Yes for multi-iPhone Shows | Shows, membership, captures, Share |
+| **HTTPS remote albums** | Optional side channel | Read-only hosted albums (not Shows) |
+
+Do not send captures over Multipeer. Do not expect CloudKit to populate the Apple TV library.
+
+### Phase-1 code gates (kept green)
+
+- New captures upload to CloudKit (`.pendingUpload`); still never Multipeer to Apple TV.
+- Orphan recovery / pending flush skip capture provenance.
+- Shared-DB apply sets `EclipseSyncController.isApplyingRemote` and private reconcile honors it (no Share → private fork).
+- Bootstrap does not stamp Show `modifiedAt` to “now” (LWW-safe).
+- Asset download tries private DB, then shared DB (Share recipients).
+- Slideshow slides that are captures use AirPlay/local only.
+
 ## Manual checklist
 
 1. **Fresh install rebuilds the library**

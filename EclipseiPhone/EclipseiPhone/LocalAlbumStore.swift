@@ -350,13 +350,19 @@ final class LocalAlbumStore {
     /// Joined Shows that share a title with a local Show get a `(2)`-style suffix so
     /// Home never lists two identical names.
     func applySynced(_ album: LocalAlbum, modifiedAt: Date) {
-        _ = modifiedAt
         var incoming = album
         incoming.name = uniquifiedName(album.name, excluding: album.id)
         if let index = albums.firstIndex(where: { $0.id == incoming.id }) {
             albums[index] = incoming
         } else {
             albums.insert(incoming, at: 0)
+        }
+        // Persist LWW clock so bootstrap/enqueue don't invent a newer local stamp.
+        if modifiedAt > .distantPast {
+            UserDefaults.standard.set(
+                modifiedAt.timeIntervalSince1970,
+                forKey: "EclipseTV.cloudKit.showModified." + incoming.id.uuidString
+            )
         }
         persist(changedAlbumId: incoming.id)
     }

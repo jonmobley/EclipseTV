@@ -46,11 +46,10 @@ extension LibraryGridViewController {
         }
     }
 
-    /// Selects an item as live without the Eclipse TV app.
+    /// Selects an item as live without the Eclipse TV app (AirPlay remember / push).
     ///
-    /// Updates local selection always; pushes to AirPlay when connected (and remembers
-    /// the source for when a display appears). Phone fullscreen preview is long-press
-    /// → Preview only — never opened from a tap.
+    /// Only used when `hasLiveOutputDestination` is true. With no display and no TV
+    /// link, taps open phone Preview instead — see `presentMedia`.
     func presentOfflineLive(for item: LibraryItemDTO) {
         if item.isVideo {
             AudioPlayerController.shared.stop()

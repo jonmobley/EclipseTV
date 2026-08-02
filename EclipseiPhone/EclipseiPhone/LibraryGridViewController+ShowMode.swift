@@ -46,8 +46,7 @@ extension LibraryGridViewController {
         // with the Home section structure (comes-and-goes until the next appear).
         UIView.performWithoutAnimation {
             applyCollectionLayout()
-            collectionView.reloadData()
-            collectionView.layoutIfNeeded()
+            reloadLibraryGrid()
         }
         scrollGridToTop()
         updateEmptyState()
@@ -168,7 +167,7 @@ extension LibraryGridViewController {
             applyCollectionLayout()
             updateHeroVisibility()
         }
-        collectionView.reloadData()
+        reloadLibraryGrid()
         scrollGridToTop()
         updateEmptyState()
         // Show website cards exist for quick access — warm them as soon as the Show opens.
@@ -197,7 +196,9 @@ extension LibraryGridViewController {
     ) {
         let items = openShowGridItems
         guard items.indices.contains(indexPath.item) else { return }
-        switch items[indexPath.item] {
+        let gridItem = items[indexPath.item]
+        let live = isShowGridItemLive(gridItem)
+        switch gridItem {
         case .slideshow(let show):
             let cover = show.resolvedCoverId.flatMap { store.thumbnail(for: $0) }
             cell.configureSpecial(
@@ -205,10 +206,7 @@ extension LibraryGridViewController {
                 systemImage: "rectangle.stack.fill",
                 thumbnail: cover,
                 fillColor: .darkGray,
-                isLive: SlideshowPlaybackController.shared.isLive(slideshowId: show.id)
-                    && !isBlackSelected
-                    && !isLogoSelected
-                    && !isScreensaverSelected,
+                isLive: live,
                 isLocked: isLiveOutputLocked
             )
             cell.setMoreMenu(
@@ -220,8 +218,7 @@ extension LibraryGridViewController {
                 systemImage: "sparkles.tv",
                 thumbnail: ScreensaverStore.poster,
                 fillColor: UIColor(white: 0.16, alpha: 1),
-                isLive: isScreensaverSelected
-                    && !ExternalDisplayManager.shared.isOverlayLive,
+                isLive: live,
                 isLocked: isLiveOutputLocked,
                 thumbnailContentMode: .scaleAspectFill
             )
@@ -236,7 +233,7 @@ extension LibraryGridViewController {
                 systemImage: "seal.fill",
                 thumbnail: LogoStore.shared.image,
                 fillColor: UIColor(white: 0.16, alpha: 1),
-                isLive: isLogoSelected && !ExternalDisplayManager.shared.isOverlayLive,
+                isLive: live,
                 isLocked: isLiveOutputLocked,
                 thumbnailContentMode: .scaleAspectFill
             )
@@ -247,7 +244,7 @@ extension LibraryGridViewController {
             )
         case .camera:
             cell.configureCamera(
-                isLive: ExternalDisplayManager.shared.isCameraLive,
+                isLive: live,
                 lastFrame: CameraManager.shared.lastFrame,
                 warmPreview: !isCameraControlPresented && !homeCameraWarmPreviewSuspended,
                 isLocked: isLiveOutputLocked
@@ -261,12 +258,7 @@ extension LibraryGridViewController {
             cell.configure(
                 with: item,
                 thumbnail: store.thumbnail(for: item.id),
-                isLive: item.id == store.currentId
-                    && SlideshowPlaybackController.shared.activeSlideshowId == nil
-                    && !isBlackSelected
-                    && !isLogoSelected
-                    && !isScreensaverSelected
-                    && !ExternalDisplayManager.shared.isOverlayLive,
+                isLive: live,
                 isLocked: isLiveOutputLocked
             )
             if isArranging || isSelecting {
@@ -275,16 +267,12 @@ extension LibraryGridViewController {
                 cell.setMoreMenu(mediaContextMenu(item, in: album))
             }
         case .website(let page):
-            let mgr = ExternalDisplayManager.shared
             cell.configureSpecial(
                 title: page.title,
                 systemImage: "safari",
                 thumbnail: WebThumbnailStore.shared.image(for: page.id),
                 fillColor: UIColor(white: 0.16, alpha: 1),
-                isLive: mgr.isWebLive && mgr.liveWebPageId == page.id
-                    && !isBlackSelected
-                    && !isLogoSelected
-                    && !isScreensaverSelected,
+                isLive: live,
                 isLocked: isLiveOutputLocked
             )
             if isArranging || isSelecting {
@@ -293,16 +281,12 @@ extension LibraryGridViewController {
                 cell.setMoreMenu(websiteContextMenu(page, in: album))
             }
         case .pdf(let doc):
-            let mgr = ExternalDisplayManager.shared
             cell.configureSpecial(
                 title: doc.title,
                 systemImage: "doc.richtext",
                 thumbnail: PDFThumbnailStore.shared.image(for: doc.id),
                 fillColor: UIColor(white: 0.16, alpha: 1),
-                isLive: mgr.isPDFLive && mgr.livePDFDocumentId == doc.id
-                    && !isBlackSelected
-                    && !isLogoSelected
-                    && !isScreensaverSelected,
+                isLive: live,
                 isLocked: isLiveOutputLocked
             )
             if isArranging || isSelecting {
@@ -331,7 +315,7 @@ extension LibraryGridViewController {
             isScreensaverSelected = false
             presentSlideshow(show)
         case .screensaver:
-            if isLiveOutputLocked {
+            if isLiveOutputLocked || !hasLiveOutputDestination {
                 presentScreensaverPhonePreview()
                 return
             }
@@ -339,7 +323,7 @@ extension LibraryGridViewController {
             isLogoSelected = false
             presentScreensaverLive()
         case .logo:
-            if isLiveOutputLocked {
+            if isLiveOutputLocked || !hasLiveOutputDestination {
                 presentLogoPhonePreview()
                 return
             }
@@ -347,13 +331,15 @@ extension LibraryGridViewController {
             isScreensaverSelected = false
             presentLogoLive()
         case .camera:
-            guard !blockLiveChangeIfLocked() else { return }
+            if hasLiveOutputDestination {
+                guard !blockLiveChangeIfLocked() else { return }
+            }
             isBlackSelected = false
             isLogoSelected = false
             isScreensaverSelected = false
             onPresentCamera?()
         case .media(let item):
-            if isLiveOutputLocked {
+            if isLiveOutputLocked || !hasLiveOutputDestination {
                 presentLocalPreview(for: item, in: openShowItems)
                 return
             }
@@ -379,9 +365,15 @@ extension LibraryGridViewController {
 
     /// Presents the slideshow on AirPlay / Multipeer.
     ///
-    /// After a manual mid-show leave, offers Resume (last slide) or Restart.
+    /// Browse-only (no display / Eclipse TV): opens the editor so slides can be
+    /// reviewed without starting a live show. After a manual mid-show leave, offers
+    /// Resume (last slide) or Restart.
     func presentSlideshow(_ slideshow: Slideshow) {
         guard !slideshow.itemIds.isEmpty else {
+            presentSlideshowEditor(slideshow.id)
+            return
+        }
+        guard hasLiveOutputDestination else {
             presentSlideshowEditor(slideshow.id)
             return
         }
@@ -470,12 +462,6 @@ extension LibraryGridViewController {
     private func mediaContextMenu(_ item: LibraryItemDTO, in album: LocalAlbum) -> UIMenu {
         let items = openShowItems
         let isCover = album.resolvedCoverId == item.id
-        let preview = UIAction(
-            title: "Preview",
-            image: UIImage(systemName: "eye")
-        ) { [weak self] _ in
-            self?.presentLocalPreview(for: item, in: items)
-        }
         let cover = UIAction(
             title: isCover ? "Cover Image" : "Set as Cover",
             image: UIImage(systemName: isCover ? "star.fill" : "star"),
@@ -493,7 +479,16 @@ extension LibraryGridViewController {
             LocalAlbumStore.shared.remove(itemId: item.id, fromAlbumId: id)
         }
         let arrange = arrangeAction()
-        var children: [UIMenuElement] = [preview]
+        // Tap already opens Preview when there is no live destination.
+        var children: [UIMenuElement] = []
+        if hasLiveOutputDestination {
+            children.append(UIAction(
+                title: "Preview",
+                image: UIImage(systemName: "eye")
+            ) { [weak self] _ in
+                self?.presentLocalPreview(for: item, in: items)
+            })
+        }
         if item.isVideo {
             children.append(contentsOf: videoOptionActions(for: item))
         } else {
@@ -553,12 +548,15 @@ extension LibraryGridViewController {
         var children: [UIMenuElement] = []
         switch token {
         case ShowToolToken.logo:
-            children.append(UIAction(
-                title: "Preview",
-                image: UIImage(systemName: "eye")
-            ) { [weak self] _ in
-                self?.presentLogoPhonePreview()
-            })
+            // Tap already opens Preview when there is no live destination.
+            if hasLiveOutputDestination {
+                children.append(UIAction(
+                    title: "Preview",
+                    image: UIImage(systemName: "eye")
+                ) { [weak self] _ in
+                    self?.presentLogoPhonePreview()
+                })
+            }
             children.append(UIAction(
                 title: "Replace",
                 image: UIImage(systemName: "photo")
@@ -581,12 +579,14 @@ extension LibraryGridViewController {
                 })
             }
         case ShowToolToken.screensaver:
-            children.append(UIAction(
-                title: "Preview",
-                image: UIImage(systemName: "eye")
-            ) { [weak self] _ in
-                self?.presentScreensaverPhonePreview()
-            })
+            if hasLiveOutputDestination {
+                children.append(UIAction(
+                    title: "Preview",
+                    image: UIImage(systemName: "eye")
+                ) { [weak self] _ in
+                    self?.presentScreensaverPhonePreview()
+                })
+            }
             children.append(UIAction(
                 title: "Replace",
                 image: UIImage(systemName: "photo.on.rectangle")

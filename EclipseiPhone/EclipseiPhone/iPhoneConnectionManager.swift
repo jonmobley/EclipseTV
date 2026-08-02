@@ -200,6 +200,11 @@ class iPhoneConnectionManager: NSObject {
         guard !pending.isEmpty, activeTargetPeer != nil else { return }
         var payload: [(id: String, url: URL)] = []
         for entry in pending {
+            // Captures are phone-owned — never Multipeer to Apple TV.
+            if CaptureStore.shared.contains(id: entry.item.id) {
+                PendingUploadStore.shared.remove(id: entry.item.id, mode: mode)
+                continue
+            }
             if let url = LocalMediaStore.shared.localURL(forId: entry.item.id, mode: mode) {
                 payload.append((id: entry.item.id, url: url))
             } else if !TVLibraryStore.shared.items.contains(where: { $0.id == entry.item.id }) {

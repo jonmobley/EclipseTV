@@ -17,9 +17,7 @@ final class CloudKitSyncEngine: NSObject, SyncBackend {
     let container: CKContainer
     let account: CloudKitAccountMonitor
     var engine: CKSyncEngine?
-    private lazy var downloader = CloudKitAssetDownloader(
-        database: container.privateCloudDatabase
-    )
+    private lazy var downloader = CloudKitAssetDownloader(container: container)
     private lazy var shareCoordinator = CloudKitShareCoordinator(
         container: container,
         database: container.privateCloudDatabase
@@ -176,11 +174,13 @@ final class CloudKitSyncEngine: NSObject, SyncBackend {
     }
 
     /// Pushes every local Show and pending capture/PDF once after engine start.
+    ///
+    /// Does **not** stamp Show `modifiedAt` — inventing “now” on bootstrap/foreground
+    /// would let an idle device win LWW over real offline edits on another phone.
     func enqueueAllLocal() {
         guard let engine else { return }
         var changes: [CKSyncEngine.PendingRecordZoneChange] = []
         for album in LocalAlbumStore.shared.albums {
-            rememberShowModified(id: album.id)
             changes.append(.saveRecord(CloudKitSchema.showRecordID(for: album.id)))
         }
         // Mirror PDF filtering: `.localOnly` captures must never upload on bootstrap.
@@ -229,7 +229,11 @@ final class CloudKitSyncEngine: NSObject, SyncBackend {
 
     /// Schedules saves for the Show that changed, or every Show when unspecified.
     private func reconcileShowsWithEngine(_ notification: Notification) {
-        guard engine != nil, !isApplyingRemote else { return }
+        // Shared-DB apply only sets the controller flag — check both so accepted
+        // Shares don't fork into the private zone.
+        guard engine != nil,
+              !isApplyingRemote,
+              !EclipseSyncController.shared.isApplyingRemote else { return }
         if let id = notification.userInfo?[LocalAlbumStore.changedAlbumIdKey] as? UUID {
             scheduleShowSave(id: id)
             return
@@ -249,8 +253,13 @@ final class CloudKitSyncEngine: NSObject, SyncBackend {
         await bootstrapEngineIfPossible()
     }
 
-    func rememberShowModified(id: UUID) {
-        UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: showModifiedKey + id.uuidString)
+    /// Records a Show LWW clock. Local edits pass `Date()`; remote apply passes the
+    /// winning merged timestamp (never invent a newer stamp on bootstrap).
+    func rememberShowModified(id: UUID, at date: Date = Date()) {
+        UserDefaults.standard.set(
+            date.timeIntervalSince1970,
+            forKey: showModifiedKey + id.uuidString
+        )
     }
 
     func showModified(id: UUID) -> Date {

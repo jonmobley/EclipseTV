@@ -11,8 +11,16 @@ import UIKit
 
 extension LibraryGridViewController {
 
-    /// The live preview belongs to an open Show; Home is Recent Shows only.
-    var showsLiveHero: Bool { isShowMode }
+    /// AirPlay/HDMI or an Eclipse TV Multipeer link — somewhere to send live output.
+    ///
+    /// Without either, the Show is browse/Preview-only: hide the live hero and open
+    /// phone Preview (or the web/PDF remote) on tap instead of marking items live.
+    var hasLiveOutputDestination: Bool {
+        ExternalDisplayManager.shared.isConnected || store.isOnline
+    }
+
+    /// Live hero belongs to an open Show that can actually drive output.
+    var showsLiveHero: Bool { isShowMode && hasLiveOutputDestination }
 
     /// Phone landscape (`verticalSizeClass == .compact`): live preview left, grid
     /// right. With no hero to pair against, the grid takes the full width instead.

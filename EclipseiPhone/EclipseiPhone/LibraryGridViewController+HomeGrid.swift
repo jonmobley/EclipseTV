@@ -349,7 +349,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
     private func handleTap(_ item: HomeGridItem) {
         switch item {
         case .logo:
-            if isLiveOutputLocked {
+            if isLiveOutputLocked || !hasLiveOutputDestination {
                 presentLogoPhonePreview()
                 return
             }
@@ -357,7 +357,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             isScreensaverSelected = false
             presentLogoLive()
         case .screensaver:
-            if isLiveOutputLocked {
+            if isLiveOutputLocked || !hasLiveOutputDestination {
                 presentScreensaverPhonePreview()
                 return
             }
@@ -365,7 +365,9 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             isLogoSelected = false
             presentScreensaverLive()
         case .camera:
-            guard !blockLiveChangeIfLocked() else { return }
+            if hasLiveOutputDestination {
+                guard !blockLiveChangeIfLocked() else { return }
+            }
             isBlackSelected = false
             isLogoSelected = false
             isScreensaverSelected = false
@@ -427,7 +429,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         store.updateCurrentId(nil)
         ExternalDisplayManager.shared.present(source)
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        collectionView.reloadData()
+        reloadLibraryGrid()
         refreshLiveHeader()
     }
 
@@ -442,24 +444,27 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         store.updateCurrentId(nil)
         ExternalDisplayManager.shared.present(source)
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        collectionView.reloadData()
+        reloadLibraryGrid()
         refreshLiveHeader()
     }
 
     /// Presents a saved website (bookmark or Show member).
     ///
-    /// Marks the page live for the home hero (works without AirPlay), warms the
-    /// session, then opens the phone browser which adopts that same web view.
+    /// With a live destination: marks the page live, warms the session, then opens
+    /// the phone browser which adopts that same web view. Browse-only (no AirPlay /
+    /// Eclipse TV): opens the phone browser without marking live.
     ///
     /// A second browser must never open on top of the first — that left the loser with
     /// an empty stage and leaked the warm web view. If one is already up, navigate it
     /// like a normal browser load so Back still works and AirPlay follows.
     func presentWebPage(_ page: WebPage) {
-        guard !blockLiveChangeIfLocked() else { return }
+        if hasLiveOutputDestination {
+            guard !blockLiveChangeIfLocked() else { return }
+        }
         if let open = openController(ofType: WebRemoteViewController.self) {
             SlideshowPlaybackController.shared.stop()
             open.loadBrowserURL(page.url, pageId: page.id)
-            collectionView.reloadData()
+            reloadLibraryGrid()
             refreshLiveHeader()
             return
         }
@@ -467,13 +472,15 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         WarmWebSessionPool.shared.warmIfNeeded(for: page)
         // Park any in-hero preview before adopt so Auto Layout pins don't stick.
         liveHeader.clearWebPreview(parking: true)
-        ExternalDisplayManager.shared.presentWeb(page.url, pageId: page.id)
+        if hasLiveOutputDestination {
+            ExternalDisplayManager.shared.presentWeb(page.url, pageId: page.id)
+        }
         let remote = WebRemoteViewController(page: page)
         // Landscape Display Mode rotates the browser; a plain nav controller would not.
         let nav = DisplayModeNavigationController(rootViewController: remote)
         nav.modalPresentationStyle = .fullScreen
         present(nav, animated: true)
-        collectionView.reloadData()
+        reloadLibraryGrid()
         // After adopt: hero shows a static thumb (live preview is in the browser).
         refreshLiveHeader()
     }
@@ -482,8 +489,11 @@ extension LibraryGridViewController: UICollectionViewDataSource,
     ///
     /// One viewer at a time, checked before the side effects: a second tap would
     /// restart the AirPlay overlay for a viewer UIKit then refuses to present.
+    /// Browse-only: opens the phone viewer without marking live.
     func presentPDF(_ doc: SavedPDF) {
-        guard !blockLiveChangeIfLocked() else { return }
+        if hasLiveOutputDestination {
+            guard !blockLiveChangeIfLocked() else { return }
+        }
         guard !isAlreadyOpen(PDFRemoteViewController.self) else { return }
         SlideshowPlaybackController.shared.stop()
         guard let url = PDFStore.shared.fileURL(for: doc.id) else {
@@ -496,12 +506,14 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             present(alert, animated: true)
             return
         }
-        ExternalDisplayManager.shared.presentPDF(url, documentId: doc.id)
+        if hasLiveOutputDestination {
+            ExternalDisplayManager.shared.presentPDF(url, documentId: doc.id)
+        }
         let remote = PDFRemoteViewController(document: doc, fileURL: url)
         let nav = UINavigationController(rootViewController: remote)
         nav.modalPresentationStyle = .fullScreen
         present(nav, animated: true)
-        collectionView.reloadData()
+        reloadLibraryGrid()
         refreshLiveHeader()
     }
 
@@ -516,9 +528,16 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         }
 
         // Captures never go to Apple TV — AirPlay from the phone, downloading first
-        // when this device only has the CloudKit metadata.
+        // when this device only has the CloudKit metadata. Browse-only still downloads
+        // then opens phone Preview.
         if let capture = CaptureStore.shared.record(id: item.id) {
             presentCapture(capture, libraryItem: item)
+            return
+        }
+
+        // No AirPlay / Eclipse TV: phone Preview only — don't mark live.
+        if !hasLiveOutputDestination {
+            presentLocalPreview(for: item, in: openShowItems.isEmpty ? displayItems : openShowItems)
             return
         }
 
@@ -537,14 +556,11 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         } else {
             presentOfflineLive(for: item)
         }
-        // Pin on-screen thumbs before reload — go-live video decode often purges NSCache.
-        refreshVisibleThumbnailPins()
-        collectionView.reloadData()
-        collectionView.layoutIfNeeded()
-        refreshVisibleThumbnailPins()
+        reloadLibraryGrid()
     }
 
-    /// Downloads (if needed) then presents a capture via phone AirPlay only.
+    /// Downloads (if needed) then presents a capture via phone AirPlay, or Preview
+    /// when there is no live destination.
     private func presentCapture(_ capture: CaptureRecord, libraryItem: LibraryItemDTO) {
         SlideshowPlaybackController.shared.stop()
         if capture.isVideo {
@@ -553,8 +569,15 @@ extension LibraryGridViewController: UICollectionViewDataSource,
 
         let finish: (LibraryItemDTO) -> Void = { [weak self] item in
             guard let self else { return }
-            self.presentOfflineLive(for: item)
-            self.collectionView.reloadData()
+            if self.hasLiveOutputDestination {
+                self.presentOfflineLive(for: item)
+            } else {
+                self.presentLocalPreview(
+                    for: item,
+                    in: self.openShowItems.isEmpty ? self.displayItems : self.openShowItems
+                )
+            }
+            self.reloadLibraryGrid()
         }
 
         let mode = capture.orientation.libraryMode
@@ -706,12 +729,6 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             return UIMenu(children: [resend, remove])
         }
 
-        let preview = UIAction(
-            title: "Preview",
-            image: UIImage(systemName: "eye")
-        ) { [weak self] _ in
-            self?.presentLocalPreview(for: item)
-        }
         let edit = UIAction(
             title: "Edit",
             image: UIImage(systemName: "crop")
@@ -725,7 +742,16 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         ) { [weak self] _ in
             self?.confirmDelete(id: id, name: item.name)
         }
-        var children: [UIMenuElement] = [preview]
+        // Tap already opens Preview when there is no live destination.
+        var children: [UIMenuElement] = []
+        if hasLiveOutputDestination {
+            children.append(UIAction(
+                title: "Preview",
+                image: UIImage(systemName: "eye")
+            ) { [weak self] _ in
+                self?.presentLocalPreview(for: item)
+            })
+        }
         if item.isVideo {
             children.append(contentsOf: videoOptionActions(for: item))
         }

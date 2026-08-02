@@ -544,6 +544,9 @@ final class LibraryGridViewController: UIViewController {
                 // and we show the passive screensaver preview below).
                 self.pushCurrentToExternalDisplay()
             }
+            // Browse ↔ live: show or hide the hero when AirPlay connects/drops.
+            self.updateHeroVisibility()
+            self.applyHeroChrome()
             overlayReload(note)
         }
         observe(ExternalDisplayManager.webDidEndNotification, using: overlayReload)
@@ -947,6 +950,14 @@ final class LibraryGridViewController: UIViewController {
     func reloadGridIfSafe() {
         guard !isArranging else { return }
         pruneShowSelection()
+        reloadLibraryGrid()
+    }
+
+    /// Reloads the collection view while keeping on-screen thumbnail pins warm.
+    ///
+    /// Prefer this over bare `reloadData()` on go-live / live-chrome paths: video decode
+    /// often purges `NSCache`, and an unpinned reload paints blank placeholders.
+    func reloadLibraryGrid() {
         refreshVisibleThumbnailPins()
         collectionView.reloadData()
         collectionView.layoutIfNeeded()
@@ -959,7 +970,7 @@ final class LibraryGridViewController: UIViewController {
         isLogoSelected = false
         isScreensaverSelected = false
         store.updateCurrentId(nil)
-        collectionView.reloadData()
+        reloadLibraryGrid()
         refreshLiveHeader()
     }
 
@@ -1078,9 +1089,7 @@ extension LibraryGridViewController: TVLibraryStoreDelegate {
         guard !isArranging else { return }
         // A fresh manifest from the TV confirms any just-saved arrangement.
         arrangeItems = nil
-        collectionView.reloadData()
-        collectionView.layoutIfNeeded()
-        refreshVisibleThumbnailPins()
+        reloadLibraryGrid()
         updateEmptyState()
         refreshLiveHeader()
     }
@@ -1097,15 +1106,14 @@ extension LibraryGridViewController: TVLibraryStoreDelegate {
         pruneShowSelection()
         // Prefer visible-only reload: go-live often coincides with video memory
         // pressure that empties NSCache; a full reloadData blanked the whole Show.
-        // Pin first so configure during reload still hits on-screen thumbs.
         refreshVisibleThumbnailPins()
         let visible = collectionView.indexPathsForVisibleItems
         if visible.isEmpty {
-            collectionView.reloadData()
+            reloadLibraryGrid()
         } else {
             collectionView.reloadItems(at: visible)
+            refreshVisibleThumbnailPins()
         }
-        refreshVisibleThumbnailPins()
     }
 
     func libraryStore(_ store: TVLibraryStore, didUpdateThumbnailFor id: String) {
@@ -1155,7 +1163,11 @@ extension LibraryGridViewController: TVLibraryStoreDelegate {
 
     func libraryStoreDidChangeConnection(_ store: TVLibraryStore) {
         updateEmptyState()
+        // Browse ↔ live: Eclipse TV link also gates the hero and tap → Preview.
+        updateHeroVisibility()
+        applyHeroChrome()
         refreshLiveHeader()
+        reloadLibraryGrid()
     }
 
     func libraryStoreDidUpdatePlayback(_ store: TVLibraryStore) {
