@@ -117,9 +117,9 @@ final class VideoResumeStore {
 
         Task.detached(priority: .utility) { [weak self] in
             let image = Self.previewFrame(at: url, seconds: position)
-            await MainActor.run {
-                guard let self,
-                      self.frameGeneration[itemId] == generation,
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                guard self.frameGeneration[itemId] == generation,
                       var entry = self.entries[itemId]
                 else { return }
                 entry.frame = image

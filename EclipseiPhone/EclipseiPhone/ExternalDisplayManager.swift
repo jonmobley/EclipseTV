@@ -745,22 +745,27 @@ final class ExternalDisplayManager {
 
     private func markConnected(presentationVC: PresentationViewController) {
         let wasConnected = isConnected
+        let hostChanged = self.presentationVC !== presentationVC
         self.presentationVC = presentationVC
         isConnected = true
 
-        presentationVC.loadViewIfNeeded()
-        if let source = resolvedPresentationSource() {
-            // Avoid re-entering beginOverlay when already presenting this source.
-            lastSource = source
-            presentationVC.showIfNeeded(source)
-        } else {
-            presentationVC.showIdle()
+        // Re-attach while already connected is common (`present` → `refreshConnection`).
+        // Re-showing + posting every time re-enters the grid observer → `present` again
+        // (stack overflow on HDMI/AirPlay connect). Only seed content / notify on edges.
+        if !wasConnected || hostChanged {
+            presentationVC.loadViewIfNeeded()
+            if let source = resolvedPresentationSource() {
+                // Avoid re-entering beginOverlay when already presenting this source.
+                lastSource = source
+                presentationVC.showIfNeeded(source)
+            } else {
+                presentationVC.showIdle()
+            }
+            updateIdleTimer()
         }
-        updateIdleTimer()
 
-        if !wasConnected {
-            logger.info("External display connected")
-        }
+        guard !wasConnected else { return }
+        logger.info("External display connected")
         NotificationCenter.default.post(name: Self.didChangeNotification, object: self)
     }
 

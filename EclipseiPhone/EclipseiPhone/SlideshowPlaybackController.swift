@@ -217,7 +217,7 @@ final class SlideshowPlaybackController {
             )
             return true
         }
-        if let url = LocalMediaStore.shared.localURL(forId: item.id) {
+        if LocalMediaStore.shared.localURL(forId: item.id) != nil {
             store.updateCurrentId(item.id)
             ExternalDisplayManager.shared.present(
                 .forLibraryItem(item, thumbnail: store.thumbnail(for: item.id))
