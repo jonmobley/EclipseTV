@@ -76,21 +76,22 @@ extension ImageViewController {
             return
         }
 
-        // If the user is mid-reorder or a menu is open, just update the selection; the
-        // live view will catch up once the UI returns to a safe state.
+        // Arm seek before any early return so a deferred make-live (move mode /
+        // presented menu) still resumes from the companion’s offset.
+        if let path = dataSource.getPath(at: index), MediaItem(path: path).isVideo {
+            pendingVideoStartAt = (startAt ?? 0) > 0 ? startAt : nil
+        } else {
+            pendingVideoStartAt = nil
+        }
+
+        // Mid-reorder or a menu is open: update selection; live view catches up
+        // when the UI returns to a safe state (pending seek already stored).
         if isMoveMode || presentedViewController != nil {
             dataSource.setCurrentIndex(index)
             showNotificationToast(message: "Selection updated from companion")
             return
         }
 
-        // Only arm seek for videos — a still play must not leave a pending seek
-        // that would apply to the next video.
-        if let path = dataSource.getPath(at: index), MediaItem(path: path).isVideo {
-            pendingVideoStartAt = (startAt ?? 0) > 0 ? startAt : nil
-        } else {
-            pendingVideoStartAt = nil
-        }
         dataSource.setCurrentIndex(index)
 
         if isInGridMode {
