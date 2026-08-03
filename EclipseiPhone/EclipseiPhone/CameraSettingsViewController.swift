@@ -7,22 +7,28 @@
 
 import UIKit
 
-/// Camera-page settings: shutter guide, frame burn-in, and When Camera Closes.
+/// Camera-page settings: shutter guide, recording, frame burn-in, and When Camera Closes.
 ///
 /// Frame picking / import lives on the camera Frame button drawer, not here.
 final class CameraSettingsViewController: UITableViewController {
 
     private enum Section: Int, CaseIterable {
         case buttonGuide
+        case recording
         case frameCaptures
         case cameraClose
     }
 
-    private static let buttonGuideRows = [
-        "Slide button to toggle LIVE",
-        "Tap button to take a photo",
-        "Hold down to start/stop recording"
-    ]
+    private var buttonGuideRows: [String] {
+        var rows = [
+            "Slide button to toggle LIVE",
+            "Tap button to take a photo"
+        ]
+        if !ExternalOutputSettings.alwaysRecordWhenLive {
+            rows.append("Hold down to start/stop recording")
+        }
+        return rows
+    }
 
     init() {
         super.init(style: .insetGrouped)
@@ -69,8 +75,8 @@ final class CameraSettingsViewController: UITableViewController {
     ) -> Int {
         switch Section(rawValue: section) {
         case .buttonGuide:
-            return Self.buttonGuideRows.count
-        case .frameCaptures:
+            return buttonGuideRows.count
+        case .recording, .frameCaptures:
             return 1
         case .cameraClose:
             return CameraCloseDestination.allCases.count
@@ -86,6 +92,8 @@ final class CameraSettingsViewController: UITableViewController {
         switch Section(rawValue: section) {
         case .buttonGuide:
             return "Button Guide"
+        case .recording:
+            return "Recording"
         case .frameCaptures:
             return "Frames"
         case .cameraClose:
@@ -100,6 +108,9 @@ final class CameraSettingsViewController: UITableViewController {
         titleForFooterInSection section: Int
     ) -> String? {
         switch Section(rawValue: section) {
+        case .recording:
+            return "When on, video recording starts as soon as the camera goes live "
+                + "and stops when you slide off live. Tap still takes a photo."
         case .frameCaptures:
             return "When on, the selected frame is saved into photos and video recordings. "
                 + "Live view always shows the frame. Choose frames with the Frame button."
@@ -125,9 +136,22 @@ final class CameraSettingsViewController: UITableViewController {
 
         switch Section(rawValue: indexPath.section) {
         case .buttonGuide:
-            config.text = Self.buttonGuideRows[indexPath.row]
+            config.text = buttonGuideRows[indexPath.row]
             config.textProperties.color = .secondaryLabel
             cell.selectionStyle = .none
+        case .recording:
+            config.text = "Always Record When Live"
+            config.textProperties.color = .label
+            config.image = UIImage(systemName: "video.fill")
+            cell.selectionStyle = .none
+            let toggle = UISwitch()
+            toggle.isOn = ExternalOutputSettings.alwaysRecordWhenLive
+            toggle.addTarget(
+                self,
+                action: #selector(alwaysRecordToggleChanged(_:)),
+                for: .valueChanged
+            )
+            cell.accessoryView = toggle
         case .frameCaptures:
             config.text = "Include in Photos & Videos"
             config.textProperties.color = .label
@@ -168,9 +192,18 @@ final class CameraSettingsViewController: UITableViewController {
         case .cameraClose:
             ExternalOutputSettings.cameraCloseDestination =
                 CameraCloseDestination.allCases[indexPath.row]
-        case .buttonGuide, .frameCaptures, .none:
+        case .buttonGuide, .recording, .frameCaptures, .none:
             break
         }
+    }
+
+    @objc private func alwaysRecordToggleChanged(_ sender: UISwitch) {
+        ExternalOutputSettings.alwaysRecordWhenLive = sender.isOn
+        // Button Guide drops/restores the hold-to-record tip when this changes.
+        tableView.reloadSections(
+            IndexSet(integer: Section.buttonGuide.rawValue),
+            with: .automatic
+        )
     }
 
     @objc private func includeFrameToggleChanged(_ sender: UISwitch) {

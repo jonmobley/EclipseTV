@@ -297,9 +297,19 @@ extension CameraLiveViewController {
     func updateShutterAccessibilityHint() {
         let towardLive = ExternalOutputSettings.isVerticalMode ? "right" : "down"
         let towardOff = ExternalOutputSettings.isVerticalMode ? "left" : "up"
-        shutterButton.accessibilityHint = isAirPlayLive
-            ? "Tap for photo. Hold to record. Slide \(towardOff) to stop live."
-            : "Slide \(towardLive) to go live on AirPlay."
+        guard isAirPlayLive else {
+            shutterButton.accessibilityHint =
+                "Slide \(towardLive) to go live on AirPlay."
+            return
+        }
+        if ExternalOutputSettings.alwaysRecordWhenLive {
+            shutterButton.accessibilityHint =
+                "Tap for photo. Recording starts with live. "
+                + "Slide \(towardOff) to stop live and recording."
+        } else {
+            shutterButton.accessibilityHint =
+                "Tap for photo. Hold to record. Slide \(towardOff) to stop live."
+        }
     }
 
     /// Flips front ↔ back camera.

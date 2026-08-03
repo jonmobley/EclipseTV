@@ -14,7 +14,8 @@ import AVFoundation
 /// Display Mode aspect AirPlay uses — so framing matches the TV.
 /// Capture chrome stays on the phone's physical bottom edge: under the panel in
 /// Vertical, on the right of the panel in Landscape. Slide toward Flip → live.
-/// While live, tap takes a photo and hold records video.
+/// While live, tap takes a photo; hold records video unless Always Record When Live
+/// is on (then recording tracks live automatically).
 final class CameraLiveViewController: UIViewController {
 
     // MARK: - Subviews
@@ -98,7 +99,7 @@ final class CameraLiveViewController: UIViewController {
         return label
     }()
 
-    /// Top-right gear — Frames and When Camera Closes.
+    /// Top-right gear — Recording, Frames, and When Camera Closes.
     let settingsButton = UIButton(type: .system)
 
     /// Shared diameter for Settings / Flip circular controls.
@@ -483,6 +484,8 @@ final class CameraLiveViewController: UIViewController {
     @objc private func outputSettingsChanged() {
         requestDisplayModeGeometry()
         updateLivePreviewSource(force: true)
+        startAlwaysLiveRecordingIfNeeded()
+        updateShutterAccessibilityHint()
     }
 
     @objc private func externalDisplayChanged() {
