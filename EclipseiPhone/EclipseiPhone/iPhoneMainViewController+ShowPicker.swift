@@ -89,15 +89,7 @@ extension iPhoneMainViewController {
     }
 
     /// Opens `id`, switching Display Mode first when the Show lives in the other mode.
-    ///
-    /// The mode switch is applied before opening so the Show grid resolves its media
-    /// against the matching library bucket instead of the mode being left behind.
     private func openShowFromPicker(id: UUID) {
-        guard let show = LocalAlbumStore.shared.album(id: id) else { return }
-        if show.orientation != ExternalOutputSettings.orientation {
-            ExternalOutputSettings.orientation = show.orientation
-            libraryViewController.applyLayoutMode()
-        }
         libraryViewController.openLocalAlbum(id: id)
     }
 }
