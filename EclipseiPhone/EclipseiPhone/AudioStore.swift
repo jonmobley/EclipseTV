@@ -229,23 +229,30 @@ final class AudioStore {
 
     /// Loads duration without the deprecated synchronous `AVAsset.duration`.
     ///
-    /// `nonisolated` so a semaphore wait cannot deadlock the main actor.
+    /// Uses `Task.detached` so the async load is never scheduled on the caller’s
+    /// actor — a plain `Task { }` from `@MainActor` seeding would deadlock the
+    /// semaphore wait for up to the timeout.
     nonisolated private static func syncDuration(at url: URL) -> TimeInterval {
         let asset = AVURLAsset(url: url)
         let semaphore = DispatchSemaphore(value: 0)
-        var seconds: TimeInterval = 0
-        Task {
+        let box = DurationBox()
+        Task.detached {
             defer { semaphore.signal() }
             do {
                 let duration = try await asset.load(.duration)
-                seconds = CMTimeGetSeconds(duration)
-                if seconds.isNaN || seconds < 0 { seconds = 0 }
+                let value = CMTimeGetSeconds(duration)
+                box.seconds = (value.isNaN || value < 0) ? 0 : value
             } catch {
-                seconds = 0
+                box.seconds = 0
             }
         }
         _ = semaphore.wait(timeout: .now() + 5)
-        return seconds
+        return box.seconds
+    }
+
+    /// Tiny hand-off box so `Task.detached` can publish duration across the wait.
+    private final class DurationBox: @unchecked Sendable {
+        var seconds: TimeInterval = 0
     }
 
     // MARK: - Persistence

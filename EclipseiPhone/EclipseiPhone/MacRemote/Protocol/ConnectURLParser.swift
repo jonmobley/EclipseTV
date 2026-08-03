@@ -28,8 +28,8 @@ struct RemoteConnectInfo: Equatable, Sendable {
 ///
 /// Accepts:
 /// - App deep links: `eclipse://mac-remote?h=host&p=7878#t=TOKEN`
-/// - Full HTTP URLs: `http://host:7878/#t=TOKEN`
-/// - Bare hosts: `eclipse.local`, `192.168.1.10:7878`
+/// - Full HTTP(S) URLs: `http(s)://host:7878/#t=TOKEN` (scheme preserved)
+/// - Bare hosts: `eclipse.local`, `192.168.1.10:7878` (default `http`)
 ///
 /// Query `?t=` on HTTP URLs is ignored — only the fragment bootstrap secret is
 /// read, matching the web client.
@@ -114,7 +114,9 @@ enum ConnectURLParser {
         }
 
         var components = URLComponents()
-        components.scheme = "http"
+        // Keep the operator’s scheme — rewriting https→http would send Bearer
+        // tokens over plaintext after a URL that looked secure.
+        components.scheme = scheme
         components.host = host
         components.port = url.port ?? defaultPort
         guard let base = components.url else { return nil }
