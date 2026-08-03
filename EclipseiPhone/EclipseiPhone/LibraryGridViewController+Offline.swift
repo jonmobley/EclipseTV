@@ -54,8 +54,12 @@ extension LibraryGridViewController {
         if item.isVideo {
             AudioPlayerController.shared.stop()
         }
+        let startAt = item.isVideo ? (VideoResumeStore.shared.position(for: item.id) ?? 0) : 0
+        if item.isVideo { VideoResumeStore.shared.clear(for: item.id) }
         let thumbnail = store.thumbnail(for: item.id)
-        let source = PresentationSource.forLibraryItem(item, thumbnail: thumbnail)
+        let source = PresentationSource.forLibraryItem(
+            item, thumbnail: thumbnail, startAt: startAt
+        )
         store.updateCurrentId(item.id)
         ExternalDisplayManager.shared.present(source)
         UIImpactFeedbackGenerator(style: .light).impactOccurred()

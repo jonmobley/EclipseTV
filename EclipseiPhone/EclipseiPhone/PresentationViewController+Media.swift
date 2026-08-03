@@ -69,7 +69,8 @@ extension PresentationViewController {
     }
 
     /// Plays a video on the primary media surface.
-    func showVideo(at url: URL, isLooping: Bool, isMuted: Bool) {
+    /// - Parameter startAt: Absolute seconds to seek before the first `play()`.
+    func showVideo(at url: URL, isLooping: Bool, isMuted: Bool, startAt: TimeInterval = 0) {
         messageLabel.text = nil
         imageView.isHidden = true
         activityIndicator.stopAnimating()
@@ -102,7 +103,14 @@ extension PresentationViewController {
             }
         }
 
-        player.play()
+        if startAt > 0 {
+            let time = CMTime(seconds: startAt, preferredTimescale: 600)
+            player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero) { [weak player] _ in
+                player?.play()
+            }
+        } else {
+            player.play()
+        }
     }
 
     /// Plays the muted seamless-loop Screensaver (aspect fill).

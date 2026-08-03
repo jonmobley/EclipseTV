@@ -468,7 +468,8 @@ final class LibraryGridViewController: UIViewController {
         applyLayoutMode()
         observe(ExternalOutputSettings.didChangeNotification) { [weak self] _ in
             self?.applyLayoutMode()
-            // Keep the open Show — migrate it into the new Landscape / Vertical mode.
+            // Settings Display Mode: keep the open Show by adopting the new format.
+            // Cross-mode Show opens clear `openShowId` first so nothing is rewritten.
             self?.validateOpenShow(adoptingCurrentDisplayMode: true)
             self?.refreshVisibleCameraTilePreview()
         }
@@ -491,6 +492,9 @@ final class LibraryGridViewController: UIViewController {
             self?.reloadGridIfSafe()
             self?.refreshLiveHeader()
             self?.scrollLiveSlideshowRibbonToCurrentSlide()
+        }
+        observe(VideoResumeStore.didChangeNotification) { [weak self] _ in
+            self?.reloadGridIfSafe()
         }
         observe(WebThumbnailStore.didChangeNotification) { [weak self] _ in
             self?.reloadGridIfSafe()
@@ -925,7 +929,18 @@ final class LibraryGridViewController: UIViewController {
         }
         if let id = store.currentId,
            let item = store.items.first(where: { $0.id == id }) {
-            return .forLibraryItem(item, thumbnail: store.thumbnail(for: id))
+            let startAt: TimeInterval
+            if item.isVideo {
+                startAt = ExternalDisplayManager.shared
+                    .currentVideoPlaybackTime(forItemId: id)
+                    ?? VideoResumeStore.shared.position(for: id)
+                    ?? 0
+            } else {
+                startAt = 0
+            }
+            return .forLibraryItem(
+                item, thumbnail: store.thumbnail(for: id), startAt: startAt
+            )
         }
         return ScreensaverStore.presentationSource
     }
@@ -1003,7 +1018,9 @@ final class LibraryGridViewController: UIViewController {
         }
 
         sheet.addAction(UIAlertAction(title: "Make Live", style: .default) { [weak self] _ in
-            self?.runCommand { self?.connectionManager.sendPlayRequest(id: id) ?? false }
+            guard let self,
+                  let item = self.store.items.first(where: { $0.id == id }) else { return }
+            self.presentMedia(item)
         })
 
         if item.isVideo {
@@ -1106,14 +1123,37 @@ extension LibraryGridViewController: TVLibraryStoreDelegate {
         pruneShowSelection()
         // Prefer visible-only reload: go-live often coincides with video memory
         // pressure that empties NSCache; a full reloadData blanked the whole Show.
+        // Fall back when Display Mode just swapped buckets — visible paths can
+        // outlive the new data-source counts and crash reloadItems.
+        reloadVisibleItemsOrGrid()
+    }
+
+    /// Reloads on-screen cells, or the whole grid when any path is out of bounds.
+    ///
+    /// Bounds come from the data source (not `collectionView.numberOfSections`) so a
+    /// layout that still reflects the previous Home/Show shape cannot green-light a
+    /// `reloadItems` against a shorter bucket.
+    private func reloadVisibleItemsOrGrid() {
         refreshVisibleThumbnailPins()
         let visible = collectionView.indexPathsForVisibleItems
-        if visible.isEmpty {
+        guard !visible.isEmpty else {
             reloadLibraryGrid()
-        } else {
-            collectionView.reloadItems(at: visible)
-            refreshVisibleThumbnailPins()
+            return
         }
+        let sectionCount = numberOfSections(in: collectionView)
+        let safe = visible.filter { path in
+            guard path.section >= 0, path.section < sectionCount else { return false }
+            let count = self.collectionView(
+                collectionView, numberOfItemsInSection: path.section
+            )
+            return path.item >= 0 && path.item < count
+        }
+        if safe.count != visible.count || safe.isEmpty {
+            reloadLibraryGrid()
+            return
+        }
+        collectionView.reloadItems(at: safe)
+        refreshVisibleThumbnailPins()
     }
 
     func libraryStore(_ store: TVLibraryStore, didUpdateThumbnailFor id: String) {

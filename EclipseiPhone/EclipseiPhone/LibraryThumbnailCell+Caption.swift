@@ -24,5 +24,8 @@ extension LibraryThumbnailCell {
         if !moreButton.isHidden {
             cardView.bringSubviewToFront(moreButton)
         }
+        if !rewindButton.isHidden {
+            cardView.bringSubviewToFront(rewindButton)
+        }
     }
 }
