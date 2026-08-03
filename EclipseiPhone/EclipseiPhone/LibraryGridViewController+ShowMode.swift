@@ -497,7 +497,7 @@ extension LibraryGridViewController {
         let items = openShowItems
         let isCover = album.resolvedCoverId == item.id
         let cover = UIAction(
-            title: isCover ? "Cover Image" : "Set as Cover",
+            title: isCover ? "Show Cover" : "Set as Show Cover",
             image: UIImage(systemName: isCover ? "star.fill" : "star"),
             attributes: isCover ? [.disabled] : []
         ) { [weak self] _ in
@@ -558,7 +558,7 @@ extension LibraryGridViewController {
     ) -> UIMenu {
         let isCover = album.resolvedCoverId == itemId
         let cover = UIAction(
-            title: isCover ? "Cover" : "Set as Cover",
+            title: isCover ? "Show Cover" : "Set as Show Cover",
             image: UIImage(systemName: isCover ? "star.fill" : "star"),
             attributes: isCover ? [.disabled] : []
         ) { [weak self] _ in

@@ -21,11 +21,11 @@ final class CameraSettingsViewController: UITableViewController {
 
     private var buttonGuideRows: [String] {
         var rows = [
-            "Slide button to toggle LIVE",
-            "Tap button to take a photo"
+            "Tap preview to toggle LIVE",
+            "Tap shutter to take a photo"
         ]
         if !ExternalOutputSettings.alwaysRecordWhenLive {
-            rows.append("Hold down to start/stop recording")
+            rows.append("Hold shutter to start/stop recording")
         }
         return rows
     }
@@ -110,12 +110,12 @@ final class CameraSettingsViewController: UITableViewController {
         switch Section(rawValue: section) {
         case .recording:
             return "When on, video recording starts as soon as the camera goes live "
-                + "and stops when you slide off live. Tap still takes a photo."
+                + "and stops when you tap off live. Tap shutter still takes a photo."
         case .frameCaptures:
             return "When on, the selected frame is saved into photos and video recordings. "
                 + "Live view always shows the frame. Choose frames with the Frame button."
         case .cameraClose:
-            return "When you slide the shutter off live, switch AirPlay to Background, "
+            return "When you tap the preview off live, switch AirPlay to Background, "
                 + "Black, or whatever was live before the camera."
         case .buttonGuide, .none:
             return nil

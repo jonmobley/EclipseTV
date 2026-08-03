@@ -6,21 +6,21 @@
 //
 
 import UIKit
-import AVKit
 
 /// One locally stored media file that can be shown in the phone preview gallery.
 struct LocalMediaPreviewItem {
     let id: String
     let fileURL: URL
     let isVideo: Bool
-    /// Honored for in-app preview playback (matches AirPlay / EclipseTV).
+    /// Honored for system video Preview (matches AirPlay / EclipseTV).
     var isLooping: Bool = false
     var isMuted: Bool = false
 }
 
-/// Fullscreen swipeable gallery of media stored on the phone (`LocalMediaStore`).
+/// Fullscreen swipeable gallery of **images** stored on the phone (`LocalMediaStore`).
 ///
-/// Opened from long-press → Preview. Swipe left/right to move through `items`.
+/// Videos open via `LocalVideoPreviewViewController` (system player) instead.
+/// Opened from long-press → Preview on an image. Swipe left/right through `items`.
 final class LocalMediaPreviewViewController: UIViewController {
 
     private let items: [LocalMediaPreviewItem]
@@ -39,6 +39,11 @@ final class LocalMediaPreviewViewController: UIViewController {
                 isMuted: item.isMuted ?? false
             )
         }
+    }
+
+    /// Image-only subset for the swipe gallery.
+    static func imagePreviewableItems(from items: [LibraryItemDTO]) -> [LocalMediaPreviewItem] {
+        previewableItems(from: items).filter { !$0.isVideo }
     }
 
     private let startIndex: Int

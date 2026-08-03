@@ -6,22 +6,19 @@
 //
 
 import UIKit
-import AVFoundation
 
-/// Single image or video page inside `LocalMediaPreviewViewController`.
+/// Single image page inside `LocalMediaPreviewViewController`.
 ///
-/// Videos use `AVPlayerLayer` (not `AVPlayerViewController`) so horizontal
-/// gallery swipes are not stolen by the system player chrome.
+/// Videos use modal `LocalVideoPreviewViewController` with system player chrome
+/// instead of living in this swipe gallery.
 final class LocalMediaPreviewPageViewController: UIViewController {
 
     let index: Int
     private let item: LocalMediaPreviewItem
     private let imageView = UIImageView()
-    private var player: AVPlayer?
-    private var playerLayer: AVPlayerLayer?
-    private var endObserver: NSObjectProtocol?
 
     init(item: LocalMediaPreviewItem, index: Int) {
+        precondition(!item.isVideo, "Videos use LocalVideoPreviewViewController")
         self.item = item
         self.index = index
         super.init(nibName: nil, bundle: nil)
@@ -31,41 +28,14 @@ final class LocalMediaPreviewPageViewController: UIViewController {
         fatalError("init(coder:) has not been implemented")
     }
 
-    deinit {
-        if let endObserver {
-            NotificationCenter.default.removeObserver(endObserver)
-        }
-    }
-
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .black
-        if item.isVideo {
-            setupVideo()
-        } else {
-            setupImage()
-        }
+        setupImage()
     }
 
-    override func viewDidLayoutSubviews() {
-        super.viewDidLayoutSubviews()
-        playerLayer?.frame = view.bounds
-    }
-
-    override func viewDidAppear(_ animated: Bool) {
-        super.viewDidAppear(animated)
-        player?.play()
-    }
-
-    override func viewDidDisappear(_ animated: Bool) {
-        super.viewDidDisappear(animated)
-        pausePlayback()
-    }
-
-    /// Pauses video when the page is no longer visible.
-    func pausePlayback() {
-        player?.pause()
-    }
+    /// No-op kept so the gallery host can pause departing pages uniformly.
+    func pausePlayback() {}
 
     // MARK: - Setup
 
@@ -81,41 +51,5 @@ final class LocalMediaPreviewPageViewController: UIViewController {
             imageView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             imageView.trailingAnchor.constraint(equalTo: view.trailingAnchor)
         ])
-    }
-
-    private func setupVideo() {
-        let player = AVPlayer(url: item.fileURL)
-        player.isMuted = item.isMuted
-        player.actionAtItemEnd = item.isLooping ? .none : .pause
-        self.player = player
-
-        let layer = AVPlayerLayer(player: player)
-        layer.videoGravity = .resizeAspect
-        layer.frame = view.bounds
-        view.layer.addSublayer(layer)
-        playerLayer = layer
-
-        let tap = UITapGestureRecognizer(target: self, action: #selector(togglePlayback))
-        view.addGestureRecognizer(tap)
-
-        if item.isLooping {
-            endObserver = NotificationCenter.default.addObserver(
-                forName: .AVPlayerItemDidPlayToEndTime,
-                object: player.currentItem,
-                queue: .main
-            ) { [weak player] _ in
-                player?.seek(to: .zero)
-                player?.play()
-            }
-        }
-    }
-
-    @objc private func togglePlayback() {
-        guard let player else { return }
-        if player.timeControlStatus == .playing {
-            player.pause()
-        } else {
-            player.play()
-        }
     }
 }

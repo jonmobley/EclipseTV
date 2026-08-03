@@ -8,14 +8,12 @@
 import UIKit
 import AVFoundation
 
-/// Phone-side camera control: preview first, slide shutter to go live on AirPlay.
+/// Phone-side camera control: Display Mode preview, tap to toggle AirPlay live.
 ///
-/// Preview is staged in a 9:16 (Vertical) or 16:9 (Landscape) panel — the same
-/// Display Mode aspect AirPlay uses — so framing matches the TV.
-/// Capture chrome stays on the phone's physical bottom edge: under the panel in
-/// Vertical, on the right of the panel in Landscape. Slide toward Flip → live.
-/// While live, tap takes a photo; hold records video unless Always Record When Live
-/// is on (then recording tracks live automatically).
+/// The preview is the largest 16:9 / 9:16 panel that fits the stage (edge contact
+/// where the aspect allows). The shutter row sits outside that panel, like the
+/// system Camera app. Tap the stage to go live or stop. While live, the shutter
+/// takes a photo; hold records unless Always Record When Live is on.
 final class CameraLiveViewController: UIViewController {
 
     // MARK: - Subviews
@@ -32,12 +30,6 @@ final class CameraLiveViewController: UIViewController {
         let view = UIView()
         view.backgroundColor = .black
         view.clipsToBounds = true
-        view.layer.cornerRadius = 32
-        // All four corners — Vertical full-width card and Landscape panel.
-        view.layer.maskedCorners = [
-            .layerMinXMinYCorner, .layerMaxXMinYCorner,
-            .layerMinXMaxYCorner, .layerMaxXMaxYCorner
-        ]
         return view
     }()
 
@@ -104,31 +96,12 @@ final class CameraLiveViewController: UIViewController {
 
     /// Shared diameter for Settings / Flip circular controls.
     static let chromeControlSize: CGFloat = 44
-    /// Shutter thumb diameter.
+    /// Shutter button diameter.
     static let shutterSize: CGFloat = 72
-    /// Distance the shutter thumb travels along the live track.
-    static let shutterTrackTravel: CGFloat = 56
-    /// Inset between the track edge and the shutter thumb.
-    static let shutterTrackPadding: CGFloat = 4
-    /// Gap between the panel and the shutter chrome strip.
+    /// Gap between the Display Mode panel and the outside shutter strip.
     static let chromeGap: CGFloat = 16
 
-    /// Track behind the shutter — toward Flip is live, toward Frame is off.
-    let shutterTrackView: UIView = {
-        let view = UIView()
-        view.backgroundColor = UIColor.white.withAlphaComponent(0.14)
-        view.clipsToBounds = true
-        return view
-    }()
-    /// Chevron in the empty side of the track, pointing where the next slide goes.
-    let shutterHintView: UIImageView = {
-        let view = UIImageView()
-        view.tintColor = .white
-        view.contentMode = .center
-        view.isUserInteractionEnabled = false
-        return view
-    }()
-    /// Shutter thumb — slide to live; when live, tap = photo, hold = video.
+    /// Shutter — when live, tap = photo, hold = video.
     /// `.custom` so the control doesn't delay/cancel the zero-duration press gesture.
     let shutterButton = UIButton(type: .custom)
     /// Switches between the back and front cameras.
@@ -138,26 +111,10 @@ final class CameraLiveViewController: UIViewController {
     /// Show that receives captures taken here, when the camera was opened from one.
     var captureDestinationShowId: UUID?
 
-    /// 0 = off-live end of the track, 1 = live end (toward Flip).
-    var shutterSlideProgress: CGFloat = 0
-    /// True while the user is dragging the shutter thumb.
-    var isShutterDragging = false
-    /// True while the thumb animates to a committed end, so layout leaves it alone.
-    var isShutterSettling = false
-    /// Progress the active drag started from, captured once at `.began`.
-    var shutterDragBaseProgress: CGFloat = 0
-    /// Translation where the press became a slide, so the thumb tracks the finger 1:1.
-    var shutterSlideAnchor: CGFloat = 0
-    /// True once the current press moved enough to count as a slide.
-    var shutterDidSlide = false
     /// Timer discriminating shutter tap vs hold-to-record (live only).
     var shutterHoldTimer: Timer?
     /// True once the hold threshold fires for the active shutter press.
     var shutterDidLongPress = false
-    /// Touch origin in `view` at shutter press `.began` (for slide axis delta).
-    var shutterTouchOrigin: CGPoint = .zero
-    /// Rest frame for the shutter track (updated in bottom chrome layout).
-    var shutterTrackFrame: CGRect = .zero
     /// Wall-clock start of the active movie recording (drives the LIVE timer).
     var recordingStartedAt: Date?
     /// 0.25s tick while recording to refresh `recordingTimerLabel`.
@@ -189,6 +146,9 @@ final class CameraLiveViewController: UIViewController {
 
         let pinch = UIPinchGestureRecognizer(target: self, action: #selector(handlePinch(_:)))
         stageView.addGestureRecognizer(pinch)
+        let stageTap = UITapGestureRecognizer(target: self, action: #selector(handleStageTap(_:)))
+        stageTap.cancelsTouchesInView = false
+        stageView.addGestureRecognizer(stageTap)
         stageView.isUserInteractionEnabled = true
 
         // Top chrome is framed in `layoutTopChromeInPanel` inside the panel.
@@ -277,8 +237,8 @@ final class CameraLiveViewController: UIViewController {
         CameraManager.shared.captureLastFrame(from: previewView)
         teardownLivePreviewSource()
         previewView.detach()
-        // Leaving the control UI does not stop AirPlay — slide the shutter off
-        // live for that. Session stays up for the home Camera tile warm preview.
+        // Leaving the control UI does not stop AirPlay — tap the stage off live
+        // for that. Session stays up for the home Camera tile warm preview.
     }
 
     @objc private func recordingDidChange() {
@@ -327,37 +287,31 @@ final class CameraLiveViewController: UIViewController {
         previewView.syncDisplayModeOrientation()
     }
 
-    /// Display Mode panel inside the stage.
+    /// Largest Display Mode panel in the stage, with the shutter strip reserved outside.
     ///
-    /// Vertical: full-width 9:16 with a strip under the card for shutter chrome.
-    /// Landscape: largest 16:9 with that same chrome on the right of the card — the
-    /// physical bottom edge when the phone is held sideways.
+    /// Vertical: preview region above a bottom shutter dock; Landscape: preview left of
+    /// a trailing dock (physical bottom when the phone is held sideways). Aspect stays
+    /// 16:9 / 9:16 — the panel touches the stage edges where that ratio allows.
     private func phoneCameraPanelRect(in bounds: CGRect) -> CGRect {
         let isVertical = ExternalOutputSettings.isVerticalMode
-        // Track short side (+ gap) — under the panel in Vertical, beside it in Landscape.
-        let chromeReserve = Self.chromeGap + Self.shutterSize + 8
         let aspect = ExternalOutputSettings.orientation.aspectRatio
+        let dock = Self.captureDockSpan(safeTrailing: isVertical
+            ? view.safeAreaInsets.bottom
+            : view.safeAreaInsets.right)
         let available: CGRect
         if isVertical {
-            let topInset = view.safeAreaInsets.top + 6
-            let bottomInset = view.safeAreaInsets.bottom + 6
             available = CGRect(
                 x: 0,
-                y: topInset,
+                y: 0,
                 width: bounds.width,
-                height: max(0, bounds.height - topInset - bottomInset - chromeReserve)
+                height: max(0, bounds.height - dock)
             )
         } else {
-            // Island / notch is on a short edge in landscape — honor leading safe area.
-            let leading = max(view.safeAreaInsets.left, 12)
-            let trailing = chromeReserve + max(view.safeAreaInsets.right, 6)
-            // Same top/bottom inset so leftover space after fitting 16:9 splits evenly.
-            let vertical = max(view.safeAreaInsets.top, view.safeAreaInsets.bottom) + 6
             available = CGRect(
-                x: leading,
-                y: vertical,
-                width: max(0, bounds.width - leading - trailing),
-                height: max(0, bounds.height - vertical * 2)
+                x: 0,
+                y: 0,
+                width: max(0, bounds.width - dock),
+                height: bounds.height
             )
         }
         guard available.width > 1, available.height > 1 else { return .zero }
@@ -370,9 +324,13 @@ final class CameraLiveViewController: UIViewController {
         }
 
         let x = available.midX - width / 2
-        // Vertical: top-align for a fixed under-panel strip. Landscape: vertically center.
-        let y = isVertical ? available.minY : available.midY - height / 2
+        let y = available.midY - height / 2
         return CGRect(x: x, y: y, width: width, height: height)
+    }
+
+    /// Outside-panel strip for Frame · shutter · Flip (gap + button + safe-area pad).
+    static func captureDockSpan(safeTrailing: CGFloat) -> CGFloat {
+        chromeGap + shutterSize + max(8, safeTrailing)
     }
 
     /// Asks the window scene to match Display Mode (Landscape ↔ landscape UI).
@@ -451,13 +409,12 @@ final class CameraLiveViewController: UIViewController {
     /// Leaves the camera screen (same as Website header back).
     ///
     /// If a movie is in flight, finishes and saves it first so Back never orphans
-    /// a recording. AirPlay stays live when already live — only the shutter stops
-    /// that; the home tile keeps the warm session.
+    /// a recording. AirPlay stays live when already live — only tapping the stage
+    /// off live stops that; the home tile keeps the warm session.
     @objc func closeTapped() {
         shutterHoldTimer?.invalidate()
         shutterHoldTimer = nil
         shutterDidLongPress = false
-        isShutterDragging = false
         if CameraManager.shared.isRecording {
             finalizeRecordingIfNeeded { [weak self] in
                 self?.dismiss(animated: true)

@@ -283,6 +283,9 @@ final class LibraryGridViewController: UIViewController {
     /// Fired when live-output lock toggles (header amber chrome).
     var onLiveOutputLockChanged: ((Bool) -> Void)?
 
+    /// One-shot resume offset applied the next time the phone hero starts a video.
+    var phoneLiveVideoStartAt: TimeInterval = 0
+
     /// Extra bottom inset reserved for the home mini player.
     var miniPlayerBottomInset: CGFloat = 0 {
         didSet {
@@ -290,6 +293,18 @@ final class LibraryGridViewController: UIViewController {
             syncHeroOverlayInsets(preservingProgress: currentHeroScrollProgress())
             bottomChromeBottomConstraint?.constant = -(miniPlayerBottomInset + 20)
             updateHomeVerticalScrollPolicy()
+        }
+    }
+
+    /// Height of the ambient mini bar when docked under the landscape live preview.
+    ///
+    /// Zero while the bar is hidden or collapsed to the bubble. Side-by-side hero
+    /// sizing subtracts this so preview + player fit the safe area.
+    var sideBySideMiniPlayerHeight: CGFloat = 0 {
+        didSet {
+            guard abs(sideBySideMiniPlayerHeight - oldValue) > 0.5 else { return }
+            guard isSideBySideChrome else { return }
+            applyHeroChrome()
         }
     }
 
@@ -422,17 +437,29 @@ final class LibraryGridViewController: UIViewController {
         }
 
         liveHeader.onTogglePlayPause = { [weak self] in
-            self?.connectionManager.sendPlaybackCommand(action: .toggle, position: nil)
+            guard let self else { return }
+            if self.liveHeader.toggleLibraryVideoPlayback() { return }
+            self.connectionManager.sendPlaybackCommand(action: .toggle, position: nil)
         }
         liveHeader.onSkip = { [weak self] delta in
-            self?.connectionManager.sendPlaybackCommand(action: .skip, position: delta)
+            guard let self else { return }
+            if self.liveHeader.skipLibraryVideo(by: delta) { return }
+            self.connectionManager.sendPlaybackCommand(action: .skip, position: delta)
         }
         liveHeader.onSeek = { [weak self] position in
-            self?.connectionManager.sendPlaybackCommand(action: .seek, position: position)
+            guard let self else { return }
+            if self.liveHeader.seekLibraryVideo(to: position) { return }
+            self.connectionManager.sendPlaybackCommand(action: .seek, position: position)
+        }
+        liveHeader.onRequestFullscreen = { [weak self] in
+            self?.presentFullscreenForLiveVideo()
         }
         liveHeader.onSlideshowSwipe = { delta in
             SlideshowPlaybackController.shared.goToAdjacentSlide(delta: delta)
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        }
+        liveHeader.onToggleSlideshowRibbon = { [weak self] in
+            self?.toggleLiveSlideshowRibbon()
         }
 
         collectionView.addGestureRecognizer(reorderGesture)
@@ -781,6 +808,9 @@ final class LibraryGridViewController: UIViewController {
             // Never leave a Show-mode live preview over the Home marketing carousel.
             liveHeader.clearWebPreview(parking: true)
             liveHeader.clearScreensaverPreview()
+            liveHeader.clearLibraryVideoPreview()
+            liveHeader.setSlideshowRibbonToggleVisible(false, isOn: false)
+            liveHeader.allowsSlideshowBrowse = false
             liveHeader.isHidden = true
             liveHeader.isUserInteractionEnabled = false
             refreshForeignLivePreview()
@@ -788,8 +818,8 @@ final class LibraryGridViewController: UIViewController {
         }
         liveHeader.isHidden = false
         liveHeader.isUserInteractionEnabled = true
-        // Cleared here; re-enabled only when the live item is a slideshow slide.
-        liveHeader.allowsSlideshowBrowse = false
+        // Ribbon toggle visibility follows the active slideshow for this Show.
+        defer { syncLiveSlideshowRibbonChrome() }
 
         // Another Show still owns live output — keep AirPlay as-is, show an empty
         // hero here, and park the live art in the tucked mini preview.
@@ -881,9 +911,51 @@ final class LibraryGridViewController: UIViewController {
             return
         }
         let thumbnail = liveItem.flatMap { store.thumbnail(for: $0.id) }
-        liveHeader.configure(with: liveItem, thumbnail: thumbnail, isOnline: store.isOnline)
-        liveHeader.updatePlayback(store.playback)
-        liveHeader.allowsSlideshowBrowse = showsLiveSlideshowRibbon
+        // External display owns motion — phone hero stays a still. With no external
+        // display, play the local file in-hero (tap toggles; transport drives it).
+        let playLocally = liveItem?.isVideo == true
+            && !mgr.isConnected
+            && liveItem.flatMap { LocalMediaStore.shared.localURL(forId: $0.id) } != nil
+        liveHeader.configure(
+            with: liveItem,
+            thumbnail: thumbnail,
+            isOnline: store.isOnline,
+            showsLocalTransport: playLocally
+        )
+        if playLocally, let item = liveItem,
+           let url = LocalMediaStore.shared.localURL(forId: item.id) {
+            let startAt = phoneLiveVideoStartAt
+            phoneLiveVideoStartAt = 0
+            liveHeader.showLibraryVideoPreview(
+                url: url,
+                itemId: item.id,
+                isMuted: item.isMuted ?? false,
+                isLooping: item.isLooping ?? false,
+                startAt: startAt
+            )
+            liveHeader.updatePlayback(liveHeader.libraryVideoPlaybackState)
+        } else {
+            liveHeader.clearLibraryVideoPreview()
+            liveHeader.updatePlayback(store.playback)
+        }
+    }
+
+    /// Opens system-player Preview for the phone-local live video (pauses the hero).
+    func presentFullscreenForLiveVideo() {
+        guard let id = store.currentId,
+              let item = store.items.first(where: { $0.id == id }),
+              item.isVideo,
+              let url = LocalMediaStore.shared.localURL(forId: id) else { return }
+        let startAt = liveHeader.libraryVideoPlaybackState.currentTime
+        liveHeader.pauseLibraryVideoPreview()
+        presentLocalVideoPreview(
+            fileURL: url,
+            isMuted: item.isMuted ?? false,
+            isLooping: item.isLooping ?? false,
+            startAt: startAt
+        ) { [weak self] position in
+            self?.liveHeader.resumeLibraryVideoPreview(at: position)
+        }
     }
 
     /// Static poster chrome + muted looping video in the phone preview.
@@ -1041,7 +1113,10 @@ final class LibraryGridViewController: UIViewController {
             })
 
             if LocalMediaStore.shared.localURL(forId: id) != nil {
-                sheet.addAction(UIAlertAction(title: "Thumbnail", style: .default) { [weak self] _ in
+                sheet.addAction(UIAlertAction(
+                    title: "Choose Thumbnail…",
+                    style: .default
+                ) { [weak self] _ in
                     self?.onRequestVideoThumbnail?(id)
                 })
             }
@@ -1160,7 +1235,9 @@ extension LibraryGridViewController: TVLibraryStoreDelegate {
         if id == store.currentId {
             refreshLiveHeader()
         }
-        guard !isArranging else { return }
+        // Still paint during arrange — entry reload can miss a purged NSCache, and
+        // skipping the update left blank tiles for the whole arrange session.
+        // Item/order reloads stay gated; only the thumb for this id refreshes.
         guard let showsSection = sectionIndex(for: .shows) else { return }
         if isShowMode {
             var paths: [IndexPath] = []

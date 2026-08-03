@@ -37,6 +37,12 @@ final class TVLibraryStore {
     /// Shared instance written by `iPhoneConnectionManager` and read by the grid.
     static let shared = TVLibraryStore()
 
+    /// Posted when a library thumbnail is written or rebuilt (`userInfo[thumbnailIdKey]`).
+    static let thumbnailDidChangeNotification =
+        Notification.Name("TVLibraryStore.thumbnailDidChange")
+    /// `userInfo` key for the media id whose thumbnail changed.
+    static let thumbnailIdKey = "id"
+
     // MARK: - State
 
     private(set) var items: [LibraryItemDTO] = []
@@ -229,7 +235,7 @@ final class TVLibraryStore {
                 if needsPersist {
                     self.persistThumbnail(image, forId: id)
                 }
-                self.delegate?.libraryStore(self, didUpdateThumbnailFor: id)
+                self.notifyThumbnailUpdated(for: id)
             }
         }
     }
@@ -354,10 +360,16 @@ final class TVLibraryStore {
     func addLocalItem(_ item: LibraryItemDTO, thumbnail: UIImage?) {
         let mode = activeLibraryMode
         PendingUploadStore.shared.enqueue(item, mode: mode)
+        // Offline / never-paired: mint "My Library" so thumbnails have a disk home
+        // before the first persist (otherwise batch imports only keep the last few
+        // in NSCache and Slideshow rows stay blank).
+        ensureLibraryIdentity()
+        ensureThumbnailDirectory()
         if let thumbnail = thumbnail {
             let thumb = ThumbnailDecoder.downsample(thumbnail)
             thumbnails[item.id] = thumb
             persistThumbnail(thumb, forId: item.id)
+            notifyThumbnailUpdated(for: item.id)
         }
         if !items.contains(where: { $0.id == item.id }) {
             items.append(item)
@@ -658,10 +670,22 @@ final class TVLibraryStore {
     }
 
     func setThumbnail(_ image: UIImage, forId id: String) {
+        ensureLibraryIdentity()
+        ensureThumbnailDirectory()
         let thumb = ThumbnailDecoder.downsample(image)
         thumbnails[id] = thumb
         persistThumbnail(thumb, forId: id)
+        notifyThumbnailUpdated(for: id)
+    }
+
+    /// Notifies the grid delegate and any other observers (e.g. Slideshow editor).
+    private func notifyThumbnailUpdated(for id: String) {
         delegate?.libraryStore(self, didUpdateThumbnailFor: id)
+        NotificationCenter.default.post(
+            name: Self.thumbnailDidChangeNotification,
+            object: self,
+            userInfo: [Self.thumbnailIdKey: id]
+        )
     }
 
     /// Updates loop / mute for a video and persists the manifest (local + pending upload).

@@ -19,8 +19,19 @@ extension LibraryGridViewController {
         ExternalDisplayManager.shared.isConnected || store.isOnline
     }
 
-    /// Live hero belongs to an open Show that can actually drive output.
-    var showsLiveHero: Bool { isShowMode && hasLiveOutputDestination }
+    /// Live hero belongs to an open Show that can drive output, or phone-only
+    /// library video marked live with no external display.
+    var showsLiveHero: Bool {
+        isShowMode && (hasLiveOutputDestination || isPhoneLiveVideo)
+    }
+
+    /// Library video selected as live while browsing with no AirPlay / Eclipse TV.
+    var isPhoneLiveVideo: Bool {
+        guard !hasLiveOutputDestination,
+              let id = store.currentId,
+              let item = store.items.first(where: { $0.id == id }) else { return false }
+        return item.isVideo && LocalMediaStore.shared.localURL(forId: id) != nil
+    }
 
     /// Phone landscape (`verticalSizeClass == .compact`): live preview left, grid
     /// right. With no hero to pair against, the grid takes the full width instead.
@@ -123,7 +134,8 @@ extension LibraryGridViewController {
             heroSpacer.heightAnchor.constraint(equalToConstant: 0)
         ]
 
-        // Landscape: live preview leading, grid in the trailing column.
+        // Landscape: live preview leading (top-aligned), grid in the trailing column.
+        // The ambient mini player docks under the preview from the parent VC.
         landscapeChromeConstraints = [
             collectionView.topAnchor.constraint(equalTo: safe.topAnchor),
             collectionView.trailingAnchor.constraint(equalTo: safe.trailingAnchor),
@@ -134,9 +146,8 @@ extension LibraryGridViewController {
             liveHeader.leadingAnchor.constraint(
                 equalTo: safe.leadingAnchor, constant: headerInset
             ),
-            liveHeader.centerYAnchor.constraint(equalTo: safe.centerYAnchor),
             liveHeader.topAnchor.constraint(
-                greaterThanOrEqualTo: safe.topAnchor, constant: 8
+                equalTo: safe.topAnchor, constant: headerInset
             ),
             liveHeader.bottomAnchor.constraint(
                 lessThanOrEqualTo: safe.bottomAnchor, constant: -8
@@ -356,7 +367,7 @@ extension LibraryGridViewController {
         }
     }
 
-    /// Landscape phone: aspect-fit hero in the leading column.
+    /// Landscape phone: aspect-fit hero in the leading column (top-aligned).
     private func applySideBySideHeroChrome() {
         deactivateHeroSizeConstraints()
         heroWidthConstraint?.isActive = true
@@ -367,9 +378,14 @@ extension LibraryGridViewController {
             view.bounds.width - safe.left - safe.right - headerInset
                 - Self.sideBySideGutter
         )
+        // Leave room under the preview for the docked mini player when expanded.
+        let miniReserve: CGFloat = sideBySideMiniPlayerHeight > 0
+            ? Self.sideBySideGutter + sideBySideMiniPlayerHeight
+            : 0
         let availableHeight = max(
             0,
-            view.bounds.height - safe.top - safe.bottom - 16
+            view.bounds.height - safe.top - safe.bottom
+                - headerInset - 8 - miniReserve
         )
         let aspect = ExternalOutputSettings.isVerticalMode
             ? (9.0 / 16.0)

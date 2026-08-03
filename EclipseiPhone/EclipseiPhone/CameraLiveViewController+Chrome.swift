@@ -18,24 +18,29 @@ extension CameraLiveViewController {
         applyLiveBadgeAppearance()
     }
 
-    /// Places Back · centered LIVE · Settings inside the panel.
+    /// Places Back · centered LIVE · Settings over the panel (safe-area aware).
     func layoutTopChromeInPanel() {
         let panel = panelView.convert(panelView.bounds, to: view)
         guard panel.width > 1, panel.height > 1 else { return }
 
         let inset: CGFloat = 18
         let controlSize = Self.chromeControlSize
-        let rowY = panel.minY + inset
+        let rowY = max(panel.minY + inset, view.safeAreaInsets.top + 8)
+        let leading = max(panel.minX + inset, view.safeAreaInsets.left + 12)
+        let trailing = min(
+            panel.maxX - inset - controlSize,
+            view.bounds.maxX - view.safeAreaInsets.right - 12 - controlSize
+        )
 
         backButton.frame = CGRect(
-            x: panel.minX + inset,
+            x: leading,
             y: rowY,
             width: controlSize,
             height: controlSize
         )
 
         settingsButton.frame = CGRect(
-            x: panel.maxX - inset - controlSize,
+            x: trailing,
             y: rowY,
             width: controlSize,
             height: controlSize
@@ -68,13 +73,8 @@ extension CameraLiveViewController {
         view.bringSubviewToFront(settingsButton)
     }
 
-    /// Builds shutter track + thumb + Flip + Frame.
+    /// Builds shutter + Flip + Frame (docked outside the Display Mode panel).
     func setupCaptureMocks() {
-        shutterTrackView.translatesAutoresizingMaskIntoConstraints = true
-        view.addSubview(shutterTrackView)
-        shutterHintView.translatesAutoresizingMaskIntoConstraints = true
-        shutterTrackView.addSubview(shutterHintView)
-
         shutterButton.translatesAutoresizingMaskIntoConstraints = true
         shutterButton.accessibilityLabel = "Shutter"
         view.addSubview(shutterButton)
@@ -129,19 +129,13 @@ extension CameraLiveViewController {
         view.addSubview(frameButton)
     }
 
-    /// Places Frame · shutter track · Flip along the phone's bottom edge.
+    /// Places Frame · shutter · Flip in the outside dock (not over the preview).
     ///
-    /// Vertical: horizontal row under the panel (slide right → live). Landscape:
-    /// vertical column on the right of the panel — same physical spot when the phone
-    /// is held sideways (slide down → live). Glyphs stay upright in both modes
-    /// (Landscape Display Mode already rotates the interface).
+    /// Vertical: bottom dock under the panel. Landscape: trailing dock — the same
+    /// physical spot when the phone is held sideways.
     func layoutBottomChromeInPanel() {
         let panel = panelView.convert(panelView.bounds, to: view)
         guard panel.width > 1, panel.height > 1 else { return }
-
-        if !isShutterDragging, !isShutterSettling {
-            shutterSlideProgress = isAirPlayLive ? 1 : 0
-        }
 
         if ExternalOutputSettings.isVerticalMode {
             layoutVerticalCaptureChrome(panel: panel)
@@ -149,10 +143,6 @@ extension CameraLiveViewController {
             layoutLandscapeCaptureChrome(panel: panel)
         }
 
-        layoutShutterThumbInTrack()
-        layoutShutterHint()
-
-        view.bringSubviewToFront(shutterTrackView)
         view.bringSubviewToFront(frameButton)
         view.bringSubviewToFront(shutterButton)
         view.bringSubviewToFront(flipButton)
@@ -160,25 +150,20 @@ extension CameraLiveViewController {
         updateShutterAccessibilityHint()
     }
 
-    /// Frame · shutter · Flip in a row under the Vertical panel.
+    /// Frame · shutter · Flip in a row in the bottom dock under the Vertical panel.
     private func layoutVerticalCaptureChrome(panel: CGRect) {
         let inset: CGFloat = 20
         let controlSize = Self.chromeControlSize
-        let pad = Self.shutterTrackPadding
-        let trackSize = CGSize(
-            width: Self.shutterSize + Self.shutterTrackTravel + pad * 2,
-            height: Self.shutterSize + pad * 2
-        )
-        let rowY = panel.maxY + Self.chromeGap
-        let sideY = rowY + (trackSize.height - controlSize) / 2
+        let bottomPad = max(8, view.safeAreaInsets.bottom)
+        let rowY = view.bounds.maxY - bottomPad - Self.shutterSize
+        let sideY = rowY + (Self.shutterSize - controlSize) / 2
 
-        shutterTrackFrame = CGRect(
-            origin: CGPoint(x: panel.midX - trackSize.width / 2, y: rowY),
-            size: trackSize
+        shutterButton.frame = CGRect(
+            x: panel.midX - Self.shutterSize / 2,
+            y: rowY,
+            width: Self.shutterSize,
+            height: Self.shutterSize
         )
-        shutterTrackView.frame = shutterTrackFrame
-        shutterTrackView.layer.cornerRadius = trackSize.height / 2
-
         frameButton.frame = CGRect(
             x: panel.minX + inset,
             y: sideY,
@@ -194,26 +179,20 @@ extension CameraLiveViewController {
         flipButton.transform = .identity
     }
 
-    /// Same chrome as Vertical, rotated onto the right of the Landscape panel.
+    /// Same chrome as Vertical, in the trailing dock beside the Landscape panel.
     private func layoutLandscapeCaptureChrome(panel: CGRect) {
         let inset: CGFloat = 20
         let controlSize = Self.chromeControlSize
-        let pad = Self.shutterTrackPadding
-        // Portrait row stood on end: short side is width, travel runs vertically.
-        let trackSize = CGSize(
-            width: Self.shutterSize + pad * 2,
-            height: Self.shutterSize + Self.shutterTrackTravel + pad * 2
-        )
-        let colX = panel.maxX + Self.chromeGap
-        let sideX = colX + (trackSize.width - controlSize) / 2
+        let trailingPad = max(8, view.safeAreaInsets.right)
+        let colX = view.bounds.maxX - trailingPad - Self.shutterSize
+        let sideX = colX + (Self.shutterSize - controlSize) / 2
 
-        shutterTrackFrame = CGRect(
-            origin: CGPoint(x: colX, y: panel.midY - trackSize.height / 2),
-            size: trackSize
+        shutterButton.frame = CGRect(
+            x: colX,
+            y: panel.midY - Self.shutterSize / 2,
+            width: Self.shutterSize,
+            height: Self.shutterSize
         )
-        shutterTrackView.frame = shutterTrackFrame
-        shutterTrackView.layer.cornerRadius = trackSize.width / 2
-
         frameButton.frame = CGRect(
             x: sideX,
             y: panel.minY + inset,
@@ -227,29 +206,6 @@ extension CameraLiveViewController {
             height: controlSize
         )
         flipButton.transform = .identity
-    }
-
-    /// Positions the shutter thumb from `shutterSlideProgress` inside the track.
-    func layoutShutterThumbInTrack() {
-        let track = shutterTrackFrame
-        guard track.width > 1, track.height > 1 else { return }
-        let pad = Self.shutterTrackPadding
-        let progress = min(1, max(0, shutterSlideProgress))
-        if ExternalOutputSettings.isVerticalMode {
-            shutterButton.frame = CGRect(
-                x: track.minX + pad + Self.shutterTrackTravel * progress,
-                y: track.minY + pad,
-                width: Self.shutterSize,
-                height: Self.shutterSize
-            )
-        } else {
-            shutterButton.frame = CGRect(
-                x: track.minX + pad,
-                y: track.minY + pad + Self.shutterTrackTravel * progress,
-                width: Self.shutterSize,
-                height: Self.shutterSize
-            )
-        }
     }
 
     /// Updates LIVE badge and shutter for preview vs AirPlay-live.
@@ -295,20 +251,18 @@ extension CameraLiveViewController {
     }
 
     func updateShutterAccessibilityHint() {
-        let towardLive = ExternalOutputSettings.isVerticalMode ? "right" : "down"
-        let towardOff = ExternalOutputSettings.isVerticalMode ? "left" : "up"
         guard isAirPlayLive else {
             shutterButton.accessibilityHint =
-                "Slide \(towardLive) to go live on AirPlay."
+                "Tap the preview to go live on AirPlay."
             return
         }
         if ExternalOutputSettings.alwaysRecordWhenLive {
             shutterButton.accessibilityHint =
                 "Tap for photo. Recording starts with live. "
-                + "Slide \(towardOff) to stop live and recording."
+                + "Tap the preview to stop live and recording."
         } else {
             shutterButton.accessibilityHint =
-                "Tap for photo. Hold to record. Slide \(towardOff) to stop live."
+                "Tap for photo. Hold to record. Tap the preview to stop live."
         }
     }
 

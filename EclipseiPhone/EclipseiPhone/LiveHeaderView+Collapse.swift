@@ -49,6 +49,20 @@ extension LiveHeaderView {
         if controls.isHidden != hideControls {
             controls.isHidden = hideControls
         }
+        if let fullscreen = libraryVideoFullscreenButton {
+            fullscreen.alpha = controlsFade
+            let hideFullscreen = controlsFade <= 0.01
+            if fullscreen.isHidden != hideFullscreen {
+                fullscreen.isHidden = hideFullscreen
+            }
+        }
+        if let ribbon = slideshowRibbonButton {
+            ribbon.alpha = controlsFade
+            let hideRibbon = controlsFade <= 0.01
+            if ribbon.isHidden != hideRibbon {
+                ribbon.isHidden = hideRibbon
+            }
+        }
         gradientLayer.opacity = Float(controlsFade)
         titleLabel.alpha = max(0, 1 - progress * 2)
 

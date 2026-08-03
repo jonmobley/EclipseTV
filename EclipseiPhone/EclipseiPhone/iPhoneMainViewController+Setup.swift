@@ -175,14 +175,28 @@ extension iPhoneMainViewController {
 
         let height = audioMiniPlayer.heightAnchor.constraint(equalToConstant: 0)
         audioMiniHeightConstraint = height
-        NSLayoutConstraint.activate([
+        audioMiniPortraitConstraints = [
             audioMiniPlayer.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             audioMiniPlayer.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             audioMiniPlayer.bottomAnchor.constraint(
                 equalTo: view.safeAreaLayoutGuide.bottomAnchor
-            ),
+            )
+        ]
+        // Constants track the live preview frame — don't pin across the pager
+        // scroll view, which fights Auto Layout when content moves.
+        let dockLeading = audioMiniPlayer.leadingAnchor.constraint(
+            equalTo: view.leadingAnchor, constant: 0
+        )
+        let dockWidth = audioMiniPlayer.widthAnchor.constraint(equalToConstant: 160)
+        let dockTop = audioMiniPlayer.topAnchor.constraint(
+            equalTo: view.topAnchor, constant: 0
+        )
+        audioMiniDockLeadingConstraint = dockLeading
+        audioMiniDockWidthConstraint = dockWidth
+        audioMiniDockTopConstraint = dockTop
+        audioMiniSideBySideConstraints = [dockLeading, dockWidth, dockTop]
+        NSLayoutConstraint.activate(audioMiniPortraitConstraints + [
             height,
-
             audioMiniBubble.trailingAnchor.constraint(
                 equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16
             ),
@@ -190,6 +204,7 @@ extension iPhoneMainViewController {
                 equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -12
             )
         ])
+        isAudioMiniSideBySide = false
 
         audioPlayerObserver = NotificationCenter.default.addObserver(
             forName: AudioPlayerController.didChangeNotification,
@@ -267,7 +282,7 @@ extension iPhoneMainViewController {
         connectionManager.syncCoordinator = coordinator
     }
 
-    /// Presents the camera control surface (preview first; slide shutter for AirPlay).
+    /// Presents the camera control surface (preview first; tap preview for AirPlay).
     ///
     /// Parks the home tile on a still first so the shared preview handoff doesn't
     /// flash black; keeps the session running for a live fullscreen open.

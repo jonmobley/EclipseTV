@@ -7,18 +7,14 @@
 
 import UIKit
 
-// MARK: - Shutter (slide = live, tap = photo, hold = video)
+// MARK: - Shutter (tap stage = live, shutter tap = photo, hold = video)
 
 extension CameraLiveViewController {
 
     /// Hold duration before a press becomes a recording (seconds).
     static let shutterHoldDuration: TimeInterval = 0.35
-    /// Movement (pt) before a press counts as a slide, not a tap/hold.
-    static let shutterSlideThreshold: CGFloat = 12
-    /// Progress above this commits to live when the drag ends.
-    static let shutterLiveCommitProgress: CGFloat = 0.55
 
-    /// Wires press+drag on the shutter thumb (axis follows Display Mode).
+    /// Wires press on the shutter thumb (tap = photo, hold = record while live).
     ///
     /// Uses a zero-duration long-press rather than a pan: `UIPanGestureRecognizer`
     /// only begins after the finger moves, so stationary tap/hold never fired.
@@ -28,63 +24,48 @@ extension CameraLiveViewController {
             action: #selector(handleShutterPress(_:))
         )
         press.minimumPressDuration = 0
-        // Default allowableMovement (~10pt) would cancel before a slide completes.
         press.allowableMovement = .greatestFiniteMagnitude
         shutterButton.addGestureRecognizer(press)
     }
 
-    @objc func handleShutterPress(_ gesture: UILongPressGestureRecognizer) {
-        // Measured in `view`, which never moves — the track and thumb do.
-        // Vertical: +x → live. Landscape: +y → live (toward Flip on the right strip).
+    /// Tap the stage (outside chrome) to toggle AirPlay live.
+    @objc func handleStageTap(_ gesture: UITapGestureRecognizer) {
+        guard gesture.state == .ended else { return }
         let location = gesture.location(in: view)
+        // Chrome lives on `view` above the stage — ignore those hits.
+        if hitTestBlocksStageLiveToggle(at: location) { return }
+        toggleAirPlayLive()
+    }
+
+    /// True when the tap landed on a chrome control that owns the gesture.
+    private func hitTestBlocksStageLiveToggle(at location: CGPoint) -> Bool {
+        let blockers: [UIView] = [
+            backButton, settingsButton, shutterButton, flipButton, frameButton
+        ]
+        return blockers.contains { $0.frame.contains(location) && !$0.isHidden }
+    }
+
+    @objc func handleShutterPress(_ gesture: UILongPressGestureRecognizer) {
         switch gesture.state {
         case .began:
-            isShutterDragging = true
-            isShutterSettling = false
-            shutterDidSlide = false
             shutterDidLongPress = false
-            shutterTouchOrigin = location
-            // Pinned once so a live-state change mid-drag can't shift the thumb.
-            shutterDragBaseProgress = isAirPlayLive ? 1 : 0
-            shutterSlideAnchor = 0
             shutterHoldTimer?.invalidate()
             shutterHoldTimer = nil
             // Always-record mode owns start/stop with live; hold would fight that.
-            if isAirPlayLive, !ExternalOutputSettings.alwaysRecordWhenLive {
-                shutterHoldTimer = Timer.scheduledTimer(
-                    withTimeInterval: Self.shutterHoldDuration,
-                    repeats: false
-                ) { [weak self] _ in
-                    guard let self, !self.shutterDidSlide else { return }
-                    self.shutterDidLongPress = true
-                    self.beginShutterHoldRecord()
-                }
+            guard isAirPlayLive, !ExternalOutputSettings.alwaysRecordWhenLive else { return }
+            shutterHoldTimer = Timer.scheduledTimer(
+                withTimeInterval: Self.shutterHoldDuration,
+                repeats: false
+            ) { [weak self] _ in
+                guard let self else { return }
+                self.shutterDidLongPress = true
+                self.beginShutterHoldRecord()
             }
-
-        case .changed:
-            let axisDelta = shutterAxisDelta(from: location)
-            if !shutterDidSlide, abs(axisDelta) >= Self.shutterSlideThreshold {
-                shutterDidSlide = true
-                // Anchor where the slide was recognized so the dead zone isn't a jump.
-                shutterSlideAnchor = axisDelta
-                shutterHoldTimer?.invalidate()
-                shutterHoldTimer = nil
-                // Sliding replaces release-to-stop: finalize the movie, then the
-                // drag can still commit on/off live when the finger lifts.
-                if CameraManager.shared.isRecording {
-                    shutterDidLongPress = false
-                    finalizeRecordingIfNeeded()
-                }
-            }
-            guard shutterDidSlide else { return }
-            trackShutterThumb(toTranslation: axisDelta)
 
         case .ended, .cancelled, .failed:
             shutterHoldTimer?.invalidate()
             shutterHoldTimer = nil
-            isShutterDragging = false
             finishShutterGesture()
-            shutterDidSlide = false
             shutterDidLongPress = false
 
         default:
@@ -92,79 +73,9 @@ extension CameraLiveViewController {
         }
     }
 
-    /// Axis travel since press began (Display Mode–aware).
-    private func shutterAxisDelta(from location: CGPoint) -> CGFloat {
-        if ExternalOutputSettings.isVerticalMode {
-            return location.x - shutterTouchOrigin.x
-        }
-        return location.y - shutterTouchOrigin.y
-    }
-
-    /// Moves the thumb with the finger, re-anchoring at each rail.
-    ///
-    /// Re-anchoring keeps the thumb glued to the finger: without it, overshooting
-    /// an end banks travel that has to be paid back before the thumb moves again.
-    private func trackShutterThumb(toTranslation axisDelta: CGFloat) {
-        let travel = Self.shutterTrackTravel
-        let raw = shutterDragBaseProgress + (axisDelta - shutterSlideAnchor) / travel
-        let clamped = min(1, max(0, raw))
-        if raw != clamped {
-            shutterSlideAnchor =
-                axisDelta - (clamped - shutterDragBaseProgress) * travel
-        }
-        shutterSlideProgress = clamped
-        layoutShutterThumbInTrack()
-        layoutShutterHint()
-    }
-
-    /// Points the track chevron at the end the next slide travels toward.
-    func layoutShutterHint() {
-        let track = shutterTrackView.bounds
-        guard track.width > 1, track.height > 1 else { return }
-        let pad = Self.shutterTrackPadding
-        let size: CGFloat = 30
-        let live = isAirPlayLive
-        let vertical = ExternalOutputSettings.isVerticalMode
-        let symbol = UIImage.SymbolConfiguration(pointSize: 22, weight: .semibold)
-        let name: String
-        if vertical {
-            name = live ? "chevron.compact.left" : "chevron.compact.right"
-        } else {
-            name = live ? "chevron.compact.up" : "chevron.compact.down"
-        }
-        shutterHintView.image = UIImage(systemName: name, withConfiguration: symbol)
-        // Idle: red cue toward live. Live: white cue toward stop.
-        shutterHintView.tintColor = live ? .white : .systemRed
-        if vertical {
-            shutterHintView.frame = CGRect(
-                x: live ? track.minX + pad : track.maxX - pad - size,
-                y: track.midY - size / 2,
-                width: size,
-                height: size
-            )
-        } else {
-            shutterHintView.frame = CGRect(
-                x: track.midX - size / 2,
-                y: live ? track.minY + pad : track.maxY - pad - size,
-                width: size,
-                height: size
-            )
-        }
-        // The thumb is sliding over the chevron's side of the track — get out of the way.
-        shutterHintView.alpha = isShutterDragging ? 0 : (live ? 0.5 : 0.85)
-    }
-
-    /// Commits slide → live/stop, or tap → photo / hold → stop record.
+    /// Tap → photo while live; hold release → stop record. Idle: no shutter action.
     private func finishShutterGesture() {
-        if shutterDidSlide {
-            commitShutterSlide()
-            return
-        }
-        guard isAirPlayLive else {
-            // Preview: no tap action — must slide toward live.
-            snapShutterProgress(to: 0, animated: true)
-            return
-        }
+        guard isAirPlayLive else { return }
         if shutterDidLongPress {
             endShutterHoldRecord()
         } else {
@@ -172,67 +83,32 @@ extension CameraLiveViewController {
         }
     }
 
-    private func commitShutterSlide() {
-        let wantLive = shutterSlideProgress >= Self.shutterLiveCommitProgress
+    /// Goes live on AirPlay, or stops live (and finishes any movie first).
+    func toggleAirPlayLive() {
         let mgr = ExternalDisplayManager.shared
-        // Before handoff/chrome layout — those would otherwise snap progress to 0/1.
-        isShutterSettling = true
-        if wantLive {
-            if !mgr.isCameraModeActive {
-                // Mirror first — AirPlay's attach steals the one preview connection.
-                prepareLivePreviewHandoffToAirPlay()
-                mgr.presentCamera()
-                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-            } else if mgr.isCameraParkedOnLogo {
-                mgr.resumeCameraFromLogoPark()
-            }
+        if mgr.isCameraParkedOnLogo {
+            mgr.resumeCameraFromLogoPark()
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
             refreshLiveChrome()
-            snapShutterProgress(to: 1, animated: true)
             startAlwaysLiveRecordingIfNeeded()
             return
         }
-
-        guard mgr.isCameraModeActive else {
-            refreshLiveChrome()
-            snapShutterProgress(to: 0, animated: true)
-            return
-        }
-
-        // Off-live: finish any movie first so Photos gets a complete file, then leave.
-        finalizeRecordingIfNeeded { [weak self] in
-            guard let self else { return }
-            ExternalDisplayManager.shared.stopCameraAndApplyCloseDestination()
-            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-            self.refreshLiveChrome()
-            self.snapShutterProgress(to: 0, animated: true)
-        }
-    }
-
-    private func snapShutterProgress(to value: CGFloat, animated: Bool) {
-        shutterSlideProgress = value
-        guard animated else {
-            isShutterSettling = false
-            layoutShutterThumbInTrack()
-            layoutShutterHint()
-            return
-        }
-        isShutterSettling = true
-        // Fades the chevron back in at its new end as the thumb travels.
-        shutterHintView.alpha = 0
-        UIView.animate(
-            withDuration: 0.28,
-            delay: 0,
-            usingSpringWithDamping: 0.86,
-            initialSpringVelocity: 0,
-            options: [.beginFromCurrentState, .allowUserInteraction],
-            animations: {
-                self.layoutShutterThumbInTrack()
-                self.layoutShutterHint()
-            },
-            completion: { [weak self] _ in
-                self?.isShutterSettling = false
+        if mgr.isCameraModeActive {
+            finalizeRecordingIfNeeded { [weak self] in
+                guard let self else { return }
+                ExternalDisplayManager.shared.stopCameraAndApplyCloseDestination()
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                self.refreshLiveChrome()
             }
-        )
+            return
+        }
+
+        // Mirror first — AirPlay's attach steals the one preview connection.
+        prepareLivePreviewHandoffToAirPlay()
+        mgr.presentCamera()
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        refreshLiveChrome()
+        startAlwaysLiveRecordingIfNeeded()
     }
 
     /// Live tap: blink the panel and save a still to Photos.
@@ -312,7 +188,7 @@ extension CameraLiveViewController {
 
     /// Stops an in-flight movie, keeps it for in-app review, then runs `completion`.
     ///
-    /// Used by release-to-stop, slide-while-recording, slide-off-live, and Back.
+    /// Used by release-to-stop, stop-live, and Back.
     func finalizeRecordingIfNeeded(completion: (() -> Void)? = nil) {
         guard CameraManager.shared.isRecording else {
             refreshLiveChrome()

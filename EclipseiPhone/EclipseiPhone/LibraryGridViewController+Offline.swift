@@ -49,7 +49,7 @@ extension LibraryGridViewController {
     /// Selects an item as live without the Eclipse TV app (AirPlay remember / push).
     ///
     /// Only used when `hasLiveOutputDestination` is true. With no display and no TV
-    /// link, taps open phone Preview instead — see `presentMedia`.
+    /// link, video taps use `presentPhoneLiveVideo` and stills open Preview.
     func presentOfflineLive(for item: LibraryItemDTO) {
         if item.isVideo {
             AudioPlayerController.shared.stop()
@@ -65,15 +65,67 @@ extension LibraryGridViewController {
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 
-    /// Fullscreen swipeable gallery of local full-res copies (⋯ Preview, or tap when locked).
+    /// Marks a local video live and plays it in the phone hero (no external display).
+    func presentPhoneLiveVideo(_ item: LibraryItemDTO) {
+        guard item.isVideo,
+              LocalMediaStore.shared.localURL(forId: item.id) != nil else {
+            presentLocalPreview(
+                for: item,
+                in: openShowItems.isEmpty ? displayItems : openShowItems
+            )
+            return
+        }
+        SlideshowPlaybackController.shared.stop()
+        AudioPlayerController.shared.stop()
+        let startAt = VideoResumeStore.shared.position(for: item.id) ?? 0
+        VideoResumeStore.shared.clear(for: item.id)
+        isBlackSelected = false
+        isLogoSelected = false
+        isScreensaverSelected = false
+        store.updateCurrentId(item.id)
+        phoneLiveVideoStartAt = startAt
+        let source = PresentationSource.forLibraryItem(
+            item, thumbnail: store.thumbnail(for: item.id), startAt: startAt
+        )
+        AudioAmbientPolicy.applyYieldIfNeeded(for: source)
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        updateHeroVisibility()
+        reloadLibraryGrid()
+        refreshLiveHeader()
+    }
+
+    /// Fullscreen Preview of a local full-res copy (⋯ Preview, or tap when locked).
+    ///
+    /// Videos use system `AVPlayerViewController` chrome; images use the swipe gallery.
     func presentLocalPreview(for item: LibraryItemDTO) {
         presentLocalPreview(for: item, in: displayItems)
     }
 
-    /// Presents a swipeable preview gallery over `neighbors`, starting at `item`.
+    /// Presents Preview for `item` among `neighbors` (images swipe; video is modal).
     func presentLocalPreview(for item: LibraryItemDTO, in neighbors: [LibraryItemDTO]) {
-        guard !isAlreadyOpen(LocalMediaPreviewViewController.self) else { return }
-        let previewable = LocalMediaPreviewViewController.previewableItems(from: neighbors)
+        guard let url = LocalMediaStore.shared.localURL(forId: item.id) else {
+            let alert = UIAlertController(
+                title: "Can't Preview",
+                message: "No local copy on this phone. Add the item from Photos first.",
+                preferredStyle: .alert
+            )
+            alert.addAction(UIAlertAction(title: "OK", style: .default))
+            present(alert, animated: true)
+            return
+        }
+
+        if item.isVideo {
+            presentLocalVideoPreview(
+                fileURL: url,
+                isMuted: item.isMuted ?? false,
+                isLooping: item.isLooping ?? false
+            )
+            return
+        }
+
+        guard !isAlreadyOpen(LocalMediaPreviewViewController.self),
+              !isAlreadyOpen(LocalVideoPreviewViewController.self) else { return }
+        let previewable = LocalMediaPreviewViewController.imagePreviewableItems(from: neighbors)
         guard let index = previewable.firstIndex(where: { $0.id == item.id }) else {
             let alert = UIAlertController(
                 title: "Can't Preview",
@@ -87,6 +139,30 @@ extension LibraryGridViewController {
 
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         let preview = LocalMediaPreviewViewController(items: previewable, startIndex: index)
+        present(preview, animated: true)
+    }
+
+    /// Modal system-player Preview for a local video file.
+    func presentLocalVideoPreview(
+        fileURL: URL,
+        isMuted: Bool = false,
+        isLooping: Bool = false,
+        startAt: TimeInterval = 0,
+        onDismiss: ((TimeInterval) -> Void)? = nil
+    ) {
+        guard !isAlreadyOpen(LocalVideoPreviewViewController.self),
+              !isAlreadyOpen(LocalMediaPreviewViewController.self) else { return }
+        AudioAmbientPolicy.applyYieldIfNeeded(
+            for: PresentationSource.video(fileURL, isLooping: isLooping, isMuted: isMuted)
+        )
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        let preview = LocalVideoPreviewViewController(
+            fileURL: fileURL,
+            isMuted: isMuted,
+            isLooping: isLooping,
+            startAt: startAt
+        )
+        preview.onDismiss = onDismiss
         present(preview, animated: true)
     }
 
@@ -120,9 +196,15 @@ extension LibraryGridViewController {
 
     /// Single-item fullscreen Preview (Show tools; not a gallery swipe).
     func presentPhonePreview(id: String, fileURL: URL, isVideo: Bool) {
-        guard !isAlreadyOpen(LocalMediaPreviewViewController.self) else { return }
+        if isVideo {
+            // Screensaver / tool videos loop like the live surface.
+            presentLocalVideoPreview(fileURL: fileURL, isLooping: true)
+            return
+        }
+        guard !isAlreadyOpen(LocalMediaPreviewViewController.self),
+              !isAlreadyOpen(LocalVideoPreviewViewController.self) else { return }
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        let item = LocalMediaPreviewItem(id: id, fileURL: fileURL, isVideo: isVideo)
+        let item = LocalMediaPreviewItem(id: id, fileURL: fileURL, isVideo: false)
         present(
             LocalMediaPreviewViewController(items: [item], startIndex: 0),
             animated: true

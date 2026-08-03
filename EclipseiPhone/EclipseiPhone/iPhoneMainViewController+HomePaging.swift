@@ -467,6 +467,7 @@ extension iPhoneMainViewController {
             self.updateHomeSplitLayoutIfNeeded()
             self.libraryViewController.collectionView.collectionViewLayout
                 .invalidateLayout()
+            self.syncAudioMiniDockingIfNeeded()
         }
         coordinator.animate(alongsideTransition: { _ in
             refresh()

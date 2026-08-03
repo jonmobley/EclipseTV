@@ -51,7 +51,7 @@ final class SettingsCameraCloseViewController: UITableViewController {
         _ tableView: UITableView,
         titleForFooterInSection section: Int
     ) -> String? {
-        "When you slide the shutter off live, switch AirPlay to Background, Black, or "
+        "When you tap the preview off live, switch AirPlay to Background, Black, or "
             + "whatever was live before the camera."
     }
 

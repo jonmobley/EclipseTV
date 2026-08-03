@@ -391,13 +391,8 @@ extension iPhoneMainViewController: ImagePreviewDelegate {
     func imagePreview(_ controller: ImagePreviewViewController, didConfirm image: UIImage) {
         controller.dismiss(animated: true) { [weak self] in
             guard let self = self else { return }
-            if MediaValidator.imageNeedsDownscaling(image) {
-                if let description = MediaValidator.getDownscalingDescription(for: image) {
-                    self.showTemporaryStatus(description, duration: 4.0)
-                }
-            }
-
-            // Downscale if needed and send with default fit-to-fill centered.
+            // Downscale large stills silently — no user-facing “optimized for Apple TV”
+            // toast; the resize is an implementation detail of the transfer pipeline.
             let optimizedImage = MediaValidator.downscaleImage(image)
             self.sendImageToAppleTV(optimizedImage)
         }

@@ -158,13 +158,18 @@ extension LibraryGridViewController {
     }
 
     /// Cross-fades the grid so tiles ease into (and out of) the wiggle.
+    ///
+    /// Uses `reloadLibraryGrid` so visible thumbs stay pinned — a bare
+    /// `reloadData()` after an `NSCache` purge blanked every media tile, and
+    /// `didUpdateThumbnailFor` used to no-op while arranging so they never
+    /// came back until Done.
     private func reloadForArrangeChange() {
         UIView.transition(
             with: collectionView,
             duration: 0.2,
             options: .transitionCrossDissolve
         ) {
-            self.collectionView.reloadData()
+            self.reloadLibraryGrid()
         }
     }
 

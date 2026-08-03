@@ -6,10 +6,12 @@
 //
 
 // LiveHeaderView.swift
+import AVFoundation
 import UIKit
 
 /// Large hero banner pinned to the top of the Library screen showing whatever is
-/// currently live on the Apple TV. When nothing is live it falls back to a neutral
+/// currently live on the Apple TV / AirPlay, or phone-local library video when no
+/// external display is connected. When nothing is live it falls back to a neutral
 /// placeholder so the layout stays fixed while the grid scrolls beneath it.
 final class LiveHeaderView: UIView {
 
@@ -31,6 +33,17 @@ final class LiveHeaderView: UIView {
     var webPreviewPageId: UUID?
     /// In-hero muted Screensaver loop (phone preview; external has its own player).
     var screensaverPreview: SeamlessLoopPlayerView?
+    /// In-hero library video (phone-only live; cleared when AirPlay owns playback).
+    var libraryVideoHost: UIView?
+    var libraryVideoPlayer: AVPlayer?
+    var libraryVideoLayer: AVPlayerLayer?
+    var libraryVideoItemId: String?
+    var libraryVideoIsLooping = false
+    var libraryVideoEndObserver: NSObjectProtocol?
+    var libraryVideoTimeObserver: Any?
+    var libraryVideoFullscreenButton: UIButton?
+    /// Toggles the live slide ribbon while a Slideshow owns the hero.
+    var slideshowRibbonButton: UIButton?
 
     /// Identity of the last applied live content; used to skip no-op crossfades.
     private var presentedContentKey: String?
@@ -54,8 +67,12 @@ final class LiveHeaderView: UIView {
     var onTogglePlayPause: (() -> Void)?
     var onSkip: ((Double) -> Void)?
     var onSeek: ((Double) -> Void)?
+    /// Fullscreen Preview for the phone-local library video.
+    var onRequestFullscreen: (() -> Void)?
     /// Swipe on the hero while a Slideshow is live: `+1` next, `-1` previous.
     var onSlideshowSwipe: ((Int) -> Void)?
+    /// Toggles `showRibbonWhenLive` for the active Slideshow from the hero.
+    var onToggleSlideshowRibbon: (() -> Void)?
     /// When true, the expanded hero accepts left/right swipes (and stays tappable).
     var allowsSlideshowBrowse = false {
         didSet {
@@ -167,6 +184,7 @@ final class LiveHeaderView: UIView {
         super.layoutSubviews()
         gradientLayer.frame = bounds
         applyBadgeCounterScale()
+        layoutLibraryVideoPreviewIfNeeded()
         // Keep the float-mode shadow path matched to the current bounds.
         if layer.shadowOpacity > 0, bounds.width > 1, bounds.height > 1 {
             layer.shadowPath = UIBezierPath(
@@ -179,10 +197,22 @@ final class LiveHeaderView: UIView {
     // MARK: - Configuration
 
     /// Shows the live item, or a placeholder when `item` is nil (nothing live).
-    func configure(with item: LibraryItemDTO?, thumbnail: UIImage?, isOnline: Bool) {
+    ///
+    /// - Parameter showsLocalTransport: When true (phone-only library video), show
+    ///   play/pause chrome even without an Eclipse TV Multipeer link.
+    func configure(
+        with item: LibraryItemDTO?,
+        thumbnail: UIImage?,
+        isOnline: Bool,
+        showsLocalTransport: Bool = false
+    ) {
         clearWebPreview(parking: true)
         clearScreensaverPreview()
+        if !showsLocalTransport {
+            clearLibraryVideoPreview()
+        }
         guard let item = item else {
+            clearLibraryVideoPreview()
             applyContent(key: "placeholder") {
                 self.showPlaceholder(message: "Connect to HDMI or AirPlay")
             }
@@ -190,7 +220,7 @@ final class LiveHeaderView: UIView {
         }
 
         let thumbToken = thumbnail.map { "\(ObjectIdentifier($0))" } ?? "nil"
-        let key = "media:\(item.id):\(thumbToken):\(isOnline)"
+        let key = "media:\(item.id):\(thumbToken):\(isOnline):local\(showsLocalTransport)"
         applyContent(key: key) {
             self.backgroundColor = .secondarySystemBackground
             // The hero card is the output panel's aspect, so frame the art the way the
@@ -208,7 +238,7 @@ final class LiveHeaderView: UIView {
 
             // LIVE badge; video transport uses the bottom gradient. Never show
             // image titles on the preview — art alone is enough.
-            let showControls = item.isVideo && isOnline
+            let showControls = item.isVideo && (isOnline || showsLocalTransport)
             self.wantsPlaybackControls = showControls
             self.gradientLayer.isHidden = !showControls
             self.liveBadge.isHidden = false
@@ -219,6 +249,9 @@ final class LiveHeaderView: UIView {
             self.accessibilityLabel = self.isCompactPresentation
                 ? "Live, \(item.name), tap to expand"
                 : "Live, \(item.name)"
+            if showsLocalTransport {
+                self.setStaticPreviewHidden(true)
+            }
         }
     }
 
@@ -237,6 +270,7 @@ final class LiveHeaderView: UIView {
         if !keepScreensaverPreview {
             clearScreensaverPreview()
         }
+        clearLibraryVideoPreview()
         let thumbToken = thumbnail.map { "\(ObjectIdentifier($0))" } ?? "nil"
         let key = "overlay:\(title):\(systemImage ?? ""):\(thumbToken):web\(keepWebPreview):ss\(keepScreensaverPreview)"
         applyContent(key: key) {
@@ -315,6 +349,7 @@ final class LiveHeaderView: UIView {
     func configureSelectToGoLive() {
         clearWebPreview(parking: true)
         clearScreensaverPreview()
+        clearLibraryVideoPreview()
         applyContent(key: "selectToGoLive") {
             self.showPlaceholder(message: "Select item to go live")
         }
@@ -324,6 +359,7 @@ final class LiveHeaderView: UIView {
     private func showPlaceholder(message: String) {
         clearWebPreview(parking: true)
         clearScreensaverPreview()
+        clearLibraryVideoPreview()
         backgroundColor = .secondarySystemBackground
         imageView.image = nil
         imageView.isHidden = true

@@ -62,18 +62,51 @@ final class SlideshowDetailViewController: UITableViewController {
             name: SlideshowStore.didChangeNotification,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(thumbnailDidChange(_:)),
+            name: TVLibraryStore.thumbnailDidChangeNotification,
+            object: nil
+        )
     }
 
     deinit {
         NotificationCenter.default.removeObserver(self)
     }
 
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        pinSlideThumbnails()
+        tableView.reloadData()
+    }
+
     @objc private func reload() {
         title = slideshow?.name ?? "Slideshow"
+        pinSlideThumbnails()
         tableView.reloadData()
         if slideshow == nil {
             navigationController?.popViewController(animated: true)
         }
+    }
+
+    /// Batch import can purge `NSCache` before this screen paints; reload when a
+    /// slide's thumb lands from disk / LocalMedia.
+    @objc private func thumbnailDidChange(_ note: Notification) {
+        guard let id = note.userInfo?[TVLibraryStore.thumbnailIdKey] as? String,
+              let row = slides.firstIndex(where: { $0.id == id }) else { return }
+        pinSlideThumbnails()
+        let path = IndexPath(row: row, section: Section.slides.rawValue)
+        guard tableView.numberOfSections > path.section,
+              tableView.numberOfRows(inSection: path.section) > row else {
+            tableView.reloadData()
+            return
+        }
+        tableView.reloadRows(at: [path], with: .none)
+    }
+
+    /// Keeps slide previews pinned while this editor is on screen.
+    private func pinSlideThumbnails() {
+        TVLibraryStore.shared.setVisibleThumbnailIds(Set(slides.map(\.id)))
     }
 
     @objc private func renameTapped() {

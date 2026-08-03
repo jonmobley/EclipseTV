@@ -535,9 +535,17 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             return
         }
 
-        // No AirPlay / Eclipse TV: phone Preview only — don't mark live.
+        // No AirPlay / Eclipse TV: videos play in the phone hero; stills open Preview.
         if !hasLiveOutputDestination {
-            presentLocalPreview(for: item, in: openShowItems.isEmpty ? displayItems : openShowItems)
+            if item.isVideo,
+               LocalMediaStore.shared.localURL(forId: item.id) != nil {
+                presentPhoneLiveVideo(item)
+            } else {
+                presentLocalPreview(
+                    for: item,
+                    in: openShowItems.isEmpty ? displayItems : openShowItems
+                )
+            }
             return
         }
 

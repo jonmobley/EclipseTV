@@ -264,13 +264,14 @@ extension LibraryGridViewController {
         notifySelectChrome()
     }
 
+    /// Cross-fades into/out of select mode with thumbnail pins held warm.
     private func reloadForSelectChange() {
         UIView.transition(
             with: collectionView,
             duration: 0.2,
             options: .transitionCrossDissolve
         ) {
-            self.collectionView.reloadData()
+            self.reloadLibraryGrid()
         }
     }
 

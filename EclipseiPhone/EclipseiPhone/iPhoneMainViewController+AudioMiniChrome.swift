@@ -231,7 +231,53 @@ extension iPhoneMainViewController {
     }
 
     private func applyMiniPlayerBottomInset(_ height: CGFloat) {
-        libraryViewController.miniPlayerBottomInset = height
+        syncAudioMiniDockingIfNeeded()
+        applyDockedMiniPlayerInsets(height: height)
+    }
+
+    /// Pins the mini bar under the landscape live preview (same width), or restores
+    /// the full-width footer when stacked chrome is active.
+    @discardableResult
+    func syncAudioMiniDockingIfNeeded() -> Bool {
+        let docked = libraryViewController.isSideBySideChrome
+        let axisChanged = docked != isAudioMiniSideBySide
+        if axisChanged {
+            isAudioMiniSideBySide = docked
+            if docked {
+                NSLayoutConstraint.deactivate(audioMiniPortraitConstraints)
+                NSLayoutConstraint.activate(audioMiniSideBySideConstraints)
+            } else {
+                NSLayoutConstraint.deactivate(audioMiniSideBySideConstraints)
+                NSLayoutConstraint.activate(audioMiniPortraitConstraints)
+            }
+            let height = audioMiniPlayer.isHidden
+                ? 0
+                : audioMiniHeightConstraint?.constant ?? 0
+            applyDockedMiniPlayerInsets(height: height)
+        }
+        if docked {
+            updateDockedMiniPlayerFrame()
+        }
+        return axisChanged
+    }
+
+    /// Matches the docked bar to the live preview’s width and places it just under.
+    private func updateDockedMiniPlayerFrame() {
+        let hero = libraryViewController.liveHeader
+        guard !hero.isHidden, hero.bounds.width > 1 else { return }
+        let frame = hero.convert(hero.bounds, to: view)
+        audioMiniDockLeadingConstraint?.constant = frame.minX
+        audioMiniDockWidthConstraint?.constant = frame.width
+        audioMiniDockTopConstraint?.constant = frame.maxY + 12
+    }
+
+    /// Grid footer inset vs. preview-docked reserve, depending on chrome axis.
+    private func applyDockedMiniPlayerInsets(height: CGFloat) {
+        let docked = isAudioMiniSideBySide
+        // Docked under the preview: no footer inset on the grid; hero sizing
+        // subtracts `sideBySideMiniPlayerHeight` instead.
+        libraryViewController.sideBySideMiniPlayerHeight = docked ? height : 0
+        libraryViewController.miniPlayerBottomInset = docked ? 0 : height
         audioLibraryViewController.miniPlayerBottomInset = height
     }
 
