@@ -686,22 +686,13 @@ extension iPhoneMainViewController {
     }
 
     func sendImageToAppleTV(_ image: UIImage) {
-        // Show processing UI if image is large
+        // Large stills encode off the main thread; no status toast — add is local-first
+        // and Multipeer progress (when linked) already surfaces via transfer UI.
         let largestSide = max(image.size.width, image.size.height)
         let isLargeImage = largestSide > 3840
-
-        if isLargeImage {
-            DispatchQueue.main.async {
-                self.statusLabel.text = "Processing image..."
-                self.statusLabel.alpha = 1.0
-            }
-        }
-
-        // Process image on background queue for large images
         let processQueue = isLargeImage ? DispatchQueue.global(qos: .userInitiated) : DispatchQueue.main
 
         processQueue.async {
-            // Save image to a temporary file
             let tempDir = FileManager.default.temporaryDirectory
             let fileName = "temp_image_\(UUID().uuidString).jpg"
             let fileURL = tempDir.appendingPathComponent(fileName)
@@ -725,9 +716,6 @@ extension iPhoneMainViewController {
             }
 
             DispatchQueue.main.async {
-                if isLargeImage {
-                    self.statusLabel.text = "Sending optimized image..."
-                }
                 self.addMedia(localURL: fileURL, isVideo: false, thumbnail: image, duration: 0)
             }
         }

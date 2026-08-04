@@ -201,16 +201,12 @@ extension iPhoneMainViewController: PHPickerViewControllerDelegate {
     }
 
     private func handlePickedVideo(_ provider: NSItemProvider) {
-        statusLabel.text = "Loading video..."
-        statusLabel.alpha = 1.0
-
         // PHPicker provides the file in a temporary location that is removed when the
         // completion returns, so copy it into our sandbox inside the callback.
         provider.loadFileRepresentation(forTypeIdentifier: UTType.movie.identifier) { [weak self] url, _ in
             guard let self = self else { return }
             guard let url = url, let localVideoURL = self.copyPickedVideoToSandbox(url) else {
                 DispatchQueue.main.async {
-                    self.statusLabel.alpha = 0
                     self.showAlert(title: "Video Error", message: "Could not access the selected video. Please try again.")
                 }
                 return
@@ -219,13 +215,10 @@ extension iPhoneMainViewController: PHPickerViewControllerDelegate {
             Task {
                 let validationResult = await MediaValidator.validateVideo(at: localVideoURL)
                 await MainActor.run {
-                    self.statusLabel.text = "Validating video..."
                     switch validationResult {
                     case .valid:
-                        self.statusLabel.alpha = 0
                         self.showVideoThumbnailPreview(for: localVideoURL)
                     case .invalid(let reason):
-                        self.statusLabel.alpha = 0
                         self.cleanupTempFile(at: localVideoURL)
                         self.showAlert(title: "Video Rejected", message: reason)
                     }
@@ -320,7 +313,6 @@ extension iPhoneMainViewController: AspectCropDelegate {
             return
         }
 
-        showTemporaryStatus("Cropping video…", duration: 60)
         Task { @MainActor in
             guard let videoSize = await MediaAspect.videoDisplaySize(at: sourceURL) else {
                 self.showTemporaryStatus("Couldn't crop that video. Try another.")
@@ -438,17 +430,14 @@ extension iPhoneMainViewController: VideoThumbnailPreviewDelegate {
             return
         }
 
-        showTemporaryStatus("Preparing crop…", duration: 30)
         Task { @MainActor in
             let size = await MediaAspect.videoDisplaySize(at: videoURL)
             guard let size, !MediaAspect.matches(size, target: MediaAspect.vertical) else {
-                self.statusLabel.alpha = 0
                 self.finishVideoAdd(videoURL: videoURL, thumbnail: thumbnail)
                 return
             }
 
             let frame = await VideoCropExporter.previewFrame(at: videoURL) ?? thumbnail
-            self.statusLabel.alpha = 0
             self.pendingVideoCropURL = videoURL
             self.pendingVideoThumbnail = thumbnail
             self.pendingVideoCropPreviewSize = MediaAspect.normalized(frame).size
