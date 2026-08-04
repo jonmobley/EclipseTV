@@ -51,6 +51,7 @@ final class HomeShowTileCell: UICollectionViewCell {
     /// Configures a Show tile with optional cover and more menu.
     ///
     /// When `thumbnail` is nil, a stable gradient derived from `showId` fills the card.
+    /// Covers always aspect-fill the square tile (crop), including landscape video posters.
     func configureShow(
         showId: UUID,
         title: String,
@@ -61,12 +62,18 @@ final class HomeShowTileCell: UICollectionViewCell {
     ) {
         titleLabel.text = title
         subtitleLabel.text = subtitle
+        // Re-assert on every bind — recycled cells must never keep a fit/letterbox mode.
+        imageView.contentMode = .scaleAspectFill
+        imageView.clipsToBounds = true
         if let thumbnail {
-            imageView.image = thumbnail
+            // Landscape video posters are wider than the square tile; crop to fill
+            // so Home never shows letterbox bars above/below the cover.
+            imageView.image = MediaAspect.centerCroppedToSquare(thumbnail)
             imageView.isHidden = false
             placeholderGradient.isHidden = true
             scrimView.isHidden = false
         } else {
+            imageView.image = nil
             imageView.isHidden = true
             placeholderGradient.colors = ShowCoverGradient.colors(for: showId)
             placeholderGradient.isHidden = false
