@@ -1,17 +1,25 @@
 # Eclipse - Apple TV & iPhone Media System
 
-A dual-platform media system that turns an Apple TV into a fullscreen digital frame and uses the iPhone as a companion remote: send media to the TV, browse and control the TV's library, view read-only cloud albums, and present media on an AirPlay display.
+A dual-platform media system: the iPhone curates **Shows** and drives the big screen (AirPlay and/or the Eclipse Apple TV app). The phone is the operator; the TV is the audience canvas.
 
 ![Eclipse Logo](EclipseAppleTV/Images/eclipse-qrcode.png)
 
 ## 🌟 Overview
 
-Eclipse consists of two companion apps that work together to provide a premium media viewing experience:
+Eclipse is a companion pair:
 
-- **🍎 Eclipse Apple TV**: Fullscreen media display, library management, and read-only cloud albums
-- **📱 Eclipse iPhone**: Companion remote that sends media, mirrors and controls the TV library, browses cloud albums, and drives an AirPlay display
+- **📱 Eclipse iPhone** — Curate Shows, go live on AirPlay, optionally link the Eclipse Apple TV app, ambient music, live camera
+- **🍎 Eclipse Apple TV** — Fullscreen library display + Multipeer receive/control; optional read-only hosted cloud albums
 
-The Apple TV draws content from three sources: bundled samples (first launch only), a local library sent and managed from the iPhone, and read-only cloud albums synced from a hosted account code.
+### Sync planes (one clear story)
+
+| Plane | What it syncs | Path | Notes |
+|-------|---------------|------|--------|
+| **1. Multipeer (primary for TV)** | Imported photos/videos → TV library; play/delete/reorder/playback | Local network, encrypted | Captures never fan out to Apple TV |
+| **2. CloudKit Eclipse Sync** | Shows, membership, captures across **iPhones** (same Apple ID / Share) | iCloud | Apple TV does **not** participate (Phase 1) |
+| **3. HTTPS remote albums** | Read-only hosted albums via 6-digit code | `aircamtv.com` | Separate from Shows; optional on TV + phone browser |
+
+**Primary user loop:** Open a Show → tap media/tools → present on AirPlay (always) and/or push/control the Eclipse TV library when linked.
 
 ## 🚀 Key Features
 
@@ -24,14 +32,14 @@ The Apple TV draws content from three sources: bundled samples (first launch onl
 - **Smart Caching**: Intelligent thumbnail and video caching for smooth performance
 - **Apple TV Remote Optimized**: Controls designed for the Siri Remote
 
-### 📱 iPhone App  
-- **Media Selection**: Easy photo and video selection from your library, with validation and custom video thumbnails
-- **Wireless Transfer**: Encrypted peer-to-peer media sharing with real-time progress and cancellation
-- **Library Mirroring & Control**: Browse the TV's live library; make items live, delete, reorder, and control video playback
-- **Multi-TV Support**: Remembers every Apple TV connected, with per-TV cached libraries and optional keep-all-in-sync
-- **Remote Albums**: Browse cloud albums by account code and push the code to the TV
-- **AirPlay Presentation**: Present the selected item fullscreen on a mirrored Apple TV while the phone stays interactive
-- **Auto-discovery**: Automatic Apple TV detection with offline/pause mode
+### 📱 iPhone App
+- **Shows**: Named presentation collections (media, screensaver/logo/camera tools, websites, PDFs, slideshows)
+- **AirPlay Presentation**: App-owned external canvas while the phone stays interactive
+- **EclipseTV Link**: Encrypted Multipeer send + library mirror/control; multi-TV optional keep-in-sync
+- **Live Camera**: Phone camera as a live AirPlay source; in-app captures stay on the phone
+- **Ambient Music**: Local playlists that yield (pause) to audible video/web media
+- **Eclipse Sync (CloudKit)**: Multi-iPhone Shows/captures; Share Show (TV out of CloudKit)
+- **Remote Albums**: Browse hosted albums by account code; push code to the TV when linked
 
 ## 🎬 Supported Formats
 
@@ -86,11 +94,11 @@ open EclipseiPhone.xcodeproj
 ## 🎮 Usage Guide
 
 ### Getting Started
-1. **Launch Eclipse on Apple TV** first
-2. **Open Eclipse iPhone app** on your iPhone
-3. **Wait for automatic connection** (usually 2-5 seconds)
-4. **Add media** on the iPhone (the `+` button) to send it to the TV, or **set up remote albums** with an account code
-5. **Browse and control** the TV library from the iPhone, and **enjoy fullscreen viewing** with the Siri Remote
+1. **Open Eclipse on iPhone** — create or open a Show
+2. **Connect AirPlay** to an Apple TV (or wired display) for the presentation canvas
+3. **Optional:** Launch Eclipse on Apple TV and link with the pairing code for Multipeer library sync/control
+4. **Add media** with `+` inside a Show; tap a tile to go live
+5. **Optional:** Share Shows via iCloud (Eclipse Sync), or browse hosted remote albums by account code
 
 ### Apple TV Controls
 | Control | Action |
@@ -159,11 +167,11 @@ Views/
 └── MediaValidator.swift               # File validation + image downscaling
 ```
 
-### Networking
-- **iPhone ↔ TV**: MultipeerConnectivity (service type `eclipse-share`, Bonjour discovery, required encryption, auto-reconnection)
-- **Control protocol**: JSON `EclipseShareEnvelope` messages for play/delete/move/reorder/video-settings/playback/account
-- **Cloud albums**: HTTPS manifest + media fetch from the hosted account (`aircamtv.com`)
-- **Realtime updates**: The TV subscribes to Supabase Realtime to re-sync albums when they change on the server
+### Networking / sync
+- **Multipeer (TV library)**: service type `eclipse-share`, required encryption; `EclipseShareEnvelope` for play/delete/move/reorder/video-settings/playback/account
+- **CloudKit (iPhone Shows)**: `CKSyncEngine` via `EclipseSyncController`; Apple TV excluded (`EclipseSyncTVPolicy`)
+- **HTTPS remote albums**: manifest + media from `aircamtv.com`; TV may use Supabase Realtime for album refresh
+- These three planes are independent — do not treat CloudKit as a substitute for Multipeer TV media
 
 ## 🔧 Development
 

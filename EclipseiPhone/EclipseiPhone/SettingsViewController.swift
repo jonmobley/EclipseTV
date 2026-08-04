@@ -8,6 +8,7 @@
 import UIKit
 
 /// Companion settings root: drill into display, transition, camera, and EclipseTV.
+/// When a Show is open, a top section hosts Arrange / Rename / Delete.
 final class SettingsViewController: UITableViewController {
 
     /// Multipeer link state for the Eclipse TV App section.
@@ -27,21 +28,58 @@ final class SettingsViewController: UITableViewController {
     var onStopConnecting: (() -> Void)?
     /// Invoked when a known TV is chosen (switch library / reconnect).
     var onSelectTV: ((String) -> Void)?
-    /// Invoked when Join Presentation is chosen (host should dismiss then open Join).
-    var onJoinPresentation: (() -> Void)?
+    /// Invoked when Enter Share Code is chosen (host dismisses then prompts for code).
+    var onEnterShareCode: (() -> Void)?
+
+    /// Open Show name when Settings should offer Edit Show; `nil` on Home.
+    var openShowName: String?
+    /// `false` when Arrange needs at least two media items.
+    var canArrangeShow = false
+    var onArrangeShow: (() -> Void)?
+    var onRenameShow: (() -> Void)?
+    var onShareShow: (() -> Void)?
+    var onDeleteShow: (() -> Void)?
+
     /// Current Multipeer link state; host updates via `setConnectionState(_:)`.
     private(set) var connectionState: ConnectionDisplayState = .paused
 
-    private enum Section: Int, CaseIterable {
+    private enum Section: Hashable {
+        case show
         case playback
-        case join
+        case showSharing
         case eclipseTV
+        case eclipseMac
+    }
+
+    private enum ShowRow: Int, CaseIterable {
+        case arrange
+        case rename
+        case delete
+    }
+
+    private enum ShowSharingRow: Int, CaseIterable {
+        case shareThisShow
+        case enterShareCode
     }
 
     private enum PlaybackRow: Int, CaseIterable {
         case displayMode
         case transition
         case cameraClose
+    }
+
+    private var sections: [Section] {
+        var result: [Section] = []
+        if openShowName != nil { result.append(.show) }
+        result.append(contentsOf: [.playback, .showSharing, .eclipseTV, .eclipseMac])
+        return result
+    }
+
+    private var showSharingRows: [ShowSharingRow] {
+        if openShowName != nil {
+            return [.shareThisShow, .enterShareCode]
+        }
+        return [.enterShareCode]
     }
 
     // MARK: - Lifecycle
@@ -84,7 +122,9 @@ final class SettingsViewController: UITableViewController {
     func setConnectionState(_ state: ConnectionDisplayState) {
         connectionState = state
         guard isViewLoaded else { return }
-        tableView.reloadSections(IndexSet(integer: Section.eclipseTV.rawValue), with: .none)
+        if let index = sections.firstIndex(of: .eclipseTV) {
+            tableView.reloadSections(IndexSet(integer: index), with: .none)
+        }
         if let detail = navigationController?.topViewController
             as? SettingsEclipseTVViewController {
             detail.setConnectionState(state)
@@ -115,20 +155,24 @@ final class SettingsViewController: UITableViewController {
     }
 
     @objc private func displayModeDidChange() {
-        tableView.reloadSections(IndexSet(integer: Section.playback.rawValue), with: .none)
+        if let index = sections.firstIndex(of: .playback) {
+            tableView.reloadSections(IndexSet(integer: index), with: .none)
+        }
     }
 
     // MARK: - Table Data
 
     override func numberOfSections(in tableView: UITableView) -> Int {
-        Section.allCases.count
+        sections.count
     }
 
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        switch Section(rawValue: section) {
+        switch sections[section] {
+        case .show: return ShowRow.allCases.count
         case .playback: return PlaybackRow.allCases.count
-        case .join, .eclipseTV: return 1
-        case .none: return 0
+        case .showSharing: return showSharingRows.count
+        case .eclipseTV: return 1
+        case .eclipseMac: return 1
         }
     }
 
@@ -136,11 +180,32 @@ final class SettingsViewController: UITableViewController {
         _ tableView: UITableView,
         titleForHeaderInSection section: Int
     ) -> String? {
-        switch Section(rawValue: section) {
+        switch sections[section] {
+        case .show:
+            guard let name = openShowName else { return "Show" }
+            return "Edit “\(name)”"
         case .playback: return "Playback"
-        case .join: return "Shared Presentation"
+        case .showSharing: return "Show Sharing"
         case .eclipseTV: return "EclipseTV"
-        case .none: return nil
+        case .eclipseMac: return "Eclipse for Mac"
+        }
+    }
+
+    override func tableView(
+        _ tableView: UITableView,
+        titleForFooterInSection section: Int
+    ) -> String? {
+        switch sections[section] {
+        case .eclipseTV:
+            return "Link an Apple TV running EclipseTV to sync Shows and present over Multipeer. "
+                + "AirPlay still works without a TV link."
+        case .showSharing:
+            return "Show sharing lets you send and receive a show directly from another user. When they provide you a code, add it here."
+        case .eclipseMac:
+            return "Control Eclipse running on a Mac on the same Wi‑Fi. "
+                + "This stays out of the way until you connect."
+        case .show, .playback:
+            return nil
         }
     }
 
@@ -152,8 +217,11 @@ final class SettingsViewController: UITableViewController {
         var config = cell.defaultContentConfiguration()
         cell.accessoryType = .disclosureIndicator
         cell.selectionStyle = .default
+        cell.isUserInteractionEnabled = true
 
-        switch Section(rawValue: indexPath.section) {
+        switch sections[indexPath.section] {
+        case .show:
+            configureShowCell(cell, config: &config, row: indexPath.row)
         case .playback:
             switch PlaybackRow(rawValue: indexPath.row) {
             case .displayMode:
@@ -168,17 +236,16 @@ final class SettingsViewController: UITableViewController {
             case .none:
                 break
             }
-        case .join:
-            let joined = AlbumBrowserStore.shared.hasAccountConfigured
-            config.text = joined ? "Open Joined Presentation…" : "Join Presentation…"
-            config.image = UIImage(systemName: "person.2.badge.key")
-            cell.accessoryType = .disclosureIndicator
+        case .showSharing:
+            configureShowSharingCell(cell, config: &config, row: indexPath.row)
         case .eclipseTV:
             config.text = "EclipseTV"
             config.secondaryText = eclipseTVSummary()
             config.image = UIImage(systemName: "tv")
-        case .none:
-            break
+        case .eclipseMac:
+            config.text = "Connect to Mac"
+            config.secondaryText = "Remote control"
+            config.image = UIImage(systemName: "desktopcomputer")
         }
 
         cell.contentConfiguration = config
@@ -187,7 +254,9 @@ final class SettingsViewController: UITableViewController {
 
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
-        switch Section(rawValue: indexPath.section) {
+        switch sections[indexPath.section] {
+        case .show:
+            handleShowRow(indexPath.row)
         case .playback:
             switch PlaybackRow(rawValue: indexPath.row) {
             case .displayMode:
@@ -205,12 +274,80 @@ final class SettingsViewController: UITableViewController {
             case .none:
                 break
             }
-        case .join:
-            onJoinPresentation?()
+        case .showSharing:
+            handleShowSharingRow(indexPath.row)
         case .eclipseTV:
             pushEclipseTV()
+        case .eclipseMac:
+            presentMacRemote()
+        }
+    }
+
+    // MARK: - Show Editing
+
+    private func configureShowCell(
+        _ cell: UITableViewCell,
+        config: inout UIListContentConfiguration,
+        row: Int
+    ) {
+        cell.accessoryType = .none
+        cell.selectionStyle = .default
+        cell.isUserInteractionEnabled = true
+        config.textProperties.color = .label
+        config.imageProperties.tintColor = .label
+        switch ShowRow(rawValue: row) {
+        case .arrange:
+            config.text = "Arrange"
+            config.image = UIImage(systemName: "arrow.up.arrow.down")
+            let enabled = canArrangeShow
+            cell.selectionStyle = enabled ? .default : .none
+            cell.isUserInteractionEnabled = enabled
+            config.textProperties.color = enabled ? .label : .secondaryLabel
+            config.imageProperties.tintColor = enabled ? .label : .secondaryLabel
+        case .rename:
+            config.text = "Rename"
+            config.image = UIImage(systemName: "pencil")
+        case .delete:
+            config.text = "Delete Show"
+            config.image = UIImage(systemName: "trash")
+            config.textProperties.color = .systemRed
+            config.imageProperties.tintColor = .systemRed
         case .none:
             break
+        }
+    }
+
+    private func handleShowRow(_ row: Int) {
+        switch ShowRow(rawValue: row) {
+        case .arrange: onArrangeShow?()
+        case .rename: onRenameShow?()
+        case .delete: onDeleteShow?()
+        case .none: break
+        }
+    }
+
+    // MARK: - Show Sharing
+
+    private func configureShowSharingCell(
+        _ cell: UITableViewCell,
+        config: inout UIListContentConfiguration,
+        row: Int
+    ) {
+        cell.accessoryType = .none
+        switch showSharingRows[row] {
+        case .shareThisShow:
+            config.text = "Share this show"
+            config.image = UIImage(systemName: "person.crop.circle.badge.plus")
+        case .enterShareCode:
+            config.text = "Enter Code"
+            config.image = UIImage(systemName: "person.2.badge.key")
+        }
+    }
+
+    private func handleShowSharingRow(_ row: Int) {
+        switch showSharingRows[row] {
+        case .shareThisShow: onShareShow?()
+        case .enterShareCode: onEnterShareCode?()
         }
     }
 
@@ -245,5 +382,9 @@ final class SettingsViewController: UITableViewController {
         }
         detail.onSelectTV = onSelectTV
         navigationController?.pushViewController(detail, animated: true)
+    }
+
+    private func presentMacRemote() {
+        MacRemoteLauncher.open(from: self)
     }
 }

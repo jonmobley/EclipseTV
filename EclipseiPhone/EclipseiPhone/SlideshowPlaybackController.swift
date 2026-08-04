@@ -34,29 +34,43 @@ final class SlideshowPlaybackController {
     private var timer: Timer?
     private var savedTransition: ContentTransitionStyle?
     private var didOverrideTransition = false
+    /// Set when the user ribbon-taps or swipes; enables Resume after leaving mid-show.
+    private var userDidNavigateManually = false
+    /// Last interrupted position after a manual advance (cleared on Restart / natural end).
+    private var interruptedResume: InterruptedResume?
+
+    private struct InterruptedResume {
+        let slideshowId: UUID
+        let slideId: String
+        let index: Int
+    }
 
     private init() {}
 
-    /// Starts presenting `slideshow` from the first available image.
+    /// Starts presenting `slideshow` from `startingAt` (clamped to available images).
     func play(
         _ slideshow: Slideshow,
-        connectionManager: iPhoneConnectionManager
+        connectionManager: iPhoneConnectionManager,
+        startingAt: Int = 0
     ) {
-        stop()
-        let ids = slideshow.itemIds.filter { id in
-            guard let item = TVLibraryStore.shared.items.first(where: { $0.id == id }) else {
-                return false
-            }
-            return !item.isVideo && item.isAvailable != false
-        }
+        let wasActive = activeSlideshowId != nil
+        // Leaving a prior run (e.g. switching shows) still updates that tile cover.
+        if wasActive { promoteCurrentSlideToCover() }
+        // Don't treat "start / restart" as an interrupt worth remembering.
+        resetPlaybackState()
+        clearResume(for: slideshow.id)
+        if wasActive { notifyChanged() }
+
+        let ids = Self.playableSlideIds(in: slideshow)
         guard !ids.isEmpty else { return }
 
         self.connectionManager = connectionManager
         activeSlideshowId = slideshow.id
         activeSlideIds = ids
-        currentSlideIndex = 0
+        currentSlideIndex = min(max(0, startingAt), ids.count - 1)
         autoplay = slideshow.autoplay
         loop = slideshow.loop
+        userDidNavigateManually = false
 
         applyTransitionOverride(crossfade: slideshow.crossfade)
         presentCurrent()
@@ -65,8 +79,13 @@ final class SlideshowPlaybackController {
     }
 
     /// Stops the timer and clears active state (keeps last frame on screen).
+    ///
+    /// If the user had manually advanced, remembers that slide for Resume.
+    /// The slideshow tile cover updates to the last slide that was on screen.
     func stop() {
         let hadActive = activeSlideshowId != nil
+        promoteCurrentSlideToCover()
+        rememberResumeIfInterrupted()
         resetPlaybackState()
         if hadActive { notifyChanged() }
     }
@@ -76,18 +95,84 @@ final class SlideshowPlaybackController {
         activeSlideshowId == id
     }
 
+    /// Resume index after a manual mid-show leave, if the slide is still present.
+    func resumeIndex(for slideshow: Slideshow) -> Int? {
+        guard let resume = interruptedResume,
+              resume.slideshowId == slideshow.id else { return nil }
+        let ids = Self.playableSlideIds(in: slideshow)
+        if let idx = ids.firstIndex(of: resume.slideId) { return idx }
+        guard ids.indices.contains(resume.index) else {
+            clearResume(for: slideshow.id)
+            return nil
+        }
+        return resume.index
+    }
+
+    /// Drops a saved Resume point (Restart, delete, or natural finish).
+    func clearResume(for slideshowId: UUID) {
+        guard interruptedResume?.slideshowId == slideshowId else { return }
+        interruptedResume = nil
+    }
+
     /// Jumps to `index` (ribbon tap). Reschedules Autoplay when enabled.
     func goToSlide(at index: Int) {
         guard activeSlideshowId != nil,
               activeSlideIds.indices.contains(index),
               index != currentSlideIndex else { return }
+        userDidNavigateManually = true
         currentSlideIndex = index
         presentCurrent()
         rescheduleAutoplayIfNeeded()
         notifyChanged()
     }
 
+    /// Steps by `delta` (hero swipe / remote). Wraps when Loop is on; otherwise stops at ends.
+    func goToAdjacentSlide(delta: Int) {
+        guard activeSlideshowId != nil, !activeSlideIds.isEmpty, delta != 0 else { return }
+        let count = activeSlideIds.count
+        var next = currentSlideIndex + delta
+        if loop {
+            next = ((next % count) + count) % count
+        } else {
+            guard activeSlideIds.indices.contains(next) else { return }
+        }
+        goToSlide(at: next)
+    }
+
     // MARK: - Private
+
+    private static func playableSlideIds(in slideshow: Slideshow) -> [String] {
+        slideshow.itemIds.filter { id in
+            guard let item = TVLibraryStore.shared.items.first(where: { $0.id == id }) else {
+                return false
+            }
+            return !item.isVideo && item.isAvailable != false
+        }
+    }
+
+    private func rememberResumeIfInterrupted() {
+        guard userDidNavigateManually,
+              let id = activeSlideshowId,
+              activeSlideIds.indices.contains(currentSlideIndex),
+              currentSlideIndex > 0
+        else { return }
+        interruptedResume = InterruptedResume(
+            slideshowId: id,
+            slideId: activeSlideIds[currentSlideIndex],
+            index: currentSlideIndex
+        )
+    }
+
+    /// Tile art follows the last slide that was live when the run ends.
+    private func promoteCurrentSlideToCover() {
+        guard let id = activeSlideshowId,
+              activeSlideIds.indices.contains(currentSlideIndex)
+        else { return }
+        SlideshowStore.shared.setCover(
+            itemId: activeSlideIds[currentSlideIndex],
+            slideshowId: id
+        )
+    }
 
     /// Presents the current slide, dropping any whose media has since gone away.
     ///
@@ -113,6 +198,18 @@ final class SlideshowPlaybackController {
             return false
         }
 
+        // Captures are phone-owned — AirPlay / local only, never Multipeer play.
+        if CaptureStore.shared.contains(id: item.id) {
+            guard LocalMediaStore.shared.localURL(forId: item.id) != nil else {
+                return false
+            }
+            store.updateCurrentId(item.id)
+            ExternalDisplayManager.shared.present(
+                .forLibraryItem(item, thumbnail: store.thumbnail(for: item.id))
+            )
+            return true
+        }
+
         if let connectionManager, connectionManager.sendPlayRequest(id: item.id) {
             store.updateCurrentId(item.id)
             ExternalDisplayManager.shared.present(
@@ -120,10 +217,10 @@ final class SlideshowPlaybackController {
             )
             return true
         }
-        if let url = LocalMediaStore.shared.localURL(forId: item.id) {
+        if LocalMediaStore.shared.localURL(forId: item.id) != nil {
             store.updateCurrentId(item.id)
             ExternalDisplayManager.shared.present(
-                .image(url, fill: MediaFitSettings.isFill(forId: item.id))
+                .forLibraryItem(item, thumbnail: store.thumbnail(for: item.id))
             )
             return true
         }
@@ -170,6 +267,10 @@ final class SlideshowPlaybackController {
     /// `connectionManager`, `autoplay`, or `loop` can't leak into the next slideshow —
     /// the previous inline version cleared only some of those fields.
     private func finishPlayback() {
+        if let id = activeSlideshowId {
+            clearResume(for: id)
+        }
+        promoteCurrentSlideToCover()
         resetPlaybackState()
         notifyChanged()
     }
@@ -182,6 +283,7 @@ final class SlideshowPlaybackController {
         currentSlideIndex = 0
         autoplay = false
         loop = false
+        userDidNavigateManually = false
         let manager = connectionManager
         connectionManager = nil
         restoreTransitionOverride(using: manager)

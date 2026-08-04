@@ -23,8 +23,6 @@ extension LibraryGridViewController {
     static let compactHeroWidthLandscape: CGFloat = 148
     /// Trailing mini-preview width (Vertical / 9:16 content).
     static let compactHeroWidthVertical: CGFloat = 84
-    /// Below this much scrollable content, collapsing would just be bounce.
-    static let minHeroCollapseDistance: CGFloat = 88
 
     /// True once the hero reads as a mini preview (tap target, no transport).
     var isHeroCompact: Bool { heroCollapseProgress > 0.5 }
@@ -32,7 +30,9 @@ extension LibraryGridViewController {
     /// Recomputes the floating hero from the current scroll offset. Cheap enough
     /// to call from `scrollViewDidScroll` and every layout pass.
     func updateHeroCollapse() {
-        guard showsLiveHero, !isSideBySideChrome else {
+        // Foreign-show live already occupies the tucked mini slot — keep this Show's
+        // hero expanded (Select item to go live) and skip scroll-linked collapse.
+        guard showsLiveHero, !isSideBySideChrome, !isLiveFromOtherShow else {
             applyHeroCollapse(progress: 0)
             return
         }
@@ -59,21 +59,22 @@ extension LibraryGridViewController {
     // MARK: - Private
 
     /// Scroll distance mapped to a full collapse, or nil when the hero should stay
-    /// expanded (landscape hero, unscrollable grid, or no room to shrink into).
+    /// expanded (no room to shrink into, or not enough content for a natural tuck).
+    ///
+    /// Short grids used to compress this distance down to whatever tiny overflow
+    /// existed, so scrolling a couple of rows raced the preview into the corner.
+    /// Collapse only arms once the grid can scroll at least the full nominal tuck.
     private func heroCollapseDistance() -> CGFloat? {
         guard let target = compactHeroTargetRect() else { return nil }
-        let scrollable = maxVerticalScroll()
-        guard scrollable >= Self.minHeroCollapseDistance else { return nil }
-        // Fully tucked about when the hero's expanded slot has scrolled away, but
-        // never demanding more scroll than the content actually has.
         let nominal = expandedHeroOverlayInset()
             - (target.height + headerInset + heroBottomPadding)
-        return max(Self.minHeroCollapseDistance, min(nominal, scrollable))
+        guard nominal > 1, maxVerticalScroll() >= nominal else { return nil }
+        return nominal
     }
 
     /// Where the tucked mini preview sits, in the controller view's coordinates.
     /// Uniform scaling means the aspect ratio comes along for free.
-    private func compactHeroTargetRect() -> CGRect? {
+    func compactHeroTargetRect() -> CGRect? {
         let expanded = expandedHeroLayoutFrame()
         guard expanded.width > 1, expanded.height > 1 else { return nil }
         let width = ExternalOutputSettings.isVerticalMode

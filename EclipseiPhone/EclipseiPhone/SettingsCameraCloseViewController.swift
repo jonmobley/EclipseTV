@@ -51,7 +51,7 @@ final class SettingsCameraCloseViewController: UITableViewController {
         _ tableView: UITableView,
         titleForFooterInSection section: Int
     ) -> String? {
-        "When you slide the shutter off live, switch AirPlay to Logo, Black, or "
+        "When you tap the preview off live, switch AirPlay to Background, Black, or "
             + "whatever was live before the camera."
     }
 
@@ -64,8 +64,8 @@ final class SettingsCameraCloseViewController: UITableViewController {
         let destination = CameraCloseDestination.allCases[indexPath.row]
         config.text = destination.rawValue
         switch destination {
-        case .previous:
-            config.secondaryText = "Restore what was on AirPlay before camera"
+            case .previous:
+                config.secondaryText = "Show what was previously live"
         case .logo, .black:
             config.secondaryText = nil
         }

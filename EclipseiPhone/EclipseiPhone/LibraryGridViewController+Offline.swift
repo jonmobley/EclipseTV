@@ -46,31 +46,86 @@ extension LibraryGridViewController {
         }
     }
 
-    /// Selects an item as live without the Eclipse TV app.
+    /// Selects an item as live without the Eclipse TV app (AirPlay remember / push).
     ///
-    /// Updates local selection always; pushes to AirPlay when connected (and remembers
-    /// the source for when a display appears). Phone fullscreen preview is long-press
-    /// → Preview only — never opened from a tap.
+    /// Only used when `hasLiveOutputDestination` is true. With no display and no TV
+    /// link, video taps use `presentPhoneLiveVideo` and stills open Preview.
     func presentOfflineLive(for item: LibraryItemDTO) {
         if item.isVideo {
             AudioPlayerController.shared.stop()
         }
+        let startAt = item.isVideo ? (VideoResumeStore.shared.position(for: item.id) ?? 0) : 0
+        if item.isVideo { VideoResumeStore.shared.clear(for: item.id) }
         let thumbnail = store.thumbnail(for: item.id)
-        let source = PresentationSource.forLibraryItem(item, thumbnail: thumbnail)
+        let source = PresentationSource.forLibraryItem(
+            item, thumbnail: thumbnail, startAt: startAt
+        )
         store.updateCurrentId(item.id)
         ExternalDisplayManager.shared.present(source)
-        warnIfNoExternalDisplay()
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 
-    /// Fullscreen swipeable gallery of local full-res copies (long-press → Preview).
+    /// Marks a local video live and plays it in the phone hero (no external display).
+    func presentPhoneLiveVideo(_ item: LibraryItemDTO) {
+        guard item.isVideo,
+              LocalMediaStore.shared.localURL(forId: item.id) != nil else {
+            presentLocalPreview(
+                for: item,
+                in: openShowItems.isEmpty ? displayItems : openShowItems
+            )
+            return
+        }
+        SlideshowPlaybackController.shared.stop()
+        AudioPlayerController.shared.stop()
+        let startAt = VideoResumeStore.shared.position(for: item.id) ?? 0
+        VideoResumeStore.shared.clear(for: item.id)
+        isBlackSelected = false
+        isLogoSelected = false
+        isScreensaverSelected = false
+        store.updateCurrentId(item.id)
+        phoneLiveVideoStartAt = startAt
+        let source = PresentationSource.forLibraryItem(
+            item, thumbnail: store.thumbnail(for: item.id), startAt: startAt
+        )
+        AudioAmbientPolicy.applyYieldIfNeeded(for: source)
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        updateHeroVisibility()
+        reloadLibraryGrid()
+        refreshLiveHeader()
+    }
+
+    /// Fullscreen Preview of a local full-res copy (⋯ Preview, or tap when locked).
+    ///
+    /// Videos use system `AVPlayerViewController` chrome; images use the swipe gallery.
     func presentLocalPreview(for item: LibraryItemDTO) {
         presentLocalPreview(for: item, in: displayItems)
     }
 
-    /// Presents a swipeable preview gallery over `neighbors`, starting at `item`.
+    /// Presents Preview for `item` among `neighbors` (images swipe; video is modal).
     func presentLocalPreview(for item: LibraryItemDTO, in neighbors: [LibraryItemDTO]) {
-        let previewable = LocalMediaPreviewViewController.previewableItems(from: neighbors)
+        guard let url = LocalMediaStore.shared.localURL(forId: item.id) else {
+            let alert = UIAlertController(
+                title: "Can't Preview",
+                message: "No local copy on this phone. Add the item from Photos first.",
+                preferredStyle: .alert
+            )
+            alert.addAction(UIAlertAction(title: "OK", style: .default))
+            present(alert, animated: true)
+            return
+        }
+
+        if item.isVideo {
+            presentLocalVideoPreview(
+                fileURL: url,
+                isMuted: item.isMuted ?? false,
+                isLooping: item.isLooping ?? false
+            )
+            return
+        }
+
+        guard !isAlreadyOpen(LocalMediaPreviewViewController.self),
+              !isAlreadyOpen(LocalVideoPreviewViewController.self) else { return }
+        let previewable = LocalMediaPreviewViewController.imagePreviewableItems(from: neighbors)
         guard let index = previewable.firstIndex(where: { $0.id == item.id }) else {
             let alert = UIAlertController(
                 title: "Can't Preview",
@@ -87,13 +142,86 @@ extension LibraryGridViewController {
         present(preview, animated: true)
     }
 
+    /// Modal system-player Preview for a local video file.
+    func presentLocalVideoPreview(
+        fileURL: URL,
+        isMuted: Bool = false,
+        isLooping: Bool = false,
+        startAt: TimeInterval = 0,
+        onDismiss: ((TimeInterval) -> Void)? = nil
+    ) {
+        guard !isAlreadyOpen(LocalVideoPreviewViewController.self),
+              !isAlreadyOpen(LocalMediaPreviewViewController.self) else { return }
+        AudioAmbientPolicy.applyYieldIfNeeded(
+            for: PresentationSource.video(fileURL, isLooping: isLooping, isMuted: isMuted)
+        )
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        let preview = LocalVideoPreviewViewController(
+            fileURL: fileURL,
+            isMuted: isMuted,
+            isLooping: isLooping,
+            startAt: startAt
+        )
+        preview.onDismiss = onDismiss
+        present(preview, animated: true)
+    }
+
+    /// Phone Preview for Background (⋯ Preview, or tap when live output is locked).
+    func presentLogoPhonePreview() {
+        guard let url = LogoStore.shared.fileURL else {
+            onChooseLogo?()
+            return
+        }
+        presentPhonePreview(
+            id: ShowToolToken.logo, fileURL: url, isVideo: false
+        )
+    }
+
+    /// Phone Preview for Screensaver (⋯ Preview, or tap when live output is locked).
+    func presentScreensaverPhonePreview() {
+        guard let source = ScreensaverStore.shared.presentationSource else { return }
+        switch source.content {
+        case .image(let url, _):
+            presentPhonePreview(
+                id: ShowToolToken.screensaver, fileURL: url, isVideo: false
+            )
+        case .screensaver(let url), .video(let url, _, _):
+            presentPhonePreview(
+                id: ShowToolToken.screensaver, fileURL: url, isVideo: true
+            )
+        case .camera, .web, .pdf, .black, .unavailable:
+            break
+        }
+    }
+
+    /// Single-item fullscreen Preview (Show tools; not a gallery swipe).
+    func presentPhonePreview(id: String, fileURL: URL, isVideo: Bool) {
+        if isVideo {
+            // Screensaver / tool videos loop like the live surface.
+            presentLocalVideoPreview(fileURL: fileURL, isLooping: true)
+            return
+        }
+        guard !isAlreadyOpen(LocalMediaPreviewViewController.self),
+              !isAlreadyOpen(LocalVideoPreviewViewController.self) else { return }
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        let item = LocalMediaPreviewItem(id: id, fileURL: fileURL, isVideo: false)
+        present(
+            LocalMediaPreviewViewController(items: [item], startIndex: 0),
+            animated: true
+        )
+    }
+
     func presentNotConnectedAlert() {
         let alert = UIAlertController(
-            title: "Not Connected",
-            message: "Connect EclipseTV in Settings to complete this action. AirPlay alone is not enough for this.",
+            title: "EclipseTV Not Linked",
+            message: "This action needs a link to the Eclipse TV app (pairing code). "
+                + "AirPlay alone is enough to present, but not for this.",
             preferredStyle: .alert
         )
-        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Connect…", style: .default) { [weak self] _ in
+            self?.onRequestEclipseTVConnect?()
+        })
         present(alert, animated: true)
     }
 }

@@ -13,13 +13,16 @@ import UIKit
 
 extension CameraManager: AVCaptureVideoDataOutputSampleBufferDelegate {
 
-    /// Fulfils pending still requests, and otherwise refreshes the throttled tile still
-    /// (preview-layer snapshots are unreliable and often black).
+    /// Feeds any live mirrors, fulfils pending still requests, and otherwise refreshes
+    /// the throttled tile still (preview-layer snapshots are unreliable and often black).
     func captureOutput(
         _ output: AVCaptureOutput,
         didOutput sampleBuffer: CMSampleBuffer,
         from connection: AVCaptureConnection
     ) {
+        // Ahead of the still-request return below: a mirror needs every frame.
+        broadcastToFrameMirrors(sampleBuffer)
+
         if !stillRequests.isEmpty {
             let requests = stillRequests
             stillRequests.removeAll()
@@ -78,7 +81,7 @@ extension CameraManager: AVCaptureVideoDataOutputSampleBufferDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + timeout) { finish(nil) }
     }
 
-    /// Converts a video sample into an upright still matching Display Mode.
+    /// Converts a video sample into an upright still matching the live preview.
     /// - Parameter maxPixelEdge: Longest-edge ceiling, or nil for sensor resolution.
     func imageFromSampleBuffer(
         _ sampleBuffer: CMSampleBuffer,
@@ -88,10 +91,9 @@ extension CameraManager: AVCaptureVideoDataOutputSampleBufferDelegate {
             return nil
         }
         var ciImage = CIImage(cvPixelBuffer: pixelBuffer)
-        // Sensor buffers are landscape; Vertical mode matches the 90° preview.
-        if ExternalOutputSettings.isVerticalMode {
-            ciImage = ciImage.oriented(.right)
-        }
+        // Prefer the lens coordinator — Vertical≠always-90°. Newer front sensors are
+        // portrait-mounted and report 0°; forcing 90° left a landscape home-tile freeze.
+        ciImage = applyHorizonCaptureOrientation(to: ciImage)
         if let maxPixelEdge {
             let longest = max(ciImage.extent.width, ciImage.extent.height)
             if longest > maxPixelEdge {
@@ -103,6 +105,47 @@ extension CameraManager: AVCaptureVideoDataOutputSampleBufferDelegate {
             return nil
         }
         return UIImage(cgImage: cgImage)
+    }
+
+    /// Rebuilds the capture-angle coordinator when the active lens changes.
+    func refreshCaptureRotationCoordinator() {
+        guard let device = videoDevice else {
+            captureRotationCoordinator = nil
+            return
+        }
+        if captureRotationCoordinator?.device === device { return }
+        captureRotationCoordinator = AVCaptureDevice.RotationCoordinator(
+            device: device,
+            previewLayer: nil
+        )
+    }
+
+    /// Horizon-level angle for stills and movie output (matches live preview uprightness).
+    func horizonLevelCaptureRotationAngle() -> CGFloat {
+        refreshCaptureRotationCoordinator()
+        return captureRotationCoordinator?.videoRotationAngleForHorizonLevelCapture
+            ?? CameraPreviewView.displayModePreviewRotationAngle
+    }
+
+    /// Applies the active lens’s horizon capture angle to a sensor-space still.
+    func applyHorizonCaptureOrientation(to ciImage: CIImage) -> CIImage {
+        switch quantizedRotationAngle(horizonLevelCaptureRotationAngle()) {
+        case 90:
+            return ciImage.oriented(.right)
+        case 180:
+            return ciImage.oriented(.down)
+        case 270:
+            return ciImage.oriented(.left)
+        default:
+            return ciImage
+        }
+    }
+
+    /// Snaps a coordinator angle to 0 / 90 / 180 / 270.
+    func quantizedRotationAngle(_ angle: CGFloat) -> Int {
+        let stepped = Int((angle / 90).rounded()) * 90
+        let normalized = ((stepped % 360) + 360) % 360
+        return normalized
     }
 
     /// Reused across `isNearlyBlack` calls — building a `CIContext` per call is one of

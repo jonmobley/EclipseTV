@@ -9,9 +9,9 @@ import UIKit
 
 // MARK: - Safari-like Nav Chrome
 
-extension WebRemoteViewController: UITextFieldDelegate {
+extension WebRemoteViewController {
 
-    /// Builds Back · pill URL (reload inside) · bookmarks ⋯.
+    /// Builds Back · host title · bookmarks ⋯ (Refresh / New / saved).
     func setupBrowserChrome() {
         backButton = UIBarButtonItem(
             image: UIImage(systemName: "chevron.backward"),
@@ -20,34 +20,7 @@ extension WebRemoteViewController: UITextFieldDelegate {
             action: #selector(goBackTapped)
         )
         navigationItem.leftBarButtonItem = backButton
-
-        urlField.delegate = self
-        if page.isFreeBrowse, isBlankBrowserURL(page.url) {
-            urlField.text = nil
-        } else {
-            urlField.text = displayHost(for: page.url)
-        }
-        urlBarContainer.addSubview(urlField)
-        urlBarContainer.addSubview(reloadButton)
-        reloadButton.addTarget(self, action: #selector(reloadTapped), for: .touchUpInside)
-
-        NSLayoutConstraint.activate([
-            urlField.leadingAnchor.constraint(
-                equalTo: urlBarContainer.leadingAnchor, constant: 14),
-            urlField.trailingAnchor.constraint(
-                equalTo: reloadButton.leadingAnchor, constant: -2),
-            urlField.topAnchor.constraint(
-                equalTo: urlBarContainer.topAnchor, constant: 4),
-            urlField.bottomAnchor.constraint(
-                equalTo: urlBarContainer.bottomAnchor, constant: -4),
-
-            reloadButton.trailingAnchor.constraint(
-                equalTo: urlBarContainer.trailingAnchor, constant: -4),
-            reloadButton.centerYAnchor.constraint(equalTo: urlBarContainer.centerYAnchor),
-            reloadButton.widthAnchor.constraint(equalToConstant: 32),
-            reloadButton.heightAnchor.constraint(equalToConstant: 32)
-        ])
-        navigationItem.titleView = urlBarContainer
+        navigationItem.titleView = nil
 
         let appearance = UINavigationBarAppearance()
         appearance.configureWithDefaultBackground()
@@ -62,51 +35,32 @@ extension WebRemoteViewController: UITextFieldDelegate {
         navigationItem.rightBarButtonItem = bookmarksButton
     }
 
-    /// Sizes the URL pill between Back and ⋯.
-    ///
-    /// Height must fit the nav bar (~36). A taller title view gets vertically
-    /// compressed while `cornerRadius` stayed at half of 52 — that clips into
-    /// the pointed “almond” shape.
-    func layoutURLBarWidth() {
-        guard let navBar = navigationController?.navigationBar else { return }
-        let reserved: CGFloat = 120
-        let width = max(navBar.bounds.width - reserved, 160)
-        let height: CGFloat = 36
-        let size = CGSize(width: width, height: height)
-        guard abs(urlBarContainer.bounds.width - size.width) > 0.5
-            || abs(urlBarContainer.bounds.height - size.height) > 0.5
-        else { return }
-        urlBarContainer.bounds = CGRect(origin: .zero, size: size)
-        urlBarContainer.frame = CGRect(origin: .zero, size: size)
-        // Re-assign so UINavigationBar picks up the new title view size.
-        navigationItem.titleView = urlBarContainer
-    }
-
-    /// Syncs URL display and Back affordance with `webView`.
+    /// Syncs the nav title and ⋯ checkmarks with `webView`.
     func updateBrowserChrome() {
-        guard let web = webView else { return }
-        if !urlField.isFirstResponder {
-            if let url = web.url, !isBlankBrowserURL(url) {
-                urlField.text = displayHost(for: url)
-            } else if !page.isFreeBrowse {
-                urlField.text = displayHost(for: page.url)
-            } else {
-                urlField.text = nil
-            }
+        if let url = webView?.url, !isBlankBrowserURL(url) {
+            navigationItem.title = displayHost(for: url)
+        } else {
+            navigationItem.title = displayHost(for: page.url)
         }
+        refreshBookmarksMenu()
     }
 
-    /// Rebuilds the ⋯ menu (Close + other bookmarks).
+    /// Rebuilds the ⋯ menu (Refresh, New…, saved bookmarks).
     func refreshBookmarksMenu() {
         bookmarksButton?.menu = makeBookmarksMenu()
     }
 
-    /// Loads an HTTPS URL in the phone web view (AirPlay follows via delegate).
-    func loadBrowserURL(_ url: URL) {
+    /// Navigates the phone web view like a normal browser load (Back keeps working).
+    ///
+    /// AirPlay is updated immediately so the TV follows; `didCommit` remains a backup.
+    /// - Parameter pageId: Optional live-tile id when jumping to a saved site.
+    func loadBrowserURL(_ url: URL, pageId: UUID? = nil) {
         webView?.load(URLRequest(url: url))
+        ExternalDisplayManager.shared.loadWeb(url: url, pageId: pageId ?? page.id)
+        updateBrowserChrome()
     }
 
-    /// Compact host label like Safari when the field is not being edited.
+    /// Compact host label for the nav title.
     func displayHost(for url: URL) -> String {
         if let host = url.host, !host.isEmpty {
             return host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
@@ -114,84 +68,110 @@ extension WebRemoteViewController: UITextFieldDelegate {
         return url.absoluteString
     }
 
+    /// Alert to type a session URL (⋯ → New…; does not save a bookmark).
+    func presentNewURLAlert() {
+        if presentedViewController is UIAlertController { return }
+
+        let alert = UIAlertController(
+            title: "New Website",
+            message: nil,
+            preferredStyle: .alert
+        )
+        alert.addTextField { [weak self] field in
+            field.placeholder = "example.com"
+            field.keyboardType = .URL
+            field.autocapitalizationType = .none
+            field.autocorrectionType = .no
+            field.textContentType = .URL
+            field.clearButtonMode = .whileEditing
+            field.returnKeyType = .go
+            if let url = self?.webView?.url, self?.isBlankBrowserURL(url) == false {
+                field.text = url.absoluteString
+            }
+        }
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Go", style: .default) { [weak self, weak alert] _ in
+            guard let self else { return }
+            let raw = alert?.textFields?.first?.text ?? ""
+            do {
+                let url = try WebPageStore.normalizedHTTPSURL(from: raw)
+                self.loadBrowserURL(url)
+            } catch {
+                let errorAlert = UIAlertController(
+                    title: "Invalid Address",
+                    message: error.localizedDescription,
+                    preferredStyle: .alert
+                )
+                errorAlert.addAction(UIAlertAction(title: "OK", style: .default))
+                self.present(errorAlert, animated: true)
+            }
+        })
+        present(alert, animated: true)
+    }
+
     // MARK: - Bookmarks Menu
 
     private func makeBookmarksMenu() -> UIMenu {
-        var children: [UIMenuElement] = [
-            UIAction(
-                title: "Close",
-                subtitle: "TV keeps showing this page",
-                image: UIImage(systemName: "xmark")
+        let refresh = UIAction(
+            title: "Refresh",
+            image: UIImage(systemName: "arrow.clockwise")
+        ) { [weak self] _ in
+            self?.reloadTapped()
+        }
+        let newURL = UIAction(
+            title: "New…",
+            image: UIImage(systemName: "plus")
+        ) { [weak self] _ in
+            self?.presentNewURLAlert()
+        }
+
+        let actions = UIMenu(title: "", options: .displayInline, children: [refresh, newURL])
+        let saved = makeSavedWebsitesMenu()
+        return UIMenu(children: [actions, saved])
+    }
+
+    private func makeSavedWebsitesMenu() -> UIMenu {
+        let pages = WebPageStore.shared.pages
+        if pages.isEmpty {
+            return UIMenu(title: "", options: .displayInline, children: [
+                UIAction(
+                    title: "No saved websites",
+                    attributes: .disabled
+                ) { _ in }
+            ])
+        }
+
+        let currentURL = webView?.url
+        let children: [UIMenuElement] = pages.map { bookmark in
+            let state: UIMenuElement.State =
+                isCurrentBookmark(bookmark, currentURL: currentURL) ? .on : .off
+            return UIAction(
+                title: bookmark.title,
+                subtitle: bookmark.url.host,
+                state: state
             ) { [weak self] _ in
-                // Dismisses the phone browser only; AirPlay web stays live.
-                self?.closeTapped()
-            }
-        ]
-
-        let others = WebPageStore.shared.pages.filter { $0.id != page.id }
-        if others.isEmpty {
-            children.append(UIAction(
-                title: "No other websites",
-                attributes: .disabled
-            ) { _ in })
-        } else {
-            children.append(contentsOf: others.map { bookmark in
-                UIAction(title: bookmark.title, subtitle: bookmark.url.host) { [weak self] _ in
-                    self?.loadBrowserURL(bookmark.url)
-                }
-            })
-        }
-        return UIMenu(children: children)
-    }
-
-    // MARK: - UITextFieldDelegate
-
-    func textFieldDidBeginEditing(_ textField: UITextField) {
-        textField.textAlignment = .left
-        if let url = webView?.url, !isBlankBrowserURL(url) {
-            textField.text = url.absoluteString
-        } else if !page.isFreeBrowse {
-            textField.text = page.url.absoluteString
-        } else {
-            textField.text = nil
-        }
-        textField.selectAll(nil)
-    }
-
-    func textFieldDidEndEditing(_ textField: UITextField) {
-        textField.textAlignment = .center
-        if let url = webView?.url {
-            textField.text = displayHost(for: url)
-        }
-    }
-
-    func textFieldShouldReturn(_ textField: UITextField) -> Bool {
-        textField.resignFirstResponder()
-        let raw = textField.text ?? ""
-        do {
-            let url = try WebPageStore.normalizedHTTPSURL(from: raw)
-            textField.text = displayHost(for: url)
-            loadBrowserURL(url)
-        } catch {
-            let alert = UIAlertController(
-                title: "Invalid Address",
-                message: error.localizedDescription,
-                preferredStyle: .alert
-            )
-            alert.addAction(UIAlertAction(title: "OK", style: .default))
-            present(alert, animated: true)
-            if let url = webView?.url {
-                textField.text = displayHost(for: url)
+                self?.loadBrowserURL(bookmark.url, pageId: bookmark.id)
             }
         }
-        return true
+        return UIMenu(title: "", options: .displayInline, children: children)
     }
-}
 
-/// Navigation title pill that keeps a true capsule corner radius as it resizes.
-final class WebURLBarView: UIView {
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        layer.cornerRadius = bounds.height / 2
+    /// Whether `bookmark` should show a checkmark for the active browser URL.
+    private func isCurrentBookmark(_ bookmark: WebPage, currentURL: URL?) -> Bool {
+        guard let currentURL, !isBlankBrowserURL(currentURL) else {
+            return bookmark.id == page.id
+        }
+        return Self.urlsMatchForMenu(currentURL, bookmark.url)
+    }
+
+    /// Host-level match so www differences still check the current item.
+    private static func urlsMatchForMenu(_ a: URL, _ b: URL) -> Bool {
+        guard let aHost = a.host?.lowercased(), let bHost = b.host?.lowercased() else {
+            return a.absoluteString == b.absoluteString
+        }
+        let stripWWW: (String) -> String = {
+            $0.hasPrefix("www.") ? String($0.dropFirst(4)) : $0
+        }
+        return stripWWW(aHost) == stripWWW(bHost) && a.path == b.path
     }
 }

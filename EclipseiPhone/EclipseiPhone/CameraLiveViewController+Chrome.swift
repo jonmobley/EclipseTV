@@ -13,62 +13,68 @@ extension CameraLiveViewController {
 
     /// Builds centered LIVE status pill (called from `viewDidLoad`).
     func setupPreviewChrome() {
-        goLiveButton.isUserInteractionEnabled = false
-        goLiveButton.isHidden = true
         view.addSubview(goLiveButton)
+        view.addSubview(recordingTimerLabel)
         applyLiveBadgeAppearance()
     }
 
-    /// Places Back · centered LIVE · Settings inside the panel.
+    /// Places Back · centered LIVE · Settings over the panel (safe-area aware).
     func layoutTopChromeInPanel() {
         let panel = panelView.convert(panelView.bounds, to: view)
         guard panel.width > 1, panel.height > 1 else { return }
 
         let inset: CGFloat = 18
-        let spacing: CGFloat = 10
         let controlSize = Self.chromeControlSize
-        let rowY = panel.minY + inset
+        let rowY = max(panel.minY + inset, view.safeAreaInsets.top + 8)
+        let leading = max(panel.minX + inset, view.safeAreaInsets.left + 12)
+        let trailing = min(
+            panel.maxX - inset - controlSize,
+            view.bounds.maxX - view.safeAreaInsets.right - 12 - controlSize
+        )
 
         backButton.frame = CGRect(
-            x: panel.minX + inset,
+            x: leading,
             y: rowY,
             width: controlSize,
             height: controlSize
         )
 
         settingsButton.frame = CGRect(
-            x: panel.maxX - inset - controlSize,
+            x: trailing,
             y: rowY,
             width: controlSize,
             height: controlSize
         )
 
-        let goHeight: CGFloat = 44
-        goLiveButton.sizeToFit()
-        let sideReserve = inset + controlSize + spacing
-        let maxGoWidth = max(96, panel.width - sideReserve * 2 - spacing)
-        let intrinsic = goLiveButton.intrinsicContentSize.width
-        let goWidth = min(max(intrinsic + 8, 72), maxGoWidth)
-        let goY = rowY + (controlSize - goHeight) / 2
+        // Fixed size for LIVE so the pill doesn't jump when chrome re-layouts.
+        let goSize = CGSize(width: 78, height: 28)
+        let goY = rowY + (controlSize - goSize.height) / 2
         goLiveButton.frame = CGRect(
-            x: panel.midX - goWidth / 2,
+            x: panel.midX - goSize.width / 2,
             y: goY,
-            width: goWidth,
-            height: goHeight
+            width: goSize.width,
+            height: goSize.height
+        )
+
+        // Timer sits just right of LIVE while recording (hidden otherwise).
+        let timerSize = recordingTimerLabel.sizeThatFits(
+            CGSize(width: 80, height: goSize.height)
+        )
+        recordingTimerLabel.frame = CGRect(
+            x: goLiveButton.frame.maxX + 8,
+            y: goY,
+            width: max(timerSize.width, 36),
+            height: goSize.height
         )
 
         view.bringSubviewToFront(backButton)
         view.bringSubviewToFront(goLiveButton)
+        view.bringSubviewToFront(recordingTimerLabel)
         view.bringSubviewToFront(settingsButton)
     }
 
-    /// Builds shutter track + thumb + Flip + camera-roll.
+    /// Builds shutter + Flip + Frame (docked outside the Display Mode panel).
     func setupCaptureMocks() {
-        shutterTrackView.translatesAutoresizingMaskIntoConstraints = true
-        view.addSubview(shutterTrackView)
-        shutterHintView.translatesAutoresizingMaskIntoConstraints = true
-        shutterTrackView.addSubview(shutterHintView)
-
         shutterButton.translatesAutoresizingMaskIntoConstraints = true
         shutterButton.accessibilityLabel = "Shutter"
         view.addSubview(shutterButton)
@@ -91,68 +97,74 @@ extension CameraLiveViewController {
         flipButton.configuration = flipConfig
         flipButton.accessibilityLabel = "Flip Camera"
         flipButton.translatesAutoresizingMaskIntoConstraints = true
-        flipButton.isUserInteractionEnabled = false
-        view.addSubview(flipButton)
-
-        var libraryConfig = UIButton.Configuration.plain()
-        libraryConfig.image = UIImage(
-            systemName: "photo.on.rectangle",
-            withConfiguration: symbol
-        )
-        libraryConfig.baseForegroundColor = .white
-        libraryConfig.background.backgroundColor = UIColor.black.withAlphaComponent(0.45)
-        libraryConfig.cornerStyle = .capsule
-        libraryConfig.contentInsets = NSDirectionalEdgeInsets(
-            top: 10, leading: 10, bottom: 10, trailing: 10
-        )
-        libraryButton.configuration = libraryConfig
-        libraryButton.accessibilityLabel = "Camera Roll"
-        libraryButton.accessibilityHint = "Opens Photos after a capture is saved"
-        libraryButton.translatesAutoresizingMaskIntoConstraints = true
-        libraryButton.isUserInteractionEnabled = false
-        libraryButton.alpha = 0.55
-        libraryButton.addTarget(
+        flipButton.isEnabled = CameraManager.shared.canFlipCamera
+        flipButton.addTarget(
             self,
-            action: #selector(libraryButtonTapped),
+            action: #selector(flipButtonTapped),
             for: .touchUpInside
         )
-        view.addSubview(libraryButton)
+        view.addSubview(flipButton)
+
+        var frameConfig = UIButton.Configuration.plain()
+        frameConfig.image = UIImage(
+            systemName: "rectangle.dashed",
+            withConfiguration: symbol
+        )
+        frameConfig.baseForegroundColor = .white
+        frameConfig.background.backgroundColor = UIColor.black.withAlphaComponent(0.45)
+        frameConfig.cornerStyle = .capsule
+        frameConfig.contentInsets = NSDirectionalEdgeInsets(
+            top: 10, leading: 10, bottom: 10, trailing: 10
+        )
+        frameButton.configuration = frameConfig
+        frameButton.accessibilityLabel = "Frames"
+        frameButton.accessibilityHint =
+            "Chooses a frame overlay, or imports and deletes frames"
+        frameButton.translatesAutoresizingMaskIntoConstraints = true
+        frameButton.addTarget(
+            self,
+            action: #selector(frameButtonTapped),
+            for: .touchUpInside
+        )
+        view.addSubview(frameButton)
     }
 
-    /// Places camera-roll · shutter track · Flip as one horizontal row.
+    /// Places Frame · shutter · Flip in the outside dock (not over the preview).
     ///
-    /// Both Display Modes slide the same way — right → live, left → off. Vertical
-    /// hangs the row under the panel; Landscape overlays the panel's bottom edge,
-    /// where the panel already fills the screen height.
+    /// Vertical: bottom dock under the panel. Landscape: trailing dock — the same
+    /// physical spot when the phone is held sideways.
     func layoutBottomChromeInPanel() {
         let panel = panelView.convert(panelView.bounds, to: view)
         guard panel.width > 1, panel.height > 1 else { return }
 
-        let inset: CGFloat = 20
-        let controlSize = Self.chromeControlSize
-        let pad = Self.shutterTrackPadding
-
-        if !isShutterDragging, !isShutterSettling {
-            shutterSlideProgress = isAirPlayLive ? 1 : 0
+        if ExternalOutputSettings.isVerticalMode {
+            layoutVerticalCaptureChrome(panel: panel)
+        } else {
+            layoutLandscapeCaptureChrome(panel: panel)
         }
 
-        let trackSize = CGSize(
-            width: Self.shutterSize + Self.shutterTrackTravel + pad * 2,
-            height: Self.shutterSize + pad * 2
-        )
-        let rowY = ExternalOutputSettings.isVerticalMode
-            ? panel.maxY + Self.verticalChromeGap
-            : panel.maxY - inset - trackSize.height
-        let sideY = rowY + (trackSize.height - controlSize) / 2
+        view.bringSubviewToFront(frameButton)
+        view.bringSubviewToFront(shutterButton)
+        view.bringSubviewToFront(flipButton)
 
-        shutterTrackFrame = CGRect(
-            origin: CGPoint(x: panel.midX - trackSize.width / 2, y: rowY),
-            size: trackSize
-        )
-        shutterTrackView.frame = shutterTrackFrame
-        shutterTrackView.layer.cornerRadius = trackSize.height / 2
+        updateShutterAccessibilityHint()
+    }
 
-        libraryButton.frame = CGRect(
+    /// Frame · shutter · Flip in a row in the bottom dock under the Vertical panel.
+    private func layoutVerticalCaptureChrome(panel: CGRect) {
+        let inset: CGFloat = 20
+        let controlSize = Self.chromeControlSize
+        let bottomPad = max(8, view.safeAreaInsets.bottom)
+        let rowY = view.bounds.maxY - bottomPad - Self.shutterSize
+        let sideY = rowY + (Self.shutterSize - controlSize) / 2
+
+        shutterButton.frame = CGRect(
+            x: panel.midX - Self.shutterSize / 2,
+            y: rowY,
+            width: Self.shutterSize,
+            height: Self.shutterSize
+        )
+        frameButton.frame = CGRect(
             x: panel.minX + inset,
             y: sideY,
             width: controlSize,
@@ -164,39 +176,48 @@ extension CameraLiveViewController {
             width: controlSize,
             height: controlSize
         )
-
-        layoutShutterThumbInTrack()
-        layoutShutterHint()
-
-        view.bringSubviewToFront(shutterTrackView)
-        view.bringSubviewToFront(libraryButton)
-        view.bringSubviewToFront(shutterButton)
-        view.bringSubviewToFront(flipButton)
-
-        updateShutterAccessibilityHint()
+        flipButton.transform = .identity
     }
 
-    /// Positions the shutter thumb from `shutterSlideProgress` inside the track.
-    func layoutShutterThumbInTrack() {
-        let track = shutterTrackFrame
-        guard track.width > 1 else { return }
-        let pad = Self.shutterTrackPadding
-        let progress = min(1, max(0, shutterSlideProgress))
+    /// Same chrome as Vertical, in the trailing dock beside the Landscape panel.
+    private func layoutLandscapeCaptureChrome(panel: CGRect) {
+        let inset: CGFloat = 20
+        let controlSize = Self.chromeControlSize
+        let trailingPad = max(8, view.safeAreaInsets.right)
+        let colX = view.bounds.maxX - trailingPad - Self.shutterSize
+        let sideX = colX + (Self.shutterSize - controlSize) / 2
+
         shutterButton.frame = CGRect(
-            x: track.minX + pad + Self.shutterTrackTravel * progress,
-            y: track.minY + pad,
+            x: colX,
+            y: panel.midY - Self.shutterSize / 2,
             width: Self.shutterSize,
             height: Self.shutterSize
         )
+        frameButton.frame = CGRect(
+            x: sideX,
+            y: panel.minY + inset,
+            width: controlSize,
+            height: controlSize
+        )
+        flipButton.frame = CGRect(
+            x: sideX,
+            y: panel.maxY - inset - controlSize,
+            width: controlSize,
+            height: controlSize
+        )
+        flipButton.transform = .identity
     }
 
     /// Updates LIVE badge and shutter for preview vs AirPlay-live.
     func refreshLiveChrome() {
+        // Going live hands the hardware preview layer to the TV — re-route the panel.
+        updateLivePreviewSource()
         let live = isAirPlayLive
         let recording = CameraManager.shared.isRecording
-        goLiveButton.isHidden = !live
         applyLiveBadgeAppearance()
         applyShutterAppearance(isLive: live, isRecording: recording)
+        refreshFlipButtonEnabled()
+        syncRecordingTimer()
         layoutTopChromeInPanel()
         layoutBottomChromeInPanel()
     }
@@ -230,27 +251,77 @@ extension CameraLiveViewController {
     }
 
     func updateShutterAccessibilityHint() {
-        shutterButton.accessibilityHint = isAirPlayLive
-            ? "Tap for photo. Hold to record. Slide left to stop live."
-            : "Slide right to go live on AirPlay."
+        guard isAirPlayLive else {
+            shutterButton.accessibilityHint =
+                "Tap the preview to go live on AirPlay."
+            return
+        }
+        if ExternalOutputSettings.alwaysRecordWhenLive {
+            shutterButton.accessibilityHint =
+                "Tap for photo. Recording starts with live. "
+                + "Tap the preview to stop live and recording."
+        } else {
+            shutterButton.accessibilityHint =
+                "Tap for photo. Hold to record. Tap the preview to stop live."
+        }
+    }
+
+    /// Flips front ↔ back camera.
+    @objc func flipButtonTapped() {
+        guard CameraManager.shared.canFlipCamera else { return }
+        if CameraManager.shared.isRecording {
+            showPresentationToast(
+                "Stop recording to flip camera",
+                centeredIn: panelView
+            )
+            return
+        }
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        flipButton.isEnabled = false
+        CameraManager.shared.flipCamera { [weak self] in
+            self?.refreshFlipButtonEnabled()
+        }
+    }
+
+    /// Flip stays available except while recording or when only one camera exists.
+    func refreshFlipButtonEnabled() {
+        let camera = CameraManager.shared
+        let allowed = camera.canFlipCamera && !camera.isRecording
+        flipButton.isEnabled = allowed
+        flipButton.alpha = allowed ? 1 : 0.45
+        flipButton.accessibilityHint = camera.isRecording
+            ? "Unavailable while recording"
+            : "Switches between the front and back cameras"
     }
 
     // MARK: - Private
 
     private func applyLiveBadgeAppearance() {
+        let live = isAirPlayLive
+        goLiveButton.isHidden = !live
+        goLiveButton.isUserInteractionEnabled = false
+        guard live else {
+            goLiveButton.configuration = nil
+            return
+        }
         var config = UIButton.Configuration.filled()
-        let dot = UIImage.SymbolConfiguration(pointSize: 6, weight: .bold)
-        config.title = "LIVE"
-        config.image = UIImage(systemName: "circle.fill", withConfiguration: dot)
-        config.imagePadding = 6
-        config.baseBackgroundColor = .systemRed
-        config.baseForegroundColor = .white
         config.cornerStyle = .capsule
         config.contentInsets = NSDirectionalEdgeInsets(
-            top: 8, leading: 12, bottom: 8, trailing: 12
+            top: 4, leading: 10, bottom: 4, trailing: 10
         )
-        goLiveButton.configuration = config
+        config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer {
+            var attrs = $0
+            attrs.font = .systemFont(ofSize: 11, weight: .semibold)
+            return attrs
+        }
+        config.baseForegroundColor = .white
+        let dot = UIImage.SymbolConfiguration(pointSize: 5, weight: .bold)
+        config.title = "LIVE"
+        config.image = UIImage(systemName: "circle.fill", withConfiguration: dot)
+        config.imagePadding = 4
+        config.baseBackgroundColor = .systemRed
         goLiveButton.accessibilityLabel = "Live"
         goLiveButton.accessibilityHint = nil
+        goLiveButton.configuration = config
     }
 }

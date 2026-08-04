@@ -9,6 +9,35 @@ import MultipeerConnectivity
 /// and fans the file out to any sync replicas.
 extension iPhoneConnectionManager {
 
+    /// Sends only a custom poster (`thumbnail_<file>`) for a video already on the TV.
+    @discardableResult
+    func sendCustomVideoThumbnail(_ image: UIImage, videoFileName: String) -> Bool {
+        guard let session = session, let peer = activeTargetPeer else { return false }
+        guard let data = image.jpegData(compressionQuality: 0.8) else { return false }
+
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("thumbnail_\(videoFileName).jpg")
+        do {
+            try data.write(to: tempURL, options: .atomic)
+        } catch {
+            return false
+        }
+
+        let mode = ExternalOutputSettings.libraryMode
+        let wireName = EclipseShareProtocol.mediaResourceName(
+            for: "thumbnail_\(videoFileName)", mode: mode
+        )
+        session.sendResource(at: tempURL, withName: wireName, toPeer: peer) { [weak self] error in
+            try? FileManager.default.removeItem(at: tempURL)
+            if let error {
+                self?.logger.error(
+                    "Custom thumbnail update failed: \(error.localizedDescription)"
+                )
+            }
+        }
+        return true
+    }
+
     func sendImage(at imageURL: URL) -> Bool {
         guard let session = session, let peer = activeTargetPeer else {
             logger.error("Cannot send image: No active session or peer")
@@ -23,7 +52,7 @@ extension iPhoneConnectionManager {
         // Clean up any existing progress observer before starting new transfer
         cleanupCurrentProgress()
 
-        sendPendingRestoreIfNeeded(to: peer, via: session)
+        let restoreId = sendPendingRestoreIfNeeded(to: peer, via: session)
 
         let fileName = imageURL.lastPathComponent
         let mode = ExternalOutputSettings.libraryMode
@@ -32,7 +61,13 @@ extension iPhoneConnectionManager {
         // (plain file name), not the mode-stamped Multipeer wire name.
         LocalMediaStore.shared.store(fileURL: imageURL, forId: fileName, mode: mode)
         // Replicate to other synced TVs (no progress UI for those).
-        fanOutMediaToReplicas(url: imageURL, id: fileName, mode: mode, excluding: peer)
+        fanOutMediaToReplicas(
+            url: imageURL,
+            id: fileName,
+            mode: mode,
+            excluding: peer,
+            restoreId: restoreId
+        )
         let wireName = EclipseShareProtocol.mediaResourceName(for: fileName, mode: mode)
         let progress = session.sendResource(at: imageURL, withName: wireName, toPeer: peer) { [weak self] error in
             DispatchQueue.main.async {
@@ -170,14 +205,20 @@ extension iPhoneConnectionManager {
             return
         }
 
-        sendPendingRestoreIfNeeded(to: peer, via: session)
+        let restoreId = sendPendingRestoreIfNeeded(to: peer, via: session)
 
         let fileName = videoURL.lastPathComponent
         // Keep a full-resolution copy on the phone for external AirPlay presentation
         // (see sendImage for rationale).
         LocalMediaStore.shared.store(fileURL: videoURL, forId: fileName, mode: mode)
         // Replicate to other synced TVs (no progress UI for those).
-        fanOutMediaToReplicas(url: videoURL, id: fileName, mode: mode, excluding: peer)
+        fanOutMediaToReplicas(
+            url: videoURL,
+            id: fileName,
+            mode: mode,
+            excluding: peer,
+            restoreId: restoreId
+        )
         let wireName = EclipseShareProtocol.mediaResourceName(for: fileName, mode: mode)
         let progress = session.sendResource(at: videoURL, withName: wireName, toPeer: peer) { [weak self] error in
             DispatchQueue.main.async {
@@ -249,40 +290,73 @@ extension iPhoneConnectionManager {
 
     /// Fans a just-sent media file out to every connected replica TV (all connected peers
     /// except the active one). No-op unless syncing all.
-    private func fanOutMediaToReplicas(url: URL, id: String,
-                                       mode: EclipseShareProtocol.LibraryMode,
-                                       excluding active: MCPeerID) {
+    ///
+    /// Prior in-flight replica sends are left alone — cancelling them on every new fan-out
+    /// meant only the most recently sent item reliably arrived on replicas. Finished
+    /// progress objects are pruned so the array cannot grow unbounded.
+    private func fanOutMediaToReplicas(
+        url: URL,
+        id: String,
+        mode: EclipseShareProtocol.LibraryMode,
+        excluding active: MCPeerID,
+        restoreId: String? = nil
+    ) {
         guard syncAllEnabled, let session = session else { return }
-        cancelReplicaFanOut()
+        pruneFinishedReplicaTransfers()
         for peer in session.connectedPeers where peer != active {
+            if let restoreId {
+                sendRestoreEnvelope(id: restoreId, to: peer, via: session)
+            }
             if let progress = sendMedia(at: url, id: id, mode: mode, to: peer) {
                 replicaTransferProgress.append(progress)
             }
         }
     }
 
-    /// If a re-send was requested, tells the TV the upcoming resource restores a purged
-    /// item, then clears the flag so subsequent normal sends aren't treated as restores.
-    private func sendPendingRestoreIfNeeded(to peer: MCPeerID, via session: MCSession) {
-        guard let restoreId = pendingRestoreId else { return }
-        let envelope = EclipseShareEnvelope.restoreItem(id: restoreId)
-            .withLibraryMode(ExternalOutputSettings.libraryMode)
+    /// Drops completed or cancelled replica progress so fan-out tracking stays bounded.
+    private func pruneFinishedReplicaTransfers() {
+        replicaTransferProgress.removeAll { $0.isFinished || $0.isCancelled }
+    }
 
-        guard let data = envelope.encoded() else {
-            logger.error("Could not encode restore_item for \(restoreId, privacy: .public)")
-            pendingRestoreId = nil
-            return
+    /// If a re-send was requested, tells the active TV the upcoming resource restores a
+    /// purged item, then clears the flag. Returns the id so replicas can get the same
+    /// envelope before their resource.
+    @discardableResult
+    private func sendPendingRestoreIfNeeded(
+        to peer: MCPeerID,
+        via session: MCSession
+    ) -> String? {
+        guard let restoreId = pendingRestoreId else { return nil }
+        guard sendRestoreEnvelope(id: restoreId, to: peer, via: session) else {
+            return nil
         }
+        // Clear only once the TV has actually been told. Clearing up front meant a
+        // failed send consumed the intent, and the resource that followed was filed
+        // as a brand-new item instead of restoring the purged one.
+        pendingRestoreId = nil
+        return restoreId
+    }
 
+    /// Sends a `restore_item` envelope to one peer ahead of its media resource.
+    @discardableResult
+    private func sendRestoreEnvelope(
+        id: String,
+        to peer: MCPeerID,
+        via session: MCSession
+    ) -> Bool {
+        let envelope = EclipseShareEnvelope.restoreItem(id: id)
+            .withLibraryMode(ExternalOutputSettings.libraryMode)
+        guard let data = envelope.encoded() else {
+            logger.error("Could not encode restore_item for \(id, privacy: .public)")
+            return false
+        }
         do {
             try session.send(data, toPeers: [peer], with: .reliable)
-            // Clear only once the TV has actually been told. Clearing up front meant a
-            // failed send consumed the intent, and the resource that followed was filed
-            // as a brand-new item instead of restoring the purged one.
-            pendingRestoreId = nil
-            logger.info("Sent restore_item for id: \(restoreId)")
+            logger.info("Sent restore_item for id: \(id, privacy: .public)")
+            return true
         } catch {
             logger.error("restore_item send failed: \(error.localizedDescription)")
+            return false
         }
     }
 }

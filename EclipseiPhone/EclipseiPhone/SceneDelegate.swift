@@ -5,6 +5,7 @@
 //  Copyright © 2026 Moxie LLC. All rights reserved.
 //
 
+import CloudKit
 import UIKit
 
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
@@ -36,14 +37,62 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // selected item can be presented fullscreen on it.
         ExternalDisplayManager.shared.start()
 
-        // Warm the Website tile (real WKWebView) so its tap is instant + hero-ready.
-        // Saved bookmarks warm as they scroll into view instead of all at launch.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            WarmWebSessionPool.shared.warmFreeBrowse()
+        // Cold-start from an `eclipse://mac-remote` QR scan.
+        if let url = connectionOptions.urlContexts.first?.url {
+            handleIncomingURL(url)
+        }
+    }
+
+    func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
+        guard let url = URLContexts.first?.url else { return }
+        handleIncomingURL(url)
+    }
+
+    // MARK: - Deep Links
+
+    /// Opens Eclipse for Mac when the Camera (or another app) hands us a QR URL.
+    private func handleIncomingURL(_ url: URL) {
+        guard url.scheme?.lowercased() == ConnectURLParser.appScheme,
+              url.host?.lowercased() == ConnectURLParser.appHost else {
+            return
+        }
+        // Defer until after splash / first layout so presentation has a host VC.
+        DispatchQueue.main.async {
+            MacRemoteLauncher.open(connectString: url.absoluteString)
         }
     }
 
     // Note: app lifecycle work (reconnecting, pausing auto-connect timers) is handled via
     // UIApplication notifications in `iPhoneMainViewController+Setup.swift`, so the empty
     // UISceneSession lifecycle placeholders are intentionally omitted here.
+
+    /// Accepts a Show shared via CloudKit (`CKShare` link).
+    func windowScene(
+        _ windowScene: UIWindowScene,
+        userDidAcceptCloudKitShareWith cloudKitShareMetadata: CKShare.Metadata
+    ) {
+        let container = CKContainer(identifier: CloudKitSchema.containerIdentifier)
+        let op = CKAcceptSharesOperation(shareMetadatas: [cloudKitShareMetadata])
+        op.acceptSharesResultBlock = { result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success:
+                    // Shared CKSyncEngine will fetch the zone contents.
+                    NotificationCenter.default.post(
+                        name: LocalAlbumStore.didChangeNotification,
+                        object: nil
+                    )
+                case .failure(let error):
+                    let alert = UIAlertController(
+                        title: "Unable to Accept Share",
+                        message: error.localizedDescription,
+                        preferredStyle: .alert
+                    )
+                    alert.addAction(UIAlertAction(title: "OK", style: .default))
+                    self.window?.rootViewController?.present(alert, animated: true)
+                }
+            }
+        }
+        container.add(op)
+    }
 }

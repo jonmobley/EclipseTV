@@ -21,6 +21,10 @@ extension LiveHeaderView {
     /// Design font size of the LIVE badge, and the size it should read as when tucked.
     private static let badgeFontSize: CGFloat = 13
     private static let compactBadgeFontSize: CGFloat = 10
+    /// Screen-space shadow once the mini preview is fully tucked (counter-scaled locally).
+    private static let floatShadowOpacity: Float = 0.38
+    private static let floatShadowRadius: CGFloat = 16
+    private static let floatShadowYOffset: CGFloat = 6
 
     /// Records the collapse state the host is applying and refreshes derived chrome.
     /// - Parameters:
@@ -45,15 +49,79 @@ extension LiveHeaderView {
         if controls.isHidden != hideControls {
             controls.isHidden = hideControls
         }
+        if let fullscreen = libraryVideoFullscreenButton {
+            fullscreen.alpha = controlsFade
+            let hideFullscreen = controlsFade <= 0.01
+            if fullscreen.isHidden != hideFullscreen {
+                fullscreen.isHidden = hideFullscreen
+            }
+        }
+        if let ribbon = slideshowRibbonButton {
+            ribbon.alpha = controlsFade
+            let hideRibbon = controlsFade <= 0.01
+            if ribbon.isHidden != hideRibbon {
+                ribbon.isHidden = hideRibbon
+            }
+        }
         gradientLayer.opacity = Float(controlsFade)
         titleLabel.alpha = max(0, 1 - progress * 2)
 
-        layer.borderWidth = inverse
-        layer.cornerRadius = Self.expandedCornerRadius * (1 - progress)
+        // Locked preview keeps a thicker amber stroke; both widths counter-scale so
+        // the hairline stays constant under the host's uniform transform.
+        let baseBorder: CGFloat = isOutputLocked ? 3 : 1
+        layer.borderWidth = baseBorder * inverse
+        let radius = Self.expandedCornerRadius * (1 - progress)
             + Self.compactCornerRadius * inverse * progress
+        layer.cornerRadius = radius
+        applyFloatingLift(progress: progress, inverse: inverse, radius: radius)
         applyBadgeCounterScale()
         applyInteractionForPresentation()
         accessibilityHint = isCompactPresentation ? "Double tap to expand" : nil
+    }
+
+    /// Drop shadow for the tucked mini preview. Parent `masksToBounds` must turn off
+    /// for the shadow to paint, so content corners clip on the fill layers instead.
+    private func applyFloatingLift(
+        progress: CGFloat,
+        inverse: CGFloat,
+        radius: CGFloat
+    ) {
+        // After transport has faded — earlier and square controls can peek past
+        // the rounded corners while masksToBounds is off for the shadow.
+        let lift = min(1, max(0, (progress - 0.4) / 0.6))
+        if lift <= 0.01 {
+            layer.masksToBounds = true
+            layer.shadowOpacity = 0
+            layer.shadowPath = nil
+            syncContentCornerRadius(0)
+            return
+        }
+
+        layer.masksToBounds = false
+        syncContentCornerRadius(radius)
+        layer.shadowColor = UIColor.black.cgColor
+        layer.shadowOpacity = Self.floatShadowOpacity * Float(lift)
+        // Host scales the whole view — inflate local shadow so screen size stays put.
+        layer.shadowRadius = Self.floatShadowRadius * inverse
+        layer.shadowOffset = CGSize(width: 0, height: Self.floatShadowYOffset * inverse)
+        guard bounds.width > 1, bounds.height > 1 else {
+            layer.shadowPath = nil
+            return
+        }
+        layer.shadowPath = UIBezierPath(
+            roundedRect: bounds,
+            cornerRadius: radius
+        ).cgPath
+    }
+
+    /// Rounds fill layers while the hero's own layer leaves `masksToBounds` off for shadow.
+    private func syncContentCornerRadius(_ radius: CGFloat) {
+        imageView.layer.cornerRadius = radius
+        imageView.clipsToBounds = true
+        gradientLayer.cornerRadius = radius
+        gradientLayer.masksToBounds = true
+        webPreviewHost?.layer.cornerRadius = radius
+        screensaverPreview?.layer.cornerRadius = radius
     }
 
     /// Grows the LIVE badge in local space so it stays legible once scaled down,

@@ -32,7 +32,9 @@ class iPhoneMainViewController: UIViewController {
         scroll.showsHorizontalScrollIndicator = false
         scroll.showsVerticalScrollIndicator = false
         scroll.bounces = false
+        scroll.alwaysBounceVertical = false
         scroll.isDirectionalLockEnabled = true
+        scroll.contentInsetAdjustmentBehavior = .never
         scroll.translatesAutoresizingMaskIntoConstraints = false
         return scroll
     }()
@@ -100,14 +102,18 @@ class iPhoneMainViewController: UIViewController {
     var pendingVideoCropPreviewSize: CGSize?
     /// When set, the cropper is re-editing an existing library item (not a new add).
     var pendingEditItemId: String?
+    /// When set, the thumbnail picker updates an existing video’s poster (not a new add).
+    var pendingThumbnailEditItemId: String?
     /// When set, the next successfully added media item is also appended to this album.
     var pendingAlbumId: UUID?
     /// When set with `pendingSlideshowName`, the next image batch becomes a Slideshow.
     var pendingSlideshowShowId: UUID?
     /// Name for the Slideshow created from the next image-only import batch.
     var pendingSlideshowName: String?
-    /// When true, the next image pick updates the Logo tile instead of the library.
+    /// When true, the next image pick updates the Background tile instead of the library.
     var pendingLogoPick = false
+    /// Photos pick for custom Screensaver (image or video).
+    var pendingScreensaverPick = false
     /// Distinguishes PDF vs audio document-picker results.
     var pendingDocumentKind: PendingDocumentKind = .pdf
 
@@ -118,7 +124,26 @@ class iPhoneMainViewController: UIViewController {
 
     /// Footer mini player for ambient music.
     let audioMiniPlayer = AudioMiniPlayerView()
+    /// Collapsed music control (session kept; tap expands).
+    let audioMiniBubble = AudioMiniPlayerBubbleView()
+    /// When true, the bar is hidden and `audioMiniBubble` is shown.
+    /// Ambient control prefers the floating bubble; expand is temporary.
+    var audioMiniCollapsed = true
+    /// True while the bubble ↔ footer morph is in flight.
+    var isAudioMiniChromeAnimating = false
     var audioMiniHeightConstraint: NSLayoutConstraint?
+    /// Full-width footer pin (phone portrait / iPad).
+    var audioMiniPortraitConstraints: [NSLayoutConstraint] = []
+    /// Docked under the landscape live preview at the same width.
+    var audioMiniSideBySideConstraints: [NSLayoutConstraint] = []
+    /// Leading inset of the docked bar (from `view.leading`).
+    var audioMiniDockLeadingConstraint: NSLayoutConstraint?
+    /// Width of the docked bar (matches the live preview).
+    var audioMiniDockWidthConstraint: NSLayoutConstraint?
+    /// Top of the docked bar (from `view.top`, just under the preview).
+    var audioMiniDockTopConstraint: NSLayoutConstraint?
+    /// Mirrors `libraryViewController.isSideBySideChrome` for the mini bar.
+    var isAudioMiniSideBySide = false
     var audioPlayerObserver: NSObjectProtocol?
     
     // MARK: - Lifecycle
@@ -163,6 +188,8 @@ class iPhoneMainViewController: UIViewController {
         super.viewDidLayoutSubviews()
         updateHomeSplitLayoutIfNeeded()
         syncHomePagerOffsetIfNeeded()
+        // Library decides side-by-side after its own layout; dock the mini bar after.
+        syncAudioMiniDockingIfNeeded()
     }
 
     override func viewWillDisappear(_ animated: Bool) {

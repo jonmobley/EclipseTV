@@ -57,7 +57,11 @@ extension ImageViewController {
 
     /// The companion asked us to make a specific item live. Resolve it and bring it
     /// to fullscreen, mirroring the behavior of selecting it on the TV.
-    func connectionManager(_ manager: ConnectionManager, didReceivePlayRequestForId id: String) {
+    func connectionManager(
+        _ manager: ConnectionManager,
+        didReceivePlayRequestForId id: String,
+        startAt: Double?
+    ) {
         // A file may have been purged by tvOS since the last sync; catch it now (this
         // moves any missing file into the ledger and rebroadcasts an updated manifest)
         // before we attempt to display it.
@@ -72,8 +76,16 @@ extension ImageViewController {
             return
         }
 
-        // If the user is mid-reorder or a menu is open, just update the selection; the
-        // live view will catch up once the UI returns to a safe state.
+        // Arm seek before any early return so a deferred make-live (move mode /
+        // presented menu) still resumes from the companion’s offset.
+        if let path = dataSource.getPath(at: index), MediaItem(path: path).isVideo {
+            pendingVideoStartAt = (startAt ?? 0) > 0 ? startAt : nil
+        } else {
+            pendingVideoStartAt = nil
+        }
+
+        // Mid-reorder or a menu is open: update selection; live view catches up
+        // when the UI returns to a safe state (pending seek already stored).
         if isMoveMode || presentedViewController != nil {
             dataSource.setCurrentIndex(index)
             showNotificationToast(message: "Selection updated from companion")

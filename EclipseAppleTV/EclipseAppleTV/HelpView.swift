@@ -39,7 +39,7 @@ class HelpView: UIView {
         • While a video plays, its controls appear on interaction and hide automatically
         
         
-        Send photos and videos from the Eclipse iPhone app, or set up
+        Send images and videos from the Eclipse iPhone app, or set up
         remote albums from the options menu. Media is shown fullscreen
         while maintaining aspect ratio.
         """

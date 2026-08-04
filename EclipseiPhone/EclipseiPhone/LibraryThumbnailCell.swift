@@ -7,35 +7,44 @@
 
 import UIKit
 
-/// Grid cell for home-library media or special tiles (Logo, Camera, Web, Album).
+/// Grid cell for home-library media or special tiles (Background, Camera, Web, Album).
 final class LibraryThumbnailCell: UICollectionViewCell {
 
     static let reuseIdentifier = "LibraryThumbnailCell"
 
     // MARK: - Subviews
 
-    /// Rounded media / tool surface (caption may sit below this in Landscape).
+    /// Rounded media / tool surface (titles overlay the bottom with a fade).
     let cardView = UIView()
     let imageView = UIImageView()
     let placeholderIcon = UIImageView()
     let captionLabel = UILabel()
-    /// Bottom fade under overlaid captions (Vertical tools / Show titles).
+    /// Bottom fade under on-card titles (tools, Shows, websites).
     let captionScrimView = GradientView()
     private let videoBadge = UIImageView()
     private let durationLabel = PaddedLabel()
     let liveBadge = PaddedLabel()
     private let unavailableBadge = PaddedLabel()
-    /// Warm live feed for the home Camera tile (nil until first idle configure).
-    var cameraPreview: CameraPreviewView?
+    /// Multi-select tick for the Add-to-Show picker and Show-grid select mode.
+    let selectionBadge = UIImageView()
     /// Hides the last-frame freeze once the tile preview is painting.
-    var cameraFreezeRevealWorkItem: DispatchWorkItem?
-
-    /// Active while caption is overlaid on the card (Vertical / media).
-    var cardFillConstraints: [NSLayoutConstraint] = []
-    /// Active while caption sits under the card (Landscape tools).
-    var cardAboveCaptionConstraints: [NSLayoutConstraint] = []
-    /// Tracks the last applied caption placement.
-    var captionBelowCard = false
+    var cameraFreezeRevealGate: TilePreviewPaintGate?
+    /// Clear overlay that hosts a pull-down menu (empty-Show Add tile).
+    private let menuButton: UIButton = {
+        let button = UIButton(type: .custom)
+        button.showsMenuAsPrimaryAction = true
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.isHidden = true
+        return button
+    }()
+    /// Visible ⋯ control for Show media / Background (same idea as Recent Show tiles).
+    let moreButton = UIButton(type: .system)
+    /// Clears a parked mid-play leave without going live.
+    let rewindButton = UIButton(type: .system)
+    /// Nudged up when a caption sits under the glyph; 0 for + -only add tiles.
+    private var placeholderCenterY: NSLayoutConstraint!
+    /// Last media id painted; keeps art when a reload hits a transient cache miss.
+    private var configuredMediaId: String?
 
     // MARK: - Init
 
@@ -55,7 +64,8 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         contentView.clipsToBounds = false
 
         cardView.backgroundColor = .secondarySystemBackground
-        cardView.layer.cornerRadius = 12
+        cardView.layer.cornerRadius = 14
+        cardView.layer.cornerCurve = .continuous
         cardView.clipsToBounds = true
         cardView.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(cardView)
@@ -86,11 +96,15 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         captionLabel.numberOfLines = 2
         captionLabel.isHidden = true
         captionLabel.translatesAutoresizingMaskIntoConstraints = false
-        contentView.addSubview(captionLabel)
+        cardView.addSubview(captionLabel)
 
+        // Dark disc + white play (palette) so the badge reads on light frames.
         let badgeConfig = UIImage.SymbolConfiguration(pointSize: 34, weight: .bold)
+            .applying(UIImage.SymbolConfiguration(paletteColors: [
+                .white,
+                UIColor(white: 0.18, alpha: 0.92)
+            ]))
         videoBadge.image = UIImage(systemName: "play.circle.fill", withConfiguration: badgeConfig)
-        videoBadge.tintColor = UIColor.white.withAlphaComponent(0.95)
         videoBadge.translatesAutoresizingMaskIntoConstraints = false
         videoBadge.isHidden = true
         cardView.addSubview(videoBadge)
@@ -109,14 +123,35 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         unavailableBadge.isHidden = true
         cardView.addSubview(unavailableBadge)
 
+        selectionBadge.image = UIImage(
+            systemName: "checkmark.circle.fill",
+            withConfiguration: UIImage.SymbolConfiguration(pointSize: 22, weight: .bold)
+        )
+        selectionBadge.tintColor = .systemBlue
+        // White inner disc so the tick reads over any thumbnail.
+        selectionBadge.backgroundColor = .white
+        selectionBadge.layer.cornerRadius = 11
+        selectionBadge.clipsToBounds = true
+        selectionBadge.isHidden = true
+        selectionBadge.translatesAutoresizingMaskIntoConstraints = false
+        cardView.addSubview(selectionBadge)
+
+        cardView.addSubview(menuButton)
+        installMoreButton()
+        installRewindButton()
+
         NSLayoutConstraint.activate([
+            cardView.topAnchor.constraint(equalTo: contentView.topAnchor),
+            cardView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
+            cardView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            cardView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+
             imageView.topAnchor.constraint(equalTo: cardView.topAnchor),
             imageView.bottomAnchor.constraint(equalTo: cardView.bottomAnchor),
             imageView.leadingAnchor.constraint(equalTo: cardView.leadingAnchor),
             imageView.trailingAnchor.constraint(equalTo: cardView.trailingAnchor),
 
             placeholderIcon.centerXAnchor.constraint(equalTo: cardView.centerXAnchor),
-            placeholderIcon.centerYAnchor.constraint(equalTo: cardView.centerYAnchor, constant: -10),
             placeholderIcon.widthAnchor.constraint(equalToConstant: 36),
             placeholderIcon.heightAnchor.constraint(equalToConstant: 36),
 
@@ -124,6 +159,10 @@ final class LibraryThumbnailCell: UICollectionViewCell {
             captionScrimView.trailingAnchor.constraint(equalTo: cardView.trailingAnchor),
             captionScrimView.bottomAnchor.constraint(equalTo: cardView.bottomAnchor),
             captionScrimView.heightAnchor.constraint(equalTo: cardView.heightAnchor, multiplier: 0.42),
+
+            captionLabel.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 8),
+            captionLabel.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -8),
+            captionLabel.bottomAnchor.constraint(equalTo: cardView.bottomAnchor, constant: -10),
 
             videoBadge.centerXAnchor.constraint(equalTo: cardView.centerXAnchor),
             videoBadge.centerYAnchor.constraint(equalTo: cardView.centerYAnchor),
@@ -135,10 +174,24 @@ final class LibraryThumbnailCell: UICollectionViewCell {
             liveBadge.topAnchor.constraint(equalTo: cardView.topAnchor, constant: 8),
 
             unavailableBadge.centerXAnchor.constraint(equalTo: cardView.centerXAnchor),
-            unavailableBadge.bottomAnchor.constraint(equalTo: cardView.bottomAnchor, constant: -8)
-        ])
+            unavailableBadge.bottomAnchor.constraint(equalTo: cardView.bottomAnchor, constant: -8),
 
-        applyCaptionPlacement(belowCard: false)
+            selectionBadge.trailingAnchor.constraint(
+                equalTo: cardView.trailingAnchor, constant: -8
+            ),
+            selectionBadge.topAnchor.constraint(equalTo: cardView.topAnchor, constant: 8),
+            selectionBadge.widthAnchor.constraint(equalToConstant: 22),
+            selectionBadge.heightAnchor.constraint(equalToConstant: 22),
+
+            menuButton.topAnchor.constraint(equalTo: cardView.topAnchor),
+            menuButton.bottomAnchor.constraint(equalTo: cardView.bottomAnchor),
+            menuButton.leadingAnchor.constraint(equalTo: cardView.leadingAnchor),
+            menuButton.trailingAnchor.constraint(equalTo: cardView.trailingAnchor)
+        ])
+        placeholderCenterY = placeholderIcon.centerYAnchor.constraint(
+            equalTo: cardView.centerYAnchor, constant: -10
+        )
+        placeholderCenterY.isActive = true
     }
 
     private func configurePill(_ label: PaddedLabel, background: UIColor, textColor: UIColor) {
@@ -152,20 +205,33 @@ final class LibraryThumbnailCell: UICollectionViewCell {
 
     // MARK: - Configuration
 
-    func configure(with item: LibraryItemDTO, thumbnail: UIImage?, isLive: Bool) {
+    func configure(
+        with item: LibraryItemDTO,
+        thumbnail: UIImage?,
+        isLive: Bool,
+        isLocked: Bool = false
+    ) {
+        // Under memory pressure `thumbnail(for:)` can briefly return nil after a
+        // reload — keep the previous bitmap for the same item instead of flashing
+        // the mountain / film placeholder.
+        let retained = (configuredMediaId == item.id && thumbnail == nil)
+            ? imageView.image
+            : nil
+        let image = thumbnail ?? retained
+
         resetChrome()
-        applyCaptionPlacement(belowCard: false)
+        configuredMediaId = item.id
         cardView.backgroundColor = .secondarySystemBackground
 
         let isUnavailable = (item.isAvailable == false)
 
-        imageView.image = thumbnail
+        imageView.image = image
         imageView.alpha = isUnavailable ? 0.35 : 1.0
-        placeholderIcon.isHidden = thumbnail != nil
+        placeholderIcon.isHidden = image != nil
         placeholderIcon.image = UIImage(systemName: item.isVideo ? "film" : "photo")
         placeholderIcon.tintColor = .tertiaryLabel
 
-        videoBadge.isHidden = isUnavailable || !(item.isVideo && thumbnail != nil)
+        videoBadge.isHidden = isUnavailable || !(item.isVideo && image != nil)
 
         if !isUnavailable, item.isVideo, item.duration > 0 {
             durationLabel.text = Self.formatDuration(item.duration)
@@ -173,51 +239,72 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         }
 
         unavailableBadge.isHidden = !isUnavailable
-        setLive(isLive && !isUnavailable)
+        setLive(isLive && !isUnavailable, isLocked: isLocked)
         var a11y = item.name
         if item.isVideo { a11y += ", video" }
         if isUnavailable { a11y += ", unavailable" }
         if isLive && !isUnavailable { a11y += ", live" }
+        if isLive && !isUnavailable && isLocked { a11y += ", locked" }
         accessibilityLabel = a11y
         isAccessibilityElement = true
     }
 
-    /// Dashed-style action tile (New Show / Add media).
-    func configureActionTile(title: String, systemImage: String = "plus") {
+    /// Soft “add” tile (New Show / Add media) — quiet fill, blue glyph.
+    ///
+    /// Pass an empty `title` for + -only tiles; VoiceOver still gets
+    /// `accessibilityLabel` (defaults to `"Add"` when the caption is empty).
+    /// - Parameter menu: When set, tap shows this pull-down (same pattern as header +).
+    func configureActionTile(
+        title: String,
+        systemImage: String = "plus",
+        menu: UIMenu? = nil,
+        accessibilityLabel: String? = nil
+    ) {
         resetChrome()
-        applyCaptionPlacement(belowCard: false)
-        cardView.backgroundColor = UIColor.secondarySystemBackground
-        cardView.layer.borderWidth = 1.5
-        cardView.layer.borderColor = UIColor.separator.cgColor
-        placeholderIcon.image = UIImage(systemName: systemImage)
-        placeholderIcon.tintColor = .secondaryLabel
+        cardView.backgroundColor = UIColor.tertiarySystemFill
+        cardView.layer.borderWidth = 0
+        let symbol = UIImage.SymbolConfiguration(pointSize: 28, weight: .medium)
+        placeholderIcon.image = UIImage(systemName: systemImage, withConfiguration: symbol)
+        placeholderIcon.tintColor = .systemBlue
         placeholderIcon.isHidden = false
+        // + alone is dead-center; titled tiles (New Show) keep the caption offset.
+        placeholderCenterY.constant = title.isEmpty ? 0 : -10
+        let voice = accessibilityLabel ?? (title.isEmpty ? "Add" : title)
         captionLabel.text = title
-        captionLabel.isHidden = false
-        updateCaptionScrim()
-        accessibilityLabel = title
+        captionLabel.textColor = .systemBlue
+        captionLabel.isHidden = title.isEmpty
+        // Keep the title readable on the light fill without a dark scrim.
+        captionScrimView.isHidden = true
+        self.accessibilityLabel = voice
         isAccessibilityElement = true
+        setPrimaryMenu(menu, accessibilityLabel: voice)
     }
 
-    /// Configures a non-media home tile (Logo, Camera, Show, Website).
+    /// Hosts a system pull-down on the tile; clears when `menu` is nil.
+    func setPrimaryMenu(_ menu: UIMenu?, accessibilityLabel: String? = nil) {
+        menuButton.menu = menu
+        menuButton.isHidden = menu == nil
+        guard menu != nil else { return }
+        isAccessibilityElement = false
+        menuButton.isAccessibilityElement = true
+        menuButton.accessibilityLabel = accessibilityLabel ?? self.accessibilityLabel
+    }
+
+    /// Configures a non-media home tile (Background, Camera, Show).
     /// - Parameter outlined: When true, draws a light stroke so a dark fill doesn't
     ///   disappear into the grid background.
     /// - Parameter thumbnailContentMode: `.scaleAspectFit` suits favicons; fill for snapshots.
-    /// - Parameter captionBelowInLandscape: Logo / Camera / Website use under-card
-    ///   labels in Landscape; Show covers keep an overlay title.
     func configureSpecial(
         title: String,
         systemImage: String?,
         thumbnail: UIImage?,
         fillColor: UIColor,
         isLive: Bool,
+        isLocked: Bool = false,
         outlined: Bool = false,
-        thumbnailContentMode: UIView.ContentMode = .scaleAspectFill,
-        captionBelowInLandscape: Bool = false
+        thumbnailContentMode: UIView.ContentMode = .scaleAspectFill
     ) {
         resetChrome()
-        let below = captionBelowInLandscape && !ExternalOutputSettings.isVerticalMode
-        applyCaptionPlacement(belowCard: below)
         cardView.backgroundColor = fillColor
         imageView.contentMode = thumbnailContentMode
         imageView.image = thumbnail
@@ -232,28 +319,40 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         captionLabel.text = title
         captionLabel.isHidden = false
         updateCaptionScrim()
-        setLive(isLive)
+        setLive(isLive, isLocked: isLocked)
         if outlined && !isLive {
             cardView.layer.borderWidth = 1
             cardView.layer.borderColor = UIColor.separator.cgColor
         }
-        accessibilityLabel = isLive ? "\(title), live" : title
+        accessibilityLabel = isLive
+            ? (isLocked ? "\(title), live, locked" : "\(title), live")
+            : title
         isAccessibilityElement = true
     }
 
     func resetChrome() {
+        contentView.alpha = 1
         imageView.image = nil
         imageView.alpha = 1.0
         imageView.contentMode = .scaleAspectFill
         placeholderIcon.isHidden = false
+        placeholderCenterY.constant = -10
         captionLabel.isHidden = true
         captionLabel.text = nil
+        captionLabel.textColor = .white
         captionScrimView.isHidden = true
         hideMediaBadges()
         liveBadge.isHidden = true
+        selectionBadge.isHidden = true
         cardView.layer.borderWidth = 0
+        menuButton.menu = nil
+        menuButton.isHidden = true
+        menuButton.isAccessibilityElement = false
+        clearMoreMenu()
+        clearRewind()
         recycleCameraPreview()
         stopArrangeWiggle()
+        configuredMediaId = nil
     }
 
     /// Clears play/duration/unavailable chrome used only by media cells.
@@ -263,16 +362,35 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         unavailableBadge.isHidden = true
     }
 
-    func setLive(_ isLive: Bool) {
+    /// Multi-select state for the Add-to-Show picker (call after `configure…`).
+    ///
+    /// Shares the card border with `setLive`; picker cells are never live.
+    func setPickerSelected(_ isSelected: Bool) {
+        selectionBadge.image = UIImage(
+            systemName: "checkmark.circle.fill",
+            withConfiguration: UIImage.SymbolConfiguration(pointSize: 22, weight: .bold)
+        )
+        selectionBadge.tintColor = .systemBlue
+        selectionBadge.backgroundColor = .white
+        selectionBadge.isHidden = !isSelected
+        cardView.layer.borderWidth = isSelected ? 3 : 0
+        cardView.layer.borderColor = isSelected
+            ? UIColor.systemBlue.cgColor
+            : UIColor.clear.cgColor
+    }
+
+    /// - Parameter isLocked: When live is locked, stroke + LIVE badge use amber.
+    func setLive(_ isLive: Bool, isLocked: Bool = false) {
         liveBadge.isHidden = !isLive
         cardView.layer.borderWidth = isLive ? 3 : 0
-        cardView.layer.borderColor = isLive ? UIColor.systemRed.cgColor : UIColor.clear.cgColor
+        let accent: UIColor = isLocked ? .systemOrange : .systemRed
+        cardView.layer.borderColor = isLive ? accent.cgColor : UIColor.clear.cgColor
+        liveBadge.backgroundColor = accent
     }
 
     override func prepareForReuse() {
         super.prepareForReuse()
         resetChrome()
-        applyCaptionPlacement(belowCard: false)
         cardView.backgroundColor = .secondarySystemBackground
     }
 
@@ -312,6 +430,9 @@ final class GradientView: UIView {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
+        // Clear→black must composite over the thumbnail; opaque skips that blend.
+        isOpaque = false
+        backgroundColor = .clear
         gradient.startPoint = CGPoint(x: 0.5, y: 0)
         gradient.endPoint = CGPoint(x: 0.5, y: 1)
         layer.addSublayer(gradient)

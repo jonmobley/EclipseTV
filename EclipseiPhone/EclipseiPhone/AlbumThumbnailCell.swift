@@ -50,9 +50,13 @@ final class AlbumThumbnailCell: UICollectionViewCell {
         placeholderIcon.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(placeholderIcon)
 
+        // Dark disc + white play (palette) so the badge reads on light frames.
         let badgeConfig = UIImage.SymbolConfiguration(pointSize: 34, weight: .bold)
+            .applying(UIImage.SymbolConfiguration(paletteColors: [
+                .white,
+                UIColor(white: 0.18, alpha: 0.92)
+            ]))
         videoBadge.image = UIImage(systemName: "play.circle.fill", withConfiguration: badgeConfig)
-        videoBadge.tintColor = UIColor.white.withAlphaComponent(0.95)
         videoBadge.translatesAutoresizingMaskIntoConstraints = false
         videoBadge.isHidden = true
         contentView.addSubview(videoBadge)

@@ -216,13 +216,21 @@ struct EclipseShareEnvelope: Codable {
     /// Makes an item live on the TV.
     /// - Parameter isFill: Fit / Fill framing for a still, so the TV matches the phone on
     ///   the first show. Nil leaves the TV's stored choice untouched.
-    static func playRequest(id: String, isFill: Bool? = nil) -> EclipseShareEnvelope {
-        EclipseShareEnvelope(
+    /// - Parameter startAt: Absolute seconds to seek when the item is a video (nil / 0 =
+    ///   from the start). Carried in `position` for wire compatibility.
+    static func playRequest(
+        id: String,
+        isFill: Bool? = nil,
+        startAt: Double? = nil
+    ) -> EclipseShareEnvelope {
+        let seek = (startAt ?? 0) > 0 ? startAt : nil
+        return EclipseShareEnvelope(
             eclipseMsg: EclipseShareProtocol.Kind.playRequest.rawValue,
             currentId: nil,
             items: nil,
             id: id,
-            isFill: isFill
+            isFill: isFill,
+            position: seek
         )
     }
 

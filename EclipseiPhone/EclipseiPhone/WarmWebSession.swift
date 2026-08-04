@@ -9,7 +9,7 @@ import UIKit
 import WebKit
 import os.log
 
-/// One warm `WKWebView` for a website card (home Website or a saved bookmark).
+/// One warm `WKWebView` for a saved website card (bookmark or Show member).
 ///
 /// Stays loaded off-screen (or in the home LiveHeader) so opening the page is
 /// instant. Thread safety: main-actor only.
@@ -33,11 +33,13 @@ final class WarmWebSession: NSObject {
 
     private var webView: WKWebView?
     private var hostView: UIView?
+    /// Keeps overscroll gutters on the page colour for this session's web view.
+    private var backgroundTint: WebBackgroundTint?
     private weak var mediaConsumer: WKScriptMessageHandler?
     private var settleWorkItem: DispatchWorkItem?
     private let logger = Logger(subsystem: "com.eclipseapp.ios", category: "WarmWeb")
 
-    /// - Parameter pageId: Free-browse id or a saved bookmark id.
+    /// - Parameter pageId: Saved website id.
     init(pageId: UUID) {
         self.pageId = pageId
         super.init()
@@ -157,6 +159,7 @@ final class WarmWebSession: NSObject {
             web.removeFromSuperview()
         }
         hostView?.removeFromSuperview()
+        backgroundTint = nil
         webView = nil
         hostView = nil
     }
@@ -187,14 +190,16 @@ final class WarmWebSession: NSObject {
         web.customUserAgent = PresentationViewController.mobileUserAgent
         web.navigationDelegate = self
         web.isOpaque = true
-        web.backgroundColor = .black
-        web.scrollView.backgroundColor = .black
+        // Start black; `backgroundTint` replaces this once the page reports a colour.
+        web.backgroundColor = WebBackgroundTint.fallback
+        web.scrollView.backgroundColor = WebBackgroundTint.fallback
         web.scrollView.contentInsetAdjustmentBehavior = .never
         host.addSubview(web)
 
         keyWindow()?.addSubview(host)
         hostView = host
         webView = web
+        backgroundTint = WebBackgroundTint(webView: web)
         return web
     }
 
@@ -213,6 +218,11 @@ final class WarmWebSession: NSObject {
             hostView = host
             keyWindow()?.addSubview(host)
         }
+        // Phone stage uses bounds + scale transform for the logical viewport.
+        // Clear that before assigning frame — setting frame while transformed is
+        // undefined and leaves bounds as a tiny corner, which is what the
+        // thumbnail snapshot then captures (especially visible in Landscape).
+        web.transform = .identity
         web.translatesAutoresizingMaskIntoConstraints = true
         web.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         web.frame = CGRect(origin: .zero, size: size)
@@ -265,6 +275,7 @@ final class WarmWebSession: NSObject {
 extension WarmWebSession: WKNavigationDelegate {
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        backgroundTint?.refresh()
         settleWarm()
         guard !isAdopted else { return }
         captureThumbnailIfPossible()

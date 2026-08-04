@@ -19,6 +19,8 @@ struct PresentationSource: Equatable {
         case image(url: URL, fill: Bool)
         /// A video at `url` (a local file or an HTTPS URL), with playback options.
         case video(url: URL, isLooping: Bool, isMuted: Bool)
+        /// Muted looping Screensaver; aspect-fill with a seamless crossfade at the loop.
+        case screensaver(url: URL)
         /// Live back-camera feed from `CameraManager` (AirPlay only).
         case camera
         /// A web page rendered full-bleed on the external display (AirPlay only).
@@ -33,6 +35,14 @@ struct PresentationSource: Equatable {
     }
 
     let content: Content
+    /// Absolute seconds to seek when presenting `.video`. Ignored for other content.
+    let videoStartAt: TimeInterval
+
+    /// - Parameter videoStartAt: Resume offset for library video (0 = from the start).
+    init(content: Content, videoStartAt: TimeInterval = 0) {
+        self.content = content
+        self.videoStartAt = videoStartAt
+    }
 
     // MARK: - Convenience builders
 
@@ -40,8 +50,21 @@ struct PresentationSource: Equatable {
         PresentationSource(content: .image(url: url, fill: fill))
     }
 
-    static func video(_ url: URL, isLooping: Bool, isMuted: Bool) -> PresentationSource {
-        PresentationSource(content: .video(url: url, isLooping: isLooping, isMuted: isMuted))
+    static func video(
+        _ url: URL,
+        isLooping: Bool,
+        isMuted: Bool,
+        startAt: TimeInterval = 0
+    ) -> PresentationSource {
+        PresentationSource(
+            content: .video(url: url, isLooping: isLooping, isMuted: isMuted),
+            videoStartAt: startAt
+        )
+    }
+
+    /// Muted seamless-loop Screensaver for AirPlay presentation.
+    static func screensaver(_ url: URL) -> PresentationSource {
+        PresentationSource(content: .screensaver(url: url))
     }
 
     /// Live camera feed for AirPlay presentation.
@@ -72,13 +95,23 @@ struct PresentationSource: Equatable {
     /// copy when present and falling back to its thumbnail otherwise.
     ///
     /// Stills carry the item's saved Fit / Fill framing (`MediaFitSettings`).
-    static func forLibraryItem(_ item: LibraryItemDTO, thumbnail: UIImage?) -> PresentationSource {
+    /// - Parameter startAt: Resume offset for video (0 = from the start).
+    static func forLibraryItem(
+        _ item: LibraryItemDTO,
+        thumbnail: UIImage?,
+        startAt: TimeInterval = 0
+    ) -> PresentationSource {
         guard let localURL = LocalMediaStore.shared.localURL(forId: item.id) else {
             return .unavailable(thumbnail: thumbnail,
                                 message: "Full-resolution copy isn't stored on this device.")
         }
         if item.isVideo {
-            return .video(localURL, isLooping: item.isLooping ?? false, isMuted: item.isMuted ?? false)
+            return .video(
+                localURL,
+                isLooping: item.isLooping ?? false,
+                isMuted: item.isMuted ?? false,
+                startAt: startAt
+            )
         }
         return .image(localURL, fill: MediaFitSettings.isFill(forId: item.id))
     }

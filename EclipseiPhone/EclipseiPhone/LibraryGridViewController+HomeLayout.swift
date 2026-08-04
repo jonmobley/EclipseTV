@@ -12,6 +12,7 @@ import UIKit
 extension LibraryGridViewController {
 
     enum HomeSection: Hashable {
+        case hero
         case tools
         case slideshowRibbon
         case shows
@@ -19,14 +20,14 @@ extension LibraryGridViewController {
 
     /// Section order for the current Home / Show / live-ribbon state.
     ///
-    /// Home is Recent Shows only. The Logo / Camera / Website row belongs to an
-    /// open Show, where those tools act on the Show you're looking at.
+    /// Home: hero carousel, then Recent. An open Show uses one media grid
+    /// (tools + members from `surfaceIds`); no fixed tools band.
     static func visibleHomeSections(
         isShowMode: Bool,
         showsSlideshowRibbon: Bool
     ) -> [HomeSection] {
-        guard isShowMode else { return [.shows] }
-        var sections: [HomeSection] = [.tools]
+        guard isShowMode else { return [.hero, .shows] }
+        var sections: [HomeSection] = []
         if showsSlideshowRibbon {
             sections.append(.slideshowRibbon)
         }
@@ -34,21 +35,46 @@ extension LibraryGridViewController {
         return sections
     }
 
+    /// Home / Show layout inputs, re-read on every layout pass.
+    struct HomeLayoutState {
+        var isShowMode: Bool
+        var showsSlideshowRibbon: Bool
+
+        /// Home with nothing playing — the state to assume once the controller is gone.
+        static let home = HomeLayoutState(
+            isShowMode: false,
+            showsSlideshowRibbon: false
+        )
+
+        var sections: [HomeSection] {
+            LibraryGridViewController.visibleHomeSections(
+                isShowMode: isShowMode,
+                showsSlideshowRibbon: showsSlideshowRibbon
+            )
+        }
+    }
+
     /// Tools row (3-up) + optional live slideshow ribbon + Recent/Show grid.
+    ///
+    /// `state` is sampled per pass rather than captured once. The data source derives
+    /// its section count from the same mutable state (open Show, live slideshow) on
+    /// every query, so a layout holding a snapshot of it can be asked for a section
+    /// it doesn't know — which UIKit treats as a fatal client error, not a glitch.
     static func makeHomeLayout(
         sectionInset: CGFloat,
         spacing: CGFloat,
-        isShowMode: Bool,
-        showsSlideshowRibbon: Bool
+        state: @escaping () -> HomeLayoutState
     ) -> UICollectionViewCompositionalLayout {
-        let visible = visibleHomeSections(
-            isShowMode: isShowMode,
-            showsSlideshowRibbon: showsSlideshowRibbon
-        )
-        return HomeGridLayout { sectionIndex, environment in
+        HomeGridLayout { sectionIndex, environment in
             let width = environment.container.effectiveContentSize.width
-            guard visible.indices.contains(sectionIndex) else { return nil }
+            let live = state()
+            let visible = live.sections
+            guard visible.indices.contains(sectionIndex) else {
+                return Self.unknownSection()
+            }
             switch visible[sectionIndex] {
+            case .hero:
+                return Self.heroSection(sectionInset: sectionInset)
             case .tools:
                 return Self.toolsSection(
                     containerWidth: width,
@@ -62,7 +88,7 @@ extension LibraryGridViewController {
                     spacing: spacing
                 )
             case .shows:
-                if isShowMode {
+                if live.isShowMode {
                     return Self.showMediaSection(
                         containerWidth: width,
                         sectionInset: sectionInset,
@@ -76,6 +102,53 @@ extension LibraryGridViewController {
                 )
             }
         }
+    }
+
+    /// Estimated height of the Home hero carousel (card + page dots).
+    static var heroEstimatedHeight: CGFloat {
+        HomeHeroCarouselCell.cardHeight + 28
+    }
+
+    /// Marketing carousel above Recent.
+    private static func heroSection(
+        sectionInset: CGFloat
+    ) -> NSCollectionLayoutSection {
+        let height = heroEstimatedHeight
+        let itemSize = NSCollectionLayoutSize(
+            widthDimension: .fractionalWidth(1),
+            heightDimension: .absolute(height)
+        )
+        let item = NSCollectionLayoutItem(layoutSize: itemSize)
+        let group = NSCollectionLayoutGroup.vertical(
+            layoutSize: itemSize,
+            subitems: [item]
+        )
+        let section = NSCollectionLayoutSection(group: group)
+        section.contentInsets = NSDirectionalEdgeInsets(
+            top: 4, leading: sectionInset,
+            bottom: 4, trailing: sectionInset
+        )
+        return section
+    }
+
+    /// Stand-in for a section index the layout can't name.
+    ///
+    /// The provider must not return nil for a section UIKit has content to render:
+    /// it raises `NSInternalInconsistencyException` ("Invalid section definition")
+    /// rather than skipping the section. This degrades a layout / data-source
+    /// disagreement into a hairline row that the next invalidation corrects.
+    private static func unknownSection() -> NSCollectionLayoutSection {
+        let size = NSCollectionLayoutSize(
+            widthDimension: .fractionalWidth(1),
+            heightDimension: .absolute(minimumTileSide)
+        )
+        let item = NSCollectionLayoutItem(layoutSize: size)
+        return NSCollectionLayoutSection(
+            group: NSCollectionLayoutGroup.horizontal(
+                layoutSize: size,
+                subitems: [item]
+            )
+        )
     }
 
     /// Smallest tile edge the layout will emit.
@@ -105,23 +178,18 @@ extension LibraryGridViewController {
         sectionInset: CGFloat,
         spacing: CGFloat
     ) -> NSCollectionLayoutSection {
-        let orientation = ExternalOutputSettings.orientation
-        let columns = max(CGFloat(orientation.gridColumnCount(
-            forWidth: containerWidth, sectionInset: sectionInset, spacing: spacing
-        )), 1)
-        let itemWidth = columnWidth(
+        let columns = homeGridColumnCount(
             containerWidth: containerWidth,
             sectionInset: sectionInset,
-            spacing: spacing,
-            columns: columns
+            spacing: spacing
         )
-        let aspect = orientation.gridCellHeightOverWidth
-        let cardHeight = max((itemWidth * aspect).rounded(.down), minimumTileSide)
-        // Landscape: Logo / Camera / Website labels sit under the 16:9 cards.
-        let captionReserve = ExternalOutputSettings.isVerticalMode
-            ? 0
-            : LibraryThumbnailCell.landscapeCaptionReserve
-        let itemHeight = cardHeight + captionReserve
+        let card = homeTileSize(
+            containerWidth: containerWidth,
+            sectionInset: sectionInset,
+            spacing: spacing
+        )
+        let itemWidth = card.width
+        let itemHeight = card.height
 
         let itemSize = NSCollectionLayoutSize(
             widthDimension: .absolute(itemWidth),
@@ -135,7 +203,7 @@ extension LibraryGridViewController {
         let group = NSCollectionLayoutGroup.horizontal(
             layoutSize: groupSize,
             repeatingSubitem: item,
-            count: Int(columns)
+            count: columns
         )
         group.interItemSpacing = .fixed(spacing)
 
@@ -150,66 +218,90 @@ extension LibraryGridViewController {
     }
 
     /// Top padding above the Recent Shows header.
-    static let showsGridTopInset: CGFloat = 20
+    static let showsGridTopInset: CGFloat = 12
 
-    /// Target Show-tile edge. Wider panes gain columns instead of bigger tiles.
-    private static let showsTilePreferredWidth: CGFloat = 120
-
-    /// Recent Shows columns — 3-up on a phone, more once there's room.
-    static func showsGridColumnCount(
+    /// Columns for every tile band in the home collection view, from the Display
+    /// Mode: 2-up for 16:9 Landscape, 3-up for 9:16 Vertical (4-up when the phone
+    /// is turned), gaining further columns on iPad rather than growing the tile.
+    static func homeGridColumnCount(
         containerWidth: CGFloat,
         sectionInset: CGFloat,
-        spacing: CGFloat
+        spacing: CGFloat,
+        orientation: ExternalOutputOrientation = ExternalOutputSettings.orientation
     ) -> Int {
-        let available = containerWidth - sectionInset * 2
-        guard available > 0 else { return 3 }
-        let fitted = Int(floor((available + spacing) / (showsTilePreferredWidth + spacing)))
-        return max(3, fitted)
+        max(orientation.gridColumnCount(
+            forWidth: containerWidth, sectionInset: sectionInset, spacing: spacing
+        ), 1)
     }
 
-    /// Recent Shows tile edge — square, derived from the current column count.
-    static func showsTileSide(
+    /// Tile size for an open Show's grid: 16:9 in Landscape, 9:16 in Vertical.
+    static func homeTileSize(
         containerWidth: CGFloat,
         sectionInset: CGFloat,
-        spacing: CGFloat
-    ) -> CGFloat {
-        columnWidth(
+        spacing: CGFloat,
+        orientation: ExternalOutputOrientation = ExternalOutputSettings.orientation
+    ) -> CGSize {
+        let width = columnWidth(
             containerWidth: containerWidth,
             sectionInset: sectionInset,
             spacing: spacing,
-            columns: CGFloat(showsGridColumnCount(
+            columns: CGFloat(homeGridColumnCount(
+                containerWidth: containerWidth,
+                sectionInset: sectionInset,
+                spacing: spacing,
+                orientation: orientation
+            ))
+        )
+        let height = max(
+            (width * orientation.gridCellHeightOverWidth).rounded(.down), minimumTileSide
+        )
+        return CGSize(width: width, height: height)
+    }
+
+    /// Square tile for Home Recent (Landscape + Vertical Shows share one grid).
+    static func homeRecentTileSize(
+        containerWidth: CGFloat,
+        sectionInset: CGFloat,
+        spacing: CGFloat
+    ) -> CGSize {
+        let width = columnWidth(
+            containerWidth: containerWidth,
+            sectionInset: sectionInset,
+            spacing: spacing,
+            columns: CGFloat(homeGridColumnCount(
                 containerWidth: containerWidth,
                 sectionInset: sectionInset,
                 spacing: spacing
             ))
         )
+        return CGSize(width: width, height: width)
     }
 
-    /// Recent Shows on Home: square tiles wrapping down the page.
+    /// Recent Shows on Home: square tiles (both Display Modes) wrapping down the page.
     private static func showsGridSection(
         containerWidth: CGFloat,
         sectionInset: CGFloat,
         spacing: CGFloat
     ) -> NSCollectionLayoutSection {
-        let columns = showsGridColumnCount(
+        let columns = homeGridColumnCount(
             containerWidth: containerWidth,
             sectionInset: sectionInset,
             spacing: spacing
         )
-        let side = showsTileSide(
+        let tile = homeRecentTileSize(
             containerWidth: containerWidth,
             sectionInset: sectionInset,
             spacing: spacing
         )
 
         let itemSize = NSCollectionLayoutSize(
-            widthDimension: .absolute(side),
-            heightDimension: .absolute(side)
+            widthDimension: .absolute(tile.width),
+            heightDimension: .absolute(tile.height)
         )
         let item = NSCollectionLayoutItem(layoutSize: itemSize)
         let groupSize = NSCollectionLayoutSize(
             widthDimension: .fractionalWidth(1),
-            heightDimension: .absolute(side)
+            heightDimension: .absolute(tile.height)
         )
         let group = NSCollectionLayoutGroup.horizontal(
             layoutSize: groupSize,
@@ -222,7 +314,7 @@ extension LibraryGridViewController {
         section.interGroupSpacing = spacing
         section.contentInsets = NSDirectionalEdgeInsets(
             top: showsGridTopInset, leading: sectionInset,
-            bottom: sectionInset, trailing: sectionInset
+            bottom: sectionInset + 8, trailing: sectionInset
         )
 
         section.boundarySupplementaryItems = [Self.sectionHeaderItem()]
@@ -264,13 +356,12 @@ extension LibraryGridViewController {
             top: 4, leading: sectionInset,
             bottom: 4, trailing: sectionInset
         )
-
-        section.boundarySupplementaryItems = [Self.sectionHeaderItem()]
+        // No title row — the live hero already identifies the slideshow.
         return section
     }
 
-    /// Nominal section-header height; also used to place the empty-state hint.
-    static let sectionHeaderEstimatedHeight: CGFloat = 28
+    /// Nominal Home section-header height (Recent Shows title); empty-state offset.
+    static let sectionHeaderEstimatedHeight: CGFloat = 44
 
     private static func sectionHeaderItem() -> NSCollectionLayoutBoundarySupplementaryItem {
         let headerSize = NSCollectionLayoutSize(
@@ -290,33 +381,30 @@ extension LibraryGridViewController {
         sectionInset: CGFloat,
         spacing: CGFloat
     ) -> NSCollectionLayoutSection {
-        let orientation = ExternalOutputSettings.orientation
-        let columns = max(CGFloat(orientation.gridColumnCount(
-            forWidth: containerWidth, sectionInset: sectionInset, spacing: spacing
-        )), 1)
-        let itemWidth = columnWidth(
+        let columns = homeGridColumnCount(
             containerWidth: containerWidth,
             sectionInset: sectionInset,
-            spacing: spacing,
-            columns: columns
+            spacing: spacing
         )
-        let itemHeight = max(
-            (itemWidth * orientation.gridCellHeightOverWidth).rounded(.down), minimumTileSide
+        let tile = homeTileSize(
+            containerWidth: containerWidth,
+            sectionInset: sectionInset,
+            spacing: spacing
         )
 
         let itemSize = NSCollectionLayoutSize(
-            widthDimension: .absolute(itemWidth),
-            heightDimension: .absolute(itemHeight)
+            widthDimension: .absolute(tile.width),
+            heightDimension: .absolute(tile.height)
         )
         let item = NSCollectionLayoutItem(layoutSize: itemSize)
         let groupSize = NSCollectionLayoutSize(
             widthDimension: .fractionalWidth(1),
-            heightDimension: .absolute(itemHeight)
+            heightDimension: .absolute(tile.height)
         )
         let group = NSCollectionLayoutGroup.horizontal(
             layoutSize: groupSize,
             repeatingSubitem: item,
-            count: Int(columns)
+            count: columns
         )
         group.interItemSpacing = .fixed(spacing)
 

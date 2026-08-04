@@ -9,26 +9,28 @@ import Foundation
 
 /// Phone-only home-grid item. Specials are never part of the Apple TV Multipeer manifest.
 ///
-/// Home is a single Recent Shows grid. Opening a Show adds the tools band
-/// (Logo / Camera / Website) and replaces Recent with that Show's media grid.
-/// Black is a header control. Saved bookmarks and PDFs live under +.
+/// Home is a hero carousel plus Recent Shows from both Display Modes (square
+/// tiles). An open Show uses `ShowGridItem` for tools and media. Black is a
+/// header control. Websites and PDFs live under + or inside a Show.
 enum HomeGridItem: Equatable {
     case logo
+    case screensaver
     case camera
-    case website
     case show(LocalAlbum)
     /// Trailing grid tile — creates a Show (also the empty-grid placeholder).
     case createShow
+    /// Adds photos or a website to the open Show (empty-Show Add tile).
+    case addShowMedia
 
-    /// Fixed tools row (section 0).
-    static var tools: [HomeGridItem] { [.logo, .camera, .website] }
+    /// Max Shows shown on the Home Recent ribbon before See All.
+    static let recentHomeLimit = 6
 
-    /// Leading pinned tool count.
-    static var specialCount: Int { tools.count }
-
-    /// Every Show in the current Display Mode, always ending with `createShow`.
+    /// Recent Shows (typically both Display Modes, by last opened).
+    /// Includes `createShow` only when there are no Shows yet.
     static func recentShows(from albums: [LocalAlbum]) -> [HomeGridItem] {
-        albums.map { HomeGridItem.show($0) } + [.createShow]
+        let recent = Array(albums.prefix(recentHomeLimit))
+        guard !recent.isEmpty else { return [.createShow] }
+        return recent.map { HomeGridItem.show($0) }
     }
 }
 
@@ -37,15 +39,17 @@ extension HomeGridItem: Hashable {
         switch self {
         case .logo:
             hasher.combine(0)
-        case .camera:
+        case .screensaver:
             hasher.combine(1)
-        case .website:
+        case .camera:
             hasher.combine(2)
         case .createShow:
             hasher.combine(3)
         case .show(let album):
             hasher.combine(4)
             hasher.combine(album.id)
+        case .addShowMedia:
+            hasher.combine(5)
         }
     }
 }

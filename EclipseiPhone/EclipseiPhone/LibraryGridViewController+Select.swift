@@ -1,0 +1,281 @@
+//
+//  LibraryGridViewController+Select.swift
+//  Eclipse
+//
+//  Copyright © 2026 Moxie LLC. All rights reserved.
+//
+
+import UIKit
+
+// MARK: - Select (Show mode multi-select)
+
+extension LibraryGridViewController {
+
+    /// Enters multi-select for the open Show's surface tiles.
+    /// - Parameter seedId: Membership / tool id to pre-select (from the ⋯ that opened Select).
+    func beginSelecting(seedId: String?) {
+        guard isShowMode, !isSelecting else { return }
+        if isArranging {
+            cancelArranging()
+        }
+        isSelecting = true
+        selectedShowItemIds = []
+        if let seedId, isShowSelectionIdSelectable(seedId) {
+            selectedShowItemIds.insert(seedId)
+        }
+        reloadForSelectChange()
+        notifySelectChrome()
+        UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+        showPresentationToast("Select items, then Copy or Remove")
+    }
+
+    /// Leaves select mode without applying a bulk action.
+    func cancelSelecting() {
+        guard isSelecting else { return }
+        endSelectMode()
+    }
+
+    /// Checkmark / empty-circle chrome for a Show tile while selecting.
+    func applySelectAppearance(to cell: LibraryThumbnailCell, at indexPath: IndexPath) {
+        guard isSelecting, isShowMode,
+              homeSection(at: indexPath.section) == .shows else {
+            return
+        }
+        let items = openShowGridItems
+        guard items.indices.contains(indexPath.item) else { return }
+        let item = items[indexPath.item]
+        let selectable = isShowGridItemSelectable(item)
+        let id = selectionId(for: item)
+        let selected = id.map { selectedShowItemIds.contains($0) } ?? false
+        cell.setShowSelectMode(
+            enabled: true,
+            isSelected: selected,
+            isSelectable: selectable
+        )
+        // Live surface tiles can't be checked — dim them like arrange pins.
+        cell.alpha = (id != nil && !selectable) ? 0.45 : 1
+    }
+
+    /// Toggles selection for a Show-grid tap while in select mode.
+    /// - Returns: `true` when the tap was consumed (caller should skip go-live).
+    @discardableResult
+    func handleSelectModeTap(at indexPath: IndexPath) -> Bool {
+        guard isSelecting else { return false }
+        let items = openShowGridItems
+        guard items.indices.contains(indexPath.item) else { return true }
+        let item = items[indexPath.item]
+        guard isShowGridItemSelectable(item),
+              let id = selectionId(for: item) else { return true }
+        if selectedShowItemIds.contains(id) {
+            selectedShowItemIds.remove(id)
+        } else {
+            selectedShowItemIds.insert(id)
+        }
+        if let cell = collectionView.cellForItem(at: indexPath) as? LibraryThumbnailCell {
+            applySelectAppearance(to: cell, at: indexPath)
+        }
+        notifySelectChrome()
+        UISelectionFeedbackGenerator().selectionChanged()
+        return true
+    }
+
+    /// Confirms and removes every selected member / tool from the open Show.
+    func confirmBulkRemoveFromShow() {
+        guard isSelecting, let showId = openShowId else { return }
+        let ids = Array(selectedShowItemIds)
+        guard !ids.isEmpty else { return }
+        let count = ids.count
+        let alert = UIAlertController(
+            title: count == 1 ? "Remove Item?" : "Remove \(count) Items?",
+            message: "Selected items leave this Show. Media stays in your library.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Remove", style: .destructive) { [weak self] _ in
+            guard let self else { return }
+            self.endSelectMode()
+            for id in ids {
+                if ShowToolToken.isTool(id) {
+                    LocalAlbumStore.shared.hideTool(id, albumId: showId)
+                } else {
+                    LocalAlbumStore.shared.remove(itemId: id, fromAlbumId: showId)
+                }
+            }
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+        })
+        present(alert, animated: true)
+    }
+
+    /// Picks a destination Show and copies selected membership / tools into it.
+    func presentBulkCopyToShow() {
+        guard isSelecting, let openId = openShowId else { return }
+        let ids = Array(selectedShowItemIds)
+        guard !ids.isEmpty else { return }
+        let destinations = LocalAlbumStore.shared.albums.filter {
+            $0.id != openId && $0.orientation == ExternalOutputSettings.orientation
+        }
+        guard !destinations.isEmpty else {
+            showPresentationToast("No other Shows to copy to")
+            return
+        }
+        let sheet = UIAlertController(
+            title: "Copy to Show",
+            message: nil,
+            preferredStyle: .actionSheet
+        )
+        for show in destinations {
+            sheet.addAction(UIAlertAction(title: show.name, style: .default) { [weak self] _ in
+                self?.copySelection(ids, toAlbumId: show.id)
+            })
+        }
+        sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        if let popover = sheet.popoverPresentationController {
+            popover.sourceView = view
+            popover.sourceRect = CGRect(
+                x: view.bounds.midX, y: view.safeAreaInsets.top + 26,
+                width: 1, height: 1
+            )
+            popover.permittedArrowDirections = .up
+        }
+        present(sheet, animated: true)
+    }
+
+    /// Builds the header Actions menu for the current selection count.
+    func selectActionsMenu() -> UIMenu? {
+        guard isSelecting, !selectedShowItemIds.isEmpty else { return nil }
+        let count = selectedShowItemIds.count
+        let copy = UIAction(
+            title: "Copy to Show…",
+            image: UIImage(systemName: "folder.badge.plus")
+        ) { [weak self] _ in
+            self?.presentBulkCopyToShow()
+        }
+        let remove = UIAction(
+            title: count == 1 ? "Remove" : "Remove \(count) Items",
+            image: UIImage(systemName: "folder.badge.minus"),
+            attributes: .destructive
+        ) { [weak self] _ in
+            self?.confirmBulkRemoveFromShow()
+        }
+        return UIMenu(children: [copy, remove])
+    }
+
+    /// Drops ids that are no longer in the Show or became live.
+    func pruneShowSelection() {
+        guard isSelecting else { return }
+        let before = selectedShowItemIds.count
+        selectedShowItemIds = Set(
+            selectedShowItemIds.filter { isShowSelectionIdSelectable($0) }
+        )
+        if selectedShowItemIds.count != before {
+            notifySelectChrome()
+        }
+    }
+
+    /// True when this surface id can be checked (present, not live).
+    func isShowSelectionIdSelectable(_ id: String) -> Bool {
+        guard let item = openShowGridItems.first(where: { selectionId(for: $0) == id })
+        else { return false }
+        return isShowGridItemSelectable(item)
+    }
+
+    /// Surface members / tools that are not currently live.
+    func isShowGridItemSelectable(_ item: ShowGridItem) -> Bool {
+        guard selectionId(for: item) != nil else { return false }
+        return !isShowGridItemLive(item)
+    }
+
+    /// Same live predicates used when configuring Show tiles.
+    ///
+    /// Always false in browse/Preview mode (no AirPlay / Eclipse TV) so tiles don't
+    /// keep a stale LIVE badge after the destination drops.
+    func isShowGridItemLive(_ item: ShowGridItem) -> Bool {
+        guard hasLiveOutputDestination else { return false }
+        switch item {
+        case .slideshow(let show):
+            return SlideshowPlaybackController.shared.isLive(slideshowId: show.id)
+                && !isBlackSelected
+                && !isLogoSelected
+                && !isScreensaverSelected
+        case .screensaver:
+            return isScreensaverSelected
+                && !ExternalDisplayManager.shared.isOverlayLive
+        case .logo:
+            return isLogoSelected && !ExternalDisplayManager.shared.isOverlayLive
+        case .camera:
+            return ExternalDisplayManager.shared.isCameraLive
+        case .media(let media):
+            return media.id == store.currentId
+                && SlideshowPlaybackController.shared.activeSlideshowId == nil
+                && !isBlackSelected
+                && !isLogoSelected
+                && !isScreensaverSelected
+                && !ExternalDisplayManager.shared.isOverlayLive
+        case .website(let page):
+            let mgr = ExternalDisplayManager.shared
+            return mgr.isWebLive && mgr.liveWebPageId == page.id
+                && !isBlackSelected
+                && !isLogoSelected
+                && !isScreensaverSelected
+        case .pdf(let doc):
+            let mgr = ExternalDisplayManager.shared
+            return mgr.isPDFLive && mgr.livePDFDocumentId == doc.id
+                && !isBlackSelected
+                && !isLogoSelected
+                && !isScreensaverSelected
+        case .add:
+            return false
+        }
+    }
+
+    /// Stable id used in `selectedShowItemIds` (nil for slideshow / Add).
+    func selectionId(for item: ShowGridItem) -> String? {
+        switch item {
+        case .screensaver: return ShowToolToken.screensaver
+        case .logo: return ShowToolToken.logo
+        case .camera: return ShowToolToken.camera
+        case .media(let media): return media.id
+        case .website(let page): return page.id.uuidString
+        case .pdf(let doc): return doc.id.uuidString
+        case .slideshow, .add: return nil
+        }
+    }
+
+    // MARK: - Private
+
+    private func copySelection(_ ids: [String], toAlbumId albumId: UUID) {
+        endSelectMode()
+        for id in ids {
+            if ShowToolToken.isTool(id) {
+                LocalAlbumStore.shared.showTool(id, albumId: albumId)
+            } else {
+                LocalAlbumStore.shared.add(itemId: id, toAlbumId: albumId)
+            }
+        }
+        let name = LocalAlbumStore.shared.album(id: albumId)?.name ?? "Show"
+        showPresentationToast("Copied to \(name)")
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+    }
+
+    private func endSelectMode() {
+        isSelecting = false
+        selectedShowItemIds = []
+        reloadForSelectChange()
+        notifySelectChrome()
+    }
+
+    /// Cross-fades into/out of select mode with thumbnail pins held warm.
+    private func reloadForSelectChange() {
+        UIView.transition(
+            with: collectionView,
+            duration: 0.2,
+            options: .transitionCrossDissolve
+        ) {
+            self.reloadLibraryGrid()
+        }
+    }
+
+    private func notifySelectChrome() {
+        onSelectingChanged?(isSelecting)
+    }
+}

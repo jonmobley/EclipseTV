@@ -8,7 +8,10 @@
 import UIKit
 import os.log
 
-/// Persists the home-grid Logo image under Application Support.
+/// Persists the Show-tools Background still under Application Support.
+///
+/// Default is the bundled eclipse Background art. A user-picked image replaces
+/// it until cleared. Looping video belongs to Screensaver, not here.
 @MainActor
 final class LogoStore {
 
@@ -17,7 +20,7 @@ final class LogoStore {
     /// Posted when the logo image is set or cleared.
     static let didChangeNotification = Notification.Name("LogoStore.didChange")
 
-    /// Custom logo if the user picked one; otherwise the bundled Eclipse app icon.
+    /// Custom image if the user picked one; otherwise the bundled Background art.
     var image: UIImage? {
         customImage ?? Self.bundledDefault
     }
@@ -25,7 +28,13 @@ final class LogoStore {
     /// Whether the user has replaced the bundled default with a custom image.
     var hasCustomImage: Bool { customImage != nil }
 
-    /// On-disk file for AirPlay: custom JPEG, or a cached copy of the bundled default.
+    /// AirPlay source for Background (always a still, aspect-fill).
+    var presentationSource: PresentationSource? {
+        guard let url = fileURL else { return nil }
+        return .image(url, fill: true)
+    }
+
+    /// On-disk file for AirPlay: custom JPEG, or a cached copy of the bundled still.
     var fileURL: URL? {
         if FileManager.default.fileExists(atPath: logoFileURL.path) {
             return logoFileURL
@@ -33,7 +42,7 @@ final class LogoStore {
         return ensureDefaultFileURL()
     }
 
-    /// Whether `url` is the custom or bundled logo file used for AirPlay.
+    /// Whether `url` is the custom or bundled Background still used for AirPlay.
     func isLogoFileURL(_ url: URL) -> Bool {
         let path = url.standardizedFileURL.path
         return path == logoFileURL.path || path == defaultFileURL.path
@@ -45,7 +54,7 @@ final class LogoStore {
     private let logger = Logger(subsystem: "com.eclipseapp.ios", category: "LogoStore")
 
     private static var bundledDefault: UIImage? {
-        UIImage(named: "EclipseLogo")
+        UIImage(named: "EclipseBackground")
     }
 
     private init() {
@@ -55,8 +64,17 @@ final class LogoStore {
         let dir = base.appendingPathComponent("Logo", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         logoFileURL = dir.appendingPathComponent("logo.jpg")
-        defaultFileURL = dir.appendingPathComponent("default.png")
+        // Versioned so prior poster caches are not reused after art updates.
+        defaultFileURL = dir.appendingPathComponent("default-eclipse-background-v2.png")
         customImage = UIImage(contentsOfFile: logoFileURL.path)
+        Self.removeLegacyDefaultsIfNeeded(in: dir)
+    }
+
+    /// Drops superseded on-disk poster caches.
+    private static func removeLegacyDefaultsIfNeeded(in dir: URL) {
+        for name in ["default.png", "default-eclipse-background.png"] {
+            try? FileManager.default.removeItem(at: dir.appendingPathComponent(name))
+        }
     }
 
     // MARK: - Mutations
@@ -77,14 +95,14 @@ final class LogoStore {
         }
     }
 
-    /// Removes the custom logo (falls back to the bundled app icon).
+    /// Removes the custom image (falls back to the bundled Background art).
     func clear() {
         try? FileManager.default.removeItem(at: logoFileURL)
         customImage = nil
         NotificationCenter.default.post(name: Self.didChangeNotification, object: self)
     }
 
-    /// Writes the bundled default to disk once so AirPlay can load a file URL.
+    /// Writes the bundled still to disk once so AirPlay can load a file URL.
     private func ensureDefaultFileURL() -> URL? {
         if FileManager.default.fileExists(atPath: defaultFileURL.path) {
             return defaultFileURL

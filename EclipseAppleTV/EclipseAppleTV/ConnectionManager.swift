@@ -14,7 +14,12 @@ protocol ConnectionManagerDelegate: AnyObject {
     func connectionManager(_ manager: ConnectionManager, didReceiveVideoAt path: String)
     func connectionManager(_ manager: ConnectionManager, didUpdateConnectionState connected: Bool, with peer: MCPeerID?)
     /// The companion requested that the item with the given id (file name) be made live.
-    func connectionManager(_ manager: ConnectionManager, didReceivePlayRequestForId id: String)
+    /// - Parameter startAt: Absolute seconds to seek for video (nil = from the start).
+    func connectionManager(
+        _ manager: ConnectionManager,
+        didReceivePlayRequestForId id: String,
+        startAt: Double?
+    )
     /// The companion requested deletion of the item with the given id.
     func connectionManager(_ manager: ConnectionManager, didReceiveDeleteRequestForId id: String)
     /// The companion requested moving the item with the given id to a new index.
@@ -292,7 +297,7 @@ class ConnectionManager: NSObject {
                 MediaDataSource.shared.setActiveLibraryMode(mode)
             }
         case .setContentTransition:
-            let style = envelope.contentTransition ?? "Cut"
+            let style = envelope.contentTransition ?? "Crossfade"
             logger.info("Received set_content_transition: \(style, privacy: .public)")
             DispatchQueue.main.async {
                 ContentTransitionSettings.apply(wireValue: style)
@@ -301,6 +306,7 @@ class ConnectionManager: NSObject {
             guard let id = envelope.id else { return }
             logger.info("Received play request for id: \(id, privacy: .public)")
             let isFill = envelope.isFill
+            let startAt = envelope.position
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
                 self.activateModeIfNeeded(from: envelope)
@@ -309,7 +315,9 @@ class ConnectionManager: NSObject {
                 if let isFill {
                     ImageFitSettings.setFill(isFill, forFileName: id)
                 }
-                self.delegate?.connectionManager(self, didReceivePlayRequestForId: id)
+                self.delegate?.connectionManager(
+                    self, didReceivePlayRequestForId: id, startAt: startAt
+                )
             }
         case .deleteItem:
             guard let id = envelope.id else { return }

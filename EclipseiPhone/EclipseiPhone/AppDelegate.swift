@@ -11,6 +11,9 @@ import UIKit
 class AppDelegate: UIResponder, UIApplicationDelegate {
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+        // Boots CloudKit private + shared sync engines when an iCloud account exists.
+        EclipseSyncController.shared.start()
+        DefaultBackgroundMusic.armOnFirstLaunchIfNeeded()
         return true
     }
 

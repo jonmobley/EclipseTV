@@ -54,7 +54,7 @@ final class SlideshowStore {
 
     // MARK: - Mutations
 
-    /// Creates a slideshow and inserts it at the front.
+    /// Creates a slideshow and appends it (last among this Show's slideshows).
     @discardableResult
     func create(
         name: String,
@@ -62,8 +62,9 @@ final class SlideshowStore {
         itemIds: [String],
         orientation: ExternalOutputOrientation = ExternalOutputSettings.orientation
     ) throws -> Slideshow {
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { throw StoreError.emptyName }
+        guard let trimmed = UserDisplayName.normalized(name) else {
+            throw StoreError.emptyName
+        }
         guard !itemIds.isEmpty else { throw StoreError.noImages }
         let show = Slideshow(
             showId: showId,
@@ -72,15 +73,27 @@ final class SlideshowStore {
             coverId: itemIds.first,
             orientation: orientation
         )
-        slideshows.insert(show, at: 0)
+        slideshows.append(show)
         persist()
         return show
     }
 
+    /// Aligns every slideshow under `showId` with the Show's Display Mode format.
+    func setOrientation(_ orientation: ExternalOutputOrientation, forShowId showId: UUID) {
+        var changed = false
+        for index in slideshows.indices where slideshows[index].showId == showId {
+            guard slideshows[index].orientation != orientation else { continue }
+            slideshows[index].orientation = orientation
+            changed = true
+        }
+        if changed { persist() }
+    }
+
     /// Renames the slideshow with `id` when present.
     func rename(id: UUID, to name: String) throws {
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { throw StoreError.emptyName }
+        guard let trimmed = UserDisplayName.normalized(name) else {
+            throw StoreError.emptyName
+        }
         guard let index = slideshows.firstIndex(where: { $0.id == id }) else { return }
         slideshows[index].name = trimmed
         persist()
@@ -91,6 +104,7 @@ final class SlideshowStore {
         let before = slideshows.count
         slideshows.removeAll { $0.id == id }
         guard slideshows.count != before else { return }
+        SlideshowPlaybackController.shared.clearResume(for: id)
         persist()
     }
 
@@ -185,13 +199,12 @@ final class SlideshowStore {
     // MARK: - Persistence
 
     private func load() {
-        guard let data = defaults.data(forKey: itemsKey) else { return }
-        do {
-            slideshows = try JSONDecoder().decode([Slideshow].self, from: data)
-        } catch {
-            logger.error("Failed to decode slideshows: \(error.localizedDescription)")
-            slideshows = []
-        }
+        slideshows = SalvagingListDecoder.decodeList(
+            Slideshow.self,
+            forKey: itemsKey,
+            from: defaults,
+            logger: logger
+        ).elements
     }
 
     private func persist() {

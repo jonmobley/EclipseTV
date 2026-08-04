@@ -67,6 +67,7 @@ extension PresentationViewController {
         pdfView?.removeFromSuperview()
         pdfView = nil
         pdfContainer.isHidden = true
+        if case .pdf = presentedSource?.content { presentedSource = nil }
     }
 
     /// Fills the AirPlay surface with the mode-aspect PDF panel (rotates when Vertical).

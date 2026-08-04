@@ -12,16 +12,16 @@ enum ContentTransitionSettings {
     private static let key = "EclipseTV.contentTransition"
 
     enum Style: String {
-        case cut = "Cut"
         case crossfade = "Crossfade"
+        case cut = "Cut"
     }
 
-    /// Defaults to Cut when unset or unknown.
+    /// Defaults to Crossfade when unset or unknown.
     static var style: Style {
         get {
             guard let raw = UserDefaults.standard.string(forKey: key),
                   let value = Style(rawValue: raw) else {
-                return .cut
+                return .crossfade
             }
             return value
         }

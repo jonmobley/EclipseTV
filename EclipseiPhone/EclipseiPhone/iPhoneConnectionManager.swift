@@ -200,10 +200,21 @@ class iPhoneConnectionManager: NSObject {
         guard !pending.isEmpty, activeTargetPeer != nil else { return }
         var payload: [(id: String, url: URL)] = []
         for entry in pending {
+            // Captures are phone-owned — never Multipeer to Apple TV.
+            if CaptureStore.shared.contains(id: entry.item.id) {
+                PendingUploadStore.shared.remove(id: entry.item.id, mode: mode)
+                continue
+            }
             if let url = LocalMediaStore.shared.localURL(forId: entry.item.id, mode: mode) {
                 payload.append((id: entry.item.id, url: url))
-            } else {
+            } else if !TVLibraryStore.shared.items.contains(where: { $0.id == entry.item.id }) {
+                // Gone from the library for good — drop the queue entry. A transient
+                // missing file is kept so the next connect can retry.
                 PendingUploadStore.shared.remove(id: entry.item.id, mode: mode)
+            } else {
+                logger.info(
+                    "Queued upload \(entry.item.id, privacy: .public) has no local file yet; keeping"
+                )
             }
         }
         guard !payload.isEmpty else { return }
@@ -439,10 +450,18 @@ class iPhoneConnectionManager: NSObject {
     ///
     /// Carries the item's Fit / Fill choice so a still is framed on the TV exactly as it
     /// is on this phone's own external output.
+    /// - Parameter startAt: Absolute resume seconds for video; omit / 0 plays from the start.
+    ///   Callers that want parked leave state must pass `VideoResumeStore` themselves —
+    ///   slideshow and other auto-advance paths must not inherit a parked seek.
+    @MainActor
     @discardableResult
-    func sendPlayRequest(id: String) -> Bool {
+    func sendPlayRequest(id: String, startAt: Double? = nil) -> Bool {
         return sendCommand(
-            .playRequest(id: id, isFill: MediaFitSettings.isFill(forId: id)),
+            .playRequest(
+                id: id,
+                isFill: MediaFitSettings.isFill(forId: id),
+                startAt: startAt
+            ),
             description: "play request"
         )
     }
@@ -642,10 +661,11 @@ class iPhoneConnectionManager: NSObject {
             let failed = failureCount
             failureLock.unlock()
 
-            if failed < total {
+            // Ordering a library the replica only partially received leaves it wrong,
+            // not just incomplete — wait until every send succeeded.
+            if failed == 0 {
                 self?.sendEnvelope(.reorderItems(orderedIds: orderedIds), to: peer)
-            }
-            if failed > 0 {
+            } else {
                 self?.logger.error(
                     "Replay to \(name, privacy: .public) failed for \(failed)/\(total) item(s)"
                 )

@@ -81,22 +81,7 @@ class MediaValidator {
         
         return resizedImage
     }
-    
-    static func imageNeedsDownscaling(_ image: UIImage, maxDimension: CGFloat = 3840) -> Bool {
-        let largestSide = max(image.size.width, image.size.height)
-        return largestSide > maxDimension
-    }
-    
-    static func getDownscalingDescription(for image: UIImage, maxDimension: CGFloat = 3840) -> String? {
-        guard imageNeedsDownscaling(image, maxDimension: maxDimension) else { return nil }
-        
-        let originalSize = max(image.size.width, image.size.height)
-        let scale = maxDimension / originalSize
-        let newSize = CGSize(width: image.size.width * scale, height: image.size.height * scale)
-        
-        return "Image downscaled from \(Int(image.size.width))×\(Int(image.size.height)) to \(Int(newSize.width))×\(Int(newSize.height)) for optimal Apple TV compatibility."
-    }
-    
+
     static func getFileSizeString(for url: URL) -> String? {
         do {
             let fileAttributes = try FileManager.default.attributesOfItem(atPath: url.path)

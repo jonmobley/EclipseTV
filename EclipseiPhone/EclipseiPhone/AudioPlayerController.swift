@@ -29,13 +29,20 @@ final class AudioPlayerController: NSObject {
     private(set) var playlistName: String?
     private(set) var isPlaying = false
     private(set) var isMuted = false
+    /// Relative mix level for ambient music (`0…1`), independent of system volume.
+    private(set) var volume: Float = 1
 
-    private var player: AVPlayer?
+    private static let volumeDefaultsKey = "Eclipse.audio.playerVolume"
+
+    /// Active `AVPlayer`. Internal so fade helpers in `+Fade` can ramp volume.
+    var player: AVPlayer?
     private var endObserver: NSObjectProtocol?
     private var timeObserver: Any?
     /// Embedded artwork for the current track (used by Now Playing).
     private(set) var artworkCache: UIImage?
     private var lastTickNotify: TimeInterval = 0
+    /// In-flight volume ramp; cancelled when transport changes.
+    var volumeFadeTask: Task<Void, Never>?
     private let logger = Logger(
         subsystem: "com.eclipseapp.ios", category: "AudioPlayer"
     )
@@ -77,6 +84,10 @@ final class AudioPlayerController: NSObject {
 
     private override init() {
         super.init()
+        let stored = UserDefaults.standard.object(forKey: Self.volumeDefaultsKey) as? Float
+        if let stored, stored.isFinite {
+            volume = min(1, max(0, stored))
+        }
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(handleTrackRemoved(_:)),
@@ -106,6 +117,12 @@ final class AudioPlayerController: NSObject {
 
     /// Plays a playlist starting at an optional track.
     func playPlaylist(_ playlist: AudioPlaylist, startingAt trackId: UUID? = nil) {
+        preparePlaylist(playlist, startingAt: trackId)
+        play()
+    }
+
+    /// Loads a playlist into the queue without starting playback (mini player stays up).
+    func preparePlaylist(_ playlist: AudioPlaylist, startingAt trackId: UUID? = nil) {
         let ids = playlist.trackIds.filter { AudioStore.shared.track(id: $0) != nil }
         guard !ids.isEmpty else { return }
         let index = trackId.flatMap { id in ids.firstIndex(of: id) } ?? 0
@@ -116,7 +133,10 @@ final class AudioPlayerController: NSObject {
             playlistId: playlist.id,
             playlistName: playlist.name
         )
-        play()
+        isPlaying = false
+        player?.pause()
+        updateNowPlayingPlayback()
+        notify()
     }
 
     /// Plays a single track as a one-item queue.
@@ -130,6 +150,7 @@ final class AudioPlayerController: NSObject {
         if isPlaying { pause() } else { play() }
     }
 
+    /// Starts playback with a volume fade-in.
     func play() {
         guard currentTrack != nil else { return }
         if player == nil { reloadCurrentItem() }
@@ -143,23 +164,53 @@ final class AudioPlayerController: NSObject {
             notify()
             return
         }
+        // Already audible (or mid fade-in). After a track reload `isPlaying` can still be
+        // true while the new player is idle — fall through so we fade that item in.
+        if isPlaying, player.rate > 0 || volumeFadeTask != nil {
+            return
+        }
+        cancelVolumeFade()
         activateSession()
+        player.volume = 0
         player.play()
         isPlaying = true
         updateNowPlayingPlayback()
         notify()
+        fadePlayerVolume(to: volume)
     }
 
-    func pause() {
-        player?.pause()
+    /// Pauses after a volume fade-out (`fade: false` syncs state when audio is already gone).
+    func pause(fade: Bool = true) {
+        let wasAudible = isPlaying || (player?.rate ?? 0) > 0
+        cancelVolumeFade()
         isPlaying = false
         updateNowPlayingPlayback()
         notify()
+        guard wasAudible, player != nil else {
+            player?.pause()
+            return
+        }
+        if fade {
+            fadePlayerVolume(to: 0) { [weak self] in
+                guard let self else { return }
+                self.player?.pause()
+                self.player?.volume = self.volume
+            }
+        } else {
+            player?.pause()
+            player?.volume = volume
+        }
     }
 
-    /// Stops playback and clears the active session (mini player hides).
+    /// Fades out if audible, then clears the session (mini player hides immediately).
     func stop() {
-        teardownPlayer()
+        let audible = isPlaying
+            && !isMuted
+            && volume > 0.001
+            && (player?.volume ?? 0) > 0.001
+        let fadingPlayer = player
+        cancelVolumeFade()
+
         queue = []
         currentIndex = 0
         playlistId = nil
@@ -168,6 +219,17 @@ final class AudioPlayerController: NSObject {
         artworkCache = nil
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
         notify()
+
+        if audible, let fadingPlayer {
+            fadePlayerVolume(to: 0) { [weak self] in
+                guard let self else { return }
+                // A new session may have replaced the player while we faded.
+                guard self.player === fadingPlayer else { return }
+                self.teardownPlayer()
+            }
+        } else {
+            teardownPlayer()
+        }
     }
 
     func playNext() {
@@ -212,6 +274,30 @@ final class AudioPlayerController: NSObject {
         notify()
     }
 
+    /// Sets ambient mix level (`0…1`). Values above zero clear mute.
+    ///
+    /// - Parameter notify: When false (slider drag), updates audio only — skips
+    ///   `didChangeNotification` so Music/Home don't reload every tick.
+    func setVolume(_ value: Float, notify notifyObservers: Bool = true) {
+        let clamped = min(1, max(0, value.isFinite ? value : 0))
+        volume = clamped
+        cancelVolumeFade()
+        if isPlaying {
+            player?.volume = clamped
+        } else {
+            // Keep the paused player silent; next `play()` fades up to `volume`.
+            player?.pause()
+            player?.volume = 0
+        }
+        if clamped > 0, isMuted {
+            isMuted = false
+            player?.isMuted = false
+        }
+        guard notifyObservers else { return }
+        UserDefaults.standard.set(clamped, forKey: Self.volumeDefaultsKey)
+        notify()
+    }
+
     // MARK: - Internals
 
     private func loadQueue(
@@ -237,6 +323,8 @@ final class AudioPlayerController: NSObject {
         let item = AVPlayerItem(url: url)
         let newPlayer = AVPlayer(playerItem: item)
         newPlayer.isMuted = isMuted
+        // Start silent; `play()` fades up to the user mix level.
+        newPlayer.volume = 0
         player = newPlayer
         artworkCache = nil
         let trackId = track.id
@@ -268,7 +356,8 @@ final class AudioPlayerController: NSObject {
         notify()
     }
 
-    private func teardownPlayer(keepingQueue: Bool = false) {
+    func teardownPlayer(keepingQueue: Bool = false) {
+        cancelVolumeFade()
         if let endObserver {
             NotificationCenter.default.removeObserver(endObserver)
             self.endObserver = nil

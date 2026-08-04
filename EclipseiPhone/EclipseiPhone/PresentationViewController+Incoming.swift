@@ -21,8 +21,14 @@ extension PresentationViewController {
             installIncomingImage(url: url, fill: fill, generation: generation)
         case .video(let url, let isLooping, let isMuted):
             installIncomingVideo(
-                url: url, isLooping: isLooping, isMuted: isMuted, generation: generation
+                url: url,
+                isLooping: isLooping,
+                isMuted: isMuted,
+                startAt: source.videoStartAt,
+                generation: generation
             )
+        case .screensaver(let url):
+            installIncomingScreensaver(url: url, generation: generation)
         case .camera:
             installIncomingCamera(generation: generation)
         case .web(let url):
@@ -90,7 +96,11 @@ extension PresentationViewController {
     // MARK: - Video
 
     private func installIncomingVideo(
-        url: URL, isLooping: Bool, isMuted: Bool, generation: Int
+        url: URL,
+        isLooping: Bool,
+        isMuted: Bool,
+        startAt: TimeInterval,
+        generation: Int
     ) {
         let host = makeIncomingMediaHost()
         configureAudioSession(muted: isMuted)
@@ -118,21 +128,59 @@ extension PresentationViewController {
             }
         }
 
+        let beginPlayback = { [weak self, weak player] in
+            guard let player else { return }
+            if startAt > 0 {
+                let time = CMTime(seconds: startAt, preferredTimescale: 600)
+                player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero) { _ in
+                    player.play()
+                    self?.notifyIfCurrent(generation)
+                }
+            } else {
+                player.play()
+                self?.notifyIfCurrent(generation)
+            }
+        }
+
         if let item = player.currentItem {
             if item.status == .readyToPlay {
-                notifyIfCurrent(generation)
+                beginPlayback()
             } else {
                 incomingVideoReadyObservation = item.observe(\.status, options: [.new]) {
                     [weak self] item, _ in
                     guard item.status == .readyToPlay || item.status == .failed else { return }
                     self?.incomingVideoReadyObservation = nil
-                    self?.notifyIfCurrent(generation)
+                    if item.status == .failed {
+                        self?.notifyIfCurrent(generation)
+                    } else {
+                        beginPlayback()
+                    }
                 }
             }
         } else {
-            notifyIfCurrent(generation)
+            beginPlayback()
         }
-        player.play()
+    }
+
+    // MARK: - Screensaver
+
+    private func installIncomingScreensaver(url: URL, generation: Int) {
+        let host = makeIncomingMediaHost()
+        let screensaver = SeamlessLoopPlayerView(url: url)
+        screensaver.translatesAutoresizingMaskIntoConstraints = false
+        host.addSubview(screensaver)
+        NSLayoutConstraint.activate([
+            screensaver.topAnchor.constraint(equalTo: host.topAnchor),
+            screensaver.bottomAnchor.constraint(equalTo: host.bottomAnchor),
+            screensaver.leadingAnchor.constraint(equalTo: host.leadingAnchor),
+            screensaver.trailingAnchor.constraint(equalTo: host.trailingAnchor)
+        ])
+        incomingScreensaverView = screensaver
+        layoutIncomingMediaHost()
+        screensaver.onReady = { [weak self] in
+            self?.notifyIfCurrent(generation)
+        }
+        screensaver.play()
     }
 
     // MARK: - Camera

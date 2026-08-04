@@ -9,7 +9,10 @@ import UIKit
 import PhotosUI
 import UniformTypeIdentifiers
 
-/// Sheet to pick None / a stored PNG frame, or import/delete frames.
+/// Drawer to pick None / a stored PNG frame, or import/delete frames.
+///
+/// Frames are listed recently used first. Selecting None or a frame dismisses
+/// so the camera can switch overlays quickly.
 final class CameraFramePickerViewController: UIViewController {
 
     private enum Item: Hashable {
@@ -84,12 +87,21 @@ final class CameraFramePickerViewController: UIViewController {
         super.viewDidLayoutSubviews()
         guard let layout = collectionView.collectionViewLayout
                 as? UICollectionViewFlowLayout else { return }
-        let inset = layout.sectionInset.left + layout.sectionInset.right
+        let inset = layout.sectionInset.left
         let spacing = layout.minimumInteritemSpacing
-        let width = collectionView.bounds.width - inset
-        let side = floor((width - spacing * 2) / 3)
+        let orientation = ExternalOutputSettings.orientation
+        let columns = CGFloat(orientation.gridColumnCount(
+            forWidth: collectionView.bounds.width,
+            sectionInset: inset,
+            spacing: spacing
+        ))
+        let totalSpacing = inset * 2 + spacing * (columns - 1)
+        let side = max(
+            ((collectionView.bounds.width - totalSpacing) / columns).rounded(.down),
+            1
+        )
         // Thumbnail aspect matches the active Display Mode card.
-        let aspect = ExternalOutputSettings.orientation.gridCellHeightOverWidth
+        let aspect = orientation.gridCellHeightOverWidth
         layout.itemSize = CGSize(width: side, height: side * aspect + 28)
     }
 
@@ -258,8 +270,10 @@ extension CameraFramePickerViewController: UICollectionViewDelegate {
         switch item {
         case .none:
             CameraFrameStore.shared.select(nil)
+            dismiss(animated: true)
         case .frame(let id):
             CameraFrameStore.shared.select(id)
+            dismiss(animated: true)
         case .importFrames:
             importFrames()
         }
@@ -289,7 +303,13 @@ extension CameraFramePickerViewController: UICollectionViewDelegate {
 
 extension CameraFramePickerViewController: PHPickerViewControllerDelegate {
     func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
-        picker.dismiss(animated: true)
+        // Load after dismiss so capacity alerts aren't presented on a dismissing picker.
+        picker.dismiss(animated: true) { [weak self] in
+            self?.importPickedFrameImages(results)
+        }
+    }
+
+    private func importPickedFrameImages(_ results: [PHPickerResult]) {
         guard !results.isEmpty else { return }
 
         let group = DispatchGroup()
@@ -365,9 +385,6 @@ private final class FramePickerCell: UICollectionViewCell {
             imageView.topAnchor.constraint(equalTo: contentView.topAnchor),
             imageView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
             imageView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-            imageView.heightAnchor.constraint(
-                equalTo: imageView.widthAnchor, multiplier: 16.0 / 9.0
-            ),
 
             iconView.centerXAnchor.constraint(equalTo: imageView.centerXAnchor),
             iconView.centerYAnchor.constraint(equalTo: imageView.centerYAnchor),
@@ -377,9 +394,8 @@ private final class FramePickerCell: UICollectionViewCell {
             titleLabel.topAnchor.constraint(equalTo: imageView.bottomAnchor, constant: 6),
             titleLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
             titleLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-            titleLabel.bottomAnchor.constraint(
-                lessThanOrEqualTo: contentView.bottomAnchor
-            )
+            titleLabel.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
+            imageView.bottomAnchor.constraint(equalTo: titleLabel.topAnchor, constant: -6)
         ])
     }
 

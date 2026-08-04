@@ -27,12 +27,14 @@ final class AudioStore {
         case copyFailed
         case invalidFile
         case fileTooLarge
+        case emptyTitle
 
         var errorDescription: String? {
             switch self {
             case .copyFailed: return "Couldn't save that audio file. Please try again."
             case .invalidFile: return "That doesn't look like a supported audio file."
             case .fileTooLarge: return "That file is too large. Maximum size is 200 MB."
+            case .emptyTitle: return "Enter a name for the track."
             }
         }
     }
@@ -96,7 +98,9 @@ final class AudioStore {
 
         let trimmed = title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let fallbackTitle = sourceURL.deletingPathExtension().lastPathComponent
-        let resolvedTitle = trimmed.isEmpty ? fallbackTitle : trimmed
+        let resolvedTitle = UserDisplayName.clamp(
+            trimmed.isEmpty ? fallbackTitle : trimmed
+        )
         guard !resolvedTitle.isEmpty else { throw StoreError.invalidFile }
 
         let id = UUID()
@@ -116,7 +120,7 @@ final class AudioStore {
         let meta = await Self.readMetadata(at: destination)
         let item = AudioTrack(
             id: id,
-            title: meta.title ?? resolvedTitle,
+            title: UserDisplayName.clamp(meta.title ?? resolvedTitle),
             artist: meta.artist,
             duration: meta.duration,
             fileExtension: ext
@@ -126,8 +130,35 @@ final class AudioStore {
         return item
     }
 
+    /// Replaces the library track order (Music list arrange).
+    func reorder(trackIds: [UUID]) {
+        let byId = Dictionary(uniqueKeysWithValues: tracks.map { ($0.id, $0) })
+        var next = trackIds.compactMap { byId[$0] }
+        let placed = Set(next.map(\.id))
+        for track in tracks where !placed.contains(track.id) {
+            next.append(track)
+        }
+        guard next.map(\.id) != tracks.map(\.id) else { return }
+        tracks = next
+        persist()
+    }
+
+    /// Renames the track with `id` when present. Protected tracks are ignored.
+    func rename(id: UUID, to title: String) throws {
+        guard let trimmed = UserDisplayName.normalized(title) else {
+            throw StoreError.emptyTitle
+        }
+        guard let index = tracks.firstIndex(where: { $0.id == id }) else { return }
+        guard !tracks[index].isProtected else { return }
+        tracks[index].title = trimmed
+        persist()
+    }
+
     /// Removes the track and deletes its file; prunes playlists.
+    /// Protected (bundled) tracks are never removed.
     func remove(id: UUID) {
+        guard let existing = tracks.first(where: { $0.id == id }),
+              !existing.isProtected else { return }
         let before = tracks.count
         tracks.removeAll { $0.id == id }
         guard tracks.count != before else { return }
@@ -146,6 +177,82 @@ final class AudioStore {
             object: nil,
             userInfo: ["id": id]
         )
+    }
+
+    /// Copies a bundled audio resource into the store under a fixed id when missing.
+    func ensureBundledTrack(
+        id: UUID,
+        title: String,
+        resourceName: String,
+        resourceExtension: String
+    ) {
+        let destination = rootDirectory.appendingPathComponent(
+            "\(id.uuidString).\(resourceExtension)"
+        )
+        if !FileManager.default.fileExists(atPath: destination.path) {
+            guard let bundled = Bundle.main.url(
+                forResource: resourceName,
+                withExtension: resourceExtension
+            ) else {
+                logger.error("Missing bundled audio \(resourceName).\(resourceExtension)")
+                return
+            }
+            do {
+                try FileManager.default.copyItem(at: bundled, to: destination)
+                excludeFromBackup(destination)
+            } catch {
+                logger.error("Bundled audio copy failed: \(error.localizedDescription)")
+                return
+            }
+        }
+
+        if let index = tracks.firstIndex(where: { $0.id == id }) {
+            if !tracks[index].isProtected {
+                tracks[index].isProtected = true
+                persist()
+            }
+            return
+        }
+
+        let duration = Self.syncDuration(at: destination)
+        let item = AudioTrack(
+            id: id,
+            title: title,
+            artist: nil,
+            duration: duration,
+            fileExtension: resourceExtension,
+            isProtected: true
+        )
+        tracks.insert(item, at: 0)
+        persist()
+    }
+
+    /// Loads duration without the deprecated synchronous `AVAsset.duration`.
+    ///
+    /// Uses `Task.detached` so the async load is never scheduled on the caller’s
+    /// actor — a plain `Task { }` from `@MainActor` seeding would deadlock the
+    /// semaphore wait for up to the timeout.
+    nonisolated private static func syncDuration(at url: URL) -> TimeInterval {
+        let asset = AVURLAsset(url: url)
+        let semaphore = DispatchSemaphore(value: 0)
+        let box = DurationBox()
+        Task.detached {
+            defer { semaphore.signal() }
+            do {
+                let duration = try await asset.load(.duration)
+                let value = CMTimeGetSeconds(duration)
+                box.seconds = (value.isNaN || value < 0) ? 0 : value
+            } catch {
+                box.seconds = 0
+            }
+        }
+        _ = semaphore.wait(timeout: .now() + 5)
+        return box.seconds
+    }
+
+    /// Tiny hand-off box so `Task.detached` can publish duration across the wait.
+    private final class DurationBox: @unchecked Sendable {
+        var seconds: TimeInterval = 0
     }
 
     // MARK: - Persistence
@@ -220,20 +327,19 @@ final class AudioStore {
     }
 
     private func load() {
-        guard let data = defaults.data(forKey: itemsKey) else { return }
-        do {
-            let decoded = try JSONDecoder().decode([AudioTrack].self, from: data)
-            tracks = decoded.filter { track in
-                let url = rootDirectory.appendingPathComponent(
-                    "\(track.id.uuidString).\(track.fileExtension)"
-                )
-                return FileManager.default.fileExists(atPath: url.path)
-            }
-            if tracks.count != decoded.count { persist() }
-        } catch {
-            logger.error("Failed to decode audio: \(error.localizedDescription)")
-            tracks = []
+        let decoded = SalvagingListDecoder.decodeList(
+            AudioTrack.self,
+            forKey: itemsKey,
+            from: defaults,
+            logger: logger
+        ).elements
+        tracks = decoded.filter { track in
+            let url = rootDirectory.appendingPathComponent(
+                "\(track.id.uuidString).\(track.fileExtension)"
+            )
+            return FileManager.default.fileExists(atPath: url.path)
         }
+        if tracks.count != decoded.count { persist() }
     }
 
     private func persist() {

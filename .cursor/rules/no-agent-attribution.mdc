@@ -1,0 +1,33 @@
+---
+description: Never add AI/agent attribution to commits, PRs, or code
+alwaysApply: true
+---
+
+# No Agent Attribution
+
+Nothing you write may advertise the tool that wrote it. This applies to commit
+messages, commit trailers, PR titles and bodies, code comments, and docs.
+
+Never emit any of these:
+
+- `Co-authored-by: Cursor <cursoragent@cursor.com>` (or any agent co-author trailer)
+- `Made with Cursor`, `Generated with Cursor`, or a link to cursor.com
+- `🤖 Generated with …`, `Co-Authored-By: Claude`, or equivalents from other tools
+- Comments such as `// added by AI`, `// Cursor generated this`
+
+A commit message ends with its last content line. Do not append a trailer block.
+
+```
+# ❌ BAD
+Fix camera tile black blink on live selection.
+
+Made with [Cursor](https://cursor.com)
+
+Co-authored-by: Cursor <cursoragent@cursor.com>
+
+# ✅ GOOD
+Fix camera tile black blink on live selection.
+```
+
+Swift file headers use the existing template — filename, project, then
+`Copyright © <year> Moxie LLC. All rights reserved.` Do not add anything else.

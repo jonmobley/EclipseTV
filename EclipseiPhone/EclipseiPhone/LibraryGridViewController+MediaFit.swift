@@ -16,11 +16,14 @@ extension LibraryGridViewController {
     /// Offered on long-press for stills only — video framing is fixed to aspect fit.
     func screenFitMenu(for item: LibraryItemDTO) -> UIMenu {
         let current = MediaFitSettings.mode(forId: item.id)
+        // Checkmark rides in the trailing image slot rather than `state:` so the
+        // selected row keeps the same title inset as the others. See
+        // `videoOptionActions` for the UIKit behaviour behind this.
         let actions = MediaFitMode.allCases.map { mode in
-            UIAction(
+            let isCurrent = mode == current
+            return UIAction(
                 title: mode.rawValue,
-                image: UIImage(systemName: mode.iconName),
-                state: mode == current ? .on : .off
+                image: UIImage(systemName: isCurrent ? "checkmark" : mode.iconName)
             ) { [weak self] _ in
                 self?.applyScreenFit(mode, to: item)
             }
@@ -40,7 +43,7 @@ extension LibraryGridViewController {
         MediaFitSettings.setMode(mode, forId: item.id)
         UISelectionFeedbackGenerator().selectionChanged()
         connectionManager.sendImageFit(id: item.id, isFill: mode == .fill)
-        collectionView.reloadData()
+        reloadLibraryGrid()
         refreshLiveHeader()
 
         let manager = ExternalDisplayManager.shared

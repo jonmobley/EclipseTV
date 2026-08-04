@@ -125,6 +125,8 @@ final class PresentationViewController: UIViewController {
     }()
 
     var webView: WKWebView?
+    /// Matches overscroll gutters to the page colour; does not alter the page.
+    var webBackgroundTint: WebBackgroundTint?
 
     /// Host for the scaled/rotated PDF view on the external display.
     let pdfContainer: UIView = {
@@ -147,6 +149,12 @@ final class PresentationViewController: UIViewController {
         view.clipsToBounds = true
         return view
     }()
+
+    /// Source currently installed in the primary containers.
+    ///
+    /// Cleared by the teardown paths, so a non-nil value means that content is live on
+    /// the external display right now. `showIfNeeded(_:)` reads it to skip rebuilds.
+    var presentedSource: PresentationSource?
 
     // MARK: - Incoming transition state
 
@@ -174,10 +182,14 @@ final class PresentationViewController: UIViewController {
     var playerLayer: AVPlayerLayer?
     var player: AVPlayer?
     var loopObserver: NSObjectProtocol?
+    /// Seamless looping Screensaver (dual-player crossfade).
+    var screensaverView: SeamlessLoopPlayerView?
+    var incomingScreensaverView: SeamlessLoopPlayerView?
     var imageRequest: RemoteImageRequest?
     var imageLoadGeneration = 0
     var settingsObserver: NSObjectProtocol?
     var cameraFrameStoreObserver: NSObjectProtocol?
+    var cameraPositionObserver: NSObjectProtocol?
 
     /// Observes AirPlay video item readiness for primary install.
     var videoReadyObservation: NSKeyValueObservation?
@@ -282,6 +294,16 @@ final class PresentationViewController: UIViewController {
             self?.layoutIncomingOverlayContent()
         }
 
+        cameraPositionObserver = NotificationCenter.default.addObserver(
+            forName: CameraManager.cameraPositionDidChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self, !self.cameraContainer.isHidden else { return }
+            self.cameraPreviewView.syncDisplayModeOrientation()
+            self.applyCameraLayout()
+        }
+
         setupAudioNowPlayingOverlay()
     }
 
@@ -317,6 +339,9 @@ final class PresentationViewController: UIViewController {
         if let cameraFrameStoreObserver {
             NotificationCenter.default.removeObserver(cameraFrameStoreObserver)
         }
+        if let cameraPositionObserver {
+            NotificationCenter.default.removeObserver(cameraPositionObserver)
+        }
         if let incomingLoopObserver {
             NotificationCenter.default.removeObserver(incomingLoopObserver)
         }
@@ -329,6 +354,24 @@ final class PresentationViewController: UIViewController {
         performContentTransition(to: source)
     }
 
+    /// Installs `source`, skipping the rebuild when the same web page is already live.
+    ///
+    /// Re-assertion runs on every scene reconnect, foreground, and Display Mode rotation,
+    /// and `show(_:)` always rebuilds. For web that means a fresh `WKWebView` and a
+    /// reload, which discards the scroll position and in-page state the phone browser has
+    /// already synced. Other content is only skipped at the cost of correctness — video
+    /// in particular relies on the rebuild to resume after a background — so the shortcut
+    /// is deliberately limited to web.
+    func showIfNeeded(_ source: PresentationSource) {
+        guard case .web = source.content else {
+            show(source)
+            return
+        }
+        if pendingTransitionSource == source { return }
+        if presentedSource == source, !isTransitionInFlight { return }
+        show(source)
+    }
+
     /// Installs `source` into the primary containers. Caller must cover with the
     /// opaque transition overlay when replacing live camera/video.
     func applyShowDirect(_ source: PresentationSource) {
@@ -336,6 +379,7 @@ final class PresentationViewController: UIViewController {
         imageRequest?.cancel()
         imageRequest = nil
         setIdleBrandVisible(false)
+        // Library video hides ambient chrome; muted Screensaver does not.
         if case .video = source.content {
             isPresentingVideo = true
         } else {
@@ -352,7 +396,17 @@ final class PresentationViewController: UIViewController {
             hideCamera()
             hideWeb()
             hidePDF()
-            showVideo(at: url, isLooping: isLooping, isMuted: isMuted)
+            showVideo(
+                at: url,
+                isLooping: isLooping,
+                isMuted: isMuted,
+                startAt: source.videoStartAt
+            )
+        case .screensaver(let url):
+            hideCamera()
+            hideWeb()
+            hidePDF()
+            showScreensaver(at: url)
         case .camera:
             hideMediaContainer()
             showCamera()
@@ -370,6 +424,7 @@ final class PresentationViewController: UIViewController {
             hidePDF()
             showUnavailable(thumbnail: thumbnail)
         }
+        presentedSource = source
     }
 
     /// Solid black — no idle brand, media, camera, web, or PDF chrome.
@@ -409,6 +464,7 @@ final class PresentationViewController: UIViewController {
         activityIndicator.stopAnimating()
         messageLabel.text = nil
         setIdleBrandVisible(true)
+        presentedSource = nil
     }
 
     /// Shows or hides the centered phone + "Eclipse" idle mark.

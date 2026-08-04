@@ -9,10 +9,10 @@
 import UIKit
 import os.log
 
-/// Manages a shared back-camera `AVCaptureSession` for phone preview and AirPlay.
+/// Manages a shared camera `AVCaptureSession` for phone preview and AirPlay.
 ///
 /// Session work runs on a dedicated queue. Multiple `CameraPreviewView`s can attach
-/// to the same session.
+/// to the same session. Starts on the back camera; Flip switches front/back.
 final class CameraManager: NSObject {
 
     static let shared = CameraManager()
@@ -27,11 +27,40 @@ final class CameraManager: NSObject {
         "CameraManager.sessionRunningDidChange"
     )
 
+    /// Posted on the main queue when Flip switches front ↔ back.
+    ///
+    /// Preview-layer connections are rebuilt on input swap — listeners must re-apply
+    /// rotation / mirroring so AirPlay does not stay on the previous lens’s angle.
+    static let cameraPositionDidChangeNotification = Notification.Name(
+        "CameraManager.cameraPositionDidChange"
+    )
+
     /// Whether the capture session is currently running.
     private(set) var isSessionRunning = false
 
     /// Whether the user has granted camera permission.
     private(set) var cameraPermissionGranted = false
+
+    /// Active lens — back by default; Flip toggles front.
+    private(set) var cameraPosition: AVCaptureDevice.Position = .back
+
+    /// Updates `cameraPosition` on the main queue (Flip / configure).
+    func publishCameraPosition(_ position: AVCaptureDevice.Position) {
+        if !Thread.isMainThread {
+            DispatchQueue.main.async { [weak self] in
+                self?.publishCameraPosition(position)
+            }
+            return
+        }
+        guard position == .front || position == .back else { return }
+        let changed = cameraPosition != position
+        cameraPosition = position
+        guard changed else { return }
+        NotificationCenter.default.post(
+            name: Self.cameraPositionDidChangeNotification,
+            object: self
+        )
+    }
 
     /// Last still from the live preview — shown on the home Camera tile when not LIVE.
     private(set) var lastFrame: UIImage?
@@ -50,6 +79,8 @@ final class CameraManager: NSObject {
     let sessionQueue = DispatchQueue(label: "com.eclipseapp.ios.camera.session")
     private var _captureSession: AVCaptureSession?
     var videoDevice: AVCaptureDevice?
+    /// Per-lens horizon angles for stills / movies (front sensors are often portrait-native).
+    var captureRotationCoordinator: AVCaptureDevice.RotationCoordinator?
     let logger = Logger(subsystem: "com.eclipseapp.ios", category: "Camera")
     /// Soft cap so digital zoom stays usable (device max can be extreme).
     let preferredMaxZoom: CGFloat = 6
@@ -76,6 +107,11 @@ final class CameraManager: NSObject {
     var stillRequests: [(maxPixelEdge: CGFloat?, deliver: (UIImage?) -> Void)] = []
     private let videoDataOutput = AVCaptureVideoDataOutput()
     let frameQueue = DispatchQueue(label: "com.eclipseapp.ios.camera.frames")
+    /// Views rendering the live feed from the frame tap. Mutated and read on `frameQueue`.
+    ///
+    /// The session drives one `AVCaptureVideoPreviewLayer` at a time, so a second live
+    /// view (the phone panel while AirPlay holds the preview) is served from here.
+    var frameMirrors: [WeakFrameMirror] = []
     let ciContext = CIContext(options: [.useSoftwareRenderer: false])
 
     /// Movie file output for hold-to-record (attached lazily).
@@ -85,7 +121,33 @@ final class CameraManager: NSObject {
     /// Whether a movie file is currently being written.
     private(set) var isRecording = false
     /// Completion invoked when `stopRecording` finishes writing/saving.
-    var stopRecordingCompletion: ((Result<Void, Error>) -> Void)?
+    /// Success includes a local preview file URL when one was kept for in-app review.
+    var stopRecordingCompletion: ((Result<URL?, Error>) -> Void)?
+    /// When true, `fileOutput` stops the capture session after the movie file is closed
+    /// (background / lock — never tear the session down mid-write).
+    var stopSessionWhenRecordingFinishes = false
+    /// True after `stopRecording()` until `fileOutput` runs — blocks a second stop.
+    var isStoppingRecording = false
+    /// Latest in-app review movie URL after a background/system stop (consumed by UI).
+    private(set) var lastInAppVideoPreviewURL: URL?
+
+    /// Stores a Caches preview URL for the camera UI to pick up after a system stop.
+    func rememberInAppVideoPreview(_ url: URL?) {
+        if !Thread.isMainThread {
+            DispatchQueue.main.async { [weak self] in
+                self?.rememberInAppVideoPreview(url)
+            }
+            return
+        }
+        lastInAppVideoPreviewURL = url
+    }
+
+    /// Takes and clears `lastInAppVideoPreviewURL` (main queue).
+    func consumeInAppVideoPreviewURL() -> URL? {
+        let url = lastInAppVideoPreviewURL
+        lastInAppVideoPreviewURL = nil
+        return url
+    }
 
     /// One-shot waiter used when start is deferred until the app is active.
     var activeStartObserver: NSObjectProtocol?
@@ -195,11 +257,7 @@ final class CameraManager: NSObject {
             session.sessionPreset = .high
 
             if session.inputs.isEmpty {
-                guard let videoDevice = AVCaptureDevice.default(
-                    .builtInWideAngleCamera,
-                    for: .video,
-                    position: .back
-                ) else {
+                guard let videoDevice = Self.device(at: .back) else {
                     self?.logger.error("No back wide-angle camera available")
                     session.commitConfiguration()
                     if let completion {
@@ -224,8 +282,16 @@ final class CameraManager: NSObject {
             }
 
             self?.attachVideoDataOutput(to: session)
+            let position = self?.videoDevice?.position ?? .back
+            if position == .front || position == .back {
+                self?.applyVideoMirroringLocked(for: position)
+            }
+            self?.refreshCaptureRotationCoordinator()
 
             session.commitConfiguration()
+            if position == .front || position == .back {
+                self?.publishCameraPosition(position)
+            }
             if let completion {
                 DispatchQueue.main.async(execute: completion)
             }
@@ -289,27 +355,25 @@ final class CameraManager: NSObject {
     }
 
     /// Stops the capture session if currently running.
+    ///
+    /// An in-flight movie is closed out first and the session stops once its file is
+    /// written. `stopRunning` mid-write truncates the recording, and callers arrive here
+    /// from paths that never ask whether one is running — the external display tearing
+    /// down camera mode, the close destination, a blackout.
     func stopSession() {
         wantsSessionRunning = false
         clearActiveStartWait()
-        let session = captureSession
 
-        sessionQueue.async { [weak self, session] in
-            guard session.isRunning else {
-                self?.publishSessionRunning(false)
+        sessionQueue.async { [weak self] in
+            guard let self else { return }
+            if self.deferSessionStopUntilRecordingFinishesLocked() { return }
+            guard self.captureSession.isRunning else {
+                self.publishSessionRunning(false)
                 return
             }
-            session.stopRunning()
-            if let device = self?.videoDevice {
-                do {
-                    try device.lockForConfiguration()
-                    device.videoZoomFactor = device.minAvailableVideoZoomFactor
-                    device.unlockForConfiguration()
-                } catch {
-                    // Best-effort reset.
-                }
-            }
-            self?.publishSessionRunning(false)
+            self.captureSession.stopRunning()
+            self.resetZoomToMinimumLocked()
+            self.publishSessionRunning(false)
         }
     }
 }

@@ -49,8 +49,8 @@ extension AudioPlayerController {
         case .began:
             wasPlayingBeforeInterruption = isPlaying
             // The system has already stopped audio; sync our own state so the transport
-            // controls stay truthful.
-            if isPlaying { pause() }
+            // controls stay truthful (no audible fade left to perform).
+            if isPlaying { pause(fade: false) }
 
         case .ended:
             let optionsRaw =
@@ -98,6 +98,6 @@ extension AudioPlayerController {
     @objc private func handleMediaServicesReset() {
         // Every audio object is invalid after a media services reset; rebuild on demand.
         wasPlayingBeforeInterruption = false
-        if isPlaying { pause() }
+        if isPlaying { pause(fade: false) }
     }
 }

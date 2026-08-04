@@ -7,9 +7,6 @@
 
 import UIKit
 import AVFoundation
-import os.log
-
-private let thumbnailPreviewLogger = Logger(subsystem: "com.eclipseapp.ios", category: "VideoThumbnailPreview")
 
 protocol VideoThumbnailPreviewDelegate: AnyObject {
     func videoThumbnailPreview(_ controller: VideoThumbnailPreviewViewController, didFinishWithVideoURL videoURL: URL, selectedThumbnail: UIImage)
@@ -27,7 +24,12 @@ class VideoThumbnailPreviewViewController: UIViewController {
     private var videoDuration: CMTime = .zero
     private var currentTime: CMTime = .zero
     private var selectedThumbnail: UIImage?
-    
+    /// Bumps on every scrub request so stale generator callbacks never paint.
+    private var scrubGeneration: UInt64 = 0
+
+    private static let scrubPreviewSize = CGSize(width: 480, height: 270)
+    private static let finalThumbnailSize = CGSize(width: 800, height: 450)
+
     // MARK: - UI Elements
     
     private let containerView: UIView = {
@@ -131,18 +133,32 @@ class VideoThumbnailPreviewViewController: UIViewController {
     
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        // Generate initial thumbnail at start of video
-        generateThumbnail(at: CMTime.zero)
+        generateThumbnail(at: .zero, exact: false)
     }
-    
+
+    deinit {
+        imageGenerator.cancelAllCGImageGeneration()
+    }
+
     // MARK: - Setup Methods
-    
+
     private func setupImageGenerator() {
         imageGenerator.appliesPreferredTrackTransform = true
-        imageGenerator.maximumSize = CGSize(width: 800, height: 450) // 16:9 aspect ratio
-        // Use small tolerance to improve generation success rate
-        imageGenerator.requestedTimeToleranceBefore = CMTime(seconds: 0.1, preferredTimescale: 600)
-        imageGenerator.requestedTimeToleranceAfter = CMTime(seconds: 0.1, preferredTimescale: 600)
+        configureGeneratorForScrubbing()
+    }
+
+    /// Fast keyframe-friendly settings for live scrubbing.
+    private func configureGeneratorForScrubbing() {
+        imageGenerator.maximumSize = Self.scrubPreviewSize
+        imageGenerator.requestedTimeToleranceBefore = .positiveInfinity
+        imageGenerator.requestedTimeToleranceAfter = .positiveInfinity
+    }
+
+    /// Tighter seek + full resolution for finger-up / confirm.
+    private func configureGeneratorForExactFrame() {
+        imageGenerator.maximumSize = Self.finalThumbnailSize
+        imageGenerator.requestedTimeToleranceBefore = CMTime(seconds: 0.05, preferredTimescale: 600)
+        imageGenerator.requestedTimeToleranceAfter = CMTime(seconds: 0.05, preferredTimescale: 600)
     }
     
     private func setupUI() {
@@ -207,6 +223,11 @@ class VideoThumbnailPreviewViewController: UIViewController {
     
     private func setupActions() {
         scrubberSlider.addTarget(self, action: #selector(scrubberValueChanged(_:)), for: .valueChanged)
+        scrubberSlider.addTarget(
+            self,
+            action: #selector(scrubberTouchEnded(_:)),
+            for: [.touchUpInside, .touchUpOutside, .touchCancel]
+        )
         cancelButton.addTarget(self, action: #selector(cancelButtonTapped), for: .touchUpInside)
         useButton.addTarget(self, action: #selector(useButtonTapped), for: .touchUpInside)
     }
@@ -228,148 +249,122 @@ class VideoThumbnailPreviewViewController: UIViewController {
     }
     
     // MARK: - Actions
-    
+
     @objc private func scrubberValueChanged(_ sender: UISlider) {
-        guard videoDuration.isValid && !videoDuration.isIndefinite else { return }
-        
-        let targetTime = CMTime(seconds: Double(sender.value) * videoDuration.seconds, preferredTimescale: videoDuration.timescale)
-        currentTime = targetTime
+        guard let time = timeForSliderValue(sender.value) else { return }
+        currentTime = time
         updateTimeLabel()
-        
-        // Generate thumbnail at new time
-        generateThumbnail(at: targetTime)
+        generateThumbnail(at: time, exact: false)
     }
-    
+
+    @objc private func scrubberTouchEnded(_ sender: UISlider) {
+        guard let time = timeForSliderValue(sender.value) else { return }
+        currentTime = time
+        updateTimeLabel()
+        // Snap to a nearer frame at full resolution once the finger lifts.
+        generateThumbnail(at: time, exact: true)
+    }
+
     @objc private func cancelButtonTapped() {
+        imageGenerator.cancelAllCGImageGeneration()
         delegate?.videoThumbnailPreviewDidCancel(self)
     }
-    
+
     @objc private func useButtonTapped() {
-        // If no thumbnail is selected, generate one at current time as fallback
-        guard let thumbnail = selectedThumbnail ?? thumbnailImageView.image else {
-            // Generate thumbnail at current slider position as last resort
-            generateThumbnailForFinalUse()
+        // Always regenerate exact/high-res at the slider position before finishing.
+        generateThumbnailForFinalUse()
+    }
+
+    private func generateThumbnailForFinalUse() {
+        let targetTime = timeForSliderValue(scrubberSlider.value) ?? currentTime
+        scrubGeneration &+= 1
+        let id = scrubGeneration
+        imageGenerator.cancelAllCGImageGeneration()
+        configureGeneratorForExactFrame()
+
+        let fallbackTimes: [CMTime] = [
+            targetTime,
+            CMTime(seconds: max(videoDuration.seconds * 0.1, 0), preferredTimescale: 600),
+            CMTime(seconds: 1.0, preferredTimescale: 600),
+            .zero
+        ]
+
+        requestExactThumbnail(from: fallbackTimes, generation: id)
+    }
+
+    /// Tries each time until one succeeds, then finishes via the delegate.
+    private func requestExactThumbnail(from times: [CMTime], generation: UInt64, index: Int = 0) {
+        guard generation == scrubGeneration else { return }
+        guard index < times.count else {
+            let placeholder = UIImage(systemName: "video.fill")?
+                .withTintColor(.white, renderingMode: .alwaysOriginal) ?? UIImage()
+            selectedThumbnail = placeholder
+            delegate?.videoThumbnailPreview(
+                self, didFinishWithVideoURL: videoURL, selectedThumbnail: placeholder
+            )
             return
         }
-        
-        delegate?.videoThumbnailPreview(self, didFinishWithVideoURL: videoURL, selectedThumbnail: thumbnail)
-    }
-    
-    private func generateThumbnailForFinalUse() {
-        let targetTime = CMTime(seconds: Double(scrubberSlider.value) * videoDuration.seconds, preferredTimescale: videoDuration.timescale)
-        
-        Task {
-            // Try multiple fallback times if the current time fails
-            let fallbackTimes: [CMTime] = [
-                targetTime,
-                CMTime(seconds: videoDuration.seconds * 0.1, preferredTimescale: videoDuration.timescale),
-                CMTime(seconds: 1.0, preferredTimescale: 600),
-                CMTime.zero
-            ]
-            
-            for time in fallbackTimes {
-                do {
-                    let cgImage = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<CGImage, Error>) in
-                        imageGenerator.generateCGImageAsynchronously(for: time) { cgImage, actualTime, error in
-                            if let cgImage = cgImage {
-                                continuation.resume(returning: cgImage)
-                            } else {
-                                continuation.resume(throwing: error ?? NSError(domain: "ThumbnailError", code: -1))
-                            }
-                        }
-                    }
-                    
+
+        let clamped = clampedTime(times[index])
+        imageGenerator.generateCGImageAsynchronously(for: clamped) { [weak self] cgImage, _, error in
+            guard let self else { return }
+            DispatchQueue.main.async {
+                guard generation == self.scrubGeneration else { return }
+                if let cgImage, error == nil {
                     let thumbnail = UIImage(cgImage: cgImage)
-                    
-                    await MainActor.run {
-                        self.selectedThumbnail = thumbnail
-                        self.delegate?.videoThumbnailPreview(self, didFinishWithVideoURL: self.videoURL, selectedThumbnail: thumbnail)
-                    }
+                    self.thumbnailImageView.image = thumbnail
+                    self.selectedThumbnail = thumbnail
+                    self.delegate?.videoThumbnailPreview(
+                        self, didFinishWithVideoURL: self.videoURL, selectedThumbnail: thumbnail
+                    )
                     return
-                    
-                } catch {
-                    continue // Try next fallback time
                 }
-            }
-            
-            // If all fallback attempts fail, create a simple placeholder
-            await MainActor.run {
-                let placeholderImage = UIImage(systemName: "video.fill")?.withTintColor(.white, renderingMode: .alwaysOriginal) ?? UIImage()
-                self.delegate?.videoThumbnailPreview(self, didFinishWithVideoURL: self.videoURL, selectedThumbnail: placeholderImage)
+                self.requestExactThumbnail(
+                    from: times, generation: generation, index: index + 1
+                )
             }
         }
     }
-    
+
     // MARK: - Helper Methods
-    
-    private func generateThumbnail(at time: CMTime) {
-        Task {
-            do {
-                // Clamp time to valid range
-                let clampedTime = max(CMTime.zero, min(time, videoDuration))
-                
-                let cgImage = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<CGImage, Error>) in
-                    imageGenerator.generateCGImageAsynchronously(for: clampedTime) { cgImage, actualTime, error in
-                        if let error = error {
-                            continuation.resume(throwing: error)
-                        } else if let cgImage = cgImage {
-                            continuation.resume(returning: cgImage)
-                        } else {
-                            continuation.resume(throwing: NSError(domain: "ThumbnailError", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to generate thumbnail"]))
-                        }
-                    }
-                }
-                
+
+    /// Cancels in-flight work and requests a frame. Scrub uses loose tolerance;
+    /// `exact` tightens seek for finger-up / confirm. Stale callbacks are dropped.
+    private func generateThumbnail(at time: CMTime, exact: Bool) {
+        scrubGeneration &+= 1
+        let id = scrubGeneration
+        imageGenerator.cancelAllCGImageGeneration()
+        if exact {
+            configureGeneratorForExactFrame()
+        } else {
+            configureGeneratorForScrubbing()
+        }
+
+        let clamped = clampedTime(time)
+        imageGenerator.generateCGImageAsynchronously(for: clamped) { [weak self] cgImage, _, error in
+            guard let self, let cgImage, error == nil else { return }
+            DispatchQueue.main.async {
+                guard id == self.scrubGeneration else { return }
                 let thumbnail = UIImage(cgImage: cgImage)
-                
-                await MainActor.run {
-                    self.thumbnailImageView.image = thumbnail
-                    self.selectedThumbnail = thumbnail
-                }
-                
-            } catch {
-                // Silently fall back to a default frame instead of showing error
-                await MainActor.run {
-                    self.generateFallbackThumbnail()
-                }
+                self.thumbnailImageView.image = thumbnail
+                self.selectedThumbnail = thumbnail
             }
         }
     }
-    
-    private func generateFallbackThumbnail() {
-        // Try to generate thumbnail at a safe time (1 second or 10% into video, whichever is smaller)
-        let fallbackTime: CMTime
-        if videoDuration.isValid && videoDuration.seconds > 0 {
-            let safeTime = min(1.0, videoDuration.seconds * 0.1)
-            fallbackTime = CMTime(seconds: safeTime, preferredTimescale: videoDuration.timescale)
-        } else {
-            fallbackTime = CMTime(seconds: 1.0, preferredTimescale: 600)
+
+    private func timeForSliderValue(_ value: Float) -> CMTime? {
+        guard videoDuration.isValid, !videoDuration.isIndefinite else { return nil }
+        return CMTime(
+            seconds: Double(value) * videoDuration.seconds,
+            preferredTimescale: videoDuration.timescale
+        )
+    }
+
+    private func clampedTime(_ time: CMTime) -> CMTime {
+        guard videoDuration.isValid, !videoDuration.isIndefinite else {
+            return max(time, .zero)
         }
-        
-        Task {
-            do {
-                let cgImage = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<CGImage, Error>) in
-                    imageGenerator.generateCGImageAsynchronously(for: fallbackTime) { cgImage, actualTime, error in
-                        if let cgImage = cgImage {
-                            continuation.resume(returning: cgImage)
-                        } else {
-                            continuation.resume(throwing: error ?? NSError(domain: "ThumbnailError", code: -1))
-                        }
-                    }
-                }
-                
-                let thumbnail = UIImage(cgImage: cgImage)
-                
-                await MainActor.run {
-                    self.thumbnailImageView.image = thumbnail
-                    self.selectedThumbnail = thumbnail
-                }
-                
-            } catch {
-                // If even fallback fails, just continue with whatever thumbnail we have
-                thumbnailPreviewLogger.debug("Thumbnail generation failed, continuing with existing thumbnail")
-            }
-        }
+        return max(.zero, min(time, videoDuration))
     }
     
     private func updateTimeLabel() {

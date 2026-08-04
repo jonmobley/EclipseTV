@@ -9,8 +9,9 @@ import UIKit
 
 /// Top header for the home screen.
 ///
-/// Left: back chevron (Show mode only) + status-dot + Eclipse dropdown
-/// (Shows + Settings). Trailing: moon (blackout) and "+" add control.
+/// Home: page dropdown · output status · Getting Started (?) · + New Show.
+/// Show mode trailing: output status, Lock, Blackout, Settings, and "+".
+/// iCloud Sync status surfaces via `EclipseSyncStatusBanner`, not the header.
 final class HomeHeaderBar: UIView {
 
     /// Multipeer EclipseTV link state. `.paused` is the AirPlay-first default.
@@ -23,27 +24,44 @@ final class HomeHeaderBar: UIView {
     // MARK: - Subviews
 
     private let menuPill = UIView()
-    private let statusDot = UIView()
-    private let backButton = UIButton(type: .system)
     private let libraryButton = UIButton(type: .system)
+    private let trailingStack = UIStackView()
+    let outputStatusButton = UIButton(type: .system)
+    private let lockButton = UIButton(type: .system)
     private let blackButton = UIButton(type: .system)
+    private let helpButton = UIButton(type: .system)
+    private let settingsButton = UIButton(type: .system)
     private let addButton = UIButton(type: .system)
+    private let newShowButton = UIButton(type: .system)
     private let doneButton = ArrangeDoneButton()
+    private let selectActionsButton = UIButton(type: .system)
 
-    /// Invoked when Settings is chosen from the Eclipse menu.
+    /// Invoked when the Settings control is tapped.
     var onOpenSettings: (() -> Void)?
-    /// Invoked when the moon (blackout) control is tapped.
+    /// Invoked when the output-status control is tapped (AirPlay / EclipseTV).
+    var onOpenOutputStatus: (() -> Void)?
+    /// Invoked when the live-output Lock control is tapped.
+    var onToggleLiveLock: (() -> Void)?
+    /// Invoked when the Blackout control is tapped.
     var onPresentBlack: (() -> Void)?
+    /// Invoked when Getting Started (?) is tapped on Home.
+    var onOpenGettingStarted: (() -> Void)?
+    /// Invoked when New Show is tapped on Home.
+    var onNewShow: (() -> Void)?
     /// Invoked when Done is tapped while arranging tiles.
     var onDoneArranging: (() -> Void)?
-    /// Invoked when the back chevron is tapped to leave an open Show.
-    var onGoHome: (() -> Void)?
+    /// Invoked when Done is tapped while multi-selecting tiles.
+    var onDoneSelecting: (() -> Void)?
 
-    private var connectionState: ConnectionDisplayState = .paused
-    private var isAirPlayConnected = false
+    /// EclipseTV Multipeer link — read by output-status chrome.
+    private(set) var connectionState: ConnectionDisplayState = .paused
+    /// External/AirPlay display available — read by output-status chrome.
+    private(set) var isAirPlayConnected = false
+    private var isLiveLocked = false
     private var isBlackLive = false
-    private var pillLeadingToEdge: NSLayoutConstraint!
-    private var pillLeadingToBack: NSLayoutConstraint!
+    private var showsShowChrome = false
+    private var isArranging = false
+    private var isSelecting = false
 
     // MARK: - Init
 
@@ -51,6 +69,7 @@ final class HomeHeaderBar: UIView {
         super.init(frame: frame)
         setupViews()
         setConnectionState(.paused)
+        applyTrailingChrome()
     }
 
     required init?(coder: NSCoder) {
@@ -62,6 +81,7 @@ final class HomeHeaderBar: UIView {
     private func setupViews() {
         menuPill.backgroundColor = .clear
         menuPill.layer.cornerRadius = 18
+        menuPill.layer.cornerCurve = .continuous
         menuPill.layer.borderWidth = 1
         menuPill.layer.borderColor = UIColor.separator.cgColor
         menuPill.translatesAutoresizingMaskIntoConstraints = false
@@ -69,34 +89,13 @@ final class HomeHeaderBar: UIView {
         registerForTraitChanges([UITraitUserInterfaceStyle.self]) {
             (view: Self, _: UITraitCollection) in
             view.menuPill.layer.borderColor = UIColor.separator.cgColor
+            view.applyLockButtonAppearance()
             view.applyBlackButtonAppearance()
-            if var addConfig = view.addButton.configuration {
-                addConfig.background.strokeColor = .separator
-                view.addButton.configuration = addConfig
-            }
+            view.applyNewShowButtonAppearance()
         }
 
-        statusDot.layer.cornerRadius = 5
-        statusDot.translatesAutoresizingMaskIntoConstraints = false
-        menuPill.addSubview(statusDot)
-
-        var backConfig = UIButton.Configuration.plain()
-        backConfig.image = UIImage(
-            systemName: "chevron.left",
-            withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .semibold)
-        )
-        backConfig.baseForegroundColor = .label
-        backConfig.contentInsets = .zero
-        backButton.configuration = backConfig
-        backButton.isHidden = true
-        backButton.accessibilityLabel = "Home"
-        backButton.accessibilityHint = "Closes this Show and returns to Recent Shows"
-        backButton.translatesAutoresizingMaskIntoConstraints = false
-        backButton.addTarget(self, action: #selector(backTapped), for: .touchUpInside)
-        addSubview(backButton)
-
         var libraryConfig = UIButton.Configuration.plain()
-        libraryConfig.title = "Eclipse"
+        libraryConfig.title = "Home"
         libraryConfig.image = UIImage(
             systemName: "chevron.down",
             withConfiguration: UIImage.SymbolConfiguration(pointSize: 10, weight: .semibold)
@@ -105,8 +104,9 @@ final class HomeHeaderBar: UIView {
         libraryConfig.imagePadding = 4
         libraryConfig.baseForegroundColor = .label
         libraryConfig.contentInsets = NSDirectionalEdgeInsets(
-            top: 6, leading: 4, bottom: 6, trailing: 10
+            top: 6, leading: 12, bottom: 6, trailing: 10
         )
+        libraryConfig.titleLineBreakMode = .byTruncatingTail
         libraryConfig.titleTextAttributesTransformer =
             UIConfigurationTextAttributesTransformer { incoming in
                 var outgoing = incoming
@@ -115,102 +115,181 @@ final class HomeHeaderBar: UIView {
             }
         libraryButton.configuration = libraryConfig
         libraryButton.showsMenuAsPrimaryAction = true
-        libraryButton.accessibilityLabel = "Eclipse menu"
-        libraryButton.accessibilityHint = "Shows, Settings, and create a new Show"
+        libraryButton.accessibilityLabel = "Home menu"
+        libraryButton.accessibilityHint =
+            "Home, Open Show, New Show, Media Library, Music, Settings, and Recent Shows"
         libraryButton.translatesAutoresizingMaskIntoConstraints = false
+        libraryButton.setContentCompressionResistancePriority(
+            .defaultLow, for: .horizontal
+        )
+        menuPill.setContentCompressionResistancePriority(
+            .defaultLow, for: .horizontal
+        )
         menuPill.addSubview(libraryButton)
+
+        installOutputStatusButton()
+
+        lockButton.translatesAutoresizingMaskIntoConstraints = false
+        lockButton.accessibilityLabel = "Lock live output"
+        lockButton.accessibilityHint =
+            "When on, the current live output stays fixed; media, Screensaver, and Background open in Preview"
+        lockButton.addTarget(self, action: #selector(lockTapped), for: .touchUpInside)
+        applyLockButtonAppearance()
 
         blackButton.translatesAutoresizingMaskIntoConstraints = false
         blackButton.accessibilityLabel = "Blackout"
-        blackButton.accessibilityHint = "Shows a black screen on AirPlay"
+        blackButton.accessibilityHint = "Toggles a black screen on AirPlay"
         blackButton.addTarget(self, action: #selector(blackTapped), for: .touchUpInside)
-        addSubview(blackButton)
         applyBlackButtonAppearance()
 
+        // Plain SF Symbols, like UIBarButtonItem — not icons in stroked circles.
         let symbolConfig = UIImage.SymbolConfiguration(pointSize: 20, weight: .regular)
-        var addConfig = UIButton.Configuration.plain()
-        addConfig.image = UIImage(systemName: "plus", withConfiguration: symbolConfig)
-        addConfig.background.strokeColor = .separator
-        addConfig.background.strokeWidth = 1
-        addConfig.background.cornerRadius = 18
-        addConfig.background.backgroundColor = .clear
-        addConfig.contentInsets = NSDirectionalEdgeInsets(
-            top: 8, leading: 8, bottom: 8, trailing: 8
+        settingsButton.configuration = Self.barIconConfig(
+            systemName: "gearshape.fill",
+            symbolConfig: symbolConfig
         )
-        addButton.configuration = addConfig
-        addButton.tintColor = .systemBlue
+        settingsButton.translatesAutoresizingMaskIntoConstraints = false
+        settingsButton.accessibilityLabel = "Settings"
+        settingsButton.accessibilityHint = "Open Settings; edit the open Show there"
+        settingsButton.addTarget(self, action: #selector(settingsTapped), for: .touchUpInside)
+
+        helpButton.configuration = Self.barIconConfig(
+            systemName: "questionmark.circle.fill",
+            symbolConfig: symbolConfig
+        )
+        helpButton.translatesAutoresizingMaskIntoConstraints = false
+        helpButton.accessibilityLabel = "Getting Started"
+        helpButton.accessibilityHint = "Learn the basics"
+        helpButton.addTarget(self, action: #selector(helpTapped), for: .touchUpInside)
+
+        addButton.configuration = Self.barIconConfig(
+            systemName: "plus",
+            symbolConfig: symbolConfig,
+            foreground: .systemBlue
+        )
         addButton.translatesAutoresizingMaskIntoConstraints = false
         addButton.accessibilityLabel = "Add"
         addButton.showsMenuAsPrimaryAction = true
-        addSubview(addButton)
+
+        newShowButton.translatesAutoresizingMaskIntoConstraints = false
+        newShowButton.accessibilityLabel = "New Show"
+        newShowButton.addTarget(self, action: #selector(newShowTapped), for: .touchUpInside)
+        applyNewShowButtonAppearance()
 
         doneButton.isHidden = true
         doneButton.translatesAutoresizingMaskIntoConstraints = false
         doneButton.onTap = { [weak self] in
-            self?.onDoneArranging?()
+            guard let self else { return }
+            if self.isSelecting {
+                self.onDoneSelecting?()
+            } else {
+                self.onDoneArranging?()
+            }
         }
-        addSubview(doneButton)
 
-        pillLeadingToEdge = menuPill.leadingAnchor.constraint(
-            equalTo: leadingAnchor, constant: 16
+        var selectConfig = UIButton.Configuration.filled()
+        selectConfig.title = "Actions"
+        selectConfig.baseBackgroundColor = .secondarySystemBackground
+        selectConfig.baseForegroundColor = .label
+        selectConfig.background.cornerRadius = 18
+        selectConfig.contentInsets = NSDirectionalEdgeInsets(
+            top: 7, leading: 14, bottom: 7, trailing: 14
         )
-        pillLeadingToBack = menuPill.leadingAnchor.constraint(
-            equalTo: backButton.trailingAnchor, constant: 4
-        )
+        selectConfig.titleTextAttributesTransformer =
+            UIConfigurationTextAttributesTransformer { incoming in
+                var outgoing = incoming
+                outgoing.font = .systemFont(ofSize: 16, weight: .semibold)
+                return outgoing
+            }
+        selectActionsButton.configuration = selectConfig
+        selectActionsButton.showsMenuAsPrimaryAction = true
+        selectActionsButton.isHidden = true
+        selectActionsButton.translatesAutoresizingMaskIntoConstraints = false
+        selectActionsButton.accessibilityLabel = "Selection actions"
+
+        trailingStack.axis = .horizontal
+        trailingStack.alignment = .center
+        trailingStack.spacing = 8
+        trailingStack.translatesAutoresizingMaskIntoConstraints = false
+        for button in [
+            outputStatusButton, lockButton, blackButton, settingsButton, helpButton,
+            addButton, newShowButton, selectActionsButton, doneButton
+        ] {
+            trailingStack.addArrangedSubview(button)
+        }
+        addSubview(trailingStack)
 
         NSLayoutConstraint.activate([
-            pillLeadingToEdge,
+            menuPill.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
             menuPill.centerYAnchor.constraint(equalTo: centerYAnchor),
             menuPill.heightAnchor.constraint(equalToConstant: 36),
 
-            backButton.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
-            backButton.centerYAnchor.constraint(equalTo: centerYAnchor),
-            backButton.widthAnchor.constraint(equalToConstant: 28),
-            backButton.heightAnchor.constraint(equalToConstant: 36),
-
-            statusDot.leadingAnchor.constraint(equalTo: menuPill.leadingAnchor, constant: 12),
-            statusDot.centerYAnchor.constraint(equalTo: menuPill.centerYAnchor),
-            statusDot.widthAnchor.constraint(equalToConstant: 10),
-            statusDot.heightAnchor.constraint(equalToConstant: 10),
-
-            libraryButton.leadingAnchor.constraint(
-                equalTo: statusDot.trailingAnchor, constant: 8),
+            libraryButton.leadingAnchor.constraint(equalTo: menuPill.leadingAnchor),
             libraryButton.trailingAnchor.constraint(equalTo: menuPill.trailingAnchor),
             libraryButton.topAnchor.constraint(equalTo: menuPill.topAnchor),
             libraryButton.bottomAnchor.constraint(equalTo: menuPill.bottomAnchor),
 
-            addButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
-            addButton.centerYAnchor.constraint(equalTo: centerYAnchor),
+            trailingStack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
+            trailingStack.centerYAnchor.constraint(equalTo: centerYAnchor),
+
+            outputStatusButton.widthAnchor.constraint(equalToConstant: 36),
+            outputStatusButton.heightAnchor.constraint(equalToConstant: 36),
             addButton.widthAnchor.constraint(equalToConstant: 36),
             addButton.heightAnchor.constraint(equalToConstant: 36),
-
-            doneButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
-            doneButton.centerYAnchor.constraint(equalTo: centerYAnchor),
+            settingsButton.widthAnchor.constraint(equalToConstant: 36),
+            settingsButton.heightAnchor.constraint(equalToConstant: 36),
+            helpButton.widthAnchor.constraint(equalToConstant: 36),
+            helpButton.heightAnchor.constraint(equalToConstant: 36),
+            lockButton.widthAnchor.constraint(equalToConstant: 36),
+            lockButton.heightAnchor.constraint(equalToConstant: 36),
+            blackButton.widthAnchor.constraint(equalToConstant: 36),
+            blackButton.heightAnchor.constraint(equalToConstant: 36),
+            newShowButton.heightAnchor.constraint(equalToConstant: 36),
+            selectActionsButton.heightAnchor.constraint(equalToConstant: 36),
             doneButton.heightAnchor.constraint(equalToConstant: 36),
 
-            blackButton.trailingAnchor.constraint(
-                equalTo: addButton.leadingAnchor, constant: -10),
-            blackButton.centerYAnchor.constraint(equalTo: centerYAnchor),
-            blackButton.heightAnchor.constraint(equalToConstant: 36),
-            // Width is intrinsic: compact moon when idle, expands for "Blackout".
-
             menuPill.trailingAnchor.constraint(
-                lessThanOrEqualTo: blackButton.leadingAnchor, constant: -12
+                lessThanOrEqualTo: trailingStack.leadingAnchor, constant: -8
             )
         ])
+        for button in [
+            outputStatusButton, lockButton, blackButton, settingsButton, helpButton,
+            addButton, newShowButton
+        ] {
+            button.setContentCompressionResistancePriority(.required, for: .horizontal)
+        }
+        outputStatusButton.setContentHuggingPriority(.required, for: .horizontal)
+        lockButton.setContentHuggingPriority(.required, for: .horizontal)
+        blackButton.setContentHuggingPriority(.required, for: .horizontal)
+    }
+
+    /// Toolbar-style icon button (plain SF Symbol, no stroked circle chrome).
+    static func barIconConfig(
+        systemName: String,
+        symbolConfig: UIImage.SymbolConfiguration,
+        foreground: UIColor = .label
+    ) -> UIButton.Configuration {
+        var config = UIButton.Configuration.plain()
+        config.image = UIImage(systemName: systemName, withConfiguration: symbolConfig)
+        config.baseForegroundColor = foreground
+        config.contentInsets = NSDirectionalEdgeInsets(
+            top: 6, leading: 6, bottom: 6, trailing: 6
+        )
+        return config
     }
 
     // MARK: - Menus
 
-    /// Sets the dropdown title (`"Eclipse"` on Home, show name in Show mode).
+    /// Sets the dropdown title (`"Home"` on Home, show name in Show mode).
     func setCenterTitle(_ title: String) {
         guard var config = libraryButton.configuration else { return }
         config.title = title
+        config.titleLineBreakMode = .byTruncatingTail
         libraryButton.configuration = config
         libraryButton.accessibilityLabel = "\(title) menu"
     }
 
-    /// Attaches the Shows + Settings menu to the Eclipse control.
+    /// Attaches the page dropdown (Home, Open Show, New Show, Media Library, Music, Recents).
     func setLibraryMenu(_ menu: UIMenu) {
         libraryButton.menu = menu
     }
@@ -222,15 +301,44 @@ final class HomeHeaderBar: UIView {
 
     // MARK: - Actions
 
+    @objc private func lockTapped() {
+        onToggleLiveLock?()
+    }
+
     @objc private func blackTapped() {
         onPresentBlack?()
     }
 
-    @objc private func backTapped() {
-        onGoHome?()
+    @objc private func settingsTapped() {
+        onOpenSettings?()
+    }
+
+    @objc private func helpTapped() {
+        onOpenGettingStarted?()
+    }
+
+    @objc private func newShowTapped() {
+        onNewShow?()
     }
 
     // MARK: - State
+
+    /// Home: New Show. Show mode: Lock + Blackout + Settings + "+".
+    func setShowModeChrome(_ showMode: Bool) {
+        guard showsShowChrome != showMode else { return }
+        showsShowChrome = showMode
+        applyTrailingChrome()
+    }
+
+    /// Reflects whether live output is locked (amber lock control).
+    func setLiveLocked(_ locked: Bool) {
+        guard isLiveLocked != locked else { return }
+        isLiveLocked = locked
+        UIView.animate(withDuration: 0.22, delay: 0, options: .curveEaseInOut) {
+            self.applyLockButtonAppearance()
+            self.layoutIfNeeded()
+        }
+    }
 
     /// Reflects whether blackout is the live AirPlay source.
     func setBlackLive(_ live: Bool) {
@@ -242,67 +350,73 @@ final class HomeHeaderBar: UIView {
         }
     }
 
-    /// Shows the back chevron ahead of the title; the only way out of Show mode.
-    func setShowingBackToHome(_ showing: Bool) {
-        guard backButton.isHidden == showing else { return }
-        backButton.isHidden = !showing
-        if showing {
-            pillLeadingToEdge.isActive = false
-            pillLeadingToBack.isActive = true
-        } else {
-            pillLeadingToBack.isActive = false
-            pillLeadingToEdge.isActive = true
-        }
+    /// Enters or leaves arrange mode, where Done replaces the trailing controls.
+    func setArranging(_ arranging: Bool) {
+        isArranging = arranging
+        if arranging { isSelecting = false }
+        applyEditingChrome()
     }
 
-    /// Enters or leaves arrange mode, where Done replaces the blackout / "+" controls.
-    func setArranging(_ arranging: Bool) {
-        doneButton.isHidden = !arranging
-        blackButton.isHidden = arranging
-        addButton.isHidden = arranging
-        // The Show name stays legible, but its menu is inert until Done.
-        libraryButton.isEnabled = !arranging
-        menuPill.alpha = arranging ? 0.45 : 1
+    /// Enters or leaves Show multi-select; `actionsMenu` is shown when items are checked.
+    func setSelecting(_ selecting: Bool, actionsMenu: UIMenu?) {
+        isSelecting = selecting
+        if selecting { isArranging = false }
+        selectActionsButton.menu = actionsMenu
+        selectActionsButton.isHidden = !selecting || actionsMenu == nil
+        selectActionsButton.accessibilityLabel = "Selection actions"
+        applyEditingChrome()
+    }
+
+    private func applyEditingChrome() {
+        let editing = isArranging || isSelecting
+        applyTrailingChrome()
+        libraryButton.isEnabled = !editing
+        menuPill.alpha = editing ? 0.45 : 1
+        doneButton.accessibilityLabel = isSelecting
+            ? "Done selecting"
+            : "Done arranging"
+        doneButton.accessibilityHint = isSelecting
+            ? "Leaves select mode"
+            : "Saves the new order"
+    }
+
+    private func applyTrailingChrome() {
+        let editing = isArranging || isSelecting
+        doneButton.isHidden = !editing
+        if !isSelecting {
+            selectActionsButton.isHidden = true
+            selectActionsButton.menu = nil
+        }
+        if editing {
+            outputStatusButton.isHidden = true
+            lockButton.isHidden = true
+            blackButton.isHidden = true
+            settingsButton.isHidden = true
+            helpButton.isHidden = true
+            addButton.isHidden = true
+            newShowButton.isHidden = true
+            return
+        }
+        outputStatusButton.isHidden = false
+        lockButton.isHidden = !showsShowChrome
+        blackButton.isHidden = !showsShowChrome
+        settingsButton.isHidden = !showsShowChrome
+        helpButton.isHidden = showsShowChrome
+        addButton.isHidden = !showsShowChrome
+        newShowButton.isHidden = showsShowChrome
     }
 
     /// Reflects EclipseTV (Multipeer) state. Combined with `setPresenting` for AirPlay.
     func setConnectionState(_ state: ConnectionDisplayState) {
         connectionState = state
-        applyStatusAppearance()
+        applyOutputStatusAppearance()
         setAddEnabled(true)
     }
 
     /// Updates whether an external display is available for presentation.
     func setPresenting(_ presenting: Bool) {
         isAirPlayConnected = presenting
-        applyStatusAppearance()
-    }
-
-    /// Status dot: green linked, blue AirPlay-only, grey offline / ready.
-    private func applyStatusAppearance() {
-        let color: UIColor
-        let accessibility: String
-        switch connectionState {
-        case .connected:
-            color = .systemGreen
-            accessibility = isAirPlayConnected
-                ? "EclipseTV linked, AirPlay available"
-                : "EclipseTV linked"
-        case .disconnected:
-            color = .systemOrange
-            accessibility = "Connecting to EclipseTV"
-        case .paused:
-            if isAirPlayConnected {
-                color = .systemBlue
-                accessibility = "AirPlay display available"
-            } else {
-                color = .systemGray
-                accessibility = "Not connected"
-            }
-        }
-        statusDot.backgroundColor = color
-        menuPill.accessibilityLabel = accessibility
-        libraryButton.accessibilityValue = accessibility
+        applyOutputStatusAppearance()
     }
 
     /// Enables or disables the "+" button (e.g. dimmed during a transfer).
@@ -314,44 +428,73 @@ final class HomeHeaderBar: UIView {
     /// The "+" button, exposed so callers can anchor popovers (iPad action sheets) to it.
     var addAnchor: UIView { addButton }
 
-    /// The Eclipse title control, for anchoring Show-related popovers.
+    /// The page title control, for anchoring Show-related popovers.
     var libraryAnchor: UIView { libraryButton }
 
-    private func applyBlackButtonAppearance() {
-        let symbol = UIImage.SymbolConfiguration(pointSize: 17, weight: .medium)
-        var config = UIButton.Configuration.plain()
-        config.image = UIImage(systemName: "moon.fill", withConfiguration: symbol)
-        config.imagePlacement = .leading
-        config.background.cornerRadius = 18
+    /// New Show control, for anchoring popovers when "+" is hidden on Home.
+    var newShowAnchor: UIView { newShowButton }
 
-        if isBlackLive {
-            config.title = "Blackout"
-            config.imagePadding = 6
+    private func applyLockButtonAppearance() {
+        let symbolConfig = UIImage.SymbolConfiguration(pointSize: 20, weight: .regular)
+        // Same lock glyph both ways — amber fill already marks the active state.
+        let name = "lock.fill"
+        if isLiveLocked {
+            var config = UIButton.Configuration.filled()
+            config.image = UIImage(systemName: name, withConfiguration: symbolConfig)
             config.baseForegroundColor = .white
-            config.background.backgroundColor = .systemBlue
-            config.background.strokeWidth = 0
+            config.baseBackgroundColor = .systemOrange
+            config.cornerStyle = .capsule
             config.contentInsets = NSDirectionalEdgeInsets(
-                top: 6, leading: 12, bottom: 6, trailing: 14
+                top: 6, leading: 6, bottom: 6, trailing: 6
             )
-            config.titleTextAttributesTransformer =
-                UIConfigurationTextAttributesTransformer { incoming in
-                    var outgoing = incoming
-                    outgoing.font = .systemFont(ofSize: 15, weight: .semibold)
-                    return outgoing
-                }
+            lockButton.configuration = config
         } else {
-            config.title = nil
-            config.imagePadding = 0
-            config.baseForegroundColor = .label
-            config.background.backgroundColor = .clear
-            config.background.strokeColor = .separator
-            config.background.strokeWidth = 1
-            config.contentInsets = NSDirectionalEdgeInsets(
-                top: 8, leading: 9, bottom: 8, trailing: 9
+            lockButton.configuration = Self.barIconConfig(
+                systemName: name,
+                symbolConfig: symbolConfig
             )
         }
+        lockButton.accessibilityValue = isLiveLocked ? "On" : "Off"
+    }
 
-        blackButton.configuration = config
+    private func applyBlackButtonAppearance() {
+        let symbolConfig = UIImage.SymbolConfiguration(pointSize: 20, weight: .regular)
+        // Always fill — matches lock / settings; active state is the blue capsule.
+        let name = "moon.fill"
+        if isBlackLive {
+            var config = UIButton.Configuration.filled()
+            config.image = UIImage(systemName: name, withConfiguration: symbolConfig)
+            config.baseForegroundColor = .white
+            config.baseBackgroundColor = .systemBlue
+            config.cornerStyle = .capsule
+            config.contentInsets = NSDirectionalEdgeInsets(
+                top: 6, leading: 6, bottom: 6, trailing: 6
+            )
+            blackButton.configuration = config
+        } else {
+            blackButton.configuration = Self.barIconConfig(
+                systemName: name,
+                symbolConfig: symbolConfig
+            )
+        }
         blackButton.accessibilityValue = isBlackLive ? "On" : "Off"
+    }
+
+    private func applyNewShowButtonAppearance() {
+        var config = UIButton.Configuration.filled()
+        config.title = "+ New Show"
+        config.baseForegroundColor = .white
+        config.baseBackgroundColor = .systemBlue
+        config.cornerStyle = .capsule
+        config.contentInsets = NSDirectionalEdgeInsets(
+            top: 7, leading: 14, bottom: 7, trailing: 14
+        )
+        config.titleTextAttributesTransformer =
+            UIConfigurationTextAttributesTransformer { incoming in
+                var outgoing = incoming
+                outgoing.font = .systemFont(ofSize: 15, weight: .semibold)
+                return outgoing
+            }
+        newShowButton.configuration = config
     }
 }

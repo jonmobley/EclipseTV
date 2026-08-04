@@ -150,31 +150,6 @@ final class WebThumbnailPrefetcher: NSObject, WKNavigationDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.8, execute: work)
     }
 
-    private func takeSnapshot(
-        from webView: WKWebView,
-        pageId: UUID,
-        completion: (() -> Void)? = nil
-    ) {
-        let scroll = webView.scrollView
-        scroll.contentInsetAdjustmentBehavior = .never
-        scroll.contentInset = .zero
-        scroll.verticalScrollIndicatorInsets = .zero
-        scroll.horizontalScrollIndicatorInsets = .zero
-
-        let config = WKSnapshotConfiguration()
-        config.rect = CGRect(origin: .zero, size: webView.bounds.size)
-        webView.takeSnapshot(with: config) { image, error in
-            Task { @MainActor in
-                if let image {
-                    WebThumbnailStore.shared.saveSnapshot(image, for: pageId)
-                } else if let error {
-                    self.logger.error("Snapshot failed: \(error.localizedDescription)")
-                }
-                completion?()
-            }
-        }
-    }
-
     private func fetchFavicon(for page: WebPage) {
         guard WebThumbnailStore.shared.snapshot(for: page.id) == nil,
               WebThumbnailStore.shared.favicon(for: page.id) == nil,

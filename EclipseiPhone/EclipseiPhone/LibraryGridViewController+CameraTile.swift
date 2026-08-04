@@ -18,8 +18,8 @@ extension LibraryGridViewController {
     /// Attaches the preview layer immediately (last-frame placeholder), then starts
     /// the session when the app is active. Retries are owned by `CameraManager`.
     func warmHomeCameraPreview() {
-        // The tools row is Show-only; on Home there is no tile to feed.
-        guard sectionIndex(for: .tools) != nil else { return }
+        // Camera tile is Show-only and only when present on that Show's surface.
+        guard cameraShowItemIndex != nil else { return }
         guard !ExternalDisplayManager.shared.isCameraModeActive else { return }
         guard AVCaptureDevice.authorizationStatus(for: .video) == .authorized else {
             return
@@ -45,7 +45,8 @@ extension LibraryGridViewController {
             cell.configureCamera(
                 isLive: ExternalDisplayManager.shared.isCameraLive,
                 lastFrame: CameraManager.shared.lastFrame,
-                warmPreview: false
+                warmPreview: false,
+                isLocked: isLiveOutputLocked
             )
         } else {
             CameraManager.shared.captureLastFrame(from: nil)
@@ -78,9 +79,20 @@ extension LibraryGridViewController {
         cell.configureCamera(
             isLive: ExternalDisplayManager.shared.isCameraLive,
             lastFrame: CameraManager.shared.lastFrame,
-            warmPreview: true
+            warmPreview: true,
+            isLocked: isLiveOutputLocked
         )
         cell.refreshLiveCameraPreview()
+    }
+
+    /// Updates only the tile's capture rotation after the phone turns.
+    func syncVisibleCameraTileOrientation() {
+        guard isHomeCameraPreviewEligible,
+              let cell = visibleCameraCell()
+        else {
+            return
+        }
+        cell.syncLiveCameraPreviewOrientation()
     }
 
     /// Observes app-active + session-running so the tile stays live across launch
@@ -101,7 +113,7 @@ extension LibraryGridViewController {
     /// True when the home grid is on-screen and should own the warm camera preview.
     private var isHomeCameraPreviewEligible: Bool {
         guard isViewLoaded, view.window != nil else { return false }
-        guard sectionIndex(for: .tools) != nil else { return false }
+        guard cameraShowItemIndex != nil else { return false }
         guard !ExternalDisplayManager.shared.isCameraModeActive else { return false }
         guard !isCameraControlPresented else { return false }
         return true
@@ -142,15 +154,9 @@ extension LibraryGridViewController {
     }
 
     private func visibleCameraCell() -> LibraryThumbnailCell? {
-        guard let toolsSection = sectionIndex(for: .tools) else { return nil }
-        let indexPath = IndexPath(item: 1, section: toolsSection)
-        guard toolItems.indices.contains(1),
-              case .camera = toolItems[1],
-              let cell = collectionView.cellForItem(at: indexPath)
-                as? LibraryThumbnailCell
-        else {
-            return nil
-        }
-        return cell
+        guard let showsSection = sectionIndex(for: .shows),
+              let item = cameraShowItemIndex else { return nil }
+        let indexPath = IndexPath(item: item, section: showsSection)
+        return collectionView.cellForItem(at: indexPath) as? LibraryThumbnailCell
     }
 }

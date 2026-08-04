@@ -36,7 +36,6 @@ extension LibraryGridViewController {
         let ids = playback.activeSlideIds
         guard ids.indices.contains(indexPath.item) else { return }
         let id = ids[indexPath.item]
-        let isCurrent = indexPath.item == playback.currentSlideIndex
         cell.configure(
             with: LibraryItemDTO(
                 id: id,
@@ -46,7 +45,7 @@ extension LibraryGridViewController {
                 isAvailable: true
             ),
             thumbnail: store.thumbnail(for: id),
-            isLive: isCurrent
+            isLive: false
         )
     }
 
@@ -59,6 +58,31 @@ extension LibraryGridViewController {
     /// Reapplies layout when the live ribbon appears or disappears.
     func refreshSlideshowRibbonPresentation() {
         applyCollectionLayout()
+        syncLiveSlideshowRibbonChrome()
+    }
+
+    /// Hero ribbon toggle + swipe browse while this Show’s slideshow is live.
+    func syncLiveSlideshowRibbonChrome() {
+        guard showsLiveHero, !isLiveFromOtherShow,
+              let slideshow = activeLiveSlideshow() else {
+            liveHeader.setSlideshowRibbonToggleVisible(false, isOn: false)
+            liveHeader.allowsSlideshowBrowse = false
+            return
+        }
+        liveHeader.setSlideshowRibbonToggleVisible(
+            true, isOn: slideshow.showRibbonWhenLive
+        )
+        liveHeader.allowsSlideshowBrowse = showsLiveSlideshowRibbon
+    }
+
+    /// Flips `showRibbonWhenLive` for the active slideshow (hero control).
+    func toggleLiveSlideshowRibbon() {
+        guard let slideshow = activeLiveSlideshow() else { return }
+        SlideshowStore.shared.updatePreferences(
+            id: slideshow.id,
+            showRibbonWhenLive: !slideshow.showRibbonWhenLive
+        )
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 
     /// Keeps the current slide roughly centered in the orthogonal ribbon.

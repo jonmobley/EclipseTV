@@ -12,16 +12,24 @@ import os.log
 struct CameraFrame: Equatable, Identifiable, Codable {
     let id: UUID
     let createdAt: Date
+    /// Bumped when the user selects this frame; drives recent-first ordering.
+    var lastUsedAt: Date
     /// Landscape and Vertical keep separate frame libraries.
     let orientation: ExternalOutputOrientation
 
     enum CodingKeys: String, CodingKey {
-        case id, createdAt, orientation
+        case id, createdAt, lastUsedAt, orientation
     }
 
-    init(id: UUID, createdAt: Date, orientation: ExternalOutputOrientation) {
+    init(
+        id: UUID,
+        createdAt: Date,
+        lastUsedAt: Date,
+        orientation: ExternalOutputOrientation
+    ) {
         self.id = id
         self.createdAt = createdAt
+        self.lastUsedAt = lastUsedAt
         self.orientation = orientation
     }
 
@@ -29,6 +37,8 @@ struct CameraFrame: Equatable, Identifiable, Codable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(UUID.self, forKey: .id)
         createdAt = try c.decode(Date.self, forKey: .createdAt)
+        // Pre-recents frames treat import time as last used.
+        lastUsedAt = try c.decodeIfPresent(Date.self, forKey: .lastUsedAt) ?? createdAt
         // Legacy frames (no orientation) land in Landscape.
         let raw = try c.decodeIfPresent(String.self, forKey: .orientation)
         orientation = ExternalOutputOrientation.resolved(fromStored: raw)
@@ -38,6 +48,7 @@ struct CameraFrame: Equatable, Identifiable, Codable {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(id, forKey: .id)
         try c.encode(createdAt, forKey: .createdAt)
+        try c.encode(lastUsedAt, forKey: .lastUsedAt)
         try c.encode(orientation.rawValue, forKey: .orientation)
     }
 }
@@ -62,10 +73,17 @@ final class CameraFrameStore {
     /// All frames on disk (both modes). Prefer `frames` for the active mode.
     private var allFrames: [CameraFrame] = []
 
-    /// Frames for the current Display Mode, newest-first.
+    /// Frames for the current Display Mode, recently used first.
     var frames: [CameraFrame] {
         let mode = ExternalOutputSettings.orientation
-        return allFrames.filter { $0.orientation == mode }
+        return allFrames
+            .filter { $0.orientation == mode }
+            .sorted {
+                if $0.lastUsedAt != $1.lastUsedAt {
+                    return $0.lastUsedAt > $1.lastUsedAt
+                }
+                return $0.createdAt > $1.createdAt
+            }
     }
 
     /// Selected frame id for the current Display Mode, or `nil` for None.
@@ -139,7 +157,13 @@ final class CameraFrameStore {
         let id = UUID()
         do {
             try data.write(to: fileURL(for: id), options: .atomic)
-            let frame = CameraFrame(id: id, createdAt: Date(), orientation: mode)
+            let now = Date()
+            let frame = CameraFrame(
+                id: id,
+                createdAt: now,
+                lastUsedAt: now,
+                orientation: mode
+            )
             allFrames.insert(frame, at: 0)
             saveIndex()
             NotificationCenter.default.post(name: Self.didChangeNotification, object: self)
@@ -166,6 +190,8 @@ final class CameraFrameStore {
     }
 
     /// Selects a frame in the current Display Mode, or `nil` for None.
+    ///
+    /// Selecting a frame bumps its recent-used time so it rises to the top of the grid.
     func select(_ id: UUID?) {
         let mode = ExternalOutputSettings.orientation
         if let id, !frames.contains(where: { $0.id == id }) {
@@ -174,6 +200,9 @@ final class CameraFrameStore {
         } else {
             selectedId = id
             setSelectedId(id, for: mode)
+            if let id {
+                touchLastUsed(for: id)
+            }
         }
         NotificationCenter.default.post(name: Self.didChangeNotification, object: self)
     }
@@ -186,6 +215,12 @@ final class CameraFrameStore {
     }
 
     // MARK: - Persistence
+
+    private func touchLastUsed(for id: UUID) {
+        guard let index = allFrames.firstIndex(where: { $0.id == id }) else { return }
+        allFrames[index].lastUsedAt = Date()
+        saveIndex()
+    }
 
     private func loadIndex() {
         guard let data = try? Data(contentsOf: indexURL),

@@ -62,18 +62,51 @@ final class SlideshowDetailViewController: UITableViewController {
             name: SlideshowStore.didChangeNotification,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(thumbnailDidChange(_:)),
+            name: TVLibraryStore.thumbnailDidChangeNotification,
+            object: nil
+        )
     }
 
     deinit {
         NotificationCenter.default.removeObserver(self)
     }
 
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        pinSlideThumbnails()
+        tableView.reloadData()
+    }
+
     @objc private func reload() {
         title = slideshow?.name ?? "Slideshow"
+        pinSlideThumbnails()
         tableView.reloadData()
         if slideshow == nil {
             navigationController?.popViewController(animated: true)
         }
+    }
+
+    /// Batch import can purge `NSCache` before this screen paints; reload when a
+    /// slide's thumb lands from disk / LocalMedia.
+    @objc private func thumbnailDidChange(_ note: Notification) {
+        guard let id = note.userInfo?[TVLibraryStore.thumbnailIdKey] as? String,
+              let row = slides.firstIndex(where: { $0.id == id }) else { return }
+        pinSlideThumbnails()
+        let path = IndexPath(row: row, section: Section.slides.rawValue)
+        guard tableView.numberOfSections > path.section,
+              tableView.numberOfRows(inSection: path.section) > row else {
+            tableView.reloadData()
+            return
+        }
+        tableView.reloadRows(at: [path], with: .none)
+    }
+
+    /// Keeps slide previews pinned while this editor is on screen.
+    private func pinSlideThumbnails() {
+        TVLibraryStore.shared.setVisibleThumbnailIds(Set(slides.map(\.id)))
     }
 
     @objc private func renameTapped() {
@@ -84,6 +117,7 @@ final class SlideshowDetailViewController: UITableViewController {
         alert.addTextField { field in
             field.text = slideshow.name
             field.autocapitalizationType = .words
+            UserDisplayName.configureTextField(field)
         }
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         alert.addAction(UIAlertAction(title: "Save", style: .default) { [weak self] _ in
@@ -132,7 +166,7 @@ final class SlideshowDetailViewController: UITableViewController {
     ) -> String? {
         switch Section(rawValue: section)! {
         case .preferences: return "Preferences"
-        case .slides: return "Photos"
+        case .slides: return "Images"
         }
     }
 
@@ -286,14 +320,14 @@ final class SlideshowDetailViewController: UITableViewController {
         let cell = tableView.dequeueReusableCell(withIdentifier: slideReuseId, for: indexPath)
         var config = cell.defaultContentConfiguration()
         if slides.isEmpty {
-            config.text = "No photos"
+            config.text = "No images"
             config.secondaryText = "Delete this Slideshow or create a new one."
             config.textProperties.color = .secondaryLabel
             cell.selectionStyle = .none
             cell.accessoryType = .none
         } else {
             let item = slides[indexPath.row]
-            config.text = "Photo \(indexPath.row + 1)"
+            config.text = "Image \(indexPath.row + 1)"
             config.image = TVLibraryStore.shared.thumbnail(for: item.id)
             config.imageProperties.maximumSize = CGSize(width: 44, height: 44)
             config.imageProperties.cornerRadius = 6

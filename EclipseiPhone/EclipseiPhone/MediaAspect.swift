@@ -70,6 +70,22 @@ enum MediaAspect {
         return UIImage(cgImage: cropped, scale: scale, orientation: .up)
     }
 
+    /// Center-crops to 1:1 so landscape (or tall) covers fill Home’s square Recent tiles.
+    static func centerCroppedToSquare(_ image: UIImage) -> UIImage {
+        let normalized = normalized(image)
+        let pointSize = normalized.size
+        guard pointSize.width > 1, pointSize.height > 1 else { return image }
+        let side = min(pointSize.width, pointSize.height)
+        guard abs(pointSize.width - pointSize.height) > 0.5 else { return normalized }
+        let rect = CGRect(
+            x: (pointSize.width - side) / 2,
+            y: (pointSize.height - side) / 2,
+            width: side,
+            height: side
+        )
+        return crop(normalized, to: rect) ?? normalized
+    }
+
     /// Natural display size of a video (orientation applied when available).
     static func videoDisplaySize(at url: URL) async -> CGSize? {
         let asset = AVURLAsset(url: url)

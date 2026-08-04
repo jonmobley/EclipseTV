@@ -7,11 +7,11 @@
 
 import UIKit
 
-// MARK: - Camera Frame Overlay
+// MARK: - Camera Frame Overlay + Drawer
 
 extension CameraLiveViewController {
 
-    /// Adds the PNG frame overlay on the phone panel (picker lives in Settings).
+    /// Adds the PNG frame overlay on the phone panel.
     func setupFrameOverlay() {
         frameOverlayView.contentMode = .scaleAspectFit
         frameOverlayView.clipsToBounds = true
@@ -44,5 +44,29 @@ extension CameraLiveViewController {
 
     @objc func cameraFrameStoreChanged() {
         refreshFrameOverlay()
+    }
+
+    /// Opens the frame drawer; finishes an in-flight movie first if needed.
+    @objc func frameButtonTapped() {
+        if CameraManager.shared.isRecording {
+            finalizeRecordingIfNeeded { [weak self] in
+                self?.presentFrameDrawer()
+            }
+            return
+        }
+        presentFrameDrawer()
+    }
+
+    /// Page-sheet drawer for picking, importing, and deleting frames.
+    private func presentFrameDrawer() {
+        let picker = CameraFramePickerViewController()
+        let nav = UINavigationController(rootViewController: picker)
+        nav.modalPresentationStyle = .pageSheet
+        if let sheet = nav.sheetPresentationController {
+            sheet.detents = [.medium(), .large()]
+            sheet.prefersGrabberVisible = true
+            sheet.prefersEdgeAttachedInCompactHeight = true
+        }
+        present(nav, animated: true)
     }
 }

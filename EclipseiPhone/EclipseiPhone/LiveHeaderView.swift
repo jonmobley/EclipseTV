@@ -6,10 +6,12 @@
 //
 
 // LiveHeaderView.swift
+import AVFoundation
 import UIKit
 
 /// Large hero banner pinned to the top of the Library screen showing whatever is
-/// currently live on the Apple TV. When nothing is live it falls back to a neutral
+/// currently live on the Apple TV / AirPlay, or phone-local library video when no
+/// external display is connected. When nothing is live it falls back to a neutral
 /// placeholder so the layout stays fixed while the grid scrolls beneath it.
 final class LiveHeaderView: UIView {
 
@@ -29,6 +31,19 @@ final class LiveHeaderView: UIView {
     var webPreviewHost: UIView?
     /// Page id currently attached to `webPreviewHost`, if any.
     var webPreviewPageId: UUID?
+    /// In-hero muted Screensaver loop (phone preview; external has its own player).
+    var screensaverPreview: SeamlessLoopPlayerView?
+    /// In-hero library video (phone-only live; cleared when AirPlay owns playback).
+    var libraryVideoHost: UIView?
+    var libraryVideoPlayer: AVPlayer?
+    var libraryVideoLayer: AVPlayerLayer?
+    var libraryVideoItemId: String?
+    var libraryVideoIsLooping = false
+    var libraryVideoEndObserver: NSObjectProtocol?
+    var libraryVideoTimeObserver: Any?
+    var libraryVideoFullscreenButton: UIButton?
+    /// Toggles the live slide ribbon while a Slideshow owns the hero.
+    var slideshowRibbonButton: UIButton?
 
     /// Identity of the last applied live content; used to skip no-op crossfades.
     private var presentedContentKey: String?
@@ -41,6 +56,9 @@ final class LiveHeaderView: UIView {
     var collapseProgress: CGFloat = 0
     /// Uniform transform scale the host controller currently applies to this view.
     var collapseScale: CGFloat = 1
+    /// When true, amber stroke (and LIVE badge) mark locked live output.
+    /// Read by collapse chrome so content updates don't wipe the thicker lock stroke.
+    private(set) var isOutputLocked = false
 
     /// True once the hero reads as a trailing mini preview rather than a full hero.
     var isCompactPresentation: Bool { collapseProgress > 0.5 }
@@ -49,12 +67,26 @@ final class LiveHeaderView: UIView {
     var onTogglePlayPause: (() -> Void)?
     var onSkip: ((Double) -> Void)?
     var onSeek: ((Double) -> Void)?
+    /// Fullscreen Preview for the phone-local library video.
+    var onRequestFullscreen: (() -> Void)?
+    /// Swipe on the hero while a Slideshow is live: `+1` next, `-1` previous.
+    var onSlideshowSwipe: ((Int) -> Void)?
+    /// Toggles `showRibbonWhenLive` for the active Slideshow from the hero.
+    var onToggleSlideshowRibbon: (() -> Void)?
+    /// When true, the expanded hero accepts left/right swipes (and stays tappable).
+    var allowsSlideshowBrowse = false {
+        didSet {
+            guard allowsSlideshowBrowse != oldValue else { return }
+            applyInteractionForPresentation()
+        }
+    }
 
     // MARK: - Init
 
     override init(frame: CGRect) {
         super.init(frame: frame)
         setupViews()
+        installSlideshowBrowseGestures()
     }
 
     required init?(coder: NSCoder) {
@@ -68,11 +100,10 @@ final class LiveHeaderView: UIView {
         layer.cornerRadius = 16
         layer.masksToBounds = true
         // Thin outline so Black / dark live content doesn't blend into the screen.
-        layer.borderWidth = 1
-        layer.borderColor = UIColor.separator.cgColor
+        applyOutputLockChrome()
         registerForTraitChanges([UITraitUserInterfaceStyle.self]) {
             (view: Self, _: UITraitCollection) in
-            view.layer.borderColor = UIColor.separator.cgColor
+            view.applyOutputLockChrome()
         }
 
         imageView.contentMode = .scaleAspectFill
@@ -92,7 +123,6 @@ final class LiveHeaderView: UIView {
 
         liveBadge.font = .systemFont(ofSize: 13, weight: .bold)
         liveBadge.textColor = .white
-        liveBadge.backgroundColor = .systemRed
         liveBadge.text = "LIVE"
         liveBadge.layer.cornerRadius = 6
         liveBadge.layer.masksToBounds = true
@@ -101,8 +131,8 @@ final class LiveHeaderView: UIView {
 
         titleLabel.font = .systemFont(ofSize: 20, weight: .bold)
         titleLabel.textColor = .white
-        titleLabel.numberOfLines = 1
-        titleLabel.lineBreakMode = .byTruncatingTail
+        titleLabel.numberOfLines = 2
+        titleLabel.lineBreakMode = .byWordWrapping
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         addSubview(titleLabel)
 
@@ -154,22 +184,43 @@ final class LiveHeaderView: UIView {
         super.layoutSubviews()
         gradientLayer.frame = bounds
         applyBadgeCounterScale()
+        layoutLibraryVideoPreviewIfNeeded()
+        // Keep the float-mode shadow path matched to the current bounds.
+        if layer.shadowOpacity > 0, bounds.width > 1, bounds.height > 1 {
+            layer.shadowPath = UIBezierPath(
+                roundedRect: bounds,
+                cornerRadius: layer.cornerRadius
+            ).cgPath
+        }
     }
 
     // MARK: - Configuration
 
     /// Shows the live item, or a placeholder when `item` is nil (nothing live).
-    func configure(with item: LibraryItemDTO?, thumbnail: UIImage?, isOnline: Bool) {
+    ///
+    /// - Parameter showsLocalTransport: When true (phone-only library video), show
+    ///   play/pause chrome even without an Eclipse TV Multipeer link.
+    func configure(
+        with item: LibraryItemDTO?,
+        thumbnail: UIImage?,
+        isOnline: Bool,
+        showsLocalTransport: Bool = false
+    ) {
         clearWebPreview(parking: true)
+        clearScreensaverPreview()
+        if !showsLocalTransport {
+            clearLibraryVideoPreview()
+        }
         guard let item = item else {
+            clearLibraryVideoPreview()
             applyContent(key: "placeholder") {
-                self.showPlaceholder()
+                self.showPlaceholder(message: "Connect to HDMI or AirPlay")
             }
             return
         }
 
         let thumbToken = thumbnail.map { "\(ObjectIdentifier($0))" } ?? "nil"
-        let key = "media:\(item.id):\(thumbToken):\(isOnline)"
+        let key = "media:\(item.id):\(thumbToken):\(isOnline):local\(showsLocalTransport)"
         applyContent(key: key) {
             self.backgroundColor = .secondarySystemBackground
             // The hero card is the output panel's aspect, so frame the art the way the
@@ -187,7 +238,7 @@ final class LiveHeaderView: UIView {
 
             // LIVE badge; video transport uses the bottom gradient. Never show
             // image titles on the preview — art alone is enough.
-            let showControls = item.isVideo && isOnline
+            let showControls = item.isVideo && (isOnline || showsLocalTransport)
             self.wantsPlaybackControls = showControls
             self.gradientLayer.isHidden = !showControls
             self.liveBadge.isHidden = false
@@ -198,6 +249,9 @@ final class LiveHeaderView: UIView {
             self.accessibilityLabel = self.isCompactPresentation
                 ? "Live, \(item.name), tap to expand"
                 : "Live, \(item.name)"
+            if showsLocalTransport {
+                self.setStaticPreviewHidden(true)
+            }
         }
     }
 
@@ -207,16 +261,21 @@ final class LiveHeaderView: UIView {
         systemImage: String?,
         fillColor: UIColor,
         thumbnail: UIImage? = nil,
-        keepWebPreview: Bool = false
+        keepWebPreview: Bool = false,
+        keepScreensaverPreview: Bool = false
     ) {
         if !keepWebPreview {
             clearWebPreview(parking: true)
         }
+        if !keepScreensaverPreview {
+            clearScreensaverPreview()
+        }
+        clearLibraryVideoPreview()
         let thumbToken = thumbnail.map { "\(ObjectIdentifier($0))" } ?? "nil"
-        let key = "overlay:\(title):\(systemImage ?? ""):\(thumbToken):web\(keepWebPreview)"
+        let key = "overlay:\(title):\(systemImage ?? ""):\(thumbToken):web\(keepWebPreview):ss\(keepScreensaverPreview)"
         applyContent(key: key) {
             self.backgroundColor = fillColor
-            // Logo / website / camera art always fills the hero.
+            // Background / website / camera art always fills the hero.
             self.imageView.contentMode = .scaleAspectFill
             self.imageView.image = thumbnail
             self.imageView.isHidden = thumbnail == nil
@@ -234,7 +293,8 @@ final class LiveHeaderView: UIView {
             self.subtitleLabel.isHidden = true
             self.controls.isHidden = true
 
-            self.titleLabel.isHidden = thumbnail != nil || keepWebPreview
+            let hidingStatic = keepWebPreview || keepScreensaverPreview
+            self.titleLabel.isHidden = thumbnail != nil || hidingStatic
             self.titleLabel.textColor = UIColor.white.withAlphaComponent(0.85)
             self.titleLabel.font = .systemFont(ofSize: 16, weight: .semibold)
             self.titleLabel.textAlignment = .center
@@ -243,7 +303,7 @@ final class LiveHeaderView: UIView {
             self.accessibilityLabel = self.isCompactPresentation
                 ? "\(title), tap to expand"
                 : title
-            if keepWebPreview {
+            if hidingStatic {
                 self.setStaticPreviewHidden(true)
             }
         }
@@ -285,8 +345,21 @@ final class LiveHeaderView: UIView {
         bringSubviewToFront(controls)
     }
 
-    private func showPlaceholder() {
+    /// Empty Show hero while live output still belongs to another Show.
+    func configureSelectToGoLive() {
         clearWebPreview(parking: true)
+        clearScreensaverPreview()
+        clearLibraryVideoPreview()
+        applyContent(key: "selectToGoLive") {
+            self.showPlaceholder(message: "Select item to go live")
+        }
+    }
+
+    /// Neutral empty hero (`tv` icon + centered message). No LIVE badge.
+    private func showPlaceholder(message: String) {
+        clearWebPreview(parking: true)
+        clearScreensaverPreview()
+        clearLibraryVideoPreview()
         backgroundColor = .secondarySystemBackground
         imageView.image = nil
         imageView.isHidden = true
@@ -304,23 +377,46 @@ final class LiveHeaderView: UIView {
 
         titleLabel.isHidden = false
         titleLabel.textColor = .secondaryLabel
-        titleLabel.font = .systemFont(ofSize: 16, weight: .semibold)
+        titleLabel.font = .systemFont(ofSize: 15, weight: .semibold)
         titleLabel.textAlignment = .center
-        titleLabel.text = "Eclipse"
+        titleLabel.numberOfLines = 2
+        titleLabel.text = message
         applyCollapseChrome()
         accessibilityLabel = isCompactPresentation
-            ? "Eclipse preview, tap to expand"
-            : "Eclipse"
+            ? "\(message), tap to expand"
+            : message
     }
 
-    /// Tap-to-expand while tucked; transport taps while the full hero shows.
+    /// Tap-to-expand while tucked; transport / slideshow swipes while expanded.
     func applyInteractionForPresentation() {
-        isUserInteractionEnabled = isCompactPresentation || wantsPlaybackControls
+        isUserInteractionEnabled =
+            isCompactPresentation || wantsPlaybackControls || allowsSlideshowBrowse
     }
 
     /// Applies the latest playback state to the transport controls.
     func updatePlayback(_ state: PlaybackState) {
         controls.update(isPlaying: state.isPlaying, currentTime: state.currentTime, duration: state.duration)
+    }
+
+    /// Amber hero stroke + LIVE badge while live output is locked.
+    func setOutputLocked(_ locked: Bool) {
+        guard isOutputLocked != locked else { return }
+        isOutputLocked = locked
+        UIView.animate(withDuration: 0.22, delay: 0, options: .curveEaseInOut) {
+            self.applyOutputLockChrome()
+        }
+    }
+
+    private func applyOutputLockChrome() {
+        if isOutputLocked {
+            layer.borderColor = UIColor.systemOrange.cgColor
+            liveBadge.backgroundColor = .systemOrange
+        } else {
+            layer.borderColor = UIColor.separator.cgColor
+            liveBadge.backgroundColor = .systemRed
+        }
+        // Width is owned by collapse chrome (counter-scales with the hero transform).
+        applyCollapseChrome()
     }
 
     // MARK: - Crossfade

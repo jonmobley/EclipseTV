@@ -206,4 +206,66 @@ extension iPhoneMainViewController {
         alertController.addAction(UIAlertAction(title: "OK", style: .default))
         presentationAnchor.present(alertController, animated: true)
     }
+
+    /// Header output-status control: explains AirPlay vs EclipseTV and offers Link.
+    func presentOutputStatusOptions() {
+        let airPlay = ExternalDisplayManager.shared.isConnected
+        let linked = isConnected()
+        let searching = !isConnectionPaused && !linked
+        let sheet = UIAlertController(
+            title: "AirPlay & EclipseTV",
+            message: Self.outputStatusMessage(
+                airPlay: airPlay,
+                linked: linked,
+                searching: searching
+            ),
+            preferredStyle: .actionSheet
+        )
+        if !linked {
+            sheet.addAction(UIAlertAction(title: "Link EclipseTV…", style: .default) { [weak self] _ in
+                self?.resumeConnection()
+            })
+        }
+        if !airPlay {
+            sheet.addAction(
+                UIAlertAction(title: "How to AirPlay", style: .default) { [weak self] _ in
+                    self?.showAlert(
+                        title: "AirPlay",
+                        message: "Open Control Center, tap Screen Mirroring, and choose "
+                            + "your display. AirPlay is enough to present a Show — "
+                            + "linking EclipseTV is only for media sync."
+                    )
+                }
+            )
+        }
+        sheet.addAction(UIAlertAction(title: "EclipseTV Settings", style: .default) { [weak self] _ in
+            self?.presentSettings(focusEclipseTV: true)
+        })
+        sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        if let popover = sheet.popoverPresentationController {
+            popover.sourceView = headerBar.outputStatusButton
+            popover.sourceRect = headerBar.outputStatusButton.bounds
+        }
+        present(sheet, animated: true)
+    }
+
+    private static func outputStatusMessage(
+        airPlay: Bool,
+        linked: Bool,
+        searching: Bool
+    ) -> String {
+        var parts: [String] = []
+        parts.append(airPlay ? "AirPlay: connected" : "AirPlay: not connected")
+        if linked {
+            parts.append("EclipseTV: linked")
+        } else if searching {
+            parts.append("EclipseTV: connecting…")
+        } else {
+            parts.append("EclipseTV: not linked")
+        }
+        parts.append(
+            "AirPlay presents your Show. EclipseTV link syncs media with the TV app."
+        )
+        return parts.joined(separator: "\n")
+    }
 }

@@ -243,9 +243,17 @@ final class AudioNowPlayingViewController: UIViewController {
         } else {
             subtitleLabel.text = track.subtitle.isEmpty ? " " : track.subtitle
         }
-        artworkView.image = player.artworkCache ?? UIImage(systemName: "music.note")
-        artworkView.contentMode = player.artworkCache == nil ? .center : .scaleAspectFill
-        artworkView.tintColor = .secondaryLabel
+        if let art = player.artworkCache {
+            artworkView.image = art
+            artworkView.contentMode = .scaleAspectFill
+            artworkView.tintColor = .secondaryLabel
+            artworkView.backgroundColor = .tertiarySystemFill
+        } else {
+            artworkView.image = UIImage(systemName: "music.note")
+            artworkView.contentMode = .center
+            artworkView.tintColor = .white
+            artworkView.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.45)
+        }
 
         let duration = max(player.duration, 0.1)
         if !isScrubbing {

@@ -34,13 +34,15 @@ extension PresentationViewController: WKNavigationDelegate {
         view.scrollView.bounces = false
         view.scrollView.contentInsetAdjustmentBehavior = .never
         view.isOpaque = false
-        view.backgroundColor = .black
-        view.scrollView.backgroundColor = .black
+        // Start black; `webBackgroundTint` replaces this once the page reports a colour.
+        view.backgroundColor = WebBackgroundTint.fallback
+        view.scrollView.backgroundColor = WebBackgroundTint.fallback
         // Non-interactive on the TV; the phone preview drives scrolling/navigation.
         view.isUserInteractionEnabled = false
 
         webContainer.addSubview(view)
         webView = view
+        webBackgroundTint = WebBackgroundTint(webView: view)
         return view
     }
 
@@ -76,7 +78,9 @@ extension PresentationViewController: WKNavigationDelegate {
         webView?.loadHTMLString("", baseURL: nil)
         webView?.removeFromSuperview()
         webView = nil
+        webBackgroundTint = nil
         webContainer.isHidden = true
+        if case .web = presentedSource?.content { presentedSource = nil }
     }
 
     /// Applies scale-up + portrait rotation from `ExternalOutputSettings`.
