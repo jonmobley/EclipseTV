@@ -157,6 +157,11 @@ public struct RemoteStateSnapshot: Codable, Sendable {
     /// Whether Prev/Next should show (slideshow, PDF, PowerPoint, Quest, web).
     public let showsSlideNavigation: Bool
     public let timer: RemoteTimerState
+    /// Program content aspect (width ÷ height) for preview and card slots.
+    ///
+    /// Matches Mac Landscape / Vertical / custom show size. Defaults to 16:9
+    /// when pairing with an older Mac that omits the field.
+    public let programAspect: Double
     public let media: [RemoteMediaEntry]
     public let libraryMedia: [RemoteMediaEntry]
 
@@ -177,6 +182,7 @@ public struct RemoteStateSnapshot: Codable, Sendable {
         isRecording: Bool,
         showsSlideNavigation: Bool,
         timer: RemoteTimerState,
+        programAspect: Double = 16.0 / 9.0,
         media: [RemoteMediaEntry],
         libraryMedia: [RemoteMediaEntry]
     ) {
@@ -195,7 +201,39 @@ public struct RemoteStateSnapshot: Codable, Sendable {
         self.isRecording = isRecording
         self.showsSlideNavigation = showsSlideNavigation
         self.timer = timer
+        self.programAspect = programAspect
         self.media = media
         self.libraryMedia = libraryMedia
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        presentationName = try container.decode(String.self, forKey: .presentationName)
+        currentPresentationID = try container.decodeIfPresent(
+            String.self, forKey: .currentPresentationID
+        )
+        presentations = try container.decode(
+            [RemotePresentationEntry].self, forKey: .presentations
+        )
+        liveMediaID = try container.decodeIfPresent(String.self, forKey: .liveMediaID)
+        livePresentationID = try container.decodeIfPresent(
+            String.self, forKey: .livePresentationID
+        )
+        livePresentationName = try container.decodeIfPresent(
+            String.self, forKey: .livePresentationName
+        )
+        isFrozen = try container.decode(Bool.self, forKey: .isFrozen)
+        isBlackout = try container.decode(Bool.self, forKey: .isBlackout)
+        isLocked = try container.decode(Bool.self, forKey: .isLocked)
+        hasExternalDisplay = try container.decode(Bool.self, forKey: .hasExternalDisplay)
+        isPresenting = try container.decode(Bool.self, forKey: .isPresenting)
+        isDrawing = try container.decode(Bool.self, forKey: .isDrawing)
+        isRecording = try container.decode(Bool.self, forKey: .isRecording)
+        showsSlideNavigation = try container.decode(Bool.self, forKey: .showsSlideNavigation)
+        timer = try container.decode(RemoteTimerState.self, forKey: .timer)
+        programAspect = try container.decodeIfPresent(Double.self, forKey: .programAspect)
+            ?? (16.0 / 9.0)
+        media = try container.decode([RemoteMediaEntry].self, forKey: .media)
+        libraryMedia = try container.decode([RemoteMediaEntry].self, forKey: .libraryMedia)
     }
 }

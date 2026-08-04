@@ -124,9 +124,22 @@ public actor RemoteAPIClient {
     /// - Parameters:
     ///   - id: Media item UUID string.
     ///   - token: Session Bearer token.
+    ///   - programAspect: Optional show aspect for URL cache-busting when the
+    ///     Mac regenerates thumbs after Landscape / Vertical / custom size.
     /// - Returns: PNG data.
-    public func thumbnail(id: String, token: String) async throws -> Data {
-        let url = try makeURL(path: "/thumb/\(id)")
+    public func thumbnail(
+        id: String,
+        token: String,
+        programAspect: Double? = nil
+    ) async throws -> Data {
+        var url = try makeURL(path: "/thumb/\(id)")
+        if let programAspect, programAspect > 0, programAspect.isFinite {
+            var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+            components?.queryItems = [
+                URLQueryItem(name: "a", value: String(format: "%.5f", programAspect))
+            ]
+            if let busted = components?.url { url = busted }
+        }
         var request = URLRequest(url: url)
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         let (data, response) = try await session.data(for: request)

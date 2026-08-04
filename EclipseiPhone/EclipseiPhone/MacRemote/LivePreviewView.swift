@@ -11,7 +11,7 @@ import UIKit
 
 // MARK: - LivePreviewView
 
-/// 16:9 live preview of the Mac program output.
+/// Live preview of the Mac program output at the show aspect.
 ///
 /// Thread Safety: Main thread only.
 struct LivePreviewView: View {
@@ -36,7 +36,7 @@ struct LivePreviewView: View {
                 .padding(14)
             }
         }
-        .aspectRatio(16 / 9, contentMode: .fit)
+        .aspectRatio(programAspect, contentMode: .fit)
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .strokeBorder(Color(uiColor: .separator), lineWidth: 1)
@@ -45,6 +45,13 @@ struct LivePreviewView: View {
     }
 
     // MARK: - Private Helpers
+
+    /// Mac program width ÷ height (Landscape / Vertical / custom).
+    private var programAspect: CGFloat {
+        let value = session.snapshot?.programAspect ?? (16.0 / 9.0)
+        guard value > 0, value.isFinite else { return 16.0 / 9.0 }
+        return CGFloat(value)
+    }
 
     @ViewBuilder
     private var previewContent: some View {

@@ -32,6 +32,9 @@ struct RemoteControlView: View {
                         items: showLibrary
                             ? (session.snapshot?.libraryMedia ?? [])
                             : (session.snapshot?.media ?? []),
+                        programAspect: CGFloat(
+                            session.snapshot?.programAspect ?? (16.0 / 9.0)
+                        ),
                         thumbnails: session.thumbnails,
                         onSelect: { item in
                             let action: RemoteCommandAction = showLibrary

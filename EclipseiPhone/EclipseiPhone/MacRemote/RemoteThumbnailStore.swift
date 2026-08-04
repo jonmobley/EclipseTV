@@ -24,6 +24,9 @@ final class RemoteThumbnailStore: ObservableObject {
     private var inflight: Set<String> = []
     private weak var client: RemoteAPIClient?
     private var token: String?
+    /// Latest Mac show aspect; appended to thumb URLs so caches don't stick.
+    private var programAspect: Double = 16.0 / 9.0
+    private var aspectRefreshTask: Task<Void, Never>?
 
     // MARK: - Public Interface
 
@@ -38,10 +41,26 @@ final class RemoteThumbnailStore: ObservableObject {
 
     /// Drops cache and credentials on disconnect.
     func reset() {
+        aspectRefreshTask?.cancel()
+        aspectRefreshTask = nil
         images.removeAll()
         inflight.removeAll()
         client = nil
         token = nil
+        programAspect = 16.0 / 9.0
+    }
+
+    /// Drops cached images so the next prefetch refetches (e.g. after aspect change).
+    func invalidateImages() {
+        images.removeAll()
+        inflight.removeAll()
+    }
+
+    /// Updates the show aspect used for thumb URL cache-busting.
+    /// - Parameter aspect: Mac `programAspect` (width ÷ height).
+    func setProgramAspect(_ aspect: Double) {
+        guard aspect > 0, aspect.isFinite else { return }
+        programAspect = aspect
     }
 
     /// Prefetches thumbnails for entries that advertise `hasThumbnail`.
@@ -52,18 +71,47 @@ final class RemoteThumbnailStore: ObservableObject {
         }
     }
 
+    /// Clears thumbs and reloads now plus a few delayed passes.
+    ///
+    /// Mac webpage cards recapture asynchronously after show-size changes; the
+    /// delayed passes pick up those bitmaps without a new wire field.
+    /// - Parameter itemsProvider: Returns the current media rows to refresh.
+    func refreshAfterAspectChange(itemsProvider: @escaping () -> [RemoteMediaEntry]) {
+        aspectRefreshTask?.cancel()
+        invalidateImages()
+        prefetch(items: itemsProvider())
+
+        let delaysNs: [UInt64] = [800_000_000, 2_000_000_000, 4_000_000_000]
+        aspectRefreshTask = Task { [weak self] in
+            for delay in delaysNs {
+                try? await Task.sleep(nanoseconds: delay)
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    guard let self else { return }
+                    self.invalidateImages()
+                    self.prefetch(items: itemsProvider())
+                }
+            }
+        }
+    }
+
     // MARK: - Private Helpers
 
     private func loadIfNeeded(id: String) {
         guard images[id] == nil, !inflight.contains(id),
               let client, let token else { return }
         inflight.insert(id)
+        let aspect = programAspect
         Task { [weak self] in
             defer {
                 Task { @MainActor in self?.inflight.remove(id) }
             }
             do {
-                let data = try await client.thumbnail(id: id, token: token)
+                let data = try await client.thumbnail(
+                    id: id,
+                    token: token,
+                    programAspect: aspect
+                )
                 guard let image = UIImage(data: data) else { return }
                 await MainActor.run {
                     self?.images[id] = image

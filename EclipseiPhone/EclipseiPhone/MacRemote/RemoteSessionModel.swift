@@ -219,8 +219,22 @@ final class RemoteSessionModel: ObservableObject {
     private func apply(snapshot: RemoteStateSnapshot) {
         isReconnecting = false
         reconnectAttempt = 0
+        let previousAspect = self.snapshot?.programAspect
         self.snapshot = snapshot
-        thumbnails.prefetch(items: snapshot.media + snapshot.libraryMedia)
+        let items = snapshot.media + snapshot.libraryMedia
+        thumbnails.setProgramAspect(snapshot.programAspect)
+        // Overlay / webpage PNGs are aspect-specific — refetch when the show
+        // size changes (Landscape / Vertical / custom), including delayed
+        // passes for Mac's async webpage thumb recapture.
+        if let previousAspect,
+           abs(previousAspect - snapshot.programAspect) > 0.001 {
+            thumbnails.refreshAfterAspectChange { [weak self] in
+                guard let snap = self?.snapshot else { return [] }
+                return snap.media + snap.libraryMedia
+            }
+        } else {
+            thumbnails.prefetch(items: items)
+        }
     }
 
     private func invalidateForUnauthorized() {

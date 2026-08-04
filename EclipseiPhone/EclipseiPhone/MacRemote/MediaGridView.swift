@@ -15,6 +15,8 @@ import SwiftUI
 /// Thread Safety: Main thread only.
 struct MediaGridView: View {
     let items: [RemoteMediaEntry]
+    /// Mac program width ÷ height for card slots.
+    var programAspect: CGFloat = 16.0 / 9.0
     @ObservedObject var thumbnails: RemoteThumbnailStore
     let onSelect: (RemoteMediaEntry) -> Void
 
@@ -22,6 +24,11 @@ struct MediaGridView: View {
         GridItem(.flexible(), spacing: 12),
         GridItem(.flexible(), spacing: 12)
     ]
+
+    private var slotAspect: CGFloat {
+        guard programAspect > 0, programAspect.isFinite else { return 16.0 / 9.0 }
+        return programAspect
+    }
 
     var body: some View {
         if items.isEmpty {
@@ -45,12 +52,12 @@ struct MediaGridView: View {
         }
     }
 
-    /// Full-bleed 16:9 tile with on-card caption — same language as Show media.
+    /// Full-bleed program-aspect tile with on-card caption.
     private func cell(for item: RemoteMediaEntry) -> some View {
         ZStack(alignment: .bottomLeading) {
             thumbnail(for: item)
                 .frame(maxWidth: .infinity)
-                .aspectRatio(16 / 9, contentMode: .fit)
+                .aspectRatio(slotAspect, contentMode: .fit)
                 .clipped()
 
             LinearGradient(
