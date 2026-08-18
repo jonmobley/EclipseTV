@@ -400,6 +400,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             // Snapshot before flipping the flag — `currentSourceProvider` prefers black.
             ExternalDisplayManager.shared.beginBlackout()
             isBlackSelected = true
+            announceAirPlayOverlayIfLinked()
         }
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         refreshLiveHeader()
@@ -428,6 +429,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         isScreensaverSelected = false
         store.updateCurrentId(nil)
         ExternalDisplayManager.shared.present(source)
+        announceAirPlayOverlayIfLinked()
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         reloadLibraryGrid()
         refreshLiveHeader()
@@ -443,6 +445,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         isScreensaverSelected = true
         store.updateCurrentId(nil)
         ExternalDisplayManager.shared.present(source)
+        announceAirPlayOverlayIfLinked()
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         reloadLibraryGrid()
         refreshLiveHeader()
@@ -474,6 +477,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         liveHeader.clearWebPreview(parking: true)
         if hasLiveOutputDestination {
             ExternalDisplayManager.shared.presentWeb(page.url, pageId: page.id)
+            announceAirPlayOverlayIfLinked()
         }
         let remote = WebRemoteViewController(page: page)
         // Landscape Display Mode rotates the browser; a plain nav controller would not.
@@ -508,6 +512,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         }
         if hasLiveOutputDestination {
             ExternalDisplayManager.shared.presentPDF(url, documentId: doc.id)
+            announceAirPlayOverlayIfLinked()
         }
         let remote = PDFRemoteViewController(document: doc, fileURL: url)
         let nav = UINavigationController(rootViewController: remote)
@@ -535,17 +540,9 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             return
         }
 
-        // No AirPlay / Eclipse TV: videos play in the phone hero; stills open Preview.
+        // No AirPlay / Eclipse TV: play on the phone hero (Preview from hero / ⋯).
         if !hasLiveOutputDestination {
-            if item.isVideo,
-               LocalMediaStore.shared.localURL(forId: item.id) != nil {
-                presentPhoneLiveVideo(item)
-            } else {
-                presentLocalPreview(
-                    for: item,
-                    in: openShowItems.isEmpty ? displayItems : openShowItems
-                )
-            }
+            presentPhoneLiveMedia(item)
             return
         }
 
@@ -586,10 +583,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             if self.hasLiveOutputDestination {
                 self.presentOfflineLive(for: item)
             } else {
-                self.presentLocalPreview(
-                    for: item,
-                    in: self.openShowItems.isEmpty ? self.displayItems : self.openShowItems
-                )
+                self.presentPhoneLiveMedia(item)
             }
             self.reloadLibraryGrid()
         }
@@ -756,16 +750,15 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         ) { [weak self] _ in
             self?.confirmDelete(id: id, name: item.name)
         }
-        // Tap already opens Preview when there is no live destination.
-        var children: [UIMenuElement] = []
-        if hasLiveOutputDestination {
-            children.append(UIAction(
+        // Tap marks phone-live when offline; Preview stays available from ⋯.
+        var children: [UIMenuElement] = [
+            UIAction(
                 title: "Preview",
                 image: UIImage(systemName: "eye")
             ) { [weak self] _ in
                 self?.presentLocalPreview(for: item)
-            })
-        }
+            }
+        ]
         if item.isVideo {
             children.append(contentsOf: videoOptionActions(for: item))
         }

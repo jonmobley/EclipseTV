@@ -10,7 +10,7 @@ import AVFoundation
 import UIKit
 
 /// Large hero banner pinned to the top of the Library screen showing whatever is
-/// currently live on the Apple TV / AirPlay, or phone-local library video when no
+/// currently live on the Apple TV / AirPlay, or phone-local library media when no
 /// external display is connected. When nothing is live it falls back to a neutral
 /// placeholder so the layout stays fixed while the grid scrolls beneath it.
 final class LiveHeaderView: UIView {
@@ -67,7 +67,7 @@ final class LiveHeaderView: UIView {
     var onTogglePlayPause: (() -> Void)?
     var onSkip: ((Double) -> Void)?
     var onSeek: ((Double) -> Void)?
-    /// Fullscreen Preview for the phone-local library video.
+    /// Fullscreen Preview for phone-local library media.
     var onRequestFullscreen: (() -> Void)?
     /// Swipe on the hero while a Slideshow is live: `+1` next, `-1` previous.
     var onSlideshowSwipe: ((Int) -> Void)?
@@ -77,6 +77,13 @@ final class LiveHeaderView: UIView {
     var allowsSlideshowBrowse = false {
         didSet {
             guard allowsSlideshowBrowse != oldValue else { return }
+            applyInteractionForPresentation()
+        }
+    }
+    /// When true, tapping the expanded hero requests fullscreen Preview (phone-live stills).
+    var allowsFullscreenTap = false {
+        didSet {
+            guard allowsFullscreenTap != oldValue else { return }
             applyInteractionForPresentation()
         }
     }
@@ -149,6 +156,12 @@ final class LiveHeaderView: UIView {
         controls.onSeek = { [weak self] position in self?.onSeek?(position) }
         addSubview(controls)
 
+        let fullscreenTap = UITapGestureRecognizer(
+            target: self,
+            action: #selector(handleFullscreenContentTap)
+        )
+        addGestureRecognizer(fullscreenTap)
+
         NSLayoutConstraint.activate([
             controls.leadingAnchor.constraint(equalTo: leadingAnchor),
             controls.trailingAnchor.constraint(equalTo: trailingAnchor),
@@ -200,11 +213,14 @@ final class LiveHeaderView: UIView {
     ///
     /// - Parameter showsLocalTransport: When true (phone-only library video), show
     ///   play/pause chrome even without an Eclipse TV Multipeer link.
+    /// - Parameter allowsStillFullscreenTap: When true (phone-only still), tap opens
+    ///   fullscreen Preview.
     func configure(
         with item: LibraryItemDTO?,
         thumbnail: UIImage?,
         isOnline: Bool,
-        showsLocalTransport: Bool = false
+        showsLocalTransport: Bool = false,
+        allowsStillFullscreenTap: Bool = false
     ) {
         clearWebPreview(parking: true)
         clearScreensaverPreview()
@@ -213,14 +229,18 @@ final class LiveHeaderView: UIView {
         }
         guard let item = item else {
             clearLibraryVideoPreview()
-            applyContent(key: "placeholder") {
-                self.showPlaceholder(message: "Connect to HDMI or AirPlay")
+            allowsFullscreenTap = false
+            let message = isOnline
+                ? "Select item to go live"
+                : "Select item to play on this iPhone"
+            applyContent(key: "placeholder:\(message)") {
+                self.showPlaceholder(message: message)
             }
             return
         }
 
         let thumbToken = thumbnail.map { "\(ObjectIdentifier($0))" } ?? "nil"
-        let key = "media:\(item.id):\(thumbToken):\(isOnline):local\(showsLocalTransport)"
+        let key = "media:\(item.id):\(thumbToken):\(isOnline):local\(showsLocalTransport):fs\(allowsStillFullscreenTap)"
         applyContent(key: key) {
             self.backgroundColor = .secondarySystemBackground
             // The hero card is the output panel's aspect, so frame the art the way the
@@ -240,6 +260,7 @@ final class LiveHeaderView: UIView {
             // image titles on the preview — art alone is enough.
             let showControls = item.isVideo && (isOnline || showsLocalTransport)
             self.wantsPlaybackControls = showControls
+            self.allowsFullscreenTap = allowsStillFullscreenTap
             self.gradientLayer.isHidden = !showControls
             self.liveBadge.isHidden = false
             self.titleLabel.isHidden = true
@@ -248,7 +269,9 @@ final class LiveHeaderView: UIView {
             self.applyCollapseChrome()
             self.accessibilityLabel = self.isCompactPresentation
                 ? "Live, \(item.name), tap to expand"
-                : "Live, \(item.name)"
+                : allowsStillFullscreenTap
+                    ? "Live, \(item.name), tap for full screen"
+                    : "Live, \(item.name)"
             if showsLocalTransport {
                 self.setStaticPreviewHidden(true)
             }
@@ -288,6 +311,7 @@ final class LiveHeaderView: UIView {
             }
 
             self.wantsPlaybackControls = false
+            self.allowsFullscreenTap = false
             self.gradientLayer.isHidden = true
             self.liveBadge.isHidden = false
             self.subtitleLabel.isHidden = true
@@ -351,6 +375,7 @@ final class LiveHeaderView: UIView {
         clearScreensaverPreview()
         clearLibraryVideoPreview()
         applyContent(key: "selectToGoLive") {
+            self.allowsFullscreenTap = false
             self.showPlaceholder(message: "Select item to go live")
         }
     }
@@ -360,6 +385,7 @@ final class LiveHeaderView: UIView {
         clearWebPreview(parking: true)
         clearScreensaverPreview()
         clearLibraryVideoPreview()
+        allowsFullscreenTap = false
         backgroundColor = .secondarySystemBackground
         imageView.image = nil
         imageView.isHidden = true
@@ -387,10 +413,19 @@ final class LiveHeaderView: UIView {
             : message
     }
 
-    /// Tap-to-expand while tucked; transport / slideshow swipes while expanded.
+    /// Tap-to-expand while tucked; transport / slideshow / still Preview while expanded.
     func applyInteractionForPresentation() {
         isUserInteractionEnabled =
-            isCompactPresentation || wantsPlaybackControls || allowsSlideshowBrowse
+            isCompactPresentation
+            || wantsPlaybackControls
+            || allowsSlideshowBrowse
+            || allowsFullscreenTap
+    }
+
+    /// Expanded phone-live still: open fullscreen Preview.
+    @objc func handleFullscreenContentTap() {
+        guard allowsFullscreenTap, !isCompactPresentation else { return }
+        onRequestFullscreen?()
     }
 
     /// Applies the latest playback state to the transport controls.

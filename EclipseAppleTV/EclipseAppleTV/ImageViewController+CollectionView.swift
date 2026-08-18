@@ -14,11 +14,14 @@ import os.log
 extension ImageViewController: UICollectionViewDataSource, UICollectionViewDelegate {
 
     func numberOfSections(in collectionView: UICollectionView) -> Int {
-        // Section 0 is always the local library; each non-empty album adds a section.
+        // Album home owns the whole grid (hosted albums become tiles).
+        if usesAlbumHome { return 1 }
+        // Section 0 is the local library; each non-empty hosted album adds a section.
         return 1 + albumStore.albumSectionCount
     }
 
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
+        if let count = companionNumberOfItems() { return count }
         if section != ImageViewController.librarySectionIndex {
             return albumStore.itemCount(albumIndex: section - 1)
         }
@@ -29,6 +32,10 @@ extension ImageViewController: UICollectionViewDataSource, UICollectionViewDeleg
     
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
         return PerformanceMonitor.shared.measureUIOperation("cellForItemAt") {
+            if let companionCell = dequeueCompanionCell(collectionView, at: indexPath) {
+                return companionCell
+            }
+
             guard let cell = collectionView.dequeueReusableCell(
                 withReuseIdentifier: "ThumbnailCell", for: indexPath
             ) as? ImageThumbnailCell else {
@@ -119,6 +126,8 @@ extension ImageViewController: UICollectionViewDataSource, UICollectionViewDeleg
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         dataSource.debugState()
 
+        if selectCompanionItem(at: indexPath) { return }
+
         // Album sections: read-only. Tapping an item views it fullscreen.
         if indexPath.section != ImageViewController.librarySectionIndex {
             let albumIndex = indexPath.section - 1
@@ -163,7 +172,8 @@ extension ImageViewController: UICollectionViewDataSource, UICollectionViewDeleg
     func collectionView(_ collectionView: UICollectionView, willDisplay cell: UICollectionViewCell, forItemAt indexPath: IndexPath) {
         // Album cells are read-only and load their own thumbnails; skip the library
         // selection-state sync and neighbor preloading below.
-        guard indexPath.section == ImageViewController.librarySectionIndex else { return }
+        guard indexPath.section == ImageViewController.librarySectionIndex,
+              !usesAlbumHome else { return }
 
         // CRITICAL FIX: Ensure proper selection state when cells become visible
         if let thumbnailCell = cell as? ImageThumbnailCell {

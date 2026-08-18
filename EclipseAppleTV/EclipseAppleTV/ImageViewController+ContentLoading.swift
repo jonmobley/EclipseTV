@@ -55,6 +55,10 @@ extension ImageViewController {
         applyAccountCodeAndSync(code)
     }
 
+    func connectionManager(_ manager: ConnectionManager, didReceiveLibraryAlbums albums: [LibraryAlbumDTO]) {
+        companionAlbumStore.replaceAll(albums)
+    }
+
     /// The companion asked us to make a specific item live. Resolve it and bring it
     /// to fullscreen, mirroring the behavior of selecting it on the TV.
     func connectionManager(
@@ -93,6 +97,8 @@ extension ImageViewController {
         }
 
         dataSource.setCurrentIndex(index)
+        applyCompanionBrowse(forPlayingId: id)
+        activeCollection = .library
 
         if isInGridMode {
             hideGridView()
@@ -223,7 +229,7 @@ extension ImageViewController {
     }
 
     /// Finds the data-source index for an item id (file name), or nil if not present.
-    private func libraryIndex(forItemId id: String) -> Int? {
+    func libraryIndex(forItemId id: String) -> Int? {
         for index in 0..<dataSource.count {
             if let path = dataSource.getPath(at: index),
                URL(fileURLWithPath: path).lastPathComponent == id {

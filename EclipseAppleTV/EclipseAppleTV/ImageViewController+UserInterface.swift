@@ -227,6 +227,14 @@ extension ImageViewController {
     
     /// Shows the empty state view when there are no images or videos
     internal func showEmptyState() {
+        if usesAlbumHome {
+            emptyStateView.hide()
+            gridView.isHidden = false
+            gradientView.isHidden = false
+            titleLabel.isHidden = false
+            titleLabel.text = albumHomeTitle
+            return
+        }
         logger.info("🟦 [EMPTY] Showing empty state view")
         
         // Hide grid view and other UI elements

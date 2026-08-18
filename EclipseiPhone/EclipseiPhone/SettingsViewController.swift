@@ -68,6 +68,11 @@ final class SettingsViewController: UITableViewController {
         case cameraClose
     }
 
+    private enum MacRow: Int, CaseIterable {
+        case remote
+        case phoneCamera
+    }
+
     private var sections: [Section] {
         var result: [Section] = []
         if openShowName != nil { result.append(.show) }
@@ -172,7 +177,7 @@ final class SettingsViewController: UITableViewController {
         case .playback: return PlaybackRow.allCases.count
         case .showSharing: return showSharingRows.count
         case .eclipseTV: return 1
-        case .eclipseMac: return 1
+        case .eclipseMac: return MacRow.allCases.count
         }
     }
 
@@ -202,8 +207,8 @@ final class SettingsViewController: UITableViewController {
         case .showSharing:
             return "Show sharing lets you send and receive a show directly from another user. When they provide you a code, add it here."
         case .eclipseMac:
-            return "Control Eclipse running on a Mac on the same Wi‑Fi. "
-                + "This stays out of the way until you connect."
+            return "Control Eclipse on a Mac, or send this iPhone’s camera as a "
+                + "live source (any Apple ID, same Wi‑Fi)."
         case .show, .playback:
             return nil
         }
@@ -243,9 +248,18 @@ final class SettingsViewController: UITableViewController {
             config.secondaryText = eclipseTVSummary()
             config.image = UIImage(systemName: "tv")
         case .eclipseMac:
-            config.text = "Connect to Mac"
-            config.secondaryText = "Remote control"
-            config.image = UIImage(systemName: "desktopcomputer")
+            switch MacRow(rawValue: indexPath.row) {
+            case .remote:
+                config.text = "Connect to Mac"
+                config.secondaryText = "Remote control"
+                config.image = UIImage(systemName: "desktopcomputer")
+            case .phoneCamera:
+                config.text = "Send Camera to Mac"
+                config.secondaryText = "Live phone camera source"
+                config.image = UIImage(systemName: "web.camera")
+            case .none:
+                break
+            }
         }
 
         cell.contentConfiguration = config
@@ -279,7 +293,14 @@ final class SettingsViewController: UITableViewController {
         case .eclipseTV:
             pushEclipseTV()
         case .eclipseMac:
-            presentMacRemote()
+            switch MacRow(rawValue: indexPath.row) {
+            case .remote:
+                presentMacRemote()
+            case .phoneCamera:
+                presentPhoneCameraSend()
+            case .none:
+                break
+            }
         }
     }
 
@@ -386,5 +407,9 @@ final class SettingsViewController: UITableViewController {
 
     private func presentMacRemote() {
         MacRemoteLauncher.open(from: self)
+    }
+
+    private func presentPhoneCameraSend() {
+        PhoneCameraSendLauncher.open(from: self)
     }
 }

@@ -58,11 +58,7 @@ extension iPhoneMainViewController: iPhoneConnectionManagerDelegate {
         connectionManager.sendSetContentTransition(
             ExternalOutputSettings.contentTransition.rawValue
         )
-        // Forward saved join code so the TV syncs the same shared presentation.
-        if let code = AlbumBrowserStore.shared.accountCode,
-           AlbumBrowserStore.shared.hasAccountConfigured {
-            _ = connectionManager.sendSetAccount(code: code)
-        }
+        connectionManager.sendSetLibraryAlbums(LibraryAlbumPush.currentAlbums())
         let pendingCount = PendingUploadStore.shared.uploads(for: mode).count
         if pendingCount > 0 {
             showTemporaryStatus(

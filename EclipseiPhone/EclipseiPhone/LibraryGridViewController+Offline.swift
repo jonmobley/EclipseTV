@@ -49,7 +49,7 @@ extension LibraryGridViewController {
     /// Selects an item as live without the Eclipse TV app (AirPlay remember / push).
     ///
     /// Only used when `hasLiveOutputDestination` is true. With no display and no TV
-    /// link, video taps use `presentPhoneLiveVideo` and stills open Preview.
+    /// link, media taps use `presentPhoneLiveMedia`.
     func presentOfflineLive(for item: LibraryItemDTO) {
         if item.isVideo {
             AudioPlayerController.shared.stop()
@@ -65,10 +65,12 @@ extension LibraryGridViewController {
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 
-    /// Marks a local video live and plays it in the phone hero (no external display).
-    func presentPhoneLiveVideo(_ item: LibraryItemDTO) {
-        guard item.isVideo,
-              LocalMediaStore.shared.localURL(forId: item.id) != nil else {
+    /// Marks local media live on the phone hero when there is no AirPlay / Eclipse TV.
+    ///
+    /// Videos play in-hero; stills show the library thumbnail. Fullscreen Preview is
+    /// available from the hero. Falls back to Preview when no local file exists.
+    func presentPhoneLiveMedia(_ item: LibraryItemDTO) {
+        guard LocalMediaStore.shared.localURL(forId: item.id) != nil else {
             presentLocalPreview(
                 for: item,
                 in: openShowItems.isEmpty ? displayItems : openShowItems
@@ -76,18 +78,23 @@ extension LibraryGridViewController {
             return
         }
         SlideshowPlaybackController.shared.stop()
-        AudioPlayerController.shared.stop()
-        let startAt = VideoResumeStore.shared.position(for: item.id) ?? 0
-        VideoResumeStore.shared.clear(for: item.id)
+        if item.isVideo {
+            AudioPlayerController.shared.stop()
+            let startAt = VideoResumeStore.shared.position(for: item.id) ?? 0
+            VideoResumeStore.shared.clear(for: item.id)
+            phoneLiveVideoStartAt = startAt
+            let source = PresentationSource.forLibraryItem(
+                item, thumbnail: store.thumbnail(for: item.id), startAt: startAt
+            )
+            AudioAmbientPolicy.applyYieldIfNeeded(for: source)
+        } else {
+            phoneLiveVideoStartAt = 0
+            liveHeader.clearLibraryVideoPreview()
+        }
         isBlackSelected = false
         isLogoSelected = false
         isScreensaverSelected = false
         store.updateCurrentId(item.id)
-        phoneLiveVideoStartAt = startAt
-        let source = PresentationSource.forLibraryItem(
-            item, thumbnail: store.thumbnail(for: item.id), startAt: startAt
-        )
-        AudioAmbientPolicy.applyYieldIfNeeded(for: source)
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         updateHeroVisibility()
         reloadLibraryGrid()
@@ -194,21 +201,21 @@ extension LibraryGridViewController {
         }
     }
 
-    /// Single-item fullscreen Preview (Show tools; not a gallery swipe).
+    /// Single-item Preview for Show tools, framed to Display Mode with aspect-fill.
+    ///
+    /// Matches tile / AirPlay framing: landscape Screensaver art fills a Vertical
+    /// 9:16 panel (cropped) instead of letterboxing on the phone.
     func presentPhonePreview(id: String, fileURL: URL, isVideo: Bool) {
-        if isVideo {
-            // Screensaver / tool videos loop like the live surface.
-            presentLocalVideoPreview(fileURL: fileURL, isLooping: true)
-            return
-        }
-        guard !isAlreadyOpen(LocalMediaPreviewViewController.self),
+        guard !isAlreadyOpen(DisplayModeMediaPreviewViewController.self),
+              !isAlreadyOpen(LocalMediaPreviewViewController.self),
               !isAlreadyOpen(LocalVideoPreviewViewController.self) else { return }
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        let item = LocalMediaPreviewItem(id: id, fileURL: fileURL, isVideo: false)
-        present(
-            LocalMediaPreviewViewController(items: [item], startIndex: 0),
-            animated: true
+        let preview = DisplayModeMediaPreviewViewController(
+            fileURL: fileURL,
+            isVideo: isVideo,
+            usesSeamlessLoop: isVideo && id == ShowToolToken.screensaver
         )
+        present(preview, animated: true)
     }
 
     func presentNotConnectedAlert() {

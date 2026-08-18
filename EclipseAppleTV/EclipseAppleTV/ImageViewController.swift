@@ -101,6 +101,7 @@ class ImageViewController: ManagedViewController, ConnectionManagerDelegate, UIG
         collectionView.delegate = self
         collectionView.dataSource = self
         collectionView.register(ImageThumbnailCell.self, forCellWithReuseIdentifier: "ThumbnailCell")
+        collectionView.register(AlbumFolderCell.self, forCellWithReuseIdentifier: AlbumFolderCell.reuseId)
         collectionView.remembersLastFocusedIndexPath = true
         
         // Add title label as header
@@ -191,6 +192,12 @@ class ImageViewController: ManagedViewController, ConnectionManagerDelegate, UIG
     /// When `activeCollection` is `.album`, the item index within the current album.
     /// (The local library uses `MediaDataSource.currentIndex`.)
     internal var albumCurrentItemIndex: Int = 0
+
+    /// Phone Shows mirrored as albums (empty until the companion sends a snapshot).
+    internal let companionAlbumStore = CompanionAlbumStore.shared
+
+    /// Album-home drill-in. Ignored while `usesAlbumHome` is false.
+    internal var companionBrowse: CompanionGridBrowse = .root
 
     /// Stable identity of the album/item the fullscreen viewer is on. Tracked alongside
     /// the indices so a background sync that reorders or removes albums/items can restore
@@ -312,6 +319,8 @@ class ImageViewController: ManagedViewController, ConnectionManagerDelegate, UIG
 
         // Observe the remote album and start an initial sync if one is configured.
         setupAlbumSync()
+        observeCompanionAlbums()
+        titleLabel.text = usesAlbumHome ? albumHomeTitle : "Eclipse"
         
         // Note: Player view setup is deferred until actually needed for video playback
         // This prevents unnecessary constraint conflicts during app launch

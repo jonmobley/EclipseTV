@@ -43,6 +43,31 @@ extension iPhoneMainViewController {
             name: ExternalDisplayManager.didChangeNotification,
             object: nil
         )
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleLocalAlbumsChanged),
+            name: LocalAlbumStore.didChangeNotification,
+            object: nil
+        )
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleJoinedAccountConflict),
+            name: JoinedAccountReconcile.conflictNotification,
+            object: nil
+        )
+    }
+
+    @objc private func handleLocalAlbumsChanged() {
+        guard isConnected() else { return }
+        connectionManager.sendSetLibraryAlbums(LibraryAlbumPush.currentAlbums())
+    }
+
+    @objc private func handleJoinedAccountConflict() {
+        showTemporaryStatus(
+            "Join codes differ — this phone and Apple TV are on different albums."
+        )
     }
 
     @objc private func handleExternalDisplayChange() {
@@ -300,6 +325,9 @@ extension iPhoneMainViewController {
         cameraVC.captureDestinationShowId = libraryViewController.openShow?.id
         cameraVC.modalPresentationStyle = .fullScreen
         present(cameraVC, animated: true)
+        if TVLibraryStore.shared.isOnline, ExternalDisplayManager.shared.isConnected {
+            showTemporaryStatus("Showing on AirPlay. EclipseTV is still on the library.")
+        }
     }
 
     /// Presents History for managing saved sites (one list at a time).

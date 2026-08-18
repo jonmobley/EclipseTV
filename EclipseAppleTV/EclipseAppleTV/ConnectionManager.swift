@@ -41,6 +41,8 @@ protocol ConnectionManagerDelegate: AnyObject {
     func connectionManager(_ manager: ConnectionManager, didReceivePlaybackCommand action: EclipseShareProtocol.PlaybackAction, position: Double?)
     /// The companion configured the read-only remote albums from an account `code`.
     func connectionManager(_ manager: ConnectionManager, didReceiveSetAccountCode code: String)
+    /// The companion pushed Show groupings to present as albums.
+    func connectionManager(_ manager: ConnectionManager, didReceiveLibraryAlbums albums: [LibraryAlbumDTO])
 }
 
 class ConnectionManager: NSObject {
@@ -226,9 +228,10 @@ class ConnectionManager: NSObject {
     /// Sends the full ordered library manifest (plus which item is live) to all peers.
     func sendLibraryManifest(items: [LibraryItemDTO], currentId: String?) {
         let mode = MediaDataSource.shared.activeLibraryMode
-        sendControlMessage(
-            .manifest(items: items, currentId: currentId).withLibraryMode(mode)
-        )
+        var envelope = EclipseShareEnvelope.manifest(items: items, currentId: currentId)
+            .withLibraryMode(mode)
+        envelope.accountCode = RemoteAlbumStore.shared.accountCode
+        sendControlMessage(envelope)
     }
 
     /// Sends a lightweight update telling the companion which item is now live.
@@ -388,6 +391,13 @@ class ConnectionManager: NSObject {
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
                 self.delegate?.connectionManager(self, didReceiveSetAccountCode: code)
+            }
+        case .setLibraryAlbums:
+            let albums = envelope.albums ?? []
+            logger.info("Received library albums: \(albums.count)")
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                self.delegate?.connectionManager(self, didReceiveLibraryAlbums: albums)
             }
         case .libraryManifest, .currentChanged, .playbackStatus, .none:
             // These are TV -> iPhone only; ignore if a peer ever sends them back.

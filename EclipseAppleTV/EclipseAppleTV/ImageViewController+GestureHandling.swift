@@ -172,6 +172,8 @@ extension ImageViewController {
             
             // Transition to grid view
             showGridViewTransition()
+        } else if popCompanionAlbumHome() {
+            // Inside an album: Menu returns to the album list.
         } else {
             // Already in grid view: open the options menu (album setup/refresh, help).
             // Exiting to the Home screen is handled by the TV/Home button.

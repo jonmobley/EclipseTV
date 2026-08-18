@@ -40,7 +40,8 @@ extension CameraLiveViewController {
     /// True when the tap landed on a chrome control that owns the gesture.
     private func hitTestBlocksStageLiveToggle(at location: CGPoint) -> Bool {
         let blockers: [UIView] = [
-            backButton, settingsButton, shutterButton, flipButton, frameButton
+            backButton, settingsButton, shutterButton, flipButton, frameButton,
+            alternateStillButton
         ]
         return blockers.contains { $0.frame.contains(location) && !$0.isHidden }
     }
@@ -86,8 +87,8 @@ extension CameraLiveViewController {
     /// Goes live on AirPlay, or stops live (and finishes any movie first).
     func toggleAirPlayLive() {
         let mgr = ExternalDisplayManager.shared
-        if mgr.isCameraParkedOnLogo {
-            mgr.resumeCameraFromLogoPark()
+        if mgr.isCameraParkedOnStill {
+            mgr.resumeCameraFromStillPark()
             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
             refreshLiveChrome()
             startAlwaysLiveRecordingIfNeeded()
@@ -149,8 +150,8 @@ extension CameraLiveViewController {
 
     /// Hold while live: start a local recording.
     func beginShutterHoldRecord() {
-        if ExternalDisplayManager.shared.isCameraParkedOnLogo {
-            ExternalDisplayManager.shared.resumeCameraFromLogoPark()
+        if ExternalDisplayManager.shared.isCameraParkedOnStill {
+            ExternalDisplayManager.shared.resumeCameraFromStillPark()
         }
         refreshLiveChrome()
         UIImpactFeedbackGenerator(style: .heavy).impactOccurred()

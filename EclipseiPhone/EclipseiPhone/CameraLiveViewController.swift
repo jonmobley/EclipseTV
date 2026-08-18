@@ -108,6 +108,18 @@ final class CameraLiveViewController: UIViewController {
     let flipButton = UIButton(type: .system)
     /// Opens the frame drawer to pick, hide, import, or delete overlays.
     let frameButton = UIButton(type: .system)
+    /// Cutaway still thumbnail — tap toggles that photo onto AirPlay while live.
+    let alternateStillButton = UIButton(type: .custom)
+    /// Aspect-fill photo inside `alternateStillButton` (nil art uses the plus symbol).
+    let alternateStillImageView: UIImageView = {
+        let view = UIImageView()
+        view.contentMode = .scaleAspectFill
+        view.clipsToBounds = true
+        view.isUserInteractionEnabled = false
+        view.translatesAutoresizingMaskIntoConstraints = false
+        view.isHidden = true
+        return view
+    }()
     /// Show that receives captures taken here, when the camera was opened from one.
     var captureDestinationShowId: UUID?
 
@@ -141,6 +153,7 @@ final class CameraLiveViewController: UIViewController {
         view.addSubview(backButton)
         setupPreviewChrome()
         setupCaptureMocks()
+        setupAlternateStillButton()
         setupFrameOverlay()
         setupSettingsButton()
 
@@ -446,6 +459,8 @@ final class CameraLiveViewController: UIViewController {
     }
 
     @objc private func externalDisplayChanged() {
+        // AirPlay / HDMI drop clears overlay live — reclaim the hardware preview layer.
+        updateLivePreviewSource(force: true)
         refreshLiveChrome()
     }
 

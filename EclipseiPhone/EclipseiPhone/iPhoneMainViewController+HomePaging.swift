@@ -297,6 +297,9 @@ extension iPhoneMainViewController: UIScrollViewDelegate, UINavigationController
         libraryViewController.onLiveOutputLockChanged = { [weak self] locked in
             self?.headerBar.setLiveLocked(locked)
         }
+        libraryViewController.onStatusMessage = { [weak self] message in
+            self?.showTemporaryStatus(message)
+        }
 
         addChild(libraryViewController)
         let gridView = libraryViewController.view!

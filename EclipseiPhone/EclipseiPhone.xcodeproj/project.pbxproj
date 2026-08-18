@@ -60,11 +60,16 @@
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
+/* Begin PBXBuildFile section */
+		E2F51CF32F1FDBB500B87D90 /* EclipsePhoneCameraClient in Frameworks */ = {isa = PBXBuildFile; productRef = E2F51CF42F1FDBB500B87D90 /* EclipsePhoneCameraClient */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFrameworksBuildPhase section */
 		E24EA38C2D8A64E7002DB63F /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E2F51CF32F1FDBB500B87D90 /* EclipsePhoneCameraClient in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -126,6 +131,7 @@
 			);
 			name = EclipseiPhone;
 			packageProductDependencies = (
+				E2F51CF42F1FDBB500B87D90 /* EclipsePhoneCameraClient */,
 			);
 			productName = EclipseiPhone;
 			productReference = E24EA38F2D8A64E7002DB63F /* EclipseiPhone.app */;
@@ -210,6 +216,9 @@
 			);
 			mainGroup = E24EA3862D8A64E7002DB63F;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				E2F51CF52F1FDBB500B87D90 /* XCLocalSwiftPackageReference "../../eclipsepro/Packages/EclipsePhoneCameraClient" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = E24EA3902D8A64E7002DB63F /* Products */;
 			projectDirPath = "";
@@ -263,6 +272,8 @@
 				"$(SRCROOT)/../EclipseiPhone/EclipseiPhone/PeerPairing.swift",
 				"$(SRCROOT)/../EclipseAppleTV/EclipseAppleTV/RemoteAlbum/AlbumConfig.swift",
 				"$(SRCROOT)/../EclipseiPhone/EclipseiPhone/AlbumConfig.swift",
+				"$(SRCROOT)/../EclipseAppleTV/EclipseAppleTV/RemoteAlbum/AlbumManifest.swift",
+				"$(SRCROOT)/../EclipseiPhone/EclipseiPhone/AlbumManifest.swift",
 			);
 			name = "Verify Shared Sources";
 			outputFileListPaths = (
@@ -604,6 +615,21 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		E2F51CF52F1FDBB500B87D90 /* XCLocalSwiftPackageReference "../../eclipsepro/Packages/EclipsePhoneCameraClient" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../../eclipsepro/Packages/EclipsePhoneCameraClient;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		E2F51CF42F1FDBB500B87D90 /* EclipsePhoneCameraClient */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E2F51CF52F1FDBB500B87D90 /* XCLocalSwiftPackageReference "../../eclipsepro/Packages/EclipsePhoneCameraClient" */;
+			productName = EclipsePhoneCameraClient;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = E24EA3872D8A64E7002DB63F /* Project object */;
 }

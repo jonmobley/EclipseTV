@@ -31,6 +31,15 @@ final class WebRemoteViewController: UIViewController {
     var backButton: UIBarButtonItem!
     var bookmarksButton: UIBarButtonItem!
 
+    /// `backList.count` when the browser settled on its opening URL.
+    ///
+    /// Warm loads often leave redirect history (`http`→`https`, trailing slash). Back
+    /// must not walk those — only navigations the user makes after open — or exiting
+    /// needs two presses.
+    var browserSessionBackCount = 0
+    /// True once `browserSessionBackCount` has been captured for this presentation.
+    var didCaptureBrowserSessionRoot = false
+
     // MARK: - Init
 
     /// Creates a presenting browser for the given saved page.
@@ -132,12 +141,29 @@ final class WebRemoteViewController: UIViewController {
     }
 
     @objc func goBackTapped() {
-        if webView?.canGoBack == true {
-            webView?.goBack()
+        guard let webView else {
+            closeTapped()
+            return
+        }
+        // Prefer a captured session root; if warm redirects are still settling, treat
+        // any existing back items as outside this visit so the first Back exits.
+        let rootCount = didCaptureBrowserSessionRoot
+            ? browserSessionBackCount
+            : webView.backForwardList.backList.count
+        if webView.backForwardList.backList.count > rootCount {
+            webView.goBack()
         } else {
-            // First page: Back leaves the browser (Safari-compact chrome has no X).
+            // At the page we opened on: leave the browser (no separate Close control).
             closeTapped()
         }
+    }
+
+    /// Records how deep the back-forward list was when the opening URL became current.
+    func captureBrowserSessionRootIfNeeded() {
+        guard !didCaptureBrowserSessionRoot else { return }
+        guard let webView, let url = webView.url, !isBlankBrowserURL(url) else { return }
+        browserSessionBackCount = webView.backForwardList.backList.count
+        didCaptureBrowserSessionRoot = true
     }
 
     @objc func reloadTapped() {

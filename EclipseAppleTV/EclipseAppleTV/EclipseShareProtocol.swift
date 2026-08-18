@@ -48,6 +48,8 @@ enum EclipseShareProtocol {
         case setContentTransition = "set_content_transition"
         /// Companion sets whether a still fills (crops to) the TV screen or letterboxes.
         case setImageFit = "set_image_fit"
+        /// Companion pushes Show groupings; the TV presents them as albums.
+        case setLibraryAlbums = "set_library_albums"
     }
 
     /// Separate media libraries: Landscape (16:9) vs Vertical (9:16).
@@ -142,6 +144,25 @@ struct LibraryItemDTO: Codable, Equatable {
     var isAvailable: Bool?
 }
 
+/// A phone Show as the TV should group it (named "album" in the TV UI).
+///
+/// `itemIds` are TV library file names only — tools, captures, websites, and PDFs
+/// are stripped before send. Empty albums are omitted by the companion.
+struct LibraryAlbumDTO: Codable, Equatable {
+    let id: String
+    let name: String
+    var itemIds: [String]
+    var coverId: String?
+    /// `"landscape"` / `"vertical"` — which library bucket this album belongs to.
+    var libraryMode: String?
+
+    /// Resolved cover, falling back to the first member.
+    var resolvedCoverId: String? {
+        if let coverId, itemIds.contains(coverId) { return coverId }
+        return itemIds.first
+    }
+}
+
 // MARK: - Envelope
 
 /// JSON envelope for every control message. Only the fields relevant to a given
@@ -177,6 +198,8 @@ struct EclipseShareEnvelope: Codable {
     var libraryMode: String? = nil
     /// `"Cut"` / `"Crossfade"` — content switch style for the TV app.
     var contentTransition: String? = nil
+    /// Show groupings for `setLibraryAlbums` (phone → TV).
+    var albums: [LibraryAlbumDTO]? = nil
 
     var kind: EclipseShareProtocol.Kind? {
         EclipseShareProtocol.Kind(rawValue: eclipseMsg)
@@ -346,6 +369,14 @@ struct EclipseShareEnvelope: Codable {
         EclipseShareEnvelope(
             eclipseMsg: EclipseShareProtocol.Kind.setContentTransition.rawValue,
             contentTransition: style
+        )
+    }
+
+    /// Pushes the companion's Show groupings so the TV can present them as albums.
+    static func setLibraryAlbums(_ albums: [LibraryAlbumDTO]) -> EclipseShareEnvelope {
+        EclipseShareEnvelope(
+            eclipseMsg: EclipseShareProtocol.Kind.setLibraryAlbums.rawValue,
+            albums: albums
         )
     }
 

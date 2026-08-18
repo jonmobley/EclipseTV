@@ -111,6 +111,13 @@ final class MultiTVSyncCoordinator {
             // Record only the items we could actually replay; if the local set later grows
             // (more items get local copies), the signature changes and we replay again.
             self.syncedSignatureByTV[name] = Self.signature(forIds: payload.map { $0.id })
+            if let peer = self.connectionManager?.session?.connectedPeers
+                .first(where: { $0.displayName == name }) {
+                _ = self.connectionManager?.sendEnvelope(
+                    .setLibraryAlbums(LibraryAlbumPush.currentAlbums()),
+                    to: peer
+                )
+            }
         }
     }
 

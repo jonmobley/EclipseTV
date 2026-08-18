@@ -14,6 +14,9 @@ import os.log
 extension ImageViewController {
 
     func indexPathForPreferredFocusedView(in collectionView: UICollectionView) -> IndexPath? {
+        if let albumPath = companionPreferredFocusIndexPath() {
+            return albumPath
+        }
         // Simple: focus on current index if valid, otherwise first item
         if dataSource.currentIndex < dataSource.count {
             return IndexPath(item: dataSource.currentIndex, section: 0)
@@ -24,7 +27,7 @@ extension ImageViewController {
     }
 
     override var preferredFocusEnvironments: [UIFocusEnvironment] {
-        if isInGridMode && !dataSource.isEmpty {
+        if isInGridMode && (usesAlbumHome || !dataSource.isEmpty) {
             // If we have a selected cell, prefer to focus on it
             if let selectedIndexPath = simpleSelectionManager.currentSelection,
                let selectedCell = gridView.cellForItem(at: selectedIndexPath) {
@@ -48,6 +51,14 @@ extension ImageViewController {
               gridView.alpha == 1,  // Don't interfere during transitions
               let nextCell = context.nextFocusedItem as? UICollectionViewCell,
               let nextIndexPath = gridView.indexPath(for: nextCell) else {
+            return
+        }
+
+        // Album home tiles / drilled-in album items are not the flat library index.
+        if usesAlbumHome {
+            if !isMoveMode, simpleSelectionManager.currentSelection != nil {
+                simpleSelectionManager.clearSelection()
+            }
             return
         }
 

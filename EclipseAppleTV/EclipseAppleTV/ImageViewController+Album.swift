@@ -314,6 +314,7 @@ extension ImageViewController {
 
         showNotificationToast(message: "Syncing albums…")
         startRealtimeIfConfigured()
+        connectionManager?.librarySync?.broadcastManifest()
 
         Task { [weak self] in
             guard let self else { return }

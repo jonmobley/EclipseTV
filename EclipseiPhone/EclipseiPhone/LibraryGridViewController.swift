@@ -45,6 +45,8 @@ final class LibraryGridViewController: UIViewController {
     var addMenuProvider: (() -> UIMenu)?
     /// Invoked when the user wants to create a Slideshow in a Show.
     var onCreateSlideshow: ((UUID) -> Void)?
+    /// Transient status (dual-path AirPlay hint, and similar).
+    var onStatusMessage: ((String) -> Void)?
     /// Invoked when the Recent Shows New Show tile is tapped.
     var onCreateShow: (() -> Void)?
     /// Invoked when Not Connected offers Connect (EclipseTV pairing).
@@ -452,7 +454,7 @@ final class LibraryGridViewController: UIViewController {
             self.connectionManager.sendPlaybackCommand(action: .seek, position: position)
         }
         liveHeader.onRequestFullscreen = { [weak self] in
-            self?.presentFullscreenForLiveVideo()
+            self?.presentFullscreenForLiveMedia()
         }
         liveHeader.onSlideshowSwipe = { delta in
             SlideshowPlaybackController.shared.goToAdjacentSlide(delta: delta)
@@ -574,6 +576,9 @@ final class LibraryGridViewController: UIViewController {
                 // "Connect…" placeholder until the user picks something (or is connected
                 // and we show the passive screensaver preview below).
                 self.pushCurrentToExternalDisplay()
+            } else if note.userInfo?[ExternalDisplayManager.disconnectReasonKey] as? Bool == true {
+                // AirPlay / HDMI dropped — keep phone camera / web / PDF open; tip the user.
+                self.showPresentationToast("External display disconnected")
             }
             // Browse ↔ live: show or hide the hero when AirPlay connects/drops.
             self.updateHeroVisibility()
@@ -912,15 +917,16 @@ final class LibraryGridViewController: UIViewController {
         }
         let thumbnail = liveItem.flatMap { store.thumbnail(for: $0.id) }
         // External display owns motion — phone hero stays a still. With no external
-        // display, play the local file in-hero (tap toggles; transport drives it).
-        let playLocally = liveItem?.isVideo == true
-            && !mgr.isConnected
-            && liveItem.flatMap { LocalMediaStore.shared.localURL(forId: $0.id) } != nil
+        // display, play local video in-hero; stills stay as art and tap to Preview.
+        let phoneLive = isPhoneLiveMedia && !mgr.isConnected
+        let playLocally = phoneLive && liveItem?.isVideo == true
+        let stillFullscreen = phoneLive && liveItem?.isVideo == false
         liveHeader.configure(
             with: liveItem,
             thumbnail: thumbnail,
             isOnline: store.isOnline,
-            showsLocalTransport: playLocally
+            showsLocalTransport: playLocally,
+            allowsStillFullscreenTap: stillFullscreen
         )
         if playLocally, let item = liveItem,
            let url = LocalMediaStore.shared.localURL(forId: item.id) {
@@ -940,22 +946,28 @@ final class LibraryGridViewController: UIViewController {
         }
     }
 
-    /// Opens system-player Preview for the phone-local live video (pauses the hero).
-    func presentFullscreenForLiveVideo() {
+    /// Opens fullscreen Preview for phone-local live media.
+    func presentFullscreenForLiveMedia() {
         guard let id = store.currentId,
               let item = store.items.first(where: { $0.id == id }),
-              item.isVideo,
               let url = LocalMediaStore.shared.localURL(forId: id) else { return }
-        let startAt = liveHeader.libraryVideoPlaybackState.currentTime
-        liveHeader.pauseLibraryVideoPreview()
-        presentLocalVideoPreview(
-            fileURL: url,
-            isMuted: item.isMuted ?? false,
-            isLooping: item.isLooping ?? false,
-            startAt: startAt
-        ) { [weak self] position in
-            self?.liveHeader.resumeLibraryVideoPreview(at: position)
+        if item.isVideo {
+            let startAt = liveHeader.libraryVideoPlaybackState.currentTime
+            liveHeader.pauseLibraryVideoPreview()
+            presentLocalVideoPreview(
+                fileURL: url,
+                isMuted: item.isMuted ?? false,
+                isLooping: item.isLooping ?? false,
+                startAt: startAt
+            ) { [weak self] position in
+                self?.liveHeader.resumeLibraryVideoPreview(at: position)
+            }
+            return
         }
+        presentLocalPreview(
+            for: item,
+            in: openShowItems.isEmpty ? displayItems : openShowItems
+        )
     }
 
     /// Static poster chrome + muted looping video in the phone preview.

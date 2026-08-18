@@ -176,8 +176,10 @@ extension iPhoneConnectionManager: MCSessionDelegate {
         case .libraryManifest:
             let items = envelope.items ?? []
             let currentId = envelope.currentId
+            let accountCode = envelope.accountCode
             Task { @MainActor in
                 TVLibraryStore.shared.updateManifest(items: items, currentId: currentId, mode: mode)
+                self.reconcileJoinedAccount(reportedByTV: accountCode)
             }
         case .currentChanged:
             let currentId = envelope.currentId
@@ -196,9 +198,35 @@ extension iPhoneConnectionManager: MCSessionDelegate {
             }
         case .playRequest, .setVideoSetting, .setImageFit, .deleteItem, .moveItem,
              .reorderItems, .restoreItem, .playbackCommand, .setAccount, .setDisplayMode,
-             .setContentTransition, .none:
+             .setContentTransition, .setLibraryAlbums, .none:
             // These are iPhone -> TV commands; ignore if ever echoed back to us.
             break
+        }
+    }
+}
+
+// MARK: - Joined account
+
+extension iPhoneConnectionManager {
+    /// Merges the TV-reported hosted-album code with this phone's join code.
+    @MainActor
+    func reconcileJoinedAccount(reportedByTV raw: String?) {
+        switch JoinedAccountReconcile.outcome(
+            phone: AlbumBrowserStore.shared.accountCode,
+            tv: raw
+        ) {
+        case .none:
+            break
+        case .adoptTV(let code):
+            _ = AlbumBrowserStore.shared.setAccountCode(code)
+            Task { try? await AlbumBrowserStore.shared.refresh() }
+        case .pushPhone(let code):
+            _ = sendSetAccount(code: code)
+        case .conflict:
+            NotificationCenter.default.post(
+                name: JoinedAccountReconcile.conflictNotification,
+                object: nil
+            )
         }
     }
 }

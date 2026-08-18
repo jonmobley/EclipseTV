@@ -146,6 +146,8 @@ extension CameraLiveViewController {
         view.bringSubviewToFront(frameButton)
         view.bringSubviewToFront(shutterButton)
         view.bringSubviewToFront(flipButton)
+        layoutAlternateStillButton(panel: panel)
+        refreshAlternateStillAppearance()
 
         updateShutterAccessibilityHint()
     }
@@ -222,7 +224,7 @@ extension CameraLiveViewController {
         layoutBottomChromeInPanel()
     }
 
-    /// Whether AirPlay currently owns the camera overlay (including Logo park).
+    /// Whether AirPlay currently owns the camera overlay (including still park).
     var isAirPlayLive: Bool {
         ExternalDisplayManager.shared.isCameraModeActive
     }

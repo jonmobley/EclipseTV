@@ -50,15 +50,20 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     // MARK: - Deep Links
 
-    /// Opens Eclipse for Mac when the Camera (or another app) hands us a QR URL.
+    /// Opens Eclipse for Mac remote or Phone Camera when Camera hands us a QR URL.
     private func handleIncomingURL(_ url: URL) {
-        guard url.scheme?.lowercased() == ConnectURLParser.appScheme,
-              url.host?.lowercased() == ConnectURLParser.appHost else {
+        let scheme = url.scheme?.lowercased()
+        let host = url.host?.lowercased()
+        guard scheme == ConnectURLParser.appScheme || scheme == "eclipse" else {
             return
         }
         // Defer until after splash / first layout so presentation has a host VC.
         DispatchQueue.main.async {
-            MacRemoteLauncher.open(connectString: url.absoluteString)
+            if host == "phone-camera" {
+                PhoneCameraSendLauncher.open(connectString: url.absoluteString)
+            } else if host == ConnectURLParser.appHost {
+                MacRemoteLauncher.open(connectString: url.absoluteString)
+            }
         }
     }
 

@@ -43,22 +43,26 @@
     </array>
     <key>NSAppTransportSecurity</key>
     <dict>
-        <key>NSAllowsLocalNetworking</key>
+        <!-- Alone on purpose: NSAllowsLocalNetworking makes iOS ignore
+             NSAllowsArbitraryLoads, which breaks Phone Camera on hotspot
+             addresses outside RFC1918 (e.g. 192.0.0.2). -->
+        <key>NSAllowsArbitraryLoads</key>
         <true/>
     </dict>
-    <key>NSLocalNetworkUsageDescription</key>
-    <string>Eclipse needs access to the local network to connect with your Apple TV and with Eclipse on your Mac</string>
-    <key>NSBonjourServices</key>
-    <array>
-        <string>_eclipse-share._tcp</string>
-        <string>_eclipse-share._udp</string>
-    </array>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Eclipse needs access to the local network to connect with your Apple TV, Eclipse on your Mac, and Phone Camera ingest</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_eclipse-share._tcp</string>
+		<string>_eclipse-share._udp</string>
+		<string>_eclipsephone._tcp</string>
+	</array>
     <key>NSPhotoLibraryUsageDescription</key>
     <string>Eclipse needs access to your photos to send them to your Apple TV</string>
     <key>NSPhotoLibraryAddUsageDescription</key>
     <string>Eclipse saves camera photos and videos to your Photos library</string>
-    <key>NSCameraUsageDescription</key>
-    <string>Eclipse needs camera access for live camera on AirPlay and to scan the pairing QR code for Eclipse on Mac</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Eclipse needs camera access for live camera on AirPlay, Send Camera to Mac, and to scan pairing QR codes</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>Eclipse needs microphone access to record video with sound</string>
     <key>UIBackgroundModes</key>

@@ -109,4 +109,8 @@ compare_album_config_core() {
 }
 compare_album_config_core "$TV_ALBUM_CONFIG" "$IPHONE_ALBUM_CONFIG" || status=1
 
+TV_ALBUM_MANIFEST="$REPO_ROOT/EclipseAppleTV/EclipseAppleTV/RemoteAlbum/AlbumManifest.swift"
+IPHONE_ALBUM_MANIFEST="$REPO_ROOT/EclipseiPhone/EclipseiPhone/AlbumManifest.swift"
+compare_from "$TV_ALBUM_MANIFEST" "$IPHONE_ALBUM_MANIFEST" "struct AlbumManifest" "AlbumManifest.swift" || status=1
+
 exit $status

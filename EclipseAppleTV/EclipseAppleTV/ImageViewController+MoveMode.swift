@@ -15,6 +15,7 @@ extension ImageViewController {
     @objc func handleLongPress(_ gesture: UILongPressGestureRecognizer) {
         // Only trigger once when gesture begins
         if gesture.state == .began {
+            guard !usesAlbumHome else { return }
             guard let cell = gesture.view as? ImageThumbnailCell else { 
                 logger.warning("🔴 Long press gesture not on ImageThumbnailCell")
                 return 

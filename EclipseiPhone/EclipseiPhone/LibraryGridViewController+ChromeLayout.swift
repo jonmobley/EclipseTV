@@ -13,24 +13,32 @@ extension LibraryGridViewController {
 
     /// AirPlay/HDMI or an Eclipse TV Multipeer link — somewhere to send live output.
     ///
-    /// Without either, the Show is browse/Preview-only: hide the live hero and open
-    /// phone Preview (or the web/PDF remote) on tap instead of marking items live.
+    /// Without either, media taps mark items phone-live in the hero (Preview is
+    /// fullscreen from the hero / ⋯ menu). Web and PDF still open their remotes.
     var hasLiveOutputDestination: Bool {
         ExternalDisplayManager.shared.isConnected || store.isOnline
     }
 
     /// Live hero belongs to an open Show that can drive output, or phone-only
-    /// library video marked live with no external display.
+    /// library media marked live with no external display.
     var showsLiveHero: Bool {
-        isShowMode && (hasLiveOutputDestination || isPhoneLiveVideo)
+        isShowMode && (hasLiveOutputDestination || isPhoneLiveMedia)
     }
 
-    /// Library video selected as live while browsing with no AirPlay / Eclipse TV.
-    var isPhoneLiveVideo: Bool {
+    /// Library media selected as live while browsing with no AirPlay / Eclipse TV.
+    var isPhoneLiveMedia: Bool {
         guard !hasLiveOutputDestination,
               let id = store.currentId,
+              store.items.contains(where: { $0.id == id }) else { return false }
+        return LocalMediaStore.shared.localURL(forId: id) != nil
+    }
+
+    /// Phone-only live library video (transport / mute-loop options).
+    var isPhoneLiveVideo: Bool {
+        guard isPhoneLiveMedia,
+              let id = store.currentId,
               let item = store.items.first(where: { $0.id == id }) else { return false }
-        return item.isVideo && LocalMediaStore.shared.localURL(forId: id) != nil
+        return item.isVideo
     }
 
     /// Phone landscape (`verticalSizeClass == .compact`): live preview left, grid

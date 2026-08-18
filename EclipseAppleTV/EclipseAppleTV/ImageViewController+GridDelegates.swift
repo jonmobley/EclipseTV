@@ -38,8 +38,18 @@ extension ImageViewController: UICollectionViewDelegateFlowLayout {
         // Reset any reused content
         headerView.subviews.forEach { $0.removeFromSuperview() }
 
-        // Each album section gets its own header label; the library section keeps the
-        // shared "Eclipse" title (whose alpha is animated during transitions).
+        if usesAlbumHome {
+            titleLabel.text = albumHomeTitle
+            titleLabel.translatesAutoresizingMaskIntoConstraints = false
+            headerView.addSubview(titleLabel)
+            NSLayoutConstraint.activate([
+                titleLabel.centerXAnchor.constraint(equalTo: headerView.centerXAnchor),
+                titleLabel.topAnchor.constraint(equalTo: headerView.topAnchor, constant: 20)
+            ])
+            return headerView
+        }
+
+        // Each hosted-album section gets its own header; the library keeps "Eclipse".
         if indexPath.section != ImageViewController.librarySectionIndex {
             // Apple "shelf" style: a left-aligned title sitting just above the row,
             // lined up with the row's leading content inset (see AdaptiveFlowLayout).
@@ -74,6 +84,8 @@ extension ImageViewController: MediaDataSourceDelegate {
 
     func mediaDataDidChange() {
         DispatchQueue.main.async {
+            self.reconcileCompanionBrowse()
+            self.titleLabel.text = self.usesAlbumHome ? self.albumHomeTitle : "Eclipse"
             // Always reload the grid when data changes
             self.gridView.reloadData()
 

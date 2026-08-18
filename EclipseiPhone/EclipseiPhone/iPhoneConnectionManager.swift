@@ -534,6 +534,16 @@ class iPhoneConnectionManager: NSObject {
         )
     }
 
+    /// Pushes Show groupings so every synced TV can present them as albums.
+    @discardableResult
+    func sendSetLibraryAlbums(_ albums: [LibraryAlbumDTO]) -> Bool {
+        return sendCommand(
+            .setLibraryAlbums(albums),
+            description: "library albums",
+            broadcast: true
+        )
+    }
+
     /// Sends a control envelope. When `broadcast` is true and "keep all in sync" is on,
     /// the message goes to every connected Apple TV; otherwise it targets only the active
     /// TV (preserving single-TV behavior for live-selection and playback commands).

@@ -41,7 +41,7 @@ struct AlbumManifestItem: Codable, Equatable {
     let url: String
     /// Optional absolute HTTPS URL of a server-generated thumbnail (under `thumbs/`).
     /// Preferred for grid cells; absent for older manifests.
-    let thumbnailUrl: String?
+    var thumbnailUrl: String? = nil
     /// `"image"` or `"video"`. Anything other than `"video"` is treated as an image.
     let type: String
     let name: String?

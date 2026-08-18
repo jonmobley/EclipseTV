@@ -373,7 +373,7 @@ extension LibraryGridViewController {
             isScreensaverSelected = false
             onPresentCamera?()
         case .media(let item):
-            if isLiveOutputLocked || !hasLiveOutputDestination {
+            if isLiveOutputLocked {
                 presentLocalPreview(for: item, in: openShowItems)
                 return
             }
@@ -513,16 +513,14 @@ extension LibraryGridViewController {
             LocalAlbumStore.shared.remove(itemId: item.id, fromAlbumId: id)
         }
         let arrange = arrangeAction()
-        // Tap already opens Preview when there is no live destination.
-        var children: [UIMenuElement] = []
-        if hasLiveOutputDestination {
-            children.append(UIAction(
+        var children: [UIMenuElement] = [
+            UIAction(
                 title: "Preview",
                 image: UIImage(systemName: "eye")
             ) { [weak self] _ in
                 self?.presentLocalPreview(for: item, in: items)
-            })
-        }
+            }
+        ]
         if item.isVideo {
             children.append(contentsOf: videoOptionActions(for: item))
         } else {
@@ -582,15 +580,12 @@ extension LibraryGridViewController {
         var children: [UIMenuElement] = []
         switch token {
         case ShowToolToken.logo:
-            // Tap already opens Preview when there is no live destination.
-            if hasLiveOutputDestination {
-                children.append(UIAction(
-                    title: "Preview",
-                    image: UIImage(systemName: "eye")
-                ) { [weak self] _ in
-                    self?.presentLogoPhonePreview()
-                })
-            }
+            children.append(UIAction(
+                title: "Preview",
+                image: UIImage(systemName: "eye")
+            ) { [weak self] _ in
+                self?.presentLogoPhonePreview()
+            })
             children.append(UIAction(
                 title: "Replace",
                 image: UIImage(systemName: "photo")
@@ -613,14 +608,12 @@ extension LibraryGridViewController {
                 })
             }
         case ShowToolToken.screensaver:
-            if hasLiveOutputDestination {
-                children.append(UIAction(
-                    title: "Preview",
-                    image: UIImage(systemName: "eye")
-                ) { [weak self] _ in
-                    self?.presentScreensaverPhonePreview()
-                })
-            }
+            children.append(UIAction(
+                title: "Preview",
+                image: UIImage(systemName: "eye")
+            ) { [weak self] _ in
+                self?.presentScreensaverPhonePreview()
+            })
             children.append(UIAction(
                 title: "Replace",
                 image: UIImage(systemName: "photo.on.rectangle")

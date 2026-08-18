@@ -42,6 +42,7 @@ extension WebRemoteViewController: UIScrollViewDelegate,
         web.translatesAutoresizingMaskIntoConstraints = true
         stage.addSubview(web)
         webView = web
+        captureBrowserSessionRootIfNeeded()
     }
 
     /// Fits a Display Mode aspect panel inside the stage, then applies the shared
@@ -168,12 +169,14 @@ extension WebRemoteViewController: UIScrollViewDelegate,
 
     func webView(_ webView: WKWebView,
                  didCommit navigation: WKNavigation!) {
+        captureBrowserSessionRootIfNeeded()
         updateBrowserChrome()
         guard let url = webView.url else { return }
         ExternalDisplayManager.shared.loadWeb(url: url)
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        captureBrowserSessionRootIfNeeded()
         updateBrowserChrome()
         pushWebScrollProgress()
         if let url = webView.url, url.scheme != "about" {

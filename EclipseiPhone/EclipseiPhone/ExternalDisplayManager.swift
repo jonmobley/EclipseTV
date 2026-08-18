@@ -32,6 +32,8 @@ final class ExternalDisplayManager {
     /// Posted when an external display connects or disconnects so UI (e.g. the header)
     /// can reflect that presentation is active.
     static let didChangeNotification = Notification.Name("ExternalDisplayManager.didChange")
+    /// UserInfo key on `didChangeNotification` when an external display truly dropped.
+    static let disconnectReasonKey = "disconnected"
 
     /// Posted when camera presentation ends because another source was presented or
     /// the display was cleared (so the phone camera UI can dismiss).
@@ -49,9 +51,9 @@ final class ExternalDisplayManager {
     /// Active overlay (camera, web, or PDF), if any.
     private(set) var overlaySource: OverlaySource?
 
-    /// Camera overlay is active, but AirPlay is temporarily showing Logo.
-    /// Phone camera UI stays open; session keeps running.
-    private(set) var isCameraParkedOnLogo = false
+    /// Camera overlay is active, but AirPlay is temporarily showing a still
+    /// (user alternate cutaway, or Logo). Phone camera UI stays open; session keeps running.
+    private(set) var isCameraParkedOnStill = false
 
     /// Whether camera mode owns the overlay (session may still be running).
     var isCameraModeActive: Bool {
@@ -61,7 +63,7 @@ final class ExternalDisplayManager {
 
     /// Whether the live camera is the active AirPlay presentation source.
     var isCameraLive: Bool {
-        isCameraModeActive && !isCameraParkedOnLogo
+        isCameraModeActive && !isCameraParkedOnStill
     }
 
     /// Whether a web page is the active presentation source (AirPlay path).
@@ -263,20 +265,39 @@ final class ExternalDisplayManager {
             return
         }
         logger.info("External display disconnected")
-        // Release the presented content before dropping our references. Otherwise the web
-        // view, `AVPlayer`, and attached camera preview stayed alive behind a window nobody
-        // can see, and the app still reported an overlay as live — camera session running,
-        // home tiles showing LIVE, phone browser refusing to let go of the page.
-        presentationVC?.showIdle()
-        endOverlay(notify: true)
-        isJoinedLive = false
 
+        // Capture resume time while the AirPlay player is still alive.
+        parkCurrentVideoForDisconnect()
+
+        // Drop TV-side players / web / camera layer. Do not stop the phone camera
+        // session or dismiss phone browser/PDF — those stay useful offline.
+        presentationVC?.showIdle()
+        if overlaySource != nil {
+            overlaySource = nil
+            isCameraParkedOnStill = false
+            liveWebPageId = nil
+            livePDFDocumentId = nil
+        }
+
+        isJoinedLive = false
+        blackoutRestore = nil
         // Do not set `window.windowScene = nil` — that forces mirroring.
         externalWindow = nil
         presentationVC = nil
         isConnected = false
         endBackgroundPresentationTask()
-        NotificationCenter.default.post(name: Self.didChangeNotification, object: self)
+        updateIdleTimer()
+        NotificationCenter.default.post(
+            name: Self.didChangeNotification,
+            object: self,
+            userInfo: [Self.disconnectReasonKey: true]
+        )
+    }
+
+    /// Parks library-video resume before disconnect tears down the AirPlay player.
+    private func parkCurrentVideoForDisconnect() {
+        guard let lastSource else { return }
+        parkLeavingVideoIfNeeded(replacing: lastSource, with: .black)
     }
 
     private func hasExternalDisplayScene() -> Bool {
@@ -407,7 +428,7 @@ final class ExternalDisplayManager {
         switch source.content {
         case .camera:
             beginOverlay(.camera, endingOther: true)
-            isCameraParkedOnLogo = false
+            isCameraParkedOnStill = false
         case .web(let url):
             beginOverlay(.web(url), endingOther: true)
         case .pdf(let url):
@@ -435,12 +456,12 @@ final class ExternalDisplayManager {
 
     /// Starts presenting the live camera on the external display (and remembers it).
     ///
-    /// If AirPlay was Logo-parked, resumes the live feed — callers that want the
-    /// camera (phone UI open / re-open) should never leave the TV stuck on Logo.
+    /// If AirPlay was still-parked, resumes the live feed — callers that want the
+    /// camera (phone UI open / re-open) should never leave the TV stuck on a still.
     /// Snapshots the prior non-camera source the first time camera goes live.
     func presentCamera() {
-        if isCameraParkedOnLogo {
-            resumeCameraFromLogoPark()
+        if isCameraParkedOnStill {
+            resumeCameraFromStillPark()
             return
         }
         if !isCameraModeActive {
@@ -460,25 +481,24 @@ final class ExternalDisplayManager {
         preCameraWasJoined = false
     }
 
-    /// Parks AirPlay on Logo without ending camera mode or stopping the session.
-    func parkCameraOnLogo() {
-        guard isCameraModeActive, !isCameraParkedOnLogo else { return }
-        guard let source = LogoStore.shared.presentationSource else { return }
+    /// Parks AirPlay on a still without ending camera mode or stopping the session.
+    func parkCameraOnStill(_ source: PresentationSource) {
+        guard isCameraModeActive else { return }
         refreshConnection()
-        isCameraParkedOnLogo = true
+        isCameraParkedOnStill = true
         AudioAmbientPolicy.applyYieldIfNeeded(for: source)
         lastSource = source
         presentationVC?.show(source)
         updateIdleTimer()
     }
 
-    /// Restores live camera on AirPlay after `parkCameraOnLogo()`.
-    func resumeCameraFromLogoPark() {
-        guard isCameraParkedOnLogo, isCameraModeActive else {
-            isCameraParkedOnLogo = false
+    /// Restores live camera on AirPlay after `parkCameraOnStill(_:)`.
+    func resumeCameraFromStillPark() {
+        guard isCameraParkedOnStill, isCameraModeActive else {
+            isCameraParkedOnStill = false
             return
         }
-        isCameraParkedOnLogo = false
+        isCameraParkedOnStill = false
         refreshConnection()
         let source = PresentationSource.camera
         AudioAmbientPolicy.applyYieldIfNeeded(for: source)
@@ -579,7 +599,7 @@ final class ExternalDisplayManager {
 
         // Drop overlay without tearDown — preview/session stay warm on the phone.
         overlaySource = nil
-        isCameraParkedOnLogo = false
+        isCameraParkedOnStill = false
 
         let destination = ExternalOutputSettings.cameraCloseDestination
         let applied: CameraCloseDestination
@@ -801,7 +821,7 @@ final class ExternalDisplayManager {
             }
         }
         if case .camera = next {} else {
-            isCameraParkedOnLogo = false
+            isCameraParkedOnStill = false
         }
         overlaySource = next
     }
@@ -820,7 +840,7 @@ final class ExternalDisplayManager {
         guard let current = overlaySource else { return }
         tearDown(current)
         overlaySource = nil
-        isCameraParkedOnLogo = false
+        isCameraParkedOnStill = false
         clearLiveOverlayId(for: current)
         if notify {
             notifyOverlayEnd(current)
