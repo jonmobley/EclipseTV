@@ -43,9 +43,11 @@ struct Slideshow: Codable, Equatable, Identifiable, Hashable {
     var crossfade: Bool
     /// When true, shows a slide ribbon on the phone while this slideshow is live.
     var showRibbonWhenLive: Bool
+    /// When true, slides fill (and crop to) the panel; otherwise they letterbox.
+    var isFill: Bool
     let createdAt: Date
 
-    /// Creates a slideshow with defaults (Autoplay / Loop / Crossfade / ribbon off).
+    /// Creates a slideshow with defaults (Autoplay / Loop / ribbon off, Fit framing).
     init(
         id: UUID = UUID(),
         showId: UUID,
@@ -58,6 +60,7 @@ struct Slideshow: Codable, Equatable, Identifiable, Hashable {
         loop: Bool = false,
         crossfade: Bool = true,
         showRibbonWhenLive: Bool = false,
+        isFill: Bool = false,
         createdAt: Date = Date()
     ) {
         self.id = id
@@ -71,6 +74,7 @@ struct Slideshow: Codable, Equatable, Identifiable, Hashable {
         self.loop = loop
         self.crossfade = crossfade
         self.showRibbonWhenLive = showRibbonWhenLive
+        self.isFill = isFill
         self.createdAt = createdAt
     }
 
@@ -84,7 +88,7 @@ struct Slideshow: Codable, Equatable, Identifiable, Hashable {
 
     private enum CodingKeys: String, CodingKey {
         case id, showId, name, itemIds, coverId, orientation
-        case autoplay, autoplaySeconds, loop, crossfade, showRibbonWhenLive, createdAt
+        case autoplay, autoplaySeconds, loop, crossfade, showRibbonWhenLive, isFill, createdAt
     }
 
     init(from decoder: Decoder) throws {
@@ -104,6 +108,7 @@ struct Slideshow: Codable, Equatable, Identifiable, Hashable {
         showRibbonWhenLive = try c.decodeIfPresent(
             Bool.self, forKey: .showRibbonWhenLive
         ) ?? false
+        isFill = try c.decodeIfPresent(Bool.self, forKey: .isFill) ?? false
         let raw = try c.decodeIfPresent(String.self, forKey: .orientation)
         orientation = ExternalOutputOrientation.resolved(fromStored: raw)
     }
@@ -121,6 +126,7 @@ struct Slideshow: Codable, Equatable, Identifiable, Hashable {
         try c.encode(loop, forKey: .loop)
         try c.encode(crossfade, forKey: .crossfade)
         try c.encode(showRibbonWhenLive, forKey: .showRibbonWhenLive)
+        try c.encode(isFill, forKey: .isFill)
         try c.encode(createdAt, forKey: .createdAt)
     }
 }

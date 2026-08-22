@@ -14,7 +14,7 @@ extension CameraLiveViewController {
     /// Hold duration before a press becomes a recording (seconds).
     static let shutterHoldDuration: TimeInterval = 0.35
 
-    /// Wires press on the shutter thumb (tap = photo, hold = record while live).
+    /// Wires press on the shutter thumb (tap = photo, hold = record).
     ///
     /// Uses a zero-duration long-press rather than a pan: `UIPanGestureRecognizer`
     /// only begins after the finger moves, so stationary tap/hold never fired.
@@ -28,7 +28,7 @@ extension CameraLiveViewController {
         shutterButton.addGestureRecognizer(press)
     }
 
-    /// Tap the stage (outside chrome) to toggle AirPlay live.
+    /// Tap the stage (outside chrome) to toggle live.
     @objc func handleStageTap(_ gesture: UITapGestureRecognizer) {
         guard gesture.state == .ended else { return }
         let location = gesture.location(in: view)
@@ -41,7 +41,7 @@ extension CameraLiveViewController {
     private func hitTestBlocksStageLiveToggle(at location: CGPoint) -> Bool {
         let blockers: [UIView] = [
             backButton, settingsButton, shutterButton, flipButton, frameButton,
-            alternateStillButton
+            alternateStillButton, frameRibbonView
         ]
         return blockers.contains { $0.frame.contains(location) && !$0.isHidden }
     }
@@ -52,8 +52,8 @@ extension CameraLiveViewController {
             shutterDidLongPress = false
             shutterHoldTimer?.invalidate()
             shutterHoldTimer = nil
-            // Always-record mode owns start/stop with live; hold would fight that.
-            guard isAirPlayLive, !ExternalOutputSettings.alwaysRecordWhenLive else { return }
+            // Always-record owns start/stop while live; hold would fight that.
+            if isAirPlayLive, ExternalOutputSettings.alwaysRecordWhenLive { return }
             shutterHoldTimer = Timer.scheduledTimer(
                 withTimeInterval: Self.shutterHoldDuration,
                 repeats: false
@@ -74,9 +74,8 @@ extension CameraLiveViewController {
         }
     }
 
-    /// Tap → photo while live; hold release → stop record. Idle: no shutter action.
+    /// Tap → photo; hold release → stop record. Works in preview and while live.
     private func finishShutterGesture() {
-        guard isAirPlayLive else { return }
         if shutterDidLongPress {
             endShutterHoldRecord()
         } else {
@@ -84,7 +83,9 @@ extension CameraLiveViewController {
         }
     }
 
-    /// Goes live on AirPlay, or stops live (and finishes any movie first).
+    /// Goes live, or stops live (and finishes any movie first).
+    ///
+    /// AirPlay when a display is attached; otherwise Camera is live on the phone.
     func toggleAirPlayLive() {
         let mgr = ExternalDisplayManager.shared
         if mgr.isCameraParkedOnStill {
@@ -105,15 +106,20 @@ extension CameraLiveViewController {
         }
 
         // Mirror first — AirPlay's attach steals the one preview connection.
-        prepareLivePreviewHandoffToAirPlay()
+        if mgr.isConnected {
+            prepareLivePreviewHandoffToAirPlay()
+        }
         mgr.presentCamera()
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         refreshLiveChrome()
         startAlwaysLiveRecordingIfNeeded()
     }
 
-    /// Live tap: blink the panel and save a still to Photos.
+    /// Blink the panel and save a still to Photos (and the Eclipse library).
     func capturePhotoFromShutter() {
+        if resumeCameraIfParkedOnStill() {
+            refreshLiveChrome()
+        }
         playShutterBlink()
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         CameraManager.shared.capturePhotoToLibrary { [weak self] result in
@@ -148,14 +154,23 @@ extension CameraLiveViewController {
         )
     }
 
-    /// Hold while live: start a local recording.
+    /// Hold: start a local recording (preview or live).
     func beginShutterHoldRecord() {
-        if ExternalDisplayManager.shared.isCameraParkedOnStill {
-            ExternalDisplayManager.shared.resumeCameraFromStillPark()
-        }
+        resumeCameraIfParkedOnStill()
         refreshLiveChrome()
         UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
         startRecordingFromShutter()
+    }
+
+    /// Restores the live camera when parked on a cutaway still.
+    ///
+    /// Returns `true` if a park was cleared. Does not call `presentCamera()` —
+    /// a local (no-display) park only drops the cutaway stroke.
+    @discardableResult
+    private func resumeCameraIfParkedOnStill() -> Bool {
+        guard ExternalDisplayManager.shared.isCameraParkedOnStill else { return false }
+        ExternalDisplayManager.shared.resumeCameraFromStillPark()
+        return true
     }
 
     /// Starts recording when Always Record When Live is on and camera is on AirPlay.
@@ -182,7 +197,7 @@ extension CameraLiveViewController {
         }
     }
 
-    /// Release after hold: stop recording; stay live.
+    /// Release after hold: stop recording; stay in preview or live.
     func endShutterHoldRecord() {
         finalizeRecordingIfNeeded()
     }

@@ -73,11 +73,7 @@ extension PresentationViewController {
             self.isCommittingTransition = true
             self.applyShowDirect(source)
             self.isCommittingTransition = false
-            self.clearIncomingOverlay(animated: false)
-            self.pendingTransitionSource = nil
-            self.isTransitionInFlight = false
-            self.isRevealScheduled = false
-            self.refreshAudioNowPlayingOverlay()
+            self.finishCommitWhenPrimaryVisible(source: source, generation: generation)
         }
 
         if ExternalOutputSettings.contentTransition == .crossfade {
@@ -93,6 +89,40 @@ extension PresentationViewController {
         } else {
             transitionOverlayContainer.alpha = 1
             commit()
+        }
+    }
+
+    /// Drops the overlay once the primary surface has a frame (video) or immediately.
+    private func finishCommitWhenPrimaryVisible(
+        source: PresentationSource,
+        generation: Int
+    ) {
+        let finish = { [weak self] in
+            guard let self, generation == self.transitionGeneration else { return }
+            self.clearIncomingOverlay(animated: false)
+            self.pendingTransitionSource = nil
+            self.isTransitionInFlight = false
+            self.isRevealScheduled = false
+            self.refreshAudioNowPlayingOverlay()
+        }
+
+        guard case .video = source.content,
+              let layer = playerLayer, !layer.isReadyForDisplay else {
+            finish()
+            return
+        }
+        videoReadyObservation = layer.observe(\.isReadyForDisplay, options: [.new]) {
+            [weak self] layer, _ in
+            guard layer.isReadyForDisplay else { return }
+            DispatchQueue.main.async {
+                self?.videoReadyObservation = nil
+                finish()
+            }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            guard self?.videoReadyObservation != nil else { return }
+            self?.videoReadyObservation = nil
+            finish()
         }
     }
 
@@ -115,6 +145,7 @@ extension PresentationViewController {
         incomingImageRequest?.cancel()
         incomingImageRequest = nil
         incomingVideoReadyObservation = nil
+        incomingLayerReadyObservation = nil
         incomingWebNavigation = nil
 
         if let loop = incomingLoopObserver {

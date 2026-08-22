@@ -8,7 +8,7 @@
 import UIKit
 
 /// One locally stored media file that can be shown in the phone preview gallery.
-struct LocalMediaPreviewItem {
+struct LocalMediaPreviewItem: Equatable {
     let id: String
     let fileURL: URL
     let isVideo: Bool
@@ -88,20 +88,16 @@ final class LocalMediaPreviewViewController: UIViewController {
         pager.didMove(toParent: self)
         pageController = pager
 
-        let first = LocalMediaPreviewPageViewController(item: items[startIndex], index: startIndex)
+        guard let first = makePage(at: startIndex) else { return }
         pager.setViewControllers([first], direction: .forward, animated: false)
     }
 
     private func setupCloseButton() {
-        let config = UIImage.SymbolConfiguration(pointSize: 28, weight: .semibold)
-        closeButton.setImage(
-            UIImage(systemName: "xmark.circle.fill", withConfiguration: config),
-            for: .normal
-        )
-        closeButton.tintColor = UIColor.white.withAlphaComponent(0.9)
+        closeButton.applyPreviewCloseAppearance()
         closeButton.translatesAutoresizingMaskIntoConstraints = false
         closeButton.addTarget(self, action: #selector(closeTapped), for: .touchUpInside)
         view.addSubview(closeButton)
+        view.bringSubviewToFront(closeButton)
         NSLayoutConstraint.activate([
             closeButton.topAnchor.constraint(
                 equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
@@ -110,9 +106,19 @@ final class LocalMediaPreviewViewController: UIViewController {
         ])
     }
 
-    private func page(at index: Int) -> LocalMediaPreviewPageViewController? {
+    private func makePage(at index: Int) -> LocalMediaPreviewPageViewController? {
         guard items.indices.contains(index) else { return nil }
-        return LocalMediaPreviewPageViewController(item: items[index], index: index)
+        let page = LocalMediaPreviewPageViewController(item: items[index], index: index)
+        page.onZoomedChanged = { [weak self] zoomed in
+            self?.setPagingEnabled(!zoomed)
+        }
+        return page
+    }
+
+    private func setPagingEnabled(_ enabled: Bool) {
+        pageController.view.subviews
+            .compactMap { $0 as? UIScrollView }
+            .forEach { $0.isScrollEnabled = enabled }
     }
 
     @objc private func closeTapped() {
@@ -130,7 +136,7 @@ extension LocalMediaPreviewViewController: UIPageViewControllerDataSource,
         viewControllerBefore viewController: UIViewController
     ) -> UIViewController? {
         guard let page = viewController as? LocalMediaPreviewPageViewController else { return nil }
-        return self.page(at: page.index - 1)
+        return self.makePage(at: page.index - 1)
     }
 
     func pageViewController(
@@ -138,7 +144,7 @@ extension LocalMediaPreviewViewController: UIPageViewControllerDataSource,
         viewControllerAfter viewController: UIViewController
     ) -> UIViewController? {
         guard let page = viewController as? LocalMediaPreviewPageViewController else { return nil }
-        return self.page(at: page.index + 1)
+        return self.makePage(at: page.index + 1)
     }
 
     func pageViewController(
@@ -148,8 +154,10 @@ extension LocalMediaPreviewViewController: UIPageViewControllerDataSource,
         transitionCompleted completed: Bool
     ) {
         guard completed else { return }
+        setPagingEnabled(true)
         for previous in previousViewControllers {
             (previous as? LocalMediaPreviewPageViewController)?.pausePlayback()
+            (previous as? LocalMediaPreviewPageViewController)?.resetZoom()
         }
     }
 }

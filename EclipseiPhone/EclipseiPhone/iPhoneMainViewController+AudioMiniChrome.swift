@@ -46,10 +46,10 @@ extension iPhoneMainViewController {
         }
     }
 
-    /// Shows the mini bar, floating bubble, or neither — and insets Library + Music.
+    /// Shows the mini bar or the persistent Music bubble, and insets Library + Music.
     ///
-    /// New sessions always open as the bubble; tap expands, chevron collapses,
-    /// long-press stops. There is no separate “close” without stopping.
+    /// The corner button stays up even when idle so Music is always one tap away.
+    /// An active session expands on tap; chevron collapses; long-press stops.
     func refreshAudioMiniPlayer() {
         if isAudioMiniChromeAnimating {
             audioMiniPlayer.reload()
@@ -61,7 +61,7 @@ extension iPhoneMainViewController {
         if !active { audioMiniCollapsed = true }
 
         let showBar = active && !audioMiniCollapsed
-        let showBubble = active && audioMiniCollapsed
+        let showBubble = !showBar
 
         audioMiniPlayer.reload()
         audioMiniBubble.reload()
@@ -90,7 +90,7 @@ extension iPhoneMainViewController {
         let defaults = UserDefaults.standard
         guard !defaults.bool(forKey: Self.musicBubbleTipKey) else { return }
         defaults.set(true, forKey: Self.musicBubbleTipKey)
-        showTemporaryStatus("Tap music to expand · Hold to stop", duration: 4)
+        showTemporaryStatus("Tap Music anytime · Hold to stop", duration: 4)
     }
 
     // MARK: - Morph animations
@@ -131,7 +131,7 @@ extension iPhoneMainViewController {
             bubble.alpha = 0
             bar.transform = .identity
             bar.alpha = 1
-            bar.layer.cornerRadius = 0
+            bar.layer.cornerRadius = self.audioMiniRestingCornerRadius
             self.view.layoutIfNeeded()
         } completion: { [weak self] finished in
             self?.completeExpandAnimation(finished: finished)
@@ -154,7 +154,7 @@ extension iPhoneMainViewController {
         bar.isHidden = false
         bar.alpha = 1
         bar.transform = .identity
-        bar.layer.cornerRadius = 0
+        bar.layer.cornerRadius = audioMiniRestingCornerRadius
         bar.clipsToBounds = true
         view.layoutIfNeeded()
 
@@ -227,62 +227,56 @@ extension iPhoneMainViewController {
         audioMiniPlayer.transform = .identity
         audioMiniPlayer.alpha = 1
         audioMiniPlayer.clipsToBounds = false
-        audioMiniPlayer.layer.cornerRadius = 0
+        audioMiniPlayer.layer.cornerRadius = audioMiniRestingCornerRadius
+    }
+
+    private var audioMiniRestingCornerRadius: CGFloat {
+        isAudioMiniLandscapeCompact ? AudioMiniPlayerView.compactCornerRadius : 0
     }
 
     private func applyMiniPlayerBottomInset(_ height: CGFloat) {
-        syncAudioMiniDockingIfNeeded()
-        applyDockedMiniPlayerInsets(height: height)
-    }
-
-    /// Pins the mini bar under the landscape live preview (same width), or restores
-    /// the full-width footer when stacked chrome is active.
-    @discardableResult
-    func syncAudioMiniDockingIfNeeded() -> Bool {
-        let docked = libraryViewController.isSideBySideChrome
-        let axisChanged = docked != isAudioMiniSideBySide
-        if axisChanged {
-            isAudioMiniSideBySide = docked
-            if docked {
-                NSLayoutConstraint.deactivate(audioMiniPortraitConstraints)
-                NSLayoutConstraint.activate(audioMiniSideBySideConstraints)
-            } else {
-                NSLayoutConstraint.deactivate(audioMiniSideBySideConstraints)
-                NSLayoutConstraint.activate(audioMiniPortraitConstraints)
-            }
-            let height = audioMiniPlayer.isHidden
-                ? 0
-                : audioMiniHeightConstraint?.constant ?? 0
-            applyDockedMiniPlayerInsets(height: height)
-        }
-        if docked {
-            updateDockedMiniPlayerFrame()
-        }
-        return axisChanged
-    }
-
-    /// Matches the docked bar to the live preview’s width and places it just under.
-    private func updateDockedMiniPlayerFrame() {
-        let hero = libraryViewController.liveHeader
-        guard !hero.isHidden, hero.bounds.width > 1 else { return }
-        let frame = hero.convert(hero.bounds, to: view)
-        audioMiniDockLeadingConstraint?.constant = frame.minX
-        audioMiniDockWidthConstraint?.constant = frame.width
-        audioMiniDockTopConstraint?.constant = frame.maxY + 12
-    }
-
-    /// Grid footer inset vs. preview-docked reserve, depending on chrome axis.
-    private func applyDockedMiniPlayerInsets(height: CGFloat) {
-        let docked = isAudioMiniSideBySide
-        // Docked under the preview: no footer inset on the grid; hero sizing
-        // subtracts `sideBySideMiniPlayerHeight` instead.
-        libraryViewController.sideBySideMiniPlayerHeight = docked ? height : 0
-        libraryViewController.miniPlayerBottomInset = docked ? 0 : height
+        syncAudioMiniLayoutIfNeeded()
+        // Landscape card sits over the grid, not under the live preview — never
+        // steal height from the hero.
+        libraryViewController.sideBySideMiniPlayerHeight = 0
+        libraryViewController.miniPlayerBottomInset = height
         audioLibraryViewController.miniPlayerBottomInset = height
     }
 
+    /// Compact trailing card in phone landscape; full-width footer otherwise.
+    @discardableResult
+    func syncAudioMiniLayoutIfNeeded() -> Bool {
+        let compact = traitCollection.verticalSizeClass == .compact
+        let axisChanged = compact != isAudioMiniLandscapeCompact
+        if axisChanged {
+            isAudioMiniLandscapeCompact = compact
+            if compact {
+                NSLayoutConstraint.deactivate(audioMiniPortraitConstraints)
+                NSLayoutConstraint.activate(audioMiniLandscapeConstraints)
+            } else {
+                NSLayoutConstraint.deactivate(audioMiniLandscapeConstraints)
+                NSLayoutConstraint.activate(audioMiniPortraitConstraints)
+            }
+            audioMiniPlayer.applyFloatingChrome(compact)
+            audioMiniPlayer.layer.cornerRadius = audioMiniRestingCornerRadius
+            view.layoutIfNeeded()
+        }
+        if compact { updateLandscapeCompactWidth() }
+        return axisChanged
+    }
+
+    private func updateLandscapeCompactWidth() {
+        let safe = view.safeAreaInsets
+        let available = view.bounds.width - safe.left - safe.right
+            - AudioMiniPlayerView.compactTrailingInset * 2
+        audioMiniLandscapeWidthConstraint?.constant = min(
+            AudioMiniPlayerView.compactWidth,
+            max(280, available)
+        )
+    }
+
     /// Scale about center, then nudge so the trailing-bottom corner stays planted
-    /// (reads as the bubble growing into the footer).
+    /// (the bubble growing into the bar).
     private static func barMorphTransform(
         for bounds: CGRect,
         height: CGFloat

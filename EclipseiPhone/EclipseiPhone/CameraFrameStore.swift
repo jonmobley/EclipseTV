@@ -139,6 +139,19 @@ final class CameraFrameStore {
         max(0, Self.maxFrameCount - frames.count)
     }
 
+    /// Frame ids stored for `orientation` (used by the ribbon enabled-set).
+    func frameIds(in orientation: ExternalOutputOrientation) -> Set<UUID> {
+        Set(allFrames.filter { $0.orientation == orientation }.map(\.id))
+    }
+
+    /// Turns off the live overlay when `id` is the current selection.
+    func clearLiveIfSelected(_ id: UUID) {
+        let mode = ExternalOutputSettings.orientation
+        guard selectedId == id else { return }
+        selectedId = nil
+        setSelectedId(nil, for: mode)
+    }
+
     // MARK: - Mutations
 
     /// Adds a PNG frame to the current Display Mode’s library.
@@ -166,6 +179,7 @@ final class CameraFrameStore {
             )
             allFrames.insert(frame, at: 0)
             saveIndex()
+            insertEnabled(id)
             NotificationCenter.default.post(name: Self.didChangeNotification, object: self)
             return id
         } catch {
@@ -185,13 +199,12 @@ final class CameraFrameStore {
         if frame.orientation == ExternalOutputSettings.orientation {
             selectedId = selectedIdKeyValue(for: frame.orientation)
         }
+        removeEnabled(id, orientation: frame.orientation)
         saveIndex()
         NotificationCenter.default.post(name: Self.didChangeNotification, object: self)
     }
 
-    /// Selects a frame in the current Display Mode, or `nil` for None.
-    ///
-    /// Selecting a frame bumps its recent-used time so it rises to the top of the grid.
+    /// Makes a frame live on the camera (ribbon tap), or `nil` for no overlay.
     func select(_ id: UUID?) {
         let mode = ExternalOutputSettings.orientation
         if let id, !frames.contains(where: { $0.id == id }) {

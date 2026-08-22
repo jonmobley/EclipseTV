@@ -22,8 +22,12 @@ struct LocalAlbum: Codable, Equatable, Identifiable, Hashable {
     let createdAt: Date
     /// Last time the user opened this Show; drives Home “Last opened …” copy.
     var lastOpenedAt: Date?
-    /// Ordered Show grid: tool tokens + member ids. `nil` = default tools then members.
+    /// Ordered Show grid: tool tokens, member ids, and slideshow tokens.
+    /// `nil` = default tools, then members, then slideshows.
     var surfaceIds: [String]?
+    /// Show the live preview hero with no AirPlay, HDMI, or EclipseTV.
+    /// Default is off; go-live still works — this only shows or hides the preview.
+    var previewsWhenDisconnected: Bool
 
     /// Creates an empty album with `name` in `orientation`.
     init(
@@ -34,7 +38,8 @@ struct LocalAlbum: Codable, Equatable, Identifiable, Hashable {
         orientation: ExternalOutputOrientation = ExternalOutputSettings.orientation,
         createdAt: Date = Date(),
         lastOpenedAt: Date? = nil,
-        surfaceIds: [String]? = nil
+        surfaceIds: [String]? = nil,
+        previewsWhenDisconnected: Bool = false
     ) {
         self.id = id
         self.name = name
@@ -44,6 +49,7 @@ struct LocalAlbum: Codable, Equatable, Identifiable, Hashable {
         self.createdAt = createdAt
         self.lastOpenedAt = lastOpenedAt
         self.surfaceIds = surfaceIds
+        self.previewsWhenDisconnected = previewsWhenDisconnected
     }
 
     /// Effective cover id for thumbnail display.
@@ -52,9 +58,19 @@ struct LocalAlbum: Codable, Equatable, Identifiable, Hashable {
         return itemIds.first
     }
 
-    /// Grid order for this Show (tools + members). Never invents removed tools.
+    /// Grid order for this Show (tools + members). Slideshow tokens already on
+    /// `surfaceIds` are kept; missing slideshows are not invented here.
     var resolvedSurfaceIds: [String] {
-        Self.sanitizedSurface(surfaceIds ?? (ShowToolToken.all + itemIds), itemIds: itemIds)
+        resolvedSurfaceIds(slideshowIds: nil)
+    }
+
+    /// Grid order including `slideshowIds` (appended when not already on the surface).
+    func resolvedSurfaceIds(slideshowIds: [String]?) -> [String] {
+        Self.sanitizedSurface(
+            surfaceIds ?? (ShowToolToken.all + itemIds),
+            itemIds: itemIds,
+            slideshowIds: slideshowIds
+        )
     }
 
     /// Tool tokens not currently on the surface (for the + menu restore section).
@@ -63,30 +79,54 @@ struct LocalAlbum: Codable, Equatable, Identifiable, Hashable {
         return ShowToolToken.all.filter { !present.contains($0) }
     }
 
-    /// Drops unknown tools, stale members; appends any members missing from surface.
-    static func sanitizedSurface(_ surface: [String], itemIds: [String]) -> [String] {
+    /// Drops unknown tools and stale members; appends missing members / slideshows.
+    ///
+    /// When `slideshowIds` is nil, slideshow tokens already on `surface` are kept
+    /// but none are appended. When non-nil, only those tokens are kept, then
+    /// any missing ones are appended (new slideshows land after tools/media).
+    static func sanitizedSurface(
+        _ surface: [String],
+        itemIds: [String],
+        slideshowIds: [String]? = nil
+    ) -> [String] {
         let memberSet = Set(itemIds)
+        let slideshowSet = slideshowIds.map(Set.init)
         var seen = Set<String>()
         var result: [String] = []
         for id in surface {
-            if ShowToolToken.isTool(id) {
-                guard seen.insert(id).inserted else { continue }
-                result.append(id)
-            } else if memberSet.contains(id) {
-                guard seen.insert(id).inserted else { continue }
-                result.append(id)
-            }
+            guard shouldKeepSurfaceId(
+                id, members: memberSet, slideshows: slideshowSet
+            ), seen.insert(id).inserted else { continue }
+            result.append(id)
         }
         for id in itemIds where seen.insert(id).inserted {
             result.append(id)
         }
+        if let slideshowIds {
+            for id in slideshowIds where seen.insert(id).inserted {
+                result.append(id)
+            }
+        }
         return result
+    }
+
+    private static func shouldKeepSurfaceId(
+        _ id: String,
+        members: Set<String>,
+        slideshows: Set<String>?
+    ) -> Bool {
+        if ShowToolToken.isTool(id) { return true }
+        if members.contains(id) { return true }
+        guard ShowSlideshowToken.isSlideshow(id) else { return false }
+        if let slideshows { return slideshows.contains(id) }
+        return true
     }
 
     // MARK: - Codable
 
     private enum CodingKeys: String, CodingKey {
         case id, name, itemIds, coverId, orientation, createdAt, lastOpenedAt, surfaceIds
+        case previewsWhenDisconnected
     }
 
     init(from decoder: Decoder) throws {
@@ -98,6 +138,9 @@ struct LocalAlbum: Codable, Equatable, Identifiable, Hashable {
         createdAt = try c.decode(Date.self, forKey: .createdAt)
         lastOpenedAt = try c.decodeIfPresent(Date.self, forKey: .lastOpenedAt)
         surfaceIds = try c.decodeIfPresent([String].self, forKey: .surfaceIds)
+        previewsWhenDisconnected = try c.decodeIfPresent(
+            Bool.self, forKey: .previewsWhenDisconnected
+        ) ?? false
         // Pre-mode albums land in Landscape (app default).
         let raw = try c.decodeIfPresent(String.self, forKey: .orientation)
         orientation = ExternalOutputOrientation.resolved(fromStored: raw)
@@ -113,9 +156,10 @@ struct LocalAlbum: Codable, Equatable, Identifiable, Hashable {
         try c.encode(createdAt, forKey: .createdAt)
         try c.encodeIfPresent(lastOpenedAt, forKey: .lastOpenedAt)
         try c.encodeIfPresent(surfaceIds, forKey: .surfaceIds)
+        try c.encode(previewsWhenDisconnected, forKey: .previewsWhenDisconnected)
     }
 
-    /// Compact relative open time for Home tiles (`3hrs ago`, `Yesterday`).
+    /// Compact relative open time for Home tiles and Show lists (`3hrs ago`).
     var lastOpenedSubtitle: String {
         Self.compactRelativeOpenString(for: lastOpenedAt ?? createdAt)
     }

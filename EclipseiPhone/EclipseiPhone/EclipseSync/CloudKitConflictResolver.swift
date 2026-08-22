@@ -9,7 +9,8 @@ import Foundation
 
 /// Merge rules for concurrent Show edits across devices.
 ///
-/// Scalars (name, cover, orientation) are last-writer-wins by `modifiedAt`.
+/// Scalars (name, cover, orientation, practice preview) are last-writer-wins
+/// by `modifiedAt`.
 /// Membership is union-then-reorder so an item added on one device is never lost.
 enum CloudKitConflictResolver {
 
@@ -50,9 +51,14 @@ enum CloudKitConflictResolver {
         } else {
             let preferred = base.resolvedSurfaceIds
             let otherSurface = other.resolvedSurfaceIds
+            let union = unionMembership(
+                preferredOrder: preferred, other: otherSurface
+            )
+            let slideshows = union.filter(ShowSlideshowToken.isSlideshow)
             merged.surfaceIds = LocalAlbum.sanitizedSurface(
-                unionMembership(preferredOrder: preferred, other: otherSurface),
-                itemIds: merged.itemIds
+                union,
+                itemIds: merged.itemIds,
+                slideshowIds: slideshows
             )
         }
         if let cover = merged.coverId, !merged.itemIds.contains(cover) {

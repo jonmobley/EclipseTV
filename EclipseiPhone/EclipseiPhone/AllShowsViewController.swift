@@ -8,6 +8,7 @@
 import UIKit
 
 /// Full list of Shows across both Display Modes (Home See All).
+/// Each row is the name, trailing recency, and a format glyph — no Landscape/Vertical copy.
 final class AllShowsViewController: UIViewController, UIAdaptivePresentationControllerDelegate {
 
     /// Invoked when the user picks a Show to open.
@@ -116,8 +117,11 @@ extension AllShowsViewController: UITableViewDataSource, UITableViewDelegate {
         let album = albums[indexPath.row]
         var content = cell.defaultContentConfiguration()
         content.text = album.name
-        content.secondaryText =
-            "\(album.orientation.rawValue) · \(album.lastOpenedSubtitle)"
+        content.secondaryText = album.showListSubtitle
+        content.prefersSideBySideTextAndSecondaryText = true
+        content.textProperties.numberOfLines = 1
+        content.secondaryTextProperties.numberOfLines = 1
+        content.secondaryTextProperties.color = .secondaryLabel
         content.image = UIImage(systemName: album.showPickerIconName)
         content.imageProperties.tintColor = .secondaryLabel
         cell.contentConfiguration = content

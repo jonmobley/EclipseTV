@@ -94,12 +94,14 @@ struct PresentationSource: Equatable {
     /// Builds a source for a mirrored TV-library item, using the phone's local full-res
     /// copy when present and falling back to its thumbnail otherwise.
     ///
-    /// Stills carry the item's saved Fit / Fill framing (`MediaFitSettings`).
+    /// Stills carry Fit / Fill (`fill` when set, otherwise the item's `MediaFitSettings`).
     /// - Parameter startAt: Resume offset for video (0 = from the start).
+    /// - Parameter fill: Slideshow-level framing override for stills.
     static func forLibraryItem(
         _ item: LibraryItemDTO,
         thumbnail: UIImage?,
-        startAt: TimeInterval = 0
+        startAt: TimeInterval = 0,
+        fill: Bool? = nil
     ) -> PresentationSource {
         guard let localURL = LocalMediaStore.shared.localURL(forId: item.id) else {
             return .unavailable(thumbnail: thumbnail,
@@ -113,6 +115,6 @@ struct PresentationSource: Equatable {
                 startAt: startAt
             )
         }
-        return .image(localURL, fill: MediaFitSettings.isFill(forId: item.id))
+        return .image(localURL, fill: fill ?? MediaFitSettings.isFill(forId: item.id))
     }
 }

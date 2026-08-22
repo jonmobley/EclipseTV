@@ -121,113 +121,110 @@ final class HomeHeroCarouselCell: UICollectionViewCell, UIScrollViewDelegate {
     private func makePage(for slide: HomeHeroSlide) -> UIView {
         let page = UIView()
         page.clipsToBounds = true
-        page.backgroundColor = UIColor(white: 0.08, alpha: 1)
+        page.backgroundColor = slide.palette.fallbackColor
+        addBackground(for: slide, to: page)
+        addTopCenteredCopy(for: slide, to: page)
+        return page
+    }
 
+    private func addBackground(for slide: HomeHeroSlide, to page: UIView) {
         if let name = slide.imageName, let image = UIImage(named: name) {
             let imageView = UIImageView(image: image)
             imageView.contentMode = .scaleAspectFill
             imageView.translatesAutoresizingMaskIntoConstraints = false
             page.addSubview(imageView)
-            NSLayoutConstraint.activate([
-                imageView.topAnchor.constraint(equalTo: page.topAnchor),
-                imageView.leadingAnchor.constraint(equalTo: page.leadingAnchor),
-                imageView.trailingAnchor.constraint(equalTo: page.trailingAnchor),
-                imageView.bottomAnchor.constraint(equalTo: page.bottomAnchor)
-            ])
-        } else {
-            let gradient = GradientView()
-            gradient.colors = [
-                UIColor(red: 0.05, green: 0.08, blue: 0.18, alpha: 1),
-                UIColor(red: 0.02, green: 0.02, blue: 0.06, alpha: 1)
-            ]
-            gradient.locations = [0, 1]
-            gradient.translatesAutoresizingMaskIntoConstraints = false
-            page.addSubview(gradient)
-            NSLayoutConstraint.activate([
-                gradient.topAnchor.constraint(equalTo: page.topAnchor),
-                gradient.leadingAnchor.constraint(equalTo: page.leadingAnchor),
-                gradient.trailingAnchor.constraint(equalTo: page.trailingAnchor),
-                gradient.bottomAnchor.constraint(equalTo: page.bottomAnchor)
-            ])
-            if let symbol = slide.systemImage {
-                let icon = UIImageView(image: UIImage(
-                    systemName: symbol,
-                    withConfiguration: UIImage.SymbolConfiguration(
-                        pointSize: 36, weight: .medium
-                    )
-                ))
-                icon.tintColor = .systemBlue
-                icon.translatesAutoresizingMaskIntoConstraints = false
-                page.addSubview(icon)
-                NSLayoutConstraint.activate([
-                    icon.leadingAnchor.constraint(equalTo: page.leadingAnchor, constant: 20),
-                    icon.topAnchor.constraint(equalTo: page.topAnchor, constant: 28)
-                ])
-            }
+            pinEdges(imageView, to: page)
+            return
         }
+        let gradient = GradientView()
+        gradient.colors = slide.palette.gradientColors
+        gradient.locations = [0, 1]
+        gradient.translatesAutoresizingMaskIntoConstraints = false
+        page.addSubview(gradient)
+        pinEdges(gradient, to: page)
+    }
 
-        let centered = slide.imageName != nil
+    /// Icon + title + subtitle, centered as a column under the top of the card.
+    private func addTopCenteredCopy(for slide: HomeHeroSlide, to page: UIView) {
+        let hasImage = slide.imageName.flatMap { UIImage(named: $0) } != nil
+        if hasImage { addImageScrim(to: page) }
 
+        let title = makeHeroLabel(
+            text: slide.title,
+            font: .systemFont(ofSize: 28, weight: .bold),
+            color: .white
+        )
+        let subtitle = makeHeroLabel(
+            text: slide.subtitle,
+            font: .systemFont(ofSize: 15, weight: .regular),
+            color: UIColor.white.withAlphaComponent(0.78)
+        )
+        subtitle.numberOfLines = 2
+
+        var arranged: [UIView] = []
+        if hasImage {
+            let logo = UIImageView(image: UIImage(named: "EclipseLogo"))
+            logo.contentMode = .scaleAspectFit
+            logo.translatesAutoresizingMaskIntoConstraints = false
+            NSLayoutConstraint.activate([
+                logo.widthAnchor.constraint(equalToConstant: 28),
+                logo.heightAnchor.constraint(equalToConstant: 28)
+            ])
+            arranged.append(logo)
+        } else if let symbol = slide.systemImage {
+            let icon = UIImageView(image: UIImage(
+                systemName: symbol,
+                withConfiguration: UIImage.SymbolConfiguration(
+                    pointSize: 36, weight: .medium
+                )
+            ))
+            icon.tintColor = .white
+            arranged.append(icon)
+        }
+        arranged.append(contentsOf: [title, subtitle])
+
+        let stack = UIStackView(arrangedSubviews: arranged)
+        stack.axis = .vertical
+        stack.alignment = .center
+        stack.spacing = 8
+        stack.setCustomSpacing(4, after: title)
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        page.addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: page.topAnchor, constant: 24),
+            stack.leadingAnchor.constraint(equalTo: page.leadingAnchor, constant: 20),
+            stack.trailingAnchor.constraint(equalTo: page.trailingAnchor, constant: -20)
+        ])
+    }
+
+    private func addImageScrim(to page: UIView) {
         let scrim = GradientView()
         scrim.colors = [
-            UIColor.clear,
-            UIColor.black.withAlphaComponent(centered ? 0.55 : 0.75)
+            UIColor.black.withAlphaComponent(0.55),
+            UIColor.clear
         ]
-        scrim.locations = [0.35, 1]
+        scrim.locations = [0, 0.65]
         scrim.translatesAutoresizingMaskIntoConstraints = false
         page.addSubview(scrim)
+        pinEdges(scrim, to: page)
+    }
 
-        let title = UILabel()
-        title.text = slide.title
-        title.font = .systemFont(ofSize: 28, weight: .bold)
-        title.textColor = .white
-        title.textAlignment = centered ? .center : .natural
-        title.translatesAutoresizingMaskIntoConstraints = false
+    private func makeHeroLabel(text: String, font: UIFont, color: UIColor) -> UILabel {
+        let label = UILabel()
+        label.text = text
+        label.font = font
+        label.textColor = color
+        label.textAlignment = .center
+        return label
+    }
 
-        let subtitle = UILabel()
-        subtitle.text = slide.subtitle
-        subtitle.font = .systemFont(ofSize: 15, weight: .regular)
-        subtitle.textColor = UIColor.white.withAlphaComponent(0.78)
-        subtitle.numberOfLines = 2
-        subtitle.textAlignment = centered ? .center : .natural
-        subtitle.translatesAutoresizingMaskIntoConstraints = false
-
-        let logo = UIImageView(image: UIImage(named: "EclipseLogo"))
-        logo.contentMode = .scaleAspectFit
-        logo.translatesAutoresizingMaskIntoConstraints = false
-        logo.isHidden = !centered
-
-        page.addSubview(logo)
-        page.addSubview(title)
-        page.addSubview(subtitle)
-
-        var constraints: [NSLayoutConstraint] = [
-            scrim.topAnchor.constraint(equalTo: page.topAnchor),
-            scrim.leadingAnchor.constraint(equalTo: page.leadingAnchor),
-            scrim.trailingAnchor.constraint(equalTo: page.trailingAnchor),
-            scrim.bottomAnchor.constraint(equalTo: page.bottomAnchor),
-
-            logo.widthAnchor.constraint(equalToConstant: 28),
-            logo.heightAnchor.constraint(equalToConstant: 28),
-            logo.bottomAnchor.constraint(equalTo: title.topAnchor, constant: -8),
-
-            title.leadingAnchor.constraint(equalTo: page.leadingAnchor, constant: 20),
-            title.trailingAnchor.constraint(equalTo: page.trailingAnchor, constant: -20),
-            title.bottomAnchor.constraint(equalTo: subtitle.topAnchor, constant: -4),
-
-            subtitle.leadingAnchor.constraint(equalTo: page.leadingAnchor, constant: 20),
-            subtitle.trailingAnchor.constraint(equalTo: page.trailingAnchor, constant: -20),
-            subtitle.bottomAnchor.constraint(equalTo: page.bottomAnchor, constant: -18)
-        ]
-        if centered {
-            constraints.append(logo.centerXAnchor.constraint(equalTo: page.centerXAnchor))
-        } else {
-            constraints.append(
-                logo.leadingAnchor.constraint(equalTo: page.leadingAnchor, constant: 20)
-            )
-        }
-        NSLayoutConstraint.activate(constraints)
-        return page
+    private func pinEdges(_ view: UIView, to page: UIView) {
+        NSLayoutConstraint.activate([
+            view.topAnchor.constraint(equalTo: page.topAnchor),
+            view.leadingAnchor.constraint(equalTo: page.leadingAnchor),
+            view.trailingAnchor.constraint(equalTo: page.trailingAnchor),
+            view.bottomAnchor.constraint(equalTo: page.bottomAnchor)
+        ])
     }
 
     private func logicalPage(forContentIndex index: Int) -> Int {

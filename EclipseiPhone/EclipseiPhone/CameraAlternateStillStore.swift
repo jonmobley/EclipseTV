@@ -8,10 +8,11 @@
 import UIKit
 import os.log
 
-/// Persists the camera-mode cutaway still the user can toggle onto AirPlay.
+/// Persists an optional camera-mode cutaway still the user can toggle on while
+/// Camera is open (AirPlay when a display is attached; local park otherwise).
 ///
-/// Empty until the user picks a photo. Independent of Background (`LogoStore`) and
-/// of PNG frame overlays (`CameraFrameStore`).
+/// When the user has not picked a photo, display and AirPlay fall back to the Show
+/// Background still (`LogoStore`). Frame overlays stay in `CameraFrameStore`.
 @MainActor
 final class CameraAlternateStillStore {
 
@@ -21,16 +22,23 @@ final class CameraAlternateStillStore {
     static let didChangeNotification =
         Notification.Name("CameraAlternateStillStore.didChange")
 
-    /// In-memory image when a cutaway is saved; nil when none is chosen.
+    /// In-memory image when a custom cutaway is saved; nil falls back to Background.
     private(set) var image: UIImage?
 
-    /// Whether the user has chosen a cutaway still.
+    /// Whether the user has replaced the Background default with a custom photo.
     var hasStill: Bool { image != nil }
 
-    /// AirPlay source for the cutaway (aspect-fill), or nil when empty.
+    /// Thumbnail to show: custom cutaway, or the Show Background card.
+    var displayImage: UIImage? {
+        image ?? LogoStore.shared.image
+    }
+
+    /// AirPlay source: custom cutaway, or the Show Background still.
     var presentationSource: PresentationSource? {
-        guard let url = fileURL else { return nil }
-        return .image(url, fill: true)
+        if let url = fileURL {
+            return .image(url, fill: true)
+        }
+        return LogoStore.shared.presentationSource
     }
 
     /// On-disk JPEG used by AirPlay, or nil when empty.
@@ -75,7 +83,7 @@ final class CameraAlternateStillStore {
         }
     }
 
-    /// Removes the cutaway still.
+    /// Removes the custom cutaway (the thumb falls back to Background).
     func clear() {
         try? FileManager.default.removeItem(at: stillFileURL)
         image = nil

@@ -44,6 +44,7 @@ extension CameraLiveViewController {
 
     @objc func cameraFrameStoreChanged() {
         refreshFrameOverlay()
+        reloadFrameRibbon()
     }
 
     /// Opens the frame drawer; finishes an in-flight movie first if needed.

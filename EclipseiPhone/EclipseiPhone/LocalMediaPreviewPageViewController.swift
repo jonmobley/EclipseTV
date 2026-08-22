@@ -15,7 +15,10 @@ final class LocalMediaPreviewPageViewController: UIViewController {
 
     let index: Int
     private let item: LocalMediaPreviewItem
-    private let imageView = UIImageView()
+    private let zoomView = ZoomableImageView()
+
+    /// Called when pinch/double-tap zoom crosses the fitted scale.
+    var onZoomedChanged: ((Bool) -> Void)?
 
     init(item: LocalMediaPreviewItem, index: Int) {
         precondition(!item.isVideo, "Videos use LocalVideoPreviewViewController")
@@ -37,19 +40,26 @@ final class LocalMediaPreviewPageViewController: UIViewController {
     /// No-op kept so the gallery host can pause departing pages uniformly.
     func pausePlayback() {}
 
+    /// Restores Photos-style fit after the page is no longer current.
+    func resetZoom() {
+        zoomView.resetZoom(animated: false)
+    }
+
     // MARK: - Setup
 
     private func setupImage() {
-        // Match the framing the item gets on the external screen / Apple TV.
-        imageView.contentMode = MediaFitSettings.mode(forId: item.id).contentMode
-        imageView.translatesAutoresizingMaskIntoConstraints = false
-        imageView.image = UIImage(contentsOfFile: item.fileURL.path)
-        view.addSubview(imageView)
+        // Preview inspects the still like Photos (fit), not the TV Fit/Fill framing.
+        zoomView.translatesAutoresizingMaskIntoConstraints = false
+        zoomView.image = UIImage(contentsOfFile: item.fileURL.path)
+        zoomView.onZoomedChanged = { [weak self] zoomed in
+            self?.onZoomedChanged?(zoomed)
+        }
+        view.addSubview(zoomView)
         NSLayoutConstraint.activate([
-            imageView.topAnchor.constraint(equalTo: view.topAnchor),
-            imageView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            imageView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            imageView.trailingAnchor.constraint(equalTo: view.trailingAnchor)
+            zoomView.topAnchor.constraint(equalTo: view.topAnchor),
+            zoomView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            zoomView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            zoomView.trailingAnchor.constraint(equalTo: view.trailingAnchor)
         ])
     }
 }

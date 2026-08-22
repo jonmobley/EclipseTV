@@ -33,6 +33,10 @@ final class AudioPlayerController: NSObject {
     private(set) var volume: Float = 1
 
     private static let volumeDefaultsKey = "Eclipse.audio.playerVolume"
+    private static let playsNextDefaultsKey = "Eclipse.audio.playsNext"
+
+    /// When true, the next queue item starts automatically when a track ends.
+    private(set) var playsNext = true
 
     /// Active `AVPlayer`. Internal so fade helpers in `+Fade` can ramp volume.
     var player: AVPlayer?
@@ -87,6 +91,9 @@ final class AudioPlayerController: NSObject {
         let stored = UserDefaults.standard.object(forKey: Self.volumeDefaultsKey) as? Float
         if let stored, stored.isFinite {
             volume = min(1, max(0, stored))
+        }
+        if UserDefaults.standard.object(forKey: Self.playsNextDefaultsKey) != nil {
+            playsNext = UserDefaults.standard.bool(forKey: Self.playsNextDefaultsKey)
         }
         NotificationCenter.default.addObserver(
             self,
@@ -232,6 +239,16 @@ final class AudioPlayerController: NSObject {
         }
     }
 
+    /// Enables or disables automatic advance when the current track ends.
+    ///
+    /// Manual Next still skips. The preference is persisted.
+    func setPlaysNext(_ enabled: Bool) {
+        guard playsNext != enabled else { return }
+        playsNext = enabled
+        UserDefaults.standard.set(enabled, forKey: Self.playsNextDefaultsKey)
+        notify()
+    }
+
     func playNext() {
         guard !queue.isEmpty else { return }
         currentIndex = (currentIndex + 1) % queue.count
@@ -298,6 +315,18 @@ final class AudioPlayerController: NSObject {
         notify()
     }
 
+    /// Advances when Play Next is on; otherwise parks on this track, paused at 0.
+    private func handleTrackDidEnd() {
+        if playsNext, !queue.isEmpty {
+            playNext()
+            return
+        }
+        isPlaying = false
+        reloadCurrentItem()
+        player?.pause()
+        updateNowPlayingPlayback()
+    }
+
     // MARK: - Internals
 
     private func loadQueue(
@@ -340,7 +369,7 @@ final class AudioPlayerController: NSObject {
             object: item,
             queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in self?.playNext() }
+            Task { @MainActor in self?.handleTrackDidEnd() }
         }
 
         let interval = CMTime(seconds: 0.5, preferredTimescale: 600)

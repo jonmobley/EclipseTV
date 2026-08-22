@@ -7,7 +7,7 @@
 
 import UIKit
 
-// MARK: - Show Mode (in-place home shell)
+// MARK: - Show Mode
 
 extension LibraryGridViewController {
 
@@ -28,8 +28,7 @@ extension LibraryGridViewController {
 
     /// Drops Show mode state before a Display Mode flip that opens another Show.
     ///
-    /// Layout and reload stay paired (same as `closeOpenShow`) so UIKit never
-    /// sees Home sections against leftover Show cells.
+    /// Reveals Home without rewriting the hidden Show page.
     private func clearOpenShowForModeSwitch() {
         showAwaitingReturnId = nil
         guard openShowId != nil else { return }
@@ -43,10 +42,9 @@ extension LibraryGridViewController {
         openShowId = nil
         onOpenShowChanged?(nil)
         enforceHomeLiveHeroTeardownIfNeeded()
-        UIView.performWithoutAnimation {
-            applyCollectionLayout()
-            reloadLibraryGrid()
-        }
+        updateVisibleLibraryPage()
+        applyShowPageLayout()
+        reloadLibraryGrid()
     }
 
     /// Leaves Show mode and restores the Recent Shows ribbon.
@@ -68,12 +66,9 @@ extension LibraryGridViewController {
         // Drop Show-only live chrome so Home never keeps a Screensaver / Background
         // hero over the marketing carousel (AirPlay can keep playing).
         enforceHomeLiveHeroTeardownIfNeeded()
-        // Layout + reload in one pass so UIKit cannot paint a Show Screensaver tile
-        // with the Home section structure (comes-and-goes until the next appear).
-        UIView.performWithoutAnimation {
-            applyCollectionLayout()
-            reloadLibraryGrid()
-        }
+        updateVisibleLibraryPage()
+        applyShowPageLayout()
+        reloadLibraryGrid()
         scrollGridToTop()
         updateEmptyState()
         updateHeroCollapse()
@@ -127,29 +122,6 @@ extension LibraryGridViewController {
         enterShowMode(album)
     }
 
-    /// Prompts to rename the open Show.
-    func promptRenameOpenShow() {
-        guard let show = openShow else { return }
-        presentShowNamePrompt(
-            title: "Rename Show",
-            initialName: show.name,
-            excludingId: show.id,
-            confirmTitle: "Save"
-        ) { [weak self] name in
-            do {
-                try LocalAlbumStore.shared.rename(id: show.id, to: name)
-            } catch {
-                let alert = UIAlertController(
-                    title: "Couldn't Rename Show",
-                    message: error.localizedDescription,
-                    preferredStyle: .alert
-                )
-                alert.addAction(UIAlertAction(title: "OK", style: .default))
-                self?.present(alert, animated: true)
-            }
-        }
-    }
-
     /// Confirms and deletes the open Show, then returns Home.
     func confirmDeleteOpenShow() {
         guard let show = openShow else { return }
@@ -191,8 +163,9 @@ extension LibraryGridViewController {
         LocalAlbumStore.shared.touchRecentlyOpened(id: album.id)
         let wasShowMode = isShowMode
         openShowId = album.id
+        updateVisibleLibraryPage()
+        applyShowPageLayout()
         if !wasShowMode {
-            applyCollectionLayout()
             updateHeroVisibility()
         }
         reloadLibraryGrid()
@@ -218,6 +191,32 @@ extension LibraryGridViewController {
         openShowGridItems.count
     }
 
+    /// Resolves one Show surface id to a grid row, or nil if that member is gone.
+    func showGridItem(forSurfaceId id: String) -> ShowGridItem? {
+        switch id {
+        case ShowToolToken.screensaver: return .screensaver
+        case ShowToolToken.logo: return .logo
+        case ShowToolToken.camera: return .camera
+        default:
+            if let uuid = ShowSlideshowToken.slideshowId(from: id),
+               let show = SlideshowStore.shared.slideshow(id: uuid),
+               show.showId == openShowId {
+                return .slideshow(show)
+            }
+            if let item = store.items.first(where: { $0.id == id }) {
+                return .media(item)
+            }
+            guard let uuid = UUID(uuidString: id) else { return nil }
+            if let page = WebPageStore.shared.page(id: uuid) {
+                return .website(page)
+            }
+            if let doc = PDFStore.shared.documents.first(where: { $0.id == uuid }) {
+                return .pdf(doc)
+            }
+            return nil
+        }
+    }
+
     func configureShowModeCell(
         _ cell: LibraryThumbnailCell,
         at indexPath: IndexPath
@@ -235,7 +234,8 @@ extension LibraryGridViewController {
                 thumbnail: cover,
                 fillColor: .darkGray,
                 isLive: live,
-                isLocked: isLiveOutputLocked
+                isLocked: isLiveOutputLocked,
+                typeIcon: .slideshow
             )
             cell.setMoreMenu(
                 (isArranging || isSelecting) ? nil : slideshowContextMenu(show)
@@ -307,7 +307,8 @@ extension LibraryGridViewController {
                 thumbnail: WebThumbnailStore.shared.image(for: page.id),
                 fillColor: UIColor(white: 0.16, alpha: 1),
                 isLive: live,
-                isLocked: isLiveOutputLocked
+                isLocked: isLiveOutputLocked,
+                typeIcon: .website
             )
             if isArranging || isSelecting {
                 cell.clearMoreMenu()
@@ -321,7 +322,9 @@ extension LibraryGridViewController {
                 thumbnail: PDFThumbnailStore.shared.image(for: doc.id),
                 fillColor: UIColor(white: 0.16, alpha: 1),
                 isLive: live,
-                isLocked: isLiveOutputLocked
+                isLocked: isLiveOutputLocked,
+                titleNumberOfLines: 1,
+                typeIcon: .pdf
             )
             if isArranging || isSelecting {
                 cell.clearMoreMenu()
@@ -349,7 +352,7 @@ extension LibraryGridViewController {
             isScreensaverSelected = false
             presentSlideshow(show)
         case .screensaver:
-            if isLiveOutputLocked || !hasLiveOutputDestination {
+            if isLiveOutputLocked {
                 presentScreensaverPhonePreview()
                 return
             }
@@ -357,7 +360,7 @@ extension LibraryGridViewController {
             isLogoSelected = false
             presentScreensaverLive()
         case .logo:
-            if isLiveOutputLocked || !hasLiveOutputDestination {
+            if isLiveOutputLocked {
                 presentLogoPhonePreview()
                 return
             }
@@ -365,9 +368,7 @@ extension LibraryGridViewController {
             isScreensaverSelected = false
             presentLogoLive()
         case .camera:
-            if hasLiveOutputDestination {
-                guard !blockLiveChangeIfLocked() else { return }
-            }
+            guard !blockLiveChangeIfLocked() else { return }
             isBlackSelected = false
             isLogoSelected = false
             isScreensaverSelected = false
@@ -397,17 +398,11 @@ extension LibraryGridViewController {
         }
     }
 
-    /// Presents the slideshow on AirPlay / Multipeer.
+    /// Presents the slideshow on AirPlay / Multipeer, or locally when disconnected.
     ///
-    /// Browse-only (no display / Eclipse TV): opens the editor so slides can be
-    /// reviewed without starting a live show. After a manual mid-show leave, offers
-    /// Resume (last slide) or Restart.
+    /// After a manual mid-show leave, offers Resume (last slide) or Restart.
     func presentSlideshow(_ slideshow: Slideshow) {
         guard !slideshow.itemIds.isEmpty else {
-            presentSlideshowEditor(slideshow.id)
-            return
-        }
-        guard hasLiveOutputDestination else {
             presentSlideshowEditor(slideshow.id)
             return
         }
@@ -490,7 +485,7 @@ extension LibraryGridViewController {
         ) { [weak self] _ in
             self?.confirmDeleteSlideshow(show)
         }
-        return UIMenu(children: [edit, rename, delete])
+        return UIMenu(children: [edit, screenFitMenu(for: show), rename, arrangeAction(), delete])
     }
 
     private func mediaContextMenu(_ item: LibraryItemDTO, in album: LocalAlbum) -> UIMenu {

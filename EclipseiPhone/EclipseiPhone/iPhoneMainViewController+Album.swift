@@ -60,7 +60,7 @@ extension iPhoneMainViewController {
                 ExternalDisplayManager.shared.clearJoinedLive()
                 ExternalDisplayManager.shared.restoreCurrentSource()
             }
-            self.libraryViewController.collectionView.reloadData()
+            self.libraryViewController.reloadLibraryGrid()
             self.libraryViewController.refreshLiveHeader()
         }
         let nav = UINavigationController(rootViewController: albumsVC)

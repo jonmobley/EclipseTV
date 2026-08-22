@@ -31,6 +31,8 @@ final class SlideshowPlaybackController {
     private weak var connectionManager: iPhoneConnectionManager?
     private var autoplay = false
     private var loop = false
+    /// Slideshow-level Fill (true) or Fit (false) for the active run.
+    private var isFill = false
     private var timer: Timer?
     private var savedTransition: ContentTransitionStyle?
     private var didOverrideTransition = false
@@ -70,6 +72,7 @@ final class SlideshowPlaybackController {
         currentSlideIndex = min(max(0, startingAt), ids.count - 1)
         autoplay = slideshow.autoplay
         loop = slideshow.loop
+        isFill = slideshow.isFill
         userDidNavigateManually = false
 
         applyTransitionOverride(crossfade: slideshow.crossfade)
@@ -93,6 +96,23 @@ final class SlideshowPlaybackController {
     /// True when `id` is the slideshow currently driving live output.
     func isLive(slideshowId id: UUID) -> Bool {
         activeSlideshowId == id
+    }
+
+    /// Fit / Fill for a live still: slideshow framing while a run is active.
+    func contentModeForLiveStill(id: String) -> UIView.ContentMode {
+        if activeSlideshowId != nil {
+            return isFill ? .scaleAspectFill : .scaleAspectFit
+        }
+        return MediaFitSettings.mode(forId: id).contentMode
+    }
+
+    /// Re-presents the current slide after a live slideshow's Fit / Fill changes.
+    func refreshPresentationIfLive(slideshowId: UUID) {
+        guard activeSlideshowId == slideshowId,
+              let show = SlideshowStore.shared.slideshow(id: slideshowId) else { return }
+        isFill = show.isFill
+        presentCurrent()
+        notifyChanged()
     }
 
     /// Resume index after a manual mid-show leave, if the slide is still present.
@@ -203,28 +223,33 @@ final class SlideshowPlaybackController {
             guard LocalMediaStore.shared.localURL(forId: item.id) != nil else {
                 return false
             }
-            store.updateCurrentId(item.id)
-            ExternalDisplayManager.shared.present(
-                .forLibraryItem(item, thumbnail: store.thumbnail(for: item.id))
-            )
+            presentLibrarySlide(item)
             return true
         }
 
-        if let connectionManager, connectionManager.sendPlayRequest(id: item.id) {
-            store.updateCurrentId(item.id)
-            ExternalDisplayManager.shared.present(
-                .forLibraryItem(item, thumbnail: store.thumbnail(for: item.id))
-            )
+        if let connectionManager,
+           connectionManager.sendPlayRequest(id: item.id, isFill: isFill) {
+            presentLibrarySlide(item)
             return true
         }
         if LocalMediaStore.shared.localURL(forId: item.id) != nil {
-            store.updateCurrentId(item.id)
-            ExternalDisplayManager.shared.present(
-                .forLibraryItem(item, thumbnail: store.thumbnail(for: item.id))
-            )
+            presentLibrarySlide(item)
             return true
         }
         return false
+    }
+
+    /// Pushes `item` to AirPlay using this run's Fit / Fill.
+    private func presentLibrarySlide(_ item: LibraryItemDTO) {
+        let store = TVLibraryStore.shared
+        store.updateCurrentId(item.id)
+        ExternalDisplayManager.shared.present(
+            .forLibraryItem(
+                item,
+                thumbnail: store.thumbnail(for: item.id),
+                fill: isFill
+            )
+        )
     }
 
     private func rescheduleAutoplayIfNeeded() {
@@ -283,6 +308,7 @@ final class SlideshowPlaybackController {
         currentSlideIndex = 0
         autoplay = false
         loop = false
+        isFill = false
         userDidNavigateManually = false
         let manager = connectionManager
         connectionManager = nil

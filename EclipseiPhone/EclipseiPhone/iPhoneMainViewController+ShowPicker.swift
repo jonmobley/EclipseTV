@@ -57,21 +57,19 @@ extension iPhoneMainViewController {
     }
 
     /// Menu rows for opening a Show: active Display Mode first, then the other mode.
+    /// Section titles stay empty — format is the row glyph only.
     /// - Parameter excludedIds: Shows to leave out, e.g. the open one and the recents.
     func showMenuGroups(excluding excludedIds: Set<UUID>) -> [UIMenuElement] {
         let active = ExternalOutputSettings.orientation
         let shows = LocalAlbumStore.shared.albums.filter { !excludedIds.contains($0.id) }
-        let groups: [(ExternalOutputOrientation, [LocalAlbum])] = [
-            (active, shows.filter { $0.orientation == active }),
-            (
-                active == .landscape ? .portrait : .landscape,
-                shows.filter { $0.orientation != active }
-            )
+        let groups = [
+            shows.filter { $0.orientation == active },
+            shows.filter { $0.orientation != active }
         ]
-        return groups.compactMap { mode, group in
+        return groups.compactMap { group in
             guard !group.isEmpty else { return nil }
             return UIMenu(
-                title: mode.rawValue,
+                title: "",
                 options: .displayInline,
                 children: group.map { openShowAction(for: $0) }
             )
@@ -105,10 +103,13 @@ extension LocalAlbum {
             : "rectangle.stack"
     }
 
-    /// Home tile caption: prefixes Landscape/Vertical when the Show is in the other mode.
+    /// Home tile caption: last-opened time only (no Landscape/Vertical prefix).
     var homeRecentSubtitle: String {
-        let relative = lastOpenedSubtitle
-        guard orientation != ExternalOutputSettings.orientation else { return relative }
-        return "\(orientation.rawValue) · \(relative)"
+        lastOpenedSubtitle
+    }
+
+    /// Show list recency (See All). Format is the leading glyph only.
+    var showListSubtitle: String {
+        lastOpenedSubtitle
     }
 }

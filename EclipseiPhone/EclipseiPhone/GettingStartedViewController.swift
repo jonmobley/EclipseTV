@@ -43,8 +43,8 @@ final class GettingStartedViewController: UITableViewController {
             body: """
             Start AirPlay from Control Center — that’s enough to present. Tap any tile \
             in a Show to put it on screen; the live preview mirrors the audience. The \
-            header AirPlay & EclipseTV control shows connection status — tap it for \
-            Link EclipseTV… or How to AirPlay.
+            header AirPlay & EclipseTV control shows connection status — tap it to \
+            Link EclipseTV.
             """,
             systemImage: "airplayvideo",
             tint: .systemTeal
@@ -62,9 +62,10 @@ final class GettingStartedViewController: UITableViewController {
         Topic(
             title: "Music",
             body: """
-            Swipe left from Home when you can, or choose Music in the Home menu. A music \
-            circle appears while something is playing — tap to expand controls, hold to \
-            stop. Ambient audio pauses when a video needs the speakers.
+            Tap Music in the bottom-right corner for quick access, swipe left from Home \
+            when you can, or choose Music in the Home menu. The circle stays visible — \
+            tap to open Music or expand controls, hold to stop. Ambient audio pauses \
+            when a video needs the speakers.
             """,
             systemImage: "music.note",
             tint: .systemPink
@@ -94,7 +95,7 @@ final class GettingStartedViewController: UITableViewController {
             body: """
             On Home, long-press a Show for rename, share, or delete. Inside a Show, \
             long-press a tile to arrange, or use ⋯ for Loop, Mute, Thumbnail, cover, \
-            and remove. Getting Started stays in the Home menu anytime.
+            and remove. Getting Started is in Settings anytime.
             """,
             systemImage: "lightbulb.fill",
             tint: .systemYellow
@@ -115,9 +116,13 @@ final class GettingStartedViewController: UITableViewController {
         super.viewDidLoad()
         title = "Getting Started"
         navigationItem.largeTitleDisplayMode = .never
-        navigationItem.rightBarButtonItem = UIBarButtonItem(
-            barButtonSystemItem: .done, target: self, action: #selector(doneTapped)
-        )
+        // Presented as its own sheet: Done dismisses. Pushed from Settings:
+        // the back button returns to Settings.
+        if navigationController?.viewControllers.first === self {
+            navigationItem.rightBarButtonItem = UIBarButtonItem(
+                barButtonSystemItem: .done, target: self, action: #selector(doneTapped)
+            )
+        }
         tableView.register(
             GettingStartedTopicCell.self,
             forCellReuseIdentifier: GettingStartedTopicCell.reuseIdentifier

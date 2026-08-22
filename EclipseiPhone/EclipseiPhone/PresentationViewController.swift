@@ -174,6 +174,8 @@ final class PresentationViewController: UIViewController {
     var incomingPlayerLayer: AVPlayerLayer?
     var incomingLoopObserver: NSObjectProtocol?
     var incomingVideoReadyObservation: NSKeyValueObservation?
+    /// Overlay video layer has a decoded frame (`isReadyForDisplay`).
+    var incomingLayerReadyObservation: NSKeyValueObservation?
     var incomingCameraPreview: CameraPreviewView?
     var incomingWebView: WKWebView?
     var incomingWebNavigation: NSObject?

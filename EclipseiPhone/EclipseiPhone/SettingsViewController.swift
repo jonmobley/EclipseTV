@@ -7,9 +7,10 @@
 
 import UIKit
 
-/// Companion settings root: drill into display, transition, camera, and EclipseTV.
-/// When a Show is open, a top section hosts Arrange / Rename / Delete.
-final class SettingsViewController: UITableViewController {
+/// Companion settings root: drill into display, transition, camera, EclipseTV,
+/// and Getting Started.
+/// When a Show is open, a top section hosts the name field and Delete.
+final class SettingsViewController: UITableViewController, UITextFieldDelegate {
 
     /// Multipeer link state for the Eclipse TV App section.
     enum ConnectionDisplayState {
@@ -31,14 +32,14 @@ final class SettingsViewController: UITableViewController {
     /// Invoked when Enter Share Code is chosen (host dismisses then prompts for code).
     var onEnterShareCode: (() -> Void)?
 
-    /// Open Show name when Settings should offer Edit Show; `nil` on Home.
+    /// Open Show name when Settings should offer show editing; `nil` on Home.
     var openShowName: String?
-    /// `false` when Arrange needs at least two media items.
-    var canArrangeShow = false
-    var onArrangeShow: (() -> Void)?
-    var onRenameShow: (() -> Void)?
+    /// Open Show id for per-Show prefs (name uniqueness, share, delete). `nil` on Home.
+    var openShowId: UUID?
     var onShareShow: (() -> Void)?
     var onDeleteShow: (() -> Void)?
+
+    private let showNameField = UITextField()
 
     /// Current Multipeer link state; host updates via `setConnectionState(_:)`.
     private(set) var connectionState: ConnectionDisplayState = .paused
@@ -49,11 +50,11 @@ final class SettingsViewController: UITableViewController {
         case showSharing
         case eclipseTV
         case eclipseMac
+        case help
     }
 
     private enum ShowRow: Int, CaseIterable {
-        case arrange
-        case rename
+        case name
         case delete
     }
 
@@ -75,8 +76,12 @@ final class SettingsViewController: UITableViewController {
 
     private var sections: [Section] {
         var result: [Section] = []
-        if openShowName != nil { result.append(.show) }
-        result.append(contentsOf: [.playback, .showSharing, .eclipseTV, .eclipseMac])
+        if openShowName != nil {
+            result.append(.show)
+        }
+        result.append(contentsOf: [
+            .playback, .showSharing, .eclipseTV, .eclipseMac, .help
+        ])
         return result
     }
 
@@ -104,7 +109,10 @@ final class SettingsViewController: UITableViewController {
             barButtonSystemItem: .done, target: self, action: #selector(doneTapped)
         )
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: "cell")
+        tableView.register(UITableViewCell.self, forCellReuseIdentifier: "showName")
+        tableView.keyboardDismissMode = .interactive
         tableView.tableFooterView = makeCopyrightFooter()
+        configureShowNameField()
 
         NotificationCenter.default.addObserver(
             self,
@@ -116,7 +124,15 @@ final class SettingsViewController: UITableViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        guard !showNameField.isFirstResponder else { return }
         tableView.reloadData()
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        if isBeingDismissed || navigationController?.isBeingDismissed == true {
+            commitShowName(revertOnFailure: true)
+        }
     }
 
     deinit {
@@ -156,6 +172,7 @@ final class SettingsViewController: UITableViewController {
     }
 
     @objc private func doneTapped() {
+        commitShowName(revertOnFailure: true)
         dismiss(animated: true)
     }
 
@@ -178,6 +195,7 @@ final class SettingsViewController: UITableViewController {
         case .showSharing: return showSharingRows.count
         case .eclipseTV: return 1
         case .eclipseMac: return MacRow.allCases.count
+        case .help: return 1
         }
     }
 
@@ -187,12 +205,12 @@ final class SettingsViewController: UITableViewController {
     ) -> String? {
         switch sections[section] {
         case .show:
-            guard let name = openShowName else { return "Show" }
-            return "Edit “\(name)”"
+            return "Show"
         case .playback: return "Playback"
         case .showSharing: return "Show Sharing"
         case .eclipseTV: return "EclipseTV"
         case .eclipseMac: return "Eclipse for Mac"
+        case .help: return "Help"
         }
     }
 
@@ -209,7 +227,7 @@ final class SettingsViewController: UITableViewController {
         case .eclipseMac:
             return "Control Eclipse on a Mac, or send this iPhone’s camera as a "
                 + "live source (any Apple ID, same Wi‑Fi)."
-        case .show, .playback:
+        case .show, .playback, .help:
             return nil
         }
     }
@@ -218,15 +236,25 @@ final class SettingsViewController: UITableViewController {
         _ tableView: UITableView,
         cellForRowAt indexPath: IndexPath
     ) -> UITableViewCell {
+        if sections[indexPath.section] == .show,
+           ShowRow(rawValue: indexPath.row) == .name {
+            let cell = tableView.dequeueReusableCell(
+                withIdentifier: "showName", for: indexPath
+            )
+            configureShowNameCell(cell)
+            return cell
+        }
+
         let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
         var config = cell.defaultContentConfiguration()
         cell.accessoryType = .disclosureIndicator
+        cell.accessoryView = nil
         cell.selectionStyle = .default
         cell.isUserInteractionEnabled = true
 
         switch sections[indexPath.section] {
         case .show:
-            configureShowCell(cell, config: &config, row: indexPath.row)
+            configureShowCell(cell, config: &config)
         case .playback:
             switch PlaybackRow(rawValue: indexPath.row) {
             case .displayMode:
@@ -260,6 +288,10 @@ final class SettingsViewController: UITableViewController {
             case .none:
                 break
             }
+        case .help:
+            config.text = "Getting Started"
+            config.secondaryText = "Learn the basics"
+            config.image = UIImage(systemName: "questionmark.circle")
         }
 
         cell.contentConfiguration = config
@@ -270,7 +302,11 @@ final class SettingsViewController: UITableViewController {
         tableView.deselectRow(at: indexPath, animated: true)
         switch sections[indexPath.section] {
         case .show:
-            handleShowRow(indexPath.row)
+            if ShowRow(rawValue: indexPath.row) == .name {
+                showNameField.becomeFirstResponder()
+            } else {
+                onDeleteShow?()
+            }
         case .playback:
             switch PlaybackRow(rawValue: indexPath.row) {
             case .displayMode:
@@ -301,50 +337,123 @@ final class SettingsViewController: UITableViewController {
             case .none:
                 break
             }
+        case .help:
+            pushGettingStarted()
         }
     }
 
     // MARK: - Show Editing
 
+    private func configureShowNameField() {
+        showNameField.placeholder = "Show name"
+        showNameField.accessibilityLabel = "Show name"
+        showNameField.autocapitalizationType = .words
+        showNameField.clearButtonMode = .whileEditing
+        showNameField.returnKeyType = .done
+        showNameField.enablesReturnKeyAutomatically = true
+        showNameField.font = .preferredFont(forTextStyle: .body)
+        showNameField.adjustsFontForContentSizeCategory = true
+        showNameField.delegate = self
+        UserDisplayName.configureTextField(showNameField)
+        showNameField.addTarget(
+            self,
+            action: #selector(showNameEditingChanged),
+            for: .editingChanged
+        )
+    }
+
+    private func configureShowNameCell(_ cell: UITableViewCell) {
+        cell.accessoryType = .none
+        cell.accessoryView = nil
+        cell.selectionStyle = .none
+        cell.contentConfiguration = nil
+        if !showNameField.isFirstResponder {
+            showNameField.text = openShowName
+            showNameField.textColor = .label
+        }
+        installShowNameField(in: cell)
+    }
+
+    private func installShowNameField(in cell: UITableViewCell) {
+        showNameField.removeFromSuperview()
+        showNameField.translatesAutoresizingMaskIntoConstraints = false
+        cell.contentView.addSubview(showNameField)
+        NSLayoutConstraint.activate([
+            showNameField.leadingAnchor.constraint(
+                equalTo: cell.contentView.layoutMarginsGuide.leadingAnchor
+            ),
+            showNameField.trailingAnchor.constraint(
+                equalTo: cell.contentView.layoutMarginsGuide.trailingAnchor
+            ),
+            showNameField.topAnchor.constraint(
+                equalTo: cell.contentView.topAnchor, constant: 12
+            ),
+            showNameField.bottomAnchor.constraint(
+                equalTo: cell.contentView.bottomAnchor, constant: -12
+            )
+        ])
+    }
+
     private func configureShowCell(
         _ cell: UITableViewCell,
-        config: inout UIListContentConfiguration,
-        row: Int
+        config: inout UIListContentConfiguration
     ) {
         cell.accessoryType = .none
         cell.selectionStyle = .default
-        cell.isUserInteractionEnabled = true
-        config.textProperties.color = .label
-        config.imageProperties.tintColor = .label
-        switch ShowRow(rawValue: row) {
-        case .arrange:
-            config.text = "Arrange"
-            config.image = UIImage(systemName: "arrow.up.arrow.down")
-            let enabled = canArrangeShow
-            cell.selectionStyle = enabled ? .default : .none
-            cell.isUserInteractionEnabled = enabled
-            config.textProperties.color = enabled ? .label : .secondaryLabel
-            config.imageProperties.tintColor = enabled ? .label : .secondaryLabel
-        case .rename:
-            config.text = "Rename"
-            config.image = UIImage(systemName: "pencil")
-        case .delete:
-            config.text = "Delete Show"
-            config.image = UIImage(systemName: "trash")
-            config.textProperties.color = .systemRed
-            config.imageProperties.tintColor = .systemRed
-        case .none:
-            break
+        config.text = "Delete Show"
+        config.image = UIImage(systemName: "trash")
+        config.textProperties.color = .systemRed
+        config.imageProperties.tintColor = .systemRed
+    }
+
+    @objc private func showNameEditingChanged() {
+        let raw = showNameField.text ?? ""
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        let taken = !trimmed.isEmpty
+            && LocalAlbumStore.shared.isNameTaken(trimmed, excluding: openShowId)
+        showNameField.textColor = taken ? .systemRed : .label
+    }
+
+    /// Saves the field when the name is valid; otherwise restores the current name.
+    @discardableResult
+    private func commitShowName(revertOnFailure: Bool) -> Bool {
+        guard let id = openShowId else { return true }
+        let current = openShowName ?? ""
+        guard let trimmed = UserDisplayName.normalized(showNameField.text ?? "") else {
+            showNameField.text = current
+            showNameField.textColor = .label
+            return true
+        }
+        if trimmed == current {
+            showNameField.text = current
+            showNameField.textColor = .label
+            return true
+        }
+        do {
+            try LocalAlbumStore.shared.rename(id: id, to: trimmed)
+            openShowName = trimmed
+            showNameField.text = trimmed
+            showNameField.textColor = .label
+            return true
+        } catch {
+            if revertOnFailure {
+                showNameField.text = current
+                showNameField.textColor = .label
+            }
+            return false
         }
     }
 
-    private func handleShowRow(_ row: Int) {
-        switch ShowRow(rawValue: row) {
-        case .arrange: onArrangeShow?()
-        case .rename: onRenameShow?()
-        case .delete: onDeleteShow?()
-        case .none: break
-        }
+    func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+        guard textField === showNameField else { return true }
+        guard commitShowName(revertOnFailure: false) else { return false }
+        textField.resignFirstResponder()
+        return true
+    }
+
+    func textFieldDidEndEditing(_ textField: UITextField) {
+        guard textField === showNameField else { return }
+        commitShowName(revertOnFailure: true)
     }
 
     // MARK: - Show Sharing
@@ -411,5 +520,11 @@ final class SettingsViewController: UITableViewController {
 
     private func presentPhoneCameraSend() {
         PhoneCameraSendLauncher.open(from: self)
+    }
+
+    private func pushGettingStarted() {
+        navigationController?.pushViewController(
+            GettingStartedViewController(), animated: true
+        )
     }
 }

@@ -7,7 +7,7 @@
 //  The guide sizes its hero header by hand in `viewDidLayoutSubviews`, and assigning
 //  `tableHeaderView` schedules another layout pass. When the header was self-sizing
 //  (`translatesAutoresizingMaskIntoConstraints = false`) Auto Layout rewrote the frame
-//  after every assignment, so the size check never settled: tapping the header's "?"
+//  after every assignment, so the size check never settled: opening Getting Started
 //  spun the main thread at 100% CPU until the watchdog killed the app.
 //
 //  These check that the sizing step converges rather than that it merely runs, so a

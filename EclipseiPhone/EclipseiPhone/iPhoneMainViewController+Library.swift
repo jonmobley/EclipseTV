@@ -17,23 +17,16 @@ extension iPhoneMainViewController {
         let openShow = libraryViewController.openShow
         headerBar.setCenterTitle(openShow?.name ?? "Home")
         headerBar.setShowModeChrome(openShow != nil)
+        headerBar.setDisconnectedPreview(openShow?.previewsWhenDisconnected ?? false)
         headerBar.setLibraryMenu(makeLibraryMenu())
         headerBar.setAddMenu(makeAddMenu())
         refreshPresentedSettingsConnectionState()
     }
 
-    /// Presents the Getting Started overview guide.
-    func presentGettingStarted() {
-        let guide = GettingStartedViewController()
-        let nav = UINavigationController(rootViewController: guide)
-        nav.modalPresentationStyle = .formSheet
-        present(nav, animated: true)
-    }
-
-    /// Home → Open Show → New Show → Library → Music → Getting Started → Settings,
-    /// then Recent Shows.
+    /// Home → Open Show → New Show → Library → Music → Settings, then Recent Shows.
     /// An open Show adds Home (leave Show mode). Show-mode also keeps the header
-    /// gear for Settings with Edit Show; Home Settings omits show-specific rows.
+    /// gear for Settings; Home Settings omits show-specific rows.
+    /// Getting Started lives in Settings, not this dropdown.
     ///
     /// Open Show always lists every openable Show (only the currently open one is
     /// left out). Recent Shows stay inline as a short hop list — they must not
@@ -59,7 +52,6 @@ extension iPhoneMainViewController {
         children.append(newShowAction())
         children.append(mediaLibraryAction())
         children.append(musicAction())
-        children.append(gettingStartedAction())
         children.append(settingsAction())
         let recents = recentShowsForMenu(excluding: openShow?.id)
         if !recents.isEmpty {
@@ -85,16 +77,6 @@ extension iPhoneMainViewController {
             image: UIImage(systemName: "music.note")
         ) { [weak self] _ in
             self?.presentAudioLibrary()
-        }
-    }
-
-    /// Opens Getting Started from the Home / Show dropdown (also on Home via ?).
-    private func gettingStartedAction() -> UIAction {
-        UIAction(
-            title: "Getting Started",
-            image: UIImage(systemName: "questionmark.circle")
-        ) { [weak self] _ in
-            self?.presentGettingStarted()
         }
     }
 
@@ -165,7 +147,7 @@ extension iPhoneMainViewController {
     }
 
     /// Presents Settings (playback prefs + EclipseTV drill-in).
-    /// When a Show is open, Settings also hosts Edit Show actions.
+    /// When a Show is open, Settings also hosts the show name and Delete.
     /// When `focusEclipseTV` is true, opens the EclipseTV detail page.
     func presentSettings(focusEclipseTV: Bool = false) {
         let settings = SettingsViewController()
@@ -173,7 +155,7 @@ extension iPhoneMainViewController {
         configureOpenShowEditing(on: settings)
         settings.onLibrariesChanged = { [weak self] in
             self?.refreshLibraryMenu()
-            self?.libraryViewController.collectionView.reloadData()
+            self?.libraryViewController.reloadLibraryGrid()
         }
         settings.onSyncPreferenceChanged = { [weak self] isOn in
             // Clear caught-up state before flipping the switch: the setter immediately
@@ -206,25 +188,15 @@ extension iPhoneMainViewController {
         }
     }
 
-    /// Wires Arrange / Rename / Share / Delete when Settings opens over a Show.
+    /// Wires name, Share, and Delete when Settings opens over a Show.
     private func configureOpenShowEditing(on settings: SettingsViewController) {
         guard let show = libraryViewController.openShow else {
             settings.openShowName = nil
+            settings.openShowId = nil
             return
         }
         settings.openShowName = show.name
-        settings.canArrangeShow = libraryViewController.openShowMembershipIds.count >= 2
-        settings.onArrangeShow = { [weak self] in
-            self?.dismiss(animated: true) {
-                self?.libraryViewController.beginArranging()
-                self?.refreshLibraryMenu()
-            }
-        }
-        settings.onRenameShow = { [weak self] in
-            self?.dismiss(animated: true) {
-                self?.libraryViewController.promptRenameOpenShow()
-            }
-        }
+        settings.openShowId = show.id
         settings.onShareShow = { [weak self] in
             guard let self,
                   let id = self.libraryViewController.openShowId else { return }

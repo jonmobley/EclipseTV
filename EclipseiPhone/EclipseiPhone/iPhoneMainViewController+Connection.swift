@@ -226,18 +226,6 @@ extension iPhoneMainViewController {
                 self?.resumeConnection()
             })
         }
-        if !airPlay {
-            sheet.addAction(
-                UIAlertAction(title: "How to AirPlay", style: .default) { [weak self] _ in
-                    self?.showAlert(
-                        title: "AirPlay",
-                        message: "Open Control Center, tap Screen Mirroring, and choose "
-                            + "your display. AirPlay is enough to present a Show — "
-                            + "linking EclipseTV is only for media sync."
-                    )
-                }
-            )
-        }
         sheet.addAction(UIAlertAction(title: "EclipseTV Settings", style: .default) { [weak self] _ in
             self?.presentSettings(focusEclipseTV: true)
         })

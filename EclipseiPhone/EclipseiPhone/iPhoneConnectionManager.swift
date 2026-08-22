@@ -453,13 +453,14 @@ class iPhoneConnectionManager: NSObject {
     /// - Parameter startAt: Absolute resume seconds for video; omit / 0 plays from the start.
     ///   Callers that want parked leave state must pass `VideoResumeStore` themselves —
     ///   slideshow and other auto-advance paths must not inherit a parked seek.
+    /// - Parameter isFill: Still framing override (slideshows). Nil uses the item's saved Fit / Fill.
     @MainActor
     @discardableResult
-    func sendPlayRequest(id: String, startAt: Double? = nil) -> Bool {
+    func sendPlayRequest(id: String, startAt: Double? = nil, isFill: Bool? = nil) -> Bool {
         return sendCommand(
             .playRequest(
                 id: id,
-                isFill: MediaFitSettings.isFill(forId: id),
+                isFill: isFill ?? MediaFitSettings.isFill(forId: id),
                 startAt: startAt
             ),
             description: "play request"

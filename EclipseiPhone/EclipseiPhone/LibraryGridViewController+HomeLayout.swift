@@ -18,10 +18,13 @@ extension LibraryGridViewController {
         case shows
     }
 
-    /// Section order for the current Home / Show / live-ribbon state.
+    /// Section order for one page. Home and Show are separate collection views,
+    /// so these lists never share a cell.
     ///
-    /// Home: hero carousel, then Recent. An open Show uses one media grid
+    /// Home: hero carousel, then Recent. A Show uses one media grid
     /// (tools + members from `surfaceIds`); no fixed tools band.
+    /// Phone landscape docks the live slideshow ribbon under the leading
+    /// preview, so pass `showsSlideshowRibbon: false` for that chrome.
     static func visibleHomeSections(
         isShowMode: Bool,
         showsSlideshowRibbon: Bool
@@ -35,10 +38,21 @@ extension LibraryGridViewController {
         return sections
     }
 
+    /// In-grid ribbon is portrait-only. Phone landscape docks it under the
+    /// leading live preview so the Show grid can scroll on its own.
+    static func showsInGridSlideshowRibbon(
+        liveRibbon: Bool,
+        sideBySideChrome: Bool
+    ) -> Bool {
+        liveRibbon && !sideBySideChrome
+    }
+
     /// Home / Show layout inputs, re-read on every layout pass.
     struct HomeLayoutState {
         var isShowMode: Bool
         var showsSlideshowRibbon: Bool
+        /// Home Recent format chips — taller header estimate when both formats exist.
+        var showsRecentFormatFilter: Bool = false
 
         /// Home with nothing playing — the state to assume once the controller is gone.
         static let home = HomeLayoutState(
@@ -98,7 +112,8 @@ extension LibraryGridViewController {
                 return Self.showsGridSection(
                     containerWidth: width,
                     sectionInset: sectionInset,
-                    spacing: spacing
+                    spacing: spacing,
+                    showsFormatFilter: live.showsRecentFormatFilter
                 )
             }
         }
@@ -281,7 +296,8 @@ extension LibraryGridViewController {
     private static func showsGridSection(
         containerWidth: CGFloat,
         sectionInset: CGFloat,
-        spacing: CGFloat
+        spacing: CGFloat,
+        showsFormatFilter: Bool = false
     ) -> NSCollectionLayoutSection {
         let columns = homeGridColumnCount(
             containerWidth: containerWidth,
@@ -317,8 +333,43 @@ extension LibraryGridViewController {
             bottom: sectionInset + 8, trailing: sectionInset
         )
 
-        section.boundarySupplementaryItems = [Self.sectionHeaderItem()]
+        section.boundarySupplementaryItems = [
+            Self.sectionHeaderItem(showsFormatFilter: showsFormatFilter)
+        ]
         return section
+    }
+
+    /// Short side of a live-ribbon thumb, as a fraction of a 3-up column.
+    private static let slideshowRibbonShortSideScale: CGFloat = 0.72
+
+    /// Ribbon thumb size: short side is a fraction of a 3-up column; long side
+    /// follows Display Mode (16:9 Landscape, 9:16 Vertical), matching the Show.
+    static func slideshowRibbonThumbSize(
+        containerWidth: CGFloat,
+        sectionInset: CGFloat,
+        spacing: CGFloat,
+        orientation: ExternalOutputOrientation = ExternalOutputSettings.orientation
+    ) -> CGSize {
+        let full = columnWidth(
+            containerWidth: containerWidth,
+            sectionInset: sectionInset,
+            spacing: spacing,
+            columns: 3
+        )
+        let short = max(
+            (full * slideshowRibbonShortSideScale).rounded(.down),
+            minimumTileSide
+        )
+        let aspect = orientation.aspectRatio
+        let width = max(
+            (aspect >= 1 ? short * aspect : short).rounded(.down),
+            minimumTileSide
+        )
+        let height = max(
+            (aspect >= 1 ? short : short / aspect).rounded(.down),
+            minimumTileSide
+        )
+        return CGSize(width: width, height: height)
     }
 
     /// Horizontal slide strip while a Slideshow with Live Ribbon is active.
@@ -327,22 +378,20 @@ extension LibraryGridViewController {
         sectionInset: CGFloat,
         spacing: CGFloat
     ) -> NSCollectionLayoutSection {
-        let full = columnWidth(
+        let thumb = slideshowRibbonThumbSize(
             containerWidth: containerWidth,
             sectionInset: sectionInset,
-            spacing: spacing,
-            columns: 3
+            spacing: spacing
         )
-        let side = max((full * 0.72).rounded(.down), minimumTileSide)
 
         let itemSize = NSCollectionLayoutSize(
-            widthDimension: .absolute(side),
-            heightDimension: .absolute(side)
+            widthDimension: .absolute(thumb.width),
+            heightDimension: .absolute(thumb.height)
         )
         let item = NSCollectionLayoutItem(layoutSize: itemSize)
         let groupSize = NSCollectionLayoutSize(
-            widthDimension: .absolute(side),
-            heightDimension: .absolute(side)
+            widthDimension: .absolute(thumb.width),
+            heightDimension: .absolute(thumb.height)
         )
         let group = NSCollectionLayoutGroup.horizontal(
             layoutSize: groupSize,
@@ -362,11 +411,18 @@ extension LibraryGridViewController {
 
     /// Nominal Home section-header height (Recent Shows title); empty-state offset.
     static let sectionHeaderEstimatedHeight: CGFloat = 44
+    /// Title + All / Landscape / Vertical chips.
+    static let sectionHeaderWithFilterEstimatedHeight: CGFloat = 92
 
-    private static func sectionHeaderItem() -> NSCollectionLayoutBoundarySupplementaryItem {
+    private static func sectionHeaderItem(
+        showsFormatFilter: Bool = false
+    ) -> NSCollectionLayoutBoundarySupplementaryItem {
+        let height = showsFormatFilter
+            ? sectionHeaderWithFilterEstimatedHeight
+            : sectionHeaderEstimatedHeight
         let headerSize = NSCollectionLayoutSize(
             widthDimension: .fractionalWidth(1),
-            heightDimension: .estimated(sectionHeaderEstimatedHeight)
+            heightDimension: .estimated(height)
         )
         return NSCollectionLayoutBoundarySupplementaryItem(
             layoutSize: headerSize,

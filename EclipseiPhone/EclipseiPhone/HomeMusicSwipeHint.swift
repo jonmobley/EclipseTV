@@ -7,7 +7,8 @@
 
 import UIKit
 
-/// Floating Home tip for the Music page. Eligible after the first mini-player collapse.
+/// Floating Home tip for the Music page. Kept off-screen while the corner Music
+/// button is the persistent entry point.
 final class HomeMusicSwipeHint: UIView {
 
     static let dismissedKey = "EclipseTV.home.musicSwipeHintDismissed"
@@ -158,14 +159,10 @@ final class HomeMusicSwipeHint: UIView {
         reload()
     }
 
-    /// Refreshes visibility from UserDefaults and active audio session.
+    /// Refreshes copy. The corner Music button is the persistent entry point,
+    /// so this tip stays hidden and never covers it.
     func reload() {
-        let defaults = UserDefaults.standard
-        let eligible = defaults.bool(forKey: Self.eligibleKey)
-        let dismissed = defaults.bool(forKey: Self.dismissedKey)
-        let sessionActive = AudioPlayerController.shared.hasActiveSession
-        // Hide while music chrome is up so the tip doesn’t compete with the bubble.
-        isHidden = !eligible || dismissed || sessionActive
+        isHidden = true
         subtitleLabel.text = musicPagingAvailable
             ? "Swipe left to open"
             : "Open from the Home menu"

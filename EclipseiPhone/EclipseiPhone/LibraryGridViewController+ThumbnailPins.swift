@@ -19,6 +19,13 @@ extension LibraryGridViewController {
                 ids.insert(id)
             }
         }
+        if docksLiveSlideshowRibbon {
+            let slideIds = SlideshowPlaybackController.shared.activeSlideIds
+            for path in slideshowRibbonView.indexPathsForVisibleItems {
+                guard slideIds.indices.contains(path.item) else { continue }
+                ids.insert(slideIds[path.item])
+            }
+        }
         // Hero / LIVE chrome also reads `store.thumbnail(for:)`.
         if let currentId = store.currentId {
             ids.insert(currentId)

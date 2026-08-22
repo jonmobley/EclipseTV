@@ -7,7 +7,7 @@
 
 import UIKit
 
-/// Collapsed ambient-music control: tap expands, long-press stops.
+/// Persistent Music control: idle tap opens Music, active tap expands, long-press stops.
 final class AudioMiniPlayerBubbleView: UIView {
 
     static let side: CGFloat = 56
@@ -35,21 +35,24 @@ final class AudioMiniPlayerBubbleView: UIView {
     /// Updates pulse / accessibility from the shared player.
     func reload() {
         let player = AudioPlayerController.shared
-        guard player.hasActiveSession else {
-            isHidden = true
-            setPulsing(false)
-            return
-        }
-        isHidden = false
-        let playing = player.isPlaying
-        // Note glyph (not play/pause) so tap reads as “expand,” not transport.
+        let active = player.hasActiveSession
+        let playing = active && player.isPlaying
+        // Note glyph (not play/pause) so tap reads as “open / expand,” not transport.
         iconView.image = UIImage(
             systemName: "music.note",
             withConfiguration: UIImage.SymbolConfiguration(pointSize: 20, weight: .semibold)
         )
+        iconBackground.backgroundColor = UIColor.systemBlue.withAlphaComponent(
+            active ? 0.45 : 0.32
+        )
         accessibilityLabel = "Music"
-        accessibilityValue = playing ? "Playing" : "Paused"
-        accessibilityHint = "Double tap to expand. Long press to stop."
+        if active {
+            accessibilityValue = playing ? "Playing" : "Paused"
+            accessibilityHint = "Double tap to expand. Long press to stop."
+        } else {
+            accessibilityValue = nil
+            accessibilityHint = "Opens the Music page."
+        }
         setPulsing(playing)
     }
 

@@ -8,12 +8,13 @@
 import PhotosUI
 import UIKit
 
-// MARK: - Alternate Still (cutaway on AirPlay)
+// MARK: - Alternate Still (cutaway)
 
 extension CameraLiveViewController {
 
-    /// Diameter of the in-panel cutaway thumbnail.
-    static let alternateStillThumbSize: CGFloat = 52
+    /// Short side of the in-panel cutaway thumbnail. Long side follows Display Mode
+    /// (16:9 Landscape, 9:16 Vertical) so the thumb matches the Show stage.
+    static let alternateStillThumbShortSide: CGFloat = 52
 
     /// Builds the cutaway thumbnail control (called from `viewDidLoad`).
     func setupAlternateStillButton() {
@@ -48,6 +49,7 @@ extension CameraLiveViewController {
         )
         alternateStillButton.addGestureRecognizer(longPress)
         view.addSubview(alternateStillButton)
+        panelView.addSubview(cutawayCoverView)
         refreshAlternateStillAppearance()
 
         NotificationCenter.default.addObserver(
@@ -56,36 +58,58 @@ extension CameraLiveViewController {
             name: CameraAlternateStillStore.didChangeNotification,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(alternateStillStoreDidChange),
+            name: LogoStore.didChangeNotification,
+            object: nil
+        )
     }
 
-    /// Places the cutaway thumb at the bottom-leading corner of the Display Mode panel.
+    /// Places the cutaway thumb at the bottom-trailing corner of the Display Mode panel.
     func layoutAlternateStillButton(panel: CGRect) {
-        let size = Self.alternateStillThumbSize
-        let inset: CGFloat = 14
+        let short = Self.alternateStillThumbShortSide
+        let aspect = ExternalOutputSettings.orientation.aspectRatio
+        let width = aspect >= 1 ? short * aspect : short
+        let height = width / aspect
+        let inset = cameraThumbEdgeInset(panel: panel)
         alternateStillButton.frame = CGRect(
-            x: panel.minX + inset,
-            y: panel.maxY - inset - size,
-            width: size,
-            height: size
+            x: panel.maxX - inset - width,
+            y: panel.maxY - inset - height,
+            width: width,
+            height: height
         )
         view.bringSubviewToFront(alternateStillButton)
     }
 
-    /// Updates thumbnail art and red stroke when the cutaway owns AirPlay.
+    /// 14pt in-panel pad, plus any home-indicator overlap (Landscape panel).
+    func cameraThumbEdgeInset(panel: CGRect) -> CGFloat {
+        let base: CGFloat = 14
+        let safeBottom = view.bounds.maxY - view.safeAreaInsets.bottom
+        return base + max(0, panel.maxY - safeBottom)
+    }
+
+    /// Updates thumbnail art and red stroke when the cutaway is the parked still.
     func refreshAlternateStillAppearance() {
         let store = CameraAlternateStillStore.shared
         let active = ExternalDisplayManager.shared.isCameraParkedOnStill
-            && store.hasStill
-        if let image = store.image {
+        let onAirPlay = ExternalDisplayManager.shared.isConnected
+        if let image = store.displayImage {
             alternateStillImageView.image = image
             alternateStillImageView.isHidden = false
             alternateStillButton.setImage(nil, for: .normal)
             alternateStillButton.tintColor = nil
             alternateStillButton.backgroundColor = .black
             alternateStillButton.accessibilityHint = active
-                ? "Showing on AirPlay. Tap to return to the live camera."
-                : "Tap to show this photo on AirPlay. Hold to replace or clear."
-            alternateStillButton.accessibilityValue = active ? "On AirPlay" : "Ready"
+                ? (onAirPlay
+                    ? "Showing on AirPlay. Tap to return to the live camera."
+                    : "Showing on this camera. Tap to return to the live camera.")
+                : store.hasStill
+                    ? "Tap to show this photo. Hold to replace or remove."
+                    : "Tap to show the Show Background. Hold to replace."
+            alternateStillButton.accessibilityValue = active
+                ? (onAirPlay ? "On AirPlay" : "Active")
+                : (store.hasStill ? "Custom photo" : "Background")
         } else {
             alternateStillImageView.image = nil
             alternateStillImageView.isHidden = true
@@ -97,26 +121,47 @@ extension CameraLiveViewController {
             alternateStillButton.tintColor = .white
             alternateStillButton.backgroundColor = UIColor.black.withAlphaComponent(0.45)
             alternateStillButton.accessibilityHint =
-                "Chooses a photo to toggle onto AirPlay while camera is live"
+                "Chooses a photo to toggle on while camera is live"
             alternateStillButton.accessibilityValue = "None"
         }
         alternateStillButton.layer.borderWidth = active ? 3 : 1
         alternateStillButton.layer.borderColor = active
             ? UIColor.systemRed.cgColor
             : UIColor.white.withAlphaComponent(0.35).cgColor
+        refreshCutawayCover()
+    }
+
+    /// Fills the phone panel with the cutaway when parked and no display is attached.
+    func layoutCutawayCover() {
+        cutawayCoverView.frame = panelView.bounds
+        refreshCutawayCover()
+    }
+
+    /// Shows the still on-panel only for a local park (AirPlay already owns the TV).
+    private func refreshCutawayCover() {
+        let mgr = ExternalDisplayManager.shared
+        let showCover = mgr.isCameraParkedOnStill && !mgr.isConnected
+        cutawayCoverView.image = showCover
+            ? CameraAlternateStillStore.shared.displayImage
+            : nil
+        cutawayCoverView.isHidden = !showCover || cutawayCoverView.image == nil
+        guard !cutawayCoverView.isHidden else { return }
+        panelView.bringSubviewToFront(cutawayCoverView)
     }
 
     @objc private func alternateStillStoreDidChange() {
+        let store = CameraAlternateStillStore.shared
+        let mgr = ExternalDisplayManager.shared
+        if mgr.isCameraParkedOnStill, !store.hasStill,
+           let source = store.presentationSource {
+            mgr.parkCameraOnStill(source)
+        }
         refreshAlternateStillAppearance()
     }
 
-    /// Empty → pick. Chosen + parked → resume camera. Chosen → park on AirPlay.
+    /// Parked → resume camera. Otherwise go live (if needed) and park the still.
     @objc func alternateStillButtonTapped() {
         let store = CameraAlternateStillStore.shared
-        guard store.hasStill else {
-            presentAlternateStillPicker()
-            return
-        }
         let mgr = ExternalDisplayManager.shared
         if mgr.isCameraParkedOnStill {
             mgr.resumeCameraFromStillPark()
@@ -125,40 +170,47 @@ extension CameraLiveViewController {
             startAlwaysLiveRecordingIfNeeded()
             return
         }
-        guard let source = store.presentationSource else { return }
+        guard let source = store.presentationSource else {
+            presentAlternateStillPicker()
+            return
+        }
         if mgr.isCameraModeActive {
             // Recording belongs on the live camera feed — stop before cutaway.
             finalizeRecordingIfNeeded { [weak self] in
                 guard let self else { return }
-                ExternalDisplayManager.shared.parkCameraOnStill(source)
-                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                self.refreshLiveChrome()
+                self.parkAlternateStill(source)
             }
             return
         }
-        // Not live yet: go live, then immediately cut to the still.
-        prepareLivePreviewHandoffToAirPlay()
+        if mgr.isConnected {
+            prepareLivePreviewHandoffToAirPlay()
+        }
         mgr.presentCamera()
-        mgr.parkCameraOnStill(source)
+        parkAlternateStill(source)
+    }
+
+    /// Parks the cutaway and refreshes chrome (AirPlay when live, local otherwise).
+    private func parkAlternateStill(_ source: PresentationSource) {
+        ExternalDisplayManager.shared.parkCameraOnStill(source)
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         refreshLiveChrome()
     }
 
-    /// Replace or clear when a cutaway is already chosen.
+    /// Replace the cutaway, or remove a custom photo (restores Show Background).
     @objc func alternateStillButtonLongPressed(_ gesture: UILongPressGestureRecognizer) {
         guard gesture.state == .began else { return }
-        guard CameraAlternateStillStore.shared.hasStill else {
-            presentAlternateStillPicker()
-            return
-        }
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-        let sheet = UIAlertController(title: "Cutaway Photo", message: nil, preferredStyle: .actionSheet)
+        let sheet = UIAlertController(
+            title: "Cutaway Photo", message: nil, preferredStyle: .actionSheet
+        )
         sheet.addAction(UIAlertAction(title: "Replace…", style: .default) { [weak self] _ in
             self?.presentAlternateStillPicker()
         })
-        sheet.addAction(UIAlertAction(title: "Clear", style: .destructive) { [weak self] _ in
-            self?.clearAlternateStill()
-        })
+        if CameraAlternateStillStore.shared.hasStill {
+            sheet.addAction(UIAlertAction(title: "Remove", style: .destructive) { [weak self] _ in
+                self?.clearAlternateStill()
+            })
+        }
         sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         if let pop = sheet.popoverPresentationController {
             pop.sourceView = alternateStillButton

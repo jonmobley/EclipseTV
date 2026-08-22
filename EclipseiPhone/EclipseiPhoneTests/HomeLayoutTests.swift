@@ -11,9 +11,12 @@
 //
 //  Also pins the Home section order: hero, then Recent. An open Show uses a
 //  single shows grid (tools + media), with an optional live slideshow ribbon.
+//  Home and Show are separate pages — Show sections never include the hero.
+//  Phone landscape docks that ribbon under the leading preview instead.
 //
 //  Open-Show tiles follow Display Mode aspect; Home Recent tiles are square so
-//  Landscape and Vertical Shows can share one grid.
+//  Landscape and Vertical Shows can share one grid. Live slideshow ribbon
+//  thumbs use the same 16:9 / 9:16 stage ratio (not square).
 //
 
 import Testing
@@ -222,6 +225,115 @@ struct HomeLayoutTests {
         #expect(LibraryGridViewController.visibleHomeSections(
             isShowMode: true, showsSlideshowRibbon: true
         ) == [.slideshowRibbon, .shows])
+    }
+
+    /// Phone landscape docks the live ribbon under the leading preview, so the
+    /// Show grid is just `.shows` and can scroll without a nested strip.
+    @Test func phoneLandscapeOmitsTheInGridRibbon() {
+        #expect(LibraryGridViewController.showsInGridSlideshowRibbon(
+            liveRibbon: true, sideBySideChrome: true
+        ) == false)
+        #expect(LibraryGridViewController.showsInGridSlideshowRibbon(
+            liveRibbon: true, sideBySideChrome: false
+        ) == true)
+        #expect(LibraryGridViewController.showsInGridSlideshowRibbon(
+            liveRibbon: false, sideBySideChrome: false
+        ) == false)
+        #expect(LibraryGridViewController.visibleHomeSections(
+            isShowMode: true,
+            showsSlideshowRibbon: LibraryGridViewController.showsInGridSlideshowRibbon(
+                liveRibbon: true, sideBySideChrome: true
+            )
+        ) == [.shows])
+    }
+
+    /// Live ribbon thumbs match the Show stage: 16:9 Landscape, 9:16 Vertical.
+    @Test func slideshowRibbonThumbsFollowTheDisplayMode() {
+        for width in [CGFloat(320), 390, 430, 744, 1024, 1366] {
+            let vertical = LibraryGridViewController.slideshowRibbonThumbSize(
+                containerWidth: width, sectionInset: inset, spacing: spacing,
+                orientation: .portrait
+            )
+            let landscape = LibraryGridViewController.slideshowRibbonThumbSize(
+                containerWidth: width, sectionInset: inset, spacing: spacing,
+                orientation: .landscape
+            )
+
+            #expect(
+                vertical.height > vertical.width,
+                "Vertical ribbon thumb \(vertical) is not tall"
+            )
+            #expect(
+                landscape.width > landscape.height,
+                "Landscape ribbon thumb \(landscape) is not wide"
+            )
+            #expect(vertical.width == landscape.height)
+            #expect(abs(landscape.width / landscape.height - 16.0 / 9.0) < 0.05)
+            #expect(abs(vertical.height / vertical.width - 16.0 / 9.0) < 0.05)
+        }
+    }
+
+    @Test func slideshowRibbonThumbsStayPositiveAtEveryContainerWidth() {
+        for orientation in ExternalOutputOrientation.allCases {
+            for width in Self.widths {
+                let thumb = LibraryGridViewController.slideshowRibbonThumbSize(
+                    containerWidth: width, sectionInset: inset, spacing: spacing,
+                    orientation: orientation
+                )
+                #expect(
+                    thumb.width > 0 && thumb.height > 0,
+                    "ribbon thumb \(thumb) for \(orientation) at width \(width)"
+                )
+            }
+        }
+    }
+
+    /// The live ribbon section must emit the same size as `slideshowRibbonThumbSize`.
+    @Test func slideshowRibbonCellsMatchDisplayModeInARealCollectionView() {
+        for orientation in ExternalOutputOrientation.allCases {
+            let previous = ExternalOutputSettings.orientation
+            ExternalOutputSettings.orientation = orientation
+            defer { ExternalOutputSettings.orientation = previous }
+
+            let width: CGFloat = 390
+            let layout = LibraryGridViewController.makeHomeLayout(
+                sectionInset: inset,
+                spacing: spacing
+            ) {
+                .init(isShowMode: true, showsSlideshowRibbon: true)
+            }
+
+            let collectionView = UICollectionView(
+                frame: CGRect(x: 0, y: 0, width: width, height: 844),
+                collectionViewLayout: layout
+            )
+            let dataSource = OverreportingDataSource()
+            dataSource.register(on: collectionView)
+            dataSource.sectionCount = 2
+            dataSource.itemsPerSection = 4
+            collectionView.dataSource = dataSource
+            collectionView.reloadData()
+            collectionView.layoutIfNeeded()
+
+            let frame = collectionView.layoutAttributesForItem(
+                at: IndexPath(item: 0, section: 0)
+            )?.frame
+            let expected = LibraryGridViewController.slideshowRibbonThumbSize(
+                containerWidth: width, sectionInset: inset, spacing: spacing,
+                orientation: orientation
+            )
+            #expect(frame?.size == expected, "ribbon cell \(String(describing: frame?.size))")
+        }
+    }
+
+    /// Going Home must not be able to put the marketing carousel on a Show page.
+    @Test func showPageSectionsNeverIncludeTheHomeHero() {
+        for ribbon in [false, true] {
+            let sections = LibraryGridViewController.visibleHomeSections(
+                isShowMode: true, showsSlideshowRibbon: ribbon
+            )
+            #expect(!sections.contains(.hero))
+        }
     }
 
     /// The layout must survive a data source that reports sections it can't name.

@@ -245,12 +245,15 @@ final class LocalAlbumStore {
         scheduleShowSaveIfNeeded(albumId)
     }
 
-    /// Replaces the Show grid order (tools + members). Syncs `itemIds` to member order.
+    /// Replaces the Show grid order (tools + members + slideshows).
+    /// Syncs `itemIds` to member order; slideshow tokens stay on the surface only.
     func reorderSurface(_ surfaceIds: [String], albumId: UUID) {
         guard let index = albums.firstIndex(where: { $0.id == albumId }) else { return }
         let sanitized = LocalAlbum.sanitizedSurface(surfaceIds, itemIds: albums[index].itemIds)
         albums[index].surfaceIds = sanitized
-        let members = sanitized.filter { !ShowToolToken.isTool($0) }
+        let members = sanitized.filter {
+            !ShowToolToken.isTool($0) && !ShowSlideshowToken.isSlideshow($0)
+        }
         // Preserve membership set; order follows surface for members that appear.
         let memberSet = Set(albums[index].itemIds)
         let ordered = members.filter { memberSet.contains($0) }
@@ -263,10 +266,50 @@ final class LocalAlbumStore {
         scheduleShowSaveIfNeeded(albumId)
     }
 
+    /// Appends a slideshow tile when this Show already has a customized surface.
+    func addSlideshow(_ slideshowId: UUID, toAlbumId albumId: UUID) {
+        guard let index = albums.firstIndex(where: { $0.id == albumId }) else { return }
+        guard var surface = albums[index].surfaceIds else { return }
+        let token = ShowSlideshowToken.token(for: slideshowId)
+        guard !surface.contains(token) else { return }
+        surface.append(token)
+        albums[index].surfaceIds = LocalAlbum.sanitizedSurface(
+            surface, itemIds: albums[index].itemIds
+        )
+        persist(changedAlbumId: albumId)
+        scheduleShowSaveIfNeeded(albumId)
+    }
+
+    /// Drops a slideshow tile from this Show's surface.
+    func removeSlideshow(_ slideshowId: UUID, fromAlbumId albumId: UUID) {
+        guard let index = albums.firstIndex(where: { $0.id == albumId }) else { return }
+        let token = ShowSlideshowToken.token(for: slideshowId)
+        guard var surface = albums[index].surfaceIds,
+              surface.contains(token) else { return }
+        surface.removeAll { $0 == token }
+        albums[index].surfaceIds = LocalAlbum.sanitizedSurface(
+            surface, itemIds: albums[index].itemIds
+        )
+        persist(changedAlbumId: albumId)
+        scheduleShowSaveIfNeeded(albumId)
+    }
+
     /// Writes the default surface so later hide/show edits persist.
     private func materializeSurface(at index: Int) {
         guard albums[index].surfaceIds == nil else { return }
-        albums[index].surfaceIds = ShowToolToken.all + albums[index].itemIds
+        let slideshows = SlideshowStore.shared.slideshows(forShowId: albums[index].id)
+            .map { ShowSlideshowToken.token(for: $0.id) }
+        albums[index].surfaceIds =
+            ShowToolToken.all + albums[index].itemIds + slideshows
+    }
+
+    /// Shows or hides the disconnected live preview hero for `albumId`.
+    func setPreviewsWhenDisconnected(_ enabled: Bool, albumId: UUID) {
+        guard let index = albums.firstIndex(where: { $0.id == albumId }) else { return }
+        guard albums[index].previewsWhenDisconnected != enabled else { return }
+        albums[index].previewsWhenDisconnected = enabled
+        persist(changedAlbumId: albumId)
+        scheduleShowSaveIfNeeded(albumId)
     }
 
     /// Sets the cover thumbnail for `albumId` when `itemId` is a member.

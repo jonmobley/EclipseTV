@@ -67,6 +67,24 @@ final class AudioNowPlayingViewController: UIViewController {
         return label
     }()
 
+    private let playNextLabel: UILabel = {
+        let label = UILabel()
+        label.text = "Play Next"
+        label.font = .preferredFont(forTextStyle: .subheadline)
+        label.adjustsFontForContentSizeCategory = true
+        label.translatesAutoresizingMaskIntoConstraints = false
+        return label
+    }()
+
+    private let playNextSwitch: UISwitch = {
+        let control = UISwitch()
+        control.accessibilityLabel = "Play Next"
+        control.accessibilityHint =
+            "When off, playback stops at the end of the current song"
+        control.translatesAutoresizingMaskIntoConstraints = false
+        return control
+    }()
+
     private let queueHeaderLabel: UILabel = {
         let label = UILabel()
         label.text = "Up Next"
@@ -107,6 +125,7 @@ final class AudioNowPlayingViewController: UIViewController {
         )
 
         configureButtons()
+        configurePlayNext()
         configureTable()
         layout()
         scrubber.addTarget(self, action: #selector(scrubBegan), for: .touchDown)
@@ -155,6 +174,13 @@ final class AudioNowPlayingViewController: UIViewController {
         nextButton.addTarget(self, action: #selector(nextTapped), for: .touchUpInside)
     }
 
+    private func configurePlayNext() {
+        playNextSwitch.addTarget(
+            self, action: #selector(playNextChanged(_:)), for: .valueChanged
+        )
+        playNextSwitch.isOn = AudioPlayerController.shared.playsNext
+    }
+
     private func configureTable() {
         tableView.translatesAutoresizingMaskIntoConstraints = false
         tableView.dataSource = self
@@ -177,12 +203,18 @@ final class AudioNowPlayingViewController: UIViewController {
         transport.distribution = .equalCentering
         transport.translatesAutoresizingMaskIntoConstraints = false
 
+        let playNextRow = UIStackView(arrangedSubviews: [playNextLabel, playNextSwitch])
+        playNextRow.axis = .horizontal
+        playNextRow.alignment = .center
+        playNextRow.translatesAutoresizingMaskIntoConstraints = false
+
         view.addSubview(artworkView)
         view.addSubview(textStack)
         view.addSubview(scrubber)
         view.addSubview(elapsedLabel)
         view.addSubview(remainingLabel)
         view.addSubview(transport)
+        view.addSubview(playNextRow)
         view.addSubview(queueHeaderLabel)
         view.addSubview(tableView)
 
@@ -213,8 +245,12 @@ final class AudioNowPlayingViewController: UIViewController {
             transport.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -48),
             transport.heightAnchor.constraint(equalToConstant: 40),
 
+            playNextRow.topAnchor.constraint(equalTo: transport.bottomAnchor, constant: 16),
+            playNextRow.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            playNextRow.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+
             queueHeaderLabel.topAnchor.constraint(
-                equalTo: transport.bottomAnchor, constant: 16
+                equalTo: playNextRow.bottomAnchor, constant: 14
             ),
             queueHeaderLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
             queueHeaderLabel.trailingAnchor.constraint(
@@ -268,6 +304,7 @@ final class AudioNowPlayingViewController: UIViewController {
         let large = UIImage.SymbolConfiguration(pointSize: 26, weight: .semibold)
         playButton.setImage(UIImage(systemName: symbol, withConfiguration: large), for: .normal)
         playButton.accessibilityLabel = player.isPlaying ? "Pause" : "Play"
+        playNextSwitch.isOn = player.playsNext
 
         let count = player.queue.count
         queueHeaderLabel.text = count > 1 ? "Up Next · \(count) tracks" : "Now Playing"
@@ -288,6 +325,9 @@ final class AudioNowPlayingViewController: UIViewController {
     @objc private func playTapped() { AudioPlayerController.shared.togglePlayPause() }
     @objc private func prevTapped() { AudioPlayerController.shared.playPrevious() }
     @objc private func nextTapped() { AudioPlayerController.shared.playNext() }
+    @objc private func playNextChanged(_ sender: UISwitch) {
+        AudioPlayerController.shared.setPlaysNext(sender.isOn)
+    }
     @objc private func scrubBegan() { isScrubbing = true }
     @objc private func scrubChanged() {
         elapsedLabel.text = format(TimeInterval(scrubber.value))

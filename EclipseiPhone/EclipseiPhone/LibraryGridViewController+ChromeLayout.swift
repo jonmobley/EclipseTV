@@ -11,34 +11,30 @@ import UIKit
 
 extension LibraryGridViewController {
 
-    /// AirPlay/HDMI or an Eclipse TV Multipeer link — somewhere to send live output.
+    /// Open Show asked to show the live preview hero with no AirPlay / HDMI / EclipseTV.
     ///
-    /// Without either, media taps mark items phone-live in the hero (Preview is
-    /// fullscreen from the hero / ⋯ menu). Web and PDF still open their remotes.
-    var hasLiveOutputDestination: Bool {
-        ExternalDisplayManager.shared.isConnected || store.isOnline
+    /// Go-live (red strokes, Camera LIVE) always works. This flag only shows or
+    /// hides the disconnected hero — it does not gate marking items live.
+    var prefersDisconnectedLivePreview: Bool {
+        isShowMode && (openShow?.previewsWhenDisconnected == true)
     }
 
-    /// Live hero belongs to an open Show that can drive output, or phone-only
-    /// library media marked live with no external display.
+    /// Live hero on an open Show: a real destination, or Preview When Disconnected.
     var showsLiveHero: Bool {
-        isShowMode && (hasLiveOutputDestination || isPhoneLiveMedia)
+        isShowMode && (
+            ExternalDisplayManager.shared.isConnected
+            || store.isOnline
+            || prefersDisconnectedLivePreview
+        )
     }
 
-    /// Library media selected as live while browsing with no AirPlay / Eclipse TV.
-    var isPhoneLiveMedia: Bool {
-        guard !hasLiveOutputDestination,
-              let id = store.currentId,
-              store.items.contains(where: { $0.id == id }) else { return false }
-        return LocalMediaStore.shared.localURL(forId: id) != nil
-    }
-
-    /// Phone-only live library video (transport / mute-loop options).
-    var isPhoneLiveVideo: Bool {
-        guard isPhoneLiveMedia,
-              let id = store.currentId,
-              let item = store.items.first(where: { $0.id == id }) else { return false }
-        return item.isVideo
+    /// Toggles the disconnected live-preview hero for the open Show.
+    func toggleDisconnectedLivePreview() {
+        guard let show = openShow else { return }
+        LocalAlbumStore.shared.setPreviewsWhenDisconnected(
+            !show.previewsWhenDisconnected, albumId: show.id
+        )
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
     }
 
     /// Phone landscape (`verticalSizeClass == .compact`): live preview left, grid
@@ -131,24 +127,39 @@ extension LibraryGridViewController {
         // pushed the last column off screen.
         portraitChromeConstraints = [
             heroTop,
-            collectionView.topAnchor.constraint(equalTo: safe.topAnchor),
-            collectionView.leadingAnchor.constraint(equalTo: safe.leadingAnchor),
-            collectionView.trailingAnchor.constraint(equalTo: safe.trailingAnchor),
-            collectionView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            gridHost.topAnchor.constraint(equalTo: safe.topAnchor),
+            gridHost.leadingAnchor.constraint(equalTo: safe.leadingAnchor),
+            gridHost.trailingAnchor.constraint(equalTo: safe.trailingAnchor),
+            gridHost.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             // Park the unused spacer so it never shows a black band.
             heroSpacer.topAnchor.constraint(equalTo: view.topAnchor),
             heroSpacer.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             heroSpacer.widthAnchor.constraint(equalToConstant: 0),
-            heroSpacer.heightAnchor.constraint(equalToConstant: 0)
+            heroSpacer.heightAnchor.constraint(equalToConstant: 0),
+            // Park the landscape ribbon; portrait uses the in-grid section.
+            slideshowRibbonView.topAnchor.constraint(equalTo: view.topAnchor),
+            slideshowRibbonView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            slideshowRibbonView.widthAnchor.constraint(equalToConstant: 0),
+            slideshowRibbonView.heightAnchor.constraint(equalToConstant: 0)
         ]
 
+        let ribbonTop = slideshowRibbonView.topAnchor.constraint(
+            equalTo: liveHeader.bottomAnchor
+        )
+        let ribbonHeight = slideshowRibbonView.heightAnchor.constraint(
+            equalToConstant: 0
+        )
+        dockedRibbonTopConstraint = ribbonTop
+        dockedRibbonHeightConstraint = ribbonHeight
+
         // Landscape: live preview leading (top-aligned), grid in the trailing column.
-        // The ambient mini player docks under the preview from the parent VC.
+        // The live slideshow ribbon docks under the preview, matching portrait.
+        // The ambient mini player is a compact trailing card on the parent VC.
         landscapeChromeConstraints = [
-            collectionView.topAnchor.constraint(equalTo: safe.topAnchor),
-            collectionView.trailingAnchor.constraint(equalTo: safe.trailingAnchor),
-            collectionView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            collectionView.leadingAnchor.constraint(
+            gridHost.topAnchor.constraint(equalTo: safe.topAnchor),
+            gridHost.trailingAnchor.constraint(equalTo: safe.trailingAnchor),
+            gridHost.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            gridHost.leadingAnchor.constraint(
                 equalTo: liveHeader.trailingAnchor, constant: gutter
             ),
             liveHeader.leadingAnchor.constraint(
@@ -158,6 +169,17 @@ extension LibraryGridViewController {
                 equalTo: safe.topAnchor, constant: headerInset
             ),
             liveHeader.bottomAnchor.constraint(
+                lessThanOrEqualTo: safe.bottomAnchor, constant: -8
+            ),
+            slideshowRibbonView.leadingAnchor.constraint(
+                equalTo: liveHeader.leadingAnchor
+            ),
+            slideshowRibbonView.trailingAnchor.constraint(
+                equalTo: liveHeader.trailingAnchor
+            ),
+            ribbonTop,
+            ribbonHeight,
+            slideshowRibbonView.bottomAnchor.constraint(
                 lessThanOrEqualTo: safe.bottomAnchor, constant: -8
             ),
             heroSpacer.topAnchor.constraint(equalTo: view.topAnchor),
@@ -172,16 +194,16 @@ extension LibraryGridViewController {
         view.bringSubviewToFront(liveHeader)
 
         NSLayoutConstraint.activate([
-            emptyLabel.centerXAnchor.constraint(equalTo: collectionView.centerXAnchor),
+            emptyLabel.centerXAnchor.constraint(equalTo: gridHost.centerXAnchor),
             emptyLabel.leadingAnchor.constraint(
-                equalTo: collectionView.leadingAnchor, constant: 40
+                equalTo: gridHost.leadingAnchor, constant: 40
             ),
             emptyLabel.trailingAnchor.constraint(
-                equalTo: collectionView.trailingAnchor, constant: -40
+                equalTo: gridHost.trailingAnchor, constant: -40
             )
         ])
         let emptyTop = emptyLabel.topAnchor.constraint(
-            equalTo: collectionView.topAnchor, constant: 160
+            equalTo: gridHost.topAnchor, constant: 160
         )
         emptyTop.isActive = true
         emptyTopConstraint = emptyTop
@@ -204,9 +226,14 @@ extension LibraryGridViewController {
 
         if axisChanged {
             applyChromeAxis(sideBySide: sideBySide)
+            // Ribbon moves between the Show grid and the leading preview.
+            applyShowPageLayout()
+            if isShowMode {
+                showCollectionView.reloadData()
+            }
         }
         applyHeroChrome()
-        collectionView.collectionViewLayout.invalidateLayout()
+        invalidatePageLayouts()
     }
 
     /// Applies Landscape vs Vertical chrome and reloads the active mode's library.
@@ -222,10 +249,10 @@ extension LibraryGridViewController {
         // Sync swaps buckets and reloads via store delegates when the mode changed.
         store.syncLibraryModeFromSettings()
         applyHeroChrome()
-        collectionView.collectionViewLayout.invalidateLayout()
+        invalidatePageLayouts()
         // Avoid a second reloadData on top of the bucket-swap delegate cascade.
         if store.activeLibraryMode == modeBefore {
-            collectionView.reloadData()
+            reloadLibraryGrid()
         }
     }
 
@@ -238,6 +265,7 @@ extension LibraryGridViewController {
             liveHeader.clearScreensaverPreview()
             syncHeroOverlayInsets(preservingProgress: currentHeroScrollProgress())
             updateHeroCollapse()
+            layoutDockedSlideshowRibbon()
             return
         }
         // Use the applied axis (`isSideBySideChrome`), not traits alone — traits can
@@ -249,6 +277,7 @@ extension LibraryGridViewController {
         }
         syncHeroOverlayInsets(preservingProgress: currentHeroScrollProgress())
         updateHeroCollapse()
+        layoutDockedSlideshowRibbon()
     }
 
     /// How far the grid has scrolled into content (0 = top).
@@ -326,7 +355,7 @@ extension LibraryGridViewController {
 
     // MARK: - Private
 
-    private static let sideBySideGutter: CGFloat = 12
+    static let sideBySideGutter: CGFloat = 12
     /// Keeps the grid usable when the 16:9 hero would otherwise dominate.
     private static let sideBySideMinGridWidth: CGFloat = 300
     private static let sideBySideMaxHeroWidthFraction: CGFloat = 0.46
@@ -386,11 +415,11 @@ extension LibraryGridViewController {
             view.bounds.width - safe.left - safe.right - headerInset
                 - Self.sideBySideGutter
         )
-        // Leave room under the preview for the docked mini player when expanded.
+        // Leave room under the preview if a docked mini player reserve is set.
         let miniReserve: CGFloat = sideBySideMiniPlayerHeight > 0
             ? Self.sideBySideGutter + sideBySideMiniPlayerHeight
             : 0
-        let availableHeight = max(
+        var availableHeight = max(
             0,
             view.bounds.height - safe.top - safe.bottom
                 - headerInset - 8 - miniReserve
@@ -399,6 +428,39 @@ extension LibraryGridViewController {
             ? (9.0 / 16.0)
             : (16.0 / 9.0)
 
+        var hero = sideBySideHeroSize(
+            availableWidth: availableWidth,
+            availableHeight: availableHeight,
+            aspect: aspect
+        )
+        if docksLiveSlideshowRibbon {
+            let thumb = Self.slideshowRibbonThumbSize(
+                containerWidth: hero.width,
+                sectionInset: 0,
+                spacing: interitemSpacing
+            )
+            availableHeight = max(0, availableHeight - Self.sideBySideGutter - thumb.height)
+            hero = sideBySideHeroSize(
+                availableWidth: availableWidth,
+                availableHeight: availableHeight,
+                aspect: aspect
+            )
+        }
+
+        heroWidthConstraint?.constant = hero.width
+        let heightConstraint = liveHeader.heightAnchor.constraint(
+            equalToConstant: hero.height
+        )
+        heightConstraint.isActive = true
+        heroHeightConstraint = heightConstraint
+    }
+
+    /// Aspect-fit hero that leaves at least `sideBySideMinGridWidth` for the grid.
+    private func sideBySideHeroSize(
+        availableWidth: CGFloat,
+        availableHeight: CGFloat,
+        aspect: CGFloat
+    ) -> CGSize {
         var heroHeight = availableHeight
         var heroWidth = (heroHeight * aspect).rounded(.down)
         let maxWidth = min(
@@ -409,15 +471,7 @@ extension LibraryGridViewController {
             heroWidth = maxWidth
             heroHeight = (heroWidth / aspect).rounded(.down)
         }
-        heroWidth = max(120, heroWidth)
-        heroHeight = max(68, heroHeight)
-
-        heroWidthConstraint?.constant = heroWidth
-        let heightConstraint = liveHeader.heightAnchor.constraint(
-            equalToConstant: heroHeight
-        )
-        heightConstraint.isActive = true
-        heroHeightConstraint = heightConstraint
+        return CGSize(width: max(120, heroWidth), height: max(68, heroHeight))
     }
 
     /// Centers a fixed-height hero (Vertical always; Landscape on wide panes).

@@ -47,9 +47,6 @@ extension LibraryGridViewController {
     }
 
     /// Selects an item as live without the Eclipse TV app (AirPlay remember / push).
-    ///
-    /// Only used when `hasLiveOutputDestination` is true. With no display and no TV
-    /// link, media taps use `presentPhoneLiveMedia`.
     func presentOfflineLive(for item: LibraryItemDTO) {
         if item.isVideo {
             AudioPlayerController.shared.stop()
@@ -63,42 +60,6 @@ extension LibraryGridViewController {
         store.updateCurrentId(item.id)
         ExternalDisplayManager.shared.present(source)
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
-    }
-
-    /// Marks local media live on the phone hero when there is no AirPlay / Eclipse TV.
-    ///
-    /// Videos play in-hero; stills show the library thumbnail. Fullscreen Preview is
-    /// available from the hero. Falls back to Preview when no local file exists.
-    func presentPhoneLiveMedia(_ item: LibraryItemDTO) {
-        guard LocalMediaStore.shared.localURL(forId: item.id) != nil else {
-            presentLocalPreview(
-                for: item,
-                in: openShowItems.isEmpty ? displayItems : openShowItems
-            )
-            return
-        }
-        SlideshowPlaybackController.shared.stop()
-        if item.isVideo {
-            AudioPlayerController.shared.stop()
-            let startAt = VideoResumeStore.shared.position(for: item.id) ?? 0
-            VideoResumeStore.shared.clear(for: item.id)
-            phoneLiveVideoStartAt = startAt
-            let source = PresentationSource.forLibraryItem(
-                item, thumbnail: store.thumbnail(for: item.id), startAt: startAt
-            )
-            AudioAmbientPolicy.applyYieldIfNeeded(for: source)
-        } else {
-            phoneLiveVideoStartAt = 0
-            liveHeader.clearLibraryVideoPreview()
-        }
-        isBlackSelected = false
-        isLogoSelected = false
-        isScreensaverSelected = false
-        store.updateCurrentId(item.id)
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        updateHeroVisibility()
-        reloadLibraryGrid()
-        refreshLiveHeader()
     }
 
     /// Fullscreen Preview of a local full-res copy (⋯ Preview, or tap when locked).
@@ -130,8 +91,11 @@ extension LibraryGridViewController {
             return
         }
 
-        guard !isAlreadyOpen(LocalMediaPreviewViewController.self),
-              !isAlreadyOpen(LocalVideoPreviewViewController.self) else { return }
+        if isShowMode, presentShowPreviewGallery(startingAt: item.id) {
+            return
+        }
+
+        guard !isPreviewAlreadyOpen else { return }
         let previewable = LocalMediaPreviewViewController.imagePreviewableItems(from: neighbors)
         guard let index = previewable.firstIndex(where: { $0.id == item.id }) else {
             let alert = UIAlertController(
@@ -157,8 +121,7 @@ extension LibraryGridViewController {
         startAt: TimeInterval = 0,
         onDismiss: ((TimeInterval) -> Void)? = nil
     ) {
-        guard !isAlreadyOpen(LocalVideoPreviewViewController.self),
-              !isAlreadyOpen(LocalMediaPreviewViewController.self) else { return }
+        guard !isPreviewAlreadyOpen else { return }
         AudioAmbientPolicy.applyYieldIfNeeded(
             for: PresentationSource.video(fileURL, isLooping: isLooping, isMuted: isMuted)
         )
@@ -179,6 +142,9 @@ extension LibraryGridViewController {
             onChooseLogo?()
             return
         }
+        if isShowMode, presentShowPreviewGallery(startingAt: ShowToolToken.logo) {
+            return
+        }
         presentPhonePreview(
             id: ShowToolToken.logo, fileURL: url, isVideo: false
         )
@@ -187,6 +153,9 @@ extension LibraryGridViewController {
     /// Phone Preview for Screensaver (⋯ Preview, or tap when live output is locked).
     func presentScreensaverPhonePreview() {
         guard let source = ScreensaverStore.shared.presentationSource else { return }
+        if isShowMode, presentShowPreviewGallery(startingAt: ShowToolToken.screensaver) {
+            return
+        }
         switch source.content {
         case .image(let url, _):
             presentPhonePreview(
@@ -206,9 +175,7 @@ extension LibraryGridViewController {
     /// Matches tile / AirPlay framing: landscape Screensaver art fills a Vertical
     /// 9:16 panel (cropped) instead of letterboxing on the phone.
     func presentPhonePreview(id: String, fileURL: URL, isVideo: Bool) {
-        guard !isAlreadyOpen(DisplayModeMediaPreviewViewController.self),
-              !isAlreadyOpen(LocalMediaPreviewViewController.self),
-              !isAlreadyOpen(LocalVideoPreviewViewController.self) else { return }
+        guard !isPreviewAlreadyOpen else { return }
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         let preview = DisplayModeMediaPreviewViewController(
             fileURL: fileURL,

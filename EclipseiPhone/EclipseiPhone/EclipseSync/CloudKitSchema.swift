@@ -39,6 +39,8 @@ enum CloudKitSchema {
         static let coverId = "coverId"
         static let createdAt = "createdAt"
         static let modifiedAt = "modifiedAt"
+        /// Show the disconnected live preview hero. Go-live is independent.
+        static let previewsWhenDisconnected = "previewsWhenDisconnected"
     }
 
     enum MediaKey {

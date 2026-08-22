@@ -7,8 +7,8 @@
 
 import Foundation
 
-/// One cell in an open Show's grid: pinned slideshows, then tools and members
-/// in `LocalAlbum.resolvedSurfaceIds` order. Empty Shows append a trailing Add tile.
+/// One cell in an open Show's grid: tools, members, and slideshows in
+/// `LocalAlbum.resolvedSurfaceIds` order. Empty Shows append a trailing Add tile.
 enum ShowGridItem: Equatable {
     case slideshow(Slideshow)
     case screensaver

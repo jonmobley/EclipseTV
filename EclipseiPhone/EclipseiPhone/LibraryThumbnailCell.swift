@@ -21,7 +21,10 @@ final class LibraryThumbnailCell: UICollectionViewCell {
     let captionLabel = UILabel()
     /// Bottom fade under on-card titles (tools, Shows, websites).
     let captionScrimView = GradientView()
-    private let videoBadge = UIImageView()
+    /// Bottom-leading photo / video / slideshow / website / PDF glyph.
+    let typeIconOverlay = ThumbnailTypeIconView()
+    /// Last content type applied; Rewind may hide the overlay without clearing this.
+    var contentTypeIcon: ThumbnailTypeIcon?
     private let durationLabel = PaddedLabel()
     let liveBadge = PaddedLabel()
     private let unavailableBadge = PaddedLabel()
@@ -43,6 +46,8 @@ final class LibraryThumbnailCell: UICollectionViewCell {
     let rewindButton = UIButton(type: .system)
     /// Nudged up when a caption sits under the glyph; 0 for + -only add tiles.
     private var placeholderCenterY: NSLayoutConstraint!
+    /// Widens when the type disc shares the bottom edge with a caption.
+    var captionLeadingConstraint: NSLayoutConstraint!
     /// Last media id painted; keeps art when a reload hits a transient cache miss.
     private var configuredMediaId: String?
 
@@ -94,20 +99,10 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         captionLabel.textColor = .white
         captionLabel.textAlignment = .center
         captionLabel.numberOfLines = 2
+        captionLabel.lineBreakMode = .byTruncatingTail
         captionLabel.isHidden = true
         captionLabel.translatesAutoresizingMaskIntoConstraints = false
         cardView.addSubview(captionLabel)
-
-        // Dark disc + white play (palette) so the badge reads on light frames.
-        let badgeConfig = UIImage.SymbolConfiguration(pointSize: 34, weight: .bold)
-            .applying(UIImage.SymbolConfiguration(paletteColors: [
-                .white,
-                UIColor(white: 0.18, alpha: 0.92)
-            ]))
-        videoBadge.image = UIImage(systemName: "play.circle.fill", withConfiguration: badgeConfig)
-        videoBadge.translatesAutoresizingMaskIntoConstraints = false
-        videoBadge.isHidden = true
-        cardView.addSubview(videoBadge)
 
         configurePill(durationLabel, background: UIColor.black.withAlphaComponent(0.6), textColor: .white)
         durationLabel.isHidden = true
@@ -139,6 +134,7 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         cardView.addSubview(menuButton)
         installMoreButton()
         installRewindButton()
+        installTypeIcon()
 
         NSLayoutConstraint.activate([
             cardView.topAnchor.constraint(equalTo: contentView.topAnchor),
@@ -160,12 +156,8 @@ final class LibraryThumbnailCell: UICollectionViewCell {
             captionScrimView.bottomAnchor.constraint(equalTo: cardView.bottomAnchor),
             captionScrimView.heightAnchor.constraint(equalTo: cardView.heightAnchor, multiplier: 0.42),
 
-            captionLabel.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 8),
             captionLabel.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -8),
             captionLabel.bottomAnchor.constraint(equalTo: cardView.bottomAnchor, constant: -10),
-
-            videoBadge.centerXAnchor.constraint(equalTo: cardView.centerXAnchor),
-            videoBadge.centerYAnchor.constraint(equalTo: cardView.centerYAnchor),
 
             durationLabel.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -8),
             durationLabel.bottomAnchor.constraint(equalTo: cardView.bottomAnchor, constant: -8),
@@ -192,6 +184,10 @@ final class LibraryThumbnailCell: UICollectionViewCell {
             equalTo: cardView.centerYAnchor, constant: -10
         )
         placeholderCenterY.isActive = true
+        captionLeadingConstraint = captionLabel.leadingAnchor.constraint(
+            equalTo: cardView.leadingAnchor, constant: 8
+        )
+        captionLeadingConstraint.isActive = true
     }
 
     private func configurePill(_ label: PaddedLabel, background: UIColor, textColor: UIColor) {
@@ -205,11 +201,14 @@ final class LibraryThumbnailCell: UICollectionViewCell {
 
     // MARK: - Configuration
 
+    /// - Parameter isLocked: Live lock uses amber chrome.
+    /// - Parameter showsTypeIcon: False for the live-slideshow ribbon (all stills).
     func configure(
         with item: LibraryItemDTO,
         thumbnail: UIImage?,
         isLive: Bool,
-        isLocked: Bool = false
+        isLocked: Bool = false,
+        showsTypeIcon: Bool = true
     ) {
         // Under memory pressure `thumbnail(for:)` can briefly return nil after a
         // reload — keep the previous bitmap for the same item instead of flashing
@@ -231,7 +230,9 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         placeholderIcon.image = UIImage(systemName: item.isVideo ? "film" : "photo")
         placeholderIcon.tintColor = .tertiaryLabel
 
-        videoBadge.isHidden = isUnavailable || !(item.isVideo && image != nil)
+        if showsTypeIcon, !isUnavailable {
+            setTypeIcon(.media(isVideo: item.isVideo))
+        }
 
         if !isUnavailable, item.isVideo, item.duration > 0 {
             durationLabel.text = Self.formatDuration(item.duration)
@@ -241,7 +242,11 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         unavailableBadge.isHidden = !isUnavailable
         setLive(isLive && !isUnavailable, isLocked: isLocked)
         var a11y = item.name
-        if item.isVideo { a11y += ", video" }
+        if item.isVideo {
+            a11y += ", video"
+        } else {
+            a11y += ", photo"
+        }
         if isUnavailable { a11y += ", unavailable" }
         if isLive && !isUnavailable { a11y += ", live" }
         if isLive && !isUnavailable && isLocked { a11y += ", locked" }
@@ -294,6 +299,8 @@ final class LibraryThumbnailCell: UICollectionViewCell {
     /// - Parameter outlined: When true, draws a light stroke so a dark fill doesn't
     ///   disappear into the grid background.
     /// - Parameter thumbnailContentMode: `.scaleAspectFit` suits favicons; fill for snapshots.
+    /// - Parameter titleNumberOfLines: Caption wrap; PDFs use 1 (tail ellipsis).
+    /// - Parameter typeIcon: Bottom-leading content glyph when the tile has art.
     func configureSpecial(
         title: String,
         systemImage: String?,
@@ -302,7 +309,9 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         isLive: Bool,
         isLocked: Bool = false,
         outlined: Bool = false,
-        thumbnailContentMode: UIView.ContentMode = .scaleAspectFill
+        thumbnailContentMode: UIView.ContentMode = .scaleAspectFill,
+        titleNumberOfLines: Int = 2,
+        typeIcon: ThumbnailTypeIcon? = nil
     ) {
         resetChrome()
         cardView.backgroundColor = fillColor
@@ -317,6 +326,8 @@ final class LibraryThumbnailCell: UICollectionViewCell {
             placeholderIcon.isHidden = true
         }
         captionLabel.text = title
+        captionLabel.numberOfLines = titleNumberOfLines
+        captionLabel.lineBreakMode = .byTruncatingTail
         captionLabel.isHidden = false
         updateCaptionScrim()
         setLive(isLive, isLocked: isLocked)
@@ -327,7 +338,11 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         accessibilityLabel = isLive
             ? (isLocked ? "\(title), live, locked" : "\(title), live")
             : title
+        if let typeIcon {
+            accessibilityLabel = "\(accessibilityLabel ?? title), \(typeIcon.spokenName)"
+        }
         isAccessibilityElement = true
+        setTypeIcon(typeIcon)
     }
 
     func resetChrome() {
@@ -340,6 +355,8 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         captionLabel.isHidden = true
         captionLabel.text = nil
         captionLabel.textColor = .white
+        captionLabel.numberOfLines = 2
+        captionLabel.lineBreakMode = .byTruncatingTail
         captionScrimView.isHidden = true
         hideMediaBadges()
         liveBadge.isHidden = true
@@ -355,11 +372,11 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         configuredMediaId = nil
     }
 
-    /// Clears play/duration/unavailable chrome used only by media cells.
+    /// Clears duration / unavailable / type-icon chrome used only by media cells.
     func hideMediaBadges() {
-        videoBadge.isHidden = true
         durationLabel.isHidden = true
         unavailableBadge.isHidden = true
+        setTypeIcon(nil)
     }
 
     /// Multi-select state for the Add-to-Show picker (call after `configure…`).

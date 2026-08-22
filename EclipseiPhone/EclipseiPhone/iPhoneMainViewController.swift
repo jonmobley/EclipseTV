@@ -124,7 +124,7 @@ class iPhoneMainViewController: UIViewController {
 
     /// Footer mini player for ambient music.
     let audioMiniPlayer = AudioMiniPlayerView()
-    /// Collapsed music control (session kept; tap expands).
+    /// Persistent Music control. Idle tap opens Music; active tap expands.
     let audioMiniBubble = AudioMiniPlayerBubbleView()
     /// When true, the bar is hidden and `audioMiniBubble` is shown.
     /// Ambient control prefers the floating bubble; expand is temporary.
@@ -134,16 +134,12 @@ class iPhoneMainViewController: UIViewController {
     var audioMiniHeightConstraint: NSLayoutConstraint?
     /// Full-width footer pin (phone portrait / iPad).
     var audioMiniPortraitConstraints: [NSLayoutConstraint] = []
-    /// Docked under the landscape live preview at the same width.
-    var audioMiniSideBySideConstraints: [NSLayoutConstraint] = []
-    /// Leading inset of the docked bar (from `view.leading`).
-    var audioMiniDockLeadingConstraint: NSLayoutConstraint?
-    /// Width of the docked bar (matches the live preview).
-    var audioMiniDockWidthConstraint: NSLayoutConstraint?
-    /// Top of the docked bar (from `view.top`, just under the preview).
-    var audioMiniDockTopConstraint: NSLayoutConstraint?
-    /// Mirrors `libraryViewController.isSideBySideChrome` for the mini bar.
-    var isAudioMiniSideBySide = false
+    /// Compact trailing card in phone landscape, planted on the Music bubble.
+    var audioMiniLandscapeConstraints: [NSLayoutConstraint] = []
+    /// Width of the landscape card (`compactWidth`, squeezed on short phones).
+    var audioMiniLandscapeWidthConstraint: NSLayoutConstraint?
+    /// True while the mini bar is the compact landscape card, not the footer.
+    var isAudioMiniLandscapeCompact = false
     var audioPlayerObserver: NSObjectProtocol?
     
     // MARK: - Lifecycle
@@ -161,8 +157,10 @@ class iPhoneMainViewController: UIViewController {
         registerForTraitChanges(
             [UITraitVerticalSizeClass.self]
         ) { (self: Self, _: UITraitCollection) in
-            // Phone landscape disables Library↔Music paging (grid|preview split).
+            // Phone landscape disables Library↔Music paging (grid|preview split)
+            // and switches the mini player to a compact trailing card.
             self.setHomePagingEnabled(true)
+            self.syncAudioMiniLayoutIfNeeded()
         }
 
         navigationController?.isNavigationBarHidden = true
@@ -189,7 +187,7 @@ class iPhoneMainViewController: UIViewController {
         updateHomeSplitLayoutIfNeeded()
         syncHomePagerOffsetIfNeeded()
         // Library decides side-by-side after its own layout; dock the mini bar after.
-        syncAudioMiniDockingIfNeeded()
+        syncAudioMiniLayoutIfNeeded()
     }
 
     override func viewWillDisappear(_ animated: Bool) {

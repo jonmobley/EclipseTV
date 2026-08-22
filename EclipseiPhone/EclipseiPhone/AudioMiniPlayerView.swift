@@ -12,6 +12,12 @@ final class AudioMiniPlayerView: UIView, UIGestureRecognizerDelegate {
 
     /// Preferred height when visible.
     static let preferredHeight: CGFloat = 64
+    /// Phone-landscape card width — enough for title + a usable volume slider.
+    static let compactWidth: CGFloat = 360
+    static let compactCornerRadius: CGFloat = 20
+    /// Matches the Music bubble so the bar grows from the same corner.
+    static let compactTrailingInset: CGFloat = 16
+    static let compactBottomInset: CGFloat = 12
 
     var onOpenLibrary: (() -> Void)?
     var onTogglePlayPause: (() -> Void)?
@@ -96,6 +102,20 @@ final class AudioMiniPlayerView: UIView, UIGestureRecognizerDelegate {
         fatalError("init(coder:) has not been implemented")
     }
 
+    /// Footer edge-shadow vs. a floating landscape card.
+    func applyFloatingChrome(_ floating: Bool) {
+        layer.cornerCurve = .continuous
+        if floating {
+            layer.shadowOpacity = 0.28
+            layer.shadowRadius = 12
+            layer.shadowOffset = CGSize(width: 0, height: 4)
+        } else {
+            layer.shadowOpacity = 0.12
+            layer.shadowRadius = 4
+            layer.shadowOffset = CGSize(width: 0, height: -1)
+        }
+    }
+
     /// Refreshes labels/controls from `AudioPlayerController`.
     func reload() {
         let player = AudioPlayerController.shared
@@ -142,9 +162,7 @@ final class AudioMiniPlayerView: UIView, UIGestureRecognizerDelegate {
         backgroundColor = .secondarySystemBackground
         clipsToBounds = false
         layer.shadowColor = UIColor.black.cgColor
-        layer.shadowOpacity = 0.12
-        layer.shadowOffset = CGSize(width: 0, height: -1)
-        layer.shadowRadius = 4
+        applyFloatingChrome(false)
 
         let textStack = UIStackView(arrangedSubviews: [titleLabel, subtitleLabel])
         textStack.axis = .vertical

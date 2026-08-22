@@ -79,6 +79,12 @@ extension PresentationViewController {
 
         configureAudioSession(muted: isMuted)
 
+        // Keep the already-decoded incoming player — a new AVPlayer flashes black.
+        if adoptIncomingVideoIfAvailable() {
+            applyMediaLayout()
+            return
+        }
+
         videoReadyObservation = nil
         let player = AVPlayer(url: url)
         player.isMuted = isMuted
@@ -111,6 +117,29 @@ extension PresentationViewController {
         } else {
             player.play()
         }
+    }
+
+    /// Moves the incoming overlay player onto the primary surface without rebuilding.
+    ///
+    /// The transition already waited for a displayed frame. Recreating `AVPlayer`
+    /// here is what flashed black at the start of live video.
+    func adoptIncomingVideoIfAvailable() -> Bool {
+        guard let player = incomingPlayer, let layer = incomingPlayerLayer else {
+            return false
+        }
+        incomingVideoReadyObservation = nil
+        incomingLayerReadyObservation = nil
+        if let loop = incomingLoopObserver {
+            loopObserver = loop
+            incomingLoopObserver = nil
+        }
+        incomingPlayer = nil
+        incomingPlayerLayer = nil
+        layer.removeFromSuperlayer()
+        mediaContentView.layer.insertSublayer(layer, at: 0)
+        self.player = player
+        self.playerLayer = layer
+        return true
     }
 
     /// Plays the muted seamless-loop Screensaver (aspect fill).

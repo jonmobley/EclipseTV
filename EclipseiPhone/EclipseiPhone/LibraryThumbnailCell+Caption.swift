@@ -20,6 +20,9 @@ extension LibraryThumbnailCell {
         // Thumbnail → fade → title → chrome (LIVE / ⋯ stay readable on top).
         cardView.bringSubviewToFront(captionScrimView)
         cardView.bringSubviewToFront(captionLabel)
+        if !typeIconOverlay.isHidden {
+            cardView.bringSubviewToFront(typeIconOverlay)
+        }
         cardView.bringSubviewToFront(liveBadge)
         if !moreButton.isHidden {
             cardView.bringSubviewToFront(moreButton)

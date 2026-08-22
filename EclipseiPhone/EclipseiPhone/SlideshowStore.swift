@@ -54,7 +54,7 @@ final class SlideshowStore {
 
     // MARK: - Mutations
 
-    /// Creates a slideshow and appends it (last among this Show's slideshows).
+    /// Creates a slideshow and appends it at the end of this Show's surface.
     @discardableResult
     func create(
         name: String,
@@ -75,6 +75,7 @@ final class SlideshowStore {
         )
         slideshows.append(show)
         persist()
+        LocalAlbumStore.shared.addSlideshow(show.id, toAlbumId: showId)
         return show
     }
 
@@ -101,11 +102,11 @@ final class SlideshowStore {
 
     /// Deletes the slideshow with `id` when present.
     func delete(id: UUID) {
-        let before = slideshows.count
+        guard let show = slideshows.first(where: { $0.id == id }) else { return }
         slideshows.removeAll { $0.id == id }
-        guard slideshows.count != before else { return }
         SlideshowPlaybackController.shared.clearResume(for: id)
         persist()
+        LocalAlbumStore.shared.removeSlideshow(id, fromAlbumId: show.showId)
     }
 
     /// Deletes every slideshow belonging to `showId`.
@@ -152,7 +153,8 @@ final class SlideshowStore {
         autoplaySeconds: SlideshowAutoplaySeconds? = nil,
         loop: Bool? = nil,
         crossfade: Bool? = nil,
-        showRibbonWhenLive: Bool? = nil
+        showRibbonWhenLive: Bool? = nil,
+        isFill: Bool? = nil
     ) {
         guard let index = slideshows.firstIndex(where: { $0.id == id }) else { return }
         if let autoplay { slideshows[index].autoplay = autoplay }
@@ -162,6 +164,7 @@ final class SlideshowStore {
         if let showRibbonWhenLive {
             slideshows[index].showRibbonWhenLive = showRibbonWhenLive
         }
+        if let isFill { slideshows[index].isFill = isFill }
         persist()
     }
 

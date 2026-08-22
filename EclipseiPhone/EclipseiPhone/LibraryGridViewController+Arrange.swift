@@ -11,7 +11,7 @@ import UIKit
 
 extension LibraryGridViewController {
 
-    /// Starts drag-to-reorder for the open Show's grid (slideshows stay pinned last).
+    /// Starts drag-to-reorder for the open Show's grid (including slideshows).
     func beginArranging() {
         beginArranging(preservingGesture: false)
     }
@@ -104,25 +104,26 @@ extension LibraryGridViewController {
 
     func collectionView(_ collectionView: UICollectionView,
                         canMoveItemAt indexPath: IndexPath) -> Bool {
-        isArranging
+        collectionView === showCollectionView
+            && isArranging
             && isShowMode
-            && homeSection(at: indexPath.section) == .shows
+            && homeSection(at: indexPath.section, in: collectionView) == .shows
             && canMoveItemAtShowIndex(indexPath.item)
     }
 
     func collectionView(_ collectionView: UICollectionView,
                         moveItemAt sourceIndexPath: IndexPath,
                         to destinationIndexPath: IndexPath) {
-        guard isShowMode,
-              homeSection(at: sourceIndexPath.section) == .shows,
-              homeSection(at: destinationIndexPath.section) == .shows,
+        guard collectionView === showCollectionView,
+              isShowMode,
+              homeSection(at: sourceIndexPath.section, in: collectionView) == .shows,
+              homeSection(at: destinationIndexPath.section, in: collectionView) == .shows,
               sourceIndexPath.item != destinationIndexPath.item,
-              let albumId = openShowId,
-              let album = openShow else { return }
-        // Surface leads the grid; slideshows are pinned after it.
+              let albumId = openShowId else { return }
+        // Surface leads the grid; Add (if any) stays after it.
         let sourceSurface = sourceIndexPath.item
         let destSurface = destinationIndexPath.item
-        var surface = album.resolvedSurfaceIds
+        var surface = openShowSurfaceIds
         guard surface.indices.contains(sourceSurface),
               destSurface >= 0 else { return }
         let moved = surface.remove(at: sourceSurface)
@@ -136,12 +137,13 @@ extension LibraryGridViewController {
         targetIndexPathForMoveFromItemAt originalIndexPath: IndexPath,
         toProposedIndexPath proposedIndexPath: IndexPath
     ) -> IndexPath {
-        guard isArranging, isShowMode,
-              homeSection(at: proposedIndexPath.section) == .shows,
+        guard collectionView === showCollectionView,
+              isArranging, isShowMode,
+              homeSection(at: proposedIndexPath.section, in: collectionView) == .shows,
               let showsSection = sectionIndex(for: .shows) else {
             return originalIndexPath
         }
-        let surfaceCount = openShow?.resolvedSurfaceIds.count ?? 0
+        let surfaceCount = openShowSurfaceIds.count
         guard surfaceCount > 0 else { return originalIndexPath }
         let clamped = min(max(proposedIndexPath.item, 0), surfaceCount - 1)
         return IndexPath(item: clamped, section: showsSection)
@@ -173,9 +175,9 @@ extension LibraryGridViewController {
         }
     }
 
-    /// Surface rows (tools + members) are movable; trailing slideshow tiles stay pinned.
+    /// Surface rows (tools, members, slideshows) are movable; Add stays pinned.
     private func canMoveItemAtShowIndex(_ item: Int) -> Bool {
-        let surfaceCount = openShow?.resolvedSurfaceIds.count ?? 0
+        let surfaceCount = openShowSurfaceIds.count
         return item >= 0 && item < surfaceCount
     }
 }

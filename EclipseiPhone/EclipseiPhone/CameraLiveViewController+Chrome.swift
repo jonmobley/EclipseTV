@@ -119,7 +119,7 @@ extension CameraLiveViewController {
         frameButton.configuration = frameConfig
         frameButton.accessibilityLabel = "Frames"
         frameButton.accessibilityHint =
-            "Chooses a frame overlay, or imports and deletes frames"
+            "Chooses which frames appear as overlay thumbnails on the camera"
         frameButton.translatesAutoresizingMaskIntoConstraints = true
         frameButton.addTarget(
             self,
@@ -148,6 +148,8 @@ extension CameraLiveViewController {
         view.bringSubviewToFront(flipButton)
         layoutAlternateStillButton(panel: panel)
         refreshAlternateStillAppearance()
+        layoutLiveOutputThumb(panel: panel)
+        layoutFrameRibbon(panel: panel)
 
         updateShutterAccessibilityHint()
     }
@@ -253,9 +255,8 @@ extension CameraLiveViewController {
     }
 
     func updateShutterAccessibilityHint() {
-        guard isAirPlayLive else {
-            shutterButton.accessibilityHint =
-                "Tap the preview to go live on AirPlay."
+        if !isAirPlayLive {
+            shutterButton.accessibilityHint = "Tap for photo. Hold to record."
             return
         }
         if ExternalOutputSettings.alwaysRecordWhenLive {

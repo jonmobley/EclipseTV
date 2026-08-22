@@ -9,9 +9,9 @@
 import UIKit
 import os
 
-/// Home: the Recent Shows ribbon, and nothing else.
-/// Opening a Show keeps this shell and adds that Show's live preview hero and a
-/// single grid (per-Show tools + media from `surfaceIds`) in place of Recent.
+/// Home and Show are two pages (two collection views). Opening a Show hides
+/// Home; it does not rewrite Home's grid. The marketing carousel lives only on
+/// the Home page. A Show adds a live preview hero and its own media grid.
 /// Blackout and "+" are Show-mode header controls. Live media still drives
 /// AirPlay / EclipseTV.
 final class LibraryGridViewController: UIViewController {
@@ -148,7 +148,7 @@ final class LibraryGridViewController: UIViewController {
         return LocalAlbumStore.shared.album(id: openShowId)
     }
 
-    /// True when a Show replaces the Recent ribbon.
+    /// True when the Show page is visible (Home is only hidden, not rewritten).
     var isShowMode: Bool { openShowId != nil }
 
     /// Media belonging to the open Show (resolved against the library store).
@@ -188,41 +188,27 @@ final class LibraryGridViewController: UIViewController {
         return SlideshowStore.shared.slideshows(forShowId: openShowId)
     }
 
-    /// Show-grid rows: tools + members from the surface, then slideshows (pinned last).
-    /// Empty Shows append a trailing Add tile (unless arranging).
-    var openShowGridItems: [ShowGridItem] {
-        guard isShowMode, let album = openShow else { return [] }
-        let shows = openShowSlideshows.map { ShowGridItem.slideshow($0) }
-        let surface: [ShowGridItem] = album.resolvedSurfaceIds.compactMap { id in
-            switch id {
-            case ShowToolToken.screensaver: return .screensaver
-            case ShowToolToken.logo: return .logo
-            case ShowToolToken.camera: return .camera
-            default:
-                if let item = store.items.first(where: { $0.id == id }) {
-                    return .media(item)
-                }
-                guard let uuid = UUID(uuidString: id) else { return nil }
-                if let page = WebPageStore.shared.page(id: uuid) {
-                    return .website(page)
-                }
-                if let doc = PDFStore.shared.documents.first(where: { $0.id == uuid }) {
-                    return .pdf(doc)
-                }
-                return nil
-            }
-        }
-        // New media / slideshows land after tools so they don't steal Screensaver's slot.
-        if showsShowAddTile {
-            return surface + shows + [.add]
-        }
-        return surface + shows
+    /// Ordered Show-grid surface ids (tools, members, slideshows). Add is not included.
+    var openShowSurfaceIds: [String] {
+        guard let album = openShow else { return [] }
+        let slideshows = openShowSlideshows.map { ShowSlideshowToken.token(for: $0.id) }
+        return album.resolvedSurfaceIds(slideshowIds: slideshows)
     }
 
-    /// Tool + member cells that can be dragged while arranging (excludes slideshows / Add).
+    /// Show-grid rows in surface order. Empty Shows append a trailing Add tile
+    /// (unless arranging).
+    var openShowGridItems: [ShowGridItem] {
+        guard isShowMode else { return [] }
+        let surface = openShowSurfaceIds.compactMap { showGridItem(forSurfaceId: $0) }
+        if showsShowAddTile {
+            return surface + [.add]
+        }
+        return surface
+    }
+
+    /// Surface cells that can be dragged while arranging (excludes Add).
     var openShowMovableCount: Int {
-        guard let album = openShow else { return 0 }
-        return album.resolvedSurfaceIds.count
+        openShowSurfaceIds.count
     }
 
     /// Empty Show (no media, websites, or slideshows) offers an Add tile
@@ -245,31 +231,50 @@ final class LibraryGridViewController: UIViewController {
         return !SlideshowPlaybackController.shared.activeSlideIds.isEmpty
     }
 
+    /// Portrait: the live ribbon is a Show-grid section under the stacked hero.
+    var showsInGridSlideshowRibbon: Bool {
+        Self.showsInGridSlideshowRibbon(
+            liveRibbon: showsLiveSlideshowRibbon,
+            sideBySideChrome: isSideBySideChrome
+        )
+    }
+
+    /// Phone landscape: the live ribbon docks under the leading preview.
+    var docksLiveSlideshowRibbon: Bool {
+        showsLiveSlideshowRibbon && isSideBySideChrome
+    }
+
     /// Layout inputs for the current mode, sampled by the layout on every pass.
     var homeLayoutState: HomeLayoutState {
         HomeLayoutState(
             isShowMode: isShowMode,
-            showsSlideshowRibbon: showsLiveSlideshowRibbon
+            showsSlideshowRibbon: showsInGridSlideshowRibbon
         )
     }
 
-    /// Layout sections for the current mode (links / tools, optional ribbon, shows).
-    var visibleHomeSections: [HomeSection] { homeLayoutState.sections }
+    /// Layout sections for the visible page.
+    var visibleHomeSections: [HomeSection] { pageSections(for: collectionView) }
 
-    /// Collection-view section index for `section`, if currently visible.
+    /// Collection-view section index for `section` on the visible page.
     func sectionIndex(for section: HomeSection) -> Int? {
         visibleHomeSections.firstIndex(of: section)
     }
 
-    /// Home section at a collection-view section index.
+    /// Section at a collection-view index on the visible page.
     func homeSection(at section: Int) -> HomeSection? {
-        guard visibleHomeSections.indices.contains(section) else { return nil }
-        return visibleHomeSections[section]
+        homeSection(at: section, in: collectionView)
     }
+
+    /// Home Recent format filter. `nil` is both; ignored unless both formats exist.
+    var homeRecentOrientationFilter: ExternalOutputOrientation?
 
     /// Recent Shows from both Display Modes (+ New Show when empty).
     var showRibbonItems: [HomeGridItem] {
-        HomeGridItem.recentShows(from: LocalAlbumStore.shared.albums)
+        let albums = LocalAlbumStore.shared.albums
+        let filter = HomeGridItem.hasBothOrientations(in: albums)
+            ? homeRecentOrientationFilter
+            : nil
+        return HomeGridItem.recentShows(from: albums, orientation: filter)
     }
 
     /// Index of the Camera tile in the open Show grid, if present.
@@ -285,9 +290,6 @@ final class LibraryGridViewController: UIViewController {
     /// Fired when live-output lock toggles (header amber chrome).
     var onLiveOutputLockChanged: ((Bool) -> Void)?
 
-    /// One-shot resume offset applied the next time the phone hero starts a video.
-    var phoneLiveVideoStartAt: TimeInterval = 0
-
     /// Extra bottom inset reserved for the home mini player.
     var miniPlayerBottomInset: CGFloat = 0 {
         didSet {
@@ -298,10 +300,8 @@ final class LibraryGridViewController: UIViewController {
         }
     }
 
-    /// Height of the ambient mini bar when docked under the landscape live preview.
-    ///
-    /// Zero while the bar is hidden or collapsed to the bubble. Side-by-side hero
-    /// sizing subtracts this so preview + player fit the safe area.
+    /// Reserved height under the landscape live preview. Always 0 today — the mini
+    /// player is a trailing card, not docked under the hero.
     var sideBySideMiniPlayerHeight: CGFloat = 0 {
         didSet {
             guard abs(sideBySideMiniPlayerHeight - oldValue) > 0.5 else { return }
@@ -311,15 +311,9 @@ final class LibraryGridViewController: UIViewController {
     }
 
     func homeItem(at indexPath: IndexPath) -> HomeGridItem? {
-        guard let section = homeSection(at: indexPath.section) else { return nil }
-        switch section {
-        case .hero, .slideshowRibbon, .tools:
-            return nil
-        case .shows:
-            guard !isShowMode else { return nil }
-            guard showRibbonItems.indices.contains(indexPath.item) else { return nil }
-            return showRibbonItems[indexPath.item]
-        }
+        guard homeSection(at: indexPath.section, in: homeCollectionView) == .shows,
+              showRibbonItems.indices.contains(indexPath.item) else { return nil }
+        return showRibbonItems[indexPath.item]
     }
 
     func displayItem(at index: Int) -> LibraryItemDTO? {
@@ -350,37 +344,29 @@ final class LibraryGridViewController: UIViewController {
         return view
     }()
 
-    lazy var collectionView: UICollectionView = {
-        let view = UICollectionView(
-            frame: .zero,
-            collectionViewLayout: makeLiveHomeLayout()
-        )
+    /// Shared frame for the Home and Show pages. Chrome pins this host; each
+    /// page fills it and is shown or hidden.
+    let gridHost: UIView = {
+        let view = UIView()
         view.backgroundColor = .systemBackground
-        // Home: no rubber-band when content fits (keeps Music swipe clean).
-        // Vertical scroll still works once Recent overflows the viewport.
-        view.alwaysBounceVertical = false
-        view.register(
-            LibraryThumbnailCell.self,
-            forCellWithReuseIdentifier: LibraryThumbnailCell.reuseIdentifier
-        )
-        view.register(
-            HomeHeroCarouselCell.self,
-            forCellWithReuseIdentifier: HomeHeroCarouselCell.reuseIdentifier
-        )
-        view.register(
-            HomeShowTileCell.self,
-            forCellWithReuseIdentifier: HomeShowTileCell.reuseIdentifier
-        )
-        view.register(
-            HomeSectionHeaderView.self,
-            forSupplementaryViewOfKind: UICollectionView.elementKindSectionHeader,
-            withReuseIdentifier: HomeSectionHeaderView.reuseIdentifier
-        )
-        view.dataSource = self
-        view.delegate = self
         view.translatesAutoresizingMaskIntoConstraints = false
         return view
     }()
+
+    lazy var homeCollectionView: UICollectionView = {
+        makePageCollectionView(layout: makeHomePageLayout(), registersHero: true)
+    }()
+
+    lazy var showCollectionView: UICollectionView = {
+        makePageCollectionView(layout: makeShowPageLayout(), registersHero: false)
+    }()
+
+    /// Horizontal slide strip docked under the landscape live preview.
+    lazy var slideshowRibbonView: UICollectionView = makeDockedSlideshowRibbonView()
+    /// Height of the docked ribbon (0 when it is parked or hidden).
+    var dockedRibbonHeightConstraint: NSLayoutConstraint?
+    /// Gap between the landscape preview and the docked ribbon (0 when hidden).
+    var dockedRibbonTopConstraint: NSLayoutConstraint?
 
     let emptyLabel: UILabel = {
         let label = UILabel()
@@ -464,12 +450,11 @@ final class LibraryGridViewController: UIViewController {
             self?.toggleLiveSlideshowRibbon()
         }
 
-        collectionView.addGestureRecognizer(reorderGesture)
-
         // Grid under the floating live hero so content can scroll beneath it.
-        view.addSubview(collectionView)
+        installLibraryPages()
         view.addSubview(heroSpacer)
         view.addSubview(liveHeader)
+        view.addSubview(slideshowRibbonView)
         view.addSubview(emptyLabel)
         let bottomChrome = UIStackView(arrangedSubviews: [syncStatusBanner, musicSwipeHint])
         bottomChrome.axis = .vertical
@@ -510,6 +495,8 @@ final class LibraryGridViewController: UIViewController {
             self?.validateOpenShow()
             self?.reloadGridIfSafe()
             self?.updateEmptyState()
+            self?.updateHeroVisibility()
+            self?.refreshLiveHeader()
         }
         observe(SlideshowStore.didChangeNotification) { [weak self] _ in
             self?.refreshSlideshowRibbonPresentation()
@@ -580,7 +567,7 @@ final class LibraryGridViewController: UIViewController {
                 // AirPlay / HDMI dropped — keep phone camera / web / PDF open; tip the user.
                 self.showPresentationToast("External display disconnected")
             }
-            // Browse ↔ live: show or hide the hero when AirPlay connects/drops.
+            // Hero follows a real destination or Preview When Disconnected.
             self.updateHeroVisibility()
             self.applyHeroChrome()
             overlayReload(note)
@@ -651,7 +638,7 @@ final class LibraryGridViewController: UIViewController {
         layoutForeignLivePreview()
         // Phone turn: keep the Camera tile upright without rebuilding the freeze still.
         syncVisibleCameraTileOrientation()
-        // Content size is final here — lock Home vertical scroll when nothing overflows.
+        // Content size is final here — pin leftover offset if the grid no longer overflows.
         updateHomeVerticalScrollPolicy()
     }
 
@@ -663,19 +650,13 @@ final class LibraryGridViewController: UIViewController {
             self?.currentPresentationSource()
         }
         updateEmptyState()
-        // Home after See All / other sheets: tear down any stuck Show live preview,
-        // and re-bind the Home layout so a Show Screensaver cell cannot linger.
+        updateVisibleLibraryPage()
         if isShowMode {
-            collectionView.reloadData()
             refreshLiveHeader()
         } else {
             enforceHomeLiveHeroTeardownIfNeeded()
-            UIView.performWithoutAnimation {
-                applyCollectionLayout()
-                collectionView.reloadData()
-                collectionView.layoutIfNeeded()
-            }
         }
+        reloadLibraryGrid()
         pushCurrentToExternalDisplay()
         warmHomeCameraPreview()
     }
@@ -747,25 +728,19 @@ final class LibraryGridViewController: UIViewController {
         refreshMusicSwipeHintVisibility()
     }
 
-    /// Rebuilds the compositional layout for the Recent Shows vs Show grid.
+    /// Rebuilds the Show page layout. Home keeps its own layout.
     func applyCollectionLayout() {
-        collectionView.setCollectionViewLayout(makeLiveHomeLayout(), animated: false)
-        updateHomeVerticalScrollPolicy()
-        updateHeroCollapse()
+        applyShowPageLayout()
     }
 
-    /// Vertical scroll/bounce only when content actually overflows the viewport.
-    ///
-    /// The header overlays the pager, so a rubber-band with nothing to scroll looks
-    /// like the whole page (minus the fixed header) doing a dead bump — Home and
-    /// short Shows alike.
+    /// Keeps Home and Show pages rubber-bandable even when the grid fits on screen.
     func updateHomeVerticalScrollPolicy() {
-        collectionView.alwaysBounceVertical = false
-        // Ignore sub-point layout slack from safe-area / inset rounding.
-        let needsScroll = maxVerticalScroll() > 8
-        collectionView.isScrollEnabled = needsScroll
-        collectionView.bounces = needsScroll
-        if !needsScroll {
+        collectionView.alwaysBounceVertical = true
+        collectionView.bounces = true
+        collectionView.isScrollEnabled = true
+        // Don't yank the offset while the user is mid-bounce.
+        guard !collectionView.isDragging, !collectionView.isDecelerating else { return }
+        if maxVerticalScroll() <= 8 {
             pinCollectionViewToTop()
         }
     }
@@ -775,16 +750,6 @@ final class LibraryGridViewController: UIViewController {
         let top = -collectionView.adjustedContentInset.top
         if abs(collectionView.contentOffset.y - top) > 0.5 {
             collectionView.setContentOffset(CGPoint(x: 0, y: top), animated: false)
-        }
-    }
-
-    /// Home layout bound to this controller's live section state.
-    private func makeLiveHomeLayout() -> UICollectionViewCompositionalLayout {
-        Self.makeHomeLayout(
-            sectionInset: sectionInset,
-            spacing: interitemSpacing
-        ) { [weak self] in
-            self?.homeLayoutState ?? .home
         }
     }
 
@@ -909,41 +874,23 @@ final class LibraryGridViewController: UIViewController {
         let liveItem = store.currentId.flatMap { id in
             store.items.first(where: { $0.id == id })
         }
-        // Not connected: connect prompt. Connected with nothing selected: preview the
-        // passive Screensaver that is filling the external display.
-        if liveItem == nil, mgr.isConnected {
+        // AirPlay with nothing selected: preview the passive Screensaver filling
+        // the external display. Preview When Disconnected uses the same fallback.
+        // EclipseTV-only still shows the connect prompt.
+        if liveItem == nil, mgr.isConnected
+            || (prefersDisconnectedLivePreview && !store.isOnline) {
             presentScreensaverInLiveHeader()
             return
         }
         let thumbnail = liveItem.flatMap { store.thumbnail(for: $0.id) }
-        // External display owns motion — phone hero stays a still. With no external
-        // display, play local video in-hero; stills stay as art and tap to Preview.
-        let phoneLive = isPhoneLiveMedia && !mgr.isConnected
-        let playLocally = phoneLive && liveItem?.isVideo == true
-        let stillFullscreen = phoneLive && liveItem?.isVideo == false
+        // External display / Apple TV owns motion — phone hero stays a still.
         liveHeader.configure(
             with: liveItem,
             thumbnail: thumbnail,
-            isOnline: store.isOnline,
-            showsLocalTransport: playLocally,
-            allowsStillFullscreenTap: stillFullscreen
+            isOnline: store.isOnline
         )
-        if playLocally, let item = liveItem,
-           let url = LocalMediaStore.shared.localURL(forId: item.id) {
-            let startAt = phoneLiveVideoStartAt
-            phoneLiveVideoStartAt = 0
-            liveHeader.showLibraryVideoPreview(
-                url: url,
-                itemId: item.id,
-                isMuted: item.isMuted ?? false,
-                isLooping: item.isLooping ?? false,
-                startAt: startAt
-            )
-            liveHeader.updatePlayback(liveHeader.libraryVideoPlaybackState)
-        } else {
-            liveHeader.clearLibraryVideoPreview()
-            liveHeader.updatePlayback(store.playback)
-        }
+        liveHeader.clearLibraryVideoPreview()
+        liveHeader.updatePlayback(store.playback)
     }
 
     /// Opens fullscreen Preview for phone-local live media.
@@ -1058,7 +1005,9 @@ final class LibraryGridViewController: UIViewController {
     /// often purges `NSCache`, and an unpinned reload paints blank placeholders.
     func reloadLibraryGrid() {
         refreshVisibleThumbnailPins()
-        collectionView.reloadData()
+        homeCollectionView.reloadData()
+        showCollectionView.reloadData()
+        slideshowRibbonView.reloadData()
         collectionView.layoutIfNeeded()
         refreshVisibleThumbnailPins()
     }
@@ -1253,7 +1202,9 @@ extension LibraryGridViewController: TVLibraryStoreDelegate {
         guard let showsSection = sectionIndex(for: .shows) else { return }
         if isShowMode {
             var paths: [IndexPath] = []
-            if let ribbonSection = sectionIndex(for: .slideshowRibbon),
+            if docksLiveSlideshowRibbon {
+                reloadDockedRibbonThumbnail(for: id)
+            } else if let ribbonSection = sectionIndex(for: .slideshowRibbon),
                let ribbonIndex = SlideshowPlaybackController.shared.activeSlideIds
                 .firstIndex(of: id) {
                 let path = IndexPath(item: ribbonIndex, section: ribbonSection)
@@ -1263,15 +1214,21 @@ extension LibraryGridViewController: TVLibraryStoreDelegate {
             }
             // Use grid item order (not raw surface ids) — compactMap can drop
             // unresolved members and skew indexes, leaving blanks stuck.
-            if let gridIndex = openShowGridItems.firstIndex(where: {
-                if case .media(let media) = $0 { return media.id == id }
-                return false
-            }) {
-                let path = IndexPath(item: gridIndex, section: showsSection)
-                if collectionView.indexPathsForVisibleItems.contains(path) {
-                    paths.append(path)
+            let gridPaths: [IndexPath] = openShowGridItems.enumerated().compactMap { index, item in
+                let matches: Bool
+                switch item {
+                case .media(let media):
+                    matches = media.id == id
+                case .slideshow(let show):
+                    matches = show.resolvedCoverId == id
+                default:
+                    matches = false
                 }
+                guard matches else { return nil }
+                let path = IndexPath(item: index, section: showsSection)
+                return collectionView.indexPathsForVisibleItems.contains(path) ? path : nil
             }
+            paths.append(contentsOf: gridPaths)
             if !paths.isEmpty {
                 collectionView.reloadItems(at: paths)
             }
@@ -1292,7 +1249,7 @@ extension LibraryGridViewController: TVLibraryStoreDelegate {
 
     func libraryStoreDidChangeConnection(_ store: TVLibraryStore) {
         updateEmptyState()
-        // Browse ↔ live: Eclipse TV link also gates the hero and tap → Preview.
+        // Eclipse TV link also gates the disconnected live hero.
         updateHeroVisibility()
         applyHeroChrome()
         refreshLiveHeader()

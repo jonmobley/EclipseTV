@@ -16,11 +16,18 @@ final class HomeSectionHeaderView: UICollectionReusableView {
     struct Action {
         let title: String
         let systemImage: String?
+        let isSelected: Bool
         let handler: () -> Void
 
-        init(title: String, systemImage: String? = nil, handler: @escaping () -> Void) {
+        init(
+            title: String,
+            systemImage: String? = nil,
+            isSelected: Bool = false,
+            handler: @escaping () -> Void
+        ) {
             self.title = title
             self.systemImage = systemImage
+            self.isSelected = isSelected
             self.handler = handler
         }
     }
@@ -161,7 +168,9 @@ final class HomeSectionHeaderView: UICollectionReusableView {
     }
 
     private static func makeChipButton(item: Action, tag: Int) -> UIButton {
-        var config = UIButton.Configuration.gray()
+        var config = item.isSelected
+            ? UIButton.Configuration.filled()
+            : UIButton.Configuration.gray()
         config.cornerStyle = .capsule
         config.title = item.title
         if let systemImage = item.systemImage {
@@ -173,6 +182,9 @@ final class HomeSectionHeaderView: UICollectionReusableView {
             config.imagePlacement = .leading
         }
         config.baseForegroundColor = .label
+        if item.isSelected {
+            config.baseBackgroundColor = .secondarySystemFill
+        }
         config.contentInsets = NSDirectionalEdgeInsets(
             top: 7, leading: 12, bottom: 7, trailing: 12
         )

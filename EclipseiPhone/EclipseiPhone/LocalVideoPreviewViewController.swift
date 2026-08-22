@@ -11,16 +11,14 @@ import UIKit
 
 /// Fullscreen phone Preview for a local library video using system player chrome.
 ///
-/// Presented modally (not inside the image gallery pager) so `AVPlayerViewController`
-/// transport controls work without fighting horizontal swipes.
-final class LocalVideoPreviewViewController: UIViewController {
+/// This *is* `AVPlayerViewController`, so tap-to-show controls (including Close)
+/// are the only chrome — no extra overlay X.
+final class LocalVideoPreviewViewController: AVPlayerViewController {
 
     private let fileURL: URL
     private let isMuted: Bool
     private let isLooping: Bool
     private let startAt: TimeInterval
-    private let closeButton = UIButton(type: .system)
-    private var playerController: AVPlayerViewController?
     private var endObserver: NSObjectProtocol?
     /// Fired once on dismiss with the player’s last position (seconds).
     var onDismiss: ((TimeInterval) -> Void)?
@@ -42,6 +40,7 @@ final class LocalVideoPreviewViewController: UIViewController {
         self.startAt = startAt
         super.init(nibName: nil, bundle: nil)
         modalPresentationStyle = .fullScreen
+        showsPlaybackControls = true
     }
 
     required init?(coder: NSCoder) {
@@ -56,21 +55,19 @@ final class LocalVideoPreviewViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .black
         setupPlayer()
-        setupCloseButton()
     }
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        playerController?.player?.play()
+        player?.play()
     }
 
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
-        playerController?.player?.pause()
+        player?.pause()
         guard isBeingDismissed || isMovingFromParent else { return }
-        let seconds = playerController?.player?.currentTime().seconds ?? 0
+        let seconds = player?.currentTime().seconds ?? 0
         let position = seconds.isFinite ? max(0, seconds) : 0
         let callback = onDismiss
         onDismiss = nil
@@ -80,63 +77,23 @@ final class LocalVideoPreviewViewController: UIViewController {
     // MARK: - Setup
 
     private func setupPlayer() {
-        let player = AVPlayer(url: fileURL)
-        player.isMuted = isMuted
-        player.actionAtItemEnd = isLooping ? .none : .pause
+        let item = AVPlayer(url: fileURL)
+        item.isMuted = isMuted
+        item.actionAtItemEnd = isLooping ? .none : .pause
         if startAt > 0.5 {
             let time = CMTime(seconds: startAt, preferredTimescale: 600)
-            player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero)
+            item.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero)
         }
+        player = item
 
-        let controller = AVPlayerViewController()
-        controller.player = player
-        controller.showsPlaybackControls = true
-        controller.view.translatesAutoresizingMaskIntoConstraints = false
-        addChild(controller)
-        view.addSubview(controller.view)
-        NSLayoutConstraint.activate([
-            controller.view.topAnchor.constraint(equalTo: view.topAnchor),
-            controller.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            controller.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            controller.view.bottomAnchor.constraint(equalTo: view.bottomAnchor)
-        ])
-        controller.didMove(toParent: self)
-        playerController = controller
-
-        if isLooping {
-            endObserver = NotificationCenter.default.addObserver(
-                forName: .AVPlayerItemDidPlayToEndTime,
-                object: player.currentItem,
-                queue: .main
-            ) { [weak player] _ in
-                player?.seek(to: .zero)
-                player?.play()
-            }
+        guard isLooping else { return }
+        endObserver = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemDidPlayToEndTime,
+            object: item.currentItem,
+            queue: .main
+        ) { [weak item] _ in
+            item?.seek(to: .zero)
+            item?.play()
         }
-    }
-
-    private func setupCloseButton() {
-        let config = UIImage.SymbolConfiguration(pointSize: 28, weight: .semibold)
-        closeButton.setImage(
-            UIImage(systemName: "xmark.circle.fill", withConfiguration: config),
-            for: .normal
-        )
-        closeButton.tintColor = UIColor.white.withAlphaComponent(0.9)
-        closeButton.translatesAutoresizingMaskIntoConstraints = false
-        closeButton.accessibilityLabel = "Close"
-        closeButton.addTarget(self, action: #selector(closeTapped), for: .touchUpInside)
-        view.addSubview(closeButton)
-        NSLayoutConstraint.activate([
-            closeButton.topAnchor.constraint(
-                equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12
-            ),
-            closeButton.trailingAnchor.constraint(
-                equalTo: view.trailingAnchor, constant: -16
-            )
-        ])
-    }
-
-    @objc private func closeTapped() {
-        dismiss(animated: true)
     }
 }

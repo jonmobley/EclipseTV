@@ -51,7 +51,7 @@ final class ExternalDisplayManager {
     /// Active overlay (camera, web, or PDF), if any.
     private(set) var overlaySource: OverlaySource?
 
-    /// Camera overlay is active, but AirPlay is temporarily showing a still
+    /// Camera overlay is active, but output is temporarily showing a still
     /// (user alternate cutaway, or Logo). Phone camera UI stays open; session keeps running.
     private(set) var isCameraParkedOnStill = false
 
@@ -90,6 +90,13 @@ final class ExternalDisplayManager {
 
     /// Whether any overlay (camera, web, or PDF) is currently live.
     var isOverlayLive: Bool { overlaySource != nil }
+
+    /// What AirPlay is showing (or would show), including Screensaver fallback.
+    /// Nil when no external display is attached.
+    var presentedSource: PresentationSource? {
+        guard isConnected else { return nil }
+        return resolvedPresentationSource()
+    }
 
     /// Supplies the source to show when a screen connects with nothing presented yet
     /// (e.g. an item is already live when the user starts mirroring). Set by the grid.
@@ -454,10 +461,10 @@ final class ExternalDisplayManager {
         isJoinedLive = false
     }
 
-    /// Starts presenting the live camera on the external display (and remembers it).
+    /// Starts presenting the live camera (AirPlay when a display is attached).
     ///
-    /// If AirPlay was still-parked, resumes the live feed — callers that want the
-    /// camera (phone UI open / re-open) should never leave the TV stuck on a still.
+    /// If still-parked, resumes the live feed — callers that want the camera
+    /// (phone UI open / re-open) should never leave output stuck on a still.
     /// Snapshots the prior non-camera source the first time camera goes live.
     func presentCamera() {
         if isCameraParkedOnStill {
@@ -481,30 +488,34 @@ final class ExternalDisplayManager {
         preCameraWasJoined = false
     }
 
-    /// Parks AirPlay on a still without ending camera mode or stopping the session.
+    /// Parks on a still without ending camera mode or stopping the session.
+    ///
+    /// With a display, AirPlay shows the still. With none, the phone panel is program.
     func parkCameraOnStill(_ source: PresentationSource) {
         guard isCameraModeActive else { return }
-        refreshConnection()
         isCameraParkedOnStill = true
         AudioAmbientPolicy.applyYieldIfNeeded(for: source)
         lastSource = source
-        presentationVC?.show(source)
-        updateIdleTimer()
+        if isConnected {
+            refreshConnection()
+            presentationVC?.show(source)
+            updateIdleTimer()
+        }
     }
 
-    /// Restores live camera on AirPlay after `parkCameraOnStill(_:)`.
+    /// Restores live camera after `parkCameraOnStill(_:)`.
     func resumeCameraFromStillPark() {
-        guard isCameraParkedOnStill, isCameraModeActive else {
-            isCameraParkedOnStill = false
-            return
-        }
+        guard isCameraParkedOnStill else { return }
         isCameraParkedOnStill = false
-        refreshConnection()
+        guard isCameraModeActive else { return }
         let source = PresentationSource.camera
         AudioAmbientPolicy.applyYieldIfNeeded(for: source)
         lastSource = source
-        presentationVC?.show(source)
-        updateIdleTimer()
+        if isConnected {
+            refreshConnection()
+            presentationVC?.show(source)
+            updateIdleTimer()
+        }
     }
 
     /// Starts presenting a web page on the external display.

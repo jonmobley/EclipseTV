@@ -468,9 +468,8 @@ extension iPhoneMainViewController {
         let refresh = { [weak self] in
             guard let self else { return }
             self.updateHomeSplitLayoutIfNeeded()
-            self.libraryViewController.collectionView.collectionViewLayout
-                .invalidateLayout()
-            self.syncAudioMiniDockingIfNeeded()
+            self.libraryViewController.invalidatePageLayouts()
+            self.syncAudioMiniLayoutIfNeeded()
         }
         coordinator.animate(alongsideTransition: { _ in
             refresh()

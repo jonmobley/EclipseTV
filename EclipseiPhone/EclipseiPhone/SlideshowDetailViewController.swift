@@ -153,8 +153,8 @@ final class SlideshowDetailViewController: UITableViewController {
         switch Section(rawValue: section)! {
         case .preferences:
             guard let s = slideshow else { return 0 }
-            // Autoplay, (Duration), (Loop), Crossfade, Live Ribbon
-            return s.autoplay ? 5 : 3
+            // Autoplay, (Duration), (Loop), Crossfade, Screen Fit, Live Ribbon
+            return s.autoplay ? 6 : 4
         case .slides:
             return max(slides.count, 1)
         }
@@ -185,10 +185,15 @@ final class SlideshowDetailViewController: UITableViewController {
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
         guard Section(rawValue: indexPath.section) == .preferences,
-              let slideshow,
-              slideshow.autoplay,
-              preferenceKind(at: indexPath.row) == .duration else { return }
-        presentDurationPicker(for: slideshow)
+              let slideshow else { return }
+        switch preferenceKind(at: indexPath.row) {
+        case .duration:
+            presentDurationPicker(for: slideshow)
+        case .screenFit:
+            presentScreenFitPicker(for: slideshow, from: indexPath)
+        default:
+            break
+        }
     }
 
     override func tableView(
@@ -248,7 +253,7 @@ final class SlideshowDetailViewController: UITableViewController {
     // MARK: - Preference rows
 
     private enum PrefKind {
-        case autoplay, duration, loop, crossfade, liveRibbon
+        case autoplay, duration, loop, crossfade, screenFit, liveRibbon
     }
 
     private func preferenceKind(at row: Int) -> PrefKind {
@@ -256,6 +261,7 @@ final class SlideshowDetailViewController: UITableViewController {
             switch row {
             case 0: return .autoplay
             case 1: return .crossfade
+            case 2: return .screenFit
             default: return .liveRibbon
             }
         }
@@ -264,6 +270,7 @@ final class SlideshowDetailViewController: UITableViewController {
         case 1: return .duration
         case 2: return .loop
         case 3: return .crossfade
+        case 4: return .screenFit
         default: return .liveRibbon
         }
     }
@@ -304,6 +311,14 @@ final class SlideshowDetailViewController: UITableViewController {
                 isOn: slideshow.crossfade,
                 action: #selector(crossfadeChanged(_:))
             )
+        case .screenFit:
+            config.text = "Screen Fit"
+            config.secondaryText = slideshow.isFill
+                ? MediaFitMode.fill.rawValue
+                : MediaFitMode.fit.rawValue
+            cell.contentConfiguration = config
+            cell.accessoryType = .disclosureIndicator
+            cell.selectionStyle = .default
         case .liveRibbon:
             config.text = "Show Ribbon When Live"
             config.secondaryText = "Thumbnails to jump between slides"
@@ -364,6 +379,30 @@ final class SlideshowDetailViewController: UITableViewController {
             popover.sourceRect = tableView.rectForRow(
                 at: IndexPath(row: 1, section: Section.preferences.rawValue)
             )
+        }
+        present(sheet, animated: true)
+    }
+
+    private func presentScreenFitPicker(for slideshow: Slideshow, from indexPath: IndexPath) {
+        let current: MediaFitMode = slideshow.isFill ? .fill : .fit
+        let sheet = UIAlertController(
+            title: "Screen Fit", message: nil, preferredStyle: .actionSheet
+        )
+        for mode in MediaFitMode.allCases {
+            let title = mode == current ? "\(mode.rawValue) ✓" : mode.rawValue
+            sheet.addAction(UIAlertAction(title: title, style: .default) { _ in
+                SlideshowStore.shared.updatePreferences(
+                    id: slideshow.id, isFill: mode == .fill
+                )
+                SlideshowPlaybackController.shared.refreshPresentationIfLive(
+                    slideshowId: slideshow.id
+                )
+            })
+        }
+        sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        if let popover = sheet.popoverPresentationController {
+            popover.sourceView = tableView
+            popover.sourceRect = tableView.rectForRow(at: indexPath)
         }
         present(sheet, animated: true)
     }

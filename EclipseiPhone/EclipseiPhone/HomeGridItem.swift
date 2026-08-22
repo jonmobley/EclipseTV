@@ -25,11 +25,25 @@ enum HomeGridItem: Equatable {
     /// Max Shows shown on the Home Recent ribbon before See All.
     static let recentHomeLimit = 6
 
+    /// True when the library has at least one Landscape and one Vertical Show.
+    static func hasBothOrientations(in albums: [LocalAlbum]) -> Bool {
+        albums.contains { $0.orientation == .landscape }
+            && albums.contains { $0.orientation == .portrait }
+    }
+
     /// Recent Shows (typically both Display Modes, by last opened).
-    /// Includes `createShow` only when there are no Shows yet.
-    static func recentShows(from albums: [LocalAlbum]) -> [HomeGridItem] {
-        let recent = Array(albums.prefix(recentHomeLimit))
-        guard !recent.isEmpty else { return [.createShow] }
+    ///
+    /// `orientation` keeps only that format. `createShow` appears only when
+    /// there are no Shows at all — a format filter that matches nothing is empty.
+    static func recentShows(
+        from albums: [LocalAlbum],
+        orientation: ExternalOutputOrientation? = nil
+    ) -> [HomeGridItem] {
+        let source = orientation.map { mode in
+            albums.filter { $0.orientation == mode }
+        } ?? albums
+        let recent = Array(source.prefix(recentHomeLimit))
+        guard !recent.isEmpty else { return albums.isEmpty ? [.createShow] : [] }
         return recent.map { HomeGridItem.show($0) }
     }
 }

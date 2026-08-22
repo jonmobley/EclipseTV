@@ -9,14 +9,14 @@ import UIKit
 import PhotosUI
 import UniformTypeIdentifiers
 
-/// Drawer to pick None / a stored PNG frame, or import/delete frames.
+/// Drawer to choose which frames appear on the camera overlay ribbon.
 ///
-/// Frames are listed recently used first. Selecting None or a frame dismisses
-/// so the camera can switch overlays quickly.
+/// Tapping a frame pins or unpins it as a thumbnail option. It does not make
+/// the overlay live — that happens on the camera ribbon. Import and delete
+/// stay here.
 final class CameraFramePickerViewController: UIViewController {
 
     private enum Item: Hashable {
-        case none
         case frame(UUID)
         case importFrames
     }
@@ -109,7 +109,7 @@ final class CameraFramePickerViewController: UIViewController {
 
     private func reload() {
         let store = CameraFrameStore.shared
-        items = [.none] + store.frames.map { .frame($0.id) } + [.importFrames]
+        items = store.frames.map { .frame($0.id) } + [.importFrames]
         var snapshot = NSDiffableDataSourceSnapshot<Int, Item>()
         snapshot.appendSections([0])
         snapshot.appendItems(items)
@@ -119,19 +119,12 @@ final class CameraFramePickerViewController: UIViewController {
     private func configure(_ cell: FramePickerCell, with item: Item) {
         let store = CameraFrameStore.shared
         switch item {
-        case .none:
-            cell.configure(
-                title: "None",
-                image: nil,
-                systemImage: "circle.slash",
-                selected: store.selectedId == nil
-            )
         case .frame(let id):
             cell.configure(
                 title: "Frame",
                 image: store.image(for: id),
                 systemImage: nil,
-                selected: store.selectedId == id
+                selected: store.isEnabled(id)
             )
         case .importFrames:
             cell.configure(
@@ -268,12 +261,8 @@ extension CameraFramePickerViewController: UICollectionViewDelegate {
         collectionView.deselectItem(at: indexPath, animated: true)
         guard let item = dataSource.itemIdentifier(for: indexPath) else { return }
         switch item {
-        case .none:
-            CameraFrameStore.shared.select(nil)
-            dismiss(animated: true)
         case .frame(let id):
-            CameraFrameStore.shared.select(id)
-            dismiss(animated: true)
+            CameraFrameStore.shared.toggleEnabled(id)
         case .importFrames:
             importFrames()
         }
@@ -418,8 +407,7 @@ private final class FramePickerCell: UICollectionViewCell {
             iconView.image = nil
             iconView.isHidden = true
         }
-        contentView.layer.borderWidth = selected ? 3 : 0
-        contentView.layer.borderColor = UIColor.systemRed.cgColor
-        contentView.layer.cornerRadius = 12
+        imageView.layer.borderWidth = selected ? 3 : 0
+        imageView.layer.borderColor = UIColor.systemBlue.cgColor
     }
 }

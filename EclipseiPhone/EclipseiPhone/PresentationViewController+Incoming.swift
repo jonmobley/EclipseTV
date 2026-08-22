@@ -134,11 +134,11 @@ extension PresentationViewController {
                 let time = CMTime(seconds: startAt, preferredTimescale: 600)
                 player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero) { _ in
                     player.play()
-                    self?.notifyIfCurrent(generation)
+                    self?.revealIncomingVideoWhenDisplayed(layer, generation: generation)
                 }
             } else {
                 player.play()
-                self?.notifyIfCurrent(generation)
+                self?.revealIncomingVideoWhenDisplayed(layer, generation: generation)
             }
         }
 
@@ -159,6 +159,25 @@ extension PresentationViewController {
             }
         } else {
             beginPlayback()
+        }
+    }
+
+    /// Reveals only after the overlay layer has a decoded frame (not just readyToPlay).
+    private func revealIncomingVideoWhenDisplayed(
+        _ layer: AVPlayerLayer,
+        generation: Int
+    ) {
+        if layer.isReadyForDisplay {
+            notifyIfCurrent(generation)
+            return
+        }
+        incomingLayerReadyObservation = layer.observe(\.isReadyForDisplay, options: [.new]) {
+            [weak self] layer, _ in
+            guard layer.isReadyForDisplay else { return }
+            DispatchQueue.main.async {
+                self?.incomingLayerReadyObservation = nil
+                self?.notifyIfCurrent(generation)
+            }
         }
     }
 

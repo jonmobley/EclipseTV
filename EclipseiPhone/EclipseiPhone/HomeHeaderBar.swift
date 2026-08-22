@@ -9,8 +9,9 @@ import UIKit
 
 /// Top header for the home screen.
 ///
-/// Home: page dropdown · output status · Getting Started (?) · + New Show.
-/// Show mode trailing: output status, Lock, Blackout, Settings, and "+".
+/// Home: page dropdown · output status · + New Show.
+/// Show mode trailing: output status, disconnected preview, Lock + Blackout,
+/// Settings, and "+".
 /// iCloud Sync status surfaces via `EclipseSyncStatusBanner`, not the header.
 final class HomeHeaderBar: UIView {
 
@@ -29,7 +30,7 @@ final class HomeHeaderBar: UIView {
     let outputStatusButton = UIButton(type: .system)
     private let lockButton = UIButton(type: .system)
     private let blackButton = UIButton(type: .system)
-    private let helpButton = UIButton(type: .system)
+    let disconnectedPreviewButton = UIButton(type: .system)
     private let settingsButton = UIButton(type: .system)
     private let addButton = UIButton(type: .system)
     private let newShowButton = UIButton(type: .system)
@@ -44,8 +45,8 @@ final class HomeHeaderBar: UIView {
     var onToggleLiveLock: (() -> Void)?
     /// Invoked when the Blackout control is tapped.
     var onPresentBlack: (() -> Void)?
-    /// Invoked when Getting Started (?) is tapped on Home.
-    var onOpenGettingStarted: (() -> Void)?
+    /// Invoked when the disconnected live-preview control is tapped.
+    var onToggleDisconnectedPreview: (() -> Void)?
     /// Invoked when New Show is tapped on Home.
     var onNewShow: (() -> Void)?
     /// Invoked when Done is tapped while arranging tiles.
@@ -59,6 +60,7 @@ final class HomeHeaderBar: UIView {
     private(set) var isAirPlayConnected = false
     private var isLiveLocked = false
     private var isBlackLive = false
+    var isDisconnectedPreviewOn = false
     private var showsShowChrome = false
     private var isArranging = false
     private var isSelecting = false
@@ -91,6 +93,7 @@ final class HomeHeaderBar: UIView {
             view.menuPill.layer.borderColor = UIColor.separator.cgColor
             view.applyLockButtonAppearance()
             view.applyBlackButtonAppearance()
+            view.applyDisconnectedPreviewAppearance()
             view.applyNewShowButtonAppearance()
         }
 
@@ -142,6 +145,8 @@ final class HomeHeaderBar: UIView {
         blackButton.addTarget(self, action: #selector(blackTapped), for: .touchUpInside)
         applyBlackButtonAppearance()
 
+        installDisconnectedPreviewButton()
+
         // Plain SF Symbols, like UIBarButtonItem — not icons in stroked circles.
         let symbolConfig = UIImage.SymbolConfiguration(pointSize: 20, weight: .regular)
         settingsButton.configuration = Self.barIconConfig(
@@ -152,15 +157,6 @@ final class HomeHeaderBar: UIView {
         settingsButton.accessibilityLabel = "Settings"
         settingsButton.accessibilityHint = "Open Settings; edit the open Show there"
         settingsButton.addTarget(self, action: #selector(settingsTapped), for: .touchUpInside)
-
-        helpButton.configuration = Self.barIconConfig(
-            systemName: "questionmark.circle.fill",
-            symbolConfig: symbolConfig
-        )
-        helpButton.translatesAutoresizingMaskIntoConstraints = false
-        helpButton.accessibilityLabel = "Getting Started"
-        helpButton.accessibilityHint = "Learn the basics"
-        helpButton.addTarget(self, action: #selector(helpTapped), for: .touchUpInside)
 
         addButton.configuration = Self.barIconConfig(
             systemName: "plus",
@@ -212,8 +208,8 @@ final class HomeHeaderBar: UIView {
         trailingStack.spacing = 8
         trailingStack.translatesAutoresizingMaskIntoConstraints = false
         for button in [
-            outputStatusButton, lockButton, blackButton, settingsButton, helpButton,
-            addButton, newShowButton, selectActionsButton, doneButton
+            outputStatusButton, disconnectedPreviewButton, lockButton, blackButton,
+            settingsButton, addButton, newShowButton, selectActionsButton, doneButton
         ] {
             trailingStack.addArrangedSubview(button)
         }
@@ -238,10 +234,10 @@ final class HomeHeaderBar: UIView {
             addButton.heightAnchor.constraint(equalToConstant: 36),
             settingsButton.widthAnchor.constraint(equalToConstant: 36),
             settingsButton.heightAnchor.constraint(equalToConstant: 36),
-            helpButton.widthAnchor.constraint(equalToConstant: 36),
-            helpButton.heightAnchor.constraint(equalToConstant: 36),
             lockButton.widthAnchor.constraint(equalToConstant: 36),
             lockButton.heightAnchor.constraint(equalToConstant: 36),
+            disconnectedPreviewButton.widthAnchor.constraint(equalToConstant: 36),
+            disconnectedPreviewButton.heightAnchor.constraint(equalToConstant: 36),
             blackButton.widthAnchor.constraint(equalToConstant: 36),
             blackButton.heightAnchor.constraint(equalToConstant: 36),
             newShowButton.heightAnchor.constraint(equalToConstant: 36),
@@ -253,12 +249,13 @@ final class HomeHeaderBar: UIView {
             )
         ])
         for button in [
-            outputStatusButton, lockButton, blackButton, settingsButton, helpButton,
-            addButton, newShowButton
+            outputStatusButton, disconnectedPreviewButton, lockButton, blackButton,
+            settingsButton, addButton, newShowButton
         ] {
             button.setContentCompressionResistancePriority(.required, for: .horizontal)
         }
         outputStatusButton.setContentHuggingPriority(.required, for: .horizontal)
+        disconnectedPreviewButton.setContentHuggingPriority(.required, for: .horizontal)
         lockButton.setContentHuggingPriority(.required, for: .horizontal)
         blackButton.setContentHuggingPriority(.required, for: .horizontal)
     }
@@ -313,17 +310,14 @@ final class HomeHeaderBar: UIView {
         onOpenSettings?()
     }
 
-    @objc private func helpTapped() {
-        onOpenGettingStarted?()
-    }
-
     @objc private func newShowTapped() {
         onNewShow?()
     }
 
     // MARK: - State
 
-    /// Home: New Show. Show mode: Lock + Blackout + Settings + "+".
+    /// Show-mode Lock + Blackout. Go-live is always available; Preview When
+    /// Disconnected only shows the live hero, not these controls.
     func setShowModeChrome(_ showMode: Bool) {
         guard showsShowChrome != showMode else { return }
         showsShowChrome = showMode
@@ -389,19 +383,19 @@ final class HomeHeaderBar: UIView {
         }
         if editing {
             outputStatusButton.isHidden = true
+            disconnectedPreviewButton.isHidden = true
             lockButton.isHidden = true
             blackButton.isHidden = true
             settingsButton.isHidden = true
-            helpButton.isHidden = true
             addButton.isHidden = true
             newShowButton.isHidden = true
             return
         }
         outputStatusButton.isHidden = false
+        disconnectedPreviewButton.isHidden = !showsShowChrome || hasRealLiveDestination
         lockButton.isHidden = !showsShowChrome
         blackButton.isHidden = !showsShowChrome
         settingsButton.isHidden = !showsShowChrome
-        helpButton.isHidden = showsShowChrome
         addButton.isHidden = !showsShowChrome
         newShowButton.isHidden = showsShowChrome
     }
@@ -410,6 +404,7 @@ final class HomeHeaderBar: UIView {
     func setConnectionState(_ state: ConnectionDisplayState) {
         connectionState = state
         applyOutputStatusAppearance()
+        applyTrailingChrome()
         setAddEnabled(true)
     }
 
@@ -417,6 +412,7 @@ final class HomeHeaderBar: UIView {
     func setPresenting(_ presenting: Bool) {
         isAirPlayConnected = presenting
         applyOutputStatusAppearance()
+        applyTrailingChrome()
     }
 
     /// Enables or disables the "+" button (e.g. dimmed during a transfer).

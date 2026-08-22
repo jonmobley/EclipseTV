@@ -5,7 +5,6 @@
 //  Copyright © 2026 Moxie LLC. All rights reserved.
 //
 
-// AlbumItemPreviewViewController.swift
 import UIKit
 import AVKit
 
@@ -14,7 +13,7 @@ import AVKit
 final class AlbumItemPreviewViewController: UIViewController {
 
     private let item: AlbumManifestItem
-    private let imageView = UIImageView()
+    private let zoomView = ZoomableImageView()
     private let activityIndicator = UIActivityIndicatorView(style: .large)
     private let closeButton = UIButton(type: .system)
     private var loadToken: RemoteImageRequest?
@@ -50,9 +49,7 @@ final class AlbumItemPreviewViewController: UIViewController {
     // MARK: - Setup
 
     private func setupCloseButton() {
-        let config = UIImage.SymbolConfiguration(pointSize: 28, weight: .semibold)
-        closeButton.setImage(UIImage(systemName: "xmark.circle.fill", withConfiguration: config), for: .normal)
-        closeButton.tintColor = UIColor.white.withAlphaComponent(0.9)
+        closeButton.applyPreviewCloseAppearance()
         closeButton.translatesAutoresizingMaskIntoConstraints = false
         closeButton.addTarget(self, action: #selector(closeTapped), for: .touchUpInside)
         view.addSubview(closeButton)
@@ -63,19 +60,19 @@ final class AlbumItemPreviewViewController: UIViewController {
     }
 
     private func setupImage() {
-        imageView.contentMode = .scaleAspectFit
-        imageView.translatesAutoresizingMaskIntoConstraints = false
-        view.insertSubview(imageView, belowSubview: closeButton)
+        zoomView.translatesAutoresizingMaskIntoConstraints = false
+        view.insertSubview(zoomView, belowSubview: closeButton)
 
         activityIndicator.color = .white
         activityIndicator.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(activityIndicator)
+        view.bringSubviewToFront(closeButton)
 
         NSLayoutConstraint.activate([
-            imageView.topAnchor.constraint(equalTo: view.topAnchor),
-            imageView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            imageView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            imageView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            zoomView.topAnchor.constraint(equalTo: view.topAnchor),
+            zoomView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            zoomView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            zoomView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             activityIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             activityIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor)
         ])
@@ -84,7 +81,7 @@ final class AlbumItemPreviewViewController: UIViewController {
         activityIndicator.startAnimating()
         loadToken = RemoteImageLoader.shared.loadImage(from: url) { [weak self] image in
             self?.activityIndicator.stopAnimating()
-            self?.imageView.image = image
+            self?.zoomView.image = image
         }
     }
 

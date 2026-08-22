@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		E2F51CF32F1FDBB500B87D90 /* EclipsePhoneCameraClient in Frameworks */ = {isa = PBXBuildFile; productRef = E2F51CF42F1FDBB500B87D90 /* EclipsePhoneCameraClient */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		E24EA3A62D8A64E9002DB63F /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -59,10 +63,6 @@
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
-
-/* Begin PBXBuildFile section */
-		E2F51CF32F1FDBB500B87D90 /* EclipsePhoneCameraClient in Frameworks */ = {isa = PBXBuildFile; productRef = E2F51CF42F1FDBB500B87D90 /* EclipsePhoneCameraClient */; };
-/* End PBXBuildFile section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		E24EA38C2D8A64E7002DB63F /* Frameworks */ = {

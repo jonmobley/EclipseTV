@@ -7,7 +7,7 @@
 
 import UIKit
 
-/// Sheet to pick library images, videos, or PDFs — either to present, or to add
+/// Page to pick library images, videos, or PDFs — either to Preview, or to add
 /// into an open Show (multi-select + Add).
 final class MediaLibraryPickerViewController: UIViewController {
 
@@ -37,10 +37,6 @@ final class MediaLibraryPickerViewController: UIViewController {
     var targetShowId: UUID?
     /// Called when the user confirms Add in Show mode.
     var onAddToShow: (([String], [UUID]) -> Void)?
-    /// Called when the user taps an image or video (present mode only).
-    var onSelectMedia: ((LibraryItemDTO) -> Void)?
-    /// Called when the user taps a saved PDF (present mode only).
-    var onSelectPDF: ((SavedPDF) -> Void)?
 
     private var filter: Filter = .all
     private var items: [Item] = []
@@ -55,18 +51,16 @@ final class MediaLibraryPickerViewController: UIViewController {
 
     private var isAddToShowMode: Bool { targetShowId != nil }
 
+    private var isNavRoot: Bool {
+        navigationController?.viewControllers.first === self
+    }
+
     // MARK: - Lifecycle
 
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
-        title = isAddToShowMode ? "Add from Media Library" : "Media Library"
-        navigationItem.leftBarButtonItem = UIBarButtonItem(
-            systemItem: .close,
-            primaryAction: UIAction { [weak self] _ in
-                self?.dismiss(animated: true)
-            }
-        )
+        title = "Media Library"
         if isAddToShowMode {
             let add = UIBarButtonItem(
                 title: "Add",
@@ -164,6 +158,19 @@ final class MediaLibraryPickerViewController: UIViewController {
         NotificationCenter.default.removeObserver(self)
     }
 
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        navigationController?.setNavigationBarHidden(false, animated: animated)
+        if isNavRoot {
+            navigationItem.leftBarButtonItem = UIBarButtonItem(
+                title: "Back",
+                style: .plain,
+                target: self,
+                action: #selector(backTapped)
+            )
+        }
+    }
+
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         guard let layout = collectionView.collectionViewLayout
@@ -187,6 +194,28 @@ final class MediaLibraryPickerViewController: UIViewController {
 
     // MARK: - Actions
 
+    @objc private func backTapped() {
+        closePicker()
+    }
+
+    /// Pops when pushed from Home; dismisses when this page is the presented root.
+    private func closePicker(completion: (() -> Void)? = nil) {
+        if let nav = navigationController, nav.viewControllers.first !== self {
+            nav.popViewController(animated: true)
+            if let completion {
+                if let coordinator = nav.transitionCoordinator {
+                    coordinator.animate(alongsideTransition: nil) { _ in
+                        completion()
+                    }
+                } else {
+                    completion()
+                }
+            }
+            return
+        }
+        dismiss(animated: true, completion: completion)
+    }
+
     @objc private func addTapped() {
         guard isAddToShowMode, !selected.isEmpty else { return }
         var mediaIds: [String] = []
@@ -198,7 +227,7 @@ final class MediaLibraryPickerViewController: UIViewController {
             }
         }
         let add = onAddToShow
-        dismiss(animated: true) {
+        closePicker {
             add?(mediaIds, pdfIds)
         }
     }
@@ -314,7 +343,9 @@ extension MediaLibraryPickerViewController: UICollectionViewDataSource {
                     systemImage: "doc.richtext",
                     thumbnail: PDFThumbnailStore.shared.image(for: id),
                     fillColor: .darkGray,
-                    isLive: false
+                    isLive: false,
+                    titleNumberOfLines: 1,
+                    typeIcon: .pdf
                 )
             }
         }
@@ -366,12 +397,12 @@ extension MediaLibraryPickerViewController: UICollectionViewDelegate {
         case .media(let id):
             guard let libraryItem = TVLibraryStore.shared.items.first(where: { $0.id == id })
             else { return }
-            onSelectMedia?(libraryItem)
+            previewMedia(libraryItem)
         case .pdf(let id):
             guard let doc = PDFStore.shared.documents.first(where: { $0.id == id }) else {
                 return
             }
-            onSelectPDF?(doc)
+            previewPDF(doc)
         }
     }
 }

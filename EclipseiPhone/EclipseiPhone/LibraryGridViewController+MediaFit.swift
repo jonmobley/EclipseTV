@@ -50,6 +50,40 @@ extension LibraryGridViewController {
         guard store.currentId == item.id,
               !manager.isOverlayLive,
               !manager.isJoinedLive else { return }
-        manager.present(.forLibraryItem(item, thumbnail: store.thumbnail(for: item.id)))
+        manager.present(
+            .forLibraryItem(item, thumbnail: store.thumbnail(for: item.id))
+        )
+    }
+
+    /// Fit / Fill submenu for a slideshow's live framing.
+    func screenFitMenu(for slideshow: Slideshow) -> UIMenu {
+        let current: MediaFitMode = slideshow.isFill ? .fill : .fit
+        let actions = MediaFitMode.allCases.map { mode in
+            let isCurrent = mode == current
+            return UIAction(
+                title: mode.rawValue,
+                image: UIImage(systemName: isCurrent ? "checkmark" : mode.iconName)
+            ) { [weak self] _ in
+                self?.applyScreenFit(mode, to: slideshow)
+            }
+        }
+        return UIMenu(
+            title: "Screen Fit",
+            subtitle: current.rawValue,
+            image: UIImage(systemName: "aspectratio"),
+            children: actions
+        )
+    }
+
+    /// Saves slideshow Fit / Fill and re-pushes the current slide when that show is live.
+    private func applyScreenFit(_ mode: MediaFitMode, to slideshow: Slideshow) {
+        let isFill = mode == .fill
+        guard slideshow.isFill != isFill else { return }
+        SlideshowStore.shared.updatePreferences(id: slideshow.id, isFill: isFill)
+        UISelectionFeedbackGenerator().selectionChanged()
+        SlideshowPlaybackController.shared.refreshPresentationIfLive(
+            slideshowId: slideshow.id
+        )
+        refreshLiveHeader()
     }
 }

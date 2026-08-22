@@ -60,7 +60,7 @@ extension LibraryGridViewController {
         refreshLiveVideoPresentationIfNeeded(id: id)
     }
 
-    /// Re-pushes the live video so AirPlay / phone hero pick up new loop / mute flags.
+    /// Re-pushes the live video so AirPlay picks up new loop / mute flags.
     ///
     /// Keeps the current playback position so mute/loop does not restart from 0.
     private func refreshLiveVideoPresentationIfNeeded(id: String) {
@@ -68,18 +68,12 @@ extension LibraryGridViewController {
               let item = store.items.first(where: { $0.id == id }),
               item.isVideo else { return }
         let manager = ExternalDisplayManager.shared
-        if manager.isConnected,
-           !manager.isOverlayLive,
-           !manager.isJoinedLive {
-            let startAt = manager.currentVideoPlaybackTime(forItemId: id) ?? 0
-            manager.present(
-                .forLibraryItem(item, thumbnail: store.thumbnail(for: id), startAt: startAt)
-            )
-            return
-        }
-        // Phone-only hero: mute/loop apply without tearing the player down.
-        if isPhoneLiveVideo {
-            refreshLiveHeader()
-        }
+        guard manager.isConnected,
+              !manager.isOverlayLive,
+              !manager.isJoinedLive else { return }
+        let startAt = manager.currentVideoPlaybackTime(forItemId: id) ?? 0
+        manager.present(
+            .forLibraryItem(item, thumbnail: store.thumbnail(for: id), startAt: startAt)
+        )
     }
 }

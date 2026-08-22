@@ -13,34 +13,37 @@ extension LibraryGridViewController: UICollectionViewDataSource,
                                      UICollectionViewDelegate {
 
     func numberOfSections(in collectionView: UICollectionView) -> Int {
-        visibleHomeSections.count
+        pageSections(for: collectionView).count
     }
 
     func collectionView(_ collectionView: UICollectionView,
                         numberOfItemsInSection section: Int) -> Int {
-        guard let homeSection = homeSection(at: section) else { return 0 }
+        guard let homeSection = homeSection(at: section, in: collectionView) else {
+            return 0
+        }
         switch homeSection {
-        case .hero: return 1
+        case .hero: return isHomePage(collectionView) ? 1 : 0
         case .tools: return 0
         case .slideshowRibbon: return liveSlideshowRibbonItemCount()
         case .shows:
-            return isShowMode ? numberOfShowModeItems() : showRibbonItems.count
+            return isHomePage(collectionView)
+                ? showRibbonItems.count
+                : numberOfShowModeItems()
         }
     }
 
     func collectionView(_ collectionView: UICollectionView,
                         cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
-        // Home never hosts Show tool tiles (Screensaver / Background / Camera).
-        // Keep this branch absolute so a layout/data-source hiccup cannot paint one.
-        if !isShowMode {
-            switch homeSection(at: indexPath.section) {
+        // Home is its own collection view — it can never dequeue a Show tile.
+        if isHomePage(collectionView) {
+            switch homeSection(at: indexPath.section, in: collectionView) {
             case .hero:
-                return dequeueHomeHeroCell(at: indexPath)
+                return dequeueHomeHeroCell(in: collectionView, at: indexPath)
             case .shows:
                 if homeItem(at: indexPath) == .createShow {
-                    return dequeueHomeCreateShowCell(at: indexPath)
+                    return dequeueHomeCreateShowCell(in: collectionView, at: indexPath)
                 }
-                return dequeueHomeShowTileCell(at: indexPath)
+                return dequeueHomeShowTileCell(in: collectionView, at: indexPath)
             case .tools, .slideshowRibbon, .none:
                 return UICollectionViewCell()
             }
@@ -52,13 +55,19 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         ) as? LibraryThumbnailCell else {
             return UICollectionViewCell()
         }
+        if isDockedSlideshowRibbon(collectionView) {
+            configureLiveSlideshowRibbonCell(cell, at: indexPath)
+            return cell
+        }
         // Every exit path, so a recycled cell never keeps a stale wiggle or dim.
         defer {
             applyArrangeAppearance(to: cell, at: indexPath)
             applySelectAppearance(to: cell, at: indexPath)
         }
 
-        guard let section = homeSection(at: indexPath.section) else { return cell }
+        guard let section = homeSection(at: indexPath.section, in: collectionView) else {
+            return cell
+        }
         switch section {
         case .hero, .tools:
             break
@@ -82,25 +91,25 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         ) as? HomeSectionHeaderView else {
             return UICollectionReusableView()
         }
-        switch homeSection(at: indexPath.section) {
+        switch homeSection(at: indexPath.section, in: collectionView) {
         case .hero:
             header.configure(title: "")
         case .tools:
-            // The tools row is Show-only and carries no title.
             header.configure(title: "")
         case .slideshowRibbon:
             header.configure(title: "")
         case .shows:
-            if isShowMode {
-                header.configure(title: "")
-            } else {
+            if isHomePage(collectionView) {
                 header.configure(
                     title: "Recent",
                     trailingTitle: "See All",
                     trailingHandler: { [weak self] in
                         self?.presentAllShows()
-                    }
+                    },
+                    actions: homeRecentFilterActions()
                 )
+            } else {
+                header.configure(title: "")
             }
         case .none:
             header.configure(title: "")
@@ -112,17 +121,18 @@ extension LibraryGridViewController: UICollectionViewDataSource,
                         didSelectItemAt indexPath: IndexPath) {
         guard !isArranging else { return }
         if isSelecting {
-            if homeSection(at: indexPath.section) == .shows, isShowMode {
+            if homeSection(at: indexPath.section, in: collectionView) == .shows,
+               !isHomePage(collectionView) {
                 handleSelectModeTap(at: indexPath)
             }
             return
         }
-        switch homeSection(at: indexPath.section) {
+        switch homeSection(at: indexPath.section, in: collectionView) {
         case .hero:
             break
         case .slideshowRibbon:
             handleLiveSlideshowRibbonTap(at: indexPath)
-        case .shows where isShowMode:
+        case .shows where !isHomePage(collectionView):
             handleShowModeTap(at: indexPath)
         default:
             guard let item = homeItem(at: indexPath) else { return }
@@ -132,11 +142,6 @@ extension LibraryGridViewController: UICollectionViewDataSource,
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
         guard scrollView === collectionView else { return }
-        // Header overlays the pager — kill dead vertical rubber-band when the
-        // grid doesn't actually overflow.
-        if maxVerticalScroll() <= 8 {
-            pinCollectionViewToTop()
-        }
         updateHeroCollapse()
     }
 
@@ -179,10 +184,10 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         point: CGPoint
     ) -> UIContextMenuConfiguration? {
         guard !isArranging, !isSelecting else { return nil }
-        switch homeSection(at: indexPath.section) {
+        switch homeSection(at: indexPath.section, in: collectionView) {
         case .hero, .slideshowRibbon:
             return nil
-        case .shows where isShowMode:
+        case .shows where !isHomePage(collectionView):
             // Long-press enters arrange mode; ⋯ hosts Preview / Cover / Remove / etc.
             return nil
         default:
@@ -196,7 +201,10 @@ extension LibraryGridViewController: UICollectionViewDataSource,
 
     // MARK: - Hero
 
-    private func dequeueHomeHeroCell(at indexPath: IndexPath) -> UICollectionViewCell {
+    private func dequeueHomeHeroCell(
+        in collectionView: UICollectionView,
+        at indexPath: IndexPath
+    ) -> UICollectionViewCell {
         guard let cell = collectionView.dequeueReusableCell(
             withReuseIdentifier: HomeHeroCarouselCell.reuseIdentifier,
             for: indexPath
@@ -210,7 +218,10 @@ extension LibraryGridViewController: UICollectionViewDataSource,
     // MARK: - Home Show Tiles
 
     /// Same soft Add chrome as an empty Show (`configureActionTile`).
-    private func dequeueHomeCreateShowCell(at indexPath: IndexPath) -> UICollectionViewCell {
+    private func dequeueHomeCreateShowCell(
+        in collectionView: UICollectionView,
+        at indexPath: IndexPath
+    ) -> UICollectionViewCell {
         guard let cell = collectionView.dequeueReusableCell(
             withReuseIdentifier: LibraryThumbnailCell.reuseIdentifier,
             for: indexPath
@@ -221,7 +232,10 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         return cell
     }
 
-    private func dequeueHomeShowTileCell(at indexPath: IndexPath) -> UICollectionViewCell {
+    private func dequeueHomeShowTileCell(
+        in collectionView: UICollectionView,
+        at indexPath: IndexPath
+    ) -> UICollectionViewCell {
         guard let cell = collectionView.dequeueReusableCell(
             withReuseIdentifier: HomeShowTileCell.reuseIdentifier,
             for: indexPath
@@ -349,7 +363,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
     private func handleTap(_ item: HomeGridItem) {
         switch item {
         case .logo:
-            if isLiveOutputLocked || !hasLiveOutputDestination {
+            if isLiveOutputLocked {
                 presentLogoPhonePreview()
                 return
             }
@@ -357,7 +371,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             isScreensaverSelected = false
             presentLogoLive()
         case .screensaver:
-            if isLiveOutputLocked || !hasLiveOutputDestination {
+            if isLiveOutputLocked {
                 presentScreensaverPhonePreview()
                 return
             }
@@ -365,9 +379,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             isLogoSelected = false
             presentScreensaverLive()
         case .camera:
-            if hasLiveOutputDestination {
-                guard !blockLiveChangeIfLocked() else { return }
-            }
+            guard !blockLiveChangeIfLocked() else { return }
             isBlackSelected = false
             isLogoSelected = false
             isScreensaverSelected = false
@@ -453,17 +465,14 @@ extension LibraryGridViewController: UICollectionViewDataSource,
 
     /// Presents a saved website (bookmark or Show member).
     ///
-    /// With a live destination: marks the page live, warms the session, then opens
-    /// the phone browser which adopts that same web view. Browse-only (no AirPlay /
-    /// Eclipse TV): opens the phone browser without marking live.
+    /// Marks the page live, warms the session, then opens the phone browser which
+    /// adopts that same web view.
     ///
     /// A second browser must never open on top of the first — that left the loser with
     /// an empty stage and leaked the warm web view. If one is already up, navigate it
     /// like a normal browser load so Back still works and AirPlay follows.
     func presentWebPage(_ page: WebPage) {
-        if hasLiveOutputDestination {
-            guard !blockLiveChangeIfLocked() else { return }
-        }
+        guard !blockLiveChangeIfLocked() else { return }
         if let open = openController(ofType: WebRemoteViewController.self) {
             SlideshowPlaybackController.shared.stop()
             open.loadBrowserURL(page.url, pageId: page.id)
@@ -475,10 +484,8 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         WarmWebSessionPool.shared.warmIfNeeded(for: page)
         // Park any in-hero preview before adopt so Auto Layout pins don't stick.
         liveHeader.clearWebPreview(parking: true)
-        if hasLiveOutputDestination {
-            ExternalDisplayManager.shared.presentWeb(page.url, pageId: page.id)
-            announceAirPlayOverlayIfLinked()
-        }
+        ExternalDisplayManager.shared.presentWeb(page.url, pageId: page.id)
+        announceAirPlayOverlayIfLinked()
         let remote = WebRemoteViewController(page: page)
         // Landscape Display Mode rotates the browser; a plain nav controller would not.
         let nav = DisplayModeNavigationController(rootViewController: remote)
@@ -493,11 +500,8 @@ extension LibraryGridViewController: UICollectionViewDataSource,
     ///
     /// One viewer at a time, checked before the side effects: a second tap would
     /// restart the AirPlay overlay for a viewer UIKit then refuses to present.
-    /// Browse-only: opens the phone viewer without marking live.
     func presentPDF(_ doc: SavedPDF) {
-        if hasLiveOutputDestination {
-            guard !blockLiveChangeIfLocked() else { return }
-        }
+        guard !blockLiveChangeIfLocked() else { return }
         guard !isAlreadyOpen(PDFRemoteViewController.self) else { return }
         SlideshowPlaybackController.shared.stop()
         guard let url = PDFStore.shared.fileURL(for: doc.id) else {
@@ -510,10 +514,8 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             present(alert, animated: true)
             return
         }
-        if hasLiveOutputDestination {
-            ExternalDisplayManager.shared.presentPDF(url, documentId: doc.id)
-            announceAirPlayOverlayIfLinked()
-        }
+        ExternalDisplayManager.shared.presentPDF(url, documentId: doc.id)
+        announceAirPlayOverlayIfLinked()
         let remote = PDFRemoteViewController(document: doc, fileURL: url)
         let nav = UINavigationController(rootViewController: remote)
         nav.modalPresentationStyle = .fullScreen
@@ -533,16 +535,9 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         }
 
         // Captures never go to Apple TV — AirPlay from the phone, downloading first
-        // when this device only has the CloudKit metadata. Browse-only still downloads
-        // then opens phone Preview.
+        // when this device only has the CloudKit metadata.
         if let capture = CaptureStore.shared.record(id: item.id) {
             presentCapture(capture, libraryItem: item)
-            return
-        }
-
-        // No AirPlay / Eclipse TV: play on the phone hero (Preview from hero / ⋯).
-        if !hasLiveOutputDestination {
-            presentPhoneLiveMedia(item)
             return
         }
 
@@ -570,8 +565,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         reloadLibraryGrid()
     }
 
-    /// Downloads (if needed) then presents a capture via phone AirPlay, or Preview
-    /// when there is no live destination.
+    /// Downloads (if needed) then presents a capture via phone AirPlay.
     private func presentCapture(_ capture: CaptureRecord, libraryItem: LibraryItemDTO) {
         SlideshowPlaybackController.shared.stop()
         if capture.isVideo {
@@ -580,11 +574,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
 
         let finish: (LibraryItemDTO) -> Void = { [weak self] item in
             guard let self else { return }
-            if self.hasLiveOutputDestination {
-                self.presentOfflineLive(for: item)
-            } else {
-                self.presentPhoneLiveMedia(item)
-            }
+            self.presentOfflineLive(for: item)
             self.reloadLibraryGrid()
         }
 

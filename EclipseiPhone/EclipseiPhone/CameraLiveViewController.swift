@@ -8,12 +8,14 @@
 import UIKit
 import AVFoundation
 
-/// Phone-side camera control: Display Mode preview, tap to toggle AirPlay live.
+/// Phone-side camera control: Display Mode preview, tap to toggle live.
 ///
 /// The preview is the largest 16:9 / 9:16 panel that fits the stage (edge contact
 /// where the aspect allows). The shutter row sits outside that panel, like the
-/// system Camera app. Tap the stage to go live or stop. While live, the shutter
-/// takes a photo; hold records unless Always Record When Live is on.
+/// system Camera app. Shutter always captures: tap = photo, hold = record
+/// (except Always Record When Live, which owns recording while on-air).
+/// Tap the stage to go live or stop — with a display that is AirPlay; without
+/// one, Camera still goes live on the phone.
 final class CameraLiveViewController: UIViewController {
 
     // MARK: - Subviews
@@ -101,16 +103,34 @@ final class CameraLiveViewController: UIViewController {
     /// Gap between the Display Mode panel and the outside shutter strip.
     static let chromeGap: CGFloat = 16
 
-    /// Shutter — when live, tap = photo, hold = video.
+    /// Shutter — tap = photo, hold = video (preview or live).
     /// `.custom` so the control doesn't delay/cancel the zero-duration press gesture.
     let shutterButton = UIButton(type: .custom)
     /// Switches between the back and front cameras.
     let flipButton = UIButton(type: .system)
-    /// Opens the frame drawer to pick, hide, import, or delete overlays.
+    /// Opens the frame library to choose which overlays appear on the ribbon.
     let frameButton = UIButton(type: .system)
-    /// Cutaway still thumbnail — tap toggles that photo onto AirPlay while live.
+    /// Overlay-frame thumbnails beside the cutaway still. Tap makes a frame live.
+    let frameRibbonView: UICollectionView = {
+        let layout = UICollectionViewFlowLayout()
+        layout.scrollDirection = .horizontal
+        layout.minimumInteritemSpacing = 8
+        layout.minimumLineSpacing = 8
+        let view = UICollectionView(frame: .zero, collectionViewLayout: layout)
+        view.backgroundColor = .clear
+        view.showsHorizontalScrollIndicator = false
+        view.alwaysBounceHorizontal = true
+        view.clipsToBounds = false
+        view.contentInsetAdjustmentBehavior = .never
+        view.delaysContentTouches = false
+        view.translatesAutoresizingMaskIntoConstraints = true
+        return view
+    }()
+    /// Program thumb of what's on AirPlay while this camera is still preview-only.
+    let liveOutputThumbView = CameraLiveOutputThumbView()
+    /// Cutaway still thumbnail — tap parks that photo (AirPlay, or locally).
     let alternateStillButton = UIButton(type: .custom)
-    /// Aspect-fill photo inside `alternateStillButton` (nil art uses the plus symbol).
+    /// Aspect-fill photo inside `alternateStillButton` (Background when none chosen).
     let alternateStillImageView: UIImageView = {
         let view = UIImageView()
         view.contentMode = .scaleAspectFill
@@ -120,10 +140,20 @@ final class CameraLiveViewController: UIViewController {
         view.isHidden = true
         return view
     }()
+    /// Full-panel still while the cutaway is parked with no external display.
+    let cutawayCoverView: UIImageView = {
+        let view = UIImageView()
+        view.contentMode = .scaleAspectFill
+        view.clipsToBounds = true
+        view.isUserInteractionEnabled = false
+        view.isHidden = true
+        view.translatesAutoresizingMaskIntoConstraints = true
+        return view
+    }()
     /// Show that receives captures taken here, when the camera was opened from one.
     var captureDestinationShowId: UUID?
 
-    /// Timer discriminating shutter tap vs hold-to-record (live only).
+    /// Timer discriminating shutter tap vs hold-to-record.
     var shutterHoldTimer: Timer?
     /// True once the hold threshold fires for the active shutter press.
     var shutterDidLongPress = false
@@ -154,6 +184,8 @@ final class CameraLiveViewController: UIViewController {
         setupPreviewChrome()
         setupCaptureMocks()
         setupAlternateStillButton()
+        setupLiveOutputThumb()
+        setupFrameRibbon()
         setupFrameOverlay()
         setupSettingsButton()
 
@@ -297,6 +329,7 @@ final class CameraLiveViewController: UIViewController {
         freezeFrameView.transform = previewView.transform
         layoutMirrorView()
         layoutFrameOverlay()
+        layoutCutawayCover()
         previewView.syncDisplayModeOrientation()
     }
 

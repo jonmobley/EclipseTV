@@ -38,6 +38,8 @@ enum CloudKitRecordMapper {
         }
         record[CloudKitSchema.ShowKey.createdAt] = album.createdAt as CKRecordValue
         record[CloudKitSchema.ShowKey.modifiedAt] = modifiedAt as CKRecordValue
+        record[CloudKitSchema.ShowKey.previewsWhenDisconnected] =
+            album.previewsWhenDisconnected as CKRecordValue
         return record
     }
 
@@ -53,6 +55,8 @@ enum CloudKitRecordMapper {
         let rawOrientation = record[CloudKitSchema.ShowKey.orientation] as? String
         let orientation = ExternalOutputOrientation.resolved(fromStored: rawOrientation)
         let createdAt = (record[CloudKitSchema.ShowKey.createdAt] as? Date) ?? Date()
+        let previewsWhenDisconnected =
+            (record[CloudKitSchema.ShowKey.previewsWhenDisconnected] as? Bool) ?? false
         return LocalAlbum(
             id: uuid,
             name: UserDisplayName.clamp(name),
@@ -60,7 +64,8 @@ enum CloudKitRecordMapper {
             coverId: coverId,
             orientation: orientation,
             createdAt: createdAt,
-            surfaceIds: surfaceIds
+            surfaceIds: surfaceIds,
+            previewsWhenDisconnected: previewsWhenDisconnected
         )
     }
 

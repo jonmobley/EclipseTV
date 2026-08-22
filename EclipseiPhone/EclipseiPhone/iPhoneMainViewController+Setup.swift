@@ -123,8 +123,8 @@ extension iPhoneMainViewController {
         headerBar.onPresentBlack = { [weak self] in
             self?.libraryViewController.toggleBlackLive()
         }
-        headerBar.onOpenGettingStarted = { [weak self] in
-            self?.presentGettingStarted()
+        headerBar.onToggleDisconnectedPreview = { [weak self] in
+            self?.libraryViewController.toggleDisconnectedLivePreview()
         }
         headerBar.onNewShow = { [weak self] in
             self?.promptNewAlbum()
@@ -186,7 +186,7 @@ extension iPhoneMainViewController {
         audioMiniBubble.translatesAutoresizingMaskIntoConstraints = false
         audioMiniBubble.isHidden = true
         audioMiniBubble.onExpand = { [weak self] in
-            self?.setAudioMiniCollapsed(false, animated: true)
+            self?.handleMusicBubbleTap()
         }
         audioMiniBubble.onStop = { [weak self] in
             AudioPlayerController.shared.stop()
@@ -207,29 +207,32 @@ extension iPhoneMainViewController {
                 equalTo: view.safeAreaLayoutGuide.bottomAnchor
             )
         ]
-        // Constants track the live preview frame — don't pin across the pager
-        // scroll view, which fights Auto Layout when content moves.
-        let dockLeading = audioMiniPlayer.leadingAnchor.constraint(
-            equalTo: view.leadingAnchor, constant: 0
+        // Compact landscape card: same trailing-bottom corner as the Music bubble.
+        let landTrailing = audioMiniPlayer.trailingAnchor.constraint(
+            equalTo: view.safeAreaLayoutGuide.trailingAnchor,
+            constant: -AudioMiniPlayerView.compactTrailingInset
         )
-        let dockWidth = audioMiniPlayer.widthAnchor.constraint(equalToConstant: 160)
-        let dockTop = audioMiniPlayer.topAnchor.constraint(
-            equalTo: view.topAnchor, constant: 0
+        let landBottom = audioMiniPlayer.bottomAnchor.constraint(
+            equalTo: view.safeAreaLayoutGuide.bottomAnchor,
+            constant: -AudioMiniPlayerView.compactBottomInset
         )
-        audioMiniDockLeadingConstraint = dockLeading
-        audioMiniDockWidthConstraint = dockWidth
-        audioMiniDockTopConstraint = dockTop
-        audioMiniSideBySideConstraints = [dockLeading, dockWidth, dockTop]
+        let landWidth = audioMiniPlayer.widthAnchor.constraint(
+            equalToConstant: AudioMiniPlayerView.compactWidth
+        )
+        audioMiniLandscapeWidthConstraint = landWidth
+        audioMiniLandscapeConstraints = [landTrailing, landBottom, landWidth]
         NSLayoutConstraint.activate(audioMiniPortraitConstraints + [
             height,
             audioMiniBubble.trailingAnchor.constraint(
-                equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16
+                equalTo: view.safeAreaLayoutGuide.trailingAnchor,
+                constant: -AudioMiniPlayerView.compactTrailingInset
             ),
             audioMiniBubble.bottomAnchor.constraint(
-                equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -12
+                equalTo: view.safeAreaLayoutGuide.bottomAnchor,
+                constant: -AudioMiniPlayerView.compactBottomInset
             )
         ])
-        isAudioMiniSideBySide = false
+        isAudioMiniLandscapeCompact = false
 
         audioPlayerObserver = NotificationCenter.default.addObserver(
             forName: AudioPlayerController.didChangeNotification,
@@ -245,6 +248,15 @@ extension iPhoneMainViewController {
     func presentAudioLibrary() {
         guard !isHomeSplitLayout else { return }
         showMusicPage(animated: true)
+    }
+
+    /// Corner Music control: expand playback chrome, or open Music when idle.
+    func handleMusicBubbleTap() {
+        if AudioPlayerController.shared.hasActiveSession {
+            setAudioMiniCollapsed(false, animated: true)
+        } else {
+            presentAudioLibrary()
+        }
     }
 
     /// Presents the expanded Now Playing sheet for the ambient player.
@@ -349,19 +361,13 @@ extension iPhoneMainViewController {
         present(nav, animated: true)
     }
 
-    /// Presents a filterable sheet of existing images, videos, and PDFs.
+    /// Opens Media Library as a page of existing images, videos, and PDFs.
     ///
     /// With an open Show: multi-select and **Add** appends cards (never goes live).
-    /// Without a Show: tap presents the item (legacy path).
+    /// Without a Show: tap Previews on top of this page (library stays open).
     func presentMediaLibrary() {
         guard !isAlreadyOpen(MediaLibraryPickerViewController.self) else { return }
         let picker = MediaLibraryPickerViewController()
-        let nav = UINavigationController(rootViewController: picker)
-        nav.modalPresentationStyle = .pageSheet
-        if let sheet = nav.sheetPresentationController {
-            sheet.detents = [.large()]
-            sheet.prefersGrabberVisible = true
-        }
         if let showId = libraryViewController.openShowId {
             picker.targetShowId = showId
             picker.onAddToShow = { mediaIds, pdfIds in
@@ -372,18 +378,19 @@ extension iPhoneMainViewController {
                     LocalAlbumStore.shared.add(itemId: id.uuidString, toAlbumId: showId)
                 }
             }
-        } else {
-            picker.onSelectMedia = { [weak self, weak nav] item in
-                nav?.dismiss(animated: true) {
-                    self?.libraryViewController.presentMedia(item)
-                }
-            }
-            picker.onSelectPDF = { [weak self, weak nav] doc in
-                nav?.dismiss(animated: true) {
-                    self?.libraryViewController.presentPDF(doc)
-                }
-            }
         }
-        presentationAnchor.present(nav, animated: true)
+        showMediaLibraryPage(picker)
+    }
+
+    /// Pushes onto the Home nav stack, or presents full-screen when there is none.
+    private func showMediaLibraryPage(_ picker: MediaLibraryPickerViewController) {
+        if let nav = navigationController {
+            navigationItem.backButtonTitle = "Back"
+            nav.pushViewController(picker, animated: true)
+            return
+        }
+        let wrapped = UINavigationController(rootViewController: picker)
+        wrapped.modalPresentationStyle = .fullScreen
+        presentationAnchor.present(wrapped, animated: true)
     }
 }

@@ -10,8 +10,8 @@ import AVFoundation
 import UIKit
 
 /// Large hero banner pinned to the top of the Library screen showing whatever is
-/// currently live on the Apple TV / AirPlay, or phone-local library media when no
-/// external display is connected. When nothing is live it falls back to a neutral
+/// currently live on the Apple TV / AirPlay. Hidden when no external display or
+/// Eclipse TV is connected. When nothing is live it falls back to a neutral
 /// placeholder so the layout stays fixed while the grid scrolls beneath it.
 final class LiveHeaderView: UIView {
 
@@ -232,7 +232,7 @@ final class LiveHeaderView: UIView {
             allowsFullscreenTap = false
             let message = isOnline
                 ? "Select item to go live"
-                : "Select item to play on this iPhone"
+                : "Connect to HDMI or AirPlay"
             applyContent(key: "placeholder:\(message)") {
                 self.showPlaceholder(message: message)
             }
@@ -240,14 +240,19 @@ final class LiveHeaderView: UIView {
         }
 
         let thumbToken = thumbnail.map { "\(ObjectIdentifier($0))" } ?? "nil"
-        let key = "media:\(item.id):\(thumbToken):\(isOnline):local\(showsLocalTransport):fs\(allowsStillFullscreenTap)"
+        let fitToken = item.isVideo
+            ? "video"
+            : (SlideshowPlaybackController.shared.contentModeForLiveStill(id: item.id)
+                == .scaleAspectFill ? "fill" : "fit")
+        let key = "media:\(item.id):\(thumbToken):\(isOnline)"
+            + ":local\(showsLocalTransport):fs\(allowsStillFullscreenTap):\(fitToken)"
         applyContent(key: key) {
             self.backgroundColor = .secondarySystemBackground
             // The hero card is the output panel's aspect, so frame the art the way the
             // external screen / Apple TV does: videos letterbox, stills follow Fit / Fill.
             self.imageView.contentMode = item.isVideo
                 ? .scaleAspectFit
-                : MediaFitSettings.mode(forId: item.id).contentMode
+                : SlideshowPlaybackController.shared.contentModeForLiveStill(id: item.id)
             self.imageView.image = thumbnail
             self.imageView.isHidden = false
             self.imageView.alpha = 1

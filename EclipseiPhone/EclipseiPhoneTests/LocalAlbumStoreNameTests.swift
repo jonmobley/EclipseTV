@@ -106,4 +106,60 @@ struct LocalAlbumStoreNameTests {
         ])
         #expect(album.itemIds == ["a", "b"])
     }
+
+    @Test func sanitizedSurfaceAppendsSlideshowsLast() {
+        let token = ShowSlideshowToken.token(for: UUID())
+        let result = LocalAlbum.sanitizedSurface(
+            ShowToolToken.all + ["a"],
+            itemIds: ["a"],
+            slideshowIds: [token]
+        )
+        #expect(result == ShowToolToken.all + ["a", token])
+    }
+
+    @Test func sanitizedSurfaceKeepsSlideshowSlot() {
+        let token = ShowSlideshowToken.token(for: UUID())
+        let result = LocalAlbum.sanitizedSurface(
+            [token, ShowToolToken.screensaver, "a"],
+            itemIds: ["a"],
+            slideshowIds: [token]
+        )
+        #expect(result == [token, ShowToolToken.screensaver, "a"])
+    }
+
+    @Test func reorderSurfaceMovesSlideshowAmongMembers() throws {
+        let store = makeStore()
+        let show = try store.create(name: "Slideshows", orientation: .landscape)
+        store.add(itemId: "a", toAlbumId: show.id)
+        let token = ShowSlideshowToken.token(for: UUID())
+        store.reorderSurface(
+            [ShowToolToken.logo, token, "a", ShowToolToken.screensaver],
+            albumId: show.id
+        )
+        let album = try #require(store.album(id: show.id))
+        #expect(album.resolvedSurfaceIds == [
+            ShowToolToken.logo, token, "a", ShowToolToken.screensaver
+        ])
+        #expect(album.itemIds == ["a"])
+        #expect(!album.itemIds.contains(token))
+    }
+
+    @Test func slideshowTokenRoundTrips() {
+        let id = UUID()
+        let token = ShowSlideshowToken.token(for: id)
+        #expect(ShowSlideshowToken.isSlideshow(token))
+        #expect(!ShowSlideshowToken.isSlideshow("media-1"))
+        #expect(ShowSlideshowToken.slideshowId(from: token) == id)
+        #expect(ShowSlideshowToken.slideshowId(from: "media-1") == nil)
+    }
+
+    @Test func addSlideshowAppendsWhenSurfaceMaterialized() throws {
+        let store = makeStore()
+        let show = try store.create(name: "Deck", orientation: .landscape)
+        store.hideTool(ShowToolToken.camera, albumId: show.id)
+        let slideshowId = UUID()
+        store.addSlideshow(slideshowId, toAlbumId: show.id)
+        let album = try #require(store.album(id: show.id))
+        #expect(album.resolvedSurfaceIds.last == ShowSlideshowToken.token(for: slideshowId))
+    }
 }

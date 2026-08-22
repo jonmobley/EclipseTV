@@ -25,11 +25,11 @@ extension CameraLiveViewController {
     /// The capture session drives a single `AVCaptureVideoPreviewLayer`, and binding a
     /// second one hands it the connection and blacks out the first. While AirPlay is
     /// live the TV owns that layer, so the panel mirrors the frame tap instead;
-    /// off-air the panel takes the hardware layer back.
+    /// off-air — and when live with no display — the panel takes the hardware layer.
     /// - Parameter force: Re-applies even when the source is unchanged (Display Mode
     ///   switches change gravity and rotation).
     func updateLivePreviewSource(force: Bool = false) {
-        let shouldMirror = isAirPlayLive
+        let shouldMirror = isAirPlayLive && ExternalDisplayManager.shared.isConnected
         guard force || isPreviewMirrored != shouldMirror else { return }
         // Cover only a real swap — not the first bind or a force re-layout.
         let sourceChanged =
