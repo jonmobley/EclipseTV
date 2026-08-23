@@ -83,9 +83,11 @@ extension CameraLiveViewController {
         }
     }
 
-    /// Goes live, or stops live (and finishes any movie first).
+    /// Goes live from preview. No-op when already live.
     ///
-    /// AirPlay when a display is attached; otherwise Camera is live on the phone.
+    /// Parked cutaway: resumes the live camera. Requires AirPlay, EclipseTV, or
+    /// Practice Mode to go live the first time; otherwise the stage stays a
+    /// viewfinder — the same Preview-only rule as Show cards.
     func toggleAirPlayLive() {
         let mgr = ExternalDisplayManager.shared
         if mgr.isCameraParkedOnStill {
@@ -96,14 +98,13 @@ extension CameraLiveViewController {
             return
         }
         if mgr.isCameraModeActive {
-            finalizeRecordingIfNeeded { [weak self] in
-                guard let self else { return }
-                ExternalDisplayManager.shared.stopCameraAndApplyCloseDestination()
-                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                self.refreshLiveChrome()
-            }
             return
         }
+
+        let practice = captureDestinationShowId.flatMap {
+            LocalAlbumStore.shared.album(id: $0)?.previewsWhenDisconnected
+        } ?? false
+        guard LiveOutputRouting.canMarkLive(practiceMode: practice) else { return }
 
         // Mirror first — AirPlay's attach steals the one preview connection.
         if mgr.isConnected {
@@ -237,13 +238,13 @@ extension CameraLiveViewController {
 
     // MARK: - Recording timer
 
-    /// Shows/hides and ticks the elapsed label beside LIVE.
+    /// Shows/hides and ticks the elapsed pill in the camera preview.
     func syncRecordingTimer() {
         if CameraManager.shared.isRecording {
             if recordingStartedAt == nil {
                 recordingStartedAt = Date()
             }
-            recordingTimerLabel.isHidden = false
+            recordingTimerPillView.isHidden = false
             updateRecordingTimerLabel()
             guard recordingTickTimer == nil else { return }
             recordingTickTimer = Timer.scheduledTimer(
@@ -262,19 +263,19 @@ extension CameraLiveViewController {
         recordingTickTimer?.invalidate()
         recordingTickTimer = nil
         recordingStartedAt = nil
-        recordingTimerLabel.isHidden = true
+        recordingTimerPillView.isHidden = true
         recordingTimerLabel.text = nil
     }
 
     private func updateRecordingTimerLabel() {
-        guard let start = recordingStartedAt else {
+        if let start = recordingStartedAt {
+            let elapsed = max(0, Int(Date().timeIntervalSince(start)))
+            let minutes = elapsed / 60
+            let seconds = elapsed % 60
+            recordingTimerLabel.text = String(format: "%d:%02d", minutes, seconds)
+        } else {
             recordingTimerLabel.text = "0:00"
-            return
         }
-        let elapsed = max(0, Int(Date().timeIntervalSince(start)))
-        let minutes = elapsed / 60
-        let seconds = elapsed % 60
-        recordingTimerLabel.text = String(format: "%d:%02d", minutes, seconds)
         layoutTopChromeInPanel()
     }
 

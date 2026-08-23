@@ -77,12 +77,15 @@ enum CloudKitRecordMapper {
 
     // MARK: - MediaItem
 
-    /// Builds a MediaItem record. Sets `parent` when `showId` is present.
+    /// Builds a MediaItem record. Always writes `showId`; sets `parent` only
+    /// when `attachAsShareChild` is true (the Show is a `CKShare` root).
     static func makeMediaRecord(
         from capture: CaptureRecord,
         existing: CKRecord? = nil,
         assetURL: URL? = nil,
-        modifiedAt: Date = Date()
+        modifiedAt: Date = Date(),
+        showId: UUID? = nil,
+        attachAsShareChild: Bool = false
     ) -> CKRecord {
         let record = existing ?? CKRecord(
             recordType: CloudKitSchema.RecordType.mediaItem,
@@ -99,20 +102,39 @@ enum CloudKitRecordMapper {
         if let hash = capture.contentHash {
             record[CloudKitSchema.MediaKey.contentHash] = hash as CKRecordValue
         }
-        if let showId = capture.showId {
-            record[CloudKitSchema.MediaKey.showId] = showId.uuidString as CKRecordValue
+        applyShowLink(
+            to: record,
+            showId: showId ?? capture.showId,
+            showIdKey: CloudKitSchema.MediaKey.showId,
+            attachAsShareChild: attachAsShareChild
+        )
+        if let assetURL {
+            record[CloudKitSchema.MediaKey.asset] = CKAsset(fileURL: assetURL)
+        }
+        return record
+    }
+
+    /// Writes `showId` as a regular field. Sets `parent` only for share roots.
+    static func applyShowLink(
+        to record: CKRecord,
+        showId: UUID?,
+        showIdKey: String,
+        attachAsShareChild: Bool
+    ) {
+        guard let showId else {
+            record[showIdKey] = nil
+            record.parent = nil
+            return
+        }
+        record[showIdKey] = showId.uuidString as CKRecordValue
+        if attachAsShareChild {
             record.parent = CKRecord.Reference(
                 recordID: CloudKitSchema.showRecordID(for: showId),
                 action: .none
             )
         } else {
-            record[CloudKitSchema.MediaKey.showId] = nil
             record.parent = nil
         }
-        if let assetURL {
-            record[CloudKitSchema.MediaKey.asset] = CKAsset(fileURL: assetURL)
-        }
-        return record
     }
 
     /// Capture from a MediaItem record (asset not downloaded here).

@@ -19,7 +19,7 @@ final class SeamlessLoopPlayerView: UIView {
     private var activeIndex = 0
     private var timeObserver: Any?
     private var endObservers: [NSObjectProtocol] = []
-    private var statusObservation: NSKeyValueObservation?
+    private var displayReadyObservation: NSKeyValueObservation?
     private var isCrossfading = false
     private var didSignalReady = false
     /// Fade-in only (underlay stays opaque) — simultaneous fades dip to black.
@@ -44,8 +44,9 @@ final class SeamlessLoopPlayerView: UIView {
         for player in players {
             player.isMuted = true
             player.actionAtItemEnd = .pause
+            AirPlayVideoTransport.configureLayerOnlyPlayback(on: player)
         }
-        observeReady(on: primary)
+        observeReady()
         observeEnds()
     }
 
@@ -62,6 +63,11 @@ final class SeamlessLoopPlayerView: UIView {
         for layer in playerLayers {
             layer.frame = bounds
         }
+    }
+
+    /// True once the active layer has a decoded frame (not just `readyToPlay`).
+    var isReadyForDisplay: Bool {
+        playerLayers[activeIndex].isReadyForDisplay
     }
 
     /// Starts muted playback from the current active player.
@@ -90,7 +96,7 @@ final class SeamlessLoopPlayerView: UIView {
             NotificationCenter.default.removeObserver(observer)
         }
         endObservers.removeAll()
-        statusObservation = nil
+        displayReadyObservation = nil
         for player in players {
             player.pause()
         }
@@ -99,12 +105,15 @@ final class SeamlessLoopPlayerView: UIView {
 
     // MARK: - Private
 
-    private func observeReady(on player: AVPlayer) {
-        statusObservation = player.currentItem?.observe(\.status, options: [.initial, .new]) {
-            [weak self] item, _ in
-            guard let self, item.status == .readyToPlay, !self.didSignalReady else { return }
+    private func observeReady() {
+        let layer = playerLayers[0]
+        displayReadyObservation = layer.observe(\.isReadyForDisplay, options: [.initial, .new]) {
+            [weak self] layer, _ in
+            guard let self, layer.isReadyForDisplay, !self.didSignalReady else { return }
             self.didSignalReady = true
-            self.onReady?()
+            DispatchQueue.main.async { [weak self] in
+                self?.onReady?()
+            }
         }
     }
 

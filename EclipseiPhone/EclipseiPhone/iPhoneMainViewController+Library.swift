@@ -16,16 +16,16 @@ extension iPhoneMainViewController {
     func refreshLibraryMenu() {
         let openShow = libraryViewController.openShow
         headerBar.setCenterTitle(openShow?.name ?? "Home")
+        headerBar.setPreviewsWhenDisconnected(openShow?.previewsWhenDisconnected ?? false)
         headerBar.setShowModeChrome(openShow != nil)
-        headerBar.setDisconnectedPreview(openShow?.previewsWhenDisconnected ?? false)
         headerBar.setLibraryMenu(makeLibraryMenu())
         headerBar.setAddMenu(makeAddMenu())
         refreshPresentedSettingsConnectionState()
     }
 
     /// Home → Open Show → New Show → Library → Music → Settings, then Recent Shows.
-    /// An open Show adds Home (leave Show mode). Show-mode also keeps the header
-    /// gear for Settings; Home Settings omits show-specific rows.
+    /// An open Show adds Home (leave Show mode) and drops Settings — the header
+    /// gear already opens it. Home Settings omits show-specific rows.
     /// Getting Started lives in Settings, not this dropdown.
     ///
     /// Open Show always lists every openable Show (only the currently open one is
@@ -52,7 +52,9 @@ extension iPhoneMainViewController {
         children.append(newShowAction())
         children.append(mediaLibraryAction())
         children.append(musicAction())
-        children.append(settingsAction())
+        if openShow == nil {
+            children.append(settingsAction())
+        }
         let recents = recentShowsForMenu(excluding: openShow?.id)
         if !recents.isEmpty {
             children.append(recentShowsMenu(recents))
@@ -60,10 +62,10 @@ extension iPhoneMainViewController {
         return UIMenu(children: children)
     }
 
-    /// Opens the Media Library picker from the Home dropdown.
+    /// Opens the Library picker from the Home dropdown.
     private func mediaLibraryAction() -> UIAction {
         UIAction(
-            title: "Media Library",
+            title: "Library",
             image: UIImage(systemName: "square.grid.2x2")
         ) { [weak self] _ in
             self?.presentMediaLibrary()
@@ -188,7 +190,7 @@ extension iPhoneMainViewController {
         }
     }
 
-    /// Wires name, Share, and Delete when Settings opens over a Show.
+    /// Wires name, Share, Delete, and Practice Mode when Settings opens over a Show.
     private func configureOpenShowEditing(on settings: SettingsViewController) {
         guard let show = libraryViewController.openShow else {
             settings.openShowName = nil
@@ -208,9 +210,10 @@ extension iPhoneMainViewController {
             }
         }
         settings.onDeleteShow = { [weak self] in
-            self?.dismiss(animated: true) {
-                self?.libraryViewController.confirmDeleteOpenShow()
-            }
+            guard let self, let id = self.libraryViewController.openShowId else { return }
+            LocalAlbumStore.shared.delete(id: id)
+            self.libraryViewController.closeOpenShow()
+            self.dismiss(animated: true)
         }
     }
 

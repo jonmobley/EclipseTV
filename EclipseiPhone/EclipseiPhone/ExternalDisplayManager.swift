@@ -106,10 +106,6 @@ final class ExternalDisplayManager {
     private var externalWindow: UIWindow?
     private var presentationVC: PresentationViewController?
     private var lastSource: PresentationSource?
-    /// AirPlay source captured just before camera went live (for Previous restore).
-    private var preCameraSource: PresentationSource?
-    /// Whether `preCameraSource` was a joined sticky live item.
-    private var preCameraWasJoined = false
     /// What to put back when blackout is toggled off.
     private var blackoutRestore: BlackoutRestore?
     private var lifecycleObservers: [NSObjectProtocol] = []
@@ -172,6 +168,17 @@ final class ExternalDisplayManager {
             },
             center.addObserver(
                 forName: UIScene.didActivateNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor in
+                    self?.disconnectWorkItem?.cancel()
+                    self?.refreshConnection()
+                    self?.keepPresentationAlive()
+                }
+            },
+            center.addObserver(
+                forName: UIScreen.didConnectNotification,
                 object: nil,
                 queue: .main
             ) { [weak self] _ in
@@ -279,7 +286,9 @@ final class ExternalDisplayManager {
         // Drop TV-side players / web / camera layer. Do not stop the phone camera
         // session or dismiss phone browser/PDF — those stay useful offline.
         presentationVC?.showIdle()
-        if overlaySource != nil {
+        if overlaySource == .camera {
+            dropCameraOverlayAfterDisconnect()
+        } else if overlaySource != nil {
             overlaySource = nil
             isCameraParkedOnStill = false
             liveWebPageId = nil
@@ -308,10 +317,11 @@ final class ExternalDisplayManager {
     }
 
     private func hasExternalDisplayScene() -> Bool {
-        UIApplication.shared.connectedScenes.contains { scene in
-            guard let windowScene = scene as? UIWindowScene else { return false }
-            return isExternalDisplayRole(windowScene.session.role)
-        }
+        extraScreenWindowScene() != nil
+            || UIApplication.shared.connectedScenes.contains { scene in
+                guard let windowScene = scene as? UIWindowScene else { return false }
+                return Self.isExternalDisplayRole(windowScene.session.role)
+            }
     }
 
     private func beginBackgroundPresentationTask() {
@@ -343,9 +353,14 @@ final class ExternalDisplayManager {
 
         for scene in UIApplication.shared.connectedScenes {
             guard let windowScene = scene as? UIWindowScene,
-                  isExternalDisplayRole(windowScene.session.role) else {
+                  Self.isExternalDisplayRole(windowScene.session.role) else {
                 continue
             }
+            attach(to: windowScene)
+            return
+        }
+
+        if let windowScene = extraScreenWindowScene() {
             attach(to: windowScene)
             return
         }
@@ -360,10 +375,20 @@ final class ExternalDisplayManager {
         }
     }
 
-    private func isExternalDisplayRole(_ role: UISceneSession.Role) -> Bool {
+    /// True for AirPlay / HDMI scene roles (interactive and non-interactive).
+    nonisolated static func isExternalDisplayRole(_ role: UISceneSession.Role) -> Bool {
         if role == .windowExternalDisplayNonInteractive { return true }
-        // Older alias still appears on some system paths.
-        return role.rawValue.contains("ExternalDisplay")
+        return role.rawValue.localizedCaseInsensitiveContains("ExternalDisplay")
+    }
+
+    /// Scene for a connected screen that isn't the phone (AirPlay / HDMI).
+    private func extraScreenWindowScene() -> UIWindowScene? {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first { scene in
+                scene.screen !== UIScreen.main
+                    && !scene.session.role.rawValue.contains("CarPlay")
+            }
     }
 
     // MARK: - Presentation
@@ -372,13 +397,43 @@ final class ExternalDisplayManager {
     func currentVideoPlaybackTime(forItemId itemId: String) -> TimeInterval? {
         guard let lastSource,
               case .video(let url, _, _) = lastSource.content,
-              let local = LocalMediaStore.shared.localURL(forId: itemId),
-              local == url || url.lastPathComponent == itemId,
+              AirPlayVideoTransport.url(
+                url,
+                matchesItemId: itemId,
+                localURL: LocalMediaStore.shared.localURL(forId: itemId)
+              ),
               let player = presentationVC?.player
         else { return nil }
         let seconds = CMTimeGetSeconds(player.currentTime())
         guard seconds.isFinite, seconds > 0 else { return nil }
         return seconds
+    }
+
+    /// Seek offset of the last presented library video matching `itemId`.
+    ///
+    /// Available even with no display attached (Practice Mode hero playback).
+    func lastPresentedVideoStartAt(forItemId itemId: String) -> TimeInterval {
+        guard let lastSource,
+              case .video(let url, _, _) = lastSource.content,
+              AirPlayVideoTransport.url(
+                url,
+                matchesItemId: itemId,
+                localURL: LocalMediaStore.shared.localURL(forId: itemId)
+              )
+        else { return 0 }
+        return lastSource.videoStartAt
+    }
+
+    /// AirPlay library-video player when a video is live on the external display.
+    var libraryVideoPlayer: AVPlayer? {
+        guard isConnected, case .video = lastSource?.content else { return nil }
+        return presentationVC?.player
+    }
+
+    /// Presentation host for AirPlay library-video transport. Nil when disconnected.
+    var libraryVideoPresentation: PresentationViewController? {
+        guard libraryVideoPlayer != nil else { return nil }
+        return presentationVC
     }
 
     /// Parks resume state when AirPlay leaves a library video for different content.
@@ -465,32 +520,18 @@ final class ExternalDisplayManager {
     ///
     /// If still-parked, resumes the live feed — callers that want the camera
     /// (phone UI open / re-open) should never leave output stuck on a still.
-    /// Snapshots the prior non-camera source the first time camera goes live.
     func presentCamera() {
         if isCameraParkedOnStill {
             resumeCameraFromStillPark()
             return
         }
-        if !isCameraModeActive {
-            snapshotPreCameraSource()
-        }
         present(.camera)
-    }
-
-    /// Remembers what AirPlay showed before camera took over.
-    private func snapshotPreCameraSource() {
-        if let last = lastSource, last.content != .camera {
-            preCameraSource = last
-            preCameraWasJoined = isJoinedLive
-            return
-        }
-        preCameraSource = currentSourceProvider?()
-        preCameraWasJoined = false
     }
 
     /// Parks on a still without ending camera mode or stopping the session.
     ///
-    /// With a display, AirPlay shows the still. With none, the phone panel is program.
+    /// AirPlay shows the still when a display is attached. The phone camera
+    /// viewfinder stays on the live camera either way.
     func parkCameraOnStill(_ source: PresentationSource) {
         guard isCameraModeActive else { return }
         isCameraParkedOnStill = true
@@ -516,6 +557,19 @@ final class ExternalDisplayManager {
             presentationVC?.show(source)
             updateIdleTimer()
         }
+    }
+
+    /// Camera overlay cannot survive a real AirPlay drop (the preview layer is gone).
+    ///
+    /// Drop `.camera` as the reconnect source so a new display does not attach
+    /// camera without overlay state and steal the phone preview layer.
+    func dropCameraOverlayAfterDisconnect() {
+        guard overlaySource == .camera else { return }
+        if lastSource?.content == .camera {
+            lastSource = nil
+        }
+        overlaySource = nil
+        isCameraParkedOnStill = false
     }
 
     /// Starts presenting a web page on the external display.
@@ -553,14 +607,14 @@ final class ExternalDisplayManager {
         if blackoutRestore == nil {
             if let last = lastSource, last.content != .black {
                 blackoutRestore = BlackoutRestore(
-                    source: last,
+                    source: parkedVideoSource(last),
                     joined: isJoinedLive,
                     webPageId: liveWebPageId,
                     pdfDocumentId: livePDFDocumentId
                 )
             } else if let provided = currentSourceProvider?(), provided.content != .black {
                 blackoutRestore = BlackoutRestore(
-                    source: provided,
+                    source: parkedVideoSource(provided),
                     joined: false,
                     webPageId: liveWebPageId,
                     pdfDocumentId: livePDFDocumentId
@@ -586,75 +640,24 @@ final class ExternalDisplayManager {
         case .black:
             clear()
         default:
-            present(restore.source, asJoined: restore.joined)
+            present(parkedVideoSource(restore.source), asJoined: restore.joined)
         }
+    }
+
+    /// Library video returns paused at the current frame; other sources are unchanged.
+    private func parkedVideoSource(_ source: PresentationSource) -> PresentationSource {
+        guard case .video = source.content else { return source }
+        let startAt = AirPlayVideoTransport.parkedStartTime(
+            player: presentationVC?.player,
+            fallback: source.videoStartAt
+        )
+        return source.pausingVideo(at: startAt)
     }
 
     /// Stops the camera session and restores the library live item when available.
     func stopCameraAndRestoreLibrary() {
         endOverlay(notify: false)
         restoreLibraryOrIdle()
-    }
-
-    /// Posted after stop-live applies a close destination so the home grid can
-    /// update Black / Background selection. `userInfo["destination"]` is the raw value.
-    static let didApplyCameraCloseDestinationNotification =
-        Notification.Name("ExternalDisplayManager.didApplyCameraCloseDestination")
-
-    /// Stops camera live and presents Previous / Background / Black per settings.
-    ///
-    /// Keeps the capture session running and does not dismiss the phone camera UI
-    /// (`cameraDidEnd` is not posted).
-    func stopCameraAndApplyCloseDestination() {
-        guard isCameraModeActive else { return }
-
-        // Drop overlay without tearDown — preview/session stay warm on the phone.
-        overlaySource = nil
-        isCameraParkedOnStill = false
-
-        let destination = ExternalOutputSettings.cameraCloseDestination
-        let applied: CameraCloseDestination
-        switch destination {
-        case .previous:
-            restorePreCameraSource()
-            applied = .previous
-        case .logo:
-            if let source = LogoStore.shared.presentationSource {
-                present(source)
-                applied = .logo
-            } else {
-                present(.black)
-                applied = .black
-            }
-        case .black:
-            present(.black)
-            applied = .black
-        }
-
-        NotificationCenter.default.post(
-            name: Self.didApplyCameraCloseDestinationNotification,
-            object: self,
-            userInfo: ["destination": applied.rawValue]
-        )
-        updateIdleTimer()
-    }
-
-    /// Restores `preCameraSource`, else the library live item, else Black.
-    private func restorePreCameraSource() {
-        if let prior = preCameraSource, prior.content != .camera {
-            let joined = preCameraWasJoined
-            preCameraSource = nil
-            preCameraWasJoined = false
-            present(prior, asJoined: joined)
-            return
-        }
-        preCameraSource = nil
-        preCameraWasJoined = false
-        if let source = currentSourceProvider?() {
-            present(source)
-        } else {
-            present(.black)
-        }
     }
 
     /// Stops web presentation and restores the library live item when available.

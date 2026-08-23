@@ -84,19 +84,8 @@ final class LibraryGridViewController: UIViewController {
     var portraitChromeConstraints: [NSLayoutConstraint] = []
     /// Preview-left / grid-right constraints (phone landscape).
     var landscapeChromeConstraints: [NSLayoutConstraint] = []
-    /// Portrait-only: how far the hero has collapsed toward the trailing mini
-    /// preview (0 = full hero, 1 = tucked). Derived from `contentOffset`; never set
-    /// directly outside `updateHeroCollapse()`.
+    /// Always 0 for this Show's hero (pinned). Foreign live uses its own mini view.
     var heroCollapseProgress: CGFloat = 0
-    /// Tap mini preview to restore the full hero.
-    lazy var heroExpandTapRecognizer: UITapGestureRecognizer = {
-        let tap = UITapGestureRecognizer(
-            target: self,
-            action: #selector(handleHeroExpandTap)
-        )
-        tap.isEnabled = false
-        return tap
-    }()
     /// Every notification token this controller owns, so `deinit` can drain them in one
     /// place. One property per observer meant six of the fifteen registrations here were
     /// never torn down at all, and each new one was an opportunity to forget another.
@@ -331,15 +320,19 @@ final class LibraryGridViewController: UIViewController {
     /// Tucked mini preview of live output that still belongs to another Show.
     let foreignLiveHeader: LiveHeaderView = {
         let header = LiveHeaderView()
+        header.translatesAutoresizingMaskIntoConstraints = true
         header.isHidden = true
         return header
     }()
 
     /// Parked view kept only so landscape chrome constraints stay unambiguous.
+    /// Black plate behind the portrait live card so tiles can't show in the
+    /// gap under the header (or beside a capped Vertical preview).
     let heroSpacer: UIView = {
         let view = UIView()
+        view.backgroundColor = .black
         view.isHidden = true
-        view.isUserInteractionEnabled = false
+        view.isUserInteractionEnabled = true
         view.translatesAutoresizingMaskIntoConstraints = false
         return view
     }()
@@ -363,6 +356,8 @@ final class LibraryGridViewController: UIViewController {
 
     /// Horizontal slide strip docked under the landscape live preview.
     lazy var slideshowRibbonView: UICollectionView = makeDockedSlideshowRibbonView()
+    /// Last in-grid / docked ribbon placement. Slide advances must not rebuild this.
+    var lastSlideshowRibbonChrome: SlideshowRibbonChrome?
     /// Height of the docked ribbon (0 when it is parked or hidden).
     var dockedRibbonHeightConstraint: NSLayoutConstraint?
     /// Gap between the landscape preview and the docked ribbon (0 when hidden).
@@ -425,19 +420,13 @@ final class LibraryGridViewController: UIViewController {
         }
 
         liveHeader.onTogglePlayPause = { [weak self] in
-            guard let self else { return }
-            if self.liveHeader.toggleLibraryVideoPlayback() { return }
-            self.connectionManager.sendPlaybackCommand(action: .toggle, position: nil)
+            self?.handleLiveVideoPlayPause()
         }
         liveHeader.onSkip = { [weak self] delta in
-            guard let self else { return }
-            if self.liveHeader.skipLibraryVideo(by: delta) { return }
-            self.connectionManager.sendPlaybackCommand(action: .skip, position: delta)
+            self?.handleLiveVideoSkip(by: delta)
         }
         liveHeader.onSeek = { [weak self] position in
-            guard let self else { return }
-            if self.liveHeader.seekLibraryVideo(to: position) { return }
-            self.connectionManager.sendPlaybackCommand(action: .seek, position: position)
+            self?.handleLiveVideoSeek(to: position)
         }
         liveHeader.onRequestFullscreen = { [weak self] in
             self?.presentFullscreenForLiveMedia()
@@ -475,7 +464,6 @@ final class LibraryGridViewController: UIViewController {
             ),
             bottomChromeBottom
         ])
-        liveHeader.addGestureRecognizer(heroExpandTapRecognizer)
         installChromeLayout()
         installForeignLivePreview()
         updateHeroVisibility()
@@ -505,7 +493,6 @@ final class LibraryGridViewController: UIViewController {
         }
         observe(SlideshowPlaybackController.didChangeNotification) { [weak self] _ in
             self?.refreshSlideshowRibbonPresentation()
-            self?.reloadGridIfSafe()
             self?.refreshLiveHeader()
             self?.scrollLiveSlideshowRibbonToCurrentSlide()
         }
@@ -517,15 +504,23 @@ final class LibraryGridViewController: UIViewController {
             self?.refreshLiveHeader()
         }
         observe(LogoStore.didChangeNotification) { [weak self] _ in
-            self?.reloadGridIfSafe()
-            self?.refreshLiveHeader()
+            guard let self else { return }
+            self.reloadGridIfSafe()
+            if LiveOutputRouting.shouldRefreshLiveAfterReplace(
+                isToolLive: self.isLogoSelected
+            ) {
+                self.presentLogoLive()
+            } else {
+                self.refreshLiveHeader()
+            }
         }
         observe(ScreensaverStore.didChangeNotification) { [weak self] _ in
             guard let self else { return }
             self.liveHeader.clearScreensaverPreview()
             self.reloadGridIfSafe()
-            // Only re-present while a Show is open — never revive the live hero on Home.
-            if self.isShowMode, self.isScreensaverSelected {
+            if LiveOutputRouting.shouldRefreshLiveAfterReplace(
+                isToolLive: self.isScreensaverSelected
+            ) {
                 self.presentScreensaverLive()
             } else {
                 self.refreshLiveHeader()
@@ -552,22 +547,22 @@ final class LibraryGridViewController: UIViewController {
         }
 
         let overlayReload: (Notification) -> Void = { [weak self] _ in
+            self?.syncScreensaverFallbackLiveSelection()
             self?.reloadGridIfSafe()
             self?.refreshLiveHeader()
+        }
+        observe(ExternalDisplayManager.videoPlaybackDidChangeNotification) { [weak self] _ in
+            self?.applyAirPlayVideoPlaybackToHero()
         }
         observe(ExternalDisplayManager.didChangeNotification) { [weak self] note in
             guard let self else { return }
             if ExternalDisplayManager.shared.isConnected {
-                // External fills with Screensaver via `currentPresentationSource` fallback;
-                // do not mark the Screensaver tile selected — phone preview keeps the
-                // "Connect…" placeholder until the user picks something (or is connected
-                // and we show the passive screensaver preview below).
                 self.pushCurrentToExternalDisplay()
             } else if note.userInfo?[ExternalDisplayManager.disconnectReasonKey] as? Bool == true {
                 // AirPlay / HDMI dropped — keep phone camera / web / PDF open; tip the user.
                 self.showPresentationToast("External display disconnected")
             }
-            // Hero follows a real destination or Preview When Disconnected.
+            // Hero follows a real destination or Practice Mode.
             self.updateHeroVisibility()
             self.applyHeroChrome()
             overlayReload(note)
@@ -578,11 +573,6 @@ final class LibraryGridViewController: UIViewController {
             overlayReload(note)
             // AirPlay tore down the session — warm the home tile again.
             self?.warmHomeCameraPreview()
-        }
-        observe(
-            ExternalDisplayManager.didApplyCameraCloseDestinationNotification
-        ) { [weak self] note in
-            self?.applyCameraCloseDestination(from: note)
         }
     }
 
@@ -596,31 +586,6 @@ final class LibraryGridViewController: UIViewController {
                 forName: name, object: nil, queue: .main, using: handler
             )
         )
-    }
-
-    /// Syncs Black / Background home selection after stop-live applies a camera-close setting.
-    private func applyCameraCloseDestination(from note: Notification) {
-        let raw = note.userInfo?["destination"] as? String
-        let destination = raw.flatMap(CameraCloseDestination.init(rawValue:))
-        switch destination {
-        case .logo:
-            isBlackSelected = false
-            isLogoSelected = true
-            isScreensaverSelected = false
-        case .black:
-            isBlackSelected = true
-            isLogoSelected = false
-            isScreensaverSelected = false
-        case .previous:
-            // Prior content may be library/web/etc. — clear forced tool selection.
-            isBlackSelected = false
-            isLogoSelected = false
-            isScreensaverSelected = false
-        case .none:
-            return
-        }
-        collectionView.reloadData()
-        refreshLiveHeader()
     }
 
     deinit {
@@ -656,6 +621,7 @@ final class LibraryGridViewController: UIViewController {
         } else {
             enforceHomeLiveHeroTeardownIfNeeded()
         }
+        syncScreensaverFallbackLiveSelection()
         reloadLibraryGrid()
         pushCurrentToExternalDisplay()
         warmHomeCameraPreview()
@@ -875,15 +841,18 @@ final class LibraryGridViewController: UIViewController {
             store.items.first(where: { $0.id == id })
         }
         // AirPlay with nothing selected: preview the passive Screensaver filling
-        // the external display. Preview When Disconnected uses the same fallback.
+        // the external display. Practice Mode uses the same fallback.
         // EclipseTV-only still shows the connect prompt.
         if liveItem == nil, mgr.isConnected
             || (prefersDisconnectedLivePreview && !store.isOnline) {
             presentScreensaverInLiveHeader()
             return
         }
+        if let liveItem, liveItem.isVideo {
+            applyLibraryVideoLiveHeader(item: liveItem)
+            return
+        }
         let thumbnail = liveItem.flatMap { store.thumbnail(for: $0.id) }
-        // External display / Apple TV owns motion — phone hero stays a still.
         liveHeader.configure(
             with: liveItem,
             thumbnail: thumbnail,
@@ -936,8 +905,7 @@ final class LibraryGridViewController: UIViewController {
     ///
     /// Used by `ExternalDisplayManager` when a display connects mid-session.
     /// Falls back to the bundled Screensaver so AirPlay never shows a grey idle.
-    /// Does not mark Screensaver as user-selected (phone connect prompt stays when
-    /// disconnected).
+    /// Connection observers mark that fallback as the live Screensaver tile.
     func currentPresentationSource() -> PresentationSource? {
         switch ExternalDisplayManager.shared.overlaySource {
         case .camera:
@@ -1257,6 +1225,7 @@ extension LibraryGridViewController: TVLibraryStoreDelegate {
     }
 
     func libraryStoreDidUpdatePlayback(_ store: TVLibraryStore) {
+        if ExternalDisplayManager.shared.isLibraryVideoLive { return }
         liveHeader.updatePlayback(store.playback)
     }
 }

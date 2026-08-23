@@ -39,8 +39,12 @@ extension LiveHeaderView {
             preview.leadingAnchor.constraint(equalTo: leadingAnchor),
             preview.trailingAnchor.constraint(equalTo: trailingAnchor)
         ])
+        preview.onReady = { [weak self] in
+            guard let self, self.screensaverPreview === preview else { return }
+            self.setStaticPreviewHidden(true)
+        }
         screensaverPreview = preview
-        setStaticPreviewHidden(true)
+        // Keep the poster up until a decoded frame exists — hiding it first blinks black.
         bringScreensaverPreviewChromeToFront()
         preview.play()
     }

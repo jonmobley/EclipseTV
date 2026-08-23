@@ -66,8 +66,8 @@ extension iPhoneMainViewController {
         audioMiniPlayer.reload()
         audioMiniBubble.reload()
 
-        let height: CGFloat = showBar ? AudioMiniPlayerView.preferredHeight : 0
-        audioMiniHeightConstraint?.constant = height
+        let chromeHeight: CGFloat = showBar ? AudioMiniPlayerView.preferredHeight : 0
+        audioMiniHeightConstraint?.constant = showBar ? audioMiniBarHeight() : 0
         audioMiniPlayer.isHidden = !showBar
         audioMiniPlayer.alpha = 1
         audioMiniPlayer.transform = .identity
@@ -75,22 +75,9 @@ extension iPhoneMainViewController {
         audioMiniBubble.alpha = 1
         audioMiniBubble.transform = .identity
 
-        applyMiniPlayerBottomInset(height)
+        applyMiniPlayerBottomInset(chromeHeight)
         libraryViewController.refreshMusicSwipeHintVisibility()
         view.layoutIfNeeded()
-        if showBubble {
-            offerMusicBubbleTipIfNeeded()
-        }
-    }
-
-    private static let musicBubbleTipKey = "EclipseTV.home.musicBubbleTipShown"
-
-    /// One-time tip when the collapsed music circle first appears.
-    private func offerMusicBubbleTipIfNeeded() {
-        let defaults = UserDefaults.standard
-        guard !defaults.bool(forKey: Self.musicBubbleTipKey) else { return }
-        defaults.set(true, forKey: Self.musicBubbleTipKey)
-        showTemporaryStatus("Tap Music anytime · Hold to stop", duration: 4)
     }
 
     // MARK: - Morph animations
@@ -101,19 +88,19 @@ extension iPhoneMainViewController {
 
         let bar = audioMiniPlayer
         let bubble = audioMiniBubble
-        let height = AudioMiniPlayerView.preferredHeight
+        let chromeHeight = AudioMiniPlayerView.preferredHeight
 
         bar.reload()
         bubble.reload()
 
         bar.isHidden = false
         bar.alpha = 0
-        audioMiniHeightConstraint?.constant = height
-        applyMiniPlayerBottomInset(height)
+        audioMiniHeightConstraint?.constant = audioMiniBarHeight()
+        applyMiniPlayerBottomInset(chromeHeight)
         view.layoutIfNeeded()
 
-        bar.transform = Self.barMorphTransform(for: bar.bounds, height: height)
-        bar.layer.cornerRadius = height / 2
+        bar.transform = Self.barMorphTransform(for: bar.bounds, height: chromeHeight)
+        bar.layer.cornerRadius = chromeHeight / 2
         bar.clipsToBounds = true
 
         bubble.isHidden = false
@@ -144,13 +131,13 @@ extension iPhoneMainViewController {
 
         let bar = audioMiniPlayer
         let bubble = audioMiniBubble
-        let height = AudioMiniPlayerView.preferredHeight
+        let chromeHeight = AudioMiniPlayerView.preferredHeight
 
         bar.reload()
         bubble.reload()
 
         // Keep bar height while morphing so the trailing-scale math stays stable.
-        audioMiniHeightConstraint?.constant = height
+        audioMiniHeightConstraint?.constant = audioMiniBarHeight()
         bar.isHidden = false
         bar.alpha = 1
         bar.transform = .identity
@@ -158,7 +145,7 @@ extension iPhoneMainViewController {
         bar.clipsToBounds = true
         view.layoutIfNeeded()
 
-        let toBar = Self.barMorphTransform(for: bar.bounds, height: height)
+        let toBar = Self.barMorphTransform(for: bar.bounds, height: chromeHeight)
 
         bubble.isHidden = false
         bubble.alpha = 0
@@ -175,7 +162,7 @@ extension iPhoneMainViewController {
         ) {
             bar.transform = toBar
             bar.alpha = 0
-            bar.layer.cornerRadius = height / 2
+            bar.layer.cornerRadius = chromeHeight / 2
             bubble.transform = .identity
             bubble.alpha = 1
             self.view.layoutIfNeeded()
@@ -259,10 +246,30 @@ extension iPhoneMainViewController {
             }
             audioMiniPlayer.applyFloatingChrome(compact)
             audioMiniPlayer.layer.cornerRadius = audioMiniRestingCornerRadius
+            updateAudioMiniBarHeightIfNeeded()
             view.layoutIfNeeded()
         }
         if compact { updateLandscapeCompactWidth() }
+        updateAudioMiniBarHeightIfNeeded()
         return axisChanged
+    }
+
+    /// Portrait footer covers the home indicator; landscape card does not.
+    private func audioMiniBarHeight() -> CGFloat {
+        AudioMiniPlayerView.barHeight(
+            floating: isAudioMiniLandscapeCompact,
+            safeAreaBottom: view.safeAreaInsets.bottom
+        )
+    }
+
+    /// Applies footer height after rotation / safe-area changes without fighting
+    /// the bubble morph.
+    private func updateAudioMiniBarHeightIfNeeded() {
+        guard !isAudioMiniChromeAnimating else { return }
+        let showBar = AudioPlayerController.shared.hasActiveSession && !audioMiniCollapsed
+        let next: CGFloat = showBar ? audioMiniBarHeight() : 0
+        guard audioMiniHeightConstraint?.constant != next else { return }
+        audioMiniHeightConstraint?.constant = next
     }
 
     private func updateLandscapeCompactWidth() {

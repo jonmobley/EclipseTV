@@ -68,9 +68,16 @@ extension PresentationViewController {
         }
     }
 
-    /// Plays a video on the primary media surface.
+    /// Plays a video on the primary media surface (layer only — no TV transport chrome).
     /// - Parameter startAt: Absolute seconds to seek before the first `play()`.
-    func showVideo(at url: URL, isLooping: Bool, isMuted: Bool, startAt: TimeInterval = 0) {
+    /// - Parameter autoplay: When false, parks on a decoded frame instead of playing.
+    func showVideo(
+        at url: URL,
+        isLooping: Bool,
+        isMuted: Bool,
+        startAt: TimeInterval = 0,
+        autoplay: Bool = true
+    ) {
         messageLabel.text = nil
         imageView.isHidden = true
         activityIndicator.stopAnimating()
@@ -82,6 +89,7 @@ extension PresentationViewController {
         // Keep the already-decoded incoming player — a new AVPlayer flashes black.
         if adoptIncomingVideoIfAvailable() {
             applyMediaLayout()
+            installVideoTransportObserver()
             return
         }
 
@@ -89,6 +97,7 @@ extension PresentationViewController {
         let player = AVPlayer(url: url)
         player.isMuted = isMuted
         player.actionAtItemEnd = isLooping ? .none : .pause
+        AirPlayVideoTransport.configureLayerOnlyPlayback(on: player)
 
         let layer = AVPlayerLayer(player: player)
         layer.videoGravity = .resizeAspect
@@ -97,6 +106,7 @@ extension PresentationViewController {
         self.player = player
         self.playerLayer = layer
         applyMediaLayout()
+        installVideoTransportObserver()
 
         if isLooping {
             loopObserver = NotificationCenter.default.addObserver(
@@ -109,14 +119,7 @@ extension PresentationViewController {
             }
         }
 
-        if startAt > 0 {
-            let time = CMTime(seconds: startAt, preferredTimescale: 600)
-            player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero) { [weak player] _ in
-                player?.play()
-            }
-        } else {
-            player.play()
-        }
+        AirPlayVideoTransport.start(player, at: startAt, autoplay: autoplay)
     }
 
     /// Moves the incoming overlay player onto the primary surface without rebuilding.
@@ -149,6 +152,12 @@ extension PresentationViewController {
         activityIndicator.stopAnimating()
         showMediaContainer()
 
+        // Keep the already-decoded incoming loop — a new player flashes black.
+        if adoptIncomingScreensaverIfAvailable() {
+            applyMediaLayout()
+            return
+        }
+
         teardownScreensaver()
         let view = SeamlessLoopPlayerView(url: url)
         view.frame = mediaContentView.bounds
@@ -157,6 +166,19 @@ extension PresentationViewController {
         screensaverView = view
         applyMediaLayout()
         view.play()
+    }
+
+    /// Moves the incoming Screensaver onto the primary surface without rebuilding.
+    func adoptIncomingScreensaverIfAvailable() -> Bool {
+        guard let screensaver = incomingScreensaverView else { return false }
+        incomingScreensaverView = nil
+        screensaver.removeFromSuperview()
+        screensaver.translatesAutoresizingMaskIntoConstraints = true
+        screensaver.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        screensaver.frame = mediaContentView.bounds
+        mediaContentView.insertSubview(screensaver, at: 0)
+        screensaverView = screensaver
+        return true
     }
 
     /// Activates playback audio for AirPlay video / web media (no-op when muted).
@@ -172,6 +194,7 @@ extension PresentationViewController {
     }
 
     func teardownPlayer() {
+        removeVideoTransportObserver()
         videoReadyObservation = nil
         if let loopObserver = loopObserver {
             NotificationCenter.default.removeObserver(loopObserver)

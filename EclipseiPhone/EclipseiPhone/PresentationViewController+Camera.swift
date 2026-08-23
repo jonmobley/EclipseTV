@@ -23,11 +23,9 @@ extension PresentationViewController {
         activityIndicator.stopAnimating()
 
         cameraContainer.isHidden = false
-        let gravity: AVLayerVideoGravity =
-            ExternalOutputSettings.isVerticalMode ? .resizeAspectFill : .resizeAspect
         cameraPreviewView.attach(
             session: CameraManager.shared.captureSession,
-            videoGravity: gravity
+            videoGravity: CameraPreviewView.programVideoGravity
         )
         cameraPreviewView.syncDisplayModeOrientation()
         refreshCameraFrameOverlay()

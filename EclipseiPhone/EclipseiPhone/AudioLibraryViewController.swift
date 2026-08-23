@@ -81,6 +81,11 @@ final class AudioLibraryViewController: UITableViewController {
         }
     }
 
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        tableView.reloadData()
+    }
+
     /// Configures Done (modal) or Library back (embedded pager) / none (split).
     private func updateLeftBarButton() {
         if isEmbedded {
@@ -118,6 +123,7 @@ final class AudioLibraryViewController: UITableViewController {
     }
 
     @objc private func reload() {
+        guard isViewLoaded, tableView.window != nil else { return }
         tableView.reloadData()
     }
 

@@ -118,15 +118,6 @@ enum ContentTransitionStyle: String, CaseIterable {
     case cut = "Cut"
 }
 
-/// What AirPlay shows after the user slides the shutter off live.
-enum CameraCloseDestination: String, CaseIterable {
-    /// Restore whatever was on AirPlay before camera went live.
-    case previous = "Previous"
-    /// Show Background tile image (stored raw value was `"Logo"` before the rename).
-    case logo = "Background"
-    case black = "Black"
-}
-
 /// Persisted external-display preferences shared by camera and web presentation.
 ///
 /// Orientation keys keep their original `EclipseTV.camera.*` names so existing
@@ -136,11 +127,10 @@ enum ExternalOutputSettings {
     private static let rotationKey = "EclipseTV.camera.rotationDirection"
     private static let textSizeKey = "EclipseTV.web.textSize"
     private static let transitionKey = "EclipseTV.contentTransition"
-    private static let cameraCloseKey = "EclipseTV.camera.closeDestination"
     private static let includeFrameInCapturesKey = "EclipseTV.camera.includeFrameInCaptures"
     private static let alwaysRecordWhenLiveKey = "EclipseTV.camera.alwaysRecordWhenLive"
 
-    /// Posted when orientation, rotation, text size, transition, camera-close,
+    /// Posted when orientation, rotation, text size, transition,
     /// frame-in-captures, or always-record-when-live changes.
     static let didChangeNotification = Notification.Name("ExternalOutputSettings.didChange")
 
@@ -167,6 +157,15 @@ enum ExternalOutputSettings {
     /// (forcing Landscape every launch was hiding media left in Vertical).
     static func applyLaunchDefault() {
         guard UserDefaults.standard.string(forKey: orientationKey) == nil else { return }
+        orientation = .landscape
+    }
+
+    /// Vertical is opt-in. If nothing is stored as a Vertical Show, snap back to
+    /// Landscape — launch used to adopt Vertical just because that media bucket
+    /// had test files.
+    static func restoreLandscapeIfNoVerticalShows(_ albums: [LocalAlbum]) {
+        guard isVerticalMode else { return }
+        guard !albums.contains(where: { $0.orientation == .portrait }) else { return }
         orientation = .landscape
     }
 
@@ -213,23 +212,6 @@ enum ExternalOutputSettings {
         }
     }
 
-    /// AirPlay target after stopping camera live. Default is Background.
-    ///
-    /// Legacy `"Camera"` and pre-rename `"Logo"` resolve to Background.
-    static var cameraCloseDestination: CameraCloseDestination {
-        get {
-            guard let raw = UserDefaults.standard.string(forKey: cameraCloseKey) else {
-                return .logo
-            }
-            if raw == "Logo" || raw == "Camera" { return .logo }
-            return CameraCloseDestination(rawValue: raw) ?? .logo
-        }
-        set {
-            UserDefaults.standard.set(newValue.rawValue, forKey: cameraCloseKey)
-            NotificationCenter.default.post(name: didChangeNotification, object: nil)
-        }
-    }
-
     /// When true, the selected camera frame is burned into saved photos and videos.
     ///
     /// Defaults on. Live preview always shows the overlay regardless of this setting.
@@ -248,8 +230,8 @@ enum ExternalOutputSettings {
 
     /// When true, video recording starts automatically whenever camera is live on AirPlay.
     ///
-    /// Defaults off. Recording stops when the shutter slides off live. Hold-to-record
-    /// is disabled while this is on; tap still takes a photo.
+    /// Defaults off. Recording stops when you leave camera live (cutaway or another
+    /// source). Hold-to-record is disabled while this is on; tap still takes a photo.
     static var alwaysRecordWhenLive: Bool {
         get {
             UserDefaults.standard.bool(forKey: alwaysRecordWhenLiveKey)

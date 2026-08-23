@@ -35,6 +35,7 @@ extension LiveHeaderView {
         guard visible else {
             slideshowRibbonButton?.removeFromSuperview()
             slideshowRibbonButton = nil
+            applyInteractionForPresentation()
             return
         }
         if slideshowRibbonButton == nil {
@@ -42,6 +43,7 @@ extension LiveHeaderView {
         }
         applySlideshowRibbonButtonAppearance(isOn: isOn)
         bringSlideshowRibbonChromeToFront()
+        applyInteractionForPresentation()
     }
 
     // MARK: - Private

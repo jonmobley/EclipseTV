@@ -14,7 +14,10 @@ extension CameraLiveViewController {
     /// Builds centered LIVE status pill (called from `viewDidLoad`).
     func setupPreviewChrome() {
         view.addSubview(goLiveButton)
-        view.addSubview(recordingTimerLabel)
+        recordingTimerPillView.addSubview(recordingTimerLabel)
+        view.addSubview(recordingTimerPillView)
+        configureTapToGoLiveHint()
+        view.addSubview(tapToGoLiveHintView)
         applyLiveBadgeAppearance()
     }
 
@@ -56,20 +59,12 @@ extension CameraLiveViewController {
             height: goSize.height
         )
 
-        // Timer sits just right of LIVE while recording (hidden otherwise).
-        let timerSize = recordingTimerLabel.sizeThatFits(
-            CGSize(width: 80, height: goSize.height)
-        )
-        recordingTimerLabel.frame = CGRect(
-            x: goLiveButton.frame.maxX + 8,
-            y: goY,
-            width: max(timerSize.width, 36),
-            height: goSize.height
-        )
-
+        layoutRecordingTimerPill(in: panel)
+        layoutTapToGoLiveHint(in: panel)
+        view.bringSubviewToFront(tapToGoLiveHintView)
         view.bringSubviewToFront(backButton)
         view.bringSubviewToFront(goLiveButton)
-        view.bringSubviewToFront(recordingTimerLabel)
+        view.bringSubviewToFront(recordingTimerPillView)
         view.bringSubviewToFront(settingsButton)
     }
 
@@ -300,7 +295,9 @@ extension CameraLiveViewController {
     // MARK: - Private
 
     private func applyLiveBadgeAppearance() {
-        let live = isAirPlayLive
+        let live = Self.showsLiveBadge(
+            isCameraLive: ExternalDisplayManager.shared.isCameraLive
+        )
         goLiveButton.isHidden = !live
         goLiveButton.isUserInteractionEnabled = false
         guard live else {
@@ -326,5 +323,80 @@ extension CameraLiveViewController {
         goLiveButton.accessibilityLabel = "Live"
         goLiveButton.accessibilityHint = nil
         goLiveButton.configuration = config
+    }
+
+    /// LIVE pill is only for the live camera feed, not a parked cutaway still.
+    static func showsLiveBadge(isCameraLive: Bool) -> Bool { isCameraLive }
+
+    /// Hint is shown on open (preview) and while a cutaway still is on program.
+    static func showsTapToGoLiveHint(isCameraLive: Bool) -> Bool { !isCameraLive }
+
+    /// Builds the centered "Tap screen to go LIVE" overlay.
+    private func configureTapToGoLiveHint() {
+        var config = UIButton.Configuration.filled()
+        config.cornerStyle = .capsule
+        config.baseForegroundColor = .white
+        config.baseBackgroundColor = UIColor.black.withAlphaComponent(0.45)
+        config.contentInsets = NSDirectionalEdgeInsets(
+            top: 10, leading: 16, bottom: 10, trailing: 16
+        )
+        config.title = "Tap screen to go LIVE"
+        config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer {
+            var attrs = $0
+            attrs.font = .systemFont(ofSize: 16, weight: .semibold)
+            return attrs
+        }
+        tapToGoLiveHintView.configuration = config
+        tapToGoLiveHintView.isUserInteractionEnabled = false
+        tapToGoLiveHintView.accessibilityLabel = "Tap screen to go LIVE"
+        tapToGoLiveHintView.translatesAutoresizingMaskIntoConstraints = true
+    }
+
+    /// Capsule elapsed-time pill, centered in the camera preview panel.
+    private func layoutRecordingTimerPill(in panel: CGRect) {
+        guard !recordingTimerPillView.isHidden else { return }
+        let textSize = recordingTimerLabel.sizeThatFits(CGSize(width: 120, height: 36))
+        let padX: CGFloat = 12
+        let padY: CGFloat = 6
+        let width = min(max(textSize.width + padX * 2, 56), panel.width - 32)
+        let height = max(textSize.height + padY * 2, 28)
+        recordingTimerPillView.layer.cornerRadius = height / 2
+        recordingTimerPillView.clipsToBounds = true
+        let y: CGFloat
+        if goLiveButton.isHidden {
+            y = goLiveButton.frame.minY
+        } else {
+            y = goLiveButton.frame.maxY + 8
+        }
+        recordingTimerPillView.frame = CGRect(
+            x: panel.midX - width / 2,
+            y: y,
+            width: width,
+            height: height
+        )
+        recordingTimerLabel.frame = recordingTimerPillView.bounds.insetBy(dx: padX, dy: padY)
+    }
+
+    /// Centers the go-live hint in the Display Mode panel.
+    private func layoutTapToGoLiveHint(in panel: CGRect) {
+        let show = Self.showsTapToGoLiveHint(
+            isCameraLive: ExternalDisplayManager.shared.isCameraLive
+        )
+        tapToGoLiveHintView.isHidden = !show
+        guard show else { return }
+        var size = tapToGoLiveHintView.intrinsicContentSize
+        if size.width < 8 || size.height < 8 {
+            size = tapToGoLiveHintView.sizeThatFits(
+                CGSize(width: panel.width - 32, height: 44)
+            )
+        }
+        let width = min(max(size.width, 200), panel.width - 32)
+        let height = max(size.height, 36)
+        tapToGoLiveHintView.frame = CGRect(
+            x: panel.midX - width / 2,
+            y: panel.midY - height / 2,
+            width: width,
+            height: height
+        )
     }
 }

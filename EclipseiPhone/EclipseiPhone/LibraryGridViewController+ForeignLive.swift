@@ -45,11 +45,10 @@ extension LibraryGridViewController {
         return owning != openShowId
     }
 
-    /// Installs the foreign mini preview above the grid (called once from `viewDidLoad`).
+    /// Wires the foreign mini preview (added to the hierarchy only when shown).
     func installForeignLivePreview() {
         foreignLiveHeader.isHidden = true
         foreignLiveHeader.isUserInteractionEnabled = true
-        view.addSubview(foreignLiveHeader)
         let tap = UITapGestureRecognizer(
             target: self,
             action: #selector(handleForeignLiveTap)
@@ -67,6 +66,10 @@ extension LibraryGridViewController {
         foreignLiveHeader.isHidden = false
         foreignLiveHeader.setOutputLocked(isLiveOutputLocked)
         layoutForeignLivePreview()
+        guard foreignLiveHeader.frame.width > 1 else { return }
+        if foreignLiveHeader.superview == nil {
+            view.addSubview(foreignLiveHeader)
+        }
         view.bringSubviewToFront(foreignLiveHeader)
 
         let name = liveOwningShowId.flatMap {
@@ -92,6 +95,7 @@ extension LibraryGridViewController {
 
     private func hideForeignLivePreview() {
         foreignLiveHeader.isHidden = true
+        foreignLiveHeader.removeFromSuperview()
         foreignLiveHeader.clearWebPreview(parking: true)
         foreignLiveHeader.clearScreensaverPreview()
     }

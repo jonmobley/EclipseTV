@@ -12,12 +12,20 @@ final class AudioMiniPlayerView: UIView, UIGestureRecognizerDelegate {
 
     /// Preferred height when visible.
     static let preferredHeight: CGFloat = 64
+    /// Solid fill under the chrome, including the home-indicator band in portrait.
+    static let barBackgroundColor: UIColor = .secondarySystemBackground
     /// Phone-landscape card width — enough for title + a usable volume slider.
     static let compactWidth: CGFloat = 360
     static let compactCornerRadius: CGFloat = 20
     /// Matches the Music bubble so the bar grows from the same corner.
     static let compactTrailingInset: CGFloat = 16
     static let compactBottomInset: CGFloat = 12
+
+    /// Full-width footer height. Portrait adds the home-indicator inset so tiles
+    /// cannot show under the bar; the compact landscape card stays `preferredHeight`.
+    static func barHeight(floating: Bool, safeAreaBottom: CGFloat) -> CGFloat {
+        preferredHeight + (floating ? 0 : max(0, safeAreaBottom))
+    }
 
     var onOpenLibrary: (() -> Void)?
     var onTogglePlayPause: (() -> Void)?
@@ -31,7 +39,7 @@ final class AudioMiniPlayerView: UIView, UIGestureRecognizerDelegate {
         button.clipsToBounds = true
         button.layer.cornerRadius = 8
         button.layer.cornerCurve = .continuous
-        button.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.45)
+        button.backgroundColor = .systemBlue
         button.tintColor = .white
         return button
     }()
@@ -139,7 +147,7 @@ final class AudioMiniPlayerView: UIView, UIGestureRecognizerDelegate {
             withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .semibold)
         )
         art.baseForegroundColor = .white
-        art.baseBackgroundColor = UIColor.systemBlue.withAlphaComponent(0.45)
+        art.baseBackgroundColor = .systemBlue
         art.cornerStyle = .fixed
         art.background.cornerRadius = 8
         art.contentInsets = .zero
@@ -159,7 +167,8 @@ final class AudioMiniPlayerView: UIView, UIGestureRecognizerDelegate {
     // MARK: - Private
 
     private func setup() {
-        backgroundColor = .secondarySystemBackground
+        isOpaque = true
+        backgroundColor = Self.barBackgroundColor
         clipsToBounds = false
         layer.shadowColor = UIColor.black.cgColor
         applyFloatingChrome(false)
@@ -173,7 +182,7 @@ final class AudioMiniPlayerView: UIView, UIGestureRecognizerDelegate {
 
         var minimizeConfig = UIButton.Configuration.plain()
         minimizeConfig.image = UIImage(
-            systemName: "chevron.down",
+            systemName: "chevron.right",
             withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .bold)
         )
         minimizeConfig.baseForegroundColor = .secondaryLabel
@@ -211,25 +220,33 @@ final class AudioMiniPlayerView: UIView, UIGestureRecognizerDelegate {
 
         NSLayoutConstraint.activate([
             artworkButton.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
-            artworkButton.centerYAnchor.constraint(equalTo: centerYAnchor),
+            artworkButton.centerYAnchor.constraint(
+                equalTo: safeAreaLayoutGuide.centerYAnchor
+            ),
             artworkButton.widthAnchor.constraint(equalToConstant: 44),
             artworkButton.heightAnchor.constraint(equalToConstant: 44),
 
             textStack.leadingAnchor.constraint(
                 equalTo: artworkButton.trailingAnchor, constant: 10
             ),
-            textStack.centerYAnchor.constraint(equalTo: centerYAnchor),
+            textStack.centerYAnchor.constraint(
+                equalTo: safeAreaLayoutGuide.centerYAnchor
+            ),
             textStack.widthAnchor.constraint(lessThanOrEqualToConstant: 120),
 
             minimizeButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
-            minimizeButton.centerYAnchor.constraint(equalTo: centerYAnchor),
+            minimizeButton.centerYAnchor.constraint(
+                equalTo: safeAreaLayoutGuide.centerYAnchor
+            ),
             minimizeButton.widthAnchor.constraint(equalToConstant: 44),
             minimizeButton.heightAnchor.constraint(equalToConstant: 44),
 
             speakerIcon.leadingAnchor.constraint(
                 equalTo: textStack.trailingAnchor, constant: 10
             ),
-            speakerIcon.centerYAnchor.constraint(equalTo: centerYAnchor),
+            speakerIcon.centerYAnchor.constraint(
+                equalTo: safeAreaLayoutGuide.centerYAnchor
+            ),
             speakerIcon.widthAnchor.constraint(equalToConstant: 18),
             speakerIcon.heightAnchor.constraint(equalToConstant: 18),
 
@@ -239,7 +256,9 @@ final class AudioMiniPlayerView: UIView, UIGestureRecognizerDelegate {
             volumeSlider.trailingAnchor.constraint(
                 equalTo: minimizeButton.leadingAnchor, constant: -10
             ),
-            volumeSlider.centerYAnchor.constraint(equalTo: centerYAnchor),
+            volumeSlider.centerYAnchor.constraint(
+                equalTo: safeAreaLayoutGuide.centerYAnchor
+            ),
             volumeSlider.heightAnchor.constraint(equalToConstant: 44),
 
             volumeHUD.centerXAnchor.constraint(equalTo: volumeSlider.centerXAnchor),

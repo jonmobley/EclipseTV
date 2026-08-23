@@ -120,6 +120,7 @@ extension CloudKitSyncEngine: CKSyncEngineDelegate {
             LocalAlbumStore.shared.applySynced(remote, modifiedAt: remoteModified)
             rememberShowModified(id: remote.id, at: remoteModified)
         }
+        learnShareRoot(from: record)
     }
 
     // MARK: - Send helpers
@@ -138,38 +139,61 @@ extension CloudKitSyncEngine: CKSyncEngineDelegate {
                 )
             }
             if let doc = PDFStore.shared.documents.first(where: { $0.id == uuid }) {
-                guard let assetURL = PDFStore.shared.fileURL(for: uuid) else {
-                    logger.notice(
-                        "Skipping PDF save \(uuid.uuidString, privacy: .public); file missing"
-                    )
-                    return nil
-                }
-                return CloudKitRecordMapper.makePDFRecord(
-                    from: doc,
-                    assetURL: assetURL,
-                    showId: LocalAlbumStore.shared.albums.first {
-                        $0.itemIds.contains(uuid.uuidString)
-                    }?.id
-                )
+                return makePDFRecordToSave(doc)
             }
         }
         if let capture = CaptureStore.shared.record(id: recordID.recordName),
            !capture.isDeleted {
-            guard let url = LocalMediaStore.shared.localURL(
-                forId: capture.libraryFileName,
-                mode: capture.orientation.libraryMode
-            ) else {
-                logger.notice(
-                    "Skipping capture save \(capture.id, privacy: .public); file missing"
-                )
-                return nil
-            }
-            return CloudKitRecordMapper.makeMediaRecord(
-                from: capture,
-                assetURL: url
-            )
+            return makeMediaRecordToSave(capture)
         }
         return nil
+    }
+
+    private func makePDFRecordToSave(_ doc: SavedPDF) -> CKRecord? {
+        guard let assetURL = PDFStore.shared.fileURL(for: doc.id) else {
+            logger.notice(
+                "Skipping PDF save \(doc.id.uuidString, privacy: .public); file missing"
+            )
+            return nil
+        }
+        let resolved = shareRoots.resolve(
+            preferredShowId: nil,
+            containingShowIds: containingShowIds(itemId: doc.id.uuidString)
+        )
+        return CloudKitRecordMapper.makePDFRecord(
+            from: doc,
+            assetURL: assetURL,
+            showId: resolved.showId,
+            attachAsShareChild: resolved.attachAsShareChild
+        )
+    }
+
+    private func makeMediaRecordToSave(_ capture: CaptureRecord) -> CKRecord? {
+        guard let url = LocalMediaStore.shared.localURL(
+            forId: capture.libraryFileName,
+            mode: capture.orientation.libraryMode
+        ) else {
+            logger.notice(
+                "Skipping capture save \(capture.id, privacy: .public); file missing"
+            )
+            return nil
+        }
+        let resolved = shareRoots.resolve(
+            preferredShowId: capture.showId,
+            containingShowIds: containingShowIds(itemId: capture.libraryFileName)
+        )
+        return CloudKitRecordMapper.makeMediaRecord(
+            from: capture,
+            assetURL: url,
+            showId: resolved.showId,
+            attachAsShareChild: resolved.attachAsShareChild
+        )
+    }
+
+    private func containingShowIds(itemId: String) -> [UUID] {
+        LocalAlbumStore.shared.albums
+            .filter { $0.itemIds.contains(itemId) }
+            .map(\.id)
     }
 
     private func handleSent(_ sent: CKSyncEngine.Event.SentRecordZoneChanges) async {
@@ -189,7 +213,10 @@ extension CloudKitSyncEngine: CKSyncEngineDelegate {
         var didRecoverZone = false
         for failed in sent.failedRecordSaves {
             let code = failed.error.code
-            switch CloudKitSaveFailurePolicy.action(for: code) {
+            switch CloudKitSaveFailurePolicy.action(
+                for: code,
+                description: failed.error.localizedDescription
+            ) {
             case .holdForQuota:
                 holdForQuota(failed.record.recordID)
             case .mergeAndRequeue:
@@ -204,8 +231,10 @@ extension CloudKitSyncEngine: CKSyncEngineDelegate {
                     .saveRecord(failed.record.recordID)
                 ])
                 logger.error(
-                    "Dropped pending save for unknown item \(failed.record.recordID.recordName, privacy: .public)"
+                    "Dropped pending save for \(failed.record.recordID.recordName, privacy: .public): \(failed.error.localizedDescription)"
                 )
+            case .stripShareParentAndRetry:
+                retryWithoutShareParent(failed.record)
             case .retryHandledByEngine:
                 logger.notice(
                     "Save retry deferred to CKSyncEngine for \(failed.record.recordID.recordName, privacy: .public): \(failed.error.localizedDescription)"
@@ -224,8 +253,11 @@ extension CloudKitSyncEngine: CKSyncEngineDelegate {
     /// Applies the server's winning record, then re-queues our (merged) local copy.
     private func mergeConflictAndRequeue(record: CKRecord, error: CKError) {
         guard let server = error.serverRecord else {
+            engine?.state.remove(pendingRecordZoneChanges: [
+                .saveRecord(record.recordID)
+            ])
             logger.error(
-                "serverRecordChanged without server record for \(record.recordID.recordName, privacy: .public)"
+                "Dropped pending save; server record already exists for \(record.recordID.recordName, privacy: .public)"
             )
             return
         }

@@ -8,6 +8,7 @@
 import UIKit
 
 /// Compact Now Playing sheet: transport on top, queue list for quick track changes.
+/// Landscape uses a mini-player-width card; the queue scrolls with the chrome.
 final class AudioNowPlayingViewController: UIViewController {
 
     var onOpenLibrary: (() -> Void)?
@@ -85,16 +86,7 @@ final class AudioNowPlayingViewController: UIViewController {
         return control
     }()
 
-    private let queueHeaderLabel: UILabel = {
-        let label = UILabel()
-        label.text = "Up Next"
-        label.font = .preferredFont(forTextStyle: .subheadline)
-        label.adjustsFontForContentSizeCategory = true
-        label.textColor = .secondaryLabel
-        label.accessibilityTraits = .header
-        label.translatesAutoresizingMaskIntoConstraints = false
-        return label
-    }()
+    private let headerView = UIView()
 
     /// Caption-sized monospaced digits that still scale with Dynamic Type.
     private static func monospacedCaption() -> UIFont {
@@ -128,6 +120,7 @@ final class AudioNowPlayingViewController: UIViewController {
         configurePlayNext()
         configureTable()
         layout()
+        sizeTableHeaderToFit()
         scrubber.addTarget(self, action: #selector(scrubBegan), for: .touchDown)
         scrubber.addTarget(
             self, action: #selector(scrubEnded), for: [.touchUpInside, .touchUpOutside]
@@ -142,6 +135,11 @@ final class AudioNowPlayingViewController: UIViewController {
             self?.reload()
         }
         reload()
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        sizeTableHeaderToFit()
     }
 
     deinit {
@@ -189,6 +187,8 @@ final class AudioNowPlayingViewController: UIViewController {
         tableView.rowHeight = 56
         tableView.tableFooterView = UIView()
         tableView.keyboardDismissMode = .onDrag
+        tableView.alwaysBounceVertical = true
+        tableView.sectionHeaderTopPadding = 8
     }
 
     private func layout() {
@@ -208,31 +208,37 @@ final class AudioNowPlayingViewController: UIViewController {
         playNextRow.alignment = .center
         playNextRow.translatesAutoresizingMaskIntoConstraints = false
 
-        view.addSubview(artworkView)
-        view.addSubview(textStack)
-        view.addSubview(scrubber)
-        view.addSubview(elapsedLabel)
-        view.addSubview(remainingLabel)
-        view.addSubview(transport)
-        view.addSubview(playNextRow)
-        view.addSubview(queueHeaderLabel)
-        view.addSubview(tableView)
+        headerView.addSubview(artworkView)
+        headerView.addSubview(textStack)
+        headerView.addSubview(scrubber)
+        headerView.addSubview(elapsedLabel)
+        headerView.addSubview(remainingLabel)
+        headerView.addSubview(transport)
+        headerView.addSubview(playNextRow)
 
         NSLayoutConstraint.activate([
-            artworkView.topAnchor.constraint(
-                equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12
+            artworkView.topAnchor.constraint(equalTo: headerView.topAnchor, constant: 12),
+            artworkView.leadingAnchor.constraint(
+                equalTo: headerView.leadingAnchor, constant: 20
             ),
-            artworkView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
             artworkView.widthAnchor.constraint(equalToConstant: 56),
             artworkView.heightAnchor.constraint(equalToConstant: 56),
 
-            textStack.leadingAnchor.constraint(equalTo: artworkView.trailingAnchor, constant: 12),
-            textStack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            textStack.leadingAnchor.constraint(
+                equalTo: artworkView.trailingAnchor, constant: 12
+            ),
+            textStack.trailingAnchor.constraint(
+                equalTo: headerView.trailingAnchor, constant: -20
+            ),
             textStack.centerYAnchor.constraint(equalTo: artworkView.centerYAnchor),
 
             scrubber.topAnchor.constraint(equalTo: artworkView.bottomAnchor, constant: 14),
-            scrubber.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
-            scrubber.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            scrubber.leadingAnchor.constraint(
+                equalTo: headerView.leadingAnchor, constant: 20
+            ),
+            scrubber.trailingAnchor.constraint(
+                equalTo: headerView.trailingAnchor, constant: -20
+            ),
 
             elapsedLabel.topAnchor.constraint(equalTo: scrubber.bottomAnchor, constant: 2),
             elapsedLabel.leadingAnchor.constraint(equalTo: scrubber.leadingAnchor),
@@ -241,29 +247,53 @@ final class AudioNowPlayingViewController: UIViewController {
             remainingLabel.trailingAnchor.constraint(equalTo: scrubber.trailingAnchor),
 
             transport.topAnchor.constraint(equalTo: elapsedLabel.bottomAnchor, constant: 10),
-            transport.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 48),
-            transport.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -48),
+            transport.leadingAnchor.constraint(
+                equalTo: headerView.leadingAnchor, constant: 48
+            ),
+            transport.trailingAnchor.constraint(
+                equalTo: headerView.trailingAnchor, constant: -48
+            ),
             transport.heightAnchor.constraint(equalToConstant: 40),
 
             playNextRow.topAnchor.constraint(equalTo: transport.bottomAnchor, constant: 16),
-            playNextRow.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
-            playNextRow.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            playNextRow.leadingAnchor.constraint(
+                equalTo: headerView.leadingAnchor, constant: 20
+            ),
+            playNextRow.trailingAnchor.constraint(
+                equalTo: headerView.trailingAnchor, constant: -20
+            ),
+            playNextRow.bottomAnchor.constraint(
+                equalTo: headerView.bottomAnchor, constant: -8
+            )
+        ])
 
-            queueHeaderLabel.topAnchor.constraint(
-                equalTo: playNextRow.bottomAnchor, constant: 14
-            ),
-            queueHeaderLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
-            queueHeaderLabel.trailingAnchor.constraint(
-                equalTo: view.trailingAnchor, constant: -20
-            ),
-
-            tableView.topAnchor.constraint(
-                equalTo: queueHeaderLabel.bottomAnchor, constant: 6
-            ),
+        tableView.tableHeaderView = headerView
+        view.addSubview(tableView)
+        NSLayoutConstraint.activate([
+            tableView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
+    }
+
+    /// Sizes the transport header so the queue table can scroll in short sheets.
+    private func sizeTableHeaderToFit() {
+        let width = tableView.bounds.width
+        guard width > 1 else { return }
+        headerView.frame.size.width = width
+        headerView.setNeedsLayout()
+        headerView.layoutIfNeeded()
+        let height = headerView.systemLayoutSizeFitting(
+            CGSize(width: width, height: 0),
+            withHorizontalFittingPriority: .required,
+            verticalFittingPriority: .fittingSizeLevel
+        ).height
+        let size = CGSize(width: width, height: height)
+        guard abs(headerView.frame.height - size.height) > 0.5
+            || abs(headerView.frame.width - size.width) > 0.5 else { return }
+        headerView.frame.size = size
+        tableView.tableHeaderView = headerView
     }
 
     private func reload() {
@@ -305,9 +335,6 @@ final class AudioNowPlayingViewController: UIViewController {
         playButton.setImage(UIImage(systemName: symbol, withConfiguration: large), for: .normal)
         playButton.accessibilityLabel = player.isPlaying ? "Pause" : "Play"
         playNextSwitch.isOn = player.playsNext
-
-        let count = player.queue.count
-        queueHeaderLabel.text = count > 1 ? "Up Next · \(count) tracks" : "Now Playing"
         tableView.reloadData()
     }
 
@@ -344,6 +371,14 @@ extension AudioNowPlayingViewController: UITableViewDataSource, UITableViewDeleg
 
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         AudioPlayerController.shared.queue.count
+    }
+
+    func tableView(
+        _ tableView: UITableView,
+        titleForHeaderInSection section: Int
+    ) -> String? {
+        let count = AudioPlayerController.shared.queue.count
+        return count > 1 ? "Up Next · \(count) tracks" : "Now Playing"
     }
 
     func tableView(

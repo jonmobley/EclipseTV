@@ -24,10 +24,10 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         configurationForConnecting connectingSceneSession: UISceneSession,
         options: UIScene.ConnectionOptions
     ) -> UISceneConfiguration {
-        if connectingSceneSession.role == .windowExternalDisplayNonInteractive {
+        if ExternalDisplayManager.isExternalDisplayRole(connectingSceneSession.role) {
             let config = UISceneConfiguration(
                 name: "External Display",
-                sessionRole: .windowExternalDisplayNonInteractive
+                sessionRole: connectingSceneSession.role
             )
             config.delegateClass = ExternalSceneDelegate.self
             return config

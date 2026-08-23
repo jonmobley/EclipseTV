@@ -55,6 +55,36 @@ enum MediaAspect {
         }
     }
 
+    /// Returns a copy rotated 90° clockwise with pixels baked in (`.up`).
+    static func rotatedClockwise(_ image: UIImage) -> UIImage {
+        rotated(image, radians: .pi / 2)
+    }
+
+    /// Returns a copy rotated 90° counterclockwise with pixels baked in (`.up`).
+    static func rotatedCounterclockwise(_ image: UIImage) -> UIImage {
+        rotated(image, radians: -.pi / 2)
+    }
+
+    private static func rotated(_ image: UIImage, radians: CGFloat) -> UIImage {
+        let src = normalized(image)
+        let size = src.size
+        let newSize = CGSize(width: size.height, height: size.width)
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = src.scale
+        format.opaque = false
+        let renderer = UIGraphicsImageRenderer(size: newSize, format: format)
+        return renderer.image { ctx in
+            ctx.cgContext.translateBy(x: newSize.width / 2, y: newSize.height / 2)
+            ctx.cgContext.rotate(by: radians)
+            src.draw(in: CGRect(
+                x: -size.width / 2,
+                y: -size.height / 2,
+                width: size.width,
+                height: size.height
+            ))
+        }
+    }
+
     /// Crops `image` to `cropRect` in the image's point space (origin top-left, `.up`).
     static func crop(_ image: UIImage, to cropRect: CGRect) -> UIImage? {
         let normalized = normalized(image)

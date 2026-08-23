@@ -49,7 +49,6 @@ extension CameraLiveViewController {
         )
         alternateStillButton.addGestureRecognizer(longPress)
         view.addSubview(alternateStillButton)
-        panelView.addSubview(cutawayCoverView)
         refreshAlternateStillAppearance()
 
         NotificationCenter.default.addObserver(
@@ -101,12 +100,10 @@ extension CameraLiveViewController {
             alternateStillButton.tintColor = nil
             alternateStillButton.backgroundColor = .black
             alternateStillButton.accessibilityHint = active
-                ? (onAirPlay
-                    ? "Showing on AirPlay. Tap to return to the live camera."
-                    : "Showing on this camera. Tap to return to the live camera.")
+                ? "Cutaway is live. Tap to return to the live camera."
                 : store.hasStill
-                    ? "Tap to show this photo. Hold to replace or remove."
-                    : "Tap to show the Show Background. Hold to replace."
+                    ? "Tap to show this photo on program. Hold to replace or remove."
+                    : "Tap to show the Show Background on program. Hold to replace."
             alternateStillButton.accessibilityValue = active
                 ? (onAirPlay ? "On AirPlay" : "Active")
                 : (store.hasStill ? "Custom photo" : "Background")
@@ -128,25 +125,6 @@ extension CameraLiveViewController {
         alternateStillButton.layer.borderColor = active
             ? UIColor.systemRed.cgColor
             : UIColor.white.withAlphaComponent(0.35).cgColor
-        refreshCutawayCover()
-    }
-
-    /// Fills the phone panel with the cutaway when parked and no display is attached.
-    func layoutCutawayCover() {
-        cutawayCoverView.frame = panelView.bounds
-        refreshCutawayCover()
-    }
-
-    /// Shows the still on-panel only for a local park (AirPlay already owns the TV).
-    private func refreshCutawayCover() {
-        let mgr = ExternalDisplayManager.shared
-        let showCover = mgr.isCameraParkedOnStill && !mgr.isConnected
-        cutawayCoverView.image = showCover
-            ? CameraAlternateStillStore.shared.displayImage
-            : nil
-        cutawayCoverView.isHidden = !showCover || cutawayCoverView.image == nil
-        guard !cutawayCoverView.isHidden else { return }
-        panelView.bringSubviewToFront(cutawayCoverView)
     }
 
     @objc private func alternateStillStoreDidChange() {
@@ -189,7 +167,7 @@ extension CameraLiveViewController {
         parkAlternateStill(source)
     }
 
-    /// Parks the cutaway and refreshes chrome (AirPlay when live, local otherwise).
+    /// Parks the cutaway on program and refreshes camera chrome.
     private func parkAlternateStill(_ source: PresentationSource) {
         ExternalDisplayManager.shared.parkCameraOnStill(source)
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()

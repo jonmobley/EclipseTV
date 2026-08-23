@@ -19,13 +19,16 @@ enum CloudKitSaveFailureAction: Equatable {
     /// Server no longer has this record; drop the pending change so the queue
     /// cannot wedge.
     case dropPendingChange
+    /// `parent` was set on a Show that is not a share root. Clear the local
+    /// share-root mark and let `CKSyncEngine` retry without `parent`.
+    case stripShareParentAndRetry
     /// iCloud storage is full; park the record until space frees.
     case holdForQuota
     /// No recovery path; log and leave state alone.
     case logOnly
 }
 
-/// Pure mapping from `CKError.Code` to a recovery action.
+/// Pure mapping from `CKError.Code` (and optional server text) to a recovery action.
 ///
 /// Kept free of `CKError` construction so unit tests can cover every branch
 /// without fabricating CloudKit error objects.
@@ -37,7 +40,10 @@ enum CloudKitSaveFailurePolicy {
     /// `zoneBusy`, `requestRateLimited`, `notAuthenticated`, `operationCancelled`)
     /// deliberately map to `.retryHandledByEngine` — `CKSyncEngine` requeues those
     /// itself, and re-scheduling from here would only amplify traffic.
-    static func action(for code: CKError.Code) -> CloudKitSaveFailureAction {
+    static func action(
+        for code: CKError.Code,
+        description: String? = nil
+    ) -> CloudKitSaveFailureAction {
         switch code {
         case .quotaExceeded:
             return .holdForQuota
@@ -46,6 +52,13 @@ enum CloudKitSaveFailurePolicy {
         case .zoneNotFound:
             return .recreateZone
         case .unknownItem:
+            return .dropPendingChange
+        case .serverRejectedRequest:
+            if let description, isChainProtectionFailure(description) {
+                return .stripShareParentAndRetry
+            }
+            // Other share/PCS rejects never succeed on retry and wedge
+            // CKSyncEngine (log flood → quarantine). Drop the pending save.
             return .dropPendingChange
         case .networkUnavailable,
              .networkFailure,
@@ -58,5 +71,10 @@ enum CloudKitSaveFailurePolicy {
         default:
             return .logOnly
         }
+    }
+
+    /// CloudKit hierarchical-share reject when `parent` has no PCS identity.
+    static func isChainProtectionFailure(_ description: String) -> Bool {
+        description.localizedCaseInsensitiveContains("chain protection")
     }
 }

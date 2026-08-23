@@ -29,14 +29,11 @@ extension PresentationViewController {
         let screenSize = container.bounds.size
         guard screenSize.width > 0, screenSize.height > 0, scale > 0 else { return }
 
-        let contentSize: CGSize
         let degrees = rotationDegrees ?? ExternalOutputSettings.rotationDegrees
-        if degrees != 0 {
-            // TV Vertical: lay out in portrait space, then rotate into the landscape panel.
-            contentSize = CGSize(width: screenSize.height, height: screenSize.width)
-        } else {
-            contentSize = screenSize
-        }
+        let contentSize = rotatedContentSize(
+            for: screenSize,
+            rotationDegrees: degrees
+        )
 
         let logicalSize = CGSize(
             width: contentSize.width / scale,
@@ -50,6 +47,24 @@ extension PresentationViewController {
             transform = transform.rotated(by: CGFloat(degrees * .pi / 180))
         }
         content.transform = transform
+    }
+
+    /// 90° and 270° swap width/height so the rotated view still fills the panel.
+    /// 180° must not swap — rotating a 16:9 view 90° without a swap clips to a square.
+    static func rotationSwapsDimensions(_ degrees: Double) -> Bool {
+        let normalized = abs(degrees).truncatingRemainder(dividingBy: 180)
+        return abs(normalized - 90) < 0.5
+    }
+
+    /// Un-rotated content size that fills `container` after `rotationDegrees`.
+    static func rotatedContentSize(
+        for container: CGSize,
+        rotationDegrees: Double
+    ) -> CGSize {
+        if rotationSwapsDimensions(rotationDegrees) {
+            return CGSize(width: container.height, height: container.width)
+        }
+        return container
     }
 
     /// Instance wrapper for call sites on the presentation controller.
@@ -68,12 +83,10 @@ extension PresentationViewController {
         guard screenSize.width > 0, screenSize.height > 0 else { return }
 
         let degrees = rotationDegrees ?? ExternalOutputSettings.rotationDegrees
-        let contentSize: CGSize
-        if degrees != 0 {
-            contentSize = CGSize(width: screenSize.height, height: screenSize.width)
-        } else {
-            contentSize = screenSize
-        }
+        let contentSize = rotatedContentSize(
+            for: screenSize,
+            rotationDegrees: degrees
+        )
 
         let logical = ExternalOutputSettings.webLogicalSize
         let scale = contentSize.width / logical.width

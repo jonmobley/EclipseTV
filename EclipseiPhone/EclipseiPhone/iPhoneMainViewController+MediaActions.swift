@@ -307,7 +307,7 @@ extension iPhoneMainViewController {
         present(sheet, animated: true)
     }
 
-    /// Creates a Show in the active Display Mode and opens it.
+    /// Creates a Show in the active Display Mode (Landscape by default) and opens it.
     func promptNewAlbum() {
         presentShowNamePrompt(
             title: "New Show",
@@ -392,17 +392,24 @@ extension iPhoneMainViewController {
 
     /// Presents or reuses the Website compose sheet (one at a time).
     private func presentAddWebsite(targetShowId: UUID?) {
+        let reveal: (UUID) -> Void = { [weak self] pageId in
+            self?.libraryViewController.revealAddedShowMember(id: pageId.uuidString)
+        }
         if let open = openController(ofType: AddWebsiteViewController.self) {
+            open.onAdded = reveal
             open.navigationController?.popToViewController(open, animated: true)
             return
         }
         if let history = openController(ofType: WebPagesViewController.self),
            let nav = history.navigationController {
+            history.onAdded = reveal
             let compose = AddWebsiteViewController(targetShowId: targetShowId)
+            compose.onAdded = reveal
             nav.pushViewController(compose, animated: true)
             return
         }
         let compose = AddWebsiteViewController(targetShowId: targetShowId)
+        compose.onAdded = reveal
         let nav = UINavigationController(rootViewController: compose)
         nav.modalPresentationStyle = .formSheet
         presentationAnchor.present(nav, animated: true)

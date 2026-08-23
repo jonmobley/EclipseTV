@@ -116,14 +116,28 @@ final class PlaybackControlsView: UIView {
 
         NSLayoutConstraint.activate([
             buttonStack.topAnchor.constraint(equalTo: topAnchor, constant: 10),
-            buttonStack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 40),
-            buttonStack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -40),
+            Self.flexible(
+                buttonStack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 40)
+            ),
+            Self.flexible(
+                buttonStack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -40)
+            ),
 
             scrubberStack.topAnchor.constraint(equalTo: buttonStack.bottomAnchor, constant: 8),
-            scrubberStack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
-            scrubberStack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
+            Self.flexible(
+                scrubberStack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12)
+            ),
+            Self.flexible(
+                scrubberStack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12)
+            ),
             scrubberStack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -10)
         ])
+    }
+
+    /// Side insets that need width; yield when the live hero is still 0pt at launch.
+    private static func flexible(_ constraint: NSLayoutConstraint) -> NSLayoutConstraint {
+        constraint.priority = .defaultHigh
+        return constraint
     }
 
     private func configureControlButton(_ button: UIButton, systemName: String, config: UIImage.SymbolConfiguration) {

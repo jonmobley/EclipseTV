@@ -7,12 +7,11 @@
 
 import UIKit
 
-// MARK: - Scroll-Linked Collapse Chrome
+// MARK: - Compact Presentation Chrome
 
-/// The host controller shrinks the hero with a uniform `CGAffineTransform` rather
-/// than by resizing it, so an embedded live `WKWebView` never relayouts mid-scroll.
-/// Everything here compensates for that scale: hairlines, corner radius and the
-/// LIVE badge would otherwise shrink along with the artwork.
+/// Compact chrome is for the foreign-Show mini preview (progress 1). The open
+/// Show's hero stays expanded (progress 0). Hairlines, corner radius, and the
+/// LIVE badge counter-scale when a host applies a uniform transform.
 extension LiveHeaderView {
 
     /// Full-hero corner radius; the tucked mini preview aims for `compactCornerRadius`.

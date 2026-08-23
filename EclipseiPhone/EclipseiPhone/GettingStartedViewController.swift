@@ -42,9 +42,8 @@ final class GettingStartedViewController: UITableViewController {
             title: "Presenting",
             body: """
             Start AirPlay from Control Center — that’s enough to present. Tap any tile \
-            in a Show to put it on screen; the live preview mirrors the audience. The \
-            header AirPlay & EclipseTV control shows connection status — tap it to \
-            Link EclipseTV.
+            in a Show to put it on screen; the live preview mirrors the audience. Link \
+            EclipseTV from Settings → EclipseTV when you want the TV app in sync.
             """,
             systemImage: "airplayvideo",
             tint: .systemTeal
@@ -74,8 +73,8 @@ final class GettingStartedViewController: UITableViewController {
             title: "EclipseTV Link",
             body: """
             Linking EclipseTV (optional) syncs imported media with the Apple TV app and \
-            enables multi-TV. AirPlay alone is enough for Shows. Use the header status \
-            control or Settings → EclipseTV to link with a pairing code.
+            enables multi-TV. AirPlay alone is enough for Shows. Use Settings → \
+            EclipseTV to link with a pairing code.
             """,
             systemImage: "tv",
             tint: .systemCyan

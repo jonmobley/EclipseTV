@@ -204,6 +204,16 @@ final class CameraFrameStore {
         NotificationCenter.default.post(name: Self.didChangeNotification, object: self)
     }
 
+    /// Rewrites `id`'s PNG rotated 90° clockwise.
+    func rotateClockwise(_ id: UUID) {
+        rewriteRotated(id, clockwise: true)
+    }
+
+    /// Rewrites `id`'s PNG rotated 90° counterclockwise.
+    func rotateCounterclockwise(_ id: UUID) {
+        rewriteRotated(id, clockwise: false)
+    }
+
     /// Makes a frame live on the camera (ribbon tap), or `nil` for no overlay.
     func select(_ id: UUID?) {
         let mode = ExternalOutputSettings.orientation
@@ -218,6 +228,24 @@ final class CameraFrameStore {
             }
         }
         NotificationCenter.default.post(name: Self.didChangeNotification, object: self)
+    }
+
+    private func rewriteRotated(_ id: UUID, clockwise: Bool) {
+        guard allFrames.contains(where: { $0.id == id }),
+              let image = image(for: id) else { return }
+        let rotated = clockwise
+            ? MediaAspect.rotatedClockwise(image)
+            : MediaAspect.rotatedCounterclockwise(image)
+        guard let data = rotated.pngData() else {
+            logger.error("Failed to encode rotated camera frame PNG")
+            return
+        }
+        do {
+            try data.write(to: fileURL(for: id), options: .atomic)
+            NotificationCenter.default.post(name: Self.didChangeNotification, object: self)
+        } catch {
+            logger.error("Failed to write rotated frame: \(error.localizedDescription)")
+        }
     }
 
     // MARK: - Display Mode

@@ -110,9 +110,14 @@ final class CameraFramePickerViewController: UIViewController {
     private func reload() {
         let store = CameraFrameStore.shared
         items = store.frames.map { .frame($0.id) } + [.importFrames]
+        let previous = Set(dataSource.snapshot().itemIdentifiers)
         var snapshot = NSDiffableDataSourceSnapshot<Int, Item>()
         snapshot.appendSections([0])
         snapshot.appendItems(items)
+        let toReload = items.filter { previous.contains($0) }
+        if !toReload.isEmpty {
+            snapshot.reloadItems(toReload)
+        }
         dataSource.apply(snapshot, animatingDifferences: true)
     }
 
@@ -276,6 +281,18 @@ extension CameraFramePickerViewController: UICollectionViewDelegate {
         guard let item = dataSource.itemIdentifier(for: indexPath),
               case .frame(let id) = item else { return nil }
         return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { [weak self] _ in
+            let rotateRight = UIAction(
+                title: "Rotate Right",
+                image: UIImage(systemName: "rotate.right")
+            ) { _ in
+                CameraFrameStore.shared.rotateClockwise(id)
+            }
+            let rotateLeft = UIAction(
+                title: "Rotate Left",
+                image: UIImage(systemName: "rotate.left")
+            ) { _ in
+                CameraFrameStore.shared.rotateCounterclockwise(id)
+            }
             let delete = UIAction(
                 title: "Delete",
                 image: UIImage(systemName: "trash"),
@@ -283,7 +300,7 @@ extension CameraFramePickerViewController: UICollectionViewDelegate {
             ) { _ in
                 self?.confirmDelete(id)
             }
-            return UIMenu(children: [delete])
+            return UIMenu(children: [rotateRight, rotateLeft, delete])
         }
     }
 }

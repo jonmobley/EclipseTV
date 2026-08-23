@@ -76,28 +76,21 @@ extension CameraLiveViewController {
     /// Fills the panel with the mirror, rotating sensor frames to match live preview.
     ///
     /// Uses the lens horizon angle — Vertical is not always 90° (portrait-mounted front
-    /// sensors report 0°). Landscape still only spins 0°/180° for Left vs Right.
+    /// sensors report 0°). 90°/270° swap width and height so a Landscape 16:9 panel
+    /// stays 16:9 instead of clipping to a square.
     func layoutMirrorView() {
         guard !mirrorView.isHidden else { return }
-        let degrees = CGFloat(
+        let degrees = Double(
             CameraManager.shared.quantizedRotationAngle(
                 CameraManager.shared.horizonLevelCaptureRotationAngle()
             )
         )
-        if ExternalOutputSettings.isVerticalMode {
-            PresentationViewController.applyRotatedLayout(
-                to: mirrorView,
-                in: panelView,
-                scale: 1,
-                rotationDegrees: degrees
-            )
-            return
-        }
-        mirrorView.bounds = CGRect(origin: .zero, size: panelView.bounds.size)
-        mirrorView.center = CGPoint(x: panelView.bounds.midX, y: panelView.bounds.midY)
-        mirrorView.transform = degrees == 0
-            ? .identity
-            : CGAffineTransform(rotationAngle: degrees * .pi / 180)
+        PresentationViewController.applyRotatedLayout(
+            to: mirrorView,
+            in: panelView,
+            scale: 1,
+            rotationDegrees: degrees
+        )
     }
 
     // MARK: - Private
@@ -160,7 +153,7 @@ extension CameraLiveViewController {
         // Panel aspect matches Display Mode — fill the card in both modes.
         previewView.attach(
             session: CameraManager.shared.captureSession,
-            videoGravity: .resizeAspectFill
+            videoGravity: CameraPreviewView.programVideoGravity
         )
         previewView.syncDisplayModeOrientation()
         layoutPhoneCameraViewport()

@@ -138,6 +138,7 @@ final class TVLibraryStore {
         mergeCaptures()
         recoverOrphanedLocalMedia()
         warmMissingThumbnails()
+        fillMissingVideoDurations()
         playback = PlaybackState()
         delegate?.libraryStoreDidUpdateItems(self)
         delegate?.libraryStoreDidUpdateCurrent(self)
@@ -162,6 +163,7 @@ final class TVLibraryStore {
         mergePendingUploads()
         mergeCaptures()
         recoverOrphanedLocalMedia()
+        fillMissingVideoDurations()
 
         delegate?.libraryStoreDidUpdateItems(self)
         delegate?.libraryStoreDidUpdateCurrent(self)
@@ -208,6 +210,9 @@ final class TVLibraryStore {
 
             for url in thumbURLs {
                 if let loaded = ThumbnailDecoder.decode(fileURL: url) {
+                    if isVideo && !VideoPosterFrame.isUsable(loaded) {
+                        continue
+                    }
                     image = loaded
                     needsPersist = url != thumbURLs.first
                     break
@@ -216,7 +221,7 @@ final class TVLibraryStore {
             if image == nil {
                 for url in mediaURLs {
                     if isVideo {
-                        image = Self.videoPreviewImage(at: url)
+                        image = VideoPosterFrame.image(at: url)
                     } else {
                         image = ThumbnailDecoder.decode(fileURL: url)
                     }
@@ -254,27 +259,6 @@ final class TVLibraryStore {
             tvDir.appendingPathComponent(other.directoryName).appendingPathComponent(file),
             tvDir.appendingPathComponent(file)
         ]
-    }
-
-    /// Generates a still from a local video file. Safe to call off the main actor.
-    nonisolated private static func videoPreviewImage(at url: URL) -> UIImage? {
-        let asset = AVURLAsset(url: url)
-        let generator = AVAssetImageGenerator(asset: asset)
-        generator.appliesPreferredTrackTransform = true
-        generator.maximumSize = CGSize(width: 720, height: 720)
-        let semaphore = DispatchSemaphore(value: 0)
-        var image: UIImage?
-        Task {
-            defer { semaphore.signal() }
-            do {
-                let cg = try await generator.image(at: .zero).image
-                image = UIImage(cgImage: cg)
-            } catch {
-                image = nil
-            }
-        }
-        _ = semaphore.wait(timeout: .now() + 5)
-        return image
     }
 
     func item(at index: Int) -> LibraryItemDTO? {
@@ -350,6 +334,7 @@ final class TVLibraryStore {
         LocalAlbumStore.shared.pruneMissingItems(keeping: keepIds)
         SlideshowStore.shared.pruneMissingItems(keeping: keepIds)
         persistManifest()
+        fillMissingVideoDurations()
 
         delegate?.libraryStoreDidUpdateItems(self)
     }
@@ -430,18 +415,15 @@ final class TVLibraryStore {
         return !persistedItems(for: other).isEmpty
     }
 
-    /// Restores items from LocalMedia / cached manifests; opens Vertical if that's
-    /// where the library actually is.
+    /// Restores items from LocalMedia / cached manifests.
     private func runLaunchRecovery() {
         ensureLibraryIdentity()
         mergePendingUploads()
         mergeCaptures()
         recoverOrphanedLocalMedia()
         recoverFromCachedManifests()
-        if items.isEmpty {
-            adoptVerticalIfLandscapeEmpty()
-        }
         warmMissingThumbnails()
+        fillMissingVideoDurations()
     }
 
     /// Drops any persisted live item so launch starts with nothing selected.
@@ -599,28 +581,6 @@ final class TVLibraryStore {
         persistManifest()
     }
 
-    /// Recent adds during Vertical testing live in that bucket — don't leave Landscape empty.
-    private func adoptVerticalIfLandscapeEmpty() {
-        guard activeLibraryMode == .landscape, items.isEmpty else { return }
-        let hasVertical =
-            !LocalMediaStore.shared.storedIds(for: .vertical).isEmpty
-            || !persistedItems(for: .vertical).isEmpty
-        guard hasVertical else { return }
-
-        logger.info("Landscape empty; opening Vertical library which still has content")
-        UserDefaults.standard.set(
-            ExternalOutputOrientation.portrait.rawValue,
-            forKey: "EclipseTV.camera.outputOrientation"
-        )
-        activeLibraryMode = .vertical
-        thumbnails.removeAll()
-        pendingDiskLoads.removeAll()
-        ensureThumbnailDirectory()
-        loadPersistedManifest()
-        mergePendingUploads()
-        recoverOrphanedLocalMedia()
-    }
-
     private func persistedItems(
         for mode: EclipseShareProtocol.LibraryMode,
         tvName: String? = nil
@@ -706,6 +666,32 @@ final class TVLibraryStore {
         items[index] = item
         persistManifest()
         PendingUploadStore.shared.update(item, mode: activeLibraryMode)
+        delegate?.libraryStoreDidUpdateItems(self)
+    }
+
+    /// Writes known file durations onto video items that were ingested with `0`.
+    func applyVideoDurations(_ durations: [String: Double]) {
+        var changed = false
+        for (id, seconds) in durations {
+            guard seconds > 0.05,
+                  let index = items.firstIndex(where: { $0.id == id }) else { continue }
+            let item = items[index]
+            guard item.isVideo, item.duration <= 0 else { continue }
+            let updated = LibraryItemDTO(
+                id: item.id,
+                name: item.name,
+                isVideo: item.isVideo,
+                duration: seconds,
+                isLooping: item.isLooping,
+                isMuted: item.isMuted,
+                isAvailable: item.isAvailable
+            )
+            items[index] = updated
+            PendingUploadStore.shared.update(updated, mode: activeLibraryMode)
+            changed = true
+        }
+        guard changed else { return }
+        persistManifest()
         delegate?.libraryStoreDidUpdateItems(self)
     }
 

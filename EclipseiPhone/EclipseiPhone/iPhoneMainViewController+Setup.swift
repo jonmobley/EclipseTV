@@ -114,17 +114,11 @@ extension iPhoneMainViewController {
         headerBar.onOpenSettings = { [weak self] in
             self?.presentSettings()
         }
-        headerBar.onOpenOutputStatus = { [weak self] in
-            self?.presentOutputStatusOptions()
-        }
         headerBar.onToggleLiveLock = { [weak self] in
             self?.libraryViewController.toggleLiveOutputLock()
         }
         headerBar.onPresentBlack = { [weak self] in
             self?.libraryViewController.toggleBlackLive()
-        }
-        headerBar.onToggleDisconnectedPreview = { [weak self] in
-            self?.libraryViewController.toggleDisconnectedLivePreview()
         }
         headerBar.onNewShow = { [weak self] in
             self?.promptNewAlbum()
@@ -168,7 +162,10 @@ extension iPhoneMainViewController {
         headerBar.setPresenting(ExternalDisplayManager.shared.isConnected)
     }
 
-    /// Pins the ambient music mini player / bubble above the home safe-area bottom.
+    /// Pins the ambient music mini player / bubble to the home bottom.
+    ///
+    /// Portrait is a full-width footer through the home indicator so tiles cannot
+    /// show under the bar. Landscape is a compact card on the Music bubble.
     private func setupAudioMiniPlayer() {
         audioMiniPlayer.translatesAutoresizingMaskIntoConstraints = false
         audioMiniPlayer.isHidden = true
@@ -203,9 +200,7 @@ extension iPhoneMainViewController {
         audioMiniPortraitConstraints = [
             audioMiniPlayer.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             audioMiniPlayer.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            audioMiniPlayer.bottomAnchor.constraint(
-                equalTo: view.safeAreaLayoutGuide.bottomAnchor
-            )
+            audioMiniPlayer.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ]
         // Compact landscape card: same trailing-bottom corner as the Music bubble.
         let landTrailing = audioMiniPlayer.trailingAnchor.constraint(
@@ -265,18 +260,9 @@ extension iPhoneMainViewController {
     /// `presentationAnchor`, which would happily stack a second sheet on the first.
     func presentNowPlaying() {
         guard !isAlreadyOpen(AudioNowPlayingViewController.self) else { return }
-        let nowPlaying = AudioNowPlayingViewController()
-        nowPlaying.onOpenLibrary = { [weak self] in
-            self?.dismiss(animated: true) {
-                guard let self, !self.isHomeSplitLayout else { return }
-                self.showMusicPage(animated: true)
-            }
-        }
-        let nav = UINavigationController(rootViewController: nowPlaying)
-        if let sheet = nav.sheetPresentationController {
-            sheet.detents = [.medium(), .large()]
-            sheet.selectedDetentIdentifier = .medium
-            sheet.prefersGrabberVisible = true
+        let nav = AudioNowPlayingViewController.makeNavigation { [weak self] in
+            guard let self, !self.isHomeSplitLayout else { return }
+            self.showMusicPage(animated: true)
         }
         presentationAnchor.present(nav, animated: true)
     }

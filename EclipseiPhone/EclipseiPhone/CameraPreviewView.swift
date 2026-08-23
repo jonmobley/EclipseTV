@@ -22,6 +22,12 @@ final class CameraPreviewView: UIView {
         layer as! AVCaptureVideoPreviewLayer
     }
 
+    /// Gravity for the Display Mode panel (phone viewfinder and AirPlay).
+    ///
+    /// Fill, not fit: the panel is already 16:9 / 9:16. Fit letterboxes the 4:3
+    /// sensor on Landscape AirPlay while the phone crops, so program wouldn't match.
+    static let programVideoGravity: AVLayerVideoGravity = .resizeAspectFill
+
     /// Fallback when `RotationCoordinator` has no device yet.
     ///
     /// Prefer `syncDisplayModeOrientation()` / `syncPhoneViewerOrientation(_:)` —

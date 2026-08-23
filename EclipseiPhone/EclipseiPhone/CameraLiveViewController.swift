@@ -14,8 +14,8 @@ import AVFoundation
 /// where the aspect allows). The shutter row sits outside that panel, like the
 /// system Camera app. Shutter always captures: tap = photo, hold = record
 /// (except Always Record When Live, which owns recording while on-air).
-/// Tap the stage to go live or stop — with a display that is AirPlay; without
-/// one, Camera still goes live on the phone.
+/// Tap the stage to go live or stop when AirPlay, EclipseTV, or Practice Mode
+/// is on. Otherwise the stage stays a viewfinder.
 final class CameraLiveViewController: UIViewController {
 
     // MARK: - Subviews
@@ -75,25 +75,36 @@ final class CameraLiveViewController: UIViewController {
         return button
     }()
 
-    /// Top-chrome status pill — "LIVE" while on-air; hidden when idle.
+    /// Top-chrome status pill — "LIVE" while the camera feed is on-air.
+    /// Hidden in preview and while a cutaway still is on program.
     let goLiveButton = UIButton(type: .system)
 
-    /// Elapsed record time shown beside the LIVE badge while holding to record.
+    /// Centered preview hint. Shown when the camera is open but not on-air,
+    /// and again while a cutaway still is live.
+    let tapToGoLiveHintView = UIButton(type: .system)
+
+    /// Dark capsule behind the record timer so elapsed time stays readable.
+    let recordingTimerPillView: UIView = {
+        let view = UIView()
+        view.backgroundColor = UIColor.black.withAlphaComponent(0.55)
+        view.clipsToBounds = true
+        view.isHidden = true
+        view.isUserInteractionEnabled = false
+        view.translatesAutoresizingMaskIntoConstraints = true
+        return view
+    }()
+
+    /// Elapsed record time, centered in the camera preview while recording.
     let recordingTimerLabel: UILabel = {
         let label = UILabel()
         label.font = .monospacedDigitSystemFont(ofSize: 15, weight: .semibold)
         label.textColor = .white
-        label.textAlignment = .left
-        label.isHidden = true
+        label.textAlignment = .center
         label.translatesAutoresizingMaskIntoConstraints = true
-        label.layer.shadowColor = UIColor.black.cgColor
-        label.layer.shadowOpacity = 0.45
-        label.layer.shadowRadius = 2
-        label.layer.shadowOffset = CGSize(width: 0, height: 1)
         return label
     }()
 
-    /// Top-right gear — Recording, Frames, and When Camera Closes.
+    /// Top-right gear — Recording and Frames.
     let settingsButton = UIButton(type: .system)
 
     /// Shared diameter for Settings / Flip circular controls.
@@ -128,7 +139,7 @@ final class CameraLiveViewController: UIViewController {
     }()
     /// Program thumb of what's on AirPlay while this camera is still preview-only.
     let liveOutputThumbView = CameraLiveOutputThumbView()
-    /// Cutaway still thumbnail — tap parks that photo (AirPlay, or locally).
+    /// Cutaway still thumbnail — tap parks that photo on program (AirPlay / live preview).
     let alternateStillButton = UIButton(type: .custom)
     /// Aspect-fill photo inside `alternateStillButton` (Background when none chosen).
     let alternateStillImageView: UIImageView = {
@@ -138,16 +149,6 @@ final class CameraLiveViewController: UIViewController {
         view.isUserInteractionEnabled = false
         view.translatesAutoresizingMaskIntoConstraints = false
         view.isHidden = true
-        return view
-    }()
-    /// Full-panel still while the cutaway is parked with no external display.
-    let cutawayCoverView: UIImageView = {
-        let view = UIImageView()
-        view.contentMode = .scaleAspectFill
-        view.clipsToBounds = true
-        view.isUserInteractionEnabled = false
-        view.isHidden = true
-        view.translatesAutoresizingMaskIntoConstraints = true
         return view
     }()
     /// Show that receives captures taken here, when the camera was opened from one.
@@ -282,8 +283,8 @@ final class CameraLiveViewController: UIViewController {
         CameraManager.shared.captureLastFrame(from: previewView)
         teardownLivePreviewSource()
         previewView.detach()
-        // Leaving the control UI does not stop AirPlay — tap the stage off live
-        // for that. Session stays up for the home Camera tile warm preview.
+        // Leaving the control UI does not stop AirPlay. Program stays until
+        // another source is selected. Session stays up for the home Camera tile.
     }
 
     @objc private func recordingDidChange() {
@@ -329,7 +330,6 @@ final class CameraLiveViewController: UIViewController {
         freezeFrameView.transform = previewView.transform
         layoutMirrorView()
         layoutFrameOverlay()
-        layoutCutawayCover()
         previewView.syncDisplayModeOrientation()
     }
 
@@ -455,8 +455,8 @@ final class CameraLiveViewController: UIViewController {
     /// Leaves the camera screen (same as Website header back).
     ///
     /// If a movie is in flight, finishes and saves it first so Back never orphans
-    /// a recording. AirPlay stays live when already live — only tapping the stage
-    /// off live stops that; the home tile keeps the warm session.
+    /// a recording. AirPlay stays live when already live; pick another source to
+    /// leave it. The home tile keeps the warm session.
     @objc func closeTapped() {
         shutterHoldTimer?.invalidate()
         shutterHoldTimer = nil

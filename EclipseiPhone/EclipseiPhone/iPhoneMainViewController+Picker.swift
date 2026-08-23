@@ -144,8 +144,9 @@ extension iPhoneMainViewController: PHPickerViewControllerDelegate {
                     )
                     return
                 }
+                // Save only — tap Background to go live. Already-live output
+                // refreshes via LogoStore.didChangeNotification.
                 LogoStore.shared.save(image)
-                self.libraryViewController.presentLogoLive()
             }
         }
     }
@@ -168,9 +169,10 @@ extension iPhoneMainViewController: PHPickerViewControllerDelegate {
                 }
                 DispatchQueue.main.async {
                     self.pendingScreensaverPick = false
+                    // Save only — tap Screensaver to go live. Already-live output
+                    // refreshes via ScreensaverStore.didChangeNotification.
                     ScreensaverStore.shared.saveVideo(from: local)
                     self.cleanupTempFile(at: local)
-                    self.libraryViewController.presentScreensaverLive()
                 }
             }
             return
@@ -194,8 +196,9 @@ extension iPhoneMainViewController: PHPickerViewControllerDelegate {
                     )
                     return
                 }
+                // Save only — tap Screensaver to go live. Already-live output
+                // refreshes via ScreensaverStore.didChangeNotification.
                 ScreensaverStore.shared.saveImage(image)
-                self.libraryViewController.presentScreensaverLive()
             }
         }
     }
@@ -353,9 +356,10 @@ extension iPhoneMainViewController: AspectCropDelegate {
                 } else {
                     self.currentTempFileURL = croppedURL
                     self.saveCustomThumbnail(croppedThumb, for: croppedURL)
+                    let duration = await VideoPosterFrame.durationSeconds(at: croppedURL)
                     self.addMedia(
                         localURL: croppedURL, isVideo: true,
-                        thumbnail: croppedThumb, duration: 0
+                        thumbnail: croppedThumb, duration: duration
                     )
                 }
             } catch {
@@ -454,7 +458,12 @@ extension iPhoneMainViewController: VideoThumbnailPreviewDelegate {
 
     private func finishVideoAdd(videoURL: URL, thumbnail: UIImage) {
         saveCustomThumbnail(thumbnail, for: videoURL)
-        addMedia(localURL: videoURL, isVideo: true, thumbnail: thumbnail, duration: 0)
+        Task { @MainActor in
+            let duration = await VideoPosterFrame.durationSeconds(at: videoURL)
+            addMedia(
+                localURL: videoURL, isVideo: true, thumbnail: thumbnail, duration: duration
+            )
+        }
     }
 
     func saveCustomThumbnail(_ thumbnail: UIImage, for videoURL: URL) {

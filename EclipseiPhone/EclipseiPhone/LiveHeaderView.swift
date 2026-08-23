@@ -51,8 +51,9 @@ final class LiveHeaderView: UIView {
     private var transitionSnapshot: UIView?
     /// Whether playback transport should show when not in compact presentation.
     var wantsPlaybackControls = false
-    /// Scroll-linked collapse progress (0 = full hero, 1 = tucked mini preview).
-    /// Owned by `applyCollapse(progress:scale:)`.
+    /// Compact presentation progress (0 = full hero, 1 = tucked mini preview).
+    /// Owned by `applyCollapse(progress:scale:)`. The open Show's hero stays at 0;
+    /// foreign-Show live uses 1 on its own mini view.
     var collapseProgress: CGFloat = 0
     /// Uniform transform scale the host controller currently applies to this view.
     var collapseScale: CGFloat = 1
@@ -92,6 +93,9 @@ final class LiveHeaderView: UIView {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
+        // Before inner Auto Layout: a 0-width TAMIC mask fights 14/40pt insets
+        // and dumps unsatisfiable-constraint logs at construction.
+        translatesAutoresizingMaskIntoConstraints = false
         setupViews()
         installSlideshowBrowseGestures()
     }
@@ -184,13 +188,34 @@ final class LiveHeaderView: UIView {
 
             titleLabel.centerXAnchor.constraint(equalTo: centerXAnchor),
             titleLabel.topAnchor.constraint(equalTo: placeholderIcon.bottomAnchor, constant: 10),
-            titleLabel.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 14),
-            titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -14),
-
-            subtitleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
-            subtitleLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
+            Self.flexible(
+                titleLabel.leadingAnchor.constraint(
+                    greaterThanOrEqualTo: leadingAnchor, constant: 14
+                )
+            ),
+            Self.flexible(
+                titleLabel.trailingAnchor.constraint(
+                    lessThanOrEqualTo: trailingAnchor, constant: -14
+                )
+            ),
+            Self.flexible(
+                subtitleLabel.leadingAnchor.constraint(
+                    equalTo: leadingAnchor, constant: 14
+                )
+            ),
+            Self.flexible(
+                subtitleLabel.trailingAnchor.constraint(
+                    equalTo: trailingAnchor, constant: -14
+                )
+            ),
             subtitleLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -14)
         ])
+    }
+
+    /// Insets that need width; yield when the hero is still 0pt at launch.
+    private static func flexible(_ constraint: NSLayoutConstraint) -> NSLayoutConstraint {
+        constraint.priority = .defaultHigh
+        return constraint
     }
 
     override func layoutSubviews() {
@@ -211,16 +236,19 @@ final class LiveHeaderView: UIView {
 
     /// Shows the live item, or a placeholder when `item` is nil (nothing live).
     ///
-    /// - Parameter showsLocalTransport: When true (phone-only library video), show
-    ///   play/pause chrome even without an Eclipse TV Multipeer link.
+    /// - Parameter showsLocalTransport: When true (phone-only or AirPlay library video),
+    ///   show play/pause chrome even without an Eclipse TV Multipeer link.
     /// - Parameter allowsStillFullscreenTap: When true (phone-only still), tap opens
     ///   fullscreen Preview.
+    /// - Parameter usesRemoteVideoMonitor: When true (AirPlay / EclipseTV owns video),
+    ///   show a black program monitor (no poster, no film glyph).
     func configure(
         with item: LibraryItemDTO?,
         thumbnail: UIImage?,
         isOnline: Bool,
         showsLocalTransport: Bool = false,
-        allowsStillFullscreenTap: Bool = false
+        allowsStillFullscreenTap: Bool = false,
+        usesRemoteVideoMonitor: Bool = false
     ) {
         clearWebPreview(parking: true)
         clearScreensaverPreview()
@@ -246,24 +274,35 @@ final class LiveHeaderView: UIView {
                 == .scaleAspectFill ? "fill" : "fit")
         let key = "media:\(item.id):\(thumbToken):\(isOnline)"
             + ":local\(showsLocalTransport):fs\(allowsStillFullscreenTap):\(fitToken)"
+            + ":monitor\(usesRemoteVideoMonitor)"
         applyContent(key: key) {
-            self.backgroundColor = .secondarySystemBackground
-            // The hero card is the output panel's aspect, so frame the art the way the
-            // external screen / Apple TV does: videos letterbox, stills follow Fit / Fill.
-            self.imageView.contentMode = item.isVideo
-                ? .scaleAspectFit
-                : SlideshowPlaybackController.shared.contentModeForLiveStill(id: item.id)
-            self.imageView.image = thumbnail
-            self.imageView.isHidden = false
-            self.imageView.alpha = 1
-            self.placeholderIcon.isHidden = thumbnail != nil
-            self.placeholderIcon.alpha = 1
-            self.placeholderIcon.image = UIImage(systemName: item.isVideo ? "film" : "photo")
-            self.placeholderIcon.tintColor = .tertiaryLabel
+            let showControls = item.isVideo && (isOnline || showsLocalTransport)
+            if usesRemoteVideoMonitor {
+                // Match the black stage behind the card — a grey fill + film glyph
+                // reads as a two-tone empty monitor while the TV actually plays.
+                self.backgroundColor = .black
+                self.imageView.image = nil
+                self.imageView.isHidden = true
+                self.imageView.alpha = 1
+                self.placeholderIcon.isHidden = true
+            } else {
+                // Video letterboxes on black so the card matches the stage; stills
+                // keep the light fill. Never put a film glyph on a video preview.
+                self.backgroundColor = item.isVideo ? .black : .secondarySystemBackground
+                self.imageView.contentMode = item.isVideo
+                    ? .scaleAspectFit
+                    : SlideshowPlaybackController.shared.contentModeForLiveStill(id: item.id)
+                self.imageView.image = thumbnail
+                self.imageView.isHidden = false
+                self.imageView.alpha = 1
+                self.placeholderIcon.isHidden = thumbnail != nil || item.isVideo
+                self.placeholderIcon.alpha = 1
+                self.placeholderIcon.image = UIImage(systemName: "photo")
+                self.placeholderIcon.tintColor = .tertiaryLabel
+            }
 
             // LIVE badge; video transport uses the bottom gradient. Never show
             // image titles on the preview — art alone is enough.
-            let showControls = item.isVideo && (isOnline || showsLocalTransport)
             self.wantsPlaybackControls = showControls
             self.allowsFullscreenTap = allowsStillFullscreenTap
             self.gradientLayer.isHidden = !showControls
@@ -277,7 +316,7 @@ final class LiveHeaderView: UIView {
                 : allowsStillFullscreenTap
                     ? "Live, \(item.name), tap for full screen"
                     : "Live, \(item.name)"
-            if showsLocalTransport {
+            if showsLocalTransport && !usesRemoteVideoMonitor {
                 self.setStaticPreviewHidden(true)
             }
         }
@@ -418,13 +457,15 @@ final class LiveHeaderView: UIView {
             : message
     }
 
-    /// Tap-to-expand while tucked; transport / slideshow / still Preview while expanded.
+    /// Compact mini: tap to return. Expanded: transport / slideshow / still Preview.
+    /// The slide-ribbon button must stay tappable even when the ribbon is hidden.
     func applyInteractionForPresentation() {
         isUserInteractionEnabled =
             isCompactPresentation
             || wantsPlaybackControls
             || allowsSlideshowBrowse
             || allowsFullscreenTap
+            || slideshowRibbonButton != nil
     }
 
     /// Expanded phone-live still: open fullscreen Preview.

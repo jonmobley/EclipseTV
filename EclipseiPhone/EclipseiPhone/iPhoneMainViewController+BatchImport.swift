@@ -175,11 +175,12 @@ extension iPhoneMainViewController {
             saveCustomThumbnail(thumbnail, for: localURL)
         }
 
+        let duration = await VideoPosterFrame.durationSeconds(at: localURL)
         return addMedia(
             localURL: localURL,
             isVideo: true,
             thumbnail: thumbnail,
-            duration: 0,
+            duration: duration,
             toAlbumId: albumId,
             sendIfConnected: false
         )

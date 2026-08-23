@@ -99,11 +99,26 @@ extension PresentationViewController {
     ) {
         let finish = { [weak self] in
             guard let self, generation == self.transitionGeneration else { return }
+            guard self.isTransitionInFlight else { return }
             self.clearIncomingOverlay(animated: false)
             self.pendingTransitionSource = nil
             self.isTransitionInFlight = false
             self.isRevealScheduled = false
             self.refreshAudioNowPlayingOverlay()
+        }
+
+        if case .camera = source.content {
+            DispatchQueue.main.asyncAfter(
+                deadline: .now() + CameraLiveViewController.hardwarePreviewPaintDelay
+            ) {
+                finish()
+            }
+            return
+        }
+
+        if case .screensaver = source.content {
+            waitUntilScreensaverDisplayed(generation: generation, then: finish)
+            return
         }
 
         guard case .video = source.content,
@@ -124,6 +139,24 @@ extension PresentationViewController {
             self?.videoReadyObservation = nil
             finish()
         }
+    }
+
+    /// Holds the overlay until the primary Screensaver has a displayed frame.
+    private func waitUntilScreensaverDisplayed(
+        generation: Int,
+        then finish: @escaping () -> Void
+    ) {
+        let complete = { [weak self] in
+            guard let self, generation == self.transitionGeneration else { return }
+            self.screensaverView?.onReady = nil
+            finish()
+        }
+        guard let view = screensaverView, !view.isReadyForDisplay else {
+            complete()
+            return
+        }
+        view.onReady = { complete() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: complete)
     }
 
     /// Ensures the fullscreen incoming host exists and is pinned to the view.

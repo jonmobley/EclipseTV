@@ -37,6 +37,25 @@ struct CloudKitSaveFailurePolicyTests {
         )
     }
 
+    @Test func serverRejectedRequestDropsPendingChange() {
+        #expect(
+            CloudKitSaveFailurePolicy.action(for: .serverRejectedRequest)
+                == .dropPendingChange
+        )
+    }
+
+    @Test func chainProtectionStripsParentAndRetries() {
+        let message = """
+            Error saving share to server: "Parent Record has no chain protection info"
+            """
+        #expect(
+            CloudKitSaveFailurePolicy.action(
+                for: .serverRejectedRequest,
+                description: message
+            ) == .stripShareParentAndRetry
+        )
+    }
+
     @Test func retryablesLeaveWorkToTheEngine() {
         let codes: [CKError.Code] = [
             .networkUnavailable,

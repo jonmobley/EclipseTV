@@ -14,7 +14,9 @@ import os.log
 
 /// Fullscreen, non-interactive view shown on an AirPlay-connected external display.
 /// Renders the currently selected item (image, video, camera, web, or PDF) while the
-/// phone keeps its normal UI. Driven entirely by `ExternalDisplayManager`.
+/// phone keeps its normal UI — including playback controls. This screen never
+/// hosts `AVPlayerViewController` or transport chrome.
+/// Driven entirely by `ExternalDisplayManager`.
 final class PresentationViewController: UIViewController {
 
     // MARK: - Subviews
@@ -183,6 +185,8 @@ final class PresentationViewController: UIViewController {
 
     var playerLayer: AVPlayerLayer?
     var player: AVPlayer?
+    /// Periodic time observer for the phone video remote (not shown on TV).
+    var videoTransportTimeObserver: Any?
     var loopObserver: NSObjectProtocol?
     /// Seamless looping Screensaver (dual-player crossfade).
     var screensaverView: SeamlessLoopPlayerView?
@@ -210,6 +214,8 @@ final class PresentationViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .black
+        // External is output-only; transport lives on the phone hero.
+        view.isUserInteractionEnabled = false
 
         view.addSubview(mediaContainer)
         mediaContainer.addSubview(mediaContentView)
@@ -353,7 +359,18 @@ final class PresentationViewController: UIViewController {
 
     /// Replaces the displayed content via dual-layer hold (live underlay → incoming).
     func show(_ source: PresentationSource) {
+        // Connect / foreground re-entry used to cancel the in-flight first paint.
+        if pendingTransitionSource == source, isTransitionInFlight { return }
+        if shouldSkipScreensaverReshow(source) { return }
         performContentTransition(to: source)
+    }
+
+    /// Same Screensaver is already on the primary surface. Rebuilding it blinks black.
+    func shouldSkipScreensaverReshow(_ source: PresentationSource) -> Bool {
+        guard !isTransitionInFlight else { return false }
+        guard presentedSource == source else { return false }
+        if case .screensaver = source.content { return true }
+        return false
     }
 
     /// Installs `source`, skipping the rebuild when the same web page is already live.
@@ -365,11 +382,11 @@ final class PresentationViewController: UIViewController {
     /// in particular relies on the rebuild to resume after a background — so the shortcut
     /// is deliberately limited to web.
     func showIfNeeded(_ source: PresentationSource) {
+        if pendingTransitionSource == source { return }
         guard case .web = source.content else {
             show(source)
             return
         }
-        if pendingTransitionSource == source { return }
         if presentedSource == source, !isTransitionInFlight { return }
         show(source)
     }
@@ -402,7 +419,8 @@ final class PresentationViewController: UIViewController {
                 at: url,
                 isLooping: isLooping,
                 isMuted: isMuted,
-                startAt: source.videoStartAt
+                startAt: source.videoStartAt,
+                autoplay: source.videoAutoplay
             )
         case .screensaver(let url):
             hideCamera()

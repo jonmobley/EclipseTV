@@ -41,15 +41,20 @@ extension LibraryThumbnailCell {
     }
 
     /// Recomputes overlay visibility after rewind / chrome changes.
+    ///
+    /// Titles sit beside the disc (one line, tail ellipsis) and stop before
+    /// the duration pill. Tool tiles keep the disc even without a poster.
     func refreshTypeIconVisibility() {
         let hasArt = imageView.image != nil && imageView.alpha > 0.5
-        let show = contentTypeIcon != nil && rewindButton.isHidden && hasArt
+        let allowEmpty = contentTypeIcon?.showsWithoutThumbnail == true
+        let show = contentTypeIcon != nil
+            && rewindButton.isHidden
+            && (hasArt || allowEmpty)
         typeIconOverlay.apply(show ? contentTypeIcon : nil)
-        let captionPad = show && !captionLabel.isHidden
-        captionLeadingConstraint.constant = captionPad
-            ? ThumbnailTypeIconView.captionClearance
-            : 8
-        guard show else { return }
-        cardView.bringSubviewToFront(typeIconOverlay)
+        if show {
+            cardView.bringSubviewToFront(typeIconOverlay)
+        }
+        raiseDurationOverlay()
+        updateCaptionLayout()
     }
 }

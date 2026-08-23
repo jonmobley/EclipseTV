@@ -25,8 +25,8 @@ struct LocalAlbum: Codable, Equatable, Identifiable, Hashable {
     /// Ordered Show grid: tool tokens, member ids, and slideshow tokens.
     /// `nil` = default tools, then members, then slideshows.
     var surfaceIds: [String]?
-    /// Show the live preview hero with no AirPlay, HDMI, or EclipseTV.
-    /// Default is off; go-live still works — this only shows or hides the preview.
+    /// Practice Mode: live preview plus Lock / Blackout with no AirPlay, HDMI,
+    /// or EclipseTV. Default is off; taps then open on-device Preview instead.
     var previewsWhenDisconnected: Bool
 
     /// Creates an empty album with `name` in `orientation`.
@@ -35,7 +35,7 @@ struct LocalAlbum: Codable, Equatable, Identifiable, Hashable {
         name: String,
         itemIds: [String] = [],
         coverId: String? = nil,
-        orientation: ExternalOutputOrientation = ExternalOutputSettings.orientation,
+        orientation: ExternalOutputOrientation = .landscape,
         createdAt: Date = Date(),
         lastOpenedAt: Date? = nil,
         surfaceIds: [String]? = nil,

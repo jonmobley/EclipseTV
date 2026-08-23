@@ -26,7 +26,7 @@ extension LibraryGridViewController {
         reloadForSelectChange()
         notifySelectChrome()
         UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
-        showPresentationToast("Select items, then Copy or Remove")
+        showPresentationToast("Select items, then use Actions")
     }
 
     /// Leaves select mode without applying a bulk action.
@@ -45,7 +45,7 @@ extension LibraryGridViewController {
         guard items.indices.contains(indexPath.item) else { return }
         let item = items[indexPath.item]
         let selectable = isShowGridItemSelectable(item)
-        let id = selectionId(for: item)
+        let id = item.selectionId
         let selected = id.map { selectedShowItemIds.contains($0) } ?? false
         cell.setShowSelectMode(
             enabled: true,
@@ -65,7 +65,7 @@ extension LibraryGridViewController {
         guard items.indices.contains(indexPath.item) else { return true }
         let item = items[indexPath.item]
         guard isShowGridItemSelectable(item),
-              let id = selectionId(for: item) else { return true }
+              let id = item.selectionId else { return true }
         if selectedShowItemIds.contains(id) {
             selectedShowItemIds.remove(id)
         } else {
@@ -106,58 +106,23 @@ extension LibraryGridViewController {
         present(alert, animated: true)
     }
 
-    /// Picks a destination Show and copies selected membership / tools into it.
-    func presentBulkCopyToShow() {
-        guard isSelecting, let openId = openShowId else { return }
-        let ids = Array(selectedShowItemIds)
-        guard !ids.isEmpty else { return }
-        let destinations = LocalAlbumStore.shared.albums.filter {
-            $0.id != openId && $0.orientation == ExternalOutputSettings.orientation
-        }
-        guard !destinations.isEmpty else {
-            showPresentationToast("No other Shows to copy to")
-            return
-        }
-        let sheet = UIAlertController(
-            title: "Copy to Show",
-            message: nil,
-            preferredStyle: .actionSheet
-        )
-        for show in destinations {
-            sheet.addAction(UIAlertAction(title: show.name, style: .default) { [weak self] _ in
-                self?.copySelection(ids, toAlbumId: show.id)
-            })
-        }
-        sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        if let popover = sheet.popoverPresentationController {
-            popover.sourceView = view
-            popover.sourceRect = CGRect(
-                x: view.bounds.midX, y: view.safeAreaInsets.top + 26,
-                width: 1, height: 1
-            )
-            popover.permittedArrowDirections = .up
-        }
-        present(sheet, animated: true)
-    }
-
     /// Builds the header Actions menu for the current selection count.
     func selectActionsMenu() -> UIMenu? {
         guard isSelecting, !selectedShowItemIds.isEmpty else { return nil }
         let count = selectedShowItemIds.count
-        let copy = UIAction(
-            title: "Copy to Show…",
-            image: UIImage(systemName: "folder.badge.plus")
-        ) { [weak self] _ in
-            self?.presentBulkCopyToShow()
+        let ids = Array(selectedShowItemIds)
+        var children: [UIMenuElement] = [copyToShowMenu(ids: ids)]
+        if let slideshow = createSlideshowAction() {
+            children.append(slideshow)
         }
-        let remove = UIAction(
+        children.append(UIAction(
             title: count == 1 ? "Remove" : "Remove \(count) Items",
             image: UIImage(systemName: "folder.badge.minus"),
             attributes: .destructive
         ) { [weak self] _ in
-            self?.confirmBulkRemoveFromShow()
-        }
-        return UIMenu(children: [copy, remove])
+            DispatchQueue.main.async { self?.confirmBulkRemoveFromShow() }
+        })
+        return UIMenu(children: children)
     }
 
     /// Drops ids that are no longer in the Show or became live.
@@ -174,14 +139,14 @@ extension LibraryGridViewController {
 
     /// True when this surface id can be checked (present, not live).
     func isShowSelectionIdSelectable(_ id: String) -> Bool {
-        guard let item = openShowGridItems.first(where: { selectionId(for: $0) == id })
+        guard let item = openShowGridItems.first(where: { $0.selectionId == id })
         else { return false }
         return isShowGridItemSelectable(item)
     }
 
     /// Surface members / tools that are not currently live.
     func isShowGridItemSelectable(_ item: ShowGridItem) -> Bool {
-        guard selectionId(for: item) != nil else { return false }
+        guard item.selectionId != nil else { return false }
         return !isShowGridItemLive(item)
     }
 
@@ -224,20 +189,47 @@ extension LibraryGridViewController {
         }
     }
 
-    /// Stable id used in `selectedShowItemIds` (nil for slideshow / Add).
-    func selectionId(for item: ShowGridItem) -> String? {
-        switch item {
-        case .screensaver: return ShowToolToken.screensaver
-        case .logo: return ShowToolToken.logo
-        case .camera: return ShowToolToken.camera
-        case .media(let media): return media.id
-        case .website(let page): return page.id.uuidString
-        case .pdf(let doc): return doc.id.uuidString
-        case .slideshow, .add: return nil
+    // MARK: - Private
+
+    /// Nested Show list so destinations appear inside Actions, not a second sheet.
+    private func copyToShowMenu(ids: [String]) -> UIMenuElement {
+        let groups = copyToShowDestinationGroups()
+        guard !groups.isEmpty else {
+            return UIAction(
+                title: "Copy to Show",
+                subtitle: "No other Shows",
+                image: UIImage(systemName: "folder.badge.plus"),
+                attributes: .disabled
+            ) { _ in }
         }
+        return UIMenu(
+            title: "Copy to Show",
+            image: UIImage(systemName: "folder.badge.plus"),
+            children: groups.map { group in
+                UIMenu(
+                    title: "",
+                    options: .displayInline,
+                    children: group.map { show in
+                        UIAction(
+                            title: show.name,
+                            image: UIImage(systemName: show.showPickerIconName)
+                        ) { [weak self] _ in
+                            self?.copySelection(ids, toAlbumId: show.id)
+                        }
+                    }
+                )
+            }
+        )
     }
 
-    // MARK: - Private
+    private func copyToShowDestinationGroups() -> [[LocalAlbum]] {
+        guard let openId = openShowId else { return [] }
+        return ShowCopyDestinations.grouped(
+            albums: LocalAlbumStore.shared.albums,
+            excluding: openId,
+            activeOrientation: ExternalOutputSettings.orientation
+        )
+    }
 
     private func copySelection(_ ids: [String], toAlbumId albumId: UUID) {
         endSelectMode()
@@ -253,7 +245,8 @@ extension LibraryGridViewController {
         UINotificationFeedbackGenerator().notificationOccurred(.success)
     }
 
-    private func endSelectMode() {
+    /// Leaves select mode after a bulk action applies.
+    func endSelectMode() {
         isSelecting = false
         selectedShowItemIds = []
         reloadForSelectChange()

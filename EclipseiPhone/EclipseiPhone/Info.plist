@@ -28,6 +28,15 @@
                     <string>$(PRODUCT_MODULE_NAME).ExternalSceneDelegate</string>
                 </dict>
             </array>
+            <key>UIWindowSceneSessionRoleExternalDisplay</key>
+            <array>
+                <dict>
+                    <key>UISceneConfigurationName</key>
+                    <string>External Display</string>
+                    <key>UISceneDelegateClassName</key>
+                    <string>$(PRODUCT_MODULE_NAME).ExternalSceneDelegate</string>
+                </dict>
+            </array>
         </dict>
     </dict>
     <key>CFBundleURLTypes</key>

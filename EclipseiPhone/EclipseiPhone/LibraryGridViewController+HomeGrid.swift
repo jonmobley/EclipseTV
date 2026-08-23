@@ -140,11 +140,6 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         }
     }
 
-    func scrollViewDidScroll(_ scrollView: UIScrollView) {
-        guard scrollView === collectionView else { return }
-        updateHeroCollapse()
-    }
-
     func scrollViewDidEndDragging(
         _ scrollView: UIScrollView,
         willDecelerate decelerate: Bool
@@ -297,24 +292,26 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         case .logo:
             cell.configureSpecial(
                 title: "Background",
-                systemImage: "seal.fill",
+                systemImage: "photo.fill",
                 thumbnail: LogoStore.shared.image,
                 fillColor: UIColor(white: 0.16, alpha: 1),
                 isLive: isLogoSelected && !ExternalDisplayManager.shared.isOverlayLive,
                 isLocked: isLiveOutputLocked,
-                thumbnailContentMode: .scaleAspectFill
+                thumbnailContentMode: .scaleAspectFill,
+                typeIcon: .photo
             )
             cell.setMoreMenu(contextMenu(for: .logo))
         case .screensaver:
             cell.configureSpecial(
                 title: "Screensaver",
-                systemImage: "sparkles.tv",
+                systemImage: ScreensaverStore.isVideo ? "play.fill" : "photo.fill",
                 thumbnail: ScreensaverStore.poster,
                 fillColor: UIColor(white: 0.16, alpha: 1),
                 isLive: isScreensaverSelected
                     && !ExternalDisplayManager.shared.isOverlayLive,
                 isLocked: isLiveOutputLocked,
-                thumbnailContentMode: .scaleAspectFill
+                thumbnailContentMode: .scaleAspectFill,
+                typeIcon: .media(isVideo: ScreensaverStore.isVideo)
             )
         case .camera:
             cell.configureCamera(
@@ -463,19 +460,38 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         refreshLiveHeader()
     }
 
-    /// Presents a saved website (bookmark or Show member).
+    /// Marks Screensaver live when AirPlay / Practice is already showing it as fallback.
+    func syncScreensaverFallbackLiveSelection() {
+        let mgr = ExternalDisplayManager.shared
+        isScreensaverSelected = LiveOutputRouting.isScreensaverFallbackLive(
+            hasOutputDestination: hasLiveOutputDestination,
+            isOverlayLive: mgr.isOverlayLive,
+            isJoinedLive: mgr.isJoinedLive,
+            isBlackSelected: isBlackSelected,
+            isLogoSelected: isLogoSelected,
+            hasLibraryLiveItem: store.currentId != nil,
+            hasLiveSlideshow: SlideshowPlaybackController.shared.activeSlideshowId != nil
+        )
+    }
+
+    /// Opens a saved website (bookmark or Show member).
     ///
-    /// Marks the page live, warms the session, then opens the phone browser which
-    /// adopts that same web view.
+    /// Marks it live when a destination exists; otherwise this is on-device
+    /// Preview (the phone browser) without a red live stroke.
     ///
     /// A second browser must never open on top of the first — that left the loser with
     /// an empty stage and leaked the warm web view. If one is already up, navigate it
     /// like a normal browser load so Back still works and AirPlay follows.
     func presentWebPage(_ page: WebPage) {
         guard !blockLiveChangeIfLocked() else { return }
+        let markLive = hasLiveOutputDestination
         if let open = openController(ofType: WebRemoteViewController.self) {
             SlideshowPlaybackController.shared.stop()
             open.loadBrowserURL(page.url, pageId: page.id)
+            if markLive {
+                ExternalDisplayManager.shared.presentWeb(page.url, pageId: page.id)
+                announceAirPlayOverlayIfLinked()
+            }
             reloadLibraryGrid()
             refreshLiveHeader()
             return
@@ -484,12 +500,17 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         WarmWebSessionPool.shared.warmIfNeeded(for: page)
         // Park any in-hero preview before adopt so Auto Layout pins don't stick.
         liveHeader.clearWebPreview(parking: true)
-        ExternalDisplayManager.shared.presentWeb(page.url, pageId: page.id)
-        announceAirPlayOverlayIfLinked()
+        if markLive {
+            ExternalDisplayManager.shared.presentWeb(page.url, pageId: page.id)
+            announceAirPlayOverlayIfLinked()
+        }
         let remote = WebRemoteViewController(page: page)
         // Landscape Display Mode rotates the browser; a plain nav controller would not.
         let nav = DisplayModeNavigationController(rootViewController: remote)
         nav.modalPresentationStyle = .fullScreen
+        if remote.usesOverlayBrowserChrome {
+            nav.setNavigationBarHidden(true, animated: false)
+        }
         present(nav, animated: true)
         reloadLibraryGrid()
         // After adopt: hero shows a static thumb (live preview is in the browser).
@@ -631,14 +652,8 @@ extension LibraryGridViewController: UICollectionViewDataSource,
                     title: "Reset to Default",
                     image: UIImage(systemName: "arrow.counterclockwise"),
                     attributes: .destructive
-                ) { [weak self] _ in
+                ) { _ in
                     LogoStore.shared.clear()
-                    if self?.isLogoSelected == true {
-                        self?.presentLogoLive()
-                    } else {
-                        self?.collectionView.reloadData()
-                        self?.refreshLiveHeader()
-                    }
                 })
             }
             return UIMenu(children: actions)

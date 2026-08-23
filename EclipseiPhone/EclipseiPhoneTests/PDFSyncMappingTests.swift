@@ -26,14 +26,24 @@ struct PDFSyncMappingTests {
         #expect(abs(decoded.createdAt.timeIntervalSince(doc.createdAt)) < 1)
     }
 
-    /// A PDF must ride along with its Show's `CKShare`, which needs a parent ref.
-    @Test func showIdSetsParentReferenceForSharing() throws {
+    /// A PDF stores `showId` as a field; `parent` is only for share-root Shows.
+    @Test func showIdDoesNotSetParentUnlessShareChild() throws {
         let showId = UUID()
         let record = CloudKitRecordMapper.makePDFRecord(
             from: SavedPDF(title: "Menu"),
             showId: showId
         )
         #expect(record[CloudKitSchema.PDFKey.showId] as? String == showId.uuidString)
+        #expect(record.parent == nil)
+    }
+
+    @Test func shareChildSetsParentReference() throws {
+        let showId = UUID()
+        let record = CloudKitRecordMapper.makePDFRecord(
+            from: SavedPDF(title: "Menu"),
+            showId: showId,
+            attachAsShareChild: true
+        )
         let parent = try #require(record.parent)
         #expect(parent.recordID == CloudKitSchema.showRecordID(for: showId))
     }

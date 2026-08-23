@@ -19,7 +19,7 @@ struct CaptureRecord: Equatable, Identifiable, Hashable {
     let capturedAt: Date
     /// Landscape / Vertical bucket for Display Mode.
     var orientation: ExternalOutputOrientation
-    /// Optional Show this capture belongs to (CloudKit parent).
+    /// Optional Show this capture belongs to (CloudKit `showId` field).
     var showId: UUID?
     /// Reserved for change detection / dedupe. Schema read/write only — nothing
     /// assigns a hash yet; leave inert until a consumer needs it.

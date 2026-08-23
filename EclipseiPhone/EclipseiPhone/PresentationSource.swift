@@ -37,11 +37,19 @@ struct PresentationSource: Equatable {
     let content: Content
     /// Absolute seconds to seek when presenting `.video`. Ignored for other content.
     let videoStartAt: TimeInterval
+    /// When false, `.video` is shown paused (blackout restore). Default is to play.
+    let videoAutoplay: Bool
 
     /// - Parameter videoStartAt: Resume offset for library video (0 = from the start).
-    init(content: Content, videoStartAt: TimeInterval = 0) {
+    /// - Parameter videoAutoplay: Play immediately. False parks on a still frame.
+    init(
+        content: Content,
+        videoStartAt: TimeInterval = 0,
+        videoAutoplay: Bool = true
+    ) {
         self.content = content
         self.videoStartAt = videoStartAt
+        self.videoAutoplay = videoAutoplay
     }
 
     // MARK: - Convenience builders
@@ -54,11 +62,23 @@ struct PresentationSource: Equatable {
         _ url: URL,
         isLooping: Bool,
         isMuted: Bool,
-        startAt: TimeInterval = 0
+        startAt: TimeInterval = 0,
+        autoplay: Bool = true
     ) -> PresentationSource {
         PresentationSource(
             content: .video(url: url, isLooping: isLooping, isMuted: isMuted),
-            videoStartAt: startAt
+            videoStartAt: startAt,
+            videoAutoplay: autoplay
+        )
+    }
+
+    /// Same video, parked at `startAt` without playing. No-op for other content.
+    func pausingVideo(at startAt: TimeInterval) -> PresentationSource {
+        guard case .video = content else { return self }
+        return PresentationSource(
+            content: content,
+            videoStartAt: startAt,
+            videoAutoplay: false
         )
     }
 

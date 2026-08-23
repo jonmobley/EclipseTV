@@ -18,4 +18,17 @@ enum ShowGridItem: Equatable {
     case website(WebPage)
     case pdf(SavedPDF)
     case add
+
+    /// Multi-select id (nil for slideshow / Add).
+    var selectionId: String? {
+        switch self {
+        case .screensaver: return ShowToolToken.screensaver
+        case .logo: return ShowToolToken.logo
+        case .camera: return ShowToolToken.camera
+        case .media(let media): return media.id
+        case .website(let page): return page.id.uuidString
+        case .pdf(let doc): return doc.id.uuidString
+        case .slideshow, .add: return nil
+        }
+    }
 }

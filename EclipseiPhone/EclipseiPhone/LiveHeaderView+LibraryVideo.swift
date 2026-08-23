@@ -68,6 +68,7 @@ extension LiveHeaderView {
         let player = AVPlayer(url: url)
         player.isMuted = isMuted
         player.actionAtItemEnd = isLooping ? .none : .pause
+        AirPlayVideoTransport.configureLayerOnlyPlayback(on: player)
         if startAt > 0.5 {
             let time = CMTime(seconds: startAt, preferredTimescale: 600)
             player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero)

@@ -21,7 +21,6 @@ final class HomeShowTileCell: UICollectionViewCell {
     private let titleLabel = UILabel()
     private let subtitleLabel = UILabel()
     private let moreButton = UIButton(type: .system)
-    private let liveBadge = PaddedLabel()
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -40,7 +39,8 @@ final class HomeShowTileCell: UICollectionViewCell {
         scrimView.isHidden = true
         titleLabel.text = nil
         subtitleLabel.text = nil
-        liveBadge.isHidden = true
+        cardView.layer.borderWidth = 0
+        cardView.layer.borderColor = UIColor.clear.cgColor
         moreButton.isHidden = true
         onMore = nil
         titleLabel.textColor = .label
@@ -82,7 +82,10 @@ final class HomeShowTileCell: UICollectionViewCell {
         titleLabel.textColor = .white
         subtitleLabel.textColor = UIColor.white.withAlphaComponent(0.78)
         applyMoreButtonForeground(.white)
-        liveBadge.isHidden = !isLive
+        cardView.layer.borderWidth = isLive ? 3 : 0
+        cardView.layer.borderColor = isLive
+            ? UIColor.systemRed.cgColor
+            : UIColor.clear.cgColor
         moreButton.menu = moreMenu
         moreButton.isHidden = moreMenu == nil
         accessibilityLabel = isLive ? "\(title), Live. \(subtitle)" : "\(title). \(subtitle)"
@@ -156,16 +159,6 @@ final class HomeShowTileCell: UICollectionViewCell {
         moreButton.isHidden = true
         cardView.addSubview(moreButton)
 
-        liveBadge.text = "LIVE"
-        liveBadge.font = .systemFont(ofSize: 11, weight: .bold)
-        liveBadge.textColor = .white
-        liveBadge.backgroundColor = .systemRed
-        liveBadge.layer.cornerRadius = 4
-        liveBadge.clipsToBounds = true
-        liveBadge.isHidden = true
-        liveBadge.translatesAutoresizingMaskIntoConstraints = false
-        cardView.addSubview(liveBadge)
-
         cardView.addSubview(titleLabel)
         cardView.addSubview(subtitleLabel)
 
@@ -218,12 +211,7 @@ final class HomeShowTileCell: UICollectionViewCell {
             moreButton.trailingAnchor.constraint(equalTo: cardView.trailingAnchor),
             moreButton.topAnchor.constraint(equalTo: cardView.topAnchor),
             moreButton.widthAnchor.constraint(equalToConstant: 44),
-            moreButton.heightAnchor.constraint(equalToConstant: 44),
-
-            liveBadge.leadingAnchor.constraint(
-                equalTo: cardView.leadingAnchor, constant: 10
-            ),
-            liveBadge.topAnchor.constraint(equalTo: cardView.topAnchor, constant: 10)
+            moreButton.heightAnchor.constraint(equalToConstant: 44)
         ])
         isAccessibilityElement = true
         accessibilityTraits = .button

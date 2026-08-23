@@ -7,90 +7,43 @@
 
 import UIKit
 
-// MARK: - Scroll-Linked Floating Live Hero
+// MARK: - Pinned Live Hero
 
-/// Portrait only: the hero shrinks toward a trailing mini preview as the grid
-/// scrolls, tracking the finger 1:1 in both directions.
-///
-/// Two rules keep this stable. The hero keeps its expanded Auto Layout size and is
-/// scaled with a `CGAffineTransform`, so a live `WKWebView` preview never relayouts
-/// mid-drag. And the grid's top inset stays at the expanded footprint at all times,
-/// so progress is a pure function of `contentOffset` — no inset/offset feedback loop
-/// and no rewriting the offset out from under the user.
+/// Portrait Show preview stays expanded. The grid's top inset is the full hero
+/// footprint, so tiles scroll under the card. The trailing mini slot is only for
+/// live-from-another-Show (`foreignLiveHeader`).
 extension LibraryGridViewController {
 
     /// Trailing mini-preview width (Landscape / 16:9 content).
-    static let compactHeroWidthLandscape: CGFloat = 148
+    static let compactHeroWidthLandscape = LiveHeroMiniSlot.landscapeWidth
     /// Trailing mini-preview width (Vertical / 9:16 content).
-    static let compactHeroWidthVertical: CGFloat = 84
+    static let compactHeroWidthVertical = LiveHeroMiniSlot.verticalWidth
 
-    /// True once the hero reads as a mini preview (tap target, no transport).
-    var isHeroCompact: Bool { heroCollapseProgress > 0.5 }
-
-    /// Recomputes the floating hero from the current scroll offset. Cheap enough
-    /// to call from `scrollViewDidScroll` and every layout pass.
+    /// Keeps this Show's hero expanded. Call after layout / Show changes.
     func updateHeroCollapse() {
-        // Foreign-show live already occupies the tucked mini slot — keep this Show's
-        // hero expanded (Select item to go live) and skip scroll-linked collapse.
-        guard showsLiveHero, !isSideBySideChrome, !isLiveFromOtherShow else {
-            applyHeroCollapse(progress: 0)
-            return
-        }
-        guard let distance = heroCollapseDistance() else {
-            applyHeroCollapse(progress: 0)
-            return
-        }
-        applyHeroCollapse(progress: currentHeroScrollProgress() / distance)
+        expandPinnedLiveHero()
     }
 
-    /// Restores the full hero when the user taps the mini preview. Driving the
-    /// scroll (rather than the hero) keeps the two in sync the whole way up.
-    @objc func handleHeroExpandTap() {
-        guard isHeroCompact else { return }
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        let top = CGPoint(x: collectionView.contentOffset.x,
-                          y: -collectionView.adjustedContentInset.top)
-        collectionView.setContentOffset(
-            top,
-            animated: !UIAccessibility.isReduceMotionEnabled
+    /// Where the tucked mini preview sits, in the controller view's coordinates.
+    func compactHeroTargetRect() -> CGRect? {
+        LiveHeroMiniSlot.targetRect(
+            viewSize: view.bounds.size,
+            safeAreaTop: view.safeAreaInsets.top,
+            headerInset: headerInset,
+            expandedHero: expandedHeroLayoutFrame(),
+            isVerticalMode: ExternalOutputSettings.isVerticalMode
         )
     }
 
     // MARK: - Private
 
-    /// Scroll distance mapped to a full collapse, or nil when the hero should stay
-    /// expanded (no room to shrink into, or not enough content for a natural tuck).
-    ///
-    /// Short grids used to compress this distance down to whatever tiny overflow
-    /// existed, so scrolling a couple of rows raced the preview into the corner.
-    /// Collapse only arms once the grid can scroll at least the full nominal tuck.
-    private func heroCollapseDistance() -> CGFloat? {
-        guard let target = compactHeroTargetRect() else { return nil }
-        let nominal = expandedHeroOverlayInset()
-            - (target.height + headerInset + heroBottomPadding)
-        guard nominal > 1, maxVerticalScroll() >= nominal else { return nil }
-        return nominal
+    private func expandPinnedLiveHero() {
+        heroCollapseProgress = 0
+        liveHeader.transform = .identity
+        liveHeader.applyCollapse(progress: 0, scale: 1)
     }
 
-    /// Where the tucked mini preview sits, in the controller view's coordinates.
-    /// Uniform scaling means the aspect ratio comes along for free.
-    func compactHeroTargetRect() -> CGRect? {
-        let expanded = expandedHeroLayoutFrame()
-        guard expanded.width > 1, expanded.height > 1 else { return nil }
-        let width = ExternalOutputSettings.isVerticalMode
-            ? Self.compactHeroWidthVertical
-            : Self.compactHeroWidthLandscape
-        guard width < expanded.width else { return nil }
-        let height = (expanded.height * (width / expanded.width)).rounded(.down)
-        return CGRect(
-            x: view.bounds.width - headerInset - width,
-            y: view.safeAreaInsets.top + headerInset,
-            width: width,
-            height: height
-        )
-    }
-
-    /// Hero frame with any collapse transform ignored — `center` is the layer
+    /// Hero frame with any leftover transform ignored — `center` is the layer
     /// position and `bounds` the layout size, neither of which a transform touches.
     private func expandedHeroLayoutFrame() -> CGRect {
         CGRect(
@@ -100,29 +53,30 @@ extension LibraryGridViewController {
             height: liveHeader.bounds.height
         )
     }
+}
 
-    private func applyHeroCollapse(progress: CGFloat) {
-        let clamped = min(1, max(0, progress))
-        guard let target = compactHeroTargetRect(), clamped > 0 else {
-            heroCollapseProgress = 0
-            liveHeader.transform = .identity
-            liveHeader.applyCollapse(progress: 0, scale: 1)
-            heroExpandTapRecognizer.isEnabled = false
-            return
-        }
+/// Geometry for the trailing live mini preview (foreign-Show live only).
+enum LiveHeroMiniSlot {
+    static let landscapeWidth: CGFloat = 148
+    static let verticalWidth: CGFloat = 84
 
-        let expanded = expandedHeroLayoutFrame()
-        let scale = 1 + (target.width / expanded.width - 1) * clamped
-        // Scale about the centre, then translate that centre toward the tucked slot.
-        liveHeader.transform = CGAffineTransform(scaleX: scale, y: scale)
-            .concatenating(
-                CGAffineTransform(
-                    translationX: (target.midX - expanded.midX) * clamped,
-                    y: (target.midY - expanded.midY) * clamped
-                )
-            )
-        heroCollapseProgress = clamped
-        liveHeader.applyCollapse(progress: clamped, scale: scale)
-        heroExpandTapRecognizer.isEnabled = isHeroCompact
+    /// Compact card in the top-trailing corner, matching the expanded hero's aspect.
+    static func targetRect(
+        viewSize: CGSize,
+        safeAreaTop: CGFloat,
+        headerInset: CGFloat,
+        expandedHero: CGRect,
+        isVerticalMode: Bool
+    ) -> CGRect? {
+        guard expandedHero.width > 1, expandedHero.height > 1 else { return nil }
+        let width = isVerticalMode ? verticalWidth : landscapeWidth
+        guard width < expandedHero.width else { return nil }
+        let height = (expandedHero.height * (width / expandedHero.width)).rounded(.down)
+        return CGRect(
+            x: viewSize.width - headerInset - width,
+            y: safeAreaTop + headerInset,
+            width: width,
+            height: height
+        )
     }
 }

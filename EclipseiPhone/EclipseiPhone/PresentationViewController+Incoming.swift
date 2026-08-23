@@ -25,6 +25,7 @@ extension PresentationViewController {
                 isLooping: isLooping,
                 isMuted: isMuted,
                 startAt: source.videoStartAt,
+                autoplay: source.videoAutoplay,
                 generation: generation
             )
         case .screensaver(let url):
@@ -100,6 +101,7 @@ extension PresentationViewController {
         isLooping: Bool,
         isMuted: Bool,
         startAt: TimeInterval,
+        autoplay: Bool,
         generation: Int
     ) {
         let host = makeIncomingMediaHost()
@@ -108,6 +110,7 @@ extension PresentationViewController {
         let player = AVPlayer(url: url)
         player.isMuted = isMuted
         player.actionAtItemEnd = isLooping ? .none : .pause
+        AirPlayVideoTransport.configureLayerOnlyPlayback(on: player)
 
         let layer = AVPlayerLayer(player: player)
         layer.videoGravity = .resizeAspect
@@ -130,14 +133,7 @@ extension PresentationViewController {
 
         let beginPlayback = { [weak self, weak player] in
             guard let player else { return }
-            if startAt > 0 {
-                let time = CMTime(seconds: startAt, preferredTimescale: 600)
-                player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero) { _ in
-                    player.play()
-                    self?.revealIncomingVideoWhenDisplayed(layer, generation: generation)
-                }
-            } else {
-                player.play()
+            AirPlayVideoTransport.start(player, at: startAt, autoplay: autoplay) {
                 self?.revealIncomingVideoWhenDisplayed(layer, generation: generation)
             }
         }
@@ -196,6 +192,7 @@ extension PresentationViewController {
         ])
         incomingScreensaverView = screensaver
         layoutIncomingMediaHost()
+        host.layoutIfNeeded()
         screensaver.onReady = { [weak self] in
             self?.notifyIfCurrent(generation)
         }
@@ -204,11 +201,26 @@ extension PresentationViewController {
 
     // MARK: - Camera
 
+    /// Still cover only — a second `AVCaptureVideoPreviewLayer` would steal the
+    /// session connection from the phone mirror (and later from program).
     private func installIncomingCamera(generation: Int) {
-        let preview = CameraPreviewView()
-        preview.translatesAutoresizingMaskIntoConstraints = true
-        transitionOverlayContainer.addSubview(preview)
-        incomingCameraPreview = preview
+        let host = makeIncomingMediaHost()
+        let imageView = UIImageView()
+        imageView.contentMode = .scaleAspectFill
+        imageView.clipsToBounds = true
+        imageView.backgroundColor = .black
+        imageView.image = CameraManager.shared.latestSampleImage
+            ?? CameraManager.shared.lastFrame
+        imageView.translatesAutoresizingMaskIntoConstraints = false
+        host.addSubview(imageView)
+        NSLayoutConstraint.activate([
+            imageView.topAnchor.constraint(equalTo: host.topAnchor),
+            imageView.bottomAnchor.constraint(equalTo: host.bottomAnchor),
+            imageView.leadingAnchor.constraint(equalTo: host.leadingAnchor),
+            imageView.trailingAnchor.constraint(equalTo: host.trailingAnchor)
+        ])
+        incomingImageView = imageView
+        layoutIncomingMediaHost()
 
         let frameView = UIImageView()
         frameView.contentMode = .scaleAspectFit
@@ -219,33 +231,8 @@ extension PresentationViewController {
         frameView.isHidden = frameView.image == nil
         transitionOverlayContainer.addSubview(frameView)
         incomingCameraFrameOverlay = frameView
-
-        let gravity: AVLayerVideoGravity =
-            ExternalOutputSettings.isVerticalMode ? .resizeAspectFill : .resizeAspect
-        preview.attach(
-            session: CameraManager.shared.captureSession,
-            videoGravity: gravity
-        )
-        preview.syncDisplayModeOrientation()
         layoutIncomingCamera()
-
-        if CameraManager.shared.isSessionRunning {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
-                self?.notifyIfCurrent(generation)
-            }
-            return
-        }
-
-        var attempts = 0
-        Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] timer in
-            attempts += 1
-            let ready = CameraManager.shared.isSessionRunning || attempts >= 20
-            guard ready else { return }
-            timer.invalidate()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
-                self?.notifyIfCurrent(generation)
-            }
-        }
+        notifyIfCurrent(generation)
     }
 
     // MARK: - Web
@@ -320,9 +307,10 @@ extension PresentationViewController {
     }
 
     private func layoutIncomingCamera() {
-        guard let preview = incomingCameraPreview else { return }
-        applyRotatedLayout(to: preview, in: transitionOverlayContainer, scale: 1)
-        preview.syncDisplayModeOrientation()
+        if let preview = incomingCameraPreview {
+            applyRotatedLayout(to: preview, in: transitionOverlayContainer, scale: 1)
+            preview.syncDisplayModeOrientation()
+        }
         if let frameView = incomingCameraFrameOverlay {
             applyRotatedLayout(to: frameView, in: transitionOverlayContainer, scale: 1)
             transitionOverlayContainer.bringSubviewToFront(frameView)

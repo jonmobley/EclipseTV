@@ -7,6 +7,7 @@
 
 import Foundation
 import Testing
+import AVFoundation
 @testable import EclipseiPhone
 
 @MainActor
@@ -46,10 +47,45 @@ struct CameraCutawayParkTests {
         endCameraIfNeeded(mgr)
     }
 
+    @Test func airPlayDropDoesNotLeaveCameraAsReconnectSource() {
+        let mgr = ExternalDisplayManager.shared
+        endCameraIfNeeded(mgr)
+
+        mgr.presentCamera()
+        #expect(mgr.isCameraModeActive == true)
+        mgr.dropCameraOverlayAfterDisconnect()
+        #expect(mgr.isCameraModeActive == false)
+        #expect(mgr.isCameraLive == false)
+
+        mgr.presentCamera()
+        #expect(mgr.isCameraLive == true)
+        endCameraIfNeeded(mgr)
+    }
+
+    @Test func stageTapDoesNotEndLiveCamera() {
+        let mgr = ExternalDisplayManager.shared
+        endCameraIfNeeded(mgr)
+
+        mgr.presentCamera()
+        #expect(mgr.isCameraLive == true)
+
+        let vc = CameraLiveViewController()
+        vc.loadViewIfNeeded()
+        vc.toggleAirPlayLive()
+        #expect(mgr.isCameraLive == true)
+        #expect(mgr.isCameraModeActive == true)
+
+        endCameraIfNeeded(mgr)
+    }
+
+    @Test func programPreviewFillsTheDisplayModePanel() {
+        #expect(CameraPreviewView.programVideoGravity == .resizeAspectFill)
+    }
+
     private func endCameraIfNeeded(_ mgr: ExternalDisplayManager) {
         mgr.resumeCameraFromStillPark()
         if mgr.isCameraModeActive {
-            mgr.stopCameraAndApplyCloseDestination()
+            mgr.stopCameraAndRestoreLibrary()
         }
     }
 }

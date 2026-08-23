@@ -18,7 +18,7 @@ extension LibraryThumbnailCell {
     }
 
     /// Idle / app-open: warm live preview (last-frame until frames arrive).
-    /// While AirPlay owns the camera: icon + LIVE badge only (no second feed).
+    /// While AirPlay owns the camera: icon + red stroke only (no second feed).
     /// - Parameter warmPreview: When false, shows a still only (fullscreen Camera open).
     func configureCamera(
         isLive: Bool,
@@ -33,6 +33,8 @@ extension LibraryThumbnailCell {
         cardView.backgroundColor = UIColor(white: 0.12, alpha: 1)
         captionLabel.text = "Camera"
         captionLabel.isHidden = false
+        setTypeIcon(.camera)
+        placeholderIcon.isHidden = true
         updateCaptionScrim()
         setLive(isLive, isLocked: isLocked)
         if !isLive {
@@ -66,7 +68,7 @@ extension LibraryThumbnailCell {
         let still = CameraManager.shared.lastFrame
         imageView.image = still
         imageView.alpha = still == nil ? 0 : 1
-        placeholderIcon.isHidden = still != nil
+        placeholderIcon.isHidden = true
         placeholderIcon.image = UIImage(systemName: "camera.fill")
     }
 
@@ -98,7 +100,7 @@ extension LibraryThumbnailCell {
             HomeCameraTilePreview.shared.unbind()
             imageView.image = nil
             imageView.alpha = 0
-            placeholderIcon.isHidden = false
+            placeholderIcon.isHidden = true
             return
         }
         if !warmPreview {
@@ -108,7 +110,7 @@ extension LibraryThumbnailCell {
             HomeCameraTilePreview.shared.unbind()
             imageView.image = lastFrame
             imageView.alpha = lastFrame == nil ? 0 : 1
-            placeholderIcon.isHidden = lastFrame != nil
+            placeholderIcon.isHidden = true
             return
         }
 
@@ -125,7 +127,7 @@ extension LibraryThumbnailCell {
         }
         imageView.image = lastFrame
         imageView.alpha = lastFrame == nil ? 0 : 1
-        placeholderIcon.isHidden = lastFrame != nil || CameraManager.shared.isSessionRunning
+        placeholderIcon.isHidden = true
         if CameraManager.shared.isSessionRunning {
             scheduleFreezeReveal()
         }
@@ -135,13 +137,12 @@ extension LibraryThumbnailCell {
         let preview = HomeCameraTilePreview.shared.adopt(into: cardView)
         preview.attach(
             session: CameraManager.shared.captureSession,
-            videoGravity: .resizeAspectFill
+            videoGravity: CameraPreviewView.programVideoGravity
         )
         preview.syncPhoneViewerOrientation(phoneInterfaceOrientation)
         cardView.bringSubviewToFront(imageView)
         cardView.bringSubviewToFront(placeholderIcon)
         updateCaptionScrim()
-        cardView.bringSubviewToFront(liveBadge)
         if !moreButton.isHidden {
             cardView.bringSubviewToFront(moreButton)
         }

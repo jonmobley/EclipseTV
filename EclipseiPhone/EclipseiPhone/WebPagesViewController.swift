@@ -12,6 +12,8 @@ final class WebPagesViewController: UITableViewController {
 
     /// When set, taps add membership to this Show instead of presenting.
     private let targetShowId: UUID?
+    /// Fired after a Show card is added, once the sheet has dismissed.
+    var onAdded: ((UUID) -> Void)?
     private let store = WebPageStore.shared
     private let cellReuseId = "pageCell"
 
@@ -100,6 +102,7 @@ final class WebPagesViewController: UITableViewController {
             return
         }
         let compose = AddWebsiteViewController(targetShowId: targetShowId)
+        compose.onAdded = onAdded
         navigationController?.pushViewController(compose, animated: true)
     }
 
@@ -107,7 +110,10 @@ final class WebPagesViewController: UITableViewController {
         guard let showId = targetShowId else { return }
         WebPageStore.shared.touch(page.id)
         LocalAlbumStore.shared.add(itemId: page.id.uuidString, toAlbumId: showId)
-        dismiss(animated: true)
+        let notify = onAdded
+        dismiss(animated: true) {
+            notify?(page.id)
+        }
     }
 
     /// Opens `page` in the phone browser, at most one browser at a time.

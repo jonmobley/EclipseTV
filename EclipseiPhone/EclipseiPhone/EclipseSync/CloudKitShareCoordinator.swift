@@ -19,6 +19,11 @@ final class CloudKitShareCoordinator: NSObject {
         subsystem: "com.eclipseapp.ios",
         category: "CloudKitShare"
     )
+    /// Called after a `CKShare` exists on the server for this Show.
+    var onShareRootEstablished: ((UUID) -> Void)?
+    /// Called when the user stops sharing the current Show.
+    var onShareRootRemoved: ((UUID) -> Void)?
+    private var currentShareShowId: UUID?
 
     init(container: CKContainer, database: CKDatabase) {
         self.container = container
@@ -41,6 +46,7 @@ final class CloudKitShareCoordinator: NSObject {
         album: LocalAlbum,
         from presenter: UIViewController
     ) async throws {
+        currentShareShowId = album.id
         let recordID = CloudKitSchema.showRecordID(for: album.id)
         let root: CKRecord
         do {
@@ -54,6 +60,7 @@ final class CloudKitShareCoordinator: NSObject {
         if let existingShare = root.share,
            let shareRecord = try? await database.record(for: existingShare.recordID),
            let share = shareRecord as? CKShare {
+            onShareRootEstablished?(album.id)
             present(share: share, root: root, from: presenter)
             return
         }
@@ -74,6 +81,7 @@ final class CloudKitShareCoordinator: NSObject {
             Task { @MainActor in
                 switch result {
                 case .success:
+                    self.onShareRootEstablished?(album.id)
                     self.present(share: share, root: root, from: presenter)
                 case .failure(let error):
                     self.presentError(error, from: presenter)
@@ -124,5 +132,17 @@ extension CloudKitShareCoordinator: UICloudSharingControllerDelegate {
 
     func itemTitle(for csc: UICloudSharingController) -> String? {
         "Eclipse Show"
+    }
+
+    func cloudSharingControllerDidSaveShare(_ csc: UICloudSharingController) {
+        if let id = currentShareShowId {
+            onShareRootEstablished?(id)
+        }
+    }
+
+    func cloudSharingControllerDidStopSharing(_ csc: UICloudSharingController) {
+        if let id = currentShareShowId {
+            onShareRootRemoved?(id)
+        }
     }
 }

@@ -14,15 +14,17 @@ enum ThumbnailTypeIcon: Equatable {
     case slideshow
     case website
     case pdf
+    case camera
 
     /// SF Symbol used on the overlay (matches existing Show-grid placeholders).
     var systemName: String {
         switch self {
         case .photo: return "photo.fill"
-        case .video: return "video.fill"
+        case .video: return "play.fill"
         case .slideshow: return "rectangle.stack.fill"
         case .website: return "safari"
         case .pdf: return "doc.richtext"
+        case .camera: return "camera.fill"
         }
     }
 
@@ -34,7 +36,18 @@ enum ThumbnailTypeIcon: Equatable {
         case .slideshow: return "slideshow"
         case .website: return "website"
         case .pdf: return "PDF"
+        case .camera: return "camera"
         }
+    }
+
+    /// Camera keeps the disc even with no still, so the title can sit beside it.
+    var showsWithoutThumbnail: Bool {
+        self == .camera
+    }
+
+    /// `play.fill` sits optically left of center in the disc.
+    var usesPlayFill: Bool {
+        self == .video
     }
 
     /// Photo vs video for a library still or clip.
@@ -48,8 +61,8 @@ final class ThumbnailTypeIconView: UIView {
 
     static let side: CGFloat = 24
     static let inset: CGFloat = 8
-    /// Caption leading inset that clears this disc.
-    static let captionClearance: CGFloat = 38
+    /// Gap between the disc (or Rewind) and a left-aligned on-card title.
+    static let titleSpacing: CGFloat = 6
 
     private let iconView = UIImageView()
     /// Last icon shown, or nil when hidden.
@@ -86,6 +99,10 @@ final class ThumbnailTypeIconView: UIView {
         guard let icon else { return }
         let config = UIImage.SymbolConfiguration(pointSize: 11, weight: .semibold)
         iconView.image = UIImage(systemName: icon.systemName, withConfiguration: config)
+        // play.fill sits optically left of geometric center in a round disc.
+        iconView.transform = icon.usesPlayFill
+            ? CGAffineTransform(translationX: 1, y: 0)
+            : .identity
         accessibilityLabel = icon.spokenName
     }
 }

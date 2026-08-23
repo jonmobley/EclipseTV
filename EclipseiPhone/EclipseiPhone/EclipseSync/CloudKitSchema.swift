@@ -10,8 +10,9 @@ import Foundation
 
 /// CloudKit record types, zone, and field keys for Eclipse Sync.
 ///
-/// Show is the share root; each MediaItem sets `parent` to its Show so a `CKShare`
-/// carries the whole hierarchy. Captures without a Show use a nil parent.
+/// Show is the share root. MediaItem / PDFDoc always store `showId` as a field;
+/// CloudKit `parent` is set only when that Show is an actual `CKShare` root.
+/// Setting `parent` on an unshared Show is rejected ("no chain protection info").
 enum CloudKitSchema {
 
     /// Custom zone in the private database (required for sharing).
@@ -39,7 +40,7 @@ enum CloudKitSchema {
         static let coverId = "coverId"
         static let createdAt = "createdAt"
         static let modifiedAt = "modifiedAt"
-        /// Show the disconnected live preview hero. Go-live is independent.
+        /// Practice Mode: live preview + Lock / Blackout when disconnected.
         static let previewsWhenDisconnected = "previewsWhenDisconnected"
     }
 

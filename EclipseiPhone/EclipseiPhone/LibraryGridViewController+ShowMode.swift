@@ -243,12 +243,13 @@ extension LibraryGridViewController {
         case .screensaver:
             cell.configureSpecial(
                 title: "Screensaver",
-                systemImage: "sparkles.tv",
+                systemImage: ScreensaverStore.isVideo ? "play.fill" : "photo.fill",
                 thumbnail: ScreensaverStore.poster,
                 fillColor: UIColor(white: 0.16, alpha: 1),
                 isLive: live,
                 isLocked: isLiveOutputLocked,
-                thumbnailContentMode: .scaleAspectFill
+                thumbnailContentMode: .scaleAspectFill,
+                typeIcon: .media(isVideo: ScreensaverStore.isVideo)
             )
             cell.setMoreMenu(
                 (isArranging || isSelecting)
@@ -258,12 +259,13 @@ extension LibraryGridViewController {
         case .logo:
             cell.configureSpecial(
                 title: "Background",
-                systemImage: "seal.fill",
+                systemImage: "photo.fill",
                 thumbnail: LogoStore.shared.image,
                 fillColor: UIColor(white: 0.16, alpha: 1),
                 isLive: live,
                 isLocked: isLiveOutputLocked,
-                thumbnailContentMode: .scaleAspectFill
+                thumbnailContentMode: .scaleAspectFill,
+                typeIcon: .photo
             )
             cell.setMoreMenu(
                 (isArranging || isSelecting)
@@ -407,6 +409,15 @@ extension LibraryGridViewController {
             return
         }
         guard !blockLiveChangeIfLocked() else { return }
+        guard hasLiveOutputDestination else {
+            if let first = slideshow.itemIds.first {
+                if presentShowPreviewGallery(startingAt: first) { return }
+                if let item = store.items.first(where: { $0.id == first }) {
+                    presentLocalPreview(for: item, in: openShowItems)
+                }
+            }
+            return
+        }
         let playback = SlideshowPlaybackController.shared
         if playback.isLive(slideshowId: slideshow.id) {
             // Already on this show — leave it alone.
@@ -592,14 +603,8 @@ extension LibraryGridViewController {
                     title: "Reset to Default",
                     image: UIImage(systemName: "arrow.counterclockwise"),
                     attributes: .destructive
-                ) { [weak self] _ in
+                ) { _ in
                     LogoStore.shared.clear()
-                    if self?.isLogoSelected == true {
-                        self?.presentLogoLive()
-                    } else {
-                        self?.collectionView.reloadData()
-                        self?.refreshLiveHeader()
-                    }
                 })
             }
         case ShowToolToken.screensaver:

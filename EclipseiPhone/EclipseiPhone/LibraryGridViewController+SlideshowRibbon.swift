@@ -11,6 +11,21 @@ import UIKit
 
 extension LibraryGridViewController {
 
+    /// In-grid vs docked ribbon placement. Slide index is not part of this.
+    struct SlideshowRibbonChrome: Equatable {
+        var inGrid: Bool
+        var docked: Bool
+
+        /// True when the Show layout must be rebuilt (ribbon appears, hides, or moves).
+        static func needsLayoutRebuild(
+            from previous: SlideshowRibbonChrome?,
+            to next: SlideshowRibbonChrome
+        ) -> Bool {
+            guard let previous else { return true }
+            return previous != next
+        }
+    }
+
     /// Active slideshow when it belongs to the open Show.
     func activeLiveSlideshow() -> Slideshow? {
         guard let id = SlideshowPlaybackController.shared.activeSlideshowId else {
@@ -56,16 +71,27 @@ extension LibraryGridViewController {
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 
-    /// Reapplies layout when the live ribbon appears or disappears.
+    /// Reapplies layout when the live ribbon appears, hides, or moves.
+    ///
+    /// Slide advances keep the Show grid's offset; only ribbon thumbs refresh.
     func refreshSlideshowRibbonPresentation() {
         let wasDocked = !slideshowRibbonView.isHidden
-        applyCollectionLayout()
-        if isShowMode {
-            showCollectionView.reloadData()
+        let chrome = SlideshowRibbonChrome(
+            inGrid: showsInGridSlideshowRibbon,
+            docked: docksLiveSlideshowRibbon
+        )
+        let rebuildLayout = SlideshowRibbonChrome.needsLayoutRebuild(
+            from: lastSlideshowRibbonChrome,
+            to: chrome
+        )
+        lastSlideshowRibbonChrome = chrome
+        if rebuildLayout {
+            applyCollectionLayout()
+            if isShowMode {
+                showCollectionView.reloadData()
+            }
         }
-        if docksLiveSlideshowRibbon {
-            slideshowRibbonView.reloadData()
-        }
+        reloadLiveSlideshowRibbonThumbs(rebuiltShowGrid: rebuildLayout)
         if wasDocked != docksLiveSlideshowRibbon {
             lastLayoutWidth = 0
             lastLayoutHeight = 0
@@ -100,7 +126,7 @@ extension LibraryGridViewController {
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 
-    /// Keeps the current slide roughly centered in the orthogonal ribbon.
+    /// Centers the current slide in the ribbon without moving the Show grid.
     func scrollLiveSlideshowRibbonToCurrentSlide() {
         guard showsLiveSlideshowRibbon else { return }
         let index = SlideshowPlaybackController.shared.currentSlideIndex
@@ -114,12 +140,7 @@ extension LibraryGridViewController {
             )
             return
         }
-        guard let section = sectionIndex(for: .slideshowRibbon) else { return }
-        collectionView.scrollToItem(
-            at: IndexPath(item: index, section: section),
-            at: .centeredHorizontally,
-            animated: true
-        )
+        scrollInGridRibbonHorizontally(to: index)
     }
 
     /// Horizontal strip used under the landscape live preview.
@@ -187,6 +208,57 @@ extension LibraryGridViewController {
     }
 
     // MARK: - Private
+
+    /// Refreshes ribbon thumbs after a slide change without rebuilding the Show grid.
+    private func reloadLiveSlideshowRibbonThumbs(rebuiltShowGrid: Bool) {
+        if docksLiveSlideshowRibbon {
+            slideshowRibbonView.reloadData()
+            return
+        }
+        guard showsInGridSlideshowRibbon, !rebuiltShowGrid else { return }
+        guard let section = sectionIndex(for: .slideshowRibbon) else { return }
+        let expected = SlideshowPlaybackController.shared.activeSlideIds.count
+        let actual = showCollectionView.numberOfItems(inSection: section)
+        if expected != actual {
+            showCollectionView.reloadSections(IndexSet(integer: section))
+            return
+        }
+        let paths = showCollectionView.indexPathsForVisibleItems
+            .filter { $0.section == section }
+        if !paths.isEmpty {
+            showCollectionView.reloadItems(at: paths)
+        }
+    }
+
+    /// Orthogonal ribbon scroller only — never `scrollToItem` on the Show grid.
+    private func scrollInGridRibbonHorizontally(to index: Int) {
+        guard let section = sectionIndex(for: .slideshowRibbon) else { return }
+        let path = IndexPath(item: index, section: section)
+        guard let attributes = showCollectionView.layoutAttributesForItem(at: path),
+              let nested = inGridRibbonScrollView(section: section) else { return }
+        let frame = showCollectionView.convert(attributes.frame, to: nested)
+        let x = nested.contentOffset.x + frame.midX - nested.bounds.width / 2
+        let maxX = max(0, nested.contentSize.width - nested.bounds.width)
+        nested.setContentOffset(
+            CGPoint(x: min(max(0, x), maxX), y: nested.contentOffset.y),
+            animated: true
+        )
+    }
+
+    private func inGridRibbonScrollView(section: Int) -> UIScrollView? {
+        let visible = showCollectionView.indexPathsForVisibleItems
+            .first { $0.section == section }
+        guard let path = visible,
+              let cell = showCollectionView.cellForItem(at: path) else { return nil }
+        var view: UIView? = cell.superview
+        while let current = view {
+            if let scroll = current as? UIScrollView, scroll !== showCollectionView {
+                return scroll
+            }
+            view = current.superview
+        }
+        return nil
+    }
 
     private func applyDockedRibbonItemSize(_ thumb: CGSize) {
         guard let layout = slideshowRibbonView.collectionViewLayout

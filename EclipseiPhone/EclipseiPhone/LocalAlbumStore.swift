@@ -61,7 +61,7 @@ final class LocalAlbumStore {
     @discardableResult
     func create(
         name: String,
-        orientation: ExternalOutputOrientation = ExternalOutputSettings.orientation
+        orientation: ExternalOutputOrientation = .landscape
     ) throws -> LocalAlbum {
         guard let trimmed = UserDisplayName.normalized(name) else {
             throw StoreError.emptyName

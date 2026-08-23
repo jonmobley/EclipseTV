@@ -7,7 +7,7 @@
 
 import UIKit
 
-/// Camera-page settings: shutter guide, recording, frame burn-in, and When Camera Closes.
+/// Camera-page settings: shutter guide, recording, and frame burn-in.
 ///
 /// Frame picking / import lives on the camera Frame button drawer, not here.
 final class CameraSettingsViewController: UITableViewController {
@@ -16,12 +16,11 @@ final class CameraSettingsViewController: UITableViewController {
         case buttonGuide
         case recording
         case frameCaptures
-        case cameraClose
     }
 
     private var buttonGuideRows: [String] {
         var rows = [
-            "Tap preview to toggle LIVE",
+            "Tap preview to go LIVE",
             "Tap shutter to take a photo"
         ]
         if !ExternalOutputSettings.alwaysRecordWhenLive {
@@ -78,8 +77,6 @@ final class CameraSettingsViewController: UITableViewController {
             return buttonGuideRows.count
         case .recording, .frameCaptures:
             return 1
-        case .cameraClose:
-            return CameraCloseDestination.allCases.count
         case .none:
             return 0
         }
@@ -96,8 +93,6 @@ final class CameraSettingsViewController: UITableViewController {
             return "Recording"
         case .frameCaptures:
             return "Frames"
-        case .cameraClose:
-            return "When Camera Closes"
         case .none:
             return nil
         }
@@ -110,13 +105,11 @@ final class CameraSettingsViewController: UITableViewController {
         switch Section(rawValue: section) {
         case .recording:
             return "When on, video recording starts as soon as the camera goes live "
-                + "and stops when you tap off live. Tap shutter still takes a photo."
+                + "and stops when you switch to the cutaway or another source. "
+                + "Tap shutter still takes a photo."
         case .frameCaptures:
             return "When on, the selected frame is saved into photos and video recordings. "
                 + "Live view always shows the frame. Choose frames with the Frame button."
-        case .cameraClose:
-            return "When you tap the preview off live, switch AirPlay to Background, "
-                + "Black, or whatever was live before the camera."
         case .buttonGuide, .none:
             return nil
         }
@@ -165,19 +158,6 @@ final class CameraSettingsViewController: UITableViewController {
                 for: .valueChanged
             )
             cell.accessoryView = toggle
-        case .cameraClose:
-            let destination = CameraCloseDestination.allCases[indexPath.row]
-            config.text = destination.rawValue
-            config.textProperties.color = .label
-            switch destination {
-            case .previous:
-                config.secondaryText = "Show what was previously live"
-            case .logo, .black:
-                break
-            }
-            cell.accessoryType =
-                ExternalOutputSettings.cameraCloseDestination == destination
-                ? .checkmark : .none
         case .none:
             break
         }
@@ -189,9 +169,6 @@ final class CameraSettingsViewController: UITableViewController {
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
         switch Section(rawValue: indexPath.section) {
-        case .cameraClose:
-            ExternalOutputSettings.cameraCloseDestination =
-                CameraCloseDestination.allCases[indexPath.row]
         case .buttonGuide, .recording, .frameCaptures, .none:
             break
         }

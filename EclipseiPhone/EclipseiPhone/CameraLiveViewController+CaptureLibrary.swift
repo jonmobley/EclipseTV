@@ -35,7 +35,13 @@ extension CameraLiveViewController {
     /// Files a finished movie, copying from the Caches file kept for in-app review.
     func fileMovieInLibrary(at previewURL: URL, duration: TimeInterval) {
         // The review file is the camera UI's, so it outlives this copy.
-        registerCapture(at: previewURL, isVideo: true, duration: duration, removingSource: false)
+        Task { @MainActor in
+            let measured = await VideoPosterFrame.durationSeconds(at: previewURL)
+            let resolved = measured > 0.05 ? measured : duration
+            registerCapture(
+                at: previewURL, isVideo: true, duration: resolved, removingSource: false
+            )
+        }
     }
 
     // MARK: - Private

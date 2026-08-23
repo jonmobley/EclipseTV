@@ -26,6 +26,9 @@ enum ThumbnailDecoder {
     /// - Returns: A fully decoded, upright image, or nil when the file is missing or is
     ///   not a readable image.
     static func decode(fileURL: URL, maxPixelEdge: Int = maxPixelEdge) -> UIImage? {
+        guard FileManager.default.isReadableFile(atPath: fileURL.path) else {
+            return nil
+        }
         let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
         guard let source = CGImageSourceCreateWithURL(fileURL as CFURL, sourceOptions) else {
             return nil

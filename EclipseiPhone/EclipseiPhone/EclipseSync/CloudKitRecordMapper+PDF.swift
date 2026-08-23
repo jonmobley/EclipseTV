@@ -17,15 +17,18 @@ extension CloudKitRecordMapper {
     /// - Parameters:
     ///   - assetURL: Local `.pdf` to upload. Pass nil only when the file is missing;
     ///     the record then carries metadata alone and the asset is filled in later.
-    ///   - showId: A Show that contains this PDF, used as the CloudKit `parent` so the
-    ///     document travels with that Show's `CKShare`. A PDF may be a member of
-    ///     several Shows, but CloudKit allows one parent, so the caller picks one.
+    ///   - showId: A Show that contains this PDF. Stored as a field always; used
+    ///     as CloudKit `parent` only when `attachAsShareChild` is true. A PDF may
+    ///     be in several Shows, but CloudKit allows one parent, so the caller picks.
+    ///   - attachAsShareChild: Set `parent` so the PDF rides with that Show's
+    ///     `CKShare`. Must be false unless the Show is a share root.
     static func makePDFRecord(
         from doc: SavedPDF,
         existing: CKRecord? = nil,
         assetURL: URL? = nil,
         showId: UUID? = nil,
-        modifiedAt: Date = Date()
+        modifiedAt: Date = Date(),
+        attachAsShareChild: Bool = false
     ) -> CKRecord {
         let record = existing ?? CKRecord(
             recordType: CloudKitSchema.RecordType.pdfDoc,
@@ -34,16 +37,12 @@ extension CloudKitRecordMapper {
         record[CloudKitSchema.PDFKey.title] = doc.title as CKRecordValue
         record[CloudKitSchema.PDFKey.createdAt] = doc.createdAt as CKRecordValue
         record[CloudKitSchema.PDFKey.modifiedAt] = modifiedAt as CKRecordValue
-        if let showId {
-            record[CloudKitSchema.PDFKey.showId] = showId.uuidString as CKRecordValue
-            record.parent = CKRecord.Reference(
-                recordID: CloudKitSchema.showRecordID(for: showId),
-                action: .none
-            )
-        } else {
-            record[CloudKitSchema.PDFKey.showId] = nil
-            record.parent = nil
-        }
+        applyShowLink(
+            to: record,
+            showId: showId,
+            showIdKey: CloudKitSchema.PDFKey.showId,
+            attachAsShareChild: attachAsShareChild
+        )
         if let assetURL {
             record[CloudKitSchema.PDFKey.asset] = CKAsset(fileURL: assetURL)
         }

@@ -67,6 +67,10 @@ extension LibraryGridViewController {
         guard store.currentId == id,
               let item = store.items.first(where: { $0.id == id }),
               item.isVideo else { return }
+        if liveHeader.isLibraryVideoPreviewActive {
+            refreshLiveHeader()
+            return
+        }
         let manager = ExternalDisplayManager.shared
         guard manager.isConnected,
               !manager.isOverlayLive,

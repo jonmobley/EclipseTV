@@ -9,9 +9,9 @@ import UIKit
 
 /// Top header for the home screen.
 ///
-/// Home: page dropdown · output status · + New Show.
-/// Show mode trailing: output status, disconnected preview, Lock + Blackout,
-/// Settings, and "+".
+/// Home: page dropdown · + New Show.
+/// Show mode trailing: Lock + Blackout (when a display, EclipseTV, or Practice
+/// Mode is on), Settings, and "+".
 /// iCloud Sync status surfaces via `EclipseSyncStatusBanner`, not the header.
 final class HomeHeaderBar: UIView {
 
@@ -27,10 +27,8 @@ final class HomeHeaderBar: UIView {
     private let menuPill = UIView()
     private let libraryButton = UIButton(type: .system)
     private let trailingStack = UIStackView()
-    let outputStatusButton = UIButton(type: .system)
     private let lockButton = UIButton(type: .system)
     private let blackButton = UIButton(type: .system)
-    let disconnectedPreviewButton = UIButton(type: .system)
     private let settingsButton = UIButton(type: .system)
     private let addButton = UIButton(type: .system)
     private let newShowButton = UIButton(type: .system)
@@ -39,14 +37,10 @@ final class HomeHeaderBar: UIView {
 
     /// Invoked when the Settings control is tapped.
     var onOpenSettings: (() -> Void)?
-    /// Invoked when the output-status control is tapped (AirPlay / EclipseTV).
-    var onOpenOutputStatus: (() -> Void)?
     /// Invoked when the live-output Lock control is tapped.
     var onToggleLiveLock: (() -> Void)?
     /// Invoked when the Blackout control is tapped.
     var onPresentBlack: (() -> Void)?
-    /// Invoked when the disconnected live-preview control is tapped.
-    var onToggleDisconnectedPreview: (() -> Void)?
     /// Invoked when New Show is tapped on Home.
     var onNewShow: (() -> Void)?
     /// Invoked when Done is tapped while arranging tiles.
@@ -60,8 +54,8 @@ final class HomeHeaderBar: UIView {
     private(set) var isAirPlayConnected = false
     private var isLiveLocked = false
     private var isBlackLive = false
-    var isDisconnectedPreviewOn = false
     private var showsShowChrome = false
+    private var previewsWhenDisconnected = false
     private var isArranging = false
     private var isSelecting = false
 
@@ -93,7 +87,6 @@ final class HomeHeaderBar: UIView {
             view.menuPill.layer.borderColor = UIColor.separator.cgColor
             view.applyLockButtonAppearance()
             view.applyBlackButtonAppearance()
-            view.applyDisconnectedPreviewAppearance()
             view.applyNewShowButtonAppearance()
         }
 
@@ -120,7 +113,7 @@ final class HomeHeaderBar: UIView {
         libraryButton.showsMenuAsPrimaryAction = true
         libraryButton.accessibilityLabel = "Home menu"
         libraryButton.accessibilityHint =
-            "Home, Open Show, New Show, Media Library, Music, Settings, and Recent Shows"
+            "Open Show, New Show, Library, Music, Settings, and Recent Shows"
         libraryButton.translatesAutoresizingMaskIntoConstraints = false
         libraryButton.setContentCompressionResistancePriority(
             .defaultLow, for: .horizontal
@@ -129,8 +122,6 @@ final class HomeHeaderBar: UIView {
             .defaultLow, for: .horizontal
         )
         menuPill.addSubview(libraryButton)
-
-        installOutputStatusButton()
 
         lockButton.translatesAutoresizingMaskIntoConstraints = false
         lockButton.accessibilityLabel = "Lock live output"
@@ -144,8 +135,6 @@ final class HomeHeaderBar: UIView {
         blackButton.accessibilityHint = "Toggles a black screen on AirPlay"
         blackButton.addTarget(self, action: #selector(blackTapped), for: .touchUpInside)
         applyBlackButtonAppearance()
-
-        installDisconnectedPreviewButton()
 
         // Plain SF Symbols, like UIBarButtonItem — not icons in stroked circles.
         let symbolConfig = UIImage.SymbolConfiguration(pointSize: 20, weight: .regular)
@@ -208,8 +197,8 @@ final class HomeHeaderBar: UIView {
         trailingStack.spacing = 8
         trailingStack.translatesAutoresizingMaskIntoConstraints = false
         for button in [
-            outputStatusButton, disconnectedPreviewButton, lockButton, blackButton,
-            settingsButton, addButton, newShowButton, selectActionsButton, doneButton
+            lockButton, blackButton, settingsButton,
+            addButton, newShowButton, selectActionsButton, doneButton
         ] {
             trailingStack.addArrangedSubview(button)
         }
@@ -228,16 +217,12 @@ final class HomeHeaderBar: UIView {
             trailingStack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
             trailingStack.centerYAnchor.constraint(equalTo: centerYAnchor),
 
-            outputStatusButton.widthAnchor.constraint(equalToConstant: 36),
-            outputStatusButton.heightAnchor.constraint(equalToConstant: 36),
             addButton.widthAnchor.constraint(equalToConstant: 36),
             addButton.heightAnchor.constraint(equalToConstant: 36),
             settingsButton.widthAnchor.constraint(equalToConstant: 36),
             settingsButton.heightAnchor.constraint(equalToConstant: 36),
             lockButton.widthAnchor.constraint(equalToConstant: 36),
             lockButton.heightAnchor.constraint(equalToConstant: 36),
-            disconnectedPreviewButton.widthAnchor.constraint(equalToConstant: 36),
-            disconnectedPreviewButton.heightAnchor.constraint(equalToConstant: 36),
             blackButton.widthAnchor.constraint(equalToConstant: 36),
             blackButton.heightAnchor.constraint(equalToConstant: 36),
             newShowButton.heightAnchor.constraint(equalToConstant: 36),
@@ -249,13 +234,11 @@ final class HomeHeaderBar: UIView {
             )
         ])
         for button in [
-            outputStatusButton, disconnectedPreviewButton, lockButton, blackButton,
-            settingsButton, addButton, newShowButton
+            lockButton, blackButton, settingsButton,
+            addButton, newShowButton
         ] {
             button.setContentCompressionResistancePriority(.required, for: .horizontal)
         }
-        outputStatusButton.setContentHuggingPriority(.required, for: .horizontal)
-        disconnectedPreviewButton.setContentHuggingPriority(.required, for: .horizontal)
         lockButton.setContentHuggingPriority(.required, for: .horizontal)
         blackButton.setContentHuggingPriority(.required, for: .horizontal)
     }
@@ -286,7 +269,7 @@ final class HomeHeaderBar: UIView {
         libraryButton.accessibilityLabel = "\(title) menu"
     }
 
-    /// Attaches the page dropdown (Home, Open Show, New Show, Media Library, Music, Recents).
+    /// Attaches the page dropdown (Home, Open Show, New Show, Library, Music, Recents).
     func setLibraryMenu(_ menu: UIMenu) {
         libraryButton.menu = menu
     }
@@ -316,12 +299,31 @@ final class HomeHeaderBar: UIView {
 
     // MARK: - State
 
-    /// Show-mode Lock + Blackout. Go-live is always available; Preview When
-    /// Disconnected only shows the live hero, not these controls.
+    /// Show-mode trailing chrome (Settings, +, Lock / Blackout when live).
     func setShowModeChrome(_ showMode: Bool) {
         guard showsShowChrome != showMode else { return }
         showsShowChrome = showMode
         applyTrailingChrome()
+        libraryButton.accessibilityHint = showMode
+            ? "Home, Open Show, New Show, Library, Music, and Recent Shows"
+            : "Open Show, New Show, Library, Music, Settings, and Recent Shows"
+    }
+
+    /// Practice Mode for the open Show: live preview + Lock / Blackout when
+    /// nothing is connected. Off means taps open on-device Preview.
+    func setPreviewsWhenDisconnected(_ enabled: Bool) {
+        guard previewsWhenDisconnected != enabled else { return }
+        previewsWhenDisconnected = enabled
+        applyTrailingChrome()
+    }
+
+    /// Lock + Blackout: Show mode with a display, EclipseTV, or Practice Mode.
+    var showsLiveOutputChrome: Bool {
+        showsShowChrome && (
+            isAirPlayConnected
+            || connectionState == .connected
+            || previewsWhenDisconnected
+        )
     }
 
     /// Reflects whether live output is locked (amber lock control).
@@ -382,8 +384,6 @@ final class HomeHeaderBar: UIView {
             selectActionsButton.menu = nil
         }
         if editing {
-            outputStatusButton.isHidden = true
-            disconnectedPreviewButton.isHidden = true
             lockButton.isHidden = true
             blackButton.isHidden = true
             settingsButton.isHidden = true
@@ -391,10 +391,8 @@ final class HomeHeaderBar: UIView {
             newShowButton.isHidden = true
             return
         }
-        outputStatusButton.isHidden = false
-        disconnectedPreviewButton.isHidden = !showsShowChrome || hasRealLiveDestination
-        lockButton.isHidden = !showsShowChrome
-        blackButton.isHidden = !showsShowChrome
+        lockButton.isHidden = !showsLiveOutputChrome
+        blackButton.isHidden = !showsLiveOutputChrome
         settingsButton.isHidden = !showsShowChrome
         addButton.isHidden = !showsShowChrome
         newShowButton.isHidden = showsShowChrome
@@ -403,7 +401,6 @@ final class HomeHeaderBar: UIView {
     /// Reflects EclipseTV (Multipeer) state. Combined with `setPresenting` for AirPlay.
     func setConnectionState(_ state: ConnectionDisplayState) {
         connectionState = state
-        applyOutputStatusAppearance()
         applyTrailingChrome()
         setAddEnabled(true)
     }
@@ -411,7 +408,6 @@ final class HomeHeaderBar: UIView {
     /// Updates whether an external display is available for presentation.
     func setPresenting(_ presenting: Bool) {
         isAirPlayConnected = presenting
-        applyOutputStatusAppearance()
         applyTrailingChrome()
     }
 

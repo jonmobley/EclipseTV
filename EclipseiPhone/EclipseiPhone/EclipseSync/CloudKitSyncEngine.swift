@@ -18,10 +18,20 @@ final class CloudKitSyncEngine: NSObject, SyncBackend {
     let account: CloudKitAccountMonitor
     var engine: CKSyncEngine?
     private lazy var downloader = CloudKitAssetDownloader(container: container)
-    private lazy var shareCoordinator = CloudKitShareCoordinator(
-        container: container,
-        database: container.privateCloudDatabase
-    )
+    let shareRoots = CloudKitShareRootStore()
+    private lazy var shareCoordinator: CloudKitShareCoordinator = {
+        let coordinator = CloudKitShareCoordinator(
+            container: container,
+            database: container.privateCloudDatabase
+        )
+        coordinator.onShareRootEstablished = { [weak self] id in
+            self?.noteShareRootEstablished(id)
+        }
+        coordinator.onShareRootRemoved = { [weak self] id in
+            self?.noteShareRootRemoved(id)
+        }
+        return coordinator
+    }()
     private lazy var sharedEngineHost = CloudKitSharedSyncHost(container: container)
 
     private let stateKey = "EclipseTV.cloudKit.syncEngineState"

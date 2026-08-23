@@ -12,6 +12,8 @@ final class AddWebsiteViewController: UITableViewController, UITextFieldDelegate
 
     /// When set, Add / a suggestion joins this Show as a card.
     private let targetShowId: UUID?
+    /// Fired after a successful add, once the compose sheet has dismissed.
+    var onAdded: ((UUID) -> Void)?
 
     private let urlField = UITextField()
     private let titleField = UITextField()
@@ -98,6 +100,7 @@ final class AddWebsiteViewController: UITableViewController, UITextFieldDelegate
             return
         }
         let history = WebPagesViewController(targetShowId: targetShowId)
+        history.onAdded = onAdded
         navigationController?.pushViewController(history, animated: true)
     }
 
@@ -118,7 +121,7 @@ final class AddWebsiteViewController: UITableViewController, UITextFieldDelegate
                     toAlbumId: showId
                 )
             }
-            dismiss(animated: true)
+            finishAdding(page)
         } catch {
             let alert = UIAlertController(
                 title: "Couldn't Add Website",
@@ -138,7 +141,7 @@ final class AddWebsiteViewController: UITableViewController, UITextFieldDelegate
                 toAlbumId: showId
             )
         }
-        dismiss(animated: true)
+        finishAdding(page)
     }
 
     // MARK: - Table
@@ -221,15 +224,34 @@ final class AddWebsiteViewController: UITableViewController, UITextFieldDelegate
     // MARK: - UITextFieldDelegate
 
     func textFieldShouldReturn(_ textField: UITextField) -> Bool {
-        if textField === urlField {
+        switch Self.keyboardReturnAction(isURLField: textField === urlField) {
+        case .focusTitle:
             titleField.becomeFirstResponder()
-        } else if addButton.isEnabled {
-            addTapped()
+        case .hideKeyboard:
+            textField.resignFirstResponder()
         }
         return true
     }
 
+    /// Keyboard check/Done never saves — the nav-bar Add button does.
+    static func keyboardReturnAction(isURLField: Bool) -> KeyboardReturnAction {
+        isURLField ? .focusTitle : .hideKeyboard
+    }
+
+    enum KeyboardReturnAction {
+        case focusTitle
+        case hideKeyboard
+    }
+
     // MARK: - Private
+
+    /// Dismisses compose, then reports the new page so the Show grid can scroll to it.
+    private func finishAdding(_ page: WebPage) {
+        let notify = onAdded
+        dismiss(animated: true) {
+            notify?(page.id)
+        }
+    }
 
     private func configure(_ field: UITextField, placeholder: String, url: Bool) {
         field.placeholder = placeholder

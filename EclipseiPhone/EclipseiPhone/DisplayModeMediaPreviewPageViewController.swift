@@ -123,6 +123,7 @@ final class DisplayModeMediaPreviewPageViewController: UIViewController {
         let player = AVPlayer(url: fileURL)
         player.isMuted = false
         player.actionAtItemEnd = .none
+        AirPlayVideoTransport.configureLayerOnlyPlayback(on: player)
         let layer = AVPlayerLayer(player: player)
         layer.videoGravity = .resizeAspectFill
         panelView.layer.addSublayer(layer)

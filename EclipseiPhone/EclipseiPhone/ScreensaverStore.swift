@@ -28,6 +28,9 @@ final class ScreensaverStore {
         return UIImage(named: "HomeHeroEclipse")
     }
 
+    /// True when the active Screensaver is a loop (bundled or custom video).
+    var isVideo: Bool { videoURL != nil }
+
     /// Looping video URL when the active Screensaver is video (bundled or custom).
     var videoURL: URL? {
         switch customKind {
@@ -57,6 +60,7 @@ final class ScreensaverStore {
     static var poster: UIImage? { shared.poster }
     static var presentationSource: PresentationSource? { shared.presentationSource }
     static var hasCustomMedia: Bool { shared.hasCustomMedia }
+    static var isVideo: Bool { shared.isVideo }
 
     // MARK: - Private
 

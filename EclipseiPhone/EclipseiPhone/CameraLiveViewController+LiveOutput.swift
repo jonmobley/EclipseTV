@@ -16,12 +16,14 @@ extension CameraLiveViewController {
         view.addSubview(liveOutputThumbView)
     }
 
+    /// Program monitor stays on while AirPlay is connected, including camera live.
+    static func showsLiveOutputThumb(isConnected: Bool) -> Bool { isConnected }
+
     /// Places the program thumb at the bottom-leading corner of the panel.
-    ///
-    /// Shown only while an external screen is connected and camera is not live,
-    /// so the preview can show what's still on the TV.
     func layoutLiveOutputThumb(panel: CGRect) {
-        let shouldShow = ExternalDisplayManager.shared.isConnected && !isAirPlayLive
+        let shouldShow = Self.showsLiveOutputThumb(
+            isConnected: ExternalDisplayManager.shared.isConnected
+        )
         liveOutputThumbView.isHidden = !shouldShow
         guard shouldShow else { return }
 
@@ -42,8 +44,7 @@ extension CameraLiveViewController {
 
     /// Loads art for the current AirPlay source into the program thumb.
     func refreshLiveOutputAppearance() {
-        guard let source = ExternalDisplayManager.shared.presentedSource,
-              source.content != .camera else {
+        guard let source = ExternalDisplayManager.shared.presentedSource else {
             liveOutputThumbView.configure(image: nil, symbol: nil, fill: .black)
             return
         }
@@ -71,7 +72,11 @@ extension CameraLiveViewController {
         switch source.content {
         case .camera:
             return LiveOutputArt(
-                image: nil, symbol: "camera.fill", fill: dim, title: "Camera"
+                image: CameraManager.shared.latestSampleImage
+                    ?? CameraManager.shared.lastFrame,
+                symbol: "camera.fill",
+                fill: dim,
+                title: "Camera"
             )
         case .black:
             return LiveOutputArt(

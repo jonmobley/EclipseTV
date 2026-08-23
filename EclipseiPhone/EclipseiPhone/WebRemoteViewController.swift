@@ -11,7 +11,8 @@ import WebKit
 /// Phone-side Safari-like browser for a page presented on AirPlay.
 ///
 /// Stages a 9:16 (Vertical) or 16:9 (Landscape) panel matching the AirPlay
-/// viewport. Compact chrome: Back · host title · bookmarks ⋯ (Refresh / New / saved).
+/// viewport. Vertical chrome: Back · host title · ⋯ · Close. Landscape hides the
+/// URL bar and puts Back / ⋯ / Close in a trailing column beside the 16:9 card.
 final class WebRemoteViewController: UIViewController {
 
     // MARK: - Properties
@@ -30,15 +31,25 @@ final class WebRemoteViewController: UIViewController {
 
     var backButton: UIBarButtonItem!
     var bookmarksButton: UIBarButtonItem!
+    var closeButton: UIBarButtonItem!
+    /// Landscape overlay Back — the nav bar (and URL title) is hidden.
+    var overlayBackButton: UIButton!
+    /// Landscape overlay Close.
+    var overlayCloseButton: UIButton!
+    /// Landscape overlay ⋯ (Refresh / New / saved).
+    var overlayBookmarksButton: UIButton!
+    /// Vertical: stage sits under the URL nav bar.
+    var verticalStageTopConstraint: NSLayoutConstraint?
+    /// Landscape: stage is full-bleed so the 16:9 card can fill the height.
+    var landscapeStageTopConstraint: NSLayoutConstraint?
 
-    /// `backList.count` when the browser settled on its opening URL.
-    ///
-    /// Warm loads often leave redirect history (`http`→`https`, trailing slash). Back
-    /// must not walk those — only navigations the user makes after open — or exiting
-    /// needs two presses.
-    var browserSessionBackCount = 0
-    /// True once `browserSessionBackCount` has been captured for this presentation.
-    var didCaptureBrowserSessionRoot = false
+    /// Landscape Display Mode overlays chrome; Vertical keeps the URL nav bar.
+    var usesOverlayBrowserChrome: Bool {
+        !ExternalOutputSettings.isVerticalMode
+    }
+
+    /// Opening-load history depth; recaptured until the user navigates.
+    var sessionBackRoot = BrowserSessionBackRoot()
 
     // MARK: - Init
 
@@ -61,12 +72,13 @@ final class WebRemoteViewController: UIViewController {
         setupBrowserChrome()
         setupPreviewWebView()
         observePresentationChanges()
-        updateBrowserChrome()
+        applyBrowserChromeMode()
     }
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         requestDisplayModeSceneGeometry()
+        applyBrowserChromeMode(animated: animated)
         ExternalDisplayManager.shared.refreshConnection()
         refreshBookmarksMenu()
     }
@@ -99,6 +111,9 @@ final class WebRemoteViewController: UIViewController {
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        if usesOverlayBrowserChrome {
+            navigationController?.setNavigationBarHidden(false, animated: animated)
+        }
         guard isBeingDismissed || isMovingFromParent else { return }
         isLeaving = true
         // Park the warm session (home LiveHeader reclaims it if still live).
@@ -141,29 +156,20 @@ final class WebRemoteViewController: UIViewController {
     }
 
     @objc func goBackTapped() {
-        guard let webView else {
-            closeTapped()
-            return
-        }
-        // Prefer a captured session root; if warm redirects are still settling, treat
-        // any existing back items as outside this visit so the first Back exits.
-        let rootCount = didCaptureBrowserSessionRoot
-            ? browserSessionBackCount
-            : webView.backForwardList.backList.count
-        if webView.backForwardList.backList.count > rootCount {
-            webView.goBack()
-        } else {
-            // At the page we opened on: leave the browser (no separate Close control).
-            closeTapped()
-        }
+        guard let webView else { return }
+        guard sessionBackRoot.shouldGoBack(
+            backListCount: webView.backForwardList.backList.count
+        ) else { return }
+        webView.goBack()
     }
 
-    /// Records how deep the back-forward list was when the opening URL became current.
+    /// Snapshots back-list depth while the opening load (and its redirects) settle.
     func captureBrowserSessionRootIfNeeded() {
-        guard !didCaptureBrowserSessionRoot else { return }
         guard let webView, let url = webView.url, !isBlankBrowserURL(url) else { return }
-        browserSessionBackCount = webView.backForwardList.backList.count
-        didCaptureBrowserSessionRoot = true
+        sessionBackRoot.captureOpeningLoad(
+            backListCount: webView.backForwardList.backList.count
+        )
+        updateBrowserChrome()
     }
 
     @objc func reloadTapped() {
@@ -177,6 +183,7 @@ final class WebRemoteViewController: UIViewController {
 
     @objc func outputSettingsChanged() {
         requestDisplayModeSceneGeometry()
+        applyBrowserChromeMode()
         layoutPhoneWebViewport()
         webView?.reload()
         ExternalDisplayManager.shared.reloadWeb()

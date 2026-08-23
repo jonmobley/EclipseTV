@@ -21,7 +21,8 @@ struct SettingsShowEditingTests {
         let table = try #require(settings.tableView)
         #expect(table.numberOfRows(inSection: 0) == 2)
         #expect(settings.tableView(table, titleForHeaderInSection: 0) == "Show")
-        #expect(settings.tableView(table, titleForHeaderInSection: 1) == "Playback")
+        #expect(settings.tableView(table, titleForHeaderInSection: 1) == nil)
+        #expect(settings.tableView(table, titleForHeaderInSection: 2) == "Playback")
 
         let nameCell = settings.tableView(
             table, cellForRowAt: IndexPath(row: 0, section: 0)
@@ -35,6 +36,47 @@ struct SettingsShowEditingTests {
         )
         let config = deleteCell.contentConfiguration as? UIListContentConfiguration
         #expect(config?.text == "Delete Show")
+    }
+
+    @Test func openShowSettingsIncludesPracticeModeToggle() throws {
+        let settings = SettingsViewController()
+        settings.openShowName = "Go"
+        settings.openShowId = UUID()
+        settings.loadViewIfNeeded()
+
+        let table = try #require(settings.tableView)
+        #expect(table.numberOfRows(inSection: 1) == 1)
+        #expect(
+            settings.tableView(table, titleForFooterInSection: 1)
+            == SettingsViewController.disconnectedLivePreviewFooter
+        )
+
+        let cell = settings.tableView(
+            table, cellForRowAt: IndexPath(row: 0, section: 1)
+        )
+        let config = cell.contentConfiguration as? UIListContentConfiguration
+        #expect(config?.text == "Practice Mode")
+        #expect(cell.accessoryView is UISwitch)
+    }
+
+    @Test func deleteShowAsksToConfirmBeforeCallingHost() throws {
+        let settings = SettingsViewController()
+        settings.openShowName = "Go"
+        settings.openShowId = UUID()
+        var didDelete = false
+        settings.onDeleteShow = { didDelete = true }
+        settings.loadViewIfNeeded()
+
+        let nav = UINavigationController(rootViewController: settings)
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = nav
+        window.makeKeyAndVisible()
+
+        let table = try #require(settings.tableView)
+        settings.tableView(table, didSelectRowAt: IndexPath(row: 1, section: 0))
+        #expect(didDelete == false)
+        #expect(settings.presentedViewController is UIAlertController)
+        window.isHidden = true
     }
 
     @Test func homeSettingsOmitsShowSection() throws {

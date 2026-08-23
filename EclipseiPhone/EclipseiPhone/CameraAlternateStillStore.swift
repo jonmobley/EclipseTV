@@ -9,7 +9,8 @@ import UIKit
 import os.log
 
 /// Persists an optional camera-mode cutaway still the user can toggle on while
-/// Camera is open (AirPlay when a display is attached; local park otherwise).
+/// Camera is open. Program (AirPlay / live preview) shows the still; the phone
+/// camera viewfinder stays on the live camera.
 ///
 /// When the user has not picked a photo, display and AirPlay fall back to the Show
 /// Background still (`LogoStore`). Frame overlays stay in `CameraFrameStore`.

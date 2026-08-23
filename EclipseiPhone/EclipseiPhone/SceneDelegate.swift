@@ -17,6 +17,9 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
         // Library / AirPlay chrome start in Landscape; Vertical is opt-in via Settings.
         ExternalOutputSettings.applyLaunchDefault()
+        ExternalOutputSettings.restoreLandscapeIfNoVerticalShows(
+            LocalAlbumStore.shared.albums
+        )
         
         window = UIWindow(windowScene: windowScene)
         

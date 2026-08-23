@@ -9,7 +9,8 @@ import UIKit
 
 /// Companion settings root: drill into display, transition, camera, EclipseTV,
 /// and Getting Started.
-/// When a Show is open, a top section hosts the name field and Delete.
+/// When a Show is open, a top section hosts the name field and Delete, plus a
+/// Practice Mode toggle.
 final class SettingsViewController: UITableViewController, UITextFieldDelegate {
 
     /// Multipeer link state for the Eclipse TV App section.
@@ -34,9 +35,10 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
 
     /// Open Show name when Settings should offer show editing; `nil` on Home.
     var openShowName: String?
-    /// Open Show id for per-Show prefs (name uniqueness, share, delete). `nil` on Home.
+    /// Open Show id for per-Show prefs (name, share, delete, Practice Mode). `nil` on Home.
     var openShowId: UUID?
     var onShareShow: (() -> Void)?
+    /// Invoked after the user confirms Delete Show. Host deletes and dismisses.
     var onDeleteShow: (() -> Void)?
 
     private let showNameField = UITextField()
@@ -46,6 +48,7 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
 
     private enum Section: Hashable {
         case show
+        case showLivePreview
         case playback
         case showSharing
         case eclipseTV
@@ -66,7 +69,6 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
     private enum PlaybackRow: Int, CaseIterable {
         case displayMode
         case transition
-        case cameraClose
     }
 
     private enum MacRow: Int, CaseIterable {
@@ -78,6 +80,7 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
         var result: [Section] = []
         if openShowName != nil {
             result.append(.show)
+            result.append(.showLivePreview)
         }
         result.append(contentsOf: [
             .playback, .showSharing, .eclipseTV, .eclipseMac, .help
@@ -191,6 +194,7 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         switch sections[section] {
         case .show: return ShowRow.allCases.count
+        case .showLivePreview: return 1
         case .playback: return PlaybackRow.allCases.count
         case .showSharing: return showSharingRows.count
         case .eclipseTV: return 1
@@ -206,6 +210,7 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
         switch sections[section] {
         case .show:
             return "Show"
+        case .showLivePreview: return nil
         case .playback: return "Playback"
         case .showSharing: return "Show Sharing"
         case .eclipseTV: return "EclipseTV"
@@ -219,6 +224,8 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
         titleForFooterInSection section: Int
     ) -> String? {
         switch sections[section] {
+        case .showLivePreview:
+            return Self.disconnectedLivePreviewFooter
         case .eclipseTV:
             return "Link an Apple TV running EclipseTV to sync Shows and present over Multipeer. "
                 + "AirPlay still works without a TV link."
@@ -255,6 +262,8 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
         switch sections[indexPath.section] {
         case .show:
             configureShowCell(cell, config: &config)
+        case .showLivePreview:
+            configureDisconnectedLivePreviewCell(cell, config: &config)
         case .playback:
             switch PlaybackRow(rawValue: indexPath.row) {
             case .displayMode:
@@ -263,9 +272,6 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
             case .transition:
                 config.text = "Content Transition"
                 config.secondaryText = ExternalOutputSettings.contentTransition.rawValue
-            case .cameraClose:
-                config.text = "When Camera Closes"
-                config.secondaryText = ExternalOutputSettings.cameraCloseDestination.rawValue
             case .none:
                 break
             }
@@ -305,8 +311,10 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
             if ShowRow(rawValue: indexPath.row) == .name {
                 showNameField.becomeFirstResponder()
             } else {
-                onDeleteShow?()
+                confirmDeleteShow()
             }
+        case .showLivePreview:
+            break
         case .playback:
             switch PlaybackRow(rawValue: indexPath.row) {
             case .displayMode:
@@ -316,10 +324,6 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
             case .transition:
                 navigationController?.pushViewController(
                     SettingsTransitionViewController(), animated: true
-                )
-            case .cameraClose:
-                navigationController?.pushViewController(
-                    SettingsCameraCloseViewController(), animated: true
                 )
             case .none:
                 break
@@ -404,6 +408,22 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
         config.image = UIImage(systemName: "trash")
         config.textProperties.color = .systemRed
         config.imageProperties.tintColor = .systemRed
+    }
+
+    /// Confirm in-place so Cancel can stay in Settings.
+    private func confirmDeleteShow() {
+        showNameField.resignFirstResponder()
+        let name = openShowName ?? "this Show"
+        let alert = UIAlertController(
+            title: "Delete Show?",
+            message: "“\(name)” is removed from Home. Its images and videos stay on this iPhone and any linked EclipseTV.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Delete", style: .destructive) { [weak self] _ in
+            self?.onDeleteShow?()
+        })
+        present(alert, animated: true)
     }
 
     @objc private func showNameEditingChanged() {
