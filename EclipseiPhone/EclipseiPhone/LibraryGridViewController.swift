@@ -29,7 +29,7 @@ final class LibraryGridViewController: UIViewController {
     var onRequestEdit: ((String) -> Void)?
     /// Invoked when the user chooses Thumbnail — host opens the video frame picker.
     var onRequestVideoThumbnail: ((String) -> Void)?
-    /// Invoked when the Camera tile is tapped.
+    /// Invoked when the Camera phone viewer should open (⋯ Open Controller).
     var onPresentCamera: (() -> Void)?
     /// True while fullscreen Camera is opening/open — keep the tile on a still.
     var homeCameraWarmPreviewSuspended = false
@@ -570,8 +570,16 @@ final class LibraryGridViewController: UIViewController {
         observe(ExternalDisplayManager.webDidEndNotification, using: overlayReload)
         observe(ExternalDisplayManager.pdfDidEndNotification, using: overlayReload)
         observe(ExternalDisplayManager.cameraDidEndNotification) { [weak self] note in
+            self?.adoptBackgroundSelectionIfCameraCommitted()
             overlayReload(note)
             // AirPlay tore down the session — warm the home tile again.
+            self?.warmHomeCameraPreview()
+        }
+        observe(CameraLiveViewController.didDismissNotification) { [weak self] _ in
+            self?.adoptBackgroundSelectionIfCameraCommitted()
+            self?.homeCameraWarmPreviewSuspended = false
+            self?.reloadGridIfSafe()
+            self?.refreshLiveHeader()
             self?.warmHomeCameraPreview()
         }
     }
@@ -813,6 +821,16 @@ final class LibraryGridViewController: UIViewController {
             liveHeader.updatePlayback(PlaybackState())
             return
         }
+        if mgr.isParkedOnQuickChangeStill {
+            liveHeader.configureOverlay(
+                title: "Camera",
+                systemImage: "camera.fill",
+                fillColor: UIColor(white: 0.12, alpha: 1),
+                thumbnail: mgr.cameraTileParkedStillImage
+            )
+            liveHeader.updatePlayback(PlaybackState())
+            return
+        }
         if isBlackSelected {
             liveHeader.configureOverlay(
                 title: "Blackout",
@@ -909,6 +927,9 @@ final class LibraryGridViewController: UIViewController {
     func currentPresentationSource() -> PresentationSource? {
         switch ExternalDisplayManager.shared.overlaySource {
         case .camera:
+            if let parked = ExternalDisplayManager.shared.parkedStillPresentationSource {
+                return parked
+            }
             return .camera
         case .web(let url):
             return .web(url)

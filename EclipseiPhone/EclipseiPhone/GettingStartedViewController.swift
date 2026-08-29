@@ -51,9 +51,10 @@ final class GettingStartedViewController: UITableViewController {
         Topic(
             title: "Camera",
             body: """
-            Inside a Show, open Camera to put a live feed on AirPlay. Capture stills or \
-            clips into your Show — those stay on your phones (and can sync with iCloud), \
-            and are never sent to the EclipseTV app library.
+            Inside a Show, tap Camera to put a live feed on AirPlay. Use ⋯ Open \
+            Controller for the phone viewfinder without changing what’s on screen. \
+            Stills and clips you shoot stay on your phones (and can sync with \
+            iCloud), and are never sent to the EclipseTV app library.
             """,
             systemImage: "camera.fill",
             tint: .systemGreen
@@ -93,8 +94,8 @@ final class GettingStartedViewController: UITableViewController {
             title: "Tips",
             body: """
             On Home, long-press a Show for rename, share, or delete. Inside a Show, \
-            long-press a tile to arrange, or use ⋯ for Loop, Mute, Thumbnail, cover, \
-            and remove. Getting Started is in Settings anytime.
+            tap a tile to put it on screen; long-press to arrange. Use ⋯ for Preview, \
+            Loop, Mute, Thumbnail, cover, and remove. Getting Started is in Settings anytime.
             """,
             systemImage: "lightbulb.fill",
             tint: .systemYellow

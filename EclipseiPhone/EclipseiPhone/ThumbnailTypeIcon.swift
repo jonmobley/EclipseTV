@@ -7,7 +7,7 @@
 
 import UIKit
 
-/// Content kind shown as a bottom-leading glyph on a library thumbnail.
+/// Content kind shown as a top-leading glyph on a library thumbnail.
 enum ThumbnailTypeIcon: Equatable {
     case photo
     case video
@@ -40,7 +40,7 @@ enum ThumbnailTypeIcon: Equatable {
         }
     }
 
-    /// Camera keeps the disc even with no still, so the title can sit beside it.
+    /// Camera keeps the disc even with no still so the tile still reads as camera.
     var showsWithoutThumbnail: Bool {
         self == .camera
     }

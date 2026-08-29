@@ -52,8 +52,49 @@ final class ExternalDisplayManager {
     private(set) var overlaySource: OverlaySource?
 
     /// Camera overlay is active, but output is temporarily showing a still
-    /// (user alternate cutaway, or Logo). Phone camera UI stays open; session keeps running.
-    private(set) var isCameraParkedOnStill = false
+    /// (Show Background, or a user cutaway). Phone camera UI stays open; session keeps running.
+    private(set) var parkedCameraStill: CameraParkedStill?
+
+    /// True while `parkedCameraStill` is set.
+    var isCameraParkedOnStill: Bool { parkedCameraStill != nil }
+
+    /// Parked on a quick-change still (not Show Background).
+    var isParkedOnQuickChangeStill: Bool {
+        if case .cutaway = parkedCameraStill { return true }
+        return false
+    }
+
+    /// Camera Show tile is live for the feed or a parked quick-change still.
+    var isCameraTileLive: Bool {
+        CameraStillRibbon.cameraTileIsLive(
+            isCameraLive: isCameraLive,
+            parked: parkedCameraStill
+        )
+    }
+
+    /// Quick-change art for the Camera tile while that still is on program.
+    var cameraTileParkedStillImage: UIImage? {
+        guard case .cutaway(let id) = parkedCameraStill else { return nil }
+        return CameraAlternateStillStore.shared.image(for: id)
+    }
+
+    /// AirPlay source for the parked still, if any.
+    var parkedStillPresentationSource: PresentationSource? {
+        switch parkedCameraStill {
+        case .background:
+            return LogoStore.shared.presentationSource
+        case .cutaway(let id):
+            return CameraAlternateStillStore.shared.presentationSource(for: id)
+        case nil:
+            return nil
+        }
+    }
+
+    /// True when program is the Show Background still.
+    var isShowingBackgroundStill: Bool {
+        guard case .image(let url, _) = lastSource?.content else { return false }
+        return LogoStore.shared.isLogoFileURL(url)
+    }
 
     /// Whether camera mode owns the overlay (session may still be running).
     var isCameraModeActive: Bool {
@@ -290,7 +331,7 @@ final class ExternalDisplayManager {
             dropCameraOverlayAfterDisconnect()
         } else if overlaySource != nil {
             overlaySource = nil
-            isCameraParkedOnStill = false
+            parkedCameraStill = nil
             liveWebPageId = nil
             livePDFDocumentId = nil
         }
@@ -490,7 +531,7 @@ final class ExternalDisplayManager {
         switch source.content {
         case .camera:
             beginOverlay(.camera, endingOther: true)
-            isCameraParkedOnStill = false
+            parkedCameraStill = nil
         case .web(let url):
             beginOverlay(.web(url), endingOther: true)
         case .pdf(let url):
@@ -532,9 +573,12 @@ final class ExternalDisplayManager {
     ///
     /// AirPlay shows the still when a display is attached. The phone camera
     /// viewfinder stays on the live camera either way.
-    func parkCameraOnStill(_ source: PresentationSource) {
+    func parkCameraOnStill(
+        _ source: PresentationSource,
+        kind: CameraParkedStill
+    ) {
         guard isCameraModeActive else { return }
-        isCameraParkedOnStill = true
+        parkedCameraStill = kind
         AudioAmbientPolicy.applyYieldIfNeeded(for: source)
         lastSource = source
         if isConnected {
@@ -544,10 +588,30 @@ final class ExternalDisplayManager {
         }
     }
 
-    /// Restores live camera after `parkCameraOnStill(_:)`.
+    /// Ends camera overlay and leaves Show Background as the live source.
+    ///
+    /// Used when the user closes Camera while parked on Background so the
+    /// Show grid's Background tile takes the red live stroke.
+    func commitCameraParkToBackground() {
+        guard CameraStillRibbon.shouldCommitToBackground(parked: parkedCameraStill),
+              let source = LogoStore.shared.presentationSource
+        else { return }
+        lastSource = source
+        parkedCameraStill = nil
+        endOverlay(notify: false)
+        AudioAmbientPolicy.applyYieldIfNeeded(for: source)
+        if isConnected {
+            refreshConnection()
+            presentationVC?.show(source)
+        }
+        updateIdleTimer()
+        NotificationCenter.default.post(name: Self.didChangeNotification, object: self)
+    }
+
+    /// Restores live camera after `parkCameraOnStill(_:kind:)`.
     func resumeCameraFromStillPark() {
         guard isCameraParkedOnStill else { return }
-        isCameraParkedOnStill = false
+        parkedCameraStill = nil
         guard isCameraModeActive else { return }
         let source = PresentationSource.camera
         AudioAmbientPolicy.applyYieldIfNeeded(for: source)
@@ -569,7 +633,7 @@ final class ExternalDisplayManager {
             lastSource = nil
         }
         overlaySource = nil
-        isCameraParkedOnStill = false
+        parkedCameraStill = nil
     }
 
     /// Starts presenting a web page on the external display.
@@ -835,7 +899,7 @@ final class ExternalDisplayManager {
             }
         }
         if case .camera = next {} else {
-            isCameraParkedOnStill = false
+            parkedCameraStill = nil
         }
         overlaySource = next
     }
@@ -854,7 +918,7 @@ final class ExternalDisplayManager {
         guard let current = overlaySource else { return }
         tearDown(current)
         overlaySource = nil
-        isCameraParkedOnStill = false
+        parkedCameraStill = nil
         clearLiveOverlayId(for: current)
         if notify {
             notifyOverlayEnd(current)

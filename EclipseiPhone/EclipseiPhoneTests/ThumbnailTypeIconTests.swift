@@ -60,7 +60,7 @@ struct ThumbnailTypeIconTests {
         #expect(cell.typeIconOverlay.isHidden == false)
     }
 
-    @Test func titledCaptionSitsBesideTypeIcon() {
+    @Test func titledCaptionStaysAtBottomWhenTypeIconIsTop() {
         let cell = makeCell()
         cell.configureSpecial(
             title: "Example",
@@ -71,12 +71,9 @@ struct ThumbnailTypeIconTests {
             typeIcon: .website
         )
         cell.layoutIfNeeded()
-        #expect(cell.captionLabel.textAlignment == .left)
-        #expect(cell.captionLabel.numberOfLines == 1)
-        let expectedMinX = ThumbnailTypeIconView.inset
-            + ThumbnailTypeIconView.side
-            + ThumbnailTypeIconView.titleSpacing
-        #expect(abs(cell.captionLabel.frame.minX - expectedMinX) < 0.5)
+        #expect(cell.captionLabel.textAlignment == .center)
+        #expect(abs(cell.typeIconOverlay.frame.minY - ThumbnailTypeIconView.inset) < 0.5)
+        #expect(cell.captionLabel.frame.minY > cell.typeIconOverlay.frame.maxY)
         let trailingInset = cell.cardView.bounds.width - cell.captionLabel.frame.maxX
         #expect(abs(trailingInset - 8) < 0.5)
     }
@@ -88,7 +85,7 @@ struct ThumbnailTypeIconTests {
         cell.captionLabel.isHidden = false
         cell.updateCaptionScrim()
         cell.layoutIfNeeded()
-        #expect(cell.captionLabel.textAlignment == .left)
+        #expect(cell.captionLabel.textAlignment == .center)
         #expect(
             cell.captionLabel.frame.maxX
                 <= cell.durationLabel.frame.minX - ThumbnailTypeIconView.titleSpacing + 0.5
@@ -132,7 +129,7 @@ struct ThumbnailTypeIconTests {
         cell.configureCamera(isLive: false, lastFrame: nil, warmPreview: false)
         #expect(cell.typeIconOverlay.appliedIcon == .camera)
         #expect(cell.typeIconOverlay.isHidden == false)
-        #expect(cell.captionLabel.textAlignment == .left)
+        #expect(cell.captionLabel.textAlignment == .center)
 
         cell.configureActionTile(title: "New Show")
         #expect(cell.typeIconOverlay.isHidden)
@@ -145,10 +142,9 @@ struct ThumbnailTypeIconTests {
         cell.layoutIfNeeded()
         #expect(cell.durationOverlayText == "0:12")
         #expect(ThumbnailTypeIcon.video.systemName == "play.fill")
-        // Play glyph stays in the leading corner, not centered on the still.
+        // Play glyph stays in the top-leading corner, not centered on the still.
         #expect(cell.typeIconOverlay.frame.minX == 8)
-        let bottomInset = cell.cardView.bounds.height - cell.typeIconOverlay.frame.maxY
-        #expect(abs(bottomInset - 8) < 0.5)
+        #expect(abs(cell.typeIconOverlay.frame.minY - 8) < 0.5)
     }
 
     @Test func photoThumbnailHidesDurationOverlay() {
@@ -170,13 +166,13 @@ struct ThumbnailTypeIconTests {
         #expect(cell.durationOverlayText == nil)
     }
 
-    @Test func rewindHidesVideoTypeIcon() {
-
+    @Test func rewindKeepsVideoTypeIcon() {
         let cell = makeCell()
         cell.configure(with: makeItem(isVideo: true), thumbnail: swatch(), isLive: false)
         #expect(cell.typeIconOverlay.isHidden == false)
         cell.setRewindHandler { }
-        #expect(cell.typeIconOverlay.isHidden)
+        #expect(cell.typeIconOverlay.appliedIcon == .video)
+        #expect(cell.typeIconOverlay.isHidden == false)
         cell.clearRewind()
         #expect(cell.typeIconOverlay.appliedIcon == .video)
         #expect(cell.typeIconOverlay.isHidden == false)

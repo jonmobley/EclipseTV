@@ -18,7 +18,7 @@ extension LibraryGridViewController {
     /// Camera, Background, Screensaver, and Blackout are global tools (no owner).
     var liveOwningShowId: UUID? {
         let mgr = ExternalDisplayManager.shared
-        if mgr.isCameraLive || isBlackSelected || isLogoSelected || isScreensaverSelected {
+        if mgr.isCameraTileLive || isBlackSelected || isLogoSelected || isScreensaverSelected {
             return nil
         }
         if mgr.isWebLive, let pageId = mgr.liveWebPageId {

@@ -164,7 +164,7 @@ extension LibraryGridViewController {
         case .logo:
             return isLogoSelected && !ExternalDisplayManager.shared.isOverlayLive
         case .camera:
-            return ExternalDisplayManager.shared.isCameraLive
+            return ExternalDisplayManager.shared.isCameraTileLive
         case .media(let media):
             return media.id == store.currentId
                 && SlideshowPlaybackController.shared.activeSlideshowId == nil

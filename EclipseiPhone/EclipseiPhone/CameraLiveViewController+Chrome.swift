@@ -141,9 +141,8 @@ extension CameraLiveViewController {
         view.bringSubviewToFront(frameButton)
         view.bringSubviewToFront(shutterButton)
         view.bringSubviewToFront(flipButton)
-        layoutAlternateStillButton(panel: panel)
-        refreshAlternateStillAppearance()
         layoutLiveOutputThumb(panel: panel)
+        layoutStillRibbon(panel: panel)
         layoutFrameRibbon(panel: panel)
 
         updateShutterAccessibilityHint()
@@ -219,6 +218,7 @@ extension CameraLiveViewController {
         syncRecordingTimer()
         layoutTopChromeInPanel()
         layoutBottomChromeInPanel()
+        stillRibbonView.reloadData()
     }
 
     /// Whether AirPlay currently owns the camera overlay (including still park).

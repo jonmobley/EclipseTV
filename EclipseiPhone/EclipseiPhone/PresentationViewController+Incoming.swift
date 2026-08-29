@@ -239,7 +239,7 @@ extension PresentationViewController {
 
     private func installIncomingWeb(url: URL, generation: Int) {
         let view = WKWebView(frame: .zero, configuration: EclipseWebKit.makeConfiguration())
-        view.customUserAgent = Self.mobileUserAgent
+        EclipseWebKit.applyDesktopSite(to: view)
         view.scrollView.showsVerticalScrollIndicator = false
         view.scrollView.showsHorizontalScrollIndicator = false
         view.scrollView.bounces = false

@@ -11,8 +11,14 @@ import UIKit
 
 extension LibraryGridViewController {
 
-    /// Cover / Arrange / Remove, plus the only place a saved PDF can be deleted.
+    /// Preview / Cover / Arrange / Remove, plus the only place a saved PDF can be deleted.
     func pdfContextMenu(_ doc: SavedPDF, in album: LocalAlbum) -> UIMenu {
+        let preview = UIAction(
+            title: "Preview",
+            image: UIImage(systemName: "eye")
+        ) { [weak self] _ in
+            self?.presentPDF(doc)
+        }
         let delete = UIAction(
             title: "Delete PDF",
             image: UIImage(systemName: "trash"),
@@ -20,11 +26,12 @@ extension LibraryGridViewController {
         ) { [weak self] _ in
             self?.confirmDeletePDF(doc)
         }
-        return memberContextMenu(
+        let rest = memberContextMenu(
             itemId: doc.id.uuidString,
             in: album,
             extras: [delete]
         )
+        return UIMenu(children: [preview] + rest.children)
     }
 
     /// Deleting drops the file, so warn that every Show loses the card.

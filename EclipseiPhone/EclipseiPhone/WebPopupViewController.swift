@@ -24,7 +24,7 @@ final class WebPopupViewController: UIViewController {
     init(configuration: WKWebViewConfiguration) {
         webView = WKWebView(frame: .zero, configuration: configuration)
         super.init(nibName: nil, bundle: nil)
-        webView.customUserAgent = PresentationViewController.mobileUserAgent
+        EclipseWebKit.applyDesktopSite(to: webView)
         webView.navigationDelegate = self
         webView.uiDelegate = self
         webView.backgroundColor = .systemBackground

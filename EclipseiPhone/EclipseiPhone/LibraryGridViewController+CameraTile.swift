@@ -13,7 +13,7 @@ import UIKit
 extension LibraryGridViewController {
 
     /// Starts capture when authorized so the idle Camera tile can show a live feed.
-    /// Does not prompt for permission — fullscreen Camera owns that.
+    /// Does not prompt — tap-to-live and the phone viewer own that.
     ///
     /// Attaches the preview layer immediately (last-frame placeholder), then starts
     /// the session when the app is active. Retries are owned by `CameraManager`.
@@ -43,8 +43,9 @@ extension LibraryGridViewController {
         if let cell = visibleCameraCell() {
             CameraManager.shared.captureLastFrame(from: cell.cameraPreview)
             cell.configureCamera(
-                isLive: ExternalDisplayManager.shared.isCameraLive,
+                isLive: ExternalDisplayManager.shared.isCameraTileLive,
                 lastFrame: CameraManager.shared.lastFrame,
+                parkedStill: ExternalDisplayManager.shared.cameraTileParkedStillImage,
                 warmPreview: false,
                 isLocked: isLiveOutputLocked
             )
@@ -77,8 +78,9 @@ extension LibraryGridViewController {
             return
         }
         cell.configureCamera(
-            isLive: ExternalDisplayManager.shared.isCameraLive,
+            isLive: ExternalDisplayManager.shared.isCameraTileLive,
             lastFrame: CameraManager.shared.lastFrame,
+            parkedStill: ExternalDisplayManager.shared.cameraTileParkedStillImage,
             warmPreview: true,
             isLocked: isLiveOutputLocked
         )
@@ -153,7 +155,7 @@ extension LibraryGridViewController {
         return nil
     }
 
-    private func visibleCameraCell() -> LibraryThumbnailCell? {
+    func visibleCameraCell() -> LibraryThumbnailCell? {
         guard let showsSection = sectionIndex(for: .shows),
               let item = cameraShowItemIndex else { return nil }
         let indexPath = IndexPath(item: item, section: showsSection)

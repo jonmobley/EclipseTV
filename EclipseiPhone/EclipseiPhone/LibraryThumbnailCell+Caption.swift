@@ -11,7 +11,7 @@ import UIKit
 
 extension LibraryThumbnailCell {
 
-    /// Centered title by default; swapped to sit beside the type disc / Rewind.
+    /// Centered title by default; swapped to sit beside Rewind.
     func installCaptionLayoutConstraints() {
         let gap = ThumbnailTypeIconView.titleSpacing
         captionLeadingToCard = captionLabel.leadingAnchor.constraint(
@@ -23,17 +23,11 @@ extension LibraryThumbnailCell {
         captionBottomToCard = captionLabel.bottomAnchor.constraint(
             equalTo: cardView.bottomAnchor, constant: -10
         )
-        captionLeadingToIcon = captionLabel.leadingAnchor.constraint(
-            equalTo: typeIconOverlay.trailingAnchor, constant: gap
-        )
         captionLeadingToRewind = captionLabel.leadingAnchor.constraint(
             equalTo: rewindButton.trailingAnchor, constant: gap
         )
         captionTrailingToDuration = captionLabel.trailingAnchor.constraint(
             equalTo: durationLabel.leadingAnchor, constant: -gap
-        )
-        captionCenterYToIcon = captionLabel.centerYAnchor.constraint(
-            equalTo: typeIconOverlay.centerYAnchor
         )
         captionCenterYToRewind = captionLabel.centerYAnchor.constraint(
             equalTo: rewindButton.centerYAnchor
@@ -43,14 +37,12 @@ extension LibraryThumbnailCell {
         captionBottomToCard.isActive = true
     }
 
-    /// Pins a visible title next to the type disc (or Rewind) and stops before
-    /// the duration pill. Untitled / + tiles stay centered.
+    /// Pins a visible title next to Rewind and stops before the duration pill.
+    /// Untitled / + tiles, and titles with the type disc up top, stay centered.
     func updateCaptionLayout() {
         let show = !captionLabel.isHidden
-        let besideIcon = show && !typeIconOverlay.isHidden
-        let besideRewind = show && !rewindButton.isHidden && !besideIcon
+        let hanging = show && !rewindButton.isHidden
         let dodgeDuration = show && !durationLabel.isHidden
-        let hanging = besideIcon || besideRewind
 
         captionLabel.textAlignment = hanging ? .left : .center
         if hanging {
@@ -59,19 +51,15 @@ extension LibraryThumbnailCell {
         }
 
         captionLeadingToCard.isActive = false
-        captionLeadingToIcon.isActive = false
         captionLeadingToRewind.isActive = false
-        captionCenterYToIcon.isActive = false
         captionCenterYToRewind.isActive = false
         captionBottomToCard.isActive = false
         captionTrailingToDuration.isActive = false
         captionTrailingToCard.isActive = false
 
-        captionLeadingToIcon.isActive = besideIcon
-        captionLeadingToRewind.isActive = besideRewind
+        captionLeadingToRewind.isActive = hanging
         captionLeadingToCard.isActive = !hanging
-        captionCenterYToIcon.isActive = besideIcon
-        captionCenterYToRewind.isActive = besideRewind
+        captionCenterYToRewind.isActive = hanging
         captionBottomToCard.isActive = !hanging
         captionTrailingToDuration.isActive = dodgeDuration
         captionTrailingToCard.isActive = !dodgeDuration

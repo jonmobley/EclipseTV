@@ -305,13 +305,13 @@ extension iPhoneMainViewController {
         connectionManager.syncCoordinator = coordinator
     }
 
-    /// Presents the camera control surface (preview first; tap preview for AirPlay).
+    /// Presents the camera control surface without changing live output.
     ///
     /// Parks the home tile on a still first so the shared preview handoff doesn't
-    /// flash black; keeps the session running for a live fullscreen open.
+    /// flash black; keeps the session running for a live fullscreen open. Tap the
+    /// stage to put Camera on AirPlay.
     func presentCameraLive() {
         guard !isAlreadyOpen(CameraLiveViewController.self) else { return }
-        SlideshowPlaybackController.shared.stop()
         libraryViewController.parkHomeCameraTileForFullscreen()
         if AVCaptureDevice.authorizationStatus(for: .video) == .authorized,
            !ExternalDisplayManager.shared.isCameraModeActive,

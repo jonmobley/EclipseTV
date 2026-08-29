@@ -11,7 +11,7 @@ import UIKit
 
 extension LibraryThumbnailCell {
 
-    /// Pins the type disc to the bottom-leading corner of the card.
+    /// Pins the type disc to the top-leading corner of the card.
     func installTypeIcon() {
         typeIconOverlay.translatesAutoresizingMaskIntoConstraints = false
         cardView.addSubview(typeIconOverlay)
@@ -20,9 +20,9 @@ extension LibraryThumbnailCell {
                 equalTo: cardView.leadingAnchor,
                 constant: ThumbnailTypeIconView.inset
             ),
-            typeIconOverlay.bottomAnchor.constraint(
-                equalTo: cardView.bottomAnchor,
-                constant: -ThumbnailTypeIconView.inset
+            typeIconOverlay.topAnchor.constraint(
+                equalTo: cardView.topAnchor,
+                constant: ThumbnailTypeIconView.inset
             ),
             typeIconOverlay.widthAnchor.constraint(
                 equalToConstant: ThumbnailTypeIconView.side
@@ -33,23 +33,20 @@ extension LibraryThumbnailCell {
         ])
     }
 
-    /// Sets the content-type glyph. Hidden when there is no thumbnail, the item
-    /// is unavailable, or Rewind already occupies this corner.
+    /// Sets the content-type glyph. Hidden when there is no thumbnail or the
+    /// item is unavailable. Rewind lives in the opposite corner, so both can show.
     func setTypeIcon(_ icon: ThumbnailTypeIcon?) {
         contentTypeIcon = icon
         refreshTypeIconVisibility()
     }
 
-    /// Recomputes overlay visibility after rewind / chrome changes.
+    /// Recomputes overlay visibility after chrome changes.
     ///
-    /// Titles sit beside the disc (one line, tail ellipsis) and stop before
-    /// the duration pill. Tool tiles keep the disc even without a poster.
+    /// Tool tiles keep the disc even without a poster.
     func refreshTypeIconVisibility() {
         let hasArt = imageView.image != nil && imageView.alpha > 0.5
         let allowEmpty = contentTypeIcon?.showsWithoutThumbnail == true
-        let show = contentTypeIcon != nil
-            && rewindButton.isHidden
-            && (hasArt || allowEmpty)
+        let show = contentTypeIcon != nil && (hasArt || allowEmpty)
         typeIconOverlay.apply(show ? contentTypeIcon : nil)
         if show {
             cardView.bringSubviewToFront(typeIconOverlay)

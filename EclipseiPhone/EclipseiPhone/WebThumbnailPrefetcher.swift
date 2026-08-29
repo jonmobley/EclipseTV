@@ -94,7 +94,7 @@ final class WebThumbnailPrefetcher: NSObject, WKNavigationDelegate {
         host.alpha = 0.01
 
         let web = WKWebView(frame: host.bounds, configuration: EclipseWebKit.makeConfiguration())
-        web.customUserAgent = PresentationViewController.mobileUserAgent
+        EclipseWebKit.applyDesktopSite(to: web)
         web.navigationDelegate = self
         web.isOpaque = true
         web.backgroundColor = .black

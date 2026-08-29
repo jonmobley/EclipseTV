@@ -20,7 +20,7 @@ extension PresentationViewController {
     ///   - content: The view being laid out (camera preview or web view).
     ///   - container: The host panel (external display or phone stage).
     ///   - scale: Uniform scale applied after sizing. Camera uses `1`; web uses
-    ///     `panelWidth / logicalWidth` so a mobile layout fills the panel.
+    ///     `panelWidth / logicalWidth` so a desktop layout fills the panel.
     ///   - rotationDegrees: Override for phone (0) vs TV (`ExternalOutputSettings`).
     static func applyRotatedLayout(to content: UIView,
                                    in container: UIView,

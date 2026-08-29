@@ -23,25 +23,25 @@ extension CameraLiveViewController: UICollectionViewDataSource, UICollectionView
         reloadFrameRibbon()
     }
 
-    /// Packs the ribbon against the cutaway, same thumb size and 8pt gap.
+    /// Packs the ribbon against the stills ribbon, same thumb size and 8pt gap.
     func layoutFrameRibbon(panel: CGRect) {
         let frames = CameraFrameStore.shared.enabledFrames
         frameRibbonView.isHidden = frames.isEmpty
         guard !frames.isEmpty else { return }
 
-        let thumb = alternateStillButton.bounds.size
+        let thumb = stillRibbonThumbSize()
         guard thumb.width > 1, thumb.height > 1 else { return }
         applyFrameRibbonItemSize(thumb)
 
         let gap: CGFloat = 8
-        let maxX = alternateStillButton.frame.minX - gap
+        let maxX = stillRibbonView.frame.minX - gap
         let available = max(0, maxX - frameRibbonLeadingMinX(panel: panel, gap: gap))
         let count = CGFloat(frames.count)
         let contentWidth = count * thumb.width + max(0, count - 1) * gap
         let width = min(contentWidth, available)
         frameRibbonView.frame = CGRect(
             x: maxX - width,
-            y: alternateStillButton.frame.minY,
+            y: stillRibbonView.frame.minY,
             width: width,
             height: thumb.height
         )
@@ -76,6 +76,9 @@ extension CameraLiveViewController: UICollectionViewDataSource, UICollectionView
         _ collectionView: UICollectionView,
         numberOfItemsInSection section: Int
     ) -> Int {
+        if collectionView === stillRibbonView {
+            return stillRibbonItems.count
+        }
         guard collectionView === frameRibbonView else { return 0 }
         return CameraFrameStore.shared.enabledFrames.count
     }
@@ -84,6 +87,9 @@ extension CameraLiveViewController: UICollectionViewDataSource, UICollectionView
         _ collectionView: UICollectionView,
         cellForItemAt indexPath: IndexPath
     ) -> UICollectionViewCell {
+        if collectionView === stillRibbonView {
+            return stillRibbonCell(at: indexPath)
+        }
         guard collectionView === frameRibbonView,
               let cell = collectionView.dequeueReusableCell(
                 withReuseIdentifier: CameraFrameRibbonCell.reuseId,
@@ -106,14 +112,70 @@ extension CameraLiveViewController: UICollectionViewDataSource, UICollectionView
         _ collectionView: UICollectionView,
         didSelectItemAt indexPath: IndexPath
     ) {
-        guard collectionView === frameRibbonView else { return }
         collectionView.deselectItem(at: indexPath, animated: false)
+        if collectionView === stillRibbonView {
+            handleStillRibbonTap(at: indexPath)
+            return
+        }
+        guard collectionView === frameRibbonView else { return }
         let store = CameraFrameStore.shared
         let frames = store.enabledFrames
         guard frames.indices.contains(indexPath.item) else { return }
         let id = frames[indexPath.item].id
         store.select(store.selectedId == id ? nil : id)
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
+    }
+
+    /// Configures a Background / quick-change / add cell for the stills ribbon.
+    func stillRibbonCell(at indexPath: IndexPath) -> UICollectionViewCell {
+        guard let cell = stillRibbonView.dequeueReusableCell(
+            withReuseIdentifier: CameraStillRibbonCell.reuseId,
+            for: indexPath
+        ) as? CameraStillRibbonCell else {
+            return UICollectionViewCell()
+        }
+        let items = stillRibbonItems
+        guard items.indices.contains(indexPath.item) else { return cell }
+        configureStillRibbonCell(cell, item: items[indexPath.item])
+        return cell
+    }
+
+    func configureStillRibbonCell(
+        _ cell: CameraStillRibbonCell,
+        item: CameraStillRibbonItem
+    ) {
+        let parked = ExternalDisplayManager.shared.parkedCameraStill
+        switch item {
+        case .background:
+            cell.configure(
+                image: LogoStore.shared.image,
+                symbolName: LogoStore.shared.image == nil ? "photo" : nil,
+                isLive: parked == .background,
+                accessibilityLabel: "Background",
+                accessibilityHint: parked == .background
+                    ? "Background is live. Tap to return to the live camera."
+                    : "Tap to show the Show Background on program."
+            )
+        case .cutaway(let id):
+            let live = parked == .cutaway(id)
+            cell.configure(
+                image: CameraAlternateStillStore.shared.image(for: id),
+                symbolName: "photo",
+                isLive: live,
+                accessibilityLabel: "Quick Change",
+                accessibilityHint: live
+                    ? "Quick Change is live. Tap to return to the live camera."
+                    : "Tap to show this photo on program. Hold to replace or remove."
+            )
+        case .add:
+            cell.configure(
+                image: nil,
+                symbolName: "plus",
+                isLive: false,
+                accessibilityLabel: "Add Quick Change",
+                accessibilityHint: "Adds another still to select while camera is open"
+            )
+        }
     }
 }
 

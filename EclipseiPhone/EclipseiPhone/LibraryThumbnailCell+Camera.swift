@@ -19,10 +19,13 @@ extension LibraryThumbnailCell {
 
     /// Idle / app-open: warm live preview (last-frame until frames arrive).
     /// While AirPlay owns the camera: icon + red stroke only (no second feed).
+    /// Parked cutaway: that still fills the tile.
     /// - Parameter warmPreview: When false, shows a still only (fullscreen Camera open).
+    /// - Parameter parkedStill: Quick-change still on program, shown instead of the feed.
     func configureCamera(
         isLive: Bool,
         lastFrame: UIImage?,
+        parkedStill: UIImage? = nil,
         warmPreview: Bool = true,
         isLocked: Bool = false
     ) {
@@ -46,7 +49,11 @@ extension LibraryThumbnailCell {
         placeholderIcon.image = UIImage(systemName: "camera.fill")
         placeholderIcon.tintColor = UIColor.white.withAlphaComponent(0.85)
 
-        applyCameraPreviewState(lastFrame: lastFrame, warmPreview: warmPreview)
+        applyCameraPreviewState(
+            lastFrame: lastFrame,
+            parkedStill: parkedStill,
+            warmPreview: warmPreview
+        )
 
         accessibilityLabel = isLive
             ? (isLocked ? "Camera, live, locked" : "Camera, live")
@@ -92,9 +99,21 @@ extension LibraryThumbnailCell {
 
     // MARK: - Private
 
-    /// Picks between icon-only (AirPlay owns the feed), a still (fullscreen Camera owns
-    /// it) and the warm live preview.
-    private func applyCameraPreviewState(lastFrame: UIImage?, warmPreview: Bool) {
+    /// Picks between a parked cutaway still, icon-only (AirPlay owns the feed), a still
+    /// (fullscreen Camera owns it) and the warm live preview.
+    private func applyCameraPreviewState(
+        lastFrame: UIImage?,
+        parkedStill: UIImage?,
+        warmPreview: Bool
+    ) {
+        if let parkedStill {
+            cancelFreezeReveal()
+            HomeCameraTilePreview.shared.unbind()
+            imageView.image = parkedStill
+            imageView.alpha = 1
+            placeholderIcon.isHidden = true
+            return
+        }
         if ExternalDisplayManager.shared.isCameraModeActive {
             cancelFreezeReveal()
             HomeCameraTilePreview.shared.unbind()

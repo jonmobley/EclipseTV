@@ -29,4 +29,12 @@ struct ExternalOutputSettingsTests {
         ExternalOutputSettings.restoreLandscapeIfNoVerticalShows(shows)
         #expect(ExternalOutputSettings.orientation == .portrait)
     }
+
+    @Test func webLogicalWidthsUseDesktopBreakpoints() {
+        #expect(WebTextSize.large.logicalWidth == 1024)
+        #expect(WebTextSize.medium.logicalWidth == 1280)
+        #expect(WebTextSize.small.logicalWidth == 1440)
+        #expect(WebTextSize.small.logicalWidth > WebTextSize.medium.logicalWidth)
+        #expect(WebTextSize.medium.logicalWidth > WebTextSize.large.logicalWidth)
+    }
 }

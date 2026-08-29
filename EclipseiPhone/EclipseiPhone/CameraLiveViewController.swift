@@ -121,8 +121,24 @@ final class CameraLiveViewController: UIViewController {
     let flipButton = UIButton(type: .system)
     /// Opens the frame library to choose which overlays appear on the ribbon.
     let frameButton = UIButton(type: .system)
-    /// Overlay-frame thumbnails beside the cutaway still. Tap makes a frame live.
+    /// Overlay-frame thumbnails beside the stills ribbon. Tap makes a frame live.
     let frameRibbonView: UICollectionView = {
+        let layout = UICollectionViewFlowLayout()
+        layout.scrollDirection = .horizontal
+        layout.minimumInteritemSpacing = 8
+        layout.minimumLineSpacing = 8
+        let view = UICollectionView(frame: .zero, collectionViewLayout: layout)
+        view.backgroundColor = .clear
+        view.showsHorizontalScrollIndicator = false
+        view.alwaysBounceHorizontal = true
+        view.clipsToBounds = false
+        view.contentInsetAdjustmentBehavior = .never
+        view.delaysContentTouches = false
+        view.translatesAutoresizingMaskIntoConstraints = true
+        return view
+    }()
+    /// Background, quick-change stills, and a trailing + that adds another.
+    let stillRibbonView: UICollectionView = {
         let layout = UICollectionViewFlowLayout()
         layout.scrollDirection = .horizontal
         layout.minimumInteritemSpacing = 8
@@ -139,18 +155,13 @@ final class CameraLiveViewController: UIViewController {
     }()
     /// Program thumb of what's on AirPlay while this camera is still preview-only.
     let liveOutputThumbView = CameraLiveOutputThumbView()
-    /// Cutaway still thumbnail — tap parks that photo on program (AirPlay / live preview).
-    let alternateStillButton = UIButton(type: .custom)
-    /// Aspect-fill photo inside `alternateStillButton` (Background when none chosen).
-    let alternateStillImageView: UIImageView = {
-        let view = UIImageView()
-        view.contentMode = .scaleAspectFill
-        view.clipsToBounds = true
-        view.isUserInteractionEnabled = false
-        view.translatesAutoresizingMaskIntoConstraints = false
-        view.isHidden = true
-        return view
-    }()
+    /// Cutaway being replaced by the active Photos picker, or nil when adding.
+    var stillPickerReplaceId: UUID?
+    /// True while Back is committing a Background park so `cameraDidEnd` won't re-dismiss.
+    var isCommittingParkOnClose = false
+    /// Posted after Camera dismisses so the Show grid can sync live stroke / tile art.
+    static let didDismissNotification =
+        Notification.Name("CameraLiveViewController.didDismiss")
     /// Show that receives captures taken here, when the camera was opened from one.
     var captureDestinationShowId: UUID?
 
@@ -184,7 +195,7 @@ final class CameraLiveViewController: UIViewController {
         view.addSubview(backButton)
         setupPreviewChrome()
         setupCaptureMocks()
-        setupAlternateStillButton()
+        setupStillRibbon()
         setupLiveOutputThumb()
         setupFrameRibbon()
         setupFrameOverlay()
@@ -272,6 +283,10 @@ final class CameraLiveViewController: UIViewController {
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         guard isBeingDismissed || isMovingFromParent else { return }
+        if !isCommittingParkOnClose {
+            isCommittingParkOnClose = true
+            commitParkedStillOnClose()
+        }
         // Safety net if dismiss bypassed `closeTapped` (interactive sheet, etc.).
         // Prefer the UI path so last-capture preview is updated when possible.
         if CameraManager.shared.isRecording {
@@ -285,6 +300,12 @@ final class CameraLiveViewController: UIViewController {
         previewView.detach()
         // Leaving the control UI does not stop AirPlay. Program stays until
         // another source is selected. Session stays up for the home Camera tile.
+    }
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        guard isBeingDismissed || isMovingFromParent else { return }
+        NotificationCenter.default.post(name: Self.didDismissNotification, object: self)
     }
 
     @objc private func recordingDidChange() {
@@ -461,6 +482,8 @@ final class CameraLiveViewController: UIViewController {
         shutterHoldTimer?.invalidate()
         shutterHoldTimer = nil
         shutterDidLongPress = false
+        isCommittingParkOnClose = true
+        commitParkedStillOnClose()
         if CameraManager.shared.isRecording {
             finalizeRecordingIfNeeded { [weak self] in
                 self?.dismiss(animated: true)
@@ -472,6 +495,9 @@ final class CameraLiveViewController: UIViewController {
 
     @objc private func cameraEndedExternally() {
         guard presentedViewController == nil else { return }
+        if isCommittingParkOnClose || isBeingDismissed || isMovingFromParent {
+            return
+        }
         shutterHoldTimer?.invalidate()
         shutterHoldTimer = nil
         finalizeRecordingIfNeeded { [weak self] in

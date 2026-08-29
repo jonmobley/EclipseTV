@@ -21,9 +21,9 @@ final class LibraryThumbnailCell: UICollectionViewCell {
     let captionLabel = UILabel()
     /// Bottom fade under on-card titles (tools, Shows, websites).
     let captionScrimView = GradientView()
-    /// Bottom-leading photo / video / slideshow / website / PDF glyph.
+    /// Top-leading photo / video / slideshow / website / PDF glyph.
     let typeIconOverlay = ThumbnailTypeIconView()
-    /// Last content type applied; Rewind may hide the overlay without clearing this.
+    /// Last content type applied; visibility can hide the overlay without clearing this.
     var contentTypeIcon: ThumbnailTypeIcon?
     let durationLabel = PaddedLabel()
     private let unavailableBadge = PaddedLabel()
@@ -46,12 +46,10 @@ final class LibraryThumbnailCell: UICollectionViewCell {
     /// Nudged up when a caption sits under the glyph; 0 for + -only add tiles.
     private var placeholderCenterY: NSLayoutConstraint!
     var captionLeadingToCard: NSLayoutConstraint!
-    var captionLeadingToIcon: NSLayoutConstraint!
     var captionLeadingToRewind: NSLayoutConstraint!
     var captionTrailingToCard: NSLayoutConstraint!
     var captionTrailingToDuration: NSLayoutConstraint!
     var captionBottomToCard: NSLayoutConstraint!
-    var captionCenterYToIcon: NSLayoutConstraint!
     var captionCenterYToRewind: NSLayoutConstraint!
     /// Last media id painted; keeps art when a reload hits a transient cache miss.
     private var configuredMediaId: String?
@@ -305,8 +303,8 @@ final class LibraryThumbnailCell: UICollectionViewCell {
     ///   disappear into the grid background.
     /// - Parameter thumbnailContentMode: `.scaleAspectFit` suits favicons; fill for snapshots.
     /// - Parameter titleNumberOfLines: Caption wrap; PDFs use 1 (tail ellipsis).
-    /// - Parameter typeIcon: Bottom-leading content glyph. Tool tiles keep it
-    ///   even without a poster so the title can sit beside the disc.
+    /// - Parameter typeIcon: Top-leading content glyph. Tool tiles keep it
+    ///   even without a poster.
     func configureSpecial(
         title: String,
         systemImage: String?,

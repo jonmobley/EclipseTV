@@ -35,7 +35,7 @@ struct CameraCutawayParkTests {
             URL(fileURLWithPath: "/tmp/cutaway.jpg"),
             fill: true
         )
-        mgr.parkCameraOnStill(source)
+        mgr.parkCameraOnStill(source, kind: .cutaway(UUID()))
         #expect(mgr.isCameraParkedOnStill == true)
         #expect(mgr.isCameraModeActive == true)
         #expect(mgr.isCameraLive == false)
@@ -43,6 +43,47 @@ struct CameraCutawayParkTests {
         mgr.resumeCameraFromStillPark()
         #expect(mgr.isCameraParkedOnStill == false)
         #expect(mgr.isCameraLive == true)
+
+        endCameraIfNeeded(mgr)
+    }
+
+    @Test func commitBackgroundParkEndsCameraAndLeavesBackgroundOnProgram() {
+        let mgr = ExternalDisplayManager.shared
+        endCameraIfNeeded(mgr)
+
+        mgr.presentCamera()
+        guard let source = LogoStore.shared.presentationSource else {
+            return
+        }
+        mgr.parkCameraOnStill(source, kind: .background)
+        #expect(mgr.isCameraParkedOnStill == true)
+        #expect(mgr.isCameraModeActive == true)
+        #expect(mgr.isCameraTileLive == false)
+
+        mgr.commitCameraParkToBackground()
+        #expect(mgr.isCameraParkedOnStill == false)
+        #expect(mgr.isCameraModeActive == false)
+        #expect(mgr.isShowingBackgroundStill == true)
+
+        endCameraIfNeeded(mgr)
+    }
+
+    @Test func parkedQuickChangeStillKeepsCameraTileLive() {
+        let mgr = ExternalDisplayManager.shared
+        endCameraIfNeeded(mgr)
+
+        mgr.presentCamera()
+        let id = UUID()
+        mgr.parkCameraOnStill(
+            PresentationSource.image(
+                URL(fileURLWithPath: "/tmp/cutaway.jpg"),
+                fill: true
+            ),
+            kind: .cutaway(id)
+        )
+        #expect(mgr.isParkedOnQuickChangeStill == true)
+        #expect(mgr.isCameraTileLive == true)
+        #expect(mgr.isCameraLive == false)
 
         endCameraIfNeeded(mgr)
     }

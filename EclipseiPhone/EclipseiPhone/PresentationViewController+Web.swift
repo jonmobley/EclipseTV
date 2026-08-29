@@ -12,12 +12,6 @@ import WebKit
 
 extension PresentationViewController: WKNavigationDelegate {
 
-    /// Mobile Safari user agent so responsive sites serve their phone breakpoint.
-    static let mobileUserAgent =
-        "Mozilla/5.0 (iPhone; CPU iPhone OS 18_2 like Mac OS X) " +
-        "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.2 " +
-        "Mobile/15E148 Safari/604.1"
-
     /// Lazily creates and returns the external-display web view.
     func ensureWebView() -> WKWebView {
         if let webView = webView { return webView }
@@ -27,7 +21,7 @@ extension PresentationViewController: WKNavigationDelegate {
             frame: .zero,
             configuration: EclipseWebKit.makeConfiguration()
         )
-        view.customUserAgent = Self.mobileUserAgent
+        EclipseWebKit.applyDesktopSite(to: view)
         view.navigationDelegate = self
         view.scrollView.showsVerticalScrollIndicator = false
         view.scrollView.showsHorizontalScrollIndicator = false

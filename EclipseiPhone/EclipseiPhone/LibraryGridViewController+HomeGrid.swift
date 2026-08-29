@@ -183,7 +183,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         case .hero, .slideshowRibbon:
             return nil
         case .shows where !isHomePage(collectionView):
-            // Long-press enters arrange mode; ⋯ hosts Preview / Cover / Remove / etc.
+            // Show tiles: long-press enters arrange; ⋯ hosts Preview / Cover / Remove.
             return nil
         default:
             guard let item = homeItem(at: indexPath) else { return nil }
@@ -315,8 +315,9 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             )
         case .camera:
             cell.configureCamera(
-                isLive: ExternalDisplayManager.shared.isCameraLive,
+                isLive: ExternalDisplayManager.shared.isCameraTileLive,
                 lastFrame: CameraManager.shared.lastFrame,
+                parkedStill: ExternalDisplayManager.shared.cameraTileParkedStillImage,
                 warmPreview: !isCameraControlPresented && !homeCameraWarmPreviewSuspended,
                 isLocked: isLiveOutputLocked
             )
@@ -376,11 +377,14 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             isLogoSelected = false
             presentScreensaverLive()
         case .camera:
-            guard !blockLiveChangeIfLocked() else { return }
+            if isLiveOutputLocked || !hasLiveOutputDestination {
+                onPresentCamera?()
+                return
+            }
             isBlackSelected = false
             isLogoSelected = false
             isScreensaverSelected = false
-            onPresentCamera?()
+            presentCameraLiveOnOutput()
         case .createShow:
             onCreateShow?()
         case .addShowMedia:
@@ -474,29 +478,30 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         )
     }
 
-    /// Opens a saved website (bookmark or Show member).
+    /// Opens the phone browser for a saved website (⋯ Preview).
     ///
-    /// Marks it live when a destination exists; otherwise this is on-device
-    /// Preview (the phone browser) without a red live stroke.
+    /// Marks it live when a destination exists and output is unlocked; otherwise this
+    /// is on-device Preview without a red live stroke.
     ///
     /// A second browser must never open on top of the first — that left the loser with
     /// an empty stage and leaked the warm web view. If one is already up, navigate it
     /// like a normal browser load so Back still works and AirPlay follows.
     func presentWebPage(_ page: WebPage) {
-        guard !blockLiveChangeIfLocked() else { return }
-        let markLive = hasLiveOutputDestination
+        let markLive = hasLiveOutputDestination && !isLiveOutputLocked
         if let open = openController(ofType: WebRemoteViewController.self) {
-            SlideshowPlaybackController.shared.stop()
-            open.loadBrowserURL(page.url, pageId: page.id)
             if markLive {
+                SlideshowPlaybackController.shared.stop()
                 ExternalDisplayManager.shared.presentWeb(page.url, pageId: page.id)
                 announceAirPlayOverlayIfLinked()
             }
+            open.loadBrowserURL(page.url, pageId: page.id)
             reloadLibraryGrid()
             refreshLiveHeader()
             return
         }
-        SlideshowPlaybackController.shared.stop()
+        if markLive {
+            SlideshowPlaybackController.shared.stop()
+        }
         WarmWebSessionPool.shared.warmIfNeeded(for: page)
         // Park any in-hero preview before adopt so Auto Layout pins don't stick.
         liveHeader.clearWebPreview(parking: true)
@@ -517,26 +522,19 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         refreshLiveHeader()
     }
 
-    /// Presents a saved PDF (from + → Library…, or after importing).
+    /// Opens the phone PDF reader (⋯ Preview).
     ///
-    /// One viewer at a time, checked before the side effects: a second tap would
+    /// One viewer at a time, checked before the side effects: a second open would
     /// restart the AirPlay overlay for a viewer UIKit then refuses to present.
     func presentPDF(_ doc: SavedPDF) {
-        guard !blockLiveChangeIfLocked() else { return }
         guard !isAlreadyOpen(PDFRemoteViewController.self) else { return }
-        SlideshowPlaybackController.shared.stop()
-        guard let url = PDFStore.shared.fileURL(for: doc.id) else {
-            let alert = UIAlertController(
-                title: "PDF Missing",
-                message: "That file is no longer on this iPhone.",
-                preferredStyle: .alert
-            )
-            alert.addAction(UIAlertAction(title: "OK", style: .default))
-            present(alert, animated: true)
-            return
+        guard let url = resolvedPDFFileURL(for: doc) else { return }
+        let markLive = !isLiveOutputLocked
+        if markLive {
+            SlideshowPlaybackController.shared.stop()
+            ExternalDisplayManager.shared.presentPDF(url, documentId: doc.id)
+            announceAirPlayOverlayIfLinked()
         }
-        ExternalDisplayManager.shared.presentPDF(url, documentId: doc.id)
-        announceAirPlayOverlayIfLinked()
         let remote = PDFRemoteViewController(document: doc, fileURL: url)
         let nav = UINavigationController(rootViewController: remote)
         nav.modalPresentationStyle = .fullScreen

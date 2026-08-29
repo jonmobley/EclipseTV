@@ -187,7 +187,7 @@ final class WarmWebSession: NSObject {
             frame: host.bounds,
             configuration: EclipseWebKit.makeConfiguration(mediaHandler: self)
         )
-        web.customUserAgent = PresentationViewController.mobileUserAgent
+        EclipseWebKit.applyDesktopSite(to: web)
         web.navigationDelegate = self
         web.isOpaque = true
         // Start black; `backgroundTint` replaces this once the page reports a colour.

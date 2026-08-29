@@ -276,6 +276,7 @@ extension LibraryGridViewController {
             cell.configureCamera(
                 isLive: live,
                 lastFrame: CameraManager.shared.lastFrame,
+                parkedStill: ExternalDisplayManager.shared.cameraTileParkedStillImage,
                 warmPreview: !isCameraControlPresented && !homeCameraWarmPreviewSuspended,
                 isLocked: isLiveOutputLocked
             )
@@ -370,11 +371,14 @@ extension LibraryGridViewController {
             isScreensaverSelected = false
             presentLogoLive()
         case .camera:
-            guard !blockLiveChangeIfLocked() else { return }
+            if isLiveOutputLocked || !hasLiveOutputDestination {
+                onPresentCamera?()
+                return
+            }
             isBlackSelected = false
             isLogoSelected = false
             isScreensaverSelected = false
-            onPresentCamera?()
+            presentCameraLiveOnOutput()
         case .media(let item):
             if isLiveOutputLocked {
                 presentLocalPreview(for: item, in: openShowItems)
@@ -386,15 +390,23 @@ extension LibraryGridViewController {
             SlideshowPlaybackController.shared.stop()
             presentMedia(item)
         case .website(let page):
+            if isLiveOutputLocked || !hasLiveOutputDestination {
+                presentWebPage(page)
+                return
+            }
             isBlackSelected = false
             isLogoSelected = false
             isScreensaverSelected = false
-            presentWebPage(page)
+            presentWebPageLive(page)
         case .pdf(let doc):
+            if isLiveOutputLocked || !hasLiveOutputDestination {
+                presentPDF(doc)
+                return
+            }
             isBlackSelected = false
             isLogoSelected = false
             isScreensaverSelected = false
-            presentPDF(doc)
+            presentPDFLive(doc)
         case .add:
             break
         }
@@ -550,7 +562,14 @@ extension LibraryGridViewController {
     }
 
     private func websiteContextMenu(_ page: WebPage, in album: LocalAlbum) -> UIMenu {
-        memberContextMenu(itemId: page.id.uuidString, in: album)
+        let preview = UIAction(
+            title: "Preview",
+            image: UIImage(systemName: "eye")
+        ) { [weak self] _ in
+            self?.presentWebPage(page)
+        }
+        let rest = memberContextMenu(itemId: page.id.uuidString, in: album)
+        return UIMenu(children: [preview] + rest.children)
     }
 
     /// Cover / Arrange / Remove for a Show member (media, website, or PDF id).
@@ -607,6 +626,13 @@ extension LibraryGridViewController {
                     LogoStore.shared.clear()
                 })
             }
+        case ShowToolToken.camera:
+            children.append(UIAction(
+                title: "Open Controller",
+                image: UIImage(systemName: "camera.viewfinder")
+            ) { [weak self] _ in
+                self?.onPresentCamera?()
+            })
         case ShowToolToken.screensaver:
             children.append(UIAction(
                 title: "Preview",

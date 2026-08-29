@@ -66,7 +66,8 @@ struct CameraLiveChromeTests {
             PresentationSource.image(
                 URL(fileURLWithPath: "/tmp/cutaway.jpg"),
                 fill: true
-            )
+            ),
+            kind: .cutaway(UUID())
         )
         #expect(mgr.isCameraLive == false)
         #expect(

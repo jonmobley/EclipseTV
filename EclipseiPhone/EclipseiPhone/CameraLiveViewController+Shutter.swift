@@ -41,7 +41,7 @@ extension CameraLiveViewController {
     private func hitTestBlocksStageLiveToggle(at location: CGPoint) -> Bool {
         let blockers: [UIView] = [
             backButton, settingsButton, shutterButton, flipButton, frameButton,
-            alternateStillButton, frameRibbonView
+            stillRibbonView, frameRibbonView
         ]
         return blockers.contains { $0.frame.contains(location) && !$0.isHidden }
     }

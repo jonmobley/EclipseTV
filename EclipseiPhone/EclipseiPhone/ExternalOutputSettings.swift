@@ -103,11 +103,12 @@ enum WebTextSize: String, CaseIterable {
     case large = "Large"
 
     /// CSS viewport width before scale-up. Phone and AirPlay use the same value.
+    /// Desktop-width so responsive sites don't snap to their phone breakpoint.
     var logicalWidth: CGFloat {
         switch self {
-        case .small: return 520
-        case .medium: return 430
-        case .large: return 360
+        case .small: return 1440
+        case .medium: return 1280
+        case .large: return 1024
         }
     }
 }
