@@ -20,8 +20,15 @@ extension CameraManager {
     ///   - attempt: Zero-based retry index.
     ///   - completion: Invoked on the main queue after a successful start or final failure.
     func startCaptureIfPossible(attempt: Int, completion: @escaping () -> Void) {
+        if !Thread.isMainThread {
+            DispatchQueue.main.async { [weak self] in
+                self?.startCaptureIfPossible(attempt: attempt, completion: completion)
+            }
+            return
+        }
+
         guard wantsSessionRunning else {
-            DispatchQueue.main.async(execute: completion)
+            completion()
             return
         }
 

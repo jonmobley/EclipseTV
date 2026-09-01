@@ -40,6 +40,8 @@ extension LibraryGridViewController {
         }
         if sent || wasPending {
             MediaFitSettings.clear(forId: id)
+            MediaNoteStore.clear(forId: id)
+            MediaTitleStore.clear(forId: id)
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
         } else {
             presentNotConnectedAlert()
@@ -67,6 +69,22 @@ extension LibraryGridViewController {
     /// Videos use system `AVPlayerViewController` chrome; images use the swipe gallery.
     func presentLocalPreview(for item: LibraryItemDTO) {
         presentLocalPreview(for: item, in: displayItems)
+    }
+
+    /// Add note / Edit note action for still tiles.
+    func noteAction(for item: LibraryItemDTO) -> UIAction {
+        UIAction(
+            title: MediaNoteStore.menuTitle(forId: item.id),
+            image: UIImage(systemName: "note.text")
+        ) { [weak self] _ in
+            self?.presentNoteComposer(forId: item.id)
+        }
+    }
+
+    /// Opens the slide-up note composer for a still.
+    func presentNoteComposer(forId id: String) {
+        let nav = MediaNoteComposerViewController.makeNavigation(itemId: id)
+        present(nav, animated: true)
     }
 
     /// Presents Preview for `item` among `neighbors` (images swipe; video is modal).
@@ -165,7 +183,7 @@ extension LibraryGridViewController {
             presentPhonePreview(
                 id: ShowToolToken.screensaver, fileURL: url, isVideo: true
             )
-        case .camera, .web, .pdf, .black, .unavailable:
+        case .camera, .web, .pdf, .black, .countdown, .unavailable:
             break
         }
     }

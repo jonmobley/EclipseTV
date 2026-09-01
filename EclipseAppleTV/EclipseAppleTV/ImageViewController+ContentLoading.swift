@@ -66,6 +66,9 @@ extension ImageViewController {
         didReceivePlayRequestForId id: String,
         startAt: Double?
     ) {
+        // Library play always unparks so AirPlay overlays cannot leave a black cover.
+        clearIdleParkForPlayRequest()
+
         // A file may have been purged by tvOS since the last sync; catch it now (this
         // moves any missing file into the ledger and rebroadcasts an updated manifest)
         // before we attempt to display it.

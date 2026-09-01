@@ -114,7 +114,7 @@ final class CameraManager: NSObject {
     var frameMirrors: [WeakFrameMirror] = []
     let ciContext = CIContext(options: [.useSoftwareRenderer: false])
 
-    /// Movie file output for hold-to-record (attached lazily).
+    /// Movie file output for tap-to-record (attached lazily).
     let movieFileOutput = AVCaptureMovieFileOutput()
     /// Optional mic input added when recording with audio permission.
     var audioDeviceInput: AVCaptureDeviceInput?

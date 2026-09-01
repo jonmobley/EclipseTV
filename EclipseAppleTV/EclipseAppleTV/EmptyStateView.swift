@@ -47,7 +47,7 @@ class EmptyStateView: UIView {
     
     private let headerLabel: UILabel = {
         let label = UILabel()
-        label.text = "Add images and videos"
+        label.text = "Link your iPhone"
         label.font = UIFont.systemFont(ofSize: 72, weight: .bold)
         label.textColor = .white
         label.textAlignment = .center
@@ -57,7 +57,7 @@ class EmptyStateView: UIView {
     
     private let bodyLabel: UILabel = {
         let label = UILabel()
-        label.text = "Download the Eclipse iPhone app, then enter the pairing code shown below."
+        label.text = "Open the Eclipse iPhone app, enter the pairing code below, and send media. Shows from your phone appear here as albums."
         label.font = UIFont.systemFont(ofSize: 42, weight: .regular)
         label.textColor = .lightGray
         label.textAlignment = .center

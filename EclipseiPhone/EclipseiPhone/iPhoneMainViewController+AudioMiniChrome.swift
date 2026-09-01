@@ -11,6 +11,41 @@ import UIKit
 
 extension iPhoneMainViewController {
 
+    /// Fades out and tears down the ambient session, returning to the idle Music bubble.
+    func stopAmbientPlayback() {
+        AudioPlayerController.shared.stop()
+        audioMiniCollapsed = true
+        isAudioMiniChromeAnimating = false
+        HomeMusicSwipeHint.markEligibleAfterMiniPlayerClose()
+        libraryViewController.refreshMusicSwipeHintVisibility()
+        refreshAudioMiniPlayer()
+    }
+
+    /// Circle tap: expand when collapsed, stop when the footer is showing;
+    /// idle opens the picker.
+    func handleAudioMiniBubbleToggle() {
+        if AudioPlayerController.shared.hasActiveSession {
+            if audioMiniCollapsed {
+                setAudioMiniCollapsed(false, animated: true)
+            } else {
+                stopAmbientPlayback()
+            }
+        } else {
+            presentMusicPicker()
+        }
+    }
+
+    /// Refreshes chrome and dismisses the Music picker when a session first starts.
+    func handleAudioPlayerDidChange() {
+        let active = AudioPlayerController.shared.hasActiveSession
+        let sessionJustStarted = active && !hadActiveAudioSession
+        hadActiveAudioSession = active
+        refreshAudioMiniPlayer()
+        if sessionJustStarted {
+            dismissPresentedMusicPicker()
+        }
+    }
+
     /// Expands or collapses ambient chrome. User gestures pass `animated: true`.
     func setAudioMiniCollapsed(_ collapsed: Bool, animated: Bool) {
         guard AudioPlayerController.shared.hasActiveSession else {
@@ -49,11 +84,14 @@ extension iPhoneMainViewController {
     /// Shows the mini bar or the persistent Music bubble, and insets Library + Music.
     ///
     /// The corner button stays up even when idle so Music is always one tap away.
-    /// An active session expands on tap; chevron collapses; long-press stops.
+    /// Circle expands the bar (or opens the picker when idle); the same circle
+    /// becomes Stop while expanded; chevron collapses.
     func refreshAudioMiniPlayer() {
         if isAudioMiniChromeAnimating {
+            let showBar = AudioPlayerController.shared.hasActiveSession
+                && !audioMiniCollapsed
             audioMiniPlayer.reload()
-            audioMiniBubble.reload()
+            audioMiniBubble.reload(barExpanded: showBar)
             return
         }
 
@@ -61,17 +99,20 @@ extension iPhoneMainViewController {
         if !active { audioMiniCollapsed = true }
 
         let showBar = active && !audioMiniCollapsed
-        let showBubble = !showBar
+        if !showBar {
+            audioMiniPlayer.collapseVolumeControl()
+        }
 
         audioMiniPlayer.reload()
-        audioMiniBubble.reload()
+        audioMiniBubble.reload(barExpanded: showBar)
+        view.bringSubviewToFront(audioMiniBubble)
 
         let chromeHeight: CGFloat = showBar ? AudioMiniPlayerView.preferredHeight : 0
         audioMiniHeightConstraint?.constant = showBar ? audioMiniBarHeight() : 0
         audioMiniPlayer.isHidden = !showBar
         audioMiniPlayer.alpha = 1
         audioMiniPlayer.transform = .identity
-        audioMiniBubble.isHidden = !showBubble
+        audioMiniBubble.isHidden = false
         audioMiniBubble.alpha = 1
         audioMiniBubble.transform = .identity
 
@@ -80,7 +121,19 @@ extension iPhoneMainViewController {
         view.layoutIfNeeded()
     }
 
-    // MARK: - Morph animations
+    // MARK: - Music picker dismiss
+
+    /// Closes the presented Music picker (not the embedded Music page).
+    private func dismissPresentedMusicPicker() {
+        guard let picker = openController(ofType: AudioLibraryViewController.self),
+              picker.presentingViewController != nil
+                || picker.navigationController?.presentingViewController != nil
+        else { return }
+        let host = picker.navigationController ?? picker
+        host.dismiss(animated: true)
+    }
+
+    // MARK: - Fade animations
 
     private func animateExpandToBar() {
         isAudioMiniChromeAnimating = true
@@ -88,37 +141,26 @@ extension iPhoneMainViewController {
 
         let bar = audioMiniPlayer
         let bubble = audioMiniBubble
-        let chromeHeight = AudioMiniPlayerView.preferredHeight
-
         bar.reload()
-        bubble.reload()
+        bubble.reload(barExpanded: true)
+        bar.collapseVolumeControl()
 
         bar.isHidden = false
         bar.alpha = 0
         audioMiniHeightConstraint?.constant = audioMiniBarHeight()
-        applyMiniPlayerBottomInset(chromeHeight)
+        applyMiniPlayerBottomInset(AudioMiniPlayerView.preferredHeight)
+        view.bringSubviewToFront(bubble)
         view.layoutIfNeeded()
-
-        bar.transform = Self.barMorphTransform(for: bar.bounds, height: chromeHeight)
-        bar.layer.cornerRadius = chromeHeight / 2
-        bar.clipsToBounds = true
 
         bubble.isHidden = false
         bubble.alpha = 1
-        bubble.transform = .identity
 
         UIView.animate(
-            withDuration: 0.52,
+            withDuration: 0.2,
             delay: 0,
-            usingSpringWithDamping: 0.84,
-            initialSpringVelocity: 0.55,
-            options: [.allowUserInteraction, .beginFromCurrentState]
+            options: [.curveEaseOut, .beginFromCurrentState]
         ) {
-            bubble.transform = CGAffineTransform(scaleX: 0.28, y: 0.28)
-            bubble.alpha = 0
-            bar.transform = .identity
             bar.alpha = 1
-            bar.layer.cornerRadius = self.audioMiniRestingCornerRadius
             self.view.layoutIfNeeded()
         } completion: { [weak self] finished in
             self?.completeExpandAnimation(finished: finished)
@@ -131,40 +173,25 @@ extension iPhoneMainViewController {
 
         let bar = audioMiniPlayer
         let bubble = audioMiniBubble
-        let chromeHeight = AudioMiniPlayerView.preferredHeight
-
         bar.reload()
-        bubble.reload()
+        bubble.reload(barExpanded: false)
+        bar.collapseVolumeControl()
 
-        // Keep bar height while morphing so the trailing-scale math stays stable.
         audioMiniHeightConstraint?.constant = audioMiniBarHeight()
         bar.isHidden = false
         bar.alpha = 1
-        bar.transform = .identity
-        bar.layer.cornerRadius = audioMiniRestingCornerRadius
-        bar.clipsToBounds = true
-        view.layoutIfNeeded()
-
-        let toBar = Self.barMorphTransform(for: bar.bounds, height: chromeHeight)
-
         bubble.isHidden = false
-        bubble.alpha = 0
-        bubble.transform = CGAffineTransform(scaleX: 0.28, y: 0.28)
-
+        bubble.alpha = 1
+        view.bringSubviewToFront(bubble)
+        view.layoutIfNeeded()
         applyMiniPlayerBottomInset(0)
 
         UIView.animate(
-            withDuration: 0.46,
+            withDuration: 0.2,
             delay: 0,
-            usingSpringWithDamping: 0.9,
-            initialSpringVelocity: 0.4,
-            options: [.allowUserInteraction, .beginFromCurrentState]
+            options: [.curveEaseOut, .beginFromCurrentState]
         ) {
-            bar.transform = toBar
             bar.alpha = 0
-            bar.layer.cornerRadius = chromeHeight / 2
-            bubble.transform = .identity
-            bubble.alpha = 1
             self.view.layoutIfNeeded()
         } completion: { [weak self] finished in
             self?.completeCollapseAnimation(finished: finished)
@@ -177,9 +204,9 @@ extension iPhoneMainViewController {
             refreshAudioMiniPlayer()
             return
         }
-        audioMiniBubble.isHidden = true
-        audioMiniBubble.transform = .identity
+        audioMiniBubble.isHidden = false
         audioMiniBubble.alpha = 1
+        view.bringSubviewToFront(audioMiniBubble)
         resetBarChromeAppearance()
         libraryViewController.refreshMusicSwipeHintVisibility()
     }
@@ -194,7 +221,6 @@ extension iPhoneMainViewController {
         audioMiniPlayer.isHidden = true
         resetBarChromeAppearance()
         audioMiniBubble.isHidden = false
-        audioMiniBubble.transform = .identity
         audioMiniBubble.alpha = 1
         libraryViewController.refreshMusicSwipeHintVisibility()
     }
@@ -211,7 +237,6 @@ extension iPhoneMainViewController {
     }
 
     private func resetBarChromeAppearance() {
-        audioMiniPlayer.transform = .identity
         audioMiniPlayer.alpha = 1
         audioMiniPlayer.clipsToBounds = false
         audioMiniPlayer.layer.cornerRadius = audioMiniRestingCornerRadius
@@ -223,17 +248,20 @@ extension iPhoneMainViewController {
 
     private func applyMiniPlayerBottomInset(_ height: CGFloat) {
         syncAudioMiniLayoutIfNeeded()
-        // Landscape card sits over the grid, not under the live preview — never
+        // Compact card sits over the grid, not under the live preview — never
         // steal height from the hero.
         libraryViewController.sideBySideMiniPlayerHeight = 0
         libraryViewController.miniPlayerBottomInset = height
         audioLibraryViewController.miniPlayerBottomInset = height
     }
 
-    /// Compact trailing card in phone landscape; full-width footer otherwise.
+    /// Compact trailing card in phone landscape and on iPad; full-width on phone portrait.
     @discardableResult
     func syncAudioMiniLayoutIfNeeded() -> Bool {
-        let compact = traitCollection.verticalSizeClass == .compact
+        let compact = AudioMiniPlayerView.usesCompactCard(
+            verticalSizeClass: traitCollection.verticalSizeClass,
+            horizontalSizeClass: traitCollection.horizontalSizeClass
+        )
         let axisChanged = compact != isAudioMiniLandscapeCompact
         if axisChanged {
             isAudioMiniLandscapeCompact = compact
@@ -254,7 +282,7 @@ extension iPhoneMainViewController {
         return axisChanged
     }
 
-    /// Portrait footer covers the home indicator; landscape card does not.
+    /// Full-width footer covers the home indicator; compact card does not.
     private func audioMiniBarHeight() -> CGFloat {
         AudioMiniPlayerView.barHeight(
             floating: isAudioMiniLandscapeCompact,
@@ -263,7 +291,7 @@ extension iPhoneMainViewController {
     }
 
     /// Applies footer height after rotation / safe-area changes without fighting
-    /// the bubble morph.
+    /// the expand animation.
     private func updateAudioMiniBarHeightIfNeeded() {
         guard !isAudioMiniChromeAnimating else { return }
         let showBar = AudioPlayerController.shared.hasActiveSession && !audioMiniCollapsed
@@ -276,26 +304,11 @@ extension iPhoneMainViewController {
         let safe = view.safeAreaInsets
         let available = view.bounds.width - safe.left - safe.right
             - AudioMiniPlayerView.compactTrailingInset * 2
+            - AudioMiniPlayerBubbleView.side
+            - AudioMiniPlayerView.circleFooterGap
         audioMiniLandscapeWidthConstraint?.constant = min(
             AudioMiniPlayerView.compactWidth,
             max(280, available)
         )
-    }
-
-    /// Scale about center, then nudge so the trailing-bottom corner stays planted
-    /// (the bubble growing into the bar).
-    private static func barMorphTransform(
-        for bounds: CGRect,
-        height: CGFloat
-    ) -> CGAffineTransform {
-        let width = max(bounds.width, 1)
-        let h = max(bounds.height > 1 ? bounds.height : height, 1)
-        let side = AudioMiniPlayerBubbleView.side
-        let sx = side / width
-        let sy = side / h
-        return CGAffineTransform(
-            translationX: (1 - sx) * width / 2,
-            y: (1 - sy) * h / 2
-        ).scaledBy(x: sx, y: sy)
     }
 }

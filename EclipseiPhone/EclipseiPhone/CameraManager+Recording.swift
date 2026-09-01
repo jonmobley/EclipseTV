@@ -95,9 +95,9 @@ extension CameraManager: AVCaptureFileOutputRecordingDelegate {
         sessionQueue.async { [weak self] in
             guard let self else { return }
             guard self.movieFileOutput.isRecording else {
-                // The output can already be closed after an external teardown that
-                // never ran the delegate. Re-publish so the shutter, the flip button,
-                // and the timer don't stay stuck in the recording state.
+            // The output can already be closed after an external teardown that
+            // never ran the delegate. Re-publish so the record button, the flip
+            // button, and the timer don't stay stuck in the recording state.
                 self.isStoppingRecording = false
                 DispatchQueue.main.async {
                     self.publishRecording(false)

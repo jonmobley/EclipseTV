@@ -12,13 +12,13 @@ import UniformTypeIdentifiers
 /// Drawer to choose which frames appear on the camera overlay ribbon.
 ///
 /// Tapping a frame pins or unpins it as a thumbnail option. It does not make
-/// the overlay live — that happens on the camera ribbon. Import and delete
-/// stay here.
+/// the overlay live — that happens on the camera ribbon. Add and delete stay
+/// here.
 final class CameraFramePickerViewController: UIViewController {
 
     private enum Item: Hashable {
         case frame(UUID)
-        case importFrames
+        case addFrames
     }
 
     private var items: [Item] = []
@@ -28,8 +28,7 @@ final class CameraFramePickerViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
-        let mode = ExternalOutputSettings.orientation.rawValue
-        title = "\(mode) Frames"
+        title = "Camera Frames"
         navigationItem.rightBarButtonItem = UIBarButtonItem(
             barButtonSystemItem: .done,
             target: self,
@@ -46,8 +45,8 @@ final class CameraFramePickerViewController: UIViewController {
         collectionView.delegate = self
         collectionView.translatesAutoresizingMaskIntoConstraints = false
         collectionView.register(
-            FramePickerCell.self,
-            forCellWithReuseIdentifier: FramePickerCell.reuseId
+            CameraFramePickerCell.self,
+            forCellWithReuseIdentifier: CameraFramePickerCell.reuseId
         )
         view.addSubview(collectionView)
         NSLayoutConstraint.activate([
@@ -61,9 +60,9 @@ final class CameraFramePickerViewController: UIViewController {
             collectionView: collectionView
         ) { [weak self] collectionView, indexPath, item in
             guard let cell = collectionView.dequeueReusableCell(
-                withReuseIdentifier: FramePickerCell.reuseId,
+                withReuseIdentifier: CameraFramePickerCell.reuseId,
                 for: indexPath
-            ) as? FramePickerCell else {
+            ) as? CameraFramePickerCell else {
                 return UICollectionViewCell()
             }
             self?.configure(cell, with: item)
@@ -109,7 +108,7 @@ final class CameraFramePickerViewController: UIViewController {
 
     private func reload() {
         let store = CameraFrameStore.shared
-        items = store.frames.map { .frame($0.id) } + [.importFrames]
+        items = store.frames.map { .frame($0.id) } + [.addFrames]
         let previous = Set(dataSource.snapshot().itemIdentifiers)
         var snapshot = NSDiffableDataSourceSnapshot<Int, Item>()
         snapshot.appendSections([0])
@@ -121,24 +120,59 @@ final class CameraFramePickerViewController: UIViewController {
         dataSource.apply(snapshot, animatingDifferences: true)
     }
 
-    private func configure(_ cell: FramePickerCell, with item: Item) {
+    private func configure(_ cell: CameraFramePickerCell, with item: Item) {
         let store = CameraFrameStore.shared
         switch item {
         case .frame(let id):
-            cell.configure(
-                title: "Frame",
+            cell.configureFrame(
                 image: store.image(for: id),
-                systemImage: nil,
-                selected: store.isEnabled(id)
+                selected: store.isEnabled(id),
+                moreMenu: frameMoreMenu(for: id)
             )
-        case .importFrames:
-            cell.configure(
-                title: "Import",
-                image: nil,
-                systemImage: "square.and.arrow.down",
-                selected: false
-            )
+        case .addFrames:
+            cell.configureAdd(menu: addFramesMenu())
         }
+    }
+
+    /// Show-style ⋯ menu: rotate and delete.
+    private func frameMoreMenu(for id: UUID) -> UIMenu {
+        let rotateRight = UIAction(
+            title: "Rotate Right",
+            image: UIImage(systemName: "rotate.right")
+        ) { _ in
+            CameraFrameStore.shared.rotateClockwise(id)
+        }
+        let rotateLeft = UIAction(
+            title: "Rotate Left",
+            image: UIImage(systemName: "rotate.left")
+        ) { _ in
+            CameraFrameStore.shared.rotateCounterclockwise(id)
+        }
+        let delete = UIAction(
+            title: "Delete",
+            image: UIImage(systemName: "trash"),
+            attributes: .destructive
+        ) { [weak self] _ in
+            self?.confirmDelete(id)
+        }
+        return UIMenu(children: [rotateRight, rotateLeft, delete])
+    }
+
+    /// Pull-down on the Add tile (Photo Library / Files).
+    private func addFramesMenu() -> UIMenu {
+        let photos = UIAction(
+            title: "Photo Library",
+            image: UIImage(systemName: "photo.on.rectangle")
+        ) { [weak self] _ in
+            self?.addFramesFromPhotoLibrary()
+        }
+        let files = UIAction(
+            title: "Files",
+            image: UIImage(systemName: "folder")
+        ) { [weak self] _ in
+            self?.addFramesFromFiles()
+        }
+        return UIMenu(children: [photos, files])
     }
 
     // MARK: - Actions
@@ -155,37 +189,32 @@ final class CameraFramePickerViewController: UIViewController {
         CameraFrameStore.shared.remainingSlots
     }
 
-    private func importFrames() {
+    /// Capacity gate shared by Add menu actions.
+    @discardableResult
+    private func ensureFrameCapacity() -> Bool {
         guard remainingFrameSlots > 0 else {
             let mode = ExternalOutputSettings.orientation.rawValue
             let alert = UIAlertController(
                 title: "Frame Library Full",
-                message: "Remove a \(mode) frame before importing more (max \(CameraFrameStore.maxFrameCount) per mode).",
+                message: "Remove a \(mode) frame before adding more "
+                    + "(max \(CameraFrameStore.maxFrameCount) per mode).",
                 preferredStyle: .alert
             )
             alert.addAction(UIAlertAction(title: "OK", style: .default))
             present(alert, animated: true)
-            return
+            return false
         }
+        return true
+    }
 
-        let mode = ExternalOutputSettings.orientation.rawValue
-        let sheet = UIAlertController(
-            title: "Import \(mode) Frames",
-            message: "Images are saved only for \(mode) (up to \(remainingFrameSlots) more).",
-            preferredStyle: .actionSheet
-        )
-        sheet.addAction(UIAlertAction(title: "Photo Library", style: .default) { [weak self] _ in
-            self?.presentPhotoPicker()
-        })
-        sheet.addAction(UIAlertAction(title: "Files", style: .default) { [weak self] _ in
-            self?.presentDocumentPicker()
-        })
-        sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        if let pop = sheet.popoverPresentationController {
-            pop.sourceView = view
-            pop.sourceRect = CGRect(x: view.bounds.midX, y: view.bounds.midY, width: 1, height: 1)
-        }
-        present(sheet, animated: true)
+    private func addFramesFromPhotoLibrary() {
+        guard ensureFrameCapacity() else { return }
+        presentPhotoPicker()
+    }
+
+    private func addFramesFromFiles() {
+        guard ensureFrameCapacity() else { return }
+        presentDocumentPicker()
     }
 
     private func presentPhotoPicker() {
@@ -224,7 +253,7 @@ final class CameraFramePickerViewController: UIViewController {
         }
         if added == 0 {
             let alert = UIAlertController(
-                title: "Couldn't Import Frames",
+                title: "Couldn't Add Frames",
                 message: "Use PNG images with transparency when possible.",
                 preferredStyle: .alert
             )
@@ -234,7 +263,8 @@ final class CameraFramePickerViewController: UIViewController {
             let mode = ExternalOutputSettings.orientation.rawValue
             let alert = UIAlertController(
                 title: "Library Full",
-                message: "Imported \(added). Remove \(mode) frames to import more (max \(CameraFrameStore.maxFrameCount) per mode).",
+                message: "Added \(added). Remove \(mode) frames to add more "
+                    + "(max \(CameraFrameStore.maxFrameCount) per mode).",
                 preferredStyle: .alert
             )
             alert.addAction(UIAlertAction(title: "OK", style: .default))
@@ -268,8 +298,9 @@ extension CameraFramePickerViewController: UICollectionViewDelegate {
         switch item {
         case .frame(let id):
             CameraFrameStore.shared.toggleEnabled(id)
-        case .importFrames:
-            importFrames()
+        case .addFrames:
+            // Add tile uses a primary pull-down menu; ignore selection.
+            break
         }
     }
 
@@ -278,29 +309,11 @@ extension CameraFramePickerViewController: UICollectionViewDelegate {
         contextMenuConfigurationForItemAt indexPath: IndexPath,
         point: CGPoint
     ) -> UIContextMenuConfiguration? {
+        // Keep long-press as a duplicate of the ⋯ menu for power users.
         guard let item = dataSource.itemIdentifier(for: indexPath),
               case .frame(let id) = item else { return nil }
         return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { [weak self] _ in
-            let rotateRight = UIAction(
-                title: "Rotate Right",
-                image: UIImage(systemName: "rotate.right")
-            ) { _ in
-                CameraFrameStore.shared.rotateClockwise(id)
-            }
-            let rotateLeft = UIAction(
-                title: "Rotate Left",
-                image: UIImage(systemName: "rotate.left")
-            ) { _ in
-                CameraFrameStore.shared.rotateCounterclockwise(id)
-            }
-            let delete = UIAction(
-                title: "Delete",
-                image: UIImage(systemName: "trash"),
-                attributes: .destructive
-            ) { _ in
-                self?.confirmDelete(id)
-            }
-            return UIMenu(children: [rotateRight, rotateLeft, delete])
+            self?.frameMoreMenu(for: id)
         }
     }
 }
@@ -355,76 +368,5 @@ extension CameraFramePickerViewController: UIDocumentPickerDelegate {
             }
         }
         ingest(images)
-    }
-}
-
-// MARK: - Cell
-
-private final class FramePickerCell: UICollectionViewCell {
-    static let reuseId = "FramePickerCell"
-
-    private let imageView = UIImageView()
-    private let iconView = UIImageView()
-    private let titleLabel = UILabel()
-
-    override init(frame: CGRect) {
-        super.init(frame: frame)
-        imageView.contentMode = .scaleAspectFit
-        imageView.backgroundColor = UIColor(white: 0.12, alpha: 1)
-        imageView.layer.cornerRadius = 10
-        imageView.clipsToBounds = true
-        imageView.translatesAutoresizingMaskIntoConstraints = false
-
-        iconView.contentMode = .scaleAspectFit
-        iconView.tintColor = .white
-        iconView.translatesAutoresizingMaskIntoConstraints = false
-
-        titleLabel.font = .systemFont(ofSize: 13, weight: .medium)
-        titleLabel.textAlignment = .center
-        titleLabel.translatesAutoresizingMaskIntoConstraints = false
-
-        contentView.addSubview(imageView)
-        imageView.addSubview(iconView)
-        contentView.addSubview(titleLabel)
-
-        NSLayoutConstraint.activate([
-            imageView.topAnchor.constraint(equalTo: contentView.topAnchor),
-            imageView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
-            imageView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-
-            iconView.centerXAnchor.constraint(equalTo: imageView.centerXAnchor),
-            iconView.centerYAnchor.constraint(equalTo: imageView.centerYAnchor),
-            iconView.widthAnchor.constraint(equalToConstant: 28),
-            iconView.heightAnchor.constraint(equalToConstant: 28),
-
-            titleLabel.topAnchor.constraint(equalTo: imageView.bottomAnchor, constant: 6),
-            titleLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
-            titleLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-            titleLabel.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
-            imageView.bottomAnchor.constraint(equalTo: titleLabel.topAnchor, constant: -6)
-        ])
-    }
-
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-
-    func configure(
-        title: String,
-        image: UIImage?,
-        systemImage: String?,
-        selected: Bool
-    ) {
-        titleLabel.text = title
-        imageView.image = image
-        if let systemImage {
-            iconView.image = UIImage(systemName: systemImage)
-            iconView.isHidden = false
-        } else {
-            iconView.image = nil
-            iconView.isHidden = true
-        }
-        imageView.layer.borderWidth = selected ? 3 : 0
-        imageView.layer.borderColor = UIColor.systemBlue.cgColor
     }
 }

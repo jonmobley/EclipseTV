@@ -72,143 +72,9 @@ extension CloudKitSyncEngine: CKSyncEngineDelegate {
         }
     }
 
-    // MARK: - Fetch apply
-
-    private func applyFetchedModifications(_ records: [CKRecord]) async {
-        isApplyingRemote = true
-        EclipseSyncController.shared.isApplyingRemote = true
-        defer {
-            isApplyingRemote = false
-            EclipseSyncController.shared.isApplyingRemote = false
-        }
-        for record in records {
-            switch record.recordType {
-            case CloudKitSchema.RecordType.show:
-                applyRemoteShow(record)
-            case CloudKitSchema.RecordType.mediaItem:
-                if let capture = CloudKitRecordMapper.capture(from: record) {
-                    CaptureStore.shared.applyRemote(capture)
-                }
-            case CloudKitSchema.RecordType.pdfDoc:
-                if let doc = CloudKitRecordMapper.savedPDF(from: record) {
-                    PDFStore.shared.applyRemote(
-                        doc,
-                        assetURL: CloudKitRecordMapper.pdfAssetURL(from: record)
-                    )
-                }
-            default:
-                break
-            }
-        }
-    }
-
-    private func applyRemoteShow(_ record: CKRecord) {
-        guard let remote = CloudKitRecordMapper.album(from: record) else { return }
-        let remoteModified = CloudKitRecordMapper.showModifiedAt(from: record)
-        if let local = LocalAlbumStore.shared.album(id: remote.id) {
-            let localModified = showModified(id: local.id)
-            let merged = CloudKitConflictResolver.mergeShows(
-                local: local,
-                localModified: localModified,
-                remote: remote,
-                remoteModified: remoteModified
-            )
-            let winning = max(localModified, remoteModified)
-            LocalAlbumStore.shared.applySynced(merged, modifiedAt: winning)
-            rememberShowModified(id: remote.id, at: winning)
-        } else {
-            LocalAlbumStore.shared.applySynced(remote, modifiedAt: remoteModified)
-            rememberShowModified(id: remote.id, at: remoteModified)
-        }
-        learnShareRoot(from: record)
-    }
-
-    // MARK: - Send helpers
-
-    /// Builds the CKRecord for a pending save, or nil to skip.
-    ///
-    /// Captures and PDFs without a local file are skipped rather than uploaded as
-    /// metadata-only records — those look Synced here and are undownloadable elsewhere.
-    func makeRecordToSave(_ recordID: CKRecord.ID) -> CKRecord? {
-        if recordID.zoneID != CloudKitSchema.zoneID { return nil }
-        if let uuid = UUID(uuidString: recordID.recordName) {
-            if let album = LocalAlbumStore.shared.album(id: uuid) {
-                return CloudKitRecordMapper.makeShowRecord(
-                    from: album,
-                    modifiedAt: showModified(id: uuid)
-                )
-            }
-            if let doc = PDFStore.shared.documents.first(where: { $0.id == uuid }) {
-                return makePDFRecordToSave(doc)
-            }
-        }
-        if let capture = CaptureStore.shared.record(id: recordID.recordName),
-           !capture.isDeleted {
-            return makeMediaRecordToSave(capture)
-        }
-        return nil
-    }
-
-    private func makePDFRecordToSave(_ doc: SavedPDF) -> CKRecord? {
-        guard let assetURL = PDFStore.shared.fileURL(for: doc.id) else {
-            logger.notice(
-                "Skipping PDF save \(doc.id.uuidString, privacy: .public); file missing"
-            )
-            return nil
-        }
-        let resolved = shareRoots.resolve(
-            preferredShowId: nil,
-            containingShowIds: containingShowIds(itemId: doc.id.uuidString)
-        )
-        return CloudKitRecordMapper.makePDFRecord(
-            from: doc,
-            assetURL: assetURL,
-            showId: resolved.showId,
-            attachAsShareChild: resolved.attachAsShareChild
-        )
-    }
-
-    private func makeMediaRecordToSave(_ capture: CaptureRecord) -> CKRecord? {
-        guard let url = LocalMediaStore.shared.localURL(
-            forId: capture.libraryFileName,
-            mode: capture.orientation.libraryMode
-        ) else {
-            logger.notice(
-                "Skipping capture save \(capture.id, privacy: .public); file missing"
-            )
-            return nil
-        }
-        let resolved = shareRoots.resolve(
-            preferredShowId: capture.showId,
-            containingShowIds: containingShowIds(itemId: capture.libraryFileName)
-        )
-        return CloudKitRecordMapper.makeMediaRecord(
-            from: capture,
-            assetURL: url,
-            showId: resolved.showId,
-            attachAsShareChild: resolved.attachAsShareChild
-        )
-    }
-
-    private func containingShowIds(itemId: String) -> [UUID] {
-        LocalAlbumStore.shared.albums
-            .filter { $0.itemIds.contains(itemId) }
-            .map(\.id)
-    }
-
     private func handleSent(_ sent: CKSyncEngine.Event.SentRecordZoneChanges) async {
         for saved in sent.savedRecords {
-            switch saved.recordType {
-            case CloudKitSchema.RecordType.mediaItem:
-                CaptureStore.shared.setSyncState(id: saved.recordID.recordName, .synced)
-            case CloudKitSchema.RecordType.pdfDoc:
-                if let uuid = UUID(uuidString: saved.recordID.recordName) {
-                    PDFStore.shared.markSynced(id: uuid)
-                }
-            default:
-                break
-            }
-            account.clearQuotaPause()
+            noteSavedRecord(saved)
         }
         var didRecoverZone = false
         for failed in sent.failedRecordSaves {
@@ -220,7 +86,7 @@ extension CloudKitSyncEngine: CKSyncEngineDelegate {
             case .holdForQuota:
                 holdForQuota(failed.record.recordID)
             case .mergeAndRequeue:
-                mergeConflictAndRequeue(record: failed.record, error: failed.error)
+                mergeConflictAndRequeueExpanded(record: failed.record, error: failed.error)
             case .recreateZone:
                 if !didRecoverZone {
                     didRecoverZone = true
@@ -246,50 +112,9 @@ extension CloudKitSyncEngine: CKSyncEngineDelegate {
             }
         }
         for id in sent.deletedRecordIDs {
+            forgetLastKnown(id)
             CaptureStore.shared.purge(id: id.recordName)
-        }
-    }
-
-    /// Applies the server's winning record, then re-queues our (merged) local copy.
-    private func mergeConflictAndRequeue(record: CKRecord, error: CKError) {
-        guard let server = error.serverRecord else {
-            engine?.state.remove(pendingRecordZoneChanges: [
-                .saveRecord(record.recordID)
-            ])
-            logger.error(
-                "Dropped pending save; server record already exists for \(record.recordID.recordName, privacy: .public)"
-            )
-            return
-        }
-        isApplyingRemote = true
-        EclipseSyncController.shared.isApplyingRemote = true
-        defer {
-            isApplyingRemote = false
-            EclipseSyncController.shared.isApplyingRemote = false
-        }
-        switch server.recordType {
-        case CloudKitSchema.RecordType.show:
-            applyRemoteShow(server)
-            if let uuid = UUID(uuidString: server.recordID.recordName) {
-                scheduleShowSave(id: uuid)
-            }
-        case CloudKitSchema.RecordType.pdfDoc:
-            if let doc = CloudKitRecordMapper.savedPDF(from: server) {
-                PDFStore.shared.applyRemote(
-                    doc,
-                    assetURL: CloudKitRecordMapper.pdfAssetURL(from: server)
-                )
-                schedulePDFSave(id: doc.id)
-            }
-        case CloudKitSchema.RecordType.mediaItem:
-            if let capture = CloudKitRecordMapper.capture(from: server) {
-                CaptureStore.shared.applyRemote(capture)
-                scheduleCaptureSave(id: capture.id)
-            }
-        default:
-            logger.error(
-                "Unhandled conflict type \(server.recordType, privacy: .public)"
-            )
+            ImportedMediaStore.shared.purge(id: id.recordName)
         }
     }
 
@@ -297,6 +122,7 @@ extension CloudKitSyncEngine: CKSyncEngineDelegate {
         switch change.changeType {
         case .signOut, .switchAccounts:
             engine = nil
+            lastKnownRecords.removeAll()
             await account.refresh()
         case .signIn:
             await bootstrapEngineIfPossiblePublic()

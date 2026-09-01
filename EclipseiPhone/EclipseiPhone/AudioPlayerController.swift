@@ -157,6 +157,24 @@ final class AudioPlayerController: NSObject {
         if isPlaying { pause() } else { play() }
     }
 
+    /// Tapping a library or playlist row fades out when that track is already playing.
+    static func tapStopsPlayback(
+        isPlaying: Bool,
+        currentTrackId: UUID?,
+        tappedTrackId: UUID
+    ) -> Bool {
+        isPlaying && currentTrackId == tappedTrackId
+    }
+
+    /// Whether selecting `trackId` should fade and stop instead of starting playback.
+    func tapStopsPlayback(for trackId: UUID) -> Bool {
+        Self.tapStopsPlayback(
+            isPlaying: isPlaying,
+            currentTrackId: currentTrack?.id,
+            tappedTrackId: trackId
+        )
+    }
+
     /// Starts playback with a volume fade-in.
     func play() {
         guard currentTrack != nil else { return }
@@ -315,7 +333,7 @@ final class AudioPlayerController: NSObject {
         notify()
     }
 
-    /// Advances when Play Next is on; otherwise parks on this track, paused at 0.
+    /// Advances when Autoplay Next is on; otherwise parks on this track, paused at 0.
     private func handleTrackDidEnd() {
         if playsNext, !queue.isEmpty {
             playNext()

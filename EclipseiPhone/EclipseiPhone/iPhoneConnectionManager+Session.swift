@@ -198,7 +198,7 @@ extension iPhoneConnectionManager: MCSessionDelegate {
             }
         case .playRequest, .setVideoSetting, .setImageFit, .deleteItem, .moveItem,
              .reorderItems, .restoreItem, .playbackCommand, .setAccount, .setDisplayMode,
-             .setContentTransition, .setLibraryAlbums, .none:
+             .setContentTransition, .setLibraryAlbums, .setIdleMode, .none:
             // These are iPhone -> TV commands; ignore if ever echoed back to us.
             break
         }

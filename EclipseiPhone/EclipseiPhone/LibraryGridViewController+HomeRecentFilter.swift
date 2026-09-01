@@ -16,14 +16,12 @@ extension LibraryGridViewController {
         HomeGridItem.hasBothOrientations(in: LocalAlbumStore.shared.albums)
     }
 
-    /// All / Landscape / Vertical chips for the Recent header.
+    /// All / Horizontal / Vertical chips for the Recent header. All is default.
     func homeRecentFilterActions() -> [HomeSectionHeaderView.Action] {
         guard showsHomeRecentFormatFilter else { return [] }
-        return [
-            filterAction(title: "All", orientation: nil),
-            filterAction(title: "Landscape", orientation: .landscape),
-            filterAction(title: "Vertical", orientation: .portrait)
-        ]
+        return ShowFormatFilter.allCases.map { filter in
+            filterAction(title: filter.title, orientation: filter.orientation)
+        }
     }
 
     /// Applies a Recent format filter and reloads only the Home page.

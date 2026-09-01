@@ -14,7 +14,7 @@ import UIKit
 /// Opening a Show from the other mode switches Display Mode first.
 extension iPhoneMainViewController {
 
-    /// How many Shows the dropdown lists inline before the rest fall to "Open Show".
+    /// How many Shows the dropdown lists inline as Recent Shows.
     private static let recentShowMenuLimit = 5
 
     /// The Shows the dropdown offers inline, most recently opened first.
@@ -40,39 +40,15 @@ extension iPhoneMainViewController {
         )
     }
 
-    /// "Open Show" submenu for the header dropdown, or `nil` when nothing is openable.
-    ///
-    /// Nested rather than inline so the top level stays a short list of verbs. Callers
-    /// should only exclude the currently open Show — never the Recent list — so this
-    /// entry stays discoverable even when every Show already fits inline.
-    /// - Parameter excludedIds: Shows to leave out, e.g. the one already open.
-    func openShowSubmenu(excluding excludedIds: Set<UUID>) -> UIMenu? {
-        let groups = showMenuGroups(excluding: excludedIds)
-        guard !groups.isEmpty else { return nil }
-        return UIMenu(
+    /// "Open Show" in the header dropdown — same Shows list as Home See All.
+    /// `nil` when there are no Shows to open.
+    func openShowListAction() -> UIAction? {
+        guard !LocalAlbumStore.shared.albums.isEmpty else { return nil }
+        return UIAction(
             title: "Open Show",
-            image: UIImage(systemName: "rectangle.stack"),
-            children: groups
-        )
-    }
-
-    /// Menu rows for opening a Show: active Display Mode first, then the other mode.
-    /// Section titles stay empty — format is the row glyph only.
-    /// - Parameter excludedIds: Shows to leave out, e.g. the open one and the recents.
-    func showMenuGroups(excluding excludedIds: Set<UUID>) -> [UIMenuElement] {
-        let active = ExternalOutputSettings.orientation
-        let shows = LocalAlbumStore.shared.albums.filter { !excludedIds.contains($0.id) }
-        let groups = [
-            shows.filter { $0.orientation == active },
-            shows.filter { $0.orientation != active }
-        ]
-        return groups.compactMap { group in
-            guard !group.isEmpty else { return nil }
-            return UIMenu(
-                title: "",
-                options: .displayInline,
-                children: group.map { openShowAction(for: $0) }
-            )
+            image: UIImage(systemName: "rectangle.stack")
+        ) { [weak self] _ in
+            self?.libraryViewController.presentAllShows()
         }
     }
 

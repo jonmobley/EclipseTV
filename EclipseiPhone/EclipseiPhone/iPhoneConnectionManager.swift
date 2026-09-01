@@ -457,7 +457,7 @@ class iPhoneConnectionManager: NSObject {
     @MainActor
     @discardableResult
     func sendPlayRequest(id: String, startAt: Double? = nil, isFill: Bool? = nil) -> Bool {
-        return sendCommand(
+        let sent = sendCommand(
             .playRequest(
                 id: id,
                 isFill: isFill ?? MediaFitSettings.isFill(forId: id),
@@ -465,6 +465,11 @@ class iPhoneConnectionManager: NSObject {
             ),
             description: "play request"
         )
+        // TV clears its park cover on playRequest; drop the phone-side desire too.
+        if sent {
+            AirPlayOverlayPark.noteUnparkedByPlayRequest()
+        }
+        return sent
     }
 
     /// Asks the Apple TV to delete the item with the given id. Broadcast to all synced
@@ -541,6 +546,16 @@ class iPhoneConnectionManager: NSObject {
         return sendCommand(
             .setLibraryAlbums(albums),
             description: "library albums",
+            broadcast: true
+        )
+    }
+
+    /// Parks (`black`) or clears park on every synced TV while AirPlay owns an overlay.
+    @discardableResult
+    func sendSetIdleMode(black: Bool) -> Bool {
+        return sendCommand(
+            .setIdleMode(black: black),
+            description: black ? "idle park" : "idle clear",
             broadcast: true
         )
     }

@@ -47,6 +47,8 @@ final class WebPageStore {
     private let itemsKey = "EclipseTV.pages.items"
     private let retainedKey = "EclipseTV.pages.retained"
     private let backupKey = "EclipseTV.pages.items.unreadableBackup"
+    private let syncedIdsKey = "EclipseTV.pages.syncedIds"
+    private var syncedIds: Set<String> = []
     private let logger = Logger(subsystem: "com.eclipseapp.ios", category: "WebPageStore")
 
     init(defaults: UserDefaults = .standard) {
@@ -83,6 +85,7 @@ final class WebPageStore {
         pages.insert(page, at: 0)
         retainedPages.removeAll { $0.id == page.id }
         persist()
+        scheduleSaveIfNeeded(id: page.id)
         WarmWebSessionPool.shared.warmIfNeeded(for: page)
         return page
     }
@@ -109,20 +112,12 @@ final class WebPageStore {
 
     /// Recent pages matching `query` in title or host (case-insensitive).
     ///
-    /// Empty query returns the most recent pages. When `excludingShowId` is set,
-    /// pages already on that Show are omitted.
+    /// Empty query returns the most recent pages.
     func suggestions(
         matching query: String,
-        excludingShowId: UUID? = nil,
         limit: Int = 8
     ) -> [WebPage] {
         let needle = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        let memberIds: Set<String> = {
-            guard let excludingShowId,
-                  let album = LocalAlbumStore.shared.album(id: excludingShowId)
-            else { return [] }
-            return Set(album.itemIds)
-        }()
         let pool = pages + retainedPages.filter { retained in
             !pages.contains(where: { $0.id == retained.id })
         }
@@ -130,7 +125,6 @@ final class WebPageStore {
         var matches: [WebPage] = []
         for page in pool {
             if seen.contains(page.id) { continue }
-            if memberIds.contains(page.id.uuidString) { continue }
             if !needle.isEmpty {
                 let title = page.title.lowercased()
                 let host = (page.url.host ?? "").lowercased()
@@ -176,7 +170,23 @@ final class WebPageStore {
             retainedPages.removeAll { $0.id == id }
             WarmWebSessionPool.shared.remove(pageId: id)
             WebThumbnailStore.shared.remove(id: id)
+            syncedIds.remove(id.uuidString)
+            guard !EclipseSyncController.shared.isApplyingRemote else {
+                persist()
+                return
+            }
+            EclipseSyncController.shared.backend.scheduleWebPageDelete(id: id)
         }
+        persist()
+    }
+
+    /// Purges a page entirely after a CloudKit tombstone (no local echo).
+    func purgeRemote(id: UUID) {
+        pages.removeAll { $0.id == id }
+        retainedPages.removeAll { $0.id == id }
+        syncedIds.remove(id.uuidString)
+        WarmWebSessionPool.shared.remove(pageId: id)
+        WebThumbnailStore.shared.remove(id: id)
         persist()
     }
 
@@ -188,6 +198,36 @@ final class WebPageStore {
         WarmWebSessionPool.shared.remove(pageId: id)
         WebThumbnailStore.shared.remove(id: id)
         persist()
+    }
+
+    /// Inserts or updates a page that arrived from iCloud.
+    func applyRemote(_ page: WebPage) {
+        if let index = pages.firstIndex(where: { $0.id == page.id }) {
+            pages[index] = page
+        } else if let index = retainedPages.firstIndex(where: { $0.id == page.id }) {
+            retainedPages[index] = page
+        } else if isReferencedByAnyShow(id: page.id) {
+            retainedPages.append(page)
+        } else {
+            pages.insert(page, at: 0)
+        }
+        syncedIds.insert(page.id.uuidString)
+        persist()
+    }
+
+    /// Records that the backend accepted this page's upload.
+    func markSynced(id: UUID) {
+        guard !syncedIds.contains(id.uuidString) else { return }
+        syncedIds.insert(id.uuidString)
+        persistSyncedIds()
+    }
+
+    /// Pages the server has not acknowledged yet.
+    var idsNeedingUpload: [UUID] {
+        let all = pages + retainedPages.filter { retained in
+            !pages.contains(where: { $0.id == retained.id })
+        }
+        return all.filter { !syncedIds.contains($0.id.uuidString) }.map(\.id)
     }
 
     // MARK: - URL Normalization
@@ -232,8 +272,18 @@ final class WebPageStore {
     }
 
     private func load() {
+        syncedIds = Set(defaults.stringArray(forKey: syncedIdsKey) ?? [])
         pages = decodePages(forKey: itemsKey, isPrimaryList: true)
         retainedPages = decodePages(forKey: retainedKey, isPrimaryList: false)
+    }
+
+    private func scheduleSaveIfNeeded(id: UUID) {
+        guard !EclipseSyncController.shared.isApplyingRemote else { return }
+        EclipseSyncController.shared.backend.scheduleWebPageSave(id: id)
+    }
+
+    private func persistSyncedIds() {
+        defaults.set(Array(syncedIds), forKey: syncedIdsKey)
     }
 
     private func decodePages(forKey key: String, isPrimaryList: Bool) -> [WebPage] {
@@ -268,6 +318,7 @@ final class WebPageStore {
             defaults.set(listData, forKey: itemsKey)
             let retainedData = try JSONEncoder().encode(retainedPages)
             defaults.set(retainedData, forKey: retainedKey)
+            persistSyncedIds()
             NotificationCenter.default.post(name: Self.didChangeNotification, object: self)
         } catch {
             logger.error("Failed to encode saved pages: \(error.localizedDescription)")

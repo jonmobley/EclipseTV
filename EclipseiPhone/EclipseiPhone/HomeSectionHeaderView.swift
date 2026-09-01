@@ -167,7 +167,8 @@ final class HomeSectionHeaderView: UICollectionReusableView {
         }
     }
 
-    private static func makeChipButton(item: Action, tag: Int) -> UIButton {
+    /// Capsule chip. Selected uses a blue fill so the active filter is obvious.
+    static func makeChipButton(item: Action, tag: Int) -> UIButton {
         var config = item.isSelected
             ? UIButton.Configuration.filled()
             : UIButton.Configuration.gray()
@@ -181,9 +182,11 @@ final class HomeSectionHeaderView: UICollectionReusableView {
             config.imagePadding = 5
             config.imagePlacement = .leading
         }
-        config.baseForegroundColor = .label
         if item.isSelected {
-            config.baseBackgroundColor = .secondarySystemFill
+            config.baseBackgroundColor = .systemBlue
+            config.baseForegroundColor = .white
+        } else {
+            config.baseForegroundColor = .label
         }
         config.contentInsets = NSDirectionalEdgeInsets(
             top: 7, leading: 12, bottom: 7, trailing: 12
@@ -199,6 +202,9 @@ final class HomeSectionHeaderView: UICollectionReusableView {
         button.accessibilityLabel = item.title
             .replacingOccurrences(of: " >", with: "")
             .replacingOccurrences(of: " ›", with: "")
+        if item.isSelected {
+            button.accessibilityTraits.insert(.selected)
+        }
         button.setContentHuggingPriority(.required, for: .horizontal)
         return button
     }

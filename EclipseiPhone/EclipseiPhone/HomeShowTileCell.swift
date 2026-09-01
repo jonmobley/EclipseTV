@@ -91,6 +91,18 @@ final class HomeShowTileCell: UICollectionViewCell {
         accessibilityLabel = isLive ? "\(title), Live. \(subtitle)" : "\(title). \(subtitle)"
     }
 
+    /// True when the tile is still on its gradient (no cover yet).
+    var isShowingPlaceholder: Bool { imageView.image == nil }
+
+    /// Paints a late-arriving cover without rebuilding titles / more menu.
+    func applyLoadedCover(_ thumbnail: UIImage) {
+        guard imageView.image == nil else { return }
+        imageView.image = MediaAspect.centerCroppedToSquare(thumbnail)
+        imageView.isHidden = false
+        placeholderGradient.isHidden = true
+        scrimView.isHidden = false
+    }
+
     // MARK: - Private
 
     private func setup() {

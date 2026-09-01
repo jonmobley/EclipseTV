@@ -264,7 +264,7 @@ private extension ImageViewController {
         cell.tag = indexPath.item
         cell.configure(with: nil, isVideo: media.isVideo)
         let size = (gridView.collectionViewLayout as? UICollectionViewFlowLayout)?
-            .itemSize ?? CGSize(width: 300, height: 169)
+            .itemSize ?? TVGridMetrics.fallbackItemSize(for: dataSource.activeLibraryMode)
         cell.configureAsync(
             imagePath: media.path, isVideo: media.isVideo, cellSize: size, userPosition: nil
         )
@@ -320,7 +320,7 @@ private extension ImageViewController {
 
     func fillCover(on cell: AlbumFolderCell, item: Int, path: String?) {
         guard let path else { return }
-        let size = CGSize(width: 480, height: 270)
+        let size = TVGridMetrics.thumbnailTargetSize(for: dataSource.activeLibraryMode)
         let isVideo = ["mp4", "mov"].contains(URL(fileURLWithPath: path).pathExtension.lowercased())
         Task {
             let image: UIImage?

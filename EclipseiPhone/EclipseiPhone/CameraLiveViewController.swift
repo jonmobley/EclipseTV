@@ -11,9 +11,10 @@ import AVFoundation
 /// Phone-side camera control: Display Mode preview, tap to toggle live.
 ///
 /// The preview is the largest 16:9 / 9:16 panel that fits the stage (edge contact
-/// where the aspect allows). The shutter row sits outside that panel, like the
-/// system Camera app. Shutter always captures: tap = photo, hold = record
-/// (except Always Record When Live, which owns recording while on-air).
+/// where the aspect allows). Capture controls sit outside that panel, like the
+/// system Camera app: a photo shutter beside a record button. Tap record to
+/// start/stop video (except Always Record When Live, which owns recording
+/// while on-air). Photos work in preview, live, and while a clip is rolling.
 /// Tap the stage to go live or stop when AirPlay, EclipseTV, or Practice Mode
 /// is on. Otherwise the stage stays a viewfinder.
 final class CameraLiveViewController: UIViewController {
@@ -109,14 +110,19 @@ final class CameraLiveViewController: UIViewController {
 
     /// Shared diameter for Settings / Flip circular controls.
     static let chromeControlSize: CGFloat = 44
-    /// Shutter button diameter.
+    /// Record button diameter.
     static let shutterSize: CGFloat = 72
+    /// Photo shutter diameter (sits beside the larger record control).
+    static let photoSize: CGFloat = 52
+    /// Space between the photo shutter and the record button.
+    static let shutterPairGap: CGFloat = 12
     /// Gap between the Display Mode panel and the outside shutter strip.
     static let chromeGap: CGFloat = 16
 
-    /// Shutter — tap = photo, hold = video (preview or live).
-    /// `.custom` so the control doesn't delay/cancel the zero-duration press gesture.
+    /// Record — tap to start/stop video (preview or live).
     let shutterButton = UIButton(type: .custom)
+    /// Photo shutter — tap to take a still, including while recording.
+    let photoButton = UIButton(type: .custom)
     /// Switches between the back and front cameras.
     let flipButton = UIButton(type: .system)
     /// Opens the frame library to choose which overlays appear on the ribbon.
@@ -165,10 +171,6 @@ final class CameraLiveViewController: UIViewController {
     /// Show that receives captures taken here, when the camera was opened from one.
     var captureDestinationShowId: UUID?
 
-    /// Timer discriminating shutter tap vs hold-to-record.
-    var shutterHoldTimer: Timer?
-    /// True once the hold threshold fires for the active shutter press.
-    var shutterDidLongPress = false
     /// Wall-clock start of the active movie recording (drives the LIVE timer).
     var recordingStartedAt: Date?
     /// 0.25s tick while recording to refresh `recordingTimerLabel`.
@@ -293,8 +295,6 @@ final class CameraLiveViewController: UIViewController {
             CameraManager.shared.closeOutRecordingIfNeeded()
         }
         stopRecordingTimer()
-        shutterHoldTimer?.invalidate()
-        shutterHoldTimer = nil
         CameraManager.shared.captureLastFrame(from: previewView)
         teardownLivePreviewSource()
         previewView.detach()
@@ -395,7 +395,8 @@ final class CameraLiveViewController: UIViewController {
         return CGRect(x: x, y: y, width: width, height: height)
     }
 
-    /// Outside-panel strip for Frame · shutter · Flip (gap + button + safe-area pad).
+    /// Outside-panel strip for Frame · photo · record · Flip
+    /// (gap + record button + safe-area pad).
     static func captureDockSpan(safeTrailing: CGFloat) -> CGFloat {
         chromeGap + shutterSize + max(8, safeTrailing)
     }
@@ -479,9 +480,6 @@ final class CameraLiveViewController: UIViewController {
     /// a recording. AirPlay stays live when already live; pick another source to
     /// leave it. The home tile keeps the warm session.
     @objc func closeTapped() {
-        shutterHoldTimer?.invalidate()
-        shutterHoldTimer = nil
-        shutterDidLongPress = false
         isCommittingParkOnClose = true
         commitParkedStillOnClose()
         if CameraManager.shared.isRecording {
@@ -498,8 +496,6 @@ final class CameraLiveViewController: UIViewController {
         if isCommittingParkOnClose || isBeingDismissed || isMovingFromParent {
             return
         }
-        shutterHoldTimer?.invalidate()
-        shutterHoldTimer = nil
         finalizeRecordingIfNeeded { [weak self] in
             guard let self else { return }
             CameraManager.shared.captureLastFrame(from: self.previewView)

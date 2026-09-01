@@ -186,8 +186,8 @@ extension iPhoneMainViewController {
     /// System menu for the header "+" control.
     ///
     /// Library and History sit at the top; Image / Video / Website / Slideshow /
-    /// PDF follow under a divider. In a Show, imports add non-live cards; Website
-    /// opens the compose sheet (History is reachable from there).
+    /// Countdown / PDF follow under a divider. In a Show, imports add non-live
+    /// cards; Website opens the compose sheet (History is reachable from there).
     func makeAddMenu() -> UIMenu {
         let albumId = libraryViewController.openShowId
         let library = UIAction(
@@ -209,7 +209,7 @@ extension iPhoneMainViewController {
             self?.pendingSlideshowShowId = nil
             self?.pendingSlideshowName = nil
             self?.pendingAlbumId = albumId
-            self?.showImagePicker()
+            self?.showAddImagePicker()
         }
         let video = UIAction(
             title: "Video",
@@ -240,6 +240,26 @@ extension iPhoneMainViewController {
         if albumId == nil {
             slideshow.attributes = .disabled
         }
+        let countdown = UIAction(
+            title: "Countdown",
+            image: UIImage(systemName: "timer")
+        ) { [weak self] _ in
+            guard let albumId else { return }
+            self?.addCountdown(toShowId: albumId)
+        }
+        if albumId == nil {
+            countdown.attributes = .disabled
+        }
+        let livePoll = UIAction(
+            title: "Live Poll",
+            image: UIImage(systemName: "chart.bar.fill")
+        ) { [weak self] _ in
+            guard let albumId else { return }
+            self?.libraryViewController.addLivePollCard(toShowId: albumId)
+        }
+        if albumId == nil {
+            livePoll.attributes = .disabled
+        }
         let pdf = UIAction(
             title: "PDF",
             image: UIImage(systemName: "doc.richtext")
@@ -250,7 +270,7 @@ extension iPhoneMainViewController {
         let imports = UIMenu(
             title: "",
             options: .displayInline,
-            children: [image, video, website, slideshow, pdf]
+            children: [image, video, website, slideshow, countdown, livePoll, pdf]
         )
         // In a Show, Website opens the compose sheet (History is on that sheet).
         // Home keeps History for manage / open.
@@ -477,8 +497,26 @@ extension iPhoneMainViewController {
         present(alert, animated: true)
     }
 
-    /// Multi-select Photos picker for Show import. One item keeps crop/confirm;
-    /// two or more skip crop and ingest directly.
+    /// Adds a named countdown tile at the end of this Show.
+    func addCountdown(toShowId showId: UUID) {
+        let name = CountdownStore.shared.nextDefaultName(inShowId: showId)
+        let duration = CountdownController.lastStoredDuration()
+        do {
+            _ = try CountdownStore.shared.create(
+                name: name,
+                showId: showId,
+                duration: duration
+            )
+        } catch {
+            showAlert(
+                title: "Couldn't Create Countdown",
+                message: error.localizedDescription
+            )
+        }
+    }
+
+    /// Multi-select Photos picker for Show import. Images skip crop; a single
+    /// video still goes through thumbnail/crop confirm.
     func showImportPicker() {
         var config = PHPickerConfiguration()
         config.selectionLimit = 0
@@ -488,8 +526,8 @@ extension iPhoneMainViewController {
         presentSystemPicker(picker)
     }
 
-    /// Images-only multi-select for creating a Slideshow.
-    func showSlideshowImagePicker() {
+    /// Images-only multi-select from Photos. Skips crop and confirm.
+    func showAddImagePicker() {
         var config = PHPickerConfiguration()
         config.selectionLimit = 0
         config.filter = .images
@@ -498,6 +536,12 @@ extension iPhoneMainViewController {
         presentSystemPicker(picker)
     }
 
+    /// Images-only multi-select for creating a Slideshow.
+    func showSlideshowImagePicker() {
+        showAddImagePicker()
+    }
+
+    /// Single-image Photos picker (Background tile, re-send).
     func showImagePicker() {
         var config = PHPickerConfiguration()
         config.selectionLimit = 1
@@ -618,6 +662,8 @@ extension iPhoneMainViewController {
     /// - Parameters:
     ///   - toAlbumId: Explicit Show membership. When nil, uses then clears `pendingAlbumId`.
     ///   - sendIfConnected: When false, only queues locally (batch import flushes later).
+    ///   - ownerShowId: CloudKit Show link when the file is not a Show member
+    ///     (slideshow slides).
     /// Adds media to the library. Returns the canonical library id.
     @discardableResult
     func addMedia(
@@ -626,7 +672,8 @@ extension iPhoneMainViewController {
         thumbnail: UIImage?,
         duration: Double,
         toAlbumId: UUID? = nil,
-        sendIfConnected: Bool = true
+        sendIfConnected: Bool = true,
+        ownerShowId: UUID? = nil
     ) -> String {
         // Match on-disk naming (UUID hyphens → underscores) so orphan recovery won't
         // re-add the same file under a second id.
@@ -644,7 +691,10 @@ extension iPhoneMainViewController {
             }
         }
 
-        LocalMediaStore.shared.store(fileURL: namedURL, forId: id)
+        LocalMediaStore.shared.store(fileURL: namedURL, forId: id) { stored in
+            guard stored else { return }
+            TVLibraryStore.shared.retryThumbnailIfMissing(for: id)
+        }
 
         let item = LibraryItemDTO(id: id,
                                   name: id,
@@ -653,9 +703,14 @@ extension iPhoneMainViewController {
                                   isLooping: isVideo ? false : nil,
                                   isMuted: isVideo ? false : nil,
                                   isAvailable: true)
-        TVLibraryStore.shared.addLocalItem(item, thumbnail: thumbnail)
+        let membershipId = toAlbumId ?? pendingAlbumId
+        TVLibraryStore.shared.addLocalItem(
+            item,
+            thumbnail: thumbnail,
+            showId: membershipId ?? ownerShowId
+        )
 
-        if let albumId = toAlbumId ?? pendingAlbumId {
+        if let albumId = membershipId {
             LocalAlbumStore.shared.add(itemId: id, toAlbumId: albumId)
         }
         if toAlbumId == nil {

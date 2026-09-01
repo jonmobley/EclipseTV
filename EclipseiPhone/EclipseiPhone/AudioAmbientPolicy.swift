@@ -16,7 +16,7 @@ enum AudioAmbientPolicy {
         case .video(_, _, let isMuted):
             // Muted library video can sit under Background Music; audible video cannot.
             return !isMuted
-        case .image, .screensaver, .camera, .web, .pdf, .black, .unavailable:
+        case .image, .screensaver, .camera, .web, .pdf, .black, .countdown, .unavailable:
             // Web yields later, when HTML5 media actually plays unmuted.
             return false
         }

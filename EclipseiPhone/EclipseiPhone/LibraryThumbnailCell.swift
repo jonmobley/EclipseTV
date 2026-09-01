@@ -201,12 +201,15 @@ final class LibraryThumbnailCell: UICollectionViewCell {
 
     /// - Parameter isLocked: Live lock uses amber chrome.
     /// - Parameter showsTypeIcon: False for the live-slideshow ribbon (all stills).
+    /// - Parameter thumbnailContentMode: Framing for the tile. Defaults to the
+    ///   item's Screen Fit (videos always letterbox).
     func configure(
         with item: LibraryItemDTO,
         thumbnail: UIImage?,
         isLive: Bool,
         isLocked: Bool = false,
-        showsTypeIcon: Bool = true
+        showsTypeIcon: Bool = true,
+        thumbnailContentMode: UIView.ContentMode? = nil
     ) {
         // Under memory pressure `thumbnail(for:)` can briefly return nil after a
         // reload — keep the previous bitmap for the same item instead of flashing
@@ -218,7 +221,11 @@ final class LibraryThumbnailCell: UICollectionViewCell {
 
         resetChrome()
         configuredMediaId = item.id
-        cardView.backgroundColor = .secondarySystemBackground
+        cardView.backgroundColor = item.isVideo
+            ? .black
+            : .secondarySystemBackground
+        imageView.contentMode = thumbnailContentMode
+            ?? MediaFitSettings.thumbnailContentMode(for: item)
 
         let isUnavailable = (item.isAvailable == false)
 
@@ -239,8 +246,9 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         }
 
         unavailableBadge.isHidden = !isUnavailable
+        applyOverlayTitle(forId: item.id)
         setLive(isLive && !isUnavailable, isLocked: isLocked)
-        var a11y = item.name
+        var a11y = MediaTitleStore.title(forId: item.id) ?? item.name
         if item.isVideo {
             a11y += ", video"
             if item.duration > 0 {
@@ -254,6 +262,24 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         if isLive && !isUnavailable && isLocked { a11y += ", locked" }
         accessibilityLabel = a11y
         isAccessibilityElement = true
+    }
+
+    /// Bottom-centered overlay from `MediaTitleStore`, if the item has one.
+    func applyOverlayTitle(forId id: String) {
+        guard let title = MediaTitleStore.title(forId: id) else { return }
+        captionLabel.text = title
+        captionLabel.isHidden = false
+        updateCaptionScrim()
+    }
+
+    /// True when the card is still showing the mountain / film placeholder.
+    var isShowingPlaceholder: Bool { imageView.image == nil }
+
+    /// Paints a late-arriving preview without resetting ⋯ / type-icon chrome.
+    func applyLoadedThumbnail(_ image: UIImage) {
+        guard imageView.image == nil else { return }
+        imageView.image = image
+        placeholderIcon.isHidden = true
     }
 
     /// Soft “add” tile (New Show / Add media) — quiet fill, blue glyph.

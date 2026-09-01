@@ -118,7 +118,7 @@ extension iPhoneMainViewController: PHPickerViewControllerDelegate {
             return
         }
 
-        // Multi-select Import: skip crop/confirm and ingest directly.
+        // Multi-select or image add: skip crop/confirm and ingest directly.
         if results.count > 1 {
             importPickedMediaBatch(results)
             return
@@ -128,7 +128,13 @@ extension iPhoneMainViewController: PHPickerViewControllerDelegate {
         if provider.hasItemConformingToTypeIdentifier(UTType.movie.identifier) {
             handlePickedVideo(provider)
         } else if provider.canLoadObject(ofClass: UIImage.self) {
-            handlePickedImage(provider)
+            // Re-send keeps crop/confirm so the restored still can be framed.
+            // Camera-roll image adds ingest immediately (no crop).
+            if connectionManager.pendingRestoreId != nil {
+                handlePickedImage(provider)
+            } else {
+                importPickedMediaBatch(results)
+            }
         }
     }
 

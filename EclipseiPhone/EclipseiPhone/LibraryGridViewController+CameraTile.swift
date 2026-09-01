@@ -108,6 +108,9 @@ extension LibraryGridViewController {
             guard let self, self.isHomeCameraPreviewEligible else { return }
             self.refreshVisibleCameraTilePreview()
         }
+        observe(CameraManager.cameraPositionDidChangeNotification) { [weak self] _ in
+            self?.liveHeader.layoutCameraPreviewIfNeeded()
+        }
     }
 
     // MARK: - Private

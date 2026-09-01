@@ -33,6 +33,8 @@ final class SlideshowStore {
 
     private let defaults: UserDefaults
     private let itemsKey = "EclipseTV.slideshows.items"
+    private let syncedIdsKey = "EclipseTV.slideshows.syncedIds"
+    private var syncedIds: Set<String> = []
     private let logger = Logger(subsystem: "com.eclipseapp.ios", category: "SlideshowStore")
 
     init(defaults: UserDefaults = .standard) {
@@ -76,6 +78,7 @@ final class SlideshowStore {
         slideshows.append(show)
         persist()
         LocalAlbumStore.shared.addSlideshow(show.id, toAlbumId: showId)
+        scheduleSaveIfNeeded(id: show.id)
         return show
     }
 
@@ -98,6 +101,7 @@ final class SlideshowStore {
         guard let index = slideshows.firstIndex(where: { $0.id == id }) else { return }
         slideshows[index].name = trimmed
         persist()
+        scheduleSaveIfNeeded(id: id)
     }
 
     /// Deletes the slideshow with `id` when present.
@@ -105,8 +109,43 @@ final class SlideshowStore {
         guard let show = slideshows.first(where: { $0.id == id }) else { return }
         slideshows.removeAll { $0.id == id }
         SlideshowPlaybackController.shared.clearResume(for: id)
+        syncedIds.remove(id.uuidString)
         persist()
         LocalAlbumStore.shared.removeSlideshow(id, fromAlbumId: show.showId)
+        guard !EclipseSyncController.shared.isApplyingRemote else { return }
+        EclipseSyncController.shared.backend.scheduleSlideshowDelete(id: id)
+    }
+
+    /// Purges after a CloudKit tombstone without echoing a delete.
+    func purgeRemote(id: UUID) {
+        guard slideshows.contains(where: { $0.id == id }) else { return }
+        slideshows.removeAll { $0.id == id }
+        syncedIds.remove(id.uuidString)
+        SlideshowPlaybackController.shared.clearResume(for: id)
+        persist()
+    }
+
+    /// Inserts or replaces a slideshow that arrived from iCloud.
+    func applyRemote(_ show: Slideshow) {
+        if let index = slideshows.firstIndex(where: { $0.id == show.id }) {
+            slideshows[index] = show
+        } else {
+            slideshows.append(show)
+        }
+        syncedIds.insert(show.id.uuidString)
+        persist()
+    }
+
+    /// Records that the backend accepted this slideshow's upload.
+    func markSynced(id: UUID) {
+        guard !syncedIds.contains(id.uuidString) else { return }
+        syncedIds.insert(id.uuidString)
+        defaults.set(Array(syncedIds), forKey: syncedIdsKey)
+    }
+
+    /// Slideshows the server has not acknowledged yet.
+    var idsNeedingUpload: [UUID] {
+        slideshows.filter { !syncedIds.contains($0.id.uuidString) }.map(\.id)
     }
 
     /// Deletes every slideshow belonging to `showId`.
@@ -125,6 +164,7 @@ final class SlideshowStore {
             slideshows[index].coverId = itemIds.first
         }
         persist()
+        scheduleSaveIfNeeded(id: id)
     }
 
     /// Removes `itemId` from the slideshow when present.
@@ -135,6 +175,7 @@ final class SlideshowStore {
             slideshows[index].coverId = slideshows[index].itemIds.first
         }
         persist()
+        scheduleSaveIfNeeded(id: id)
     }
 
     /// Sets the cover thumbnail when `itemId` is a member.
@@ -144,6 +185,7 @@ final class SlideshowStore {
         guard slideshows[index].coverId != itemId else { return }
         slideshows[index].coverId = itemId
         persist()
+        scheduleSaveIfNeeded(id: id)
     }
 
     /// Updates playback preferences for `id`.
@@ -166,6 +208,7 @@ final class SlideshowStore {
         }
         if let isFill { slideshows[index].isFill = isFill }
         persist()
+        scheduleSaveIfNeeded(id: id)
     }
 
     /// Drops `itemId` from every slideshow (e.g. after library delete).
@@ -184,11 +227,17 @@ final class SlideshowStore {
     }
 
     /// Removes membership ids that are no longer in the library.
+    ///
+    /// Captures and Photos imports stay — a TV manifest must not empty a
+    /// slideshow whose slides still exist on the phone.
     func pruneMissingItems(keeping validIds: Set<String>) {
+        let keep = validIds
+            .union(CaptureStore.shared.keepIds)
+            .union(ImportedMediaStore.shared.keepIds)
         var changed = false
         for index in slideshows.indices {
             let before = slideshows[index].itemIds
-            let after = before.filter { validIds.contains($0) }
+            let after = before.filter { keep.contains($0) }
             guard after != before else { continue }
             slideshows[index].itemIds = after
             changed = true
@@ -202,6 +251,7 @@ final class SlideshowStore {
     // MARK: - Persistence
 
     private func load() {
+        syncedIds = Set(defaults.stringArray(forKey: syncedIdsKey) ?? [])
         slideshows = SalvagingListDecoder.decodeList(
             Slideshow.self,
             forKey: itemsKey,
@@ -210,10 +260,16 @@ final class SlideshowStore {
         ).elements
     }
 
+    private func scheduleSaveIfNeeded(id: UUID) {
+        guard !EclipseSyncController.shared.isApplyingRemote else { return }
+        EclipseSyncController.shared.backend.scheduleSlideshowSave(id: id)
+    }
+
     private func persist() {
         do {
             let data = try JSONEncoder().encode(slideshows)
             defaults.set(data, forKey: itemsKey)
+            defaults.set(Array(syncedIds), forKey: syncedIdsKey)
             NotificationCenter.default.post(name: Self.didChangeNotification, object: self)
         } catch {
             logger.error("Failed to encode slideshows: \(error.localizedDescription)")

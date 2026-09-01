@@ -69,11 +69,10 @@ final class CameraPreviewView: UIView {
         videoPreviewLayer.session = nil
     }
 
-    /// Syncs rotation from Display Mode + how the phone (camera body) is held.
+    /// Syncs rotation from Display Mode. Program does not follow how the iPad is held.
     ///
-    /// Landscape Left vs Right need 0° vs 180° — a fixed `0` for all Landscape made
-    /// AirPlay go sideways/upside-down when the scene landed on the other side, and
-    /// Flip to the front camera was worse because that sensor is mounted differently.
+    /// Landscape Left vs Right (same axis as Landscape mode) still need 0° vs 180°
+    /// so AirPlay is not upside-down when the camera UI lands on the other side.
     func syncDisplayModeOrientation() {
         preferredVideoRotationAngle = Self.displayModePreviewRotationAngle
         refreshRotationCoordinator()
@@ -100,6 +99,11 @@ final class CameraPreviewView: UIView {
         }
     }
 
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        applyPreviewOrientation()
+    }
+
     override func layoutSubviews() {
         super.layoutSubviews()
         applyPreviewOrientation()
@@ -107,10 +111,33 @@ final class CameraPreviewView: UIView {
 
     // MARK: - Rotation
 
-    /// Angle for Display Mode previews from the phone window (not the AirPlay scene).
+    /// Angle for the AirPlay / Display Mode panel — pinned to Vertical or Landscape.
+    ///
+    /// Thumbnail-page live camera leaves the iPad free to rotate; program stays in
+    /// the configured output mode so a Vertical stage does not become Landscape
+    /// (and vice versa) when the operator turns the tablet.
     static var displayModePreviewRotationAngle: CGFloat {
-        if ExternalOutputSettings.isVerticalMode { return 90 }
-        return phoneApplicationOrientation.cameraPreviewRotationAngle
+        programRotationAngle(
+            isVerticalMode: ExternalOutputSettings.isVerticalMode,
+            phoneOrientation: phoneApplicationOrientation
+        )
+    }
+
+    /// Program sensor angle for Display Mode, ignoring a mismatched phone hold.
+    static func programRotationAngle(
+        isVerticalMode: Bool,
+        phoneOrientation: UIInterfaceOrientation
+    ) -> CGFloat {
+        if isVerticalMode {
+            if phoneOrientation.isPortrait {
+                return phoneOrientation.cameraPreviewRotationAngle
+            }
+            return UIInterfaceOrientation.portrait.cameraPreviewRotationAngle
+        }
+        if phoneOrientation.isLandscape {
+            return phoneOrientation.cameraPreviewRotationAngle
+        }
+        return UIInterfaceOrientation.landscapeRight.cameraPreviewRotationAngle
     }
 
     /// Interface orientation of the phone app window (camera body), not the TV.
@@ -155,15 +182,52 @@ final class CameraPreviewView: UIView {
             .first { $0.hasMediaType(.video) }
     }
 
+    /// Front-camera program is unmirrored so shirts, signs, and slides read correctly.
+    /// The phone tile / viewfinder keep the familiar selfie mirror.
+    static func shouldMirrorPreview(
+        isExternalDisplay: Bool,
+        cameraPosition: AVCaptureDevice.Position
+    ) -> Bool {
+        guard cameraPosition == .front else { return false }
+        return !isExternalDisplay
+    }
+
     /// Applies horizon-level rotation once a connection exists.
     private func applyPreviewOrientation() {
         guard let connection = videoPreviewLayer.connection else { return }
         refreshRotationCoordinator()
-        let angle = rotationCoordinator?.videoRotationAngleForHorizonLevelPreview
-            ?? preferredVideoRotationAngle
+        applyPreviewMirroring(to: connection)
+        let angle = programPreviewRotationAngle
         if connection.isVideoRotationAngleSupported(angle),
            connection.videoRotationAngle != angle {
             connection.videoRotationAngle = angle
         }
+    }
+
+    /// Preview layers auto-mirror the front lens; program must opt out.
+    private func applyPreviewMirroring(to connection: AVCaptureConnection) {
+        guard connection.isVideoMirroringSupported else { return }
+        let mirror = Self.shouldMirrorPreview(
+            isExternalDisplay: isHostedOnExternalDisplay,
+            cameraPosition: activeVideoDevice?.position
+                ?? CameraManager.shared.cameraPosition
+        )
+        connection.automaticallyAdjustsVideoMirroring = false
+        connection.isVideoMirrored = mirror
+    }
+
+    /// AirPlay stays on Display Mode. The preview-layer coordinator follows gravity
+    /// and would reorient program when the iPad turns on the thumbnail page.
+    private var programPreviewRotationAngle: CGFloat {
+        if isHostedOnExternalDisplay {
+            return preferredVideoRotationAngle
+        }
+        return rotationCoordinator?.videoRotationAngleForHorizonLevelPreview
+            ?? preferredVideoRotationAngle
+    }
+
+    private var isHostedOnExternalDisplay: Bool {
+        guard let role = window?.windowScene?.session.role else { return false }
+        return ExternalDisplayManager.isExternalDisplayRole(role)
     }
 }

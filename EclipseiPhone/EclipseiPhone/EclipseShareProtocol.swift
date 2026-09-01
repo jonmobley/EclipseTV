@@ -50,6 +50,8 @@ enum EclipseShareProtocol {
         case setImageFit = "set_image_fit"
         /// Companion pushes Show groupings; the TV presents them as albums.
         case setLibraryAlbums = "set_library_albums"
+        /// Companion parks the TV (black) while AirPlay owns an overlay, or clears park.
+        case setIdleMode = "set_idle_mode"
     }
 
     /// Separate media libraries: Landscape (16:9) vs Vertical (9:16).
@@ -200,6 +202,8 @@ struct EclipseShareEnvelope: Codable {
     var contentTransition: String? = nil
     /// Show groupings for `setLibraryAlbums` (phone → TV).
     var albums: [LibraryAlbumDTO]? = nil
+    /// `"black"` / `"clear"` — park the TV stage or release park (`set_idle_mode`).
+    var mode: String? = nil
 
     var kind: EclipseShareProtocol.Kind? {
         EclipseShareProtocol.Kind(rawValue: eclipseMsg)
@@ -377,6 +381,14 @@ struct EclipseShareEnvelope: Codable {
         EclipseShareEnvelope(
             eclipseMsg: EclipseShareProtocol.Kind.setLibraryAlbums.rawValue,
             albums: albums
+        )
+    }
+
+    /// Parks the TV on a solid black stage (`true`) or clears park (`false`).
+    static func setIdleMode(black: Bool) -> EclipseShareEnvelope {
+        EclipseShareEnvelope(
+            eclipseMsg: EclipseShareProtocol.Kind.setIdleMode.rawValue,
+            mode: black ? "black" : "clear"
         )
     }
 

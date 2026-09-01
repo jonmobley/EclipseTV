@@ -15,7 +15,13 @@ extension iPhoneMainViewController {
     /// Rebuilds the center title/menu and "+" menu for Home or open Show.
     func refreshLibraryMenu() {
         let openShow = libraryViewController.openShow
-        headerBar.setCenterTitle(openShow?.name ?? "Home")
+        let remote = ShowLiveSession.shared
+        let subtitle: String? = {
+            guard remote.isRemoteOperator else { return nil }
+            let name = remote.directorDeviceName ?? "another device"
+            return "Live on \(name)"
+        }()
+        headerBar.setCenterTitle(openShow?.name ?? "Home", subtitle: subtitle)
         headerBar.setPreviewsWhenDisconnected(openShow?.previewsWhenDisconnected ?? false)
         headerBar.setShowModeChrome(openShow != nil)
         headerBar.setLibraryMenu(makeLibraryMenu())
@@ -23,31 +29,22 @@ extension iPhoneMainViewController {
         refreshPresentedSettingsConnectionState()
     }
 
-    /// Home → Open Show → New Show → Library → Music → Settings, then Recent Shows.
-    /// An open Show adds Home (leave Show mode) and drops Settings — the header
-    /// gear already opens it. Home Settings omits show-specific rows.
+    /// Open Show → New Show → Library → Music → Settings, then Recent Shows.
+    /// Show mode drops Settings — the header gear already opens it. Return to
+    /// Home is the header back control, not this menu. Home Settings omits
+    /// show-specific rows.
     /// Getting Started lives in Settings, not this dropdown.
     ///
-    /// Open Show always lists every openable Show (only the currently open one is
-    /// left out). Recent Shows stay inline as a short hop list — they must not
-    /// suppress the Open Show verb, or libraries with ≤5 Shows lose that entry.
+    /// Open Show presents the same Shows list as Home See All (not a nested menu).
+    /// Recent Shows stay inline as a short hop list.
     ///
     /// Arrange mode needs no entry here: the header disables this dropdown and
     /// offers Done as the single way to finish.
     func makeLibraryMenu() -> UIMenu {
         let openShow = libraryViewController.openShow
         var children: [UIMenuElement] = []
-        if openShow != nil {
-            children.append(
-                UIMenu(title: "", options: .displayInline, children: [goBackAction()])
-            )
-        }
-        var excluded = Set<UUID>()
-        if let openShowId = openShow?.id {
-            excluded.insert(openShowId)
-        }
-        if let shows = openShowSubmenu(excluding: excluded) {
-            children.append(shows)
+        if let openList = openShowListAction() {
+            children.append(openList)
         }
         children.append(newShowAction())
         children.append(mediaLibraryAction())
@@ -72,23 +69,21 @@ extension iPhoneMainViewController {
         }
     }
 
-    /// Opens the Music page from the Home dropdown.
+    /// Compact: opens the Music page. Regular: pins or unpins the sidebar.
     private func musicAction() -> UIAction {
-        UIAction(
+        let canPin = traitCollection.horizontalSizeClass == .regular
+        let pinned = canPin && isMusicSidebarPinned
+        return UIAction(
             title: "Music",
-            image: UIImage(systemName: "music.note")
+            image: UIImage(systemName: "music.note"),
+            state: pinned ? .on : .off
         ) { [weak self] _ in
-            self?.presentAudioLibrary()
-        }
-    }
-
-    /// Closes the open Show and returns to Recent Shows.
-    private func goBackAction() -> UIAction {
-        UIAction(
-            title: "Home",
-            image: UIImage(systemName: "chevron.left")
-        ) { [weak self] _ in
-            self?.libraryViewController.closeOpenShow()
+            guard let self else { return }
+            if self.traitCollection.horizontalSizeClass == .regular {
+                self.setMusicSidebarPinned(!self.isMusicSidebarPinned, animated: true)
+            } else {
+                self.presentAudioLibrary()
+            }
         }
     }
 

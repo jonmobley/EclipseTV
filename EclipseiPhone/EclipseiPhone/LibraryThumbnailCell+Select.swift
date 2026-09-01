@@ -45,29 +45,4 @@ extension LibraryThumbnailCell {
             ? UIColor.systemBlue.cgColor
             : UIColor.clear.cgColor
     }
-
-    /// Add-from-Library chrome after `configure…`.
-    ///
-    /// Already-on-Show tiles stay visible but dimmed with a checkmark and cannot
-    /// be selected again.
-    func setPickerState(selected: Bool, alreadyInShow: Bool) {
-        if alreadyInShow {
-            contentView.alpha = 0.45
-            selectionBadge.image = UIImage(
-                systemName: "checkmark.circle.fill",
-                withConfiguration: UIImage.SymbolConfiguration(
-                    pointSize: 22, weight: .bold
-                )
-            )
-            selectionBadge.tintColor = .secondaryLabel
-            selectionBadge.backgroundColor = .systemBackground
-            selectionBadge.isHidden = false
-            cardView.layer.borderWidth = 0
-            cardView.layer.borderColor = UIColor.clear.cgColor
-            cardView.bringSubviewToFront(selectionBadge)
-            return
-        }
-        contentView.alpha = 1
-        setPickerSelected(selected)
-    }
 }

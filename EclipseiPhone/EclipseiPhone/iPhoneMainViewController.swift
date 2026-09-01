@@ -22,7 +22,7 @@ class iPhoneMainViewController: UIViewController {
     /// The library grid is the home screen; it's embedded as a child view controller.
     lazy var libraryViewController = LibraryGridViewController(connectionManager: connectionManager)
 
-    /// Music page embedded to the right of the library grid (swipe left to open).
+    /// Music list; pager page on compact, drawer or pinned sidebar on regular width.
     lazy var audioLibraryViewController = AudioLibraryViewController(embedded: true)
 
     /// Horizontal pager hosting Library (page 0) and Music (page 1).
@@ -39,12 +39,25 @@ class iPhoneMainViewController: UIViewController {
         return scroll
     }()
 
-    /// Navigation stack for the Music page (playlist detail pushes).
+    /// Navigation stack for the Music page. An open playlist stays here so
+    /// Show ↔ Music paging returns to that playlist instead of the library list.
     var audioLibraryNavController: UINavigationController?
     /// 0 = Library, 1 = Music.
     var homePageIndex = 0
-    /// True when Library and Music share the home screen (regular width).
+    /// True when Library and Music share the home screen (regular width, pinned).
     var isHomeSplitLayout = false
+    /// True when the user pinned Music beside Library (regular width only).
+    var isMusicSidebarPinned = HomeMusicLayout.isPinned()
+    /// True while Music is hosted in the floating drawer (regular width, unpinned).
+    var isMusicInDrawer = false
+    /// Overlay drawer for Music when unpinned on regular width.
+    let musicDrawer = HomeMusicDrawerView()
+    /// Pager constraints for the Music page; empty while Music is in the drawer.
+    var musicPagerConstraints: [NSLayoutConstraint] = []
+    /// Pins Library to the pager’s trailing edge when Music is not a pager page.
+    var libraryTrailingToContentConstraint: NSLayoutConstraint?
+    /// Right-edge pan that opens the Music drawer.
+    var musicEdgePanRecognizer: UIScreenEdgePanGestureRecognizer?
     /// Width of the Library page (full pager width, or remaining space in split).
     var libraryPageWidthConstraint: NSLayoutConstraint?
     /// Width of the Music page (full pager width, or sidebar in split).
@@ -124,21 +137,24 @@ class iPhoneMainViewController: UIViewController {
 
     /// Footer mini player for ambient music.
     let audioMiniPlayer = AudioMiniPlayerView()
-    /// Persistent Music control. Idle tap opens Music; active tap expands.
+    /// Persistent Music control. Idle opens picker; session expands the footer;
+    /// expanded tap stops.
     let audioMiniBubble = AudioMiniPlayerBubbleView()
-    /// When true, the bar is hidden and `audioMiniBubble` is shown.
+    /// When true, the bar is hidden; the Music circle stays visible.
     /// Ambient control prefers the floating bubble; expand is temporary.
     var audioMiniCollapsed = true
+    /// Tracks session edge so the Music picker dismisses only when playback starts.
+    var hadActiveAudioSession = false
     /// True while the bubble ↔ footer morph is in flight.
     var isAudioMiniChromeAnimating = false
     var audioMiniHeightConstraint: NSLayoutConstraint?
-    /// Full-width footer pin (phone portrait / iPad).
+    /// Full-width footer pin (phone portrait).
     var audioMiniPortraitConstraints: [NSLayoutConstraint] = []
-    /// Compact trailing card in phone landscape, planted on the Music bubble.
+    /// Compact trailing card (phone landscape / iPad), planted beside the Music bubble.
     var audioMiniLandscapeConstraints: [NSLayoutConstraint] = []
-    /// Width of the landscape card (`compactWidth`, squeezed on short phones).
+    /// Width of the compact card (`compactWidth`, squeezed on short phones).
     var audioMiniLandscapeWidthConstraint: NSLayoutConstraint?
-    /// True while the mini bar is the compact landscape card, not the footer.
+    /// True while the mini bar is the compact card, not the footer.
     var isAudioMiniLandscapeCompact = false
     var audioPlayerObserver: NSObjectProtocol?
     
@@ -153,6 +169,8 @@ class iPhoneMainViewController: UIViewController {
             [UITraitHorizontalSizeClass.self]
         ) { (self: Self, _: UITraitCollection) in
             self.updateHomeSplitLayoutIfNeeded()
+            self.syncAudioMiniLayoutIfNeeded()
+            self.refreshLibraryMenu()
         }
         registerForTraitChanges(
             [UITraitVerticalSizeClass.self]

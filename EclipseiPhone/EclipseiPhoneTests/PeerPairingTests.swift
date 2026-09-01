@@ -38,6 +38,18 @@ struct PeerPairingTests {
         #expect(decoded?.id == "photo.jpg")
     }
 
+    @Test func envelopeSetIdleModeRoundTrips() {
+        let black = EclipseShareEnvelope.setIdleMode(black: true).encoded()
+        let blackDecoded = EclipseShareEnvelope.decode(from: black!)
+        #expect(blackDecoded?.kind == .setIdleMode)
+        #expect(blackDecoded?.mode == "black")
+
+        let clear = EclipseShareEnvelope.setIdleMode(black: false).encoded()
+        let clearDecoded = EclipseShareEnvelope.decode(from: clear!)
+        #expect(clearDecoded?.kind == .setIdleMode)
+        #expect(clearDecoded?.mode == "clear")
+    }
+
     @Test func mediaResourceNameRoundTripsWithMode() {
         let wire = EclipseShareProtocol.mediaResourceName(
             for: "thumbnail_clip.mp4", mode: .landscape

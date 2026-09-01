@@ -66,13 +66,14 @@ extension LibraryGridViewController {
         let orientation = LocalAlbumStore.shared.album(id: showId)?.orientation
             ?? ExternalOutputSettings.orientation
         do {
-            _ = try SlideshowStore.shared.create(
+            let created = try SlideshowStore.shared.create(
                 name: trimmed,
                 showId: showId,
                 itemIds: itemIds,
                 orientation: orientation
             )
             endSelectMode()
+            revealAddedShowMember(id: ShowSlideshowToken.token(for: created.id))
             showPresentationToast("Slideshow created")
             UINotificationFeedbackGenerator().notificationOccurred(.success)
         } catch {

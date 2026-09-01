@@ -36,17 +36,31 @@ extension LibraryGridViewController {
         return show
     }
 
-    /// Slide count for the live ribbon section.
+    /// Slide or Live Poll count for the live ribbon section.
     func liveSlideshowRibbonItemCount() -> Int {
+        if showsLivePollRibbon {
+            return livePollRibbonItemCount()
+        }
+        if showsCountdownRibbon {
+            return countdownRibbonItemCount()
+        }
         guard showsLiveSlideshowRibbon else { return 0 }
         return SlideshowPlaybackController.shared.activeSlideIds.count
     }
 
-    /// Configures a ribbon cell for the live slideshow slide at `indexPath`.
+    /// Configures a ribbon cell for the live slideshow slide or poll cue at `indexPath`.
     func configureLiveSlideshowRibbonCell(
         _ cell: LibraryThumbnailCell,
         at indexPath: IndexPath
     ) {
+        if showsLivePollRibbon {
+            configureLivePollRibbonCell(cell, at: indexPath)
+            return
+        }
+        if showsCountdownRibbon {
+            configureCountdownRibbonCell(cell, at: indexPath)
+            return
+        }
         let playback = SlideshowPlaybackController.shared
         let ids = playback.activeSlideIds
         guard ids.indices.contains(indexPath.item) else { return }
@@ -61,12 +75,21 @@ extension LibraryGridViewController {
             ),
             thumbnail: store.thumbnail(for: id),
             isLive: indexPath.item == SlideshowPlaybackController.shared.currentSlideIndex,
-            showsTypeIcon: false
+            showsTypeIcon: false,
+            thumbnailContentMode: playback.contentModeForLiveStill(id: id)
         )
     }
 
-    /// Jumps the live slideshow to the tapped ribbon slide.
+    /// Jumps the live slideshow or poll ribbon to the tapped cue.
     func handleLiveSlideshowRibbonTap(at indexPath: IndexPath) {
+        if showsLivePollRibbon {
+            handleLivePollRibbonTap(at: indexPath)
+            return
+        }
+        if showsCountdownRibbon {
+            handleCountdownRibbonTap(at: indexPath)
+            return
+        }
         SlideshowPlaybackController.shared.goToSlide(at: indexPath.item)
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
@@ -103,7 +126,18 @@ extension LibraryGridViewController {
     }
 
     /// Hero ribbon toggle + swipe browse while this Show’s slideshow is live.
+    /// Live Poll and Countdown always show their ribbons (no toggle).
     func syncLiveSlideshowRibbonChrome() {
+        if showsLivePollRibbon {
+            liveHeader.setSlideshowRibbonToggleVisible(false, isOn: false)
+            liveHeader.allowsSlideshowBrowse = false
+            return
+        }
+        if showsCountdownRibbon {
+            liveHeader.setSlideshowRibbonToggleVisible(false, isOn: false)
+            liveHeader.allowsSlideshowBrowse = false
+            return
+        }
         guard showsLiveHero, !isLiveFromOtherShow,
               let slideshow = activeLiveSlideshow() else {
             liveHeader.setSlideshowRibbonToggleVisible(false, isOn: false)
@@ -126,11 +160,18 @@ extension LibraryGridViewController {
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 
-    /// Centers the current slide in the ribbon without moving the Show grid.
+    /// Centers the current slide or poll cue in the ribbon without moving the Show grid.
     func scrollLiveSlideshowRibbonToCurrentSlide() {
         guard showsLiveSlideshowRibbon else { return }
-        let index = SlideshowPlaybackController.shared.currentSlideIndex
-        let count = SlideshowPlaybackController.shared.activeSlideIds.count
+        let index: Int
+        let count: Int
+        if showsLivePollRibbon {
+            index = livePollRibbonIndex
+            count = livePollRibbonItems.count
+        } else {
+            index = SlideshowPlaybackController.shared.currentSlideIndex
+            count = SlideshowPlaybackController.shared.activeSlideIds.count
+        }
         guard count > 0, index >= 0, index < count else { return }
         if docksLiveSlideshowRibbon {
             slideshowRibbonView.scrollToItem(
@@ -187,7 +228,7 @@ extension LibraryGridViewController {
             spacing: interitemSpacing
         )
         applyDockedRibbonItemSize(thumb)
-        dockedRibbonTopConstraint?.constant = Self.sideBySideGutter
+        dockedRibbonTopConstraint?.constant = heroBottomPadding
         dockedRibbonHeightConstraint?.constant = thumb.height
         view.bringSubviewToFront(slideshowRibbonView)
         if wasHidden {
@@ -217,7 +258,7 @@ extension LibraryGridViewController {
         }
         guard showsInGridSlideshowRibbon, !rebuiltShowGrid else { return }
         guard let section = sectionIndex(for: .slideshowRibbon) else { return }
-        let expected = SlideshowPlaybackController.shared.activeSlideIds.count
+        let expected = liveSlideshowRibbonItemCount()
         let actual = showCollectionView.numberOfItems(inSection: section)
         if expected != actual {
             showCollectionView.reloadSections(IndexSet(integer: section))

@@ -48,9 +48,47 @@ final class DisabledSyncBackend: SyncBackend {
 
     func scheduleCaptureDelete(id: String) {}
 
+    func scheduleMediaSave(cloudId: String) {}
+
+    func scheduleMediaDelete(cloudId: String) {}
+
     func schedulePDFSave(id: UUID) {}
 
     func schedulePDFDelete(id: UUID) {}
+
+    func scheduleWebPageSave(id: UUID) {}
+
+    func scheduleWebPageDelete(id: UUID) {}
+
+    func scheduleSlideshowSave(id: UUID) {}
+
+    func scheduleSlideshowDelete(id: UUID) {}
+
+    func scheduleCountdownSave(id: UUID) {}
+
+    func scheduleCountdownDelete(id: UUID) {}
+
+    func scheduleLivePollSave(id: UUID) {}
+
+    func scheduleLivePollDelete(id: UUID) {}
+
+    func scheduleBackgroundSave() {}
+
+    func scheduleBackgroundDelete() {}
+
+    func scheduleScreensaverSave() {}
+
+    func scheduleScreensaverDelete() {}
+
+    func scheduleCameraFrameSave(id: UUID) {}
+
+    func scheduleCameraFrameDelete(id: UUID) {}
+
+    func scheduleCameraSettingsSave(orientation: ExternalOutputOrientation) {}
+
+    func scheduleCutawaySave(id: UUID) {}
+
+    func scheduleCutawayDelete(id: UUID) {}
 
     func downloadAsset(
         id: String,

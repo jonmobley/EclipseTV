@@ -7,20 +7,21 @@
 
 import UIKit
 
-/// Persistent Music control: idle tap opens Music, active tap expands, long-press stops.
-final class AudioMiniPlayerBubbleView: UIButton {
+/// Persistent Music control: idle tap opens a picker sheet; session tap expands
+/// the footer. The same circle becomes Stop while the footer is showing.
+final class AudioMiniPlayerBubbleView: UIView {
 
     static let side: CGFloat = 72
     /// Pressed-in scale while idle so opening Music still feels like a control.
     static let idlePressScale: CGFloat = 0.9
 
-    var onExpand: (() -> Void)?
-    var onStop: (() -> Void)?
+    /// Idle opens the picker; collapsed session expands; expanded session stops.
+    var onToggle: (() -> Void)?
 
+    private let musicCircle = HighlightForwardingButton(type: .system)
+    /// Circle control: picker, expand, or stop depending on session and footer.
+    var musicButton: UIButton { musicCircle }
     private let waveformView = AudioMiniPlayerWaveformView()
-    private let rippleLayer = CAShapeLayer()
-    private let rippleLayerDelayed = CAShapeLayer()
-    private var isPulsing = false
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -32,95 +33,112 @@ final class AudioMiniPlayerBubbleView: UIButton {
     }
 
     /// Updates chrome from the shared player.
-    func reload() {
+    /// - Parameter barExpanded: Footer is showing; this circle is Stop.
+    func reload(barExpanded: Bool = false) {
         let player = AudioPlayerController.shared
-        let active = player.hasActiveSession
-        let playing = active && player.isPlaying
-        applyPlaybackChrome(playing: playing)
-        accessibilityTraits = .button
-        accessibilityLabel = "Music"
-        if active {
-            accessibilityValue = playing ? "Playing" : "Paused"
-            accessibilityHint = "Double tap to expand. Long press to stop."
-        } else {
-            accessibilityValue = nil
-            accessibilityHint = "Opens the Music page."
-        }
-        applyIdlePressReaction(highlighted: isHighlighted)
+        applySessionChrome(
+            active: player.hasActiveSession,
+            playing: player.hasActiveSession && player.isPlaying,
+            expanded: barExpanded
+        )
+        applyIdlePressReaction(highlighted: musicButton.isHighlighted)
     }
 
-    /// Playing: waveform + glow. Idle / paused: music note, no glow.
-    func applyPlaybackChrome(playing: Bool) {
-        configuration = Self.musicConfiguration(showsNote: !playing)
+    /// Playing: waveform. Expanded: stop. Otherwise: music note.
+    func applySessionChrome(active: Bool, playing: Bool, expanded: Bool = false) {
+        let showStop = active && expanded
+        applyPlaybackChrome(playing: playing && !showStop, showStop: showStop)
+        applyAccessibility(active: active, playing: playing, showStop: showStop)
+    }
+
+    /// Playing: 3-bar waveform. Stop: stop glyph. Otherwise: music note.
+    func applyPlaybackChrome(playing: Bool, showStop: Bool = false) {
+        musicButton.configuration = Self.musicConfiguration(
+            showsNote: !playing && !showStop,
+            showsStop: showStop
+        )
         waveformView.setPlaying(playing)
-        setPulsing(playing)
-        applyShadow(playing: playing)
+        applyShadow(playing: playing || showStop)
     }
 
     var showsPlaybackWaveform: Bool { waveformView.isPlaying && !waveformView.isHidden }
-    var isPlaybackGlowActive: Bool { isPulsing }
 
-    override var isHighlighted: Bool {
-        get { super.isHighlighted }
-        set {
-            super.isHighlighted = newValue
-            applyIdlePressReaction(highlighted: newValue)
-        }
+    override var intrinsicContentSize: CGSize {
+        CGSize(width: Self.side, height: Self.side)
     }
 
     // MARK: - Private
 
     private func setup() {
         clipsToBounds = false
+        setContentHuggingPriority(.required, for: .horizontal)
+        setContentHuggingPriority(.required, for: .vertical)
         applyShadow(playing: false)
-
-        configureRipple(rippleLayer)
-        configureRipple(rippleLayerDelayed)
-        layer.insertSublayer(rippleLayer, at: 0)
-        layer.insertSublayer(rippleLayerDelayed, at: 0)
+        configureMusicButton()
 
         waveformView.translatesAutoresizingMaskIntoConstraints = false
         waveformView.isHidden = true
-        addSubview(waveformView)
+        musicButton.addSubview(waveformView)
+        addSubview(musicCircle)
 
-        NSLayoutConstraint.activate([
-            widthAnchor.constraint(equalToConstant: Self.side),
-            heightAnchor.constraint(equalToConstant: Self.side),
-            waveformView.centerXAnchor.constraint(equalTo: centerXAnchor),
-            waveformView.centerYAnchor.constraint(equalTo: centerYAnchor),
-            waveformView.widthAnchor.constraint(equalToConstant: 34),
-            waveformView.heightAnchor.constraint(equalToConstant: 30)
-        ])
-
-        addTarget(self, action: #selector(expandTapped), for: .touchUpInside)
-        let hold = UILongPressGestureRecognizer(target: self, action: #selector(stopPressed(_:)))
-        hold.minimumPressDuration = 0.45
-        addGestureRecognizer(hold)
+        NSLayoutConstraint.activate(Self.layoutConstraints(
+            in: self, music: musicCircle, wave: waveformView
+        ))
         reload()
+    }
+
+    private func configureMusicButton() {
+        musicCircle.translatesAutoresizingMaskIntoConstraints = false
+        musicCircle.clipsToBounds = false
+        musicCircle.onHighlightChange = { [weak self] highlighted in
+            self?.applyIdlePressReaction(highlighted: highlighted)
+        }
+        musicCircle.addTarget(self, action: #selector(musicTapped), for: .touchUpInside)
+    }
+
+    private static func layoutConstraints(
+        in parent: UIView,
+        music: UIButton,
+        wave: UIView
+    ) -> [NSLayoutConstraint] {
+        [
+            music.topAnchor.constraint(equalTo: parent.topAnchor),
+            music.leadingAnchor.constraint(equalTo: parent.leadingAnchor),
+            music.trailingAnchor.constraint(equalTo: parent.trailingAnchor),
+            music.bottomAnchor.constraint(equalTo: parent.bottomAnchor),
+            music.widthAnchor.constraint(equalToConstant: side),
+            music.heightAnchor.constraint(equalToConstant: side),
+            wave.centerXAnchor.constraint(equalTo: music.centerXAnchor),
+            wave.centerYAnchor.constraint(equalTo: music.centerYAnchor),
+            wave.widthAnchor.constraint(equalToConstant: 28),
+            wave.heightAnchor.constraint(equalToConstant: 26)
+        ]
     }
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        bringSubviewToFront(waveformView)
-        let path = UIBezierPath(ovalIn: bounds).cgPath
-        rippleLayer.path = path
-        rippleLayer.frame = bounds
-        rippleLayerDelayed.path = path
-        rippleLayerDelayed.frame = bounds
-        layer.shadowPath = path
+        musicButton.bringSubviewToFront(waveformView)
+        musicButton.layer.shadowPath = UIBezierPath(ovalIn: musicButton.bounds).cgPath
     }
 
-    private func configureRipple(_ layer: CAShapeLayer) {
-        layer.fillColor = UIColor.white.withAlphaComponent(0.65).cgColor
-        layer.opacity = 0
-    }
-
-    private static func musicConfiguration(showsNote: Bool) -> UIButton.Configuration {
+    private static func musicConfiguration(
+        showsNote: Bool,
+        showsStop: Bool
+    ) -> UIButton.Configuration {
         var config = UIButton.Configuration.filled()
-        if showsNote {
+        if showsStop {
+            config.image = UIImage(
+                systemName: "stop.fill",
+                withConfiguration: UIImage.SymbolConfiguration(
+                    pointSize: 22, weight: .semibold
+                )
+            )
+        } else if showsNote {
             config.image = UIImage(
                 systemName: "music.note",
-                withConfiguration: UIImage.SymbolConfiguration(pointSize: 24, weight: .semibold)
+                withConfiguration: UIImage.SymbolConfiguration(
+                    pointSize: 24, weight: .semibold
+                )
             )
         }
         config.baseForegroundColor = .white
@@ -129,12 +147,30 @@ final class AudioMiniPlayerBubbleView: UIButton {
         return config
     }
 
+    private func applyAccessibility(active: Bool, playing: Bool, showStop: Bool) {
+        musicButton.accessibilityTraits = .button
+        if showStop {
+            musicButton.accessibilityLabel = "Stop"
+            musicButton.accessibilityHint = "Fades out and stops playback."
+            musicButton.accessibilityValue = playing ? "Playing" : "Paused"
+        } else if active {
+            musicButton.accessibilityLabel = "Expand"
+            musicButton.accessibilityHint =
+                "Shows the playback bar. Tap again to stop."
+            musicButton.accessibilityValue = playing ? "Playing" : "Paused"
+        } else {
+            musicButton.accessibilityLabel = "Music"
+            musicButton.accessibilityHint = "Choose something to play."
+            musicButton.accessibilityValue = nil
+        }
+    }
+
     /// Native fill already dims; idle also scales so a no-track tap still reads as a press.
     private func applyIdlePressReaction(highlighted: Bool) {
         guard !AudioPlayerController.shared.hasActiveSession else { return }
         let scale: CGFloat = highlighted ? Self.idlePressScale : 1
         let animations = {
-            self.transform = CGAffineTransform(scaleX: scale, y: scale)
+            self.musicButton.transform = CGAffineTransform(scaleX: scale, y: scale)
         }
         if !UIView.areAnimationsEnabled || UIAccessibility.isReduceMotionEnabled {
             animations()
@@ -149,10 +185,11 @@ final class AudioMiniPlayerBubbleView: UIButton {
     }
 
     private func applyShadow(playing: Bool) {
+        let layer = musicButton.layer
         if playing {
             layer.shadowColor = UIColor.systemBlue.cgColor
-            layer.shadowOpacity = 0.95
-            layer.shadowRadius = 22
+            layer.shadowOpacity = 0.4
+            layer.shadowRadius = 12
             layer.shadowOffset = .zero
         } else {
             layer.shadowColor = UIColor.black.cgColor
@@ -162,54 +199,23 @@ final class AudioMiniPlayerBubbleView: UIButton {
         }
     }
 
-    private func setPulsing(_ pulsing: Bool) {
-        guard pulsing != isPulsing else { return }
-        isPulsing = pulsing
-        rippleLayer.removeAnimation(forKey: "ripple")
-        rippleLayerDelayed.removeAnimation(forKey: "ripple")
-        rippleLayer.transform = CATransform3DIdentity
-        rippleLayerDelayed.transform = CATransform3DIdentity
-        guard pulsing else {
-            rippleLayer.opacity = 0
-            rippleLayerDelayed.opacity = 0
-            return
-        }
-        if UIAccessibility.isReduceMotionEnabled {
-            rippleLayer.transform = CATransform3DMakeScale(1.32, 1.32, 1)
-            rippleLayer.opacity = 0.7
-            rippleLayerDelayed.opacity = 0
-            return
-        }
-        rippleLayer.add(Self.rippleAnimation(phase: 0), forKey: "ripple")
-        rippleLayerDelayed.add(Self.rippleAnimation(phase: 0.7), forKey: "ripple")
+    @objc private func musicTapped() {
+        let style: UIImpactFeedbackGenerator.FeedbackStyle =
+            AudioPlayerController.shared.hasActiveSession ? .medium : .light
+        UIImpactFeedbackGenerator(style: style).impactOccurred()
+        onToggle?()
     }
+}
 
-    private static func rippleAnimation(phase: CFTimeInterval) -> CAAnimation {
-        let scale = CABasicAnimation(keyPath: "transform.scale")
-        scale.fromValue = 1
-        scale.toValue = 1.72
-        let fade = CABasicAnimation(keyPath: "opacity")
-        fade.fromValue = 0.9
-        fade.toValue = 0
-        let group = CAAnimationGroup()
-        group.animations = [scale, fade]
-        group.duration = 1.4
-        group.repeatCount = .infinity
-        group.timingFunction = CAMediaTimingFunction(name: .easeOut)
-        group.timeOffset = phase
-        return group
-    }
+/// Forwards highlight so idle press scale runs from tests and touches.
+private final class HighlightForwardingButton: UIButton {
+    var onHighlightChange: ((Bool) -> Void)?
 
-    @objc private func expandTapped() {
-        if !AudioPlayerController.shared.hasActiveSession {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+    override var isHighlighted: Bool {
+        get { super.isHighlighted }
+        set {
+            super.isHighlighted = newValue
+            onHighlightChange?(newValue)
         }
-        onExpand?()
-    }
-
-    @objc private func stopPressed(_ gesture: UILongPressGestureRecognizer) {
-        guard gesture.state == .began else { return }
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-        onStop?()
     }
 }

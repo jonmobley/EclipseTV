@@ -32,7 +32,7 @@ extension LibraryGridViewController {
         }
     }
 
-    /// Index of a Show-grid member id (media / website / PDF).
+    /// Index of a Show-grid member id (media / website / PDF / slideshow).
     static func indexOfShowMember(_ id: String, in items: [ShowGridItem]) -> Int? {
         items.firstIndex { item in
             switch item {
@@ -42,6 +42,9 @@ extension LibraryGridViewController {
                 return page.id.uuidString.caseInsensitiveCompare(id) == .orderedSame
             case .pdf(let doc):
                 return doc.id.uuidString.caseInsensitiveCompare(id) == .orderedSame
+            case .slideshow(let show):
+                return ShowSlideshowToken.token(for: show.id) == id
+                    || show.id.uuidString.caseInsensitiveCompare(id) == .orderedSame
             default:
                 return false
             }

@@ -10,8 +10,9 @@ import Foundation
 /// Phone-only home-grid item. Specials are never part of the Apple TV Multipeer manifest.
 ///
 /// Home is a hero carousel plus Recent Shows from both Display Modes (square
-/// tiles). An open Show uses `ShowGridItem` for tools and media. Black is a
-/// header control. Websites and PDFs live under + or inside a Show.
+/// tiles). An open Show uses `ShowGridItem` for tools and media. Live Poll
+/// and Countdown are multi-card Show tiles (not Home tools). Websites and PDFs
+/// live under + or inside a Show.
 enum HomeGridItem: Equatable {
     case logo
     case screensaver

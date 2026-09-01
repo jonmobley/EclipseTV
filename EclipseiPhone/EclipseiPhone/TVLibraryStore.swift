@@ -69,6 +69,8 @@ final class TVLibraryStore {
     /// Ids with a disk load already in flight, so a scrolling grid doesn't kick off
     /// duplicate reads for the same cell.
     private var pendingDiskLoads: Set<String> = []
+    /// Miss retries while LocalMedia / JPEG writes are still landing.
+    private var diskLoadAttempts: [String: Int] = [:]
 
     /// Serial queue for thumbnail disk I/O.
     private let ioQueue = DispatchQueue(label: "com.eclipseapp.ios.TVLibraryStore.io", qos: .utility)
@@ -132,10 +134,12 @@ final class TVLibraryStore {
         activeLibraryMode = mode
         thumbnails.removeAll()
         pendingDiskLoads.removeAll()
+        diskLoadAttempts.removeAll()
         ensureThumbnailDirectory()
         loadPersistedManifest()
         mergePendingUploads()
         mergeCaptures()
+        mergeImportedMedia()
         recoverOrphanedLocalMedia()
         warmMissingThumbnails()
         fillMissingVideoDurations()
@@ -158,11 +162,15 @@ final class TVLibraryStore {
 
         migrateLegacyKeysIfNeeded(for: name)
         thumbnails.removeAll()
+        pendingDiskLoads.removeAll()
+        diskLoadAttempts.removeAll()
         ensureThumbnailDirectory()
         loadPersistedManifest()
         mergePendingUploads()
         mergeCaptures()
+        mergeImportedMedia()
         recoverOrphanedLocalMedia()
+        warmMissingThumbnails()
         fillMissingVideoDurations()
 
         delegate?.libraryStoreDidUpdateItems(self)
@@ -234,7 +242,11 @@ final class TVLibraryStore {
                 guard self.activeTVName == tvName,
                       self.activeLibraryMode == mode else { return }
                 // Miss / failure: leave pending clear so the next configure can retry.
-                guard let image else { return }
+                guard let image else {
+                    self.scheduleThumbnailRetry(id: id, tvName: tvName, mode: mode)
+                    return
+                }
+                self.diskLoadAttempts.removeValue(forKey: id)
                 // Always re-insert — refills NSCache after a memory-pressure purge.
                 self.thumbnails[id] = image
                 if needsPersist {
@@ -320,19 +332,23 @@ final class TVLibraryStore {
         self.currentId = currentId
         mergePendingUploads()
         mergeCaptures()
+        mergeImportedMedia()
         recoverOrphanedLocalMedia()
 
         let keepIds = Set(self.items.map { $0.id })
             .union(PendingUploadStore.shared.pendingIds(for: mode))
             .union(CaptureStore.shared.keepIds)
+            .union(ImportedMediaStore.shared.keepIds)
         thumbnails.retain(ids: keepIds)
         pruneDiskThumbnails(keeping: keepIds)
         // Keep full-res copies that still exist on disk even if the TV omitted them.
         // Captures are never pruned by TV manifests (separate root in LocalMediaStore).
+        // Slideshows and Show membership use the same set so a TV omit cannot
+        // empty a just-created slideshow whose files are still local-only.
         let localKeep = keepIds.union(Set(LocalMediaStore.shared.storedIds(for: mode)))
         LocalMediaStore.shared.prune(keeping: localKeep, mode: mode)
-        LocalAlbumStore.shared.pruneMissingItems(keeping: keepIds)
-        SlideshowStore.shared.pruneMissingItems(keeping: keepIds)
+        LocalAlbumStore.shared.pruneMissingItems(keeping: localKeep)
+        SlideshowStore.shared.pruneMissingItems(keeping: localKeep)
         persistManifest()
         fillMissingVideoDurations()
 
@@ -342,7 +358,12 @@ final class TVLibraryStore {
     // MARK: - Local (offline) Additions
 
     /// Records an item added on the phone for the active library mode.
-    func addLocalItem(_ item: LibraryItemDTO, thumbnail: UIImage?) {
+    /// - Parameter showId: Show that owns this import for CloudKit, if any.
+    func addLocalItem(
+        _ item: LibraryItemDTO,
+        thumbnail: UIImage?,
+        showId: UUID? = nil
+    ) {
         let mode = activeLibraryMode
         PendingUploadStore.shared.enqueue(item, mode: mode)
         // Offline / never-paired: mint "My Library" so thumbnails have a disk home
@@ -360,6 +381,15 @@ final class TVLibraryStore {
             items.append(item)
             persistManifest()
         }
+        if !CaptureStore.shared.contains(id: item.id) {
+            _ = ImportedMediaStore.shared.register(
+                libraryId: item.id,
+                isVideo: item.isVideo,
+                duration: item.duration,
+                orientation: ExternalOutputSettings.orientation,
+                showId: showId
+            )
+        }
         delegate?.libraryStoreDidUpdateItems(self)
     }
 
@@ -376,6 +406,9 @@ final class TVLibraryStore {
         if currentId == id { currentId = nil }
         LocalAlbumStore.shared.removeItemFromAllAlbums(itemId: id)
         SlideshowStore.shared.removeItemFromAllSlideshows(itemId: id)
+        if let imported = ImportedMediaStore.shared.record(id: id) {
+            ImportedMediaStore.shared.markDeleted(cloudId: imported.cloudId)
+        }
         delegate?.libraryStoreDidUpdateItems(self)
     }
 
@@ -400,9 +433,28 @@ final class TVLibraryStore {
         }
     }
 
+    /// Merges CloudKit-synced imports that are not yet in the TV manifest.
+    private func mergeImportedMedia() {
+        let existing = Set(items.map { $0.id })
+        let mode = ExternalOutputSettings.orientation
+        for imported in ImportedMediaStore.shared.allActive
+        where imported.orientation == mode {
+            let dto = imported.asLibraryItem
+            guard !existing.contains(dto.id) else { continue }
+            items.append(dto)
+        }
+    }
+
     /// Re-merges captures after CloudKit fetch / local capture changes.
     func refreshMergedCaptures() {
         mergeCaptures()
+        persistManifest()
+        delegate?.libraryStoreDidUpdateItems(self)
+    }
+
+    /// Re-merges imported CloudKit media after a remote apply.
+    func refreshMergedImports() {
+        mergeImportedMedia()
         persistManifest()
         delegate?.libraryStoreDidUpdateItems(self)
     }
@@ -420,6 +472,7 @@ final class TVLibraryStore {
         ensureLibraryIdentity()
         mergePendingUploads()
         mergeCaptures()
+        mergeImportedMedia()
         recoverOrphanedLocalMedia()
         recoverFromCachedManifests()
         warmMissingThumbnails()
@@ -444,6 +497,33 @@ final class TVLibraryStore {
     private func warmMissingThumbnails() {
         for item in items where thumbnails[item.id] == nil {
             loadThumbnailFromDisk(item.id)
+        }
+    }
+
+    /// Reloads a preview when the full file or JPEG lands after the first miss.
+    func retryThumbnailIfMissing(for id: String) {
+        guard thumbnails[id] == nil else { return }
+        loadThumbnailFromDisk(id)
+    }
+
+    /// Retries a miss while LocalMedia / cache JPEGs are still being written.
+    private func scheduleThumbnailRetry(
+        id: String,
+        tvName: String?,
+        mode: EclipseShareProtocol.LibraryMode
+    ) {
+        let attempt = (diskLoadAttempts[id] ?? 0) + 1
+        guard attempt <= 3 else {
+            diskLoadAttempts.removeValue(forKey: id)
+            return
+        }
+        diskLoadAttempts[id] = attempt
+        let delay = 0.35 * Double(attempt)
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            guard let self,
+                  self.activeTVName == tvName,
+                  self.activeLibraryMode == mode else { return }
+            self.loadThumbnailFromDisk(id)
         }
     }
 
@@ -713,6 +793,8 @@ final class TVLibraryStore {
         items = []
         currentId = nil
         thumbnails.removeAll()
+        pendingDiskLoads.removeAll()
+        diskLoadAttempts.removeAll()
         delegate?.libraryStoreDidUpdateItems(self)
         delegate?.libraryStoreDidUpdateCurrent(self)
     }
@@ -755,6 +837,13 @@ final class TVLibraryStore {
                 logger.error(
                     "Failed to persist thumbnail for \(id, privacy: .public): \(error.localizedDescription)"
                 )
+                return
+            }
+            Task { @MainActor in
+                // Batch import can evict NSCache before this write finishes.
+                guard self.thumbnails[id] == nil else { return }
+                self.thumbnails[id] = image
+                self.notifyThumbnailUpdated(for: id)
             }
         }
     }

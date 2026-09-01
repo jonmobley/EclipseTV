@@ -8,41 +8,52 @@
 import UIKit
 
 /// Compact footer chrome for ambient music on the home screen.
+/// Stop lives on the Music circle, not this bar.
 final class AudioMiniPlayerView: UIView, UIGestureRecognizerDelegate {
 
     /// Preferred height when visible.
     static let preferredHeight: CGFloat = 64
     /// Solid fill under the chrome, including the home-indicator band in portrait.
     static let barBackgroundColor: UIColor = .secondarySystemBackground
-    /// Phone-landscape card width — enough for title + a usable volume slider.
+    /// Floating card width — title, speaker, and collapse control.
     static let compactWidth: CGFloat = 360
     static let compactCornerRadius: CGFloat = 20
     /// Matches the Music bubble so the bar grows from the same corner.
     static let compactTrailingInset: CGFloat = 16
-    static let compactBottomInset: CGFloat = 12
+    /// Gap from the screen bottom (not the safe area) so the circle sits in the corner.
+    static let compactBottomInset: CGFloat = 10
+    /// Space between the compact card and the Music circle.
+    static let circleFooterGap: CGFloat = 8
+    /// Trailing inset for minimize when the circle sits beside the card.
+    static let controlTrailingInset: CGFloat = 10
+
+    /// Compact trailing card in phone landscape and on regular-width layouts (iPad).
+    /// Phone portrait stays a full-width footer.
+    static func usesCompactCard(
+        verticalSizeClass: UIUserInterfaceSizeClass,
+        horizontalSizeClass: UIUserInterfaceSizeClass
+    ) -> Bool {
+        verticalSizeClass == .compact || horizontalSizeClass == .regular
+    }
 
     /// Full-width footer height. Portrait adds the home-indicator inset so tiles
-    /// cannot show under the bar; the compact landscape card stays `preferredHeight`.
+    /// cannot show under the bar; the compact card stays `preferredHeight`.
     static func barHeight(floating: Bool, safeAreaBottom: CGFloat) -> CGFloat {
         preferredHeight + (floating ? 0 : max(0, safeAreaBottom))
     }
 
+    /// Portrait overlays the circle; the compact card sits beside it.
+    static func minimizeTrailingInset(floating: Bool) -> CGFloat {
+        if floating { return controlTrailingInset }
+        return AudioMiniPlayerBubbleView.side + circleFooterGap + compactTrailingInset
+    }
+
     var onOpenLibrary: (() -> Void)?
-    var onTogglePlayPause: (() -> Void)?
     /// Collapses the bar to the floating bubble (does not stop playback).
     var onMinimize: (() -> Void)?
 
-    /// Blue album tile that hosts play / pause (floating bubble keeps the note).
-    private let artworkButton: UIButton = {
-        let button = UIButton(type: .system)
-        button.translatesAutoresizingMaskIntoConstraints = false
-        button.clipsToBounds = true
-        button.layer.cornerRadius = 8
-        button.layer.cornerCurve = .continuous
-        button.backgroundColor = .systemBlue
-        button.tintColor = .white
-        return button
-    }()
+    /// True while the vertical volume slider is showing above the speaker.
+    var isVolumeExpanded: Bool { volumeControl.isExpanded }
 
     private let titleLabel: UILabel = {
         let label = UILabel()
@@ -62,16 +73,7 @@ final class AudioMiniPlayerView: UIView, UIGestureRecognizerDelegate {
         return label
     }()
 
-    private let speakerIcon: UIImageView = {
-        let view = UIImageView()
-        view.tintColor = .secondaryLabel
-        view.contentMode = .scaleAspectFit
-        view.isUserInteractionEnabled = false
-        view.translatesAutoresizingMaskIntoConstraints = false
-        return view
-    }()
-
-    private let volumeSlider = GenerousVolumeSlider()
+    private let volumeControl = AudioMiniVolumeControl()
 
     private let minimizeButton: UIButton = {
         let button = UIButton(type: .system)
@@ -80,26 +82,7 @@ final class AudioMiniPlayerView: UIView, UIGestureRecognizerDelegate {
         return button
     }()
 
-    private var isAdjustingVolume = false
-
-    /// Floats above the slider while dragging so the thumb doesn't cover the level.
-    private let volumeHUD: UIVisualEffectView = {
-        let view = UIVisualEffectView(effect: UIBlurEffect(style: .systemChromeMaterial))
-        view.layer.cornerRadius = 14
-        view.clipsToBounds = true
-        view.isHidden = true
-        view.translatesAutoresizingMaskIntoConstraints = false
-        return view
-    }()
-
-    private let volumeHUDLabel: UILabel = {
-        let label = UILabel()
-        label.font = .monospacedDigitSystemFont(ofSize: 17, weight: .semibold)
-        label.textAlignment = .center
-        label.textColor = .label
-        label.translatesAutoresizingMaskIntoConstraints = false
-        return label
-    }()
+    private var minimizeTrailingConstraint: NSLayoutConstraint?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -110,7 +93,7 @@ final class AudioMiniPlayerView: UIView, UIGestureRecognizerDelegate {
         fatalError("init(coder:) has not been implemented")
     }
 
-    /// Footer edge-shadow vs. a floating landscape card.
+    /// Footer edge-shadow vs. a floating card.
     func applyFloatingChrome(_ floating: Bool) {
         layer.cornerCurve = .continuous
         if floating {
@@ -122,6 +105,9 @@ final class AudioMiniPlayerView: UIView, UIGestureRecognizerDelegate {
             layer.shadowRadius = 4
             layer.shadowOffset = CGSize(width: 0, height: -1)
         }
+        minimizeTrailingConstraint?.constant = -Self.minimizeTrailingInset(
+            floating: floating
+        )
     }
 
     /// Refreshes labels/controls from `AudioPlayerController`.
@@ -140,28 +126,12 @@ final class AudioMiniPlayerView: UIView, UIGestureRecognizerDelegate {
             subtitleLabel.text = track.subtitle.isEmpty ? "Music" : track.subtitle
         }
 
-        let playSymbol = player.isPlaying ? "pause.fill" : "play.fill"
-        var art = UIButton.Configuration.filled()
-        art.image = UIImage(
-            systemName: playSymbol,
-            withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .semibold)
-        )
-        art.baseForegroundColor = .white
-        art.baseBackgroundColor = .systemBlue
-        art.cornerStyle = .fixed
-        art.background.cornerRadius = 8
-        art.contentInsets = .zero
-        artworkButton.configuration = art
-        artworkButton.accessibilityLabel = player.isPlaying ? "Pause" : "Play"
+        volumeControl.setVolume(player.isMuted ? 0 : player.volume)
+    }
 
-        let level = player.isMuted ? 0 : player.volume
-        speakerIcon.image = UIImage(
-            systemName: Self.speakerSymbol(for: level),
-            withConfiguration: UIImage.SymbolConfiguration(pointSize: 14, weight: .semibold)
-        )
-        if !isAdjustingVolume {
-            volumeSlider.value = level
-        }
+    /// Hides the vertical volume slider without changing the mix level.
+    func collapseVolumeControl(animated: Bool = false) {
+        volumeControl.setExpanded(false, animated: animated)
     }
 
     // MARK: - Private
@@ -171,7 +141,6 @@ final class AudioMiniPlayerView: UIView, UIGestureRecognizerDelegate {
         backgroundColor = Self.barBackgroundColor
         clipsToBounds = false
         layer.shadowColor = UIColor.black.cgColor
-        applyFloatingChrome(false)
 
         let textStack = UIStackView(arrangedSubviews: [titleLabel, subtitleLabel])
         textStack.axis = .vertical
@@ -180,6 +149,58 @@ final class AudioMiniPlayerView: UIView, UIGestureRecognizerDelegate {
         textStack.setContentHuggingPriority(.defaultLow, for: .horizontal)
         textStack.translatesAutoresizingMaskIntoConstraints = false
 
+        configureMinimizeButton()
+        volumeControl.translatesAutoresizingMaskIntoConstraints = false
+        volumeControl.onVolumeChange = { value, notify in
+            AudioPlayerController.shared.setVolume(value, notify: notify)
+        }
+
+        addSubview(textStack)
+        addSubview(volumeControl)
+        addSubview(minimizeButton)
+        pinChrome(textStack: textStack)
+        applyFloatingChrome(false)
+
+        accessibilityLabel = "Now Playing"
+        accessibilityHint = "Double tap to open Now Playing"
+
+        let tap = UITapGestureRecognizer(target: self, action: #selector(openTapped))
+        tap.delegate = self
+        addGestureRecognizer(tap)
+        minimizeButton.addTarget(self, action: #selector(minimizeTapped), for: .touchUpInside)
+    }
+
+    private func pinChrome(textStack: UIStackView) {
+        let minimizeTrailing = minimizeButton.trailingAnchor.constraint(
+            equalTo: trailingAnchor, constant: -Self.controlTrailingInset
+        )
+        minimizeTrailingConstraint = minimizeTrailing
+        NSLayoutConstraint.activate([
+            textStack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
+            textStack.centerYAnchor.constraint(
+                equalTo: safeAreaLayoutGuide.centerYAnchor
+            ),
+            textStack.trailingAnchor.constraint(
+                lessThanOrEqualTo: volumeControl.leadingAnchor, constant: -8
+            ),
+
+            minimizeTrailing,
+            minimizeButton.centerYAnchor.constraint(
+                equalTo: safeAreaLayoutGuide.centerYAnchor
+            ),
+            minimizeButton.widthAnchor.constraint(equalToConstant: 44),
+            minimizeButton.heightAnchor.constraint(equalToConstant: 44),
+
+            volumeControl.trailingAnchor.constraint(
+                equalTo: minimizeButton.leadingAnchor, constant: -4
+            ),
+            volumeControl.centerYAnchor.constraint(
+                equalTo: safeAreaLayoutGuide.centerYAnchor
+            )
+        ])
+    }
+
+    private func configureMinimizeButton() {
         var minimizeConfig = UIButton.Configuration.plain()
         minimizeConfig.image = UIImage(
             systemName: "chevron.right",
@@ -194,172 +215,30 @@ final class AudioMiniPlayerView: UIView, UIGestureRecognizerDelegate {
         minimizeButton.configuration = minimizeConfig
         minimizeButton.accessibilityLabel = "Collapse"
         minimizeButton.accessibilityHint = "Collapse to a floating button. Music keeps playing."
-
-        volumeSlider.minimumValue = 0
-        volumeSlider.maximumValue = 1
-        volumeSlider.accessibilityLabel = "Volume"
-        volumeSlider.tintColor = .secondaryLabel
-        volumeSlider.translatesAutoresizingMaskIntoConstraints = false
-        volumeSlider.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        volumeSlider.addTarget(self, action: #selector(volumeBegan), for: .touchDown)
-        volumeSlider.addTarget(self, action: #selector(volumeChanged), for: .valueChanged)
-        volumeSlider.addTarget(
-            self,
-            action: #selector(volumeEnded),
-            for: [.touchUpInside, .touchUpOutside, .touchCancel]
-        )
-
-        volumeHUD.contentView.addSubview(volumeHUDLabel)
-
-        addSubview(artworkButton)
-        addSubview(textStack)
-        addSubview(speakerIcon)
-        addSubview(volumeSlider)
-        addSubview(minimizeButton)
-        addSubview(volumeHUD)
-
-        NSLayoutConstraint.activate([
-            artworkButton.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
-            artworkButton.centerYAnchor.constraint(
-                equalTo: safeAreaLayoutGuide.centerYAnchor
-            ),
-            artworkButton.widthAnchor.constraint(equalToConstant: 44),
-            artworkButton.heightAnchor.constraint(equalToConstant: 44),
-
-            textStack.leadingAnchor.constraint(
-                equalTo: artworkButton.trailingAnchor, constant: 10
-            ),
-            textStack.centerYAnchor.constraint(
-                equalTo: safeAreaLayoutGuide.centerYAnchor
-            ),
-            textStack.widthAnchor.constraint(lessThanOrEqualToConstant: 120),
-
-            minimizeButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
-            minimizeButton.centerYAnchor.constraint(
-                equalTo: safeAreaLayoutGuide.centerYAnchor
-            ),
-            minimizeButton.widthAnchor.constraint(equalToConstant: 44),
-            minimizeButton.heightAnchor.constraint(equalToConstant: 44),
-
-            speakerIcon.leadingAnchor.constraint(
-                equalTo: textStack.trailingAnchor, constant: 10
-            ),
-            speakerIcon.centerYAnchor.constraint(
-                equalTo: safeAreaLayoutGuide.centerYAnchor
-            ),
-            speakerIcon.widthAnchor.constraint(equalToConstant: 18),
-            speakerIcon.heightAnchor.constraint(equalToConstant: 18),
-
-            volumeSlider.leadingAnchor.constraint(
-                equalTo: speakerIcon.trailingAnchor, constant: 6
-            ),
-            volumeSlider.trailingAnchor.constraint(
-                equalTo: minimizeButton.leadingAnchor, constant: -10
-            ),
-            volumeSlider.centerYAnchor.constraint(
-                equalTo: safeAreaLayoutGuide.centerYAnchor
-            ),
-            volumeSlider.heightAnchor.constraint(equalToConstant: 44),
-
-            volumeHUD.centerXAnchor.constraint(equalTo: volumeSlider.centerXAnchor),
-            volumeHUD.bottomAnchor.constraint(
-                equalTo: volumeSlider.topAnchor, constant: -28
-            ),
-            volumeHUD.widthAnchor.constraint(greaterThanOrEqualToConstant: 64),
-            volumeHUD.heightAnchor.constraint(equalToConstant: 40),
-
-            volumeHUDLabel.leadingAnchor.constraint(
-                equalTo: volumeHUD.contentView.leadingAnchor, constant: 12
-            ),
-            volumeHUDLabel.trailingAnchor.constraint(
-                equalTo: volumeHUD.contentView.trailingAnchor, constant: -12
-            ),
-            volumeHUDLabel.centerYAnchor.constraint(
-                equalTo: volumeHUD.contentView.centerYAnchor
-            )
-        ])
-
-        accessibilityLabel = "Now Playing"
-        accessibilityHint = "Double tap to open Now Playing"
-
-        let tap = UITapGestureRecognizer(target: self, action: #selector(openTapped))
-        tap.delegate = self
-        addGestureRecognizer(tap)
-        artworkButton.addTarget(self, action: #selector(playTapped), for: .touchUpInside)
-        minimizeButton.addTarget(self, action: #selector(minimizeTapped), for: .touchUpInside)
     }
 
-    private static func speakerSymbol(for volume: Float) -> String {
-        if volume <= 0.001 { return "speaker.slash.fill" }
-        if volume < 0.4 { return "speaker.wave.1.fill" }
-        if volume < 0.7 { return "speaker.wave.2.fill" }
-        return "speaker.wave.3.fill"
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        if super.point(inside: point, with: event) { return true }
+        guard volumeControl.isExpanded else { return false }
+        return volumeControl.point(inside: convert(point, to: volumeControl), with: event)
     }
 
     func gestureRecognizer(
         _ gestureRecognizer: UIGestureRecognizer,
         shouldReceive touch: UITouch
     ) -> Bool {
-        !(touch.view is UIControl) && !(touch.view is UISlider)
+        guard let view = touch.view else { return true }
+        if view is UIControl { return false }
+        return !view.isDescendant(of: volumeControl)
     }
 
-    @objc private func openTapped() { onOpenLibrary?() }
-    @objc private func playTapped() { onTogglePlayPause?() }
-    @objc private func minimizeTapped() { onMinimize?() }
-
-    @objc private func volumeBegan() {
-        isAdjustingVolume = true
-        updateVolumeChrome()
-        volumeHUD.alpha = 0
-        volumeHUD.isHidden = false
-        UIView.animate(withDuration: 0.15) { self.volumeHUD.alpha = 1 }
-    }
-
-    @objc private func volumeChanged() {
-        updateVolumeChrome()
-        // Live audio only — full notify on end (avoids Music-page reload flicker).
-        AudioPlayerController.shared.setVolume(volumeSlider.value, notify: false)
-    }
-
-    @objc private func volumeEnded() {
-        isAdjustingVolume = false
-        AudioPlayerController.shared.setVolume(volumeSlider.value, notify: true)
-        UIView.animate(withDuration: 0.2, delay: 0.15) {
-            self.volumeHUD.alpha = 0
-        } completion: { _ in
-            self.volumeHUD.isHidden = true
+    @objc private func openTapped() {
+        if volumeControl.isExpanded {
+            volumeControl.setExpanded(false, animated: true)
+            return
         }
+        onOpenLibrary?()
     }
 
-    private func updateVolumeChrome() {
-        let value = volumeSlider.value
-        let percent = Int((value * 100).rounded())
-        volumeHUDLabel.text = "\(percent)%"
-        speakerIcon.image = UIImage(
-            systemName: Self.speakerSymbol(for: value),
-            withConfiguration: UIImage.SymbolConfiguration(pointSize: 14, weight: .semibold)
-        )
-    }
-}
-
-// MARK: - Generous hit target
-
-/// Wider / taller touch area than the visual track so volume is easy to grab.
-private final class GenerousVolumeSlider: UISlider {
-    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
-        let expanded = CGRect(
-            x: bounds.minX - 14,
-            y: bounds.minY - 10,
-            width: bounds.width + 14 + 4,
-            height: bounds.height + 20
-        )
-        return expanded.contains(point)
-    }
-
-    override func trackRect(forBounds bounds: CGRect) -> CGRect {
-        var rect = super.trackRect(forBounds: bounds)
-        rect.size.height = 4
-        rect.origin.y = (bounds.height - rect.height) / 2
-        return rect
-    }
+    @objc private func minimizeTapped() { onMinimize?() }
 }

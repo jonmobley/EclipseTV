@@ -39,6 +39,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // Begin watching for an AirPlay-mirrored Apple TV (external display) so the
         // selected item can be presented fullscreen on it.
         ExternalDisplayManager.shared.start()
+        ShowLiveSession.shared.prepare()
 
         // Cold-start from an `eclipse://mac-remote` QR scan.
         if let url = connectionOptions.urlContexts.first?.url {

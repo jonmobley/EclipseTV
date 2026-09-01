@@ -98,6 +98,7 @@ extension LibraryGridViewController {
         foreignLiveHeader.removeFromSuperview()
         foreignLiveHeader.clearWebPreview(parking: true)
         foreignLiveHeader.clearScreensaverPreview()
+        foreignLiveHeader.clearCameraPreview()
     }
 
     /// Prefer the open Show when a member lives in more than one album.

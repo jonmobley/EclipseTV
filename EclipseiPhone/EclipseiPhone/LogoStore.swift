@@ -90,6 +90,8 @@ final class LogoStore {
             try data.write(to: logoFileURL, options: .atomic)
             customImage = normalized
             NotificationCenter.default.post(name: Self.didChangeNotification, object: self)
+            guard !EclipseSyncController.shared.isApplyingRemote else { return }
+            EclipseSyncController.shared.backend.scheduleBackgroundSave()
         } catch {
             logger.error("Failed to write logo: \(error.localizedDescription)")
         }
@@ -99,6 +101,36 @@ final class LogoStore {
     func clear() {
         try? FileManager.default.removeItem(at: logoFileURL)
         customImage = nil
+        NotificationCenter.default.post(name: Self.didChangeNotification, object: self)
+        guard !EclipseSyncController.shared.isApplyingRemote else { return }
+        EclipseSyncController.shared.backend.scheduleBackgroundDelete()
+    }
+
+    /// On-disk custom JPEG for CloudKit upload, if the user replaced the default.
+    var customFileURLForSync: URL? {
+        guard hasCustomImage,
+              FileManager.default.fileExists(atPath: logoFileURL.path)
+        else { return nil }
+        return logoFileURL
+    }
+
+    /// Applies a custom Background still from iCloud (or clears when `assetURL` is nil).
+    func applyRemote(assetURL: URL?) {
+        if let assetURL {
+            do {
+                if FileManager.default.fileExists(atPath: logoFileURL.path) {
+                    try FileManager.default.removeItem(at: logoFileURL)
+                }
+                try FileManager.default.copyItem(at: assetURL, to: logoFileURL)
+                customImage = UIImage(contentsOfFile: logoFileURL.path)
+            } catch {
+                logger.error("Remote background copy failed: \(error.localizedDescription)")
+                return
+            }
+        } else {
+            try? FileManager.default.removeItem(at: logoFileURL)
+            customImage = nil
+        }
         NotificationCenter.default.post(name: Self.didChangeNotification, object: self)
     }
 

@@ -39,9 +39,13 @@ class HelpView: UIView {
         • While a video plays, its controls appear on interaction and hide automatically
         
         
-        Send images and videos from the Eclipse iPhone app, or set up
-        remote albums from the options menu. Media is shown fullscreen
-        while maintaining aspect ratio.
+        Link the Eclipse iPhone app to sync imported media. Phone Shows appear as \
+        albums here. Landscape and Vertical are separate libraries — Vertical \
+        tiles are 9:16 and fullscreen letterboxes on the TV. Fit / Fill for stills \
+        is set from the phone.
+        
+        Camera, websites, PDFs, countdowns, and Live Polls stay on AirPlay; when \
+        both are linked, EclipseTV parks black while AirPlay owns those overlays.
         """
         label.textColor = UIColor(white: 0.9, alpha: 1.0) // Lighter, more readable text
         label.font = UIFont.preferredFont(forTextStyle: .body)

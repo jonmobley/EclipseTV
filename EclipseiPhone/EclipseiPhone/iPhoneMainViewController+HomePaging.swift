@@ -9,18 +9,12 @@ import UIKit
 
 // MARK: - Home Pager (Library | Music)
 
-extension iPhoneMainViewController: UIScrollViewDelegate, UINavigationControllerDelegate {
+extension iPhoneMainViewController: UIScrollViewDelegate {
 
-    /// Preferred Music sidebar width in regular-width (side-by-side) layout.
-    private static let musicSidebarPreferredWidth: CGFloat = 340
-    /// Minimum Library pane width when side-by-side.
-    private static let librarySplitMinWidth: CGFloat = 360
-    /// Floor for a squeezed Music sidebar on narrower regular widths.
-    private static let musicSidebarMinWidth: CGFloat = 280
     /// Matches `HomeHeaderBar` height — overlays Library in compact paging.
     private static let homeHeaderOverlayHeight: CGFloat = 52
 
-    /// Embeds Library and Music side-by-side in a horizontal paging scroll view.
+    /// Embeds Library and Music in the home pager (split or drawer on regular width).
     func embedHomePager() {
         homePagerScrollView.delegate = self
         view.addSubview(homePagerScrollView)
@@ -60,14 +54,23 @@ extension iPhoneMainViewController: UIScrollViewDelegate, UINavigationController
         updateHomeChromeForCurrentPage()
     }
 
-    /// Scrolls to the Music page (right of the media grid). No-op in split layout.
+    /// Reveals Music: drawer on regular width, pager page when compact.
+    /// No-op when Music is already pinned beside Library.
     func showMusicPage(animated: Bool = true) {
+        if isMusicInDrawer {
+            musicDrawer.setOpen(true, animated: animated)
+            return
+        }
         guard !isHomeSplitLayout else { return }
         setHomePage(1, animated: animated)
     }
 
-    /// Scrolls back to the Library grid. No-op in split layout.
+    /// Hides Music: closes the drawer, or pages back to Library when compact.
     func showLibraryPage(animated: Bool = true) {
+        if isMusicInDrawer {
+            musicDrawer.setOpen(false, animated: animated)
+            return
+        }
         guard !isHomeSplitLayout else { return }
         setHomePage(0, animated: animated)
     }
@@ -84,7 +87,7 @@ extension iPhoneMainViewController: UIScrollViewDelegate, UINavigationController
         refreshHomePagerScrollEnabled()
     }
 
-    /// Switches between compact paging and regular-width side-by-side.
+    /// Switches among compact paging, pinned split, and the Music drawer.
     func updateHomeSplitLayoutIfNeeded() {
         let width = homePagerScrollView.bounds.width
         guard width > 0 else { return }
@@ -100,25 +103,39 @@ extension iPhoneMainViewController: UIScrollViewDelegate, UINavigationController
     func applyHomePageWidths(forTotalWidth width: CGFloat) -> Bool {
         guard width > 0 else { return false }
 
-        let wantSplit = traitCollection.horizontalSizeClass == .regular
-        let musicWidth = wantSplit ? musicSidebarWidth(for: width) : width
+        let mode = HomeMusicLayout.mode(
+            horizontalSizeClass: traitCollection.horizontalSizeClass,
+            pinned: isMusicSidebarPinned
+        )
+        musicDrawer.panelWidth = HomeMusicLayout.sidebarWidth(for: width)
+
+        let wantSplit = mode == .split
+        let musicWidth = wantSplit
+            ? HomeMusicLayout.sidebarWidth(for: width) : width
         let libraryWidth = wantSplit ? width - musicWidth : width
 
         let splitChanged = wantSplit != isHomeSplitLayout
         let libraryWidthChanged =
             abs((libraryPageWidthConstraint?.constant ?? -1) - libraryWidth) > 0.5
-        let musicWidthChanged =
-            abs((musicPageWidthConstraint?.constant ?? -1) - musicWidth) > 0.5
-        guard splitChanged || libraryWidthChanged || musicWidthChanged else {
+        let musicWidthChanged = mode != .drawer && abs(
+            (musicPageWidthConstraint?.constant ?? -1) - musicWidth
+        ) > 0.5
+        let hostNeedsUpdate =
+            (mode == .drawer) != isMusicInDrawer
+            || audioLibraryNavController?.view.superview == nil
+        guard splitChanged || libraryWidthChanged || musicWidthChanged
+                || hostNeedsUpdate else {
             return false
         }
 
         isHomeSplitLayout = wantSplit
         libraryPageWidthConstraint?.constant = libraryWidth
-        musicPageWidthConstraint?.constant = musicWidth
+        if mode != .drawer {
+            musicPageWidthConstraint?.constant = musicWidth
+        }
 
-        homePagerScrollView.isPagingEnabled = !wantSplit
-        if wantSplit {
+        homePagerScrollView.isPagingEnabled = mode == .paging
+        if mode != .paging {
             homePageIndex = 0
             homePagerScrollView.contentOffset = .zero
             homePagerScrollView.isScrollEnabled = false
@@ -127,16 +144,18 @@ extension iPhoneMainViewController: UIScrollViewDelegate, UINavigationController
             syncHomePagerOffsetIfNeeded()
         }
 
-        audioLibraryViewController.showsEmbeddedBackButton = !wantSplit
-        libraryViewController.setMusicPagingAvailable(!wantSplit)
+        updateMusicHost(for: mode)
         applyHomePagerTopAttachment()
         updateHomeChromeForCurrentPage()
+        if splitChanged || libraryWidthChanged {
+            libraryViewController.invalidatePageLayouts()
+        }
         return true
     }
 
     /// Keeps the current page aligned after rotation / bounds changes.
     func syncHomePagerOffsetIfNeeded() {
-        guard !isHomeSplitLayout else {
+        guard !isHomeSplitLayout, !isMusicInDrawer else {
             if homePagerScrollView.contentOffset.x != 0 {
                 homePagerScrollView.contentOffset = .zero
             }
@@ -166,7 +185,7 @@ extension iPhoneMainViewController: UIScrollViewDelegate, UINavigationController
         if abs(scrollView.contentOffset.y) > 0.5 {
             scrollView.contentOffset.y = 0
         }
-        guard !isHomeSplitLayout else { return }
+        guard !isHomeSplitLayout, !isMusicInDrawer else { return }
         let width = scrollView.bounds.width
         guard width > 0 else { return }
         // Progress-tied chrome — pager height stays fixed so Music does not jump.
@@ -178,62 +197,50 @@ extension iPhoneMainViewController: UIScrollViewDelegate, UINavigationController
         _ scrollView: UIScrollView,
         willDecelerate decelerate: Bool
     ) {
-        guard scrollView === homePagerScrollView, !isHomeSplitLayout else { return }
+        guard scrollView === homePagerScrollView,
+              !isHomeSplitLayout,
+              !isMusicInDrawer else { return }
         if !decelerate {
             updateHomePageIndexFromOffset()
         }
     }
 
     func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
-        guard scrollView === homePagerScrollView, !isHomeSplitLayout else { return }
+        guard scrollView === homePagerScrollView,
+              !isHomeSplitLayout,
+              !isMusicInDrawer else { return }
         updateHomePageIndexFromOffset()
     }
 
     func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
-        guard scrollView === homePagerScrollView, !isHomeSplitLayout else { return }
+        guard scrollView === homePagerScrollView,
+              !isHomeSplitLayout,
+              !isMusicInDrawer else { return }
         updateHomePageIndexFromOffset()
-    }
-
-    func navigationController(
-        _ navigationController: UINavigationController,
-        didShow viewController: UIViewController,
-        animated: Bool
-    ) {
-        guard navigationController === audioLibraryNavController else { return }
-        refreshHomePagerScrollEnabled()
     }
 
     // MARK: - Private
 
-    /// Music sidebar width, keeping Library at least `librarySplitMinWidth` when possible.
-    private func musicSidebarWidth(for totalWidth: CGFloat) -> CGFloat {
-        let preferred = Self.musicSidebarPreferredWidth
-        let minLibrary = Self.librarySplitMinWidth
-        if totalWidth >= minLibrary + preferred {
-            return preferred
-        }
-        return max(Self.musicSidebarMinWidth, totalWidth - minLibrary)
-    }
-
-    /// Paging stays on only at Music root (and never while arranging, split,
-    /// or phone-landscape side-by-side chrome).
+    /// Paging stays on except while arranging, selecting, split, drawer, or
+    /// phone-landscape Show chrome. An open playlist remains the Music page.
     private func refreshHomePagerScrollEnabled() {
+        let allowPaging: Bool
         if isHomeSplitLayout
+            || isMusicInDrawer
             || libraryViewController.isArranging
             || libraryViewController.isSelecting {
-            homePagerScrollView.isScrollEnabled = false
-            return
+            allowPaging = false
+        } else if traitCollection.verticalSizeClass == .compact,
+                  libraryViewController.isShowMode {
+            // Preview|grid already owns the horizontal axis in phone landscape.
+            allowPaging = false
+        } else {
+            allowPaging = true
         }
-        // An open Show puts preview|grid on the horizontal axis in phone landscape,
-        // so Music is reachable there only via the Home dropdown / mini player. Home
-        // has no such split and keeps the swipe.
-        if traitCollection.verticalSizeClass == .compact,
-           libraryViewController.isShowMode {
-            homePagerScrollView.isScrollEnabled = false
-            return
-        }
-        let atMusicRoot = (audioLibraryNavController?.viewControllers.count ?? 1) <= 1
-        homePagerScrollView.isScrollEnabled = atMusicRoot
+        homePagerScrollView.isScrollEnabled = allowPaging
+        // Pager owns the swipe; the playlist back button returns to Music.
+        audioLibraryNavController?.interactivePopGestureRecognizer?.isEnabled =
+            !allowPaging
     }
 
     private func embedLibraryPage() {
@@ -328,6 +335,12 @@ extension iPhoneMainViewController: UIScrollViewDelegate, UINavigationController
             widthConstraint,
             gridView.heightAnchor.constraint(equalTo: frame.heightAnchor)
         ])
+
+        let trailing = gridView.trailingAnchor.constraint(
+            equalTo: homePagerScrollView.contentLayoutGuide.trailingAnchor
+        )
+        trailing.isActive = false
+        libraryTrailingToContentConstraint = trailing
     }
 
     private func embedMusicPage() {
@@ -340,40 +353,20 @@ extension iPhoneMainViewController: UIScrollViewDelegate, UINavigationController
 
         let nav = UINavigationController(rootViewController: audioLibraryViewController)
         nav.setNavigationBarHidden(false, animated: false)
-        nav.delegate = self
         audioLibraryNavController = nav
 
         addChild(nav)
-        let musicView = nav.view!
-        musicView.translatesAutoresizingMaskIntoConstraints = false
-        homePagerScrollView.addSubview(musicView)
-        nav.didMove(toParent: self)
-
-        let gridView = libraryViewController.view!
-        let frame = homePagerScrollView.frameLayoutGuide
-        let initialWidth = max(
-            homePagerScrollView.bounds.width,
-            view.bounds.width,
-            UIScreen.main.bounds.width
+        updateMusicHost(
+            for: HomeMusicLayout.mode(
+                horizontalSizeClass: traitCollection.horizontalSizeClass,
+                pinned: isMusicSidebarPinned
+            )
         )
-        let widthConstraint = musicView.widthAnchor.constraint(equalToConstant: initialWidth)
-        musicPageWidthConstraint = widthConstraint
-        NSLayoutConstraint.activate([
-            musicView.topAnchor.constraint(equalTo: homePagerScrollView.contentLayoutGuide.topAnchor),
-            musicView.bottomAnchor.constraint(
-                equalTo: homePagerScrollView.contentLayoutGuide.bottomAnchor
-            ),
-            musicView.leadingAnchor.constraint(equalTo: gridView.trailingAnchor),
-            musicView.trailingAnchor.constraint(
-                equalTo: homePagerScrollView.contentLayoutGuide.trailingAnchor
-            ),
-            widthConstraint,
-            musicView.heightAnchor.constraint(equalTo: frame.heightAnchor)
-        ])
+        nav.didMove(toParent: self)
     }
 
     private func setHomePage(_ index: Int, animated: Bool) {
-        guard !isHomeSplitLayout else { return }
+        guard !isHomeSplitLayout, !isMusicInDrawer else { return }
         if index == 1 {
             libraryViewController.dismissMusicSwipeHint()
         }
@@ -390,21 +383,16 @@ extension iPhoneMainViewController: UIScrollViewDelegate, UINavigationController
         if !animated {
             updateHomeChromeForCurrentPage()
         }
-        if index == 0 {
-            audioLibraryNavController?.popToRootViewController(animated: false)
-        }
     }
 
     private func updateHomePageIndexFromOffset() {
-        guard !isHomeSplitLayout else { return }
+        guard !isHomeSplitLayout, !isMusicInDrawer else { return }
         let width = homePagerScrollView.bounds.width
         guard width > 0 else { return }
         let index = Int(round(homePagerScrollView.contentOffset.x / width))
         homePageIndex = max(0, min(1, index))
         updateHomeChromeForCurrentPage()
-        if homePageIndex == 0 {
-            audioLibraryNavController?.popToRootViewController(animated: false)
-        } else {
+        if homePageIndex == 1 {
             libraryViewController.dismissMusicSwipeHint()
         }
     }
@@ -416,9 +404,9 @@ extension iPhoneMainViewController: UIScrollViewDelegate, UINavigationController
     }
 
     /// Compact: pager is always under the status bar; header overlays Library.
-    /// Split: pager sits below the header (both panes share that chrome).
+    /// Regular width: pager sits below the header (split and drawer).
     private func applyHomePagerTopAttachment() {
-        if isHomeSplitLayout {
+        if traitCollection.horizontalSizeClass == .regular {
             homePagerTopToSafeAreaConstraint?.isActive = false
             homePagerTopToHeaderConstraint?.isActive = true
             libraryViewController.additionalSafeAreaInsets.top = 0
@@ -470,6 +458,7 @@ extension iPhoneMainViewController {
             self.updateHomeSplitLayoutIfNeeded()
             self.libraryViewController.invalidatePageLayouts()
             self.syncAudioMiniLayoutIfNeeded()
+            ExternalDisplayManager.shared.syncLiveCameraOrientation()
         }
         coordinator.animate(alongsideTransition: { _ in
             refresh()

@@ -70,7 +70,7 @@ final class AudioNowPlayingViewController: UIViewController {
 
     private let playNextLabel: UILabel = {
         let label = UILabel()
-        label.text = "Play Next"
+        label.text = "Autoplay Next"
         label.font = .preferredFont(forTextStyle: .subheadline)
         label.adjustsFontForContentSizeCategory = true
         label.translatesAutoresizingMaskIntoConstraints = false
@@ -79,7 +79,7 @@ final class AudioNowPlayingViewController: UIViewController {
 
     private let playNextSwitch: UISwitch = {
         let control = UISwitch()
-        control.accessibilityLabel = "Play Next"
+        control.accessibilityLabel = "Autoplay Next"
         control.accessibilityHint =
             "When off, playback stops at the end of the current song"
         control.translatesAutoresizingMaskIntoConstraints = false
@@ -407,6 +407,12 @@ extension AudioNowPlayingViewController: UITableViewDataSource, UITableViewDeleg
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
-        AudioPlayerController.shared.play(at: indexPath.row)
+        let player = AudioPlayerController.shared
+        guard player.queue.indices.contains(indexPath.row) else { return }
+        if player.tapStopsPlayback(for: player.queue[indexPath.row]) {
+            player.stop()
+        } else {
+            player.play(at: indexPath.row)
+        }
     }
 }

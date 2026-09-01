@@ -43,7 +43,8 @@ extension iPhoneMainViewController {
                 }
                 if let id = await importOnePickedResult(
                     result,
-                    albumId: makingSlideshow ? nil : albumId
+                    albumId: makingSlideshow ? nil : albumId,
+                    ownerShowId: makingSlideshow ? slideshowShowId : nil
                 ) {
                     addedIds.append(id)
                 } else {
@@ -95,11 +96,14 @@ extension iPhoneMainViewController {
         let orientation = LocalAlbumStore.shared.album(id: showId)?.orientation
             ?? ExternalOutputSettings.orientation
         do {
-            _ = try SlideshowStore.shared.create(
+            let created = try SlideshowStore.shared.create(
                 name: name,
                 showId: showId,
                 itemIds: itemIds,
                 orientation: orientation
+            )
+            libraryViewController.revealAddedShowMember(
+                id: ShowSlideshowToken.token(for: created.id)
             )
             if failed == 0 {
                 showTemporaryStatus("Slideshow created")
@@ -114,23 +118,31 @@ extension iPhoneMainViewController {
     // MARK: - Per-item ingest
 
     /// Imports one pick. Returns the new library id on success.
+    /// - Parameter ownerShowId: CloudKit Show link when the file is not a member
+    ///   (slideshow slides).
     private func importOnePickedResult(
         _ result: PHPickerResult,
-        albumId: UUID?
+        albumId: UUID?,
+        ownerShowId: UUID? = nil
     ) async -> String? {
         let provider = result.itemProvider
         if provider.hasItemConformingToTypeIdentifier(UTType.movie.identifier) {
-            return await importPickedVideoSkippingCrop(provider, albumId: albumId)
+            return await importPickedVideoSkippingCrop(
+                provider, albumId: albumId, ownerShowId: ownerShowId
+            )
         }
         if provider.canLoadObject(ofClass: UIImage.self) {
-            return await importPickedImageSkippingCrop(provider, albumId: albumId)
+            return await importPickedImageSkippingCrop(
+                provider, albumId: albumId, ownerShowId: ownerShowId
+            )
         }
         return nil
     }
 
     private func importPickedImageSkippingCrop(
         _ provider: NSItemProvider,
-        albumId: UUID?
+        albumId: UUID?,
+        ownerShowId: UUID? = nil
     ) async -> String? {
         guard let image = await loadUIImage(from: provider) else { return nil }
         let optimized = MediaValidator.downscaleImage(image)
@@ -150,13 +162,15 @@ extension iPhoneMainViewController {
             thumbnail: optimized,
             duration: 0,
             toAlbumId: albumId,
-            sendIfConnected: false
+            sendIfConnected: false,
+            ownerShowId: ownerShowId
         )
     }
 
     private func importPickedVideoSkippingCrop(
         _ provider: NSItemProvider,
-        albumId: UUID?
+        albumId: UUID?,
+        ownerShowId: UUID? = nil
     ) async -> String? {
         // Copied inside the PHPicker callback so the file survives after it returns.
         guard let localURL = await loadMovieFileURL(from: provider) else { return nil }
@@ -182,7 +196,8 @@ extension iPhoneMainViewController {
             thumbnail: thumbnail,
             duration: duration,
             toAlbumId: albumId,
-            sendIfConnected: false
+            sendIfConnected: false,
+            ownerShowId: ownerShowId
         )
     }
 

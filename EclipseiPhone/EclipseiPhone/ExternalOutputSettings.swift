@@ -232,7 +232,8 @@ enum ExternalOutputSettings {
     /// When true, video recording starts automatically whenever camera is live on AirPlay.
     ///
     /// Defaults off. Recording stops when you leave camera live (cutaway or another
-    /// source). Hold-to-record is disabled while this is on; tap still takes a photo.
+    /// source). The record button does not start or stop independently while this is
+    /// on; the photo button still takes a picture.
     static var alwaysRecordWhenLive: Bool {
         get {
             UserDefaults.standard.bool(forKey: alwaysRecordWhenLiveKey)

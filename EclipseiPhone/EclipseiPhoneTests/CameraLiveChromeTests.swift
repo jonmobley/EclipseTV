@@ -106,6 +106,55 @@ struct CameraLiveChromeTests {
         #expect(vc.recordingTimerLabel.superview === vc.recordingTimerPillView)
     }
 
+    @Test func photoShutterSitsBesideRecordInVerticalDock() {
+        let shutter = CGRect(x: 159, y: 740, width: 72, height: 72)
+        let photo = CameraLiveViewController.photoButtonFrame(
+            shutterFrame: shutter,
+            isVertical: true
+        )
+        #expect(photo.width == CameraLiveViewController.photoSize)
+        #expect(photo.height == CameraLiveViewController.photoSize)
+        #expect(photo.intersects(shutter) == false)
+        #expect(
+            abs(
+                photo.maxX + CameraLiveViewController.shutterPairGap - shutter.minX
+            ) < 0.5
+        )
+        #expect(abs(photo.midY - shutter.midY) < 0.5)
+    }
+
+    @Test func photoShutterSitsAboveRecordInLandscapeDock() {
+        let shutter = CGRect(x: 760, y: 159, width: 72, height: 72)
+        let photo = CameraLiveViewController.photoButtonFrame(
+            shutterFrame: shutter,
+            isVertical: false
+        )
+        #expect(photo.intersects(shutter) == false)
+        #expect(
+            abs(
+                photo.maxY + CameraLiveViewController.shutterPairGap - shutter.minY
+            ) < 0.5
+        )
+        #expect(abs(photo.midX - shutter.midX) < 0.5)
+    }
+
+    @Test func captureDockShowsSeparatePhotoAndRecordButtons() {
+        let vc = CameraLiveViewController()
+        vc.loadViewIfNeeded()
+        vc.view.bounds = CGRect(x: 0, y: 0, width: 390, height: 844)
+        vc.view.layoutIfNeeded()
+        vc.refreshLiveChrome()
+
+        #expect(vc.photoButton.superview === vc.view)
+        #expect(vc.shutterButton.superview === vc.view)
+        #expect(vc.photoButton.accessibilityLabel == "Take Photo")
+        #expect(vc.shutterButton.accessibilityLabel == "Record")
+        #expect(vc.photoButton.frame.width == CameraLiveViewController.photoSize)
+        #expect(vc.shutterButton.frame.width == CameraLiveViewController.shutterSize)
+        #expect(vc.photoButton.frame.intersects(vc.shutterButton.frame) == false)
+        #expect(vc.photoButton.accessibilityHint?.contains("recording") == true)
+    }
+
     private func endCameraIfNeeded(_ mgr: ExternalDisplayManager) {
         mgr.resumeCameraFromStillPark()
         if mgr.isCameraModeActive {

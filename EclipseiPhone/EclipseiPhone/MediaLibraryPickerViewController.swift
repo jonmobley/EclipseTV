@@ -28,28 +28,62 @@ final class MediaLibraryPickerViewController: UIViewController {
         }
     }
 
-    private enum Item: Hashable {
+    enum Item: Hashable {
         case media(String)
         case pdf(UUID)
+
+        /// Show membership id (`LibraryItemDTO.id` or PDF uuid string).
+        var membershipId: String {
+            switch self {
+            case .media(let id): return id
+            case .pdf(let id): return id.uuidString
+            }
+        }
     }
 
     /// When set, taps toggle selection and **Add** appends to this Show (no live).
     var targetShowId: UUID?
     /// Called when the user confirms Add in Show mode.
     var onAddToShow: (([String], [UUID]) -> Void)?
+    /// Crop an existing still or video (same flow as Show ⋯ Edit).
+    var onRequestEdit: ((String) -> Void)?
+    /// Replace a video’s poster frame.
+    var onRequestVideoThumbnail: ((String) -> Void)?
+    /// Persist loop / mute and sync to EclipseTV when linked.
+    var onApplyVideoSetting: ((String, Bool?, Bool?) -> Void)?
+    /// Deletes after the picker’s confirmation. Grid owns TV + local teardown.
+    var onPerformDelete: ((String) -> Void)?
+    /// Re-send a purged Apple TV item from Photos.
+    var onRequestResend: ((String) -> Void)?
+    /// True when EclipseTV is linked (TV-backed deletes need a live link).
+    var onIsEclipseTVLinked: (() -> Bool)?
+    /// Invoked when a TV-backed delete is blocked because EclipseTV is unlinked.
+    var onRequestEclipseTVConnect: (() -> Void)?
 
-    private var filter: Filter = .all
-    private var items: [Item] = []
+    var filter: Filter = .all
+    var items: [Item] = []
+    var searchQuery = ""
     private var selected = Set<Item>()
     /// Item ids already on `targetShowId` (media id or PDF uuid string).
-    private var memberIds: Set<String> = []
-    private var collectionView: UICollectionView!
+    var memberIds: Set<String> = []
+    var collectionView: UICollectionView!
     private let filterControl = UISegmentedControl(items: Filter.allCases.map(\.title))
-    private let emptyLabel = UILabel()
+    let emptyLabel = UILabel()
     private var thumbRetryWork: DispatchWorkItem?
-    private var addButton: UIBarButtonItem?
+    var addButton: UIBarButtonItem?
+    let searchBarButton: UIBarButtonItem = {
+        let item = UIBarButtonItem(
+            image: UIImage(systemName: "magnifyingglass"),
+            style: .plain,
+            target: nil,
+            action: nil
+        )
+        item.accessibilityLabel = "Search"
+        return item
+    }()
+    var searchController: UISearchController?
 
-    private var isAddToShowMode: Bool { targetShowId != nil }
+    var isAddToShowMode: Bool { targetShowId != nil }
 
     private var isNavRoot: Bool {
         navigationController?.viewControllers.first === self
@@ -61,6 +95,8 @@ final class MediaLibraryPickerViewController: UIViewController {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
         title = "Media Library"
+        searchBarButton.target = self
+        searchBarButton.action = #selector(searchTapped)
         if isAddToShowMode {
             let add = UIBarButtonItem(
                 title: "Add",
@@ -70,8 +106,8 @@ final class MediaLibraryPickerViewController: UIViewController {
             )
             add.isEnabled = false
             addButton = add
-            navigationItem.rightBarButtonItem = add
         }
+        updateRightBarButtons(searchActive: false)
 
         filterControl.selectedSegmentIndex = Filter.all.rawValue
         filterControl.addTarget(self, action: #selector(filterChanged), for: .valueChanged)
@@ -150,6 +186,12 @@ final class MediaLibraryPickerViewController: UIViewController {
             name: ExternalOutputSettings.didChangeNotification,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(reload),
+            name: MediaTitleStore.didChangeNotification,
+            object: nil
+        )
         reload()
     }
 
@@ -218,6 +260,20 @@ final class MediaLibraryPickerViewController: UIViewController {
 
     @objc private func addTapped() {
         guard isAddToShowMode, !selected.isEmpty else { return }
+        let selectedIds = selected.map(\.membershipId)
+        if AlreadyInShowAlert.needsConfirmation(
+            selectedIds: selectedIds,
+            memberIds: memberIds
+        ) {
+            AlreadyInShowAlert.present(from: self) { [weak self] in
+                self?.commitAddToShow()
+            }
+            return
+        }
+        commitAddToShow()
+    }
+
+    private func commitAddToShow() {
         var mediaIds: [String] = []
         var pdfIds: [UUID] = []
         for item in selected {
@@ -245,42 +301,75 @@ final class MediaLibraryPickerViewController: UIViewController {
         addButton?.title = count > 0 ? "Add (\(count))" : "Add"
     }
 
+    /// Toggles a tile in the Add-to-Show selection. Members stay selectable.
+    private func toggleAddSelection(for item: Item, at indexPath: IndexPath) {
+        if selected.contains(item) {
+            selected.remove(item)
+        } else {
+            selected.insert(item)
+        }
+        updateAddButton()
+        guard let cell = collectionView.cellForItem(at: indexPath)
+                as? LibraryThumbnailCell else { return }
+        let isSelected = selected.contains(item)
+        cell.setPickerSelected(isSelected)
+        cell.accessibilityTraits = isSelected ? [.selected] : []
+    }
+
     // MARK: - Data
 
-    @objc private func reload() {
+    @objc func reload() {
         let media = TVLibraryStore.shared.items
         let pdfs = PDFStore.shared.documents
-        // Members stay visible (dimmed); only block re-adding on tap.
         memberIds = {
             guard let showId = targetShowId,
                   let album = LocalAlbumStore.shared.album(id: showId)
             else { return [] }
             return Set(album.itemIds)
         }()
-        let mediaItems = media.map { Item.media($0.id) }
-        let pdfItems = pdfs.map { Item.pdf($0.id) }
-        switch filter {
-        case .all:
-            items = mediaItems + pdfItems
-        case .image:
-            items = media.filter { !$0.isVideo }.map { .media($0.id) }
-        case .video:
-            items = media.filter(\.isVideo).map { .media($0.id) }
-        case .pdf:
-            items = pdfItems
-        }
-        selected = selected.filter { items.contains($0) && !isMember($0) }
+        items = displayedItems(from: media, pdfs: pdfs)
+        selected = selected.filter { items.contains($0) }
         emptyLabel.isHidden = !items.isEmpty
-        emptyLabel.text = Self.emptyMessage()
+        emptyLabel.text = emptyMessage()
         collectionView.reloadData()
         updateAddButton()
         scheduleThumbnailRetry()
     }
 
-    private func isMember(_ item: Item) -> Bool {
+    /// Type filter, then title / filename search.
+    func displayedItems(from media: [LibraryItemDTO], pdfs: [SavedPDF]) -> [Item] {
+        let mediaItems = media.map { Item.media($0.id) }
+        let pdfItems = pdfs.map { Item.pdf($0.id) }
+        let typed: [Item]
+        switch filter {
+        case .all:
+            typed = mediaItems + pdfItems
+        case .image:
+            typed = media.filter { !$0.isVideo }.map { .media($0.id) }
+        case .video:
+            typed = media.filter(\.isVideo).map { .media($0.id) }
+        case .pdf:
+            typed = pdfItems
+        }
+        return typed.filter { itemMatchesSearch($0, media: media, pdfs: pdfs) }
+    }
+
+    /// Overlay title, filename, or PDF title.
+    func itemMatchesSearch(
+        _ item: Item,
+        media: [LibraryItemDTO],
+        pdfs: [SavedPDF]
+    ) -> Bool {
         switch item {
-        case .media(let id): return memberIds.contains(id)
-        case .pdf(let id): return memberIds.contains(id.uuidString)
+        case .media(let id):
+            let name = media.first(where: { $0.id == id })?.name
+            return LibrarySearch.matches(
+                searchQuery,
+                in: [MediaTitleStore.title(forId: id), name]
+            )
+        case .pdf(let id):
+            let title = pdfs.first(where: { $0.id == id })?.title
+            return LibrarySearch.matches(searchQuery, in: [title])
         }
     }
 
@@ -294,8 +383,12 @@ final class MediaLibraryPickerViewController: UIViewController {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.45, execute: work)
     }
 
-    /// Empty copy; points at the other Display Mode when that bucket still has media.
-    private static func emptyMessage() -> String {
+    /// Empty copy; search misses vs Display Mode bucket.
+    func emptyMessage() -> String {
+        let needle = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !needle.isEmpty {
+            return "No titles matching “\(needle)”"
+        }
         let mode = ExternalOutputSettings.orientation.rawValue
         guard TVLibraryStore.shared.inactiveModeHasContent() else {
             return "No items in \(mode)"
@@ -335,6 +428,9 @@ extension MediaLibraryPickerViewController: UICollectionViewDataSource {
                     thumbnail: TVLibraryStore.shared.thumbnail(for: id),
                     isLive: false
                 )
+                if !isAddToShowMode {
+                    cell.setMoreMenu(mediaLibraryMenu(for: libraryItem))
+                }
             }
         case .pdf(let id):
             if let doc = PDFStore.shared.documents.first(where: { $0.id == id }) {
@@ -347,23 +443,14 @@ extension MediaLibraryPickerViewController: UICollectionViewDataSource {
                     titleNumberOfLines: 1,
                     typeIcon: .pdf
                 )
+                if !isAddToShowMode {
+                    cell.setMoreMenu(pdfLibraryMenu(for: doc))
+                }
             }
         }
-        let alreadyInShow = isAddToShowMode && isMember(item)
         let isSelected = selected.contains(item)
-        if isAddToShowMode {
-            cell.setPickerState(selected: isSelected, alreadyInShow: alreadyInShow)
-        } else {
-            cell.setPickerSelected(isSelected)
-        }
-        if alreadyInShow {
-            cell.accessibilityTraits = [.notEnabled]
-            if let label = cell.accessibilityLabel, !label.contains("already in this Show") {
-                cell.accessibilityLabel = label + ", already in this Show"
-            }
-        } else {
-            cell.accessibilityTraits = isSelected ? [.selected] : []
-        }
+        cell.setPickerSelected(isSelected)
+        cell.accessibilityTraits = isSelected ? [.selected] : []
         return cell
     }
 }
@@ -379,18 +466,7 @@ extension MediaLibraryPickerViewController: UICollectionViewDelegate {
         let item = items[indexPath.item]
         if isAddToShowMode {
             collectionView.deselectItem(at: indexPath, animated: false)
-            guard !isMember(item) else { return }
-            if selected.contains(item) {
-                selected.remove(item)
-            } else {
-                selected.insert(item)
-            }
-            updateAddButton()
-            if let cell = collectionView.cellForItem(at: indexPath)
-                as? LibraryThumbnailCell {
-                cell.setPickerState(selected: selected.contains(item), alreadyInShow: false)
-                cell.accessibilityTraits = selected.contains(item) ? [.selected] : []
-            }
+            toggleAddSelection(for: item, at: indexPath)
             return
         }
         switch item {
@@ -403,6 +479,19 @@ extension MediaLibraryPickerViewController: UICollectionViewDelegate {
                 return
             }
             previewPDF(doc)
+        }
+    }
+
+    func collectionView(
+        _ collectionView: UICollectionView,
+        contextMenuConfigurationForItemAt indexPath: IndexPath,
+        point: CGPoint
+    ) -> UIContextMenuConfiguration? {
+        guard !isAddToShowMode, items.indices.contains(indexPath.item) else { return nil }
+        let item = items[indexPath.item]
+        return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) {
+            [weak self] _ in
+            self?.libraryContextMenu(for: item)
         }
     }
 }

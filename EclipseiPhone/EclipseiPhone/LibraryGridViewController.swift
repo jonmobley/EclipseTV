@@ -61,8 +61,8 @@ final class LibraryGridViewController: UIViewController {
     let sectionInset: CGFloat = 16
     let interitemSpacing: CGFloat = 12
     let headerInset: CGFloat = 16
-    /// Black gap inserted between the hero banner and the grid below it.
-    let heroBottomPadding: CGFloat = 16
+    /// Black gap between the live preview and the grid / ribbon below it.
+    let heroBottomPadding: CGFloat = 24
     /// Caps Vertical-mode hero height so a 9:16 frame doesn't fill the phone.
     /// Also used to height-cap Landscape heroes on wide (iPad) panes.
     let verticalHeroMaxHeight: CGFloat = 280
@@ -115,6 +115,10 @@ final class LibraryGridViewController: UIViewController {
     /// Working copy of the library order used while arranging and until the Apple TV
     /// confirms the saved order with a fresh manifest. `nil` means show `store.items`.
     var arrangeItems: [LibraryItemDTO]?
+    /// Cancels Live Poll status polling when the ribbon hides or the Show closes.
+    var questPollStatusPollTask: Task<Void, Never>?
+    /// Idle Live Poll card waiting for Practice / Start in the hero.
+    var livePollGateMembershipId: UUID?
 
     /// Long-press: enter arrange mode (Show grid), then grab a tile to drag.
     lazy var reorderGesture: UILongPressGestureRecognizer = {
@@ -159,16 +163,11 @@ final class LibraryGridViewController: UIViewController {
 
     /// Resolvable membership ids in album order — media, websites, and PDFs.
     ///
-    /// Orphans (ids whose store entry is gone) are dropped so callers agree with the
-    /// grid, which also can't render them.
+    /// Keeps unresolved CloudKit membership ids so the grid can show placeholders
+    /// instead of silently dropping them.
     var openShowMembershipIds: [String] {
         guard let album = openShow else { return [] }
-        return album.itemIds.filter { id in
-            if store.items.contains(where: { $0.id == id }) { return true }
-            guard let uuid = UUID(uuidString: id) else { return false }
-            return WebPageStore.shared.page(id: uuid) != nil
-                || PDFStore.shared.documents.contains(where: { $0.id == uuid })
-        }
+        return album.itemIds
     }
 
     /// Slideshows belonging to the open Show.
@@ -177,11 +176,67 @@ final class LibraryGridViewController: UIViewController {
         return SlideshowStore.shared.slideshows(forShowId: openShowId)
     }
 
-    /// Ordered Show-grid surface ids (tools, members, slideshows). Add is not included.
+    /// Countdowns belonging to the open Show.
+    var openShowCountdowns: [ShowCountdown] {
+        guard let openShowId else { return [] }
+        return CountdownStore.shared.countdowns(forShowId: openShowId)
+    }
+
+    /// Live Poll cards belonging to the open Show.
+    var openShowLivePolls: [ShowLivePoll] {
+        guard let openShowId else { return [] }
+        return LivePollStore.shared.polls(forShowId: openShowId)
+    }
+
+    /// Ordered Show-grid surface ids (tools, members, slideshows, countdowns,
+    /// Live Polls). Add is not included.
     var openShowSurfaceIds: [String] {
-        guard let album = openShow else { return [] }
+        guard openShowId != nil else { return [] }
+        CountdownStore.shared.migrateLegacyToolTokensIfNeeded()
+        LivePollStore.shared.dropLegacyToolTokensIfNeeded()
         let slideshows = openShowSlideshows.map { ShowSlideshowToken.token(for: $0.id) }
-        return album.resolvedSurfaceIds(slideshowIds: slideshows)
+        let countdowns = openShowCountdowns.map { ShowCountdownToken.token(for: $0.id) }
+        let livePolls = openShowLivePolls.map { ShowLivePollToken.token(for: $0.id) }
+        // Re-read after migration may rewrite `surfaceIds`.
+        guard let album = openShow else { return [] }
+        let surface = album.resolvedSurfaceIds(
+            slideshowIds: slideshows,
+            countdownIds: countdowns,
+            livePollIds: livePolls
+        )
+        let pending = (album.surfaceIds ?? []).filter { token in
+            pendingSlideshowToken(token)
+                || pendingCountdownToken(token)
+                || pendingLivePollToken(token)
+        }
+        guard !pending.isEmpty else { return surface }
+        var seen = Set(surface)
+        var result = surface
+        for token in pending where seen.insert(token).inserted {
+            result.append(token)
+        }
+        return result
+    }
+
+    private func pendingSlideshowToken(_ token: String) -> Bool {
+        ShowSlideshowToken.isSlideshow(token)
+            && ShowSlideshowToken.slideshowId(from: token).map {
+                SlideshowStore.shared.slideshow(id: $0) == nil
+            } == true
+    }
+
+    private func pendingCountdownToken(_ token: String) -> Bool {
+        ShowCountdownToken.isCountdown(token)
+            && ShowCountdownToken.countdownId(from: token).map {
+                CountdownStore.shared.countdown(id: $0) == nil
+            } == true
+    }
+
+    private func pendingLivePollToken(_ token: String) -> Bool {
+        ShowLivePollToken.isLivePoll(token)
+            && ShowLivePollToken.livePollId(from: token).map {
+                LivePollStore.shared.poll(id: $0) == nil
+            } == true
     }
 
     /// Show-grid rows in surface order. Empty Shows append a trailing Add tile
@@ -200,18 +255,22 @@ final class LibraryGridViewController: UIViewController {
         openShowSurfaceIds.count
     }
 
-    /// Empty Show (no media, websites, or slideshows) offers an Add tile
-    /// (unless arranging or selecting).
+    /// Empty Show (no media, websites, slideshows, countdowns, or Live Polls)
+    /// offers an Add tile (unless arranging or selecting).
     var showsShowAddTile: Bool {
         isShowMode
             && openShowMembershipIds.isEmpty
             && openShowSlideshows.isEmpty
+            && openShowCountdowns.isEmpty
+            && openShowLivePolls.isEmpty
             && !isArranging
             && !isSelecting
     }
 
-    /// Live slideshow ribbon is on for the open Show's active slideshow.
+    /// Live slideshow or Live Poll ribbon is on for the open Show.
     var showsLiveSlideshowRibbon: Bool {
+        if showsLivePollRibbon { return true }
+        if showsCountdownRibbon { return true }
         guard isShowMode,
               let id = SlideshowPlaybackController.shared.activeSlideshowId,
               let show = SlideshowStore.shared.slideshow(id: id),
@@ -326,8 +385,8 @@ final class LibraryGridViewController: UIViewController {
     }()
 
     /// Parked view kept only so landscape chrome constraints stay unambiguous.
-    /// Black plate behind the portrait live card so tiles can't show in the
-    /// gap under the header (or beside a capped Vertical preview).
+    /// Black plate behind the live card so tiles can't show around it, including
+    /// the padding below the preview (and beside a capped Vertical preview).
     let heroSpacer: UIView = {
         let view = UIView()
         view.backgroundColor = .black
@@ -491,12 +550,38 @@ final class LibraryGridViewController: UIViewController {
             self?.reloadGridIfSafe()
             self?.updateEmptyState()
         }
+        observe(CountdownStore.didChangeNotification) { [weak self] _ in
+            self?.reloadGridIfSafe()
+            self?.updateEmptyState()
+        }
+        observe(LivePollStore.didChangeNotification) { [weak self] _ in
+            self?.reloadGridIfSafe()
+            self?.updateEmptyState()
+        }
         observe(SlideshowPlaybackController.didChangeNotification) { [weak self] _ in
             self?.refreshSlideshowRibbonPresentation()
             self?.refreshLiveHeader()
             self?.scrollLiveSlideshowRibbonToCurrentSlide()
         }
+        observe(QuestPollSessionStore.didChangeNotification) { [weak self] _ in
+            guard let self else { return }
+            self.reloadGridIfSafe()
+            self.refreshSlideshowRibbonPresentation()
+            self.refreshLiveHeader()
+            self.scrollLiveSlideshowRibbonToCurrentSlide()
+            if self.showsLivePollRibbon {
+                self.startQuestPollStatusPolling()
+            } else {
+                self.stopQuestPollStatusPolling()
+            }
+        }
+        observe(CountdownController.didChangeNotification) { [weak self] _ in
+            self?.refreshCountdownChrome()
+        }
         observe(VideoResumeStore.didChangeNotification) { [weak self] _ in
+            self?.reloadGridIfSafe()
+        }
+        observe(MediaTitleStore.didChangeNotification) { [weak self] _ in
             self?.reloadGridIfSafe()
         }
         observe(WebThumbnailStore.didChangeNotification) { [weak self] _ in
@@ -558,14 +643,18 @@ final class LibraryGridViewController: UIViewController {
             guard let self else { return }
             if ExternalDisplayManager.shared.isConnected {
                 self.pushCurrentToExternalDisplay()
-            } else if note.userInfo?[ExternalDisplayManager.disconnectReasonKey] as? Bool == true {
-                // AirPlay / HDMI dropped — keep phone camera / web / PDF open; tip the user.
-                self.showPresentationToast("External display disconnected")
+            } else {
+                // AirPlay gone: release EclipseTV park; toast only on real disconnect.
+                _ = AirPlayOverlayPark.clear(using: self.connectionManager)
+                if note.userInfo?[ExternalDisplayManager.disconnectReasonKey] as? Bool == true {
+                    self.showPresentationToast("External display disconnected")
+                }
             }
             // Hero follows a real destination or Practice Mode.
             self.updateHeroVisibility()
             self.applyHeroChrome()
             overlayReload(note)
+            self.syncShowLiveSession()
         }
         observe(ExternalDisplayManager.webDidEndNotification, using: overlayReload)
         observe(ExternalDisplayManager.pdfDidEndNotification, using: overlayReload)
@@ -574,6 +663,21 @@ final class LibraryGridViewController: UIViewController {
             overlayReload(note)
             // AirPlay tore down the session — warm the home tile again.
             self?.warmHomeCameraPreview()
+        }
+        observe(ExternalDisplayManager.webDidEndNotification) { [weak self] _ in
+            self?.clearTVParkIfAirPlayReturnedToLibrary()
+        }
+        observe(ExternalDisplayManager.pdfDidEndNotification) { [weak self] _ in
+            self?.clearTVParkIfAirPlayReturnedToLibrary()
+        }
+        observe(ExternalDisplayManager.cameraDidEndNotification) { [weak self] _ in
+            self?.clearTVParkIfAirPlayReturnedToLibrary()
+        }
+        observe(ShowLiveSession.didChangeNotification) { [weak self] _ in
+            self?.handleShowLiveSessionChanged()
+        }
+        observe(ShowLiveSession.incomingSelectNotification) { [weak self] note in
+            self?.handleIncomingShowLiveSelect(note)
         }
         observe(CameraLiveViewController.didDismissNotification) { [weak self] _ in
             self?.adoptBackgroundSelectionIfCameraCommitted()
@@ -611,6 +715,7 @@ final class LibraryGridViewController: UIViewController {
         layoutForeignLivePreview()
         // Phone turn: keep the Camera tile upright without rebuilding the freeze still.
         syncVisibleCameraTileOrientation()
+        liveHeader.layoutCameraPreviewIfNeeded()
         // Content size is final here — pin leftover offset if the grid no longer overflows.
         updateHomeVerticalScrollPolicy()
     }
@@ -748,11 +853,18 @@ final class LibraryGridViewController: UIViewController {
         onBlackLiveChanged?(blackLive)
         onLiveOutputLockChanged?(isLiveOutputLocked)
         liveHeader.setOutputLocked(isLiveOutputLocked)
+        defer {
+            if ShowLiveSession.shared.isDirector {
+                broadcastShowLiveSnapshotIfNeeded()
+            }
+        }
         guard showsLiveHero else {
             // Never leave a Show-mode live preview over the Home marketing carousel.
             liveHeader.clearWebPreview(parking: true)
             liveHeader.clearScreensaverPreview()
+            liveHeader.clearCameraPreview()
             liveHeader.clearLibraryVideoPreview()
+            liveHeader.hideLivePollGate()
             liveHeader.setSlideshowRibbonToggleVisible(false, isOn: false)
             liveHeader.allowsSlideshowBrowse = false
             liveHeader.isHidden = true
@@ -762,6 +874,25 @@ final class LibraryGridViewController: UIViewController {
         }
         liveHeader.isHidden = false
         liveHeader.isUserInteractionEnabled = true
+        if ShowLiveSession.shared.isRemoteOperator {
+            liveHeader.setSlideshowRibbonToggleVisible(false, isOn: false)
+            liveHeader.allowsSlideshowBrowse = false
+            if let snap = ShowLiveSession.shared.snapshot {
+                applyRemoteLiveHeader(snap)
+            } else {
+                let name = ShowLiveSession.shared.directorDeviceName ?? "another device"
+                liveHeader.configureOverlay(
+                    title: "Live on \(name)",
+                    systemImage: "antenna.radiowaves.left.and.right",
+                    fillColor: UIColor(white: 0.12, alpha: 1),
+                    showsLiveBadge: true
+                )
+                liveHeader.updatePlayback(PlaybackState())
+            }
+            refreshForeignLivePreview()
+            updateHeroCollapse()
+            return
+        }
         // Ribbon toggle visibility follows the active slideshow for this Show.
         defer { syncLiveSlideshowRibbonChrome() }
 
@@ -776,7 +907,18 @@ final class LibraryGridViewController: UIViewController {
         }
         refreshForeignLivePreview()
 
+        if mgr.isCountdownLive {
+            applyCountdownLiveHeader()
+            return
+        }
+        if applyLivePollIdleHeaderIfNeeded() {
+            return
+        }
         if mgr.isWebLive {
+            if mgr.isQuestPollLive {
+                applyQuestPollLiveHeader()
+                return
+            }
             let pageId = mgr.liveWebPageId
             let page = pageId.flatMap { WebPageStore.shared.page(id: $0) }
             let title = page?.title ?? "Website"
@@ -813,12 +955,7 @@ final class LibraryGridViewController: UIViewController {
             return
         }
         if mgr.isCameraLive {
-            liveHeader.configureOverlay(
-                title: "Camera",
-                systemImage: "camera.fill",
-                fillColor: UIColor(white: 0.12, alpha: 1)
-            )
-            liveHeader.updatePlayback(PlaybackState())
+            presentCameraInLiveHeader()
             return
         }
         if mgr.isParkedOnQuickChangeStill {
@@ -904,6 +1041,22 @@ final class LibraryGridViewController: UIViewController {
         )
     }
 
+    /// Live camera feed in the phone hero; the Camera tile shows the icon instead.
+    private func presentCameraInLiveHeader() {
+        let freeze = CameraManager.shared.latestSampleImage
+            ?? CameraManager.shared.lastFrame
+        let thumb = freeze.flatMap { CameraManager.isNearlyBlack($0) ? nil : $0 }
+        liveHeader.configureOverlay(
+            title: "Camera",
+            systemImage: "camera.fill",
+            fillColor: UIColor(white: 0.12, alpha: 1),
+            thumbnail: thumb,
+            keepCameraPreview: liveHeader.isCameraPreviewActive
+        )
+        liveHeader.showCameraPreview()
+        liveHeader.updatePlayback(PlaybackState())
+    }
+
     /// Static poster chrome + muted looping video in the phone preview.
     private func presentScreensaverInLiveHeader() {
         liveHeader.configureOverlay(
@@ -935,6 +1088,8 @@ final class LibraryGridViewController: UIViewController {
             return .web(url)
         case .pdf(let url):
             return .pdf(url)
+        case .countdown:
+            return .countdown
         case .none:
             break
         }
@@ -1187,53 +1342,7 @@ extension LibraryGridViewController: TVLibraryStoreDelegate {
         }
         // Still paint during arrange — entry reload can miss a purged NSCache, and
         // skipping the update left blank tiles for the whole arrange session.
-        // Item/order reloads stay gated; only the thumb for this id refreshes.
-        guard let showsSection = sectionIndex(for: .shows) else { return }
-        if isShowMode {
-            var paths: [IndexPath] = []
-            if docksLiveSlideshowRibbon {
-                reloadDockedRibbonThumbnail(for: id)
-            } else if let ribbonSection = sectionIndex(for: .slideshowRibbon),
-               let ribbonIndex = SlideshowPlaybackController.shared.activeSlideIds
-                .firstIndex(of: id) {
-                let path = IndexPath(item: ribbonIndex, section: ribbonSection)
-                if collectionView.indexPathsForVisibleItems.contains(path) {
-                    paths.append(path)
-                }
-            }
-            // Use grid item order (not raw surface ids) — compactMap can drop
-            // unresolved members and skew indexes, leaving blanks stuck.
-            let gridPaths: [IndexPath] = openShowGridItems.enumerated().compactMap { index, item in
-                let matches: Bool
-                switch item {
-                case .media(let media):
-                    matches = media.id == id
-                case .slideshow(let show):
-                    matches = show.resolvedCoverId == id
-                default:
-                    matches = false
-                }
-                guard matches else { return nil }
-                let path = IndexPath(item: index, section: showsSection)
-                return collectionView.indexPathsForVisibleItems.contains(path) ? path : nil
-            }
-            paths.append(contentsOf: gridPaths)
-            if !paths.isEmpty {
-                collectionView.reloadItems(at: paths)
-            }
-            return
-        }
-        // Home shows Show covers; reload any ribbon tile that uses this media.
-        let items = showRibbonItems
-        let paths: [IndexPath] = items.enumerated().compactMap { index, item in
-            guard case .show(let show) = item,
-                  show.itemIds.contains(id) else { return nil }
-            let path = IndexPath(item: index, section: showsSection)
-            return collectionView.indexPathsForVisibleItems.contains(path) ? path : nil
-        }
-        if !paths.isEmpty {
-            collectionView.reloadItems(at: paths)
-        }
+        paintArrivedThumbnail(id)
     }
 
     func libraryStoreDidChangeConnection(_ store: TVLibraryStore) {

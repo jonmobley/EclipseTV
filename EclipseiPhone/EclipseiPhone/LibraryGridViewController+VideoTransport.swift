@@ -47,7 +47,8 @@ extension LibraryGridViewController {
         let phonePlays = LiveOutputRouting.phoneHeroPlaysLibraryVideo(
             airPlayConnected: mgr.isConnected,
             eclipseTVOnline: store.isOnline,
-            practiceMode: prefersDisconnectedLivePreview
+            practiceMode: prefersDisconnectedLivePreview,
+            isRemoteOperator: ShowLiveSession.shared.isRemoteOperator
         )
         if phonePlays, let url = LocalMediaStore.shared.localURL(forId: item.id) {
             liveHeader.configure(

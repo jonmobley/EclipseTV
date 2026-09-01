@@ -163,6 +163,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         forItemAt indexPath: IndexPath
     ) {
         refreshVisibleThumbnailPins()
+        fillPlaceholderThumbnailIfReady(cell, at: indexPath, in: collectionView)
     }
 
     func collectionView(
@@ -266,7 +267,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         return cell
     }
 
-    /// Presents the full Shows list (both Display Modes).
+    /// Presents the full Shows list (both Display Modes, All / Horizontal / Vertical).
     func presentAllShows() {
         let list = AllShowsViewController()
         list.onOpenShow = { [weak self] id in
@@ -408,6 +409,12 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         if isBlackSelected {
             isBlackSelected = false
             ExternalDisplayManager.shared.endBlackout()
+            // Library restore unparks; overlay restore keeps EclipseTV parked.
+            if ExternalDisplayManager.shared.isOverlayLive {
+                announceAirPlayOverlayIfLinked()
+            } else {
+                _ = AirPlayOverlayPark.clear(using: connectionManager)
+            }
         } else {
             SlideshowPlaybackController.shared.stop()
             // Snapshot before flipping the flag — `currentSourceProvider` prefers black.
@@ -423,15 +430,13 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         }
     }
 
-    /// Presents a solid black frame on AirPlay (header Black control).
-    func presentBlackLive() {
-        guard !isBlackSelected else { return }
-        toggleBlackLive()
-    }
-
     /// Marks Background live and presents the Background still on AirPlay.
     func presentLogoLive() {
         guard !blockLiveChangeIfLocked() else { return }
+        if sendShowLiveSelectIfOperator(.logo, itemId: nil) {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            return
+        }
         guard let source = LogoStore.shared.presentationSource else {
             onChooseLogo?()
             return
@@ -451,6 +456,10 @@ extension LibraryGridViewController: UICollectionViewDataSource,
     /// Marks Screensaver live and presents the looping video on AirPlay.
     func presentScreensaverLive() {
         guard !blockLiveChangeIfLocked() else { return }
+        if sendShowLiveSelectIfOperator(.screensaver, itemId: nil) {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            return
+        }
         guard let source = ScreensaverStore.presentationSource else { return }
         SlideshowPlaybackController.shared.stop()
         isBlackSelected = false
@@ -550,6 +559,10 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         }
         if item.isAvailable == false {
             presentOptions(forItemId: item.id)
+            return
+        }
+        if sendShowLiveSelectIfOperator(.media, itemId: item.id) {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
             return
         }
 
@@ -760,10 +773,13 @@ extension LibraryGridViewController: UICollectionViewDataSource,
                 image: UIImage(systemName: "eye")
             ) { [weak self] _ in
                 self?.presentLocalPreview(for: item)
-            }
+            },
+            titleAction(for: item)
         ]
         if item.isVideo {
             children.append(contentsOf: videoOptionActions(for: item))
+        } else {
+            children.append(noteAction(for: item))
         }
         children.append(contentsOf: [edit, delete])
         return UIMenu(children: children)

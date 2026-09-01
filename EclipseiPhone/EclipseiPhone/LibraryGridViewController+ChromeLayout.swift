@@ -7,23 +7,43 @@
 
 import UIKit
 
-/// Tap goes live (red) only with AirPlay, EclipseTV, or Practice Mode.
+/// Tap goes live (red) with AirPlay, EclipseTV, Practice Mode, or a remote director.
 enum LiveOutputRouting {
-    /// Live when a display, EclipseTV, or Practice Mode is available.
+    /// Live when a display, EclipseTV, Practice Mode, or a remote director is available.
     static func canMarkLive(
         airPlayConnected: Bool,
         eclipseTVOnline: Bool,
-        practiceMode: Bool
+        practiceMode: Bool,
+        isRemoteOperator: Bool = false
     ) -> Bool {
-        airPlayConnected || eclipseTVOnline || practiceMode
+        airPlayConnected || eclipseTVOnline || practiceMode || isRemoteOperator
     }
 
-    /// Live using the current AirPlay / EclipseTV state.
+    /// Live using the current AirPlay / EclipseTV / remote-operator state.
     @MainActor
     static func canMarkLive(practiceMode: Bool) -> Bool {
         canMarkLive(
             airPlayConnected: ExternalDisplayManager.shared.isConnected,
             eclipseTVOnline: TVLibraryStore.shared.isOnline,
+            practiceMode: practiceMode,
+            isRemoteOperator: ShowLiveSession.shared.isRemoteOperator
+        )
+    }
+
+    /// Web overlays (Live Poll / websites) only reach AirPlay / HDMI or Practice.
+    /// Linked EclipseTV stays on the companion library and cannot show a WKWebView.
+    static func canPresentWebOverlay(
+        airPlayConnected: Bool,
+        practiceMode: Bool
+    ) -> Bool {
+        airPlayConnected || practiceMode
+    }
+
+    /// Web overlay using the current AirPlay / Practice state.
+    @MainActor
+    static func canPresentWebOverlay(practiceMode: Bool) -> Bool {
+        canPresentWebOverlay(
+            airPlayConnected: ExternalDisplayManager.shared.isConnected,
             practiceMode: practiceMode
         )
     }
@@ -56,27 +76,50 @@ enum LiveOutputRouting {
     static func phoneHeroPlaysLibraryVideo(
         airPlayConnected: Bool,
         eclipseTVOnline: Bool,
-        practiceMode: Bool
+        practiceMode: Bool,
+        isRemoteOperator: Bool = false
     ) -> Bool {
-        practiceMode && !airPlayConnected && !eclipseTVOnline
+        practiceMode && !airPlayConnected && !eclipseTVOnline && !isRemoteOperator
     }
 
-    /// Grey program monitor when library video is live on AirPlay or EclipseTV.
+    /// Grey program monitor when library video is live on AirPlay, EclipseTV, or remote.
     static func usesRemoteVideoMonitor(
         isVideo: Bool,
         airPlayConnected: Bool,
-        eclipseTVOnline: Bool
+        eclipseTVOnline: Bool,
+        isRemoteOperator: Bool = false
     ) -> Bool {
-        isVideo && (airPlayConnected || eclipseTVOnline)
+        isVideo && (airPlayConnected || eclipseTVOnline || isRemoteOperator)
+    }
+
+    /// LIVE overlay on the big preview: HDMI / AirPlay / EclipseTV / remote operator.
+    /// Practice Mode still shows the hero, but it is not program output.
+    static func showsHeroLiveBadge(
+        airPlayConnected: Bool,
+        eclipseTVOnline: Bool,
+        isRemoteOperator: Bool = false
+    ) -> Bool {
+        airPlayConnected || eclipseTVOnline || isRemoteOperator
+    }
+
+    /// LIVE overlay using the current HDMI / AirPlay / EclipseTV / remote state.
+    @MainActor
+    static func showsHeroLiveBadge() -> Bool {
+        showsHeroLiveBadge(
+            airPlayConnected: ExternalDisplayManager.shared.isConnected,
+            eclipseTVOnline: TVLibraryStore.shared.isOnline,
+            isRemoteOperator: ShowLiveSession.shared.isRemoteOperator
+        )
     }
 }
 
-/// Portrait live preview occludes the grid from the page top through the card.
+/// Live preview occludes the grid from the page top through the card plus
+/// the black padding under it. Landscape keeps the plate in the leading column.
 enum LiveHeroBackdrop {
-    /// Shown only for the stacked (portrait) live hero — landscape already
-    /// puts the grid in a separate column.
-    static func isVisible(showsLiveHero: Bool, isSideBySideChrome: Bool) -> Bool {
-        showsLiveHero && !isSideBySideChrome
+    /// Shown whenever the live hero is on — stacked is full-width; side-by-side
+    /// covers only the leading preview column (including the ribbon gap).
+    static func isVisible(showsLiveHero: Bool, isSideBySideChrome _: Bool) -> Bool {
+        showsLiveHero
     }
 }
 
@@ -89,7 +132,8 @@ extension LibraryGridViewController {
         isShowMode && (openShow?.previewsWhenDisconnected == true)
     }
 
-    /// Tap marks live (red) when AirPlay, EclipseTV, or Practice Mode is on.
+    /// Tap marks live (red) when AirPlay, EclipseTV, Practice Mode, or a remote
+    /// director is on.
     ///
     /// Otherwise the Show is Preview-only: no live hero, and taps open the
     /// on-device gallery / browser instead of going live.
@@ -122,6 +166,7 @@ extension LibraryGridViewController {
         if shouldHide {
             liveHeader.clearWebPreview(parking: true)
             liveHeader.clearScreensaverPreview()
+            liveHeader.clearCameraPreview()
             liveHeader.transform = .identity
             liveHeader.applyCollapse(progress: 0, scale: 1)
             heroCollapseProgress = 0
@@ -194,12 +239,14 @@ extension LibraryGridViewController {
             gridHost.leadingAnchor.constraint(equalTo: safe.leadingAnchor),
             gridHost.trailingAnchor.constraint(equalTo: safe.trailingAnchor),
             gridHost.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            // Portrait: opaque plate from the page top through the live card so
-            // tiles scrolling under the preview can't show between it and the header.
+            // Portrait: opaque plate from the page top through the live card and
+            // the black padding under it, so tiles can't sit flush with the preview.
             heroSpacer.topAnchor.constraint(equalTo: view.topAnchor),
             heroSpacer.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             heroSpacer.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            heroSpacer.bottomAnchor.constraint(equalTo: liveHeader.bottomAnchor),
+            heroSpacer.bottomAnchor.constraint(
+                equalTo: liveHeader.bottomAnchor, constant: heroBottomPadding
+            ),
             // Park the landscape ribbon; portrait uses the in-grid section.
             slideshowRibbonView.topAnchor.constraint(equalTo: view.topAnchor),
             slideshowRibbonView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
@@ -246,10 +293,13 @@ extension LibraryGridViewController {
             slideshowRibbonView.bottomAnchor.constraint(
                 lessThanOrEqualTo: safe.bottomAnchor, constant: -8
             ),
+            // Leading-column plate: header through the gap above the docked ribbon.
             heroSpacer.topAnchor.constraint(equalTo: view.topAnchor),
             heroSpacer.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            heroSpacer.widthAnchor.constraint(equalToConstant: 0),
-            heroSpacer.heightAnchor.constraint(equalToConstant: 0)
+            heroSpacer.trailingAnchor.constraint(equalTo: liveHeader.trailingAnchor),
+            heroSpacer.bottomAnchor.constraint(
+                equalTo: slideshowRibbonView.topAnchor
+            )
         ]
 
         NSLayoutConstraint.activate(portraitChromeConstraints)
@@ -327,6 +377,7 @@ extension LibraryGridViewController {
             liveHeader.isHidden = true
             liveHeader.clearWebPreview(parking: true)
             liveHeader.clearScreensaverPreview()
+            liveHeader.clearCameraPreview()
             updateLiveHeroBackdrop()
             syncHeroOverlayInsets(preservingProgress: currentHeroScrollProgress())
             updateHeroCollapse()
@@ -449,7 +500,7 @@ extension LibraryGridViewController {
         heroHeightConstraint?.isActive = false
     }
 
-    /// Black plate under the portrait live card; hidden on Home and in landscape.
+    /// Black plate under the live card; hidden on Home.
     func updateLiveHeroBackdrop() {
         let show = LiveHeroBackdrop.isVisible(
             showsLiveHero: showsLiveHero,
@@ -514,7 +565,9 @@ extension LibraryGridViewController {
                 sectionInset: 0,
                 spacing: interitemSpacing
             )
-            availableHeight = max(0, availableHeight - Self.sideBySideGutter - thumb.height)
+            availableHeight = max(
+                0, availableHeight - heroBottomPadding - thumb.height
+            )
             hero = sideBySideHeroSize(
                 availableWidth: availableWidth,
                 availableHeight: availableHeight,

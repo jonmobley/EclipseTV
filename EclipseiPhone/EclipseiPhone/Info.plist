@@ -59,11 +59,13 @@
         <true/>
     </dict>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Eclipse needs access to the local network to connect with your Apple TV, Eclipse on your Mac, and Phone Camera ingest</string>
+	<string>Eclipse needs access to the local network to connect with your Apple TV, Eclipse on your Mac, other Eclipse devices, and Phone Camera ingest</string>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_eclipse-share._tcp</string>
 		<string>_eclipse-share._udp</string>
+		<string>_eclipse-live._tcp</string>
+		<string>_eclipse-live._udp</string>
 		<string>_eclipsephone._tcp</string>
 	</array>
     <key>NSPhotoLibraryUsageDescription</key>

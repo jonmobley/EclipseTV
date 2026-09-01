@@ -97,7 +97,8 @@ extension ImageViewController: UICollectionViewDataSource, UICollectionViewDeleg
         cell.addGestureRecognizer(longPressGesture)
         
         // Load thumbnail asynchronously using the improved configureAsync method
-        let cellSize = (gridView.collectionViewLayout as? UICollectionViewFlowLayout)?.itemSize ?? CGSize(width: 300, height: 169)
+        let cellSize = (gridView.collectionViewLayout as? UICollectionViewFlowLayout)?.itemSize
+            ?? TVGridMetrics.fallbackItemSize(for: dataSource.activeLibraryMode)
         cell.configureAsync(imagePath: mediaItem.path, isVideo: mediaItem.isVideo, cellSize: cellSize, userPosition: nil)
         
         // Handle video metadata separately if needed
@@ -203,7 +204,8 @@ extension ImageViewController: UICollectionViewDataSource, UICollectionViewDeleg
             for index in startIndex...endIndex {
                 guard let path = dataSource.getPath(at: index) else { continue }
                 let isVideo = path.lowercased().hasSuffix(".mp4") || path.lowercased().hasSuffix(".mov")
-                let cellSize = (collectionView.collectionViewLayout as? UICollectionViewFlowLayout)?.itemSize ?? CGSize(width: 400, height: 225)
+                let cellSize = (collectionView.collectionViewLayout as? UICollectionViewFlowLayout)?.itemSize
+                    ?? TVGridMetrics.preloadItemSize(for: self.dataSource.activeLibraryMode)
                 
                 if isVideo {
                     _ = await VideoThumbnailCache.shared.getThumbnailAsync(for: path, targetSize: cellSize)

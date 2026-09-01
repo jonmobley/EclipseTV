@@ -68,13 +68,18 @@ extension CameraLiveViewController {
         view.bringSubviewToFront(settingsButton)
     }
 
-    /// Builds shutter + Flip + Frame (docked outside the Display Mode panel).
+    /// Builds photo + record + Flip + Frame (docked outside the Display Mode panel).
     func setupCaptureMocks() {
         shutterButton.translatesAutoresizingMaskIntoConstraints = true
-        shutterButton.accessibilityLabel = "Shutter"
+        shutterButton.accessibilityLabel = "Record"
         view.addSubview(shutterButton)
-        applyShutterAppearance(isLive: false, isRecording: false)
-        setupShutterGestures()
+        applyShutterAppearance(isRecording: false)
+
+        photoButton.translatesAutoresizingMaskIntoConstraints = true
+        photoButton.accessibilityLabel = "Take Photo"
+        view.addSubview(photoButton)
+        applyPhotoButtonAppearance()
+        setupCaptureButtons()
 
         let symbol = UIImage.SymbolConfiguration(pointSize: 14, weight: .semibold)
 
@@ -124,7 +129,7 @@ extension CameraLiveViewController {
         view.addSubview(frameButton)
     }
 
-    /// Places Frame · shutter · Flip in the outside dock (not over the preview).
+    /// Places Frame · photo · record · Flip in the outside dock (not over the preview).
     ///
     /// Vertical: bottom dock under the panel. Landscape: trailing dock — the same
     /// physical spot when the phone is held sideways.
@@ -139,6 +144,7 @@ extension CameraLiveViewController {
         }
 
         view.bringSubviewToFront(frameButton)
+        view.bringSubviewToFront(photoButton)
         view.bringSubviewToFront(shutterButton)
         view.bringSubviewToFront(flipButton)
         layoutLiveOutputThumb(panel: panel)
@@ -148,7 +154,7 @@ extension CameraLiveViewController {
         updateShutterAccessibilityHint()
     }
 
-    /// Frame · shutter · Flip in a row in the bottom dock under the Vertical panel.
+    /// Frame · photo · record · Flip in a row in the bottom dock under the Vertical panel.
     private func layoutVerticalCaptureChrome(panel: CGRect) {
         let inset: CGFloat = 20
         let controlSize = Self.chromeControlSize
@@ -161,6 +167,10 @@ extension CameraLiveViewController {
             y: rowY,
             width: Self.shutterSize,
             height: Self.shutterSize
+        )
+        photoButton.frame = Self.photoButtonFrame(
+            shutterFrame: shutterButton.frame,
+            isVertical: true
         )
         frameButton.frame = CGRect(
             x: panel.minX + inset,
@@ -191,6 +201,10 @@ extension CameraLiveViewController {
             width: Self.shutterSize,
             height: Self.shutterSize
         )
+        photoButton.frame = Self.photoButtonFrame(
+            shutterFrame: shutterButton.frame,
+            isVertical: false
+        )
         frameButton.frame = CGRect(
             x: sideX,
             y: panel.minY + inset,
@@ -206,14 +220,33 @@ extension CameraLiveViewController {
         flipButton.transform = .identity
     }
 
+    /// Photo shutter sits beside record: leading in Vertical, above in Landscape.
+    static func photoButtonFrame(shutterFrame: CGRect, isVertical: Bool) -> CGRect {
+        let size = photoSize
+        let gap = shutterPairGap
+        if isVertical {
+            return CGRect(
+                x: shutterFrame.minX - gap - size,
+                y: shutterFrame.midY - size / 2,
+                width: size,
+                height: size
+            )
+        }
+        return CGRect(
+            x: shutterFrame.midX - size / 2,
+            y: shutterFrame.minY - gap - size,
+            width: size,
+            height: size
+        )
+    }
+
     /// Updates LIVE badge and shutter for preview vs AirPlay-live.
     func refreshLiveChrome() {
         // Going live hands the hardware preview layer to the TV — re-route the panel.
         updateLivePreviewSource()
-        let live = isAirPlayLive
         let recording = CameraManager.shared.isRecording
         applyLiveBadgeAppearance()
-        applyShutterAppearance(isLive: live, isRecording: recording)
+        applyShutterAppearance(isRecording: recording)
         refreshFlipButtonEnabled()
         syncRecordingTimer()
         layoutTopChromeInPanel()
@@ -226,41 +259,57 @@ extension CameraLiveViewController {
         ExternalDisplayManager.shared.isCameraModeActive
     }
 
-    /// Styles the shutter for idle / live / recording.
-    func applyShutterAppearance(isLive: Bool, isRecording: Bool) {
+    /// Styles the record button for idle vs recording.
+    func applyShutterAppearance(isRecording: Bool) {
         var config = UIButton.Configuration.plain()
         config.cornerStyle = .capsule
+        config.background.backgroundColor = .systemRed
+        config.background.strokeColor = .white
         if isRecording {
-            config.background.backgroundColor = .systemRed
-            config.background.strokeColor = .white
             config.background.strokeWidth = 4
-        } else if isLive {
-            config.background.backgroundColor = .systemRed
-            config.background.strokeColor = UIColor.white.withAlphaComponent(0.85)
-            config.background.strokeWidth = 3
+            // Stop square only when tapping this control will stop the clip.
+            let alwaysLiveOwnsRecord =
+                isAirPlayLive && ExternalOutputSettings.alwaysRecordWhenLive
+            if !alwaysLiveOwnsRecord {
+                let stop = UIImage.SymbolConfiguration(pointSize: 20, weight: .bold)
+                config.image = UIImage(systemName: "stop.fill", withConfiguration: stop)
+                config.baseForegroundColor = .white
+            }
         } else {
-            config.background.backgroundColor = .white
-            config.background.strokeColor = UIColor.white.withAlphaComponent(0.35)
             config.background.strokeWidth = 3
+            config.image = nil
         }
         shutterButton.configuration = config
-        shutterButton.accessibilityValue = isRecording
-            ? "Recording"
-            : (isLive ? "Live" : "Preview")
+        shutterButton.accessibilityValue = isRecording ? "Recording" : "Idle"
+    }
+
+    /// White still shutter, visually distinct from the red record control.
+    func applyPhotoButtonAppearance() {
+        var config = UIButton.Configuration.plain()
+        config.cornerStyle = .capsule
+        let symbol = UIImage.SymbolConfiguration(pointSize: 18, weight: .medium)
+        config.image = UIImage(systemName: "camera.fill", withConfiguration: symbol)
+        config.baseForegroundColor = .black
+        config.background.backgroundColor = .white
+        config.background.strokeColor = UIColor.white.withAlphaComponent(0.35)
+        config.background.strokeWidth = 3
+        photoButton.configuration = config
     }
 
     func updateShutterAccessibilityHint() {
-        if !isAirPlayLive {
-            shutterButton.accessibilityHint = "Tap for photo. Hold to record."
+        photoButton.accessibilityHint = "Takes a photo. Works while recording."
+        if isAirPlayLive, ExternalOutputSettings.alwaysRecordWhenLive {
+            shutterButton.accessibilityHint =
+                "Recording starts with live. Tap the preview to stop live and recording."
             return
         }
-        if ExternalOutputSettings.alwaysRecordWhenLive {
+        if CameraManager.shared.isRecording {
+            shutterButton.accessibilityHint = "Stops recording."
+        } else if isAirPlayLive {
             shutterButton.accessibilityHint =
-                "Tap for photo. Recording starts with live. "
-                + "Tap the preview to stop live and recording."
+                "Starts video recording. Tap the preview to stop live."
         } else {
-            shutterButton.accessibilityHint =
-                "Tap for photo. Hold to record. Tap the preview to stop live."
+            shutterButton.accessibilityHint = "Starts video recording."
         }
     }
 

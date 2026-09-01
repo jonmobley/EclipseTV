@@ -10,8 +10,8 @@ import UIKit
 /// Top header for the home screen.
 ///
 /// Home: page dropdown · + New Show.
-/// Show mode trailing: Lock + Blackout (when a display, EclipseTV, or Practice
-/// Mode is on), Settings, and "+".
+/// Show mode: back to Home · page dropdown; trailing Lock + Blackout (when a
+/// display, EclipseTV, or Practice Mode is on), Settings, and "+".
 /// iCloud Sync status surfaces via `EclipseSyncStatusBanner`, not the header.
 final class HomeHeaderBar: UIView {
 
@@ -24,6 +24,8 @@ final class HomeHeaderBar: UIView {
 
     // MARK: - Subviews
 
+    private let leadingStack = UIStackView()
+    private let backButton = UIButton(type: .system)
     private let menuPill = UIView()
     private let libraryButton = UIButton(type: .system)
     private let trailingStack = UIStackView()
@@ -43,6 +45,8 @@ final class HomeHeaderBar: UIView {
     var onPresentBlack: (() -> Void)?
     /// Invoked when New Show is tapped on Home.
     var onNewShow: (() -> Void)?
+    /// Invoked when the Show-mode back control is tapped (returns to Home).
+    var onGoHome: (() -> Void)?
     /// Invoked when Done is tapped while arranging tiles.
     var onDoneArranging: (() -> Void)?
     /// Invoked when Done is tapped while multi-selecting tiles.
@@ -81,7 +85,6 @@ final class HomeHeaderBar: UIView {
         menuPill.layer.borderWidth = 1
         menuPill.layer.borderColor = UIColor.separator.cgColor
         menuPill.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(menuPill)
         registerForTraitChanges([UITraitUserInterfaceStyle.self]) {
             (view: Self, _: UITraitCollection) in
             view.menuPill.layer.borderColor = UIColor.separator.cgColor
@@ -122,6 +125,29 @@ final class HomeHeaderBar: UIView {
             .defaultLow, for: .horizontal
         )
         menuPill.addSubview(libraryButton)
+
+        backButton.configuration = Self.barIconConfig(
+            systemName: "chevron.left",
+            symbolConfig: UIImage.SymbolConfiguration(pointSize: 17, weight: .semibold)
+        )
+        backButton.translatesAutoresizingMaskIntoConstraints = false
+        backButton.accessibilityLabel = "Back to Home"
+        backButton.accessibilityHint = "Closes this Show and returns to Home"
+        backButton.addTarget(self, action: #selector(homeBackTapped), for: .touchUpInside)
+        backButton.isHidden = true
+        backButton.setContentHuggingPriority(.required, for: .horizontal)
+        backButton.setContentCompressionResistancePriority(.required, for: .horizontal)
+
+        leadingStack.axis = .horizontal
+        leadingStack.alignment = .center
+        leadingStack.spacing = 2
+        leadingStack.translatesAutoresizingMaskIntoConstraints = false
+        leadingStack.addArrangedSubview(backButton)
+        leadingStack.addArrangedSubview(menuPill)
+        leadingStack.setContentCompressionResistancePriority(
+            .defaultLow, for: .horizontal
+        )
+        addSubview(leadingStack)
 
         lockButton.translatesAutoresizingMaskIntoConstraints = false
         lockButton.accessibilityLabel = "Lock live output"
@@ -205,9 +231,15 @@ final class HomeHeaderBar: UIView {
         addSubview(trailingStack)
 
         NSLayoutConstraint.activate([
-            menuPill.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
-            menuPill.centerYAnchor.constraint(equalTo: centerYAnchor),
+            leadingStack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
+            leadingStack.centerYAnchor.constraint(equalTo: centerYAnchor),
+            leadingStack.trailingAnchor.constraint(
+                lessThanOrEqualTo: trailingStack.leadingAnchor, constant: -8
+            ),
+
             menuPill.heightAnchor.constraint(equalToConstant: 36),
+            backButton.widthAnchor.constraint(equalToConstant: 36),
+            backButton.heightAnchor.constraint(equalToConstant: 36),
 
             libraryButton.leadingAnchor.constraint(equalTo: menuPill.leadingAnchor),
             libraryButton.trailingAnchor.constraint(equalTo: menuPill.trailingAnchor),
@@ -227,11 +259,7 @@ final class HomeHeaderBar: UIView {
             blackButton.heightAnchor.constraint(equalToConstant: 36),
             newShowButton.heightAnchor.constraint(equalToConstant: 36),
             selectActionsButton.heightAnchor.constraint(equalToConstant: 36),
-            doneButton.heightAnchor.constraint(equalToConstant: 36),
-
-            menuPill.trailingAnchor.constraint(
-                lessThanOrEqualTo: trailingStack.leadingAnchor, constant: -8
-            )
+            doneButton.heightAnchor.constraint(equalToConstant: 36)
         ])
         for button in [
             lockButton, blackButton, settingsButton,
@@ -261,15 +289,22 @@ final class HomeHeaderBar: UIView {
     // MARK: - Menus
 
     /// Sets the dropdown title (`"Home"` on Home, show name in Show mode).
-    func setCenterTitle(_ title: String) {
+    /// - Parameter subtitle: Optional second line (e.g. "Live on iPad").
+    func setCenterTitle(_ title: String, subtitle: String? = nil) {
         guard var config = libraryButton.configuration else { return }
         config.title = title
+        config.subtitle = subtitle
         config.titleLineBreakMode = .byTruncatingTail
+        config.subtitleLineBreakMode = .byTruncatingTail
         libraryButton.configuration = config
-        libraryButton.accessibilityLabel = "\(title) menu"
+        if let subtitle {
+            libraryButton.accessibilityLabel = "\(title) menu, \(subtitle)"
+        } else {
+            libraryButton.accessibilityLabel = "\(title) menu"
+        }
     }
 
-    /// Attaches the page dropdown (Home, Open Show, New Show, Library, Music, Recents).
+    /// Attaches the page dropdown (Open Show, New Show, Library, Music, Recents).
     func setLibraryMenu(_ menu: UIMenu) {
         libraryButton.menu = menu
     }
@@ -297,6 +332,10 @@ final class HomeHeaderBar: UIView {
         onNewShow?()
     }
 
+    @objc private func homeBackTapped() {
+        onGoHome?()
+    }
+
     // MARK: - State
 
     /// Show-mode trailing chrome (Settings, +, Lock / Blackout when live).
@@ -305,7 +344,7 @@ final class HomeHeaderBar: UIView {
         showsShowChrome = showMode
         applyTrailingChrome()
         libraryButton.accessibilityHint = showMode
-            ? "Home, Open Show, New Show, Library, Music, and Recent Shows"
+            ? "Open Show, New Show, Library, Music, and Recent Shows"
             : "Open Show, New Show, Library, Music, Settings, and Recent Shows"
     }
 
@@ -367,7 +406,8 @@ final class HomeHeaderBar: UIView {
         let editing = isArranging || isSelecting
         applyTrailingChrome()
         libraryButton.isEnabled = !editing
-        menuPill.alpha = editing ? 0.45 : 1
+        backButton.isEnabled = !editing
+        leadingStack.alpha = editing ? 0.45 : 1
         doneButton.accessibilityLabel = isSelecting
             ? "Done selecting"
             : "Done arranging"
@@ -378,6 +418,7 @@ final class HomeHeaderBar: UIView {
 
     private func applyTrailingChrome() {
         let editing = isArranging || isSelecting
+        backButton.isHidden = !showsShowChrome
         doneButton.isHidden = !editing
         if !isSelecting {
             selectActionsButton.isHidden = true
@@ -422,6 +463,9 @@ final class HomeHeaderBar: UIView {
 
     /// The page title control, for anchoring Show-related popovers.
     var libraryAnchor: UIView { libraryButton }
+
+    /// Show-mode back control to the left of the page dropdown.
+    var showsHomeBackButton: Bool { !backButton.isHidden }
 
     /// New Show control, for anchoring popovers when "+" is hidden on Home.
     var newShowAnchor: UIView { newShowButton }

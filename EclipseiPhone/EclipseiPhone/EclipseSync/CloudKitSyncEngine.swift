@@ -45,6 +45,12 @@ final class CloudKitSyncEngine: NSObject, SyncBackend {
     /// Pending record IDs that hit quotaExceeded and need re-queue after space frees.
     var quotaHeldRecordIDs: [CKRecord.ID] = []
 
+    /// Last server (or successfully saved) `CKRecord`s, so retries keep a change tag.
+    ///
+    /// Building a fresh `CKRecord` for an id that already exists is an insert, and
+    /// CloudKit rejects it with "record to insert already exists".
+    var lastKnownRecords: [CKRecord.ID: CKRecord] = [:]
+
     init(container: CKContainer = CKContainer(identifier: CloudKitSchema.containerIdentifier)) {
         self.container = container
         self.account = CloudKitAccountMonitor(container: container)
@@ -132,7 +138,11 @@ final class CloudKitSyncEngine: NSObject, SyncBackend {
     }
 
     func removeLocalDownload(id: String) {
-        CaptureStore.shared.removeLocalDownload(id: id)
+        if CaptureStore.shared.record(id: id) != nil {
+            CaptureStore.shared.removeLocalDownload(id: id)
+            return
+        }
+        ImportedMediaStore.shared.removeLocalDownload(id: id)
     }
 
     func presentShareUI(forShowId id: UUID, from presenter: AnyObject) {
@@ -202,6 +212,7 @@ final class CloudKitSyncEngine: NSObject, SyncBackend {
         for id in PDFStore.shared.idsNeedingUpload {
             changes.append(.saveRecord(CloudKitSchema.pdfRecordID(for: id)))
         }
+        enqueueExpandedLocalContent(into: &changes)
         if !changes.isEmpty {
             engine.state.add(pendingRecordZoneChanges: changes)
         }
@@ -213,6 +224,9 @@ final class CloudKitSyncEngine: NSObject, SyncBackend {
     /// Never deletes local data in response to that signal.
     func recoverFromZoneLoss() {
         guard let engine else { return }
+        lastKnownRecords.removeAll()
+        CameraFrameStore.shared.markAllNeedsUpload()
+        CameraAlternateStillStore.shared.markAllNeedsUpload()
         engine.state.add(pendingDatabaseChanges: [
             .saveZone(CKRecordZone(zoneID: CloudKitSchema.zoneID))
         ])

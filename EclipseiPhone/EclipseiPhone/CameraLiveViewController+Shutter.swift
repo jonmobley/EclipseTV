@@ -7,25 +7,22 @@
 
 import UIKit
 
-// MARK: - Shutter (tap stage = live, shutter tap = photo, hold = video)
+// MARK: - Capture (tap stage = live, photo shutter, tap record)
 
 extension CameraLiveViewController {
 
-    /// Hold duration before a press becomes a recording (seconds).
-    static let shutterHoldDuration: TimeInterval = 0.35
-
-    /// Wires press on the shutter thumb (tap = photo, hold = record).
-    ///
-    /// Uses a zero-duration long-press rather than a pan: `UIPanGestureRecognizer`
-    /// only begins after the finger moves, so stationary tap/hold never fired.
-    func setupShutterGestures() {
-        let press = UILongPressGestureRecognizer(
-            target: self,
-            action: #selector(handleShutterPress(_:))
+    /// Wires tap on the photo shutter and the record button.
+    func setupCaptureButtons() {
+        photoButton.addTarget(
+            self,
+            action: #selector(photoButtonTapped),
+            for: .touchUpInside
         )
-        press.minimumPressDuration = 0
-        press.allowableMovement = .greatestFiniteMagnitude
-        shutterButton.addGestureRecognizer(press)
+        shutterButton.addTarget(
+            self,
+            action: #selector(recordButtonTapped),
+            for: .touchUpInside
+        )
     }
 
     /// Tap the stage (outside chrome) to toggle live.
@@ -40,46 +37,25 @@ extension CameraLiveViewController {
     /// True when the tap landed on a chrome control that owns the gesture.
     private func hitTestBlocksStageLiveToggle(at location: CGPoint) -> Bool {
         let blockers: [UIView] = [
-            backButton, settingsButton, shutterButton, flipButton, frameButton,
-            stillRibbonView, frameRibbonView
+            backButton, settingsButton, shutterButton, photoButton, flipButton,
+            frameButton, stillRibbonView, frameRibbonView
         ]
         return blockers.contains { $0.frame.contains(location) && !$0.isHidden }
     }
 
-    @objc func handleShutterPress(_ gesture: UILongPressGestureRecognizer) {
-        switch gesture.state {
-        case .began:
-            shutterDidLongPress = false
-            shutterHoldTimer?.invalidate()
-            shutterHoldTimer = nil
-            // Always-record owns start/stop while live; hold would fight that.
-            if isAirPlayLive, ExternalOutputSettings.alwaysRecordWhenLive { return }
-            shutterHoldTimer = Timer.scheduledTimer(
-                withTimeInterval: Self.shutterHoldDuration,
-                repeats: false
-            ) { [weak self] _ in
-                guard let self else { return }
-                self.shutterDidLongPress = true
-                self.beginShutterHoldRecord()
-            }
-
-        case .ended, .cancelled, .failed:
-            shutterHoldTimer?.invalidate()
-            shutterHoldTimer = nil
-            finishShutterGesture()
-            shutterDidLongPress = false
-
-        default:
-            break
-        }
+    /// Saves a still. Works in preview, live, and while a movie is recording.
+    @objc func photoButtonTapped() {
+        capturePhotoFromShutter()
     }
 
-    /// Tap → photo; hold release → stop record. Works in preview and while live.
-    private func finishShutterGesture() {
-        if shutterDidLongPress {
-            endShutterHoldRecord()
+    /// Tap to start or stop a local recording. Always Record When Live owns
+    /// start/stop while on-air, so the record control is a no-op in that case.
+    @objc func recordButtonTapped() {
+        if isAirPlayLive, ExternalOutputSettings.alwaysRecordWhenLive { return }
+        if CameraManager.shared.isRecording {
+            finalizeRecordingIfNeeded()
         } else {
-            capturePhotoFromShutter()
+            startRecordingFromRecordButton()
         }
     }
 
@@ -117,6 +93,9 @@ extension CameraLiveViewController {
     }
 
     /// Blink the panel and save a still to Photos (and the Eclipse library).
+    ///
+    /// Safe while a movie is rolling: stills come from the video data output, which
+    /// keeps delivering samples while `AVCaptureMovieFileOutput` is writing.
     func capturePhotoFromShutter() {
         if resumeCameraIfParkedOnStill() {
             refreshLiveChrome()
@@ -155,8 +134,8 @@ extension CameraLiveViewController {
         )
     }
 
-    /// Hold: start a local recording (preview or live).
-    func beginShutterHoldRecord() {
+    /// Starts a local recording (preview or live).
+    func startRecordingFromRecordButton() {
         resumeCameraIfParkedOnStill()
         refreshLiveChrome()
         UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
@@ -177,8 +156,8 @@ extension CameraLiveViewController {
     /// Starts recording when Always Record When Live is on and camera is on AirPlay.
     ///
     /// No-ops if the preference is off, camera isn't live, a movie is already rolling,
-    /// or a modal (e.g. Camera Settings) is covering the shutter. Used after go-live,
-    /// settings dismiss, and preference changes.
+    /// or a modal (e.g. Camera Settings) is covering the record control. Used after
+    /// go-live, settings dismiss, and preference changes.
     func startAlwaysLiveRecordingIfNeeded() {
         guard ExternalOutputSettings.alwaysRecordWhenLive else { return }
         guard ExternalDisplayManager.shared.isCameraLive else { return }
@@ -198,23 +177,15 @@ extension CameraLiveViewController {
         }
     }
 
-    /// Release after hold: stop recording; stay in preview or live.
-    func endShutterHoldRecord() {
-        finalizeRecordingIfNeeded()
-    }
-
     /// Stops an in-flight movie, keeps it for in-app review, then runs `completion`.
     ///
-    /// Used by release-to-stop, stop-live, and Back.
+    /// Used by tap-to-stop, stop-live, and Back.
     func finalizeRecordingIfNeeded(completion: (() -> Void)? = nil) {
         guard CameraManager.shared.isRecording else {
             refreshLiveChrome()
             completion?()
             return
         }
-        shutterHoldTimer?.invalidate()
-        shutterHoldTimer = nil
-        shutterDidLongPress = false
         CameraManager.shared.stopRecording { [weak self] result in
             guard let self else {
                 completion?()

@@ -181,6 +181,12 @@ final class CameraFrameStore {
             saveIndex()
             insertEnabled(id)
             NotificationCenter.default.post(name: Self.didChangeNotification, object: self)
+            guard !EclipseSyncController.shared.isApplyingRemote else { return id }
+            markSettingsNeedsUpload(orientation: mode)
+            EclipseSyncController.shared.backend.scheduleCameraFrameSave(id: id)
+            EclipseSyncController.shared.backend.scheduleCameraSettingsSave(
+                orientation: mode
+            )
             return id
         } catch {
             logger.error("Failed to write frame: \(error.localizedDescription)")
@@ -202,6 +208,13 @@ final class CameraFrameStore {
         removeEnabled(id, orientation: frame.orientation)
         saveIndex()
         NotificationCenter.default.post(name: Self.didChangeNotification, object: self)
+        guard !EclipseSyncController.shared.isApplyingRemote else { return }
+        markFrameNeedsUpload(id: id)
+        markSettingsNeedsUpload(orientation: frame.orientation)
+        EclipseSyncController.shared.backend.scheduleCameraFrameDelete(id: id)
+        EclipseSyncController.shared.backend.scheduleCameraSettingsSave(
+            orientation: frame.orientation
+        )
     }
 
     /// Rewrites `id`'s PNG rotated 90° clockwise.
@@ -228,6 +241,9 @@ final class CameraFrameStore {
             }
         }
         NotificationCenter.default.post(name: Self.didChangeNotification, object: self)
+        guard !EclipseSyncController.shared.isApplyingRemote else { return }
+        markSettingsNeedsUpload(orientation: mode)
+        EclipseSyncController.shared.backend.scheduleCameraSettingsSave(orientation: mode)
     }
 
     private func rewriteRotated(_ id: UUID, clockwise: Bool) {
@@ -243,6 +259,9 @@ final class CameraFrameStore {
         do {
             try data.write(to: fileURL(for: id), options: .atomic)
             NotificationCenter.default.post(name: Self.didChangeNotification, object: self)
+            guard !EclipseSyncController.shared.isApplyingRemote else { return }
+            markFrameNeedsUpload(id: id)
+            EclipseSyncController.shared.backend.scheduleCameraFrameSave(id: id)
         } catch {
             logger.error("Failed to write rotated frame: \(error.localizedDescription)")
         }
@@ -328,5 +347,94 @@ final class CameraFrameStore {
             UserDefaults.standard.set(raw, forKey: landscapeKey)
         }
         UserDefaults.standard.removeObject(forKey: legacyKey)
+    }
+
+    // MARK: - CloudKit Sync
+
+    /// Every frame on disk (both Display Modes) for bootstrap enqueue.
+    var allFramesForSync: [CameraFrame] { allFrames }
+
+    /// Frame metadata for `id`, if present.
+    func frame(id: UUID) -> CameraFrame? {
+        allFrames.first { $0.id == id }
+    }
+
+    /// Selected overlay id for `orientation`.
+    func selectedId(for orientation: ExternalOutputOrientation) -> UUID? {
+        selectedIdKeyValue(for: orientation)
+    }
+
+    /// Inserts or replaces a frame that arrived from iCloud.
+    func applyRemote(
+        id: UUID,
+        orientation: ExternalOutputOrientation,
+        createdAt: Date,
+        assetURL: URL
+    ) {
+        let destination = fileURL(for: id)
+        do {
+            if FileManager.default.fileExists(atPath: destination.path) {
+                try FileManager.default.removeItem(at: destination)
+            }
+            try FileManager.default.copyItem(at: assetURL, to: destination)
+        } catch {
+            logger.error("Remote frame copy failed: \(error.localizedDescription)")
+            return
+        }
+        if let index = allFrames.firstIndex(where: { $0.id == id }) {
+            allFrames[index] = CameraFrame(
+                id: id,
+                createdAt: createdAt,
+                lastUsedAt: allFrames[index].lastUsedAt,
+                orientation: orientation
+            )
+        } else {
+            allFrames.append(
+                CameraFrame(
+                    id: id,
+                    createdAt: createdAt,
+                    lastUsedAt: createdAt,
+                    orientation: orientation
+                )
+            )
+            insertEnabled(id)
+        }
+        saveIndex()
+        markFrameSynced(id: id)
+        NotificationCenter.default.post(name: Self.didChangeNotification, object: self)
+    }
+
+    /// Applies ribbon enabled / selected state from iCloud.
+    func applyRemoteSettings(
+        orientation: ExternalOutputOrientation,
+        enabledIds: [UUID],
+        selectedId: UUID?
+    ) {
+        let valid = frameIds(in: orientation)
+        let filtered = Set(enabledIds).intersection(valid)
+        UserDefaults.standard.set(
+            filtered.map(\.uuidString).sorted(),
+            forKey: "EclipseTV.camera.enabledFrameIds.\(orientation.rawValue)"
+        )
+        if let selectedId, valid.contains(selectedId) {
+            setSelectedId(selectedId, for: orientation)
+        } else {
+            setSelectedId(nil, for: orientation)
+        }
+        if orientation == ExternalOutputSettings.orientation {
+            loadSelection(for: orientation)
+        }
+        markSettingsSynced(orientation: orientation)
+        NotificationCenter.default.post(name: Self.didChangeNotification, object: self)
+    }
+
+    /// Ribbon-enabled ids for `orientation` (CloudKit upload).
+    func enabledIds(for orientation: ExternalOutputOrientation) -> Set<UUID> {
+        let key = "EclipseTV.camera.enabledFrameIds.\(orientation.rawValue)"
+        let valid = frameIds(in: orientation)
+        guard let raw = UserDefaults.standard.array(forKey: key) as? [String] else {
+            return valid
+        }
+        return Set(raw.compactMap(UUID.init(uuidString:))).intersection(valid)
     }
 }

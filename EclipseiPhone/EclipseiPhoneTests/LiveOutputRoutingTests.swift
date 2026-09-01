@@ -10,6 +10,49 @@ import Testing
 
 struct LiveOutputRoutingTests {
 
+    @Test func remoteOperatorMarksLiveWhenDisconnected() {
+        #expect(
+            LiveOutputRouting.canMarkLive(
+                airPlayConnected: false,
+                eclipseTVOnline: false,
+                practiceMode: false,
+                isRemoteOperator: true
+            )
+        )
+    }
+
+    @Test func remoteOperatorShowsHeroLiveBadge() {
+        #expect(
+            LiveOutputRouting.showsHeroLiveBadge(
+                airPlayConnected: false,
+                eclipseTVOnline: false,
+                isRemoteOperator: true
+            )
+        )
+    }
+
+    @Test func remoteOperatorDoesNotPlayLibraryVideoInPhoneHero() {
+        #expect(
+            LiveOutputRouting.phoneHeroPlaysLibraryVideo(
+                airPlayConnected: false,
+                eclipseTVOnline: false,
+                practiceMode: true,
+                isRemoteOperator: true
+            ) == false
+        )
+    }
+
+    @Test func remoteOperatorUsesRemoteVideoMonitor() {
+        #expect(
+            LiveOutputRouting.usesRemoteVideoMonitor(
+                isVideo: true,
+                airPlayConnected: false,
+                eclipseTVOnline: false,
+                isRemoteOperator: true
+            )
+        )
+    }
+
     @Test func disconnectedWithoutPracticeOpensPreview() {
         #expect(
             LiveOutputRouting.canMarkLive(
@@ -169,6 +212,98 @@ struct LiveOutputRoutingTests {
                 isVideo: true,
                 airPlayConnected: false,
                 eclipseTVOnline: false
+            ) == false
+        )
+    }
+
+    @Test func heroLiveBadgeShowsWhenAirPlayIsConnected() {
+        #expect(
+            LiveOutputRouting.showsHeroLiveBadge(
+                airPlayConnected: true,
+                eclipseTVOnline: false
+            )
+        )
+    }
+
+    @Test func heroLiveBadgeShowsWhenEclipseTVIsLinked() {
+        #expect(
+            LiveOutputRouting.showsHeroLiveBadge(
+                airPlayConnected: false,
+                eclipseTVOnline: true
+            )
+        )
+    }
+
+    @Test func heroLiveBadgeHidesInDisconnectedPractice() {
+        #expect(
+            LiveOutputRouting.showsHeroLiveBadge(
+                airPlayConnected: false,
+                eclipseTVOnline: false
+            ) == false
+        )
+    }
+
+    @Test func webOverlayNeedsAirPlayOrPractice() {
+        #expect(
+            LiveOutputRouting.canPresentWebOverlay(
+                airPlayConnected: false,
+                practiceMode: false
+            ) == false
+        )
+        #expect(
+            LiveOutputRouting.canPresentWebOverlay(
+                airPlayConnected: true,
+                practiceMode: false
+            )
+        )
+        #expect(
+            LiveOutputRouting.canPresentWebOverlay(
+                airPlayConnected: false,
+                practiceMode: true
+            )
+        )
+    }
+
+    @Test func eclipseTVAloneCannotPresentWebOverlay() {
+        // canMarkLive is true with EclipseTV, but web overlays cannot use it.
+        #expect(
+            LiveOutputRouting.canMarkLive(
+                airPlayConnected: false,
+                eclipseTVOnline: true,
+                practiceMode: false
+            )
+        )
+        #expect(
+            LiveOutputRouting.canPresentWebOverlay(
+                airPlayConnected: false,
+                practiceMode: false
+            ) == false
+        )
+    }
+
+    @Test func parkGateRequiresLinkedTVAndAirPlay() {
+        #expect(
+            AirPlayOverlayPark.shouldParkTV(
+                eclipseTVOnline: true,
+                airPlayConnected: true
+            )
+        )
+        #expect(
+            AirPlayOverlayPark.shouldParkTV(
+                eclipseTVOnline: true,
+                airPlayConnected: false
+            ) == false
+        )
+        #expect(
+            AirPlayOverlayPark.shouldParkTV(
+                eclipseTVOnline: false,
+                airPlayConnected: true
+            ) == false
+        )
+        #expect(
+            AirPlayOverlayPark.shouldParkTV(
+                eclipseTVOnline: false,
+                airPlayConnected: false
             ) == false
         )
     }

@@ -10,15 +10,17 @@ import UIKit
 /// Equalizer bars drawn in the Music bubble while a track is playing.
 final class AudioMiniPlayerWaveformView: UIView {
 
-    private static let barCount = 5
-    private static let barWidth: CGFloat = 3.5
-    private static let barSpacing: CGFloat = 3
-    private static let durations: [CFTimeInterval] = [0.46, 0.62, 0.38, 0.54, 0.44]
-    private static let restScales: [CGFloat] = [0.34, 0.58, 0.82, 0.5, 0.4]
-    private static let peakScales: [CGFloat] = [0.78, 0.96, 1.0, 0.9, 0.72]
+    private static let barCount = 3
+    private static let barWidth: CGFloat = 4
+    private static let barSpacing: CGFloat = 3.5
+    private static let durations: [CFTimeInterval] = [0.5, 0.64, 0.44]
+    private static let restScales: [CGFloat] = [0.42, 0.7, 0.5]
+    private static let peakScales: [CGFloat] = [0.86, 1.0, 0.78]
 
     private var bars: [CALayer] = []
     private(set) var isPlaying = false
+    /// Number of equalizer bars (always 3).
+    var barCount: Int { bars.count }
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -27,7 +29,7 @@ final class AudioMiniPlayerWaveformView: UIView {
         bars = (0..<Self.barCount).map { _ in
             let bar = CALayer()
             bar.backgroundColor = UIColor.white.cgColor
-            bar.cornerRadius = 1.75
+            bar.cornerRadius = 2
             bar.anchorPoint = CGPoint(x: 0.5, y: 1)
             layer.addSublayer(bar)
             return bar
