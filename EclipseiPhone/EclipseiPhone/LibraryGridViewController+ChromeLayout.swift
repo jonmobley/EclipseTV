@@ -46,6 +46,18 @@ enum LiveOutputRouting {
         )
     }
 
+    /// Live Poll can use the phone as projector when nothing else is connected.
+    /// Linked EclipseTV still cannot render the page, so that path needs AirPlay
+    /// / HDMI or Practice Mode.
+    static func canHostLivePoll(
+        airPlayConnected: Bool,
+        eclipseTVOnline: Bool,
+        practiceMode: Bool
+    ) -> Bool {
+        if airPlayConnected || practiceMode { return true }
+        return !eclipseTVOnline
+    }
+
     /// Screensaver is the live grid item when a destination is up and nothing else is.
     static func isScreensaverFallbackLive(
         hasOutputDestination: Bool,
@@ -115,9 +127,28 @@ extension LibraryGridViewController {
         LiveOutputRouting.canMarkLive(practiceMode: prefersDisconnectedLivePreview)
     }
 
-    /// Live hero on an open Show: a real destination, or Practice Mode.
+    /// Live hero on an open Show: a real destination, Practice Mode, or a Live
+    /// Poll the phone is hosting with no display attached.
     var showsLiveHero: Bool {
-        isShowMode && hasLiveOutputDestination
+        isShowMode && (hasLiveOutputDestination || isLivePollPhoneHeroActive)
+    }
+
+    /// Gate, Practice preview, or this Show's active room — show the hero so
+    /// the host can run the poll on the phone when AirPlay / HDMI are down.
+    var isLivePollPhoneHeroActive: Bool {
+        guard isShowMode, let openShowId else { return false }
+        if livePollGateMembershipId != nil { return true }
+        let store = QuestPollSessionStore.shared
+        if let practiceId = store.practiceMembershipId,
+           LivePollStore.shared.poll(id: practiceId)?.showId == openShowId {
+            return true
+        }
+        if store.session != nil,
+           let membershipId = store.membershipId,
+           LivePollStore.shared.poll(id: membershipId)?.showId == openShowId {
+            return true
+        }
+        return false
     }
 
     /// Phone landscape (`verticalSizeClass == .compact`): live preview left, grid

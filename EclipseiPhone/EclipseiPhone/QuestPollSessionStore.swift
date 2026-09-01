@@ -23,8 +23,6 @@ final class QuestPollSessionStore {
     private(set) var questionCount = 1
     /// True while a ribbon cue is sending start / results / next / prev / end.
     private(set) var isControlInFlight = false
-    /// Prompt text keyed by question index (from live session polls).
-    private(set) var questionPrompts: [Int: String] = [:]
     /// Membership whose Practice preview is in the hero (no room).
     private(set) var practiceMembershipId: UUID?
 
@@ -44,9 +42,6 @@ final class QuestPollSessionStore {
         } else if let resolved = session.resolvedQuestionCount {
             self.questionCount = max(resolved, 1)
         }
-        if let prompt = session.questionPrompt {
-            questionPrompts[session.questionIndex] = prompt
-        }
         notifyChanged()
     }
 
@@ -63,7 +58,6 @@ final class QuestPollSessionStore {
         practiceMembershipId = nil
         questionCount = 1
         isControlInFlight = false
-        questionPrompts = [:]
         notifyChanged()
     }
 
@@ -84,10 +78,7 @@ final class QuestPollSessionStore {
 
     /// Join / Question/Results thumbs for the current deck.
     var ribbonItems: [QuestPollRibbonItem] {
-        QuestPollRibbon.items(
-            questionCount: questionCount,
-            prompts: questionPrompts
-        )
+        QuestPollRibbon.items(questionCount: questionCount)
     }
 
     /// Tile secondary line: join code and live vote count.

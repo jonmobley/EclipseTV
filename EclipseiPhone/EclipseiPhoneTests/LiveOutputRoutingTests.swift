@@ -193,4 +193,35 @@ struct LiveOutputRoutingTests {
             )
         )
     }
+
+    @Test func livePollHostsOnPhoneWhenNothingIsConnected() {
+        #expect(
+            LiveOutputRouting.canHostLivePoll(
+                airPlayConnected: false,
+                eclipseTVOnline: false,
+                practiceMode: false
+            )
+        )
+        #expect(
+            LiveOutputRouting.canHostLivePoll(
+                airPlayConnected: false,
+                eclipseTVOnline: true,
+                practiceMode: false
+            ) == false
+        )
+        #expect(
+            LiveOutputRouting.canHostLivePoll(
+                airPlayConnected: false,
+                eclipseTVOnline: true,
+                practiceMode: true
+            )
+        )
+        #expect(
+            LiveOutputRouting.canHostLivePoll(
+                airPlayConnected: true,
+                eclipseTVOnline: false,
+                practiceMode: false
+            )
+        )
+    }
 }

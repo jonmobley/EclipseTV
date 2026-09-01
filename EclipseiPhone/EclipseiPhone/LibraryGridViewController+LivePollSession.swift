@@ -53,9 +53,7 @@ extension LibraryGridViewController {
         if ExternalDisplayManager.shared.isQuestPollLive {
             ExternalDisplayManager.shared.stopWebAndRestoreLibrary()
         }
-        reloadLibraryGrid()
-        refreshLiveHeader()
-        refreshSlideshowRibbonPresentation()
+        refreshLivePollPresentation()
     }
 
     /// Confirms End Poll from the tile menu.

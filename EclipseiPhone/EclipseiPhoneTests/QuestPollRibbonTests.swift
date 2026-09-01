@@ -21,12 +21,9 @@ struct QuestPollRibbonTests {
         ])
     }
 
-    @Test func itemsUsePromptWhenProvided() {
-        let items = QuestPollRibbon.items(
-            questionCount: 1,
-            prompts: [0: "How long?"]
-        )
-        #expect(items.map(\.title) == ["Join", "How long?", "Results 1"])
+    @Test func itemsKeepShortLabelsNotQuestionCopy() {
+        let items = QuestPollRibbon.items(questionCount: 1)
+        #expect(items.map(\.title) == ["Join", "Question 1", "Results 1"])
     }
 
     @Test func lobbyIsJoinCue() {

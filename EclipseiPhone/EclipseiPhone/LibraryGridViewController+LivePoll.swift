@@ -9,9 +9,12 @@ import UIKit
 
 extension LibraryGridViewController {
 
-    /// True when AirPlay / HDMI or Practice can show a web overlay (not EclipseTV alone).
+    /// True when the phone, AirPlay / HDMI, or Practice can show the projector.
+    /// EclipseTV-only still cannot render a WKWebView.
     var canPresentQuestPollOverlay: Bool {
-        LiveOutputRouting.canPresentWebOverlay(
+        LiveOutputRouting.canHostLivePoll(
+            airPlayConnected: ExternalDisplayManager.shared.isConnected,
+            eclipseTVOnline: TVLibraryStore.shared.isOnline,
             practiceMode: prefersDisconnectedLivePreview
         )
     }
@@ -38,7 +41,7 @@ extension LibraryGridViewController {
            QuestPollSessionStore.shared.session != nil {
             livePollGateMembershipId = nil
             if ExternalDisplayManager.shared.isQuestPollLive {
-                refreshSlideshowRibbonPresentation()
+                refreshLivePollPresentation()
                 scrollLiveSlideshowRibbonToCurrentSlide()
                 startQuestPollStatusPolling()
             } else {
@@ -54,9 +57,7 @@ extension LibraryGridViewController {
         livePollGateMembershipId = item.id
         QuestPollSessionStore.shared.setPracticeMembershipId(nil)
         store.updateCurrentId(nil)
-        reloadLibraryGrid()
-        refreshLiveHeader()
-        refreshSlideshowRibbonPresentation()
+        refreshLivePollPresentation()
     }
 
     /// Phone-hero deck preview without creating a QuestPoll room.
@@ -76,9 +77,7 @@ extension LibraryGridViewController {
         let page = QuestPollConfig.previewPage(pollId: item.pollId)
         WarmWebSessionPool.shared.warmIfNeeded(for: page)
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        reloadLibraryGrid()
-        refreshLiveHeader()
-        refreshSlideshowRibbonPresentation()
+        refreshLivePollPresentation()
     }
 
     /// Creates/replaces the global room and goes live for this card.
@@ -86,7 +85,7 @@ extension LibraryGridViewController {
         livePollGateMembershipId = nil
         guard ensureQuestPollDestination() else {
             livePollGateMembershipId = item.id
-            refreshLiveHeader()
+            refreshLivePollPresentation()
             return
         }
         confirmStartOrReplaceQuestPoll(item)
@@ -110,11 +109,18 @@ extension LibraryGridViewController {
         ExternalDisplayManager.shared.presentWeb(page.url, pageId: page.id)
         announceAirPlayOverlayIfLinked()
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        refreshLivePollPresentation()
+        scrollLiveSlideshowRibbonToCurrentSlide()
+        startQuestPollStatusPolling()
+    }
+
+    /// Shows the live hero when the phone is hosting, then reloads poll chrome.
+    func refreshLivePollPresentation() {
+        updateHeroVisibility()
+        applyHeroChrome()
         reloadLibraryGrid()
         refreshLiveHeader()
         refreshSlideshowRibbonPresentation()
-        scrollLiveSlideshowRibbonToCurrentSlide()
-        startQuestPollStatusPolling()
     }
 
     /// Live hero for the QuestPoll projector (not a generic Website overlay).
@@ -180,8 +186,7 @@ extension LibraryGridViewController {
     var showsLivePollRibbon: Bool {
         QuestPollRibbon.shouldShow(
             isShowMode: isShowMode,
-            liveRoomActive: ExternalDisplayManager.shared.isQuestPollLive
-                && QuestPollSessionStore.shared.session != nil,
+            liveRoomActive: QuestPollSessionStore.shared.session != nil,
             isPracticing: QuestPollSessionStore.shared.practiceMembershipId != nil,
             isGated: livePollGateMembershipId != nil
         )
@@ -349,7 +354,7 @@ extension LibraryGridViewController {
         if TVLibraryStore.shared.isOnline {
             message = "Live Poll needs AirPlay or HDMI. EclipseTV stays on the library."
         } else {
-            message = "Live Poll needs AirPlay, HDMI, or Practice Mode."
+            message = "Live Poll needs AirPlay, HDMI, or the phone preview."
         }
         let alert = UIAlertController(
             title: "Live Poll", message: message, preferredStyle: .alert

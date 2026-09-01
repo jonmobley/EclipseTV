@@ -35,11 +35,8 @@ enum QuestPollRibbon {
 
     /// Join, then Question n / Results n for each question.
     ///
-    /// - Parameter prompts: Optional per-question titles (index → prompt).
-    static func items(
-        questionCount: Int,
-        prompts: [Int: String] = [:]
-    ) -> [QuestPollRibbonItem] {
+    /// Ribbon thumbs stay short labels. Question copy belongs on the projector.
+    static func items(questionCount: Int) -> [QuestPollRibbonItem] {
         let count = max(questionCount, 1)
         var items = [
             QuestPollRibbonItem(
@@ -47,18 +44,9 @@ enum QuestPollRibbon {
             )
         ]
         for index in 0..<count {
-            let fallback = "Question \(index + 1)"
-            let prompt = prompts[index]?
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            let title: String
-            if let prompt, !prompt.isEmpty {
-                title = prompt
-            } else {
-                title = fallback
-            }
             items.append(QuestPollRibbonItem(
                 kind: .question(index),
-                title: title,
+                title: "Question \(index + 1)",
                 systemImage: "text.bubble.fill"
             ))
             items.append(QuestPollRibbonItem(
