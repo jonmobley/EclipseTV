@@ -7,7 +7,7 @@
 
 import UIKit
 
-/// Full list of Shows across both Display Modes (Home See All).
+/// Full list of Shows across both Display Modes (Home See All and Open Show).
 /// Each row is the name, trailing recency, and a format glyph — no Landscape/Vertical copy.
 final class AllShowsViewController: UIViewController, UIAdaptivePresentationControllerDelegate {
 
@@ -19,11 +19,18 @@ final class AllShowsViewController: UIViewController, UIAdaptivePresentationCont
     var onDismissWithoutOpening: (() -> Void)?
 
     private let tableView = UITableView(frame: .zero, style: .insetGrouped)
+    private let filterBar = ShowFormatFilterBar()
     private let cellId = "ShowCell"
     private var albums: [LocalAlbum] = []
     private var observer: NSObjectProtocol?
     /// True once a row or New Show claimed the dismiss — skip the Home teardown.
     private var didSelectDestination = false
+    private var formatFilter: ShowFormatFilter = .all
+
+    /// Shows matching the active All / Horizontal / Vertical filter.
+    private var displayedAlbums: [LocalAlbum] {
+        ShowFormatFilter.albums(albums, matching: formatFilter)
+    }
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -41,19 +48,8 @@ final class AllShowsViewController: UIViewController, UIAdaptivePresentationCont
             target: self,
             action: #selector(newShowTapped)
         )
-
-        tableView.translatesAutoresizingMaskIntoConstraints = false
-        tableView.dataSource = self
-        tableView.delegate = self
-        tableView.register(UITableViewCell.self, forCellReuseIdentifier: cellId)
-        view.addSubview(tableView)
-        NSLayoutConstraint.activate([
-            tableView.topAnchor.constraint(equalTo: view.topAnchor),
-            tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
-        ])
-
+        configureFilterBar()
+        configureTable()
         reload()
         observer = NotificationCenter.default.addObserver(
             forName: LocalAlbumStore.didChangeNotification,
@@ -74,6 +70,40 @@ final class AllShowsViewController: UIViewController, UIAdaptivePresentationCont
         if let observer {
             NotificationCenter.default.removeObserver(observer)
         }
+    }
+
+    private func configureFilterBar() {
+        filterBar.translatesAutoresizingMaskIntoConstraints = false
+        filterBar.onSelect = { [weak self] filter in
+            self?.formatFilter = filter
+            self?.tableView.reloadData()
+        }
+        view.addSubview(filterBar)
+    }
+
+    private func configureTable() {
+        tableView.translatesAutoresizingMaskIntoConstraints = false
+        tableView.dataSource = self
+        tableView.delegate = self
+        tableView.register(UITableViewCell.self, forCellReuseIdentifier: cellId)
+        view.addSubview(tableView)
+        NSLayoutConstraint.activate([
+            filterBar.topAnchor.constraint(
+                equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8
+            ),
+            filterBar.leadingAnchor.constraint(
+                equalTo: view.leadingAnchor, constant: 20
+            ),
+            filterBar.trailingAnchor.constraint(
+                equalTo: view.trailingAnchor, constant: -20
+            ),
+            tableView.topAnchor.constraint(
+                equalTo: filterBar.bottomAnchor, constant: 4
+            ),
+            tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ])
     }
 
     private func reload() {
@@ -106,7 +136,7 @@ final class AllShowsViewController: UIViewController, UIAdaptivePresentationCont
 
 extension AllShowsViewController: UITableViewDataSource, UITableViewDelegate {
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        albums.count
+        displayedAlbums.count
     }
 
     func tableView(
@@ -114,7 +144,7 @@ extension AllShowsViewController: UITableViewDataSource, UITableViewDelegate {
         cellForRowAt indexPath: IndexPath
     ) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: cellId, for: indexPath)
-        let album = albums[indexPath.row]
+        let album = displayedAlbums[indexPath.row]
         var content = cell.defaultContentConfiguration()
         content.text = album.name
         content.secondaryText = album.showListSubtitle
@@ -132,7 +162,7 @@ extension AllShowsViewController: UITableViewDataSource, UITableViewDelegate {
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
         didSelectDestination = true
-        let id = albums[indexPath.row].id
+        let id = displayedAlbums[indexPath.row].id
         // Capture the handler — don't rely on `self` surviving dismiss completion.
         let open = onOpenShow
         dismiss(animated: true) {

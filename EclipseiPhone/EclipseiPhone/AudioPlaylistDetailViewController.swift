@@ -22,6 +22,10 @@ final class AudioPlaylistDetailViewController: UITableViewController {
         return playlist.trackIds.compactMap { AudioStore.shared.track(id: $0) }
     }
 
+    /// Extra air under a large navigation title (phone). Inline titles skip this.
+    private static let largeTitleSectionPadding: CGFloat = 28
+    private static let inlineTitleSectionPadding: CGFloat = 8
+
     /// Creates a detail screen for `playlistId`.
     init(playlistId: UUID) {
         self.playlistId = playlistId
@@ -32,16 +36,24 @@ final class AudioPlaylistDetailViewController: UITableViewController {
         fatalError("init(coder:) has not been implemented")
     }
 
+    /// Large titles on compact (phone) width; inline on the iPad Music sidebar.
+    static func usesLargeTitle(horizontalSizeClass: UIUserInterfaceSizeClass) -> Bool {
+        horizontalSizeClass == .compact
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
-        navigationItem.largeTitleDisplayMode = .always
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: cellReuseId)
         tableView.rowHeight = UITableView.automaticDimension
         tableView.estimatedRowHeight = 52
-        // Extra air between the large playlist title and the first track row.
-        tableView.sectionHeaderTopPadding = 28
         editButtonItem.accessibilityHint = "Reorder songs"
+        applyTitleMetrics()
         updateChrome()
+        registerForTraitChanges(
+            [UITraitHorizontalSizeClass.self]
+        ) { (self: Self, _: UITraitCollection) in
+            self.applyTitleMetrics()
+        }
 
         NotificationCenter.default.addObserver(
             self,
@@ -65,7 +77,20 @@ final class AudioPlaylistDetailViewController: UITableViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        navigationController?.navigationBar.prefersLargeTitles = true
+        applyTitleMetrics()
+    }
+
+    /// Compact width keeps the large playlist name; regular width (iPad sidebar)
+    /// uses an inline nav title so the type does not dominate the pane.
+    private func applyTitleMetrics() {
+        let large = Self.usesLargeTitle(
+            horizontalSizeClass: traitCollection.horizontalSizeClass
+        )
+        navigationItem.largeTitleDisplayMode = large ? .always : .never
+        navigationController?.navigationBar.prefersLargeTitles = large
+        tableView.sectionHeaderTopPadding = large
+            ? Self.largeTitleSectionPadding
+            : Self.inlineTitleSectionPadding
     }
 
     deinit {
@@ -80,7 +105,7 @@ final class AudioPlaylistDetailViewController: UITableViewController {
         }
     }
 
-    /// Title (large, left-aligned) and trailing Play / Edit controls.
+    /// Playlist name and trailing Play / Edit controls.
     private func updateChrome() {
         title = playlist?.name ?? "Playlist"
         let play = UIBarButtonItem(
@@ -170,7 +195,12 @@ final class AudioPlaylistDetailViewController: UITableViewController {
         tableView.deselectRow(at: indexPath, animated: true)
         guard !isEditing, let playlist, !tracks.isEmpty else { return }
         let track = tracks[indexPath.row]
-        AudioPlayerController.shared.playPlaylist(playlist, startingAt: track.id)
+        let player = AudioPlayerController.shared
+        if player.tapStopsPlayback(for: track.id) {
+            player.stop()
+        } else {
+            player.playPlaylist(playlist, startingAt: track.id)
+        }
     }
 
     override func tableView(_ tableView: UITableView,

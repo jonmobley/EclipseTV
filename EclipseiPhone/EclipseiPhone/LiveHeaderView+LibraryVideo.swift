@@ -51,6 +51,7 @@ extension LiveHeaderView {
         clearLibraryVideoPreview()
         clearWebPreview(parking: true)
         clearScreensaverPreview()
+        clearCameraPreview()
 
         let host = UIView()
         host.backgroundColor = .black

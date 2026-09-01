@@ -60,12 +60,39 @@ final class GettingStartedViewController: UITableViewController {
             tint: .systemGreen
         ),
         Topic(
+            title: "Live Poll",
+            body: """
+            Add Live Poll from + inside a Show — link your QuestPoll host PIN once, \
+            then pick a deck for each card. Tap a card for Practice (phone preview, \
+            no room) or Start (creates the room on AirPlay, HDMI, or Practice Mode). \
+            EclipseTV alone cannot show the poll. Starting another poll ends the \
+            current room. The ribbon under the live preview cues Join, each question, \
+            and results; audience phones scan the QR on the projector. Use ⋯ Edit on \
+            QuestPoll to manage decks in the browser.
+            """,
+            systemImage: "chart.bar.fill",
+            tint: .systemOrange
+        ),
+        Topic(
+            title: "Countdown",
+            body: """
+            Add Countdown from + inside a Show as many times as you like — each \
+            tile is its own timer. Tap one to put it on AirPlay or HDMI — EclipseTV \
+            alone cannot show the clock. The ribbon under the live preview picks \
+            0:30, 1:00, 2:00, 5:00, 10:00, or Custom. Tap the tile again to pause or \
+            resume; ⋯ Reset restores the full duration.
+            """,
+            systemImage: "timer",
+            tint: .systemRed
+        ),
+        Topic(
             title: "Music",
             body: """
             Tap Music in the bottom-right corner for quick access, swipe left from Home \
             when you can, or choose Music in the Home menu. The circle stays visible — \
-            tap to open Music or expand controls, hold to stop. Ambient audio pauses \
-            when a video needs the speakers.
+            tap to open Music, or tap to stop while a track is playing. A button beside \
+            the circle expands playback controls. Ambient audio pauses when a video \
+            needs the speakers.
             """,
             systemImage: "music.note",
             tint: .systemPink
@@ -84,8 +111,9 @@ final class GettingStartedViewController: UITableViewController {
             title: "Display Mode & Tools",
             body: """
             Landscape (16:9) is the default; Vertical is in Settings → Display Mode. \
-            Inside a Show: Blackout blanks the display, Background sets a resting image, \
-            Screensaver loops a video, and + adds media.
+            Inside a Show: header Blackout blanks the display, Background sets a \
+            resting image, Screensaver loops a video, + adds media, and Live Poll \
+            or Countdown run on AirPlay or HDMI.
             """,
             systemImage: "moon.fill",
             tint: .systemPurple
@@ -129,35 +157,6 @@ final class GettingStartedViewController: UITableViewController {
         )
         tableView.allowsSelection = false
         tableView.separatorStyle = .none
-        tableView.tableHeaderView = makeHeroHeader()
-    }
-
-    override func viewDidLayoutSubviews() {
-        super.viewDidLayoutSubviews()
-        resizeHeroHeader(toWidth: tableView.bounds.width)
-    }
-
-    /// Sizes the hero header to `width`, reporting whether it had to change anything.
-    ///
-    /// Assigning `tableHeaderView` schedules another layout pass, which calls back into
-    /// here, so this has to report "settled" once the frame fits or the two spin
-    /// forever. That is why the header stays frame-based (`translatesAutoresizing…` on):
-    /// a self-sizing header rewrites the frame Auto Layout thinks it should have after
-    /// each assignment, so the comparison never converges.
-    @discardableResult
-    func resizeHeroHeader(toWidth width: CGFloat) -> Bool {
-        guard let header = tableView.tableHeaderView, width > 0 else { return false }
-        let fitted = header.systemLayoutSizeFitting(
-            CGSize(width: width, height: UIView.layoutFittingCompressedSize.height),
-            withHorizontalFittingPriority: .required,
-            verticalFittingPriority: .fittingSizeLevel
-        )
-        // Sub-point slack: rounding alone must not qualify as a change.
-        guard abs(header.frame.width - width) > 0.5
-            || abs(header.frame.height - fitted.height) > 0.5 else { return false }
-        header.frame.size = CGSize(width: width, height: fitted.height)
-        tableView.tableHeaderView = header
-        return true
     }
 
     // MARK: - Table
@@ -192,65 +191,6 @@ final class GettingStartedViewController: UITableViewController {
     }
 
     // MARK: - Private
-
-    /// Soft hero above the topic cards: glyph + short pitch.
-    private func makeHeroHeader() -> UIView {
-        // Frame-based on purpose — see `resizeHeroHeader(toWidth:)`.
-        let container = UIView()
-
-        let badge = UIView()
-        badge.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.18)
-        badge.layer.cornerRadius = 22
-        badge.layer.cornerCurve = .continuous
-        badge.translatesAutoresizingMaskIntoConstraints = false
-
-        let glyph = UIImageView(
-            image: UIImage(
-                systemName: "lightbulb.max.fill",
-                withConfiguration: UIImage.SymbolConfiguration(pointSize: 28, weight: .semibold)
-            )
-        )
-        glyph.tintColor = .systemBlue
-        glyph.contentMode = .scaleAspectFit
-        glyph.translatesAutoresizingMaskIntoConstraints = false
-        badge.addSubview(glyph)
-
-        let title = UILabel()
-        title.text = "Learn the ropes"
-        title.font = .preferredFont(forTextStyle: .title2)
-        title.adjustsFontForContentSizeCategory = true
-        title.textColor = .label
-        title.textAlignment = .center
-
-        let subtitle = UILabel()
-        subtitle.text = "Shows, AirPlay, Camera, Music, and optional EclipseTV — the tools you’ll use every night."
-        subtitle.font = .preferredFont(forTextStyle: .subheadline)
-        subtitle.adjustsFontForContentSizeCategory = true
-        subtitle.textColor = .secondaryLabel
-        subtitle.textAlignment = .center
-        subtitle.numberOfLines = 0
-
-        let stack = UIStackView(arrangedSubviews: [badge, title, subtitle])
-        stack.axis = .vertical
-        stack.alignment = .center
-        stack.spacing = 12
-        stack.setCustomSpacing(16, after: badge)
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(stack)
-
-        NSLayoutConstraint.activate([
-            badge.widthAnchor.constraint(equalToConstant: 64),
-            badge.heightAnchor.constraint(equalToConstant: 64),
-            glyph.centerXAnchor.constraint(equalTo: badge.centerXAnchor),
-            glyph.centerYAnchor.constraint(equalTo: badge.centerYAnchor),
-
-            stack.topAnchor.constraint(equalTo: container.topAnchor, constant: 8),
-            stack.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 28),
-            stack.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -28),
-            stack.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -8)
-        ])
-        return container
-    }
 
     @objc private func doneTapped() {
         dismiss(animated: true)

@@ -37,11 +37,68 @@ protocol SyncBackend: AnyObject {
     /// Schedules deletion of a capture record and its cloud asset.
     func scheduleCaptureDelete(id: String)
 
+    /// Schedules an imported-media metadata (+ asset) upload.
+    func scheduleMediaSave(cloudId: String)
+
+    /// Schedules deletion of an imported-media record and its cloud asset.
+    func scheduleMediaDelete(cloudId: String)
+
     /// Schedules a saved-PDF upload (title + the `.pdf` file itself).
     func schedulePDFSave(id: UUID)
 
     /// Schedules deletion of a PDF record and its cloud file.
     func schedulePDFDelete(id: UUID)
+
+    /// Schedules a website metadata upload.
+    func scheduleWebPageSave(id: UUID)
+
+    /// Schedules deletion of a website record.
+    func scheduleWebPageDelete(id: UUID)
+
+    /// Schedules a slideshow metadata upload.
+    func scheduleSlideshowSave(id: UUID)
+
+    /// Schedules deletion of a slideshow record.
+    func scheduleSlideshowDelete(id: UUID)
+
+    /// Schedules a countdown metadata upload.
+    func scheduleCountdownSave(id: UUID)
+
+    /// Schedules deletion of a countdown record.
+    func scheduleCountdownDelete(id: UUID)
+
+    /// Schedules a Live Poll card metadata upload.
+    func scheduleLivePollSave(id: UUID)
+
+    /// Schedules deletion of a Live Poll card record.
+    func scheduleLivePollDelete(id: UUID)
+
+    /// Schedules the account-global Background custom image upload (or clear).
+    func scheduleBackgroundSave()
+
+    /// Schedules deletion of the custom Background (restore bundled).
+    func scheduleBackgroundDelete()
+
+    /// Schedules the account-global Screensaver custom media upload (or clear).
+    func scheduleScreensaverSave()
+
+    /// Schedules deletion of the custom Screensaver (restore bundled).
+    func scheduleScreensaverDelete()
+
+    /// Schedules a camera frame PNG upload.
+    func scheduleCameraFrameSave(id: UUID)
+
+    /// Schedules deletion of a camera frame.
+    func scheduleCameraFrameDelete(id: UUID)
+
+    /// Schedules per-orientation camera ribbon settings upload.
+    func scheduleCameraSettingsSave(orientation: ExternalOutputOrientation)
+
+    /// Schedules a camera cutaway still upload.
+    func scheduleCutawaySave(id: UUID)
+
+    /// Schedules deletion of a camera cutaway still.
+    func scheduleCutawayDelete(id: UUID)
 
     /// Downloads the full-resolution asset for `id` when it is not on disk.
     func downloadAsset(

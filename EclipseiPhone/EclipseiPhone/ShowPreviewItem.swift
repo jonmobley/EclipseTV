@@ -34,8 +34,8 @@ struct DisplayModePreviewSpec: Equatable {
 /// Builds the swipe set: stills, Screensaver, and Background in grid order.
 enum ShowPreviewGallery {
 
-    /// Photos, Screensaver, and Background. Skips Camera, PDF, web, slideshow,
-    /// Add, and library videos.
+    /// Photos, Screensaver, and Background. Skips Camera, Live Poll,
+    /// Countdown, PDF, web, slideshow, Add, and library videos.
     static func items(
         from grid: [ShowGridItem],
         screensaver: (url: URL, isVideo: Bool)?,
@@ -58,7 +58,7 @@ enum ShowPreviewGallery {
                 ))
             case .media(let dto):
                 return stillItem(dto, localStillURL: localStillURL)
-            case .slideshow, .livePoll, .camera, .website, .pdf, .add:
+            case .slideshow, .camera, .livePoll, .countdown, .website, .pdf, .add, .unresolved:
                 return nil
             }
         }
@@ -106,7 +106,7 @@ enum ShowPreviewGallery {
             return (url, false)
         case .screensaver(let url), .video(let url, _, _):
             return (url, true)
-        case .camera, .web, .pdf, .black, .unavailable:
+        case .camera, .web, .pdf, .black, .countdown, .unavailable:
             return nil
         }
     }

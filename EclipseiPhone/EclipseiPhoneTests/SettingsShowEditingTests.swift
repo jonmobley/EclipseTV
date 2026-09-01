@@ -19,7 +19,7 @@ struct SettingsShowEditingTests {
         settings.loadViewIfNeeded()
 
         let table = try #require(settings.tableView)
-        #expect(table.numberOfRows(inSection: 0) == 2)
+        #expect(table.numberOfRows(inSection: 0) == 1)
         #expect(settings.tableView(table, titleForHeaderInSection: 0) == "Show")
         #expect(settings.tableView(table, titleForHeaderInSection: 1) == nil)
         #expect(settings.tableView(table, titleForHeaderInSection: 2) == "Playback")
@@ -31,11 +31,9 @@ struct SettingsShowEditingTests {
         #expect(field?.text == "Go")
         #expect(field?.placeholder == "Show name")
 
-        let deleteCell = settings.tableView(
-            table, cellForRowAt: IndexPath(row: 1, section: 0)
-        )
-        let config = deleteCell.contentConfiguration as? UIListContentConfiguration
-        #expect(config?.text == "Delete Show")
+        let delete = nameCell.accessoryView as? UIButton
+        #expect(delete?.accessibilityLabel == "Delete Show")
+        #expect(delete?.image(for: .normal) != nil)
     }
 
     @Test func openShowSettingsIncludesPracticeModeToggle() throws {
@@ -73,7 +71,11 @@ struct SettingsShowEditingTests {
         window.makeKeyAndVisible()
 
         let table = try #require(settings.tableView)
-        settings.tableView(table, didSelectRowAt: IndexPath(row: 1, section: 0))
+        let nameCell = settings.tableView(
+            table, cellForRowAt: IndexPath(row: 0, section: 0)
+        )
+        let delete = try #require(nameCell.accessoryView as? UIButton)
+        delete.sendActions(for: .touchUpInside)
         #expect(didDelete == false)
         #expect(settings.presentedViewController is UIAlertController)
         window.isHidden = true

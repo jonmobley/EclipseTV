@@ -19,15 +19,9 @@ final class WebPagesViewController: UITableViewController {
 
     private var isAddToShowMode: Bool { targetShowId != nil }
 
-    /// Pages not already members of the target Show (add-to-Show mode only).
-    private var candidates: [WebPage] {
-        guard let showId = targetShowId else { return store.pages }
-        let memberIds = Set(LocalAlbumStore.shared.album(id: showId)?.itemIds ?? [])
-        return store.pages.filter { !memberIds.contains($0.id.uuidString) }
-    }
-
+    /// Pages shown in History, including sites already on the target Show.
     private var displayedPages: [WebPage] {
-        isAddToShowMode ? candidates : store.pages
+        store.pages
     }
 
     private var isNavRoot: Bool {
@@ -70,14 +64,6 @@ final class WebPagesViewController: UITableViewController {
             name: WebPageStore.didChangeNotification,
             object: nil
         )
-        if isAddToShowMode {
-            NotificationCenter.default.addObserver(
-                self,
-                selector: #selector(pagesDidChange),
-                name: LocalAlbumStore.didChangeNotification,
-                object: nil
-            )
-        }
     }
 
     deinit {
@@ -107,6 +93,23 @@ final class WebPagesViewController: UITableViewController {
     }
 
     private func addToShow(_ page: WebPage) {
+        guard targetShowId != nil else { return }
+        if isMember(page) {
+            AlreadyInShowAlert.present(from: self) { [weak self] in
+                self?.commitAddToShow(page)
+            }
+            return
+        }
+        commitAddToShow(page)
+    }
+
+    private func isMember(_ page: WebPage) -> Bool {
+        guard let showId = targetShowId else { return false }
+        let ids = LocalAlbumStore.shared.album(id: showId)?.itemIds ?? []
+        return ids.contains(page.id.uuidString)
+    }
+
+    private func commitAddToShow(_ page: WebPage) {
         guard let showId = targetShowId else { return }
         WebPageStore.shared.touch(page.id)
         LocalAlbumStore.shared.add(itemId: page.id.uuidString, toAlbumId: showId)
@@ -145,9 +148,6 @@ final class WebPagesViewController: UITableViewController {
         if store.pages.isEmpty {
             return "Tap + to add a website, then add it as a card."
         }
-        if candidates.isEmpty {
-            return "Every site is already a card here. Tap + to add a new one."
-        }
         return "Choose a site to add as a card, or tap + to add a new one."
     }
 
@@ -160,12 +160,8 @@ final class WebPagesViewController: UITableViewController {
         let pages = displayedPages
 
         if pages.isEmpty {
-            if isAddToShowMode {
-                config.text = store.pages.isEmpty
-                    ? "No history yet"
-                    : "All sites are already cards here"
-            } else {
-                config.text = "No history yet"
+            config.text = "No history yet"
+            if !isAddToShowMode {
                 config.secondaryText = "Tap + to add a website"
                 config.textProperties.color = .secondaryLabel
                 config.secondaryTextProperties.color = .tertiaryLabel

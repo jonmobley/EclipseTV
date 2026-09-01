@@ -28,6 +28,7 @@ extension LiveHeaderView {
             return
         }
         clearWebPreview(parking: true)
+        clearCameraPreview()
 
         let preview = SeamlessLoopPlayerView(url: url)
         preview.translatesAutoresizingMaskIntoConstraints = false

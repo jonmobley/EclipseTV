@@ -104,6 +104,8 @@ extension iPhoneMainViewController {
         setupHeaderBar()
         embedHomePager()
         setupAudioMiniPlayer()
+        setupMusicDrawer()
+        view.bringSubviewToFront(musicDrawer)
         setupTransferOverlay()
     }
 
@@ -125,6 +127,9 @@ extension iPhoneMainViewController {
         }
         headerBar.onNewShow = { [weak self] in
             self?.promptNewAlbum()
+        }
+        headerBar.onGoHome = { [weak self] in
+            self?.libraryViewController.closeOpenShow()
         }
         headerBar.onDoneArranging = { [weak self] in
             self?.libraryViewController.commitArranging()
@@ -168,15 +173,12 @@ extension iPhoneMainViewController {
     /// Pins the ambient music mini player / bubble to the home bottom.
     ///
     /// Portrait is a full-width footer through the home indicator so tiles cannot
-    /// show under the bar. Landscape is a compact card on the Music bubble.
+    /// show under the bar. Landscape is a compact card beside the Music bubble.
     private func setupAudioMiniPlayer() {
         audioMiniPlayer.translatesAutoresizingMaskIntoConstraints = false
         audioMiniPlayer.isHidden = true
         audioMiniPlayer.onOpenLibrary = { [weak self] in
             self?.presentNowPlaying()
-        }
-        audioMiniPlayer.onTogglePlayPause = {
-            AudioPlayerController.shared.togglePlayPause()
         }
         audioMiniPlayer.onMinimize = { [weak self] in
             self?.setAudioMiniCollapsed(true, animated: true)
@@ -185,16 +187,8 @@ extension iPhoneMainViewController {
 
         audioMiniBubble.translatesAutoresizingMaskIntoConstraints = false
         audioMiniBubble.isHidden = true
-        audioMiniBubble.onExpand = { [weak self] in
-            self?.handleMusicBubbleTap()
-        }
-        audioMiniBubble.onStop = { [weak self] in
-            AudioPlayerController.shared.stop()
-            self?.audioMiniCollapsed = true
-            self?.isAudioMiniChromeAnimating = false
-            HomeMusicSwipeHint.markEligibleAfterMiniPlayerClose()
-            self?.libraryViewController.refreshMusicSwipeHintVisibility()
-            self?.refreshAudioMiniPlayer()
+        audioMiniBubble.onToggle = { [weak self] in
+            self?.handleAudioMiniBubbleToggle()
         }
         view.addSubview(audioMiniBubble)
 
@@ -205,13 +199,13 @@ extension iPhoneMainViewController {
             audioMiniPlayer.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             audioMiniPlayer.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ]
-        // Compact landscape card: same trailing-bottom corner as the Music bubble.
+        // Compact card sits beside the Music bubble in the same corner.
         let landTrailing = audioMiniPlayer.trailingAnchor.constraint(
-            equalTo: view.safeAreaLayoutGuide.trailingAnchor,
-            constant: -AudioMiniPlayerView.compactTrailingInset
+            equalTo: audioMiniBubble.leadingAnchor,
+            constant: -AudioMiniPlayerView.circleFooterGap
         )
         let landBottom = audioMiniPlayer.bottomAnchor.constraint(
-            equalTo: view.safeAreaLayoutGuide.bottomAnchor,
+            equalTo: view.bottomAnchor,
             constant: -AudioMiniPlayerView.compactBottomInset
         )
         let landWidth = audioMiniPlayer.widthAnchor.constraint(
@@ -226,35 +220,38 @@ extension iPhoneMainViewController {
                 constant: -AudioMiniPlayerView.compactTrailingInset
             ),
             audioMiniBubble.bottomAnchor.constraint(
-                equalTo: view.safeAreaLayoutGuide.bottomAnchor,
+                equalTo: view.bottomAnchor,
                 constant: -AudioMiniPlayerView.compactBottomInset
             )
         ])
         isAudioMiniLandscapeCompact = false
 
+        hadActiveAudioSession = AudioPlayerController.shared.hasActiveSession
         audioPlayerObserver = NotificationCenter.default.addObserver(
             forName: AudioPlayerController.didChangeNotification,
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.refreshAudioMiniPlayer()
+            self?.handleAudioPlayerDidChange()
         }
         refreshAudioMiniPlayer()
     }
 
-    /// Reveals the Music page to the right of the media grid (no-op when split).
+    /// Reveals Music: pager page, floating drawer, or no-op when already pinned.
     func presentAudioLibrary() {
-        guard !isHomeSplitLayout else { return }
         showMusicPage(animated: true)
     }
 
-    /// Corner Music control: expand playback chrome, or open Music when idle.
-    func handleMusicBubbleTap() {
-        if AudioPlayerController.shared.hasActiveSession {
-            setAudioMiniCollapsed(false, animated: true)
-        } else {
-            presentAudioLibrary()
+    /// Presents the Music library as a bottom sheet to choose something to play.
+    ///
+    /// Stays on Home instead of paging to the Music page. One at a time via the
+    /// presented chain (embedded Music is a child, so it does not false-positive).
+    func presentMusicPicker() {
+        guard !isAlreadyOpen(AudioLibraryViewController.self) else { return }
+        let nav = AudioLibraryViewController.makePickerNavigation { [weak self] in
+            self?.showAudioPicker()
         }
+        presentationAnchor.present(nav, animated: true)
     }
 
     /// Presents the expanded Now Playing sheet for the ambient player.
@@ -264,8 +261,7 @@ extension iPhoneMainViewController {
     func presentNowPlaying() {
         guard !isAlreadyOpen(AudioNowPlayingViewController.self) else { return }
         let nav = AudioNowPlayingViewController.makeNavigation { [weak self] in
-            guard let self, !self.isHomeSplitLayout else { return }
-            self.showMusicPage(animated: true)
+            self?.presentMusicPicker()
         }
         presentationAnchor.present(nav, animated: true)
     }
@@ -327,7 +323,7 @@ extension iPhoneMainViewController {
         cameraVC.modalPresentationStyle = .fullScreen
         present(cameraVC, animated: true)
         if TVLibraryStore.shared.isOnline, ExternalDisplayManager.shared.isConnected {
-            showTemporaryStatus("Showing on AirPlay. EclipseTV is still on the library.")
+            showTemporaryStatus("Showing on AirPlay. EclipseTV is parked.")
         }
     }
 
@@ -357,6 +353,29 @@ extension iPhoneMainViewController {
     func presentMediaLibrary() {
         guard !isAlreadyOpen(MediaLibraryPickerViewController.self) else { return }
         let picker = MediaLibraryPickerViewController()
+        picker.onRequestEdit = { [weak self] id in
+            self?.beginEditCrop(forItemId: id)
+        }
+        picker.onRequestVideoThumbnail = { [weak self] id in
+            self?.beginChangeVideoThumbnail(forItemId: id)
+        }
+        picker.onApplyVideoSetting = { [weak self] id, isLooping, isMuted in
+            self?.libraryViewController.applyVideoSetting(
+                id: id, isLooping: isLooping, isMuted: isMuted
+            )
+        }
+        picker.onPerformDelete = { [weak self] id in
+            self?.libraryViewController.performDelete(id: id)
+        }
+        picker.onRequestResend = { [weak self] id in
+            self?.beginResend(forItemId: id)
+        }
+        picker.onIsEclipseTVLinked = { [weak self] in
+            self?.isConnected() ?? false
+        }
+        picker.onRequestEclipseTVConnect = { [weak self] in
+            self?.resumeConnection()
+        }
         if let showId = libraryViewController.openShowId {
             picker.targetShowId = showId
             picker.onAddToShow = { mediaIds, pdfIds in

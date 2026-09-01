@@ -11,7 +11,8 @@ import Foundation
 ///
 /// Scalars (name, cover, orientation, practice preview) are last-writer-wins
 /// by `modifiedAt`.
-/// Membership is union-then-reorder so an item added on one device is never lost.
+/// Membership is union-then-reorder minus tombstones so an item added on one
+/// device is never lost, and a remove is not resurrected by the other side.
 enum CloudKitConflictResolver {
 
     /// Merged membership: union of both sides, preferring `preferredOrder` sequence,
@@ -31,6 +32,20 @@ enum CloudKitConflictResolver {
         return result
     }
 
+    /// Union of two tombstone lists (order preserved, unique).
+    static func unionTombstones(_ a: [String], _ b: [String]) -> [String] {
+        unionMembership(preferredOrder: a, other: b)
+    }
+
+    /// Drops ids present in `tombstones`.
+    static func subtractingTombstones(
+        _ ids: [String],
+        tombstones: [String]
+    ) -> [String] {
+        let dead = Set(tombstones)
+        return ids.filter { !dead.contains($0) }
+    }
+
     /// Picks the newer Show fields, then unions membership and surface layout.
     static func mergeShows(
         local: LocalAlbum,
@@ -42,24 +57,40 @@ enum CloudKitConflictResolver {
         let base = preferRemote ? remote : local
         let other = preferRemote ? local : remote
         var merged = base
-        merged.itemIds = unionMembership(
-            preferredOrder: base.itemIds,
-            other: other.itemIds
+        let deletedItems = unionTombstones(
+            base.deletedItemIds, other.deletedItemIds
+        )
+        let deletedSurface = unionTombstones(
+            base.deletedSurfaceIds, other.deletedSurfaceIds
+        )
+        merged.deletedItemIds = deletedItems
+        merged.deletedSurfaceIds = deletedSurface
+        merged.itemIds = subtractingTombstones(
+            unionMembership(
+                preferredOrder: base.itemIds,
+                other: other.itemIds
+            ),
+            tombstones: deletedItems
         )
         if base.surfaceIds == nil, other.surfaceIds == nil {
             merged.surfaceIds = nil
         } else {
             let preferred = base.resolvedSurfaceIds
             let otherSurface = other.resolvedSurfaceIds
-            let union = unionMembership(
-                preferredOrder: preferred, other: otherSurface
+            let union = subtractingTombstones(
+                unionMembership(
+                    preferredOrder: preferred, other: otherSurface
+                ),
+                tombstones: deletedSurface + deletedItems
             )
             let slideshows = union.filter(ShowSlideshowToken.isSlideshow)
+            let countdowns = union.filter(ShowCountdownToken.isCountdown)
             let livePolls = union.filter(ShowLivePollToken.isLivePoll)
             merged.surfaceIds = LocalAlbum.sanitizedSurface(
                 union,
                 itemIds: merged.itemIds,
                 slideshowIds: slideshows,
+                countdownIds: countdowns,
                 livePollIds: livePolls
             )
         }

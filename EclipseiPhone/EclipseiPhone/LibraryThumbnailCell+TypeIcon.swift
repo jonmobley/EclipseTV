@@ -33,8 +33,9 @@ extension LibraryThumbnailCell {
         ])
     }
 
-    /// Sets the content-type glyph. Hidden when there is no thumbnail or the
-    /// item is unavailable. Rewind lives in the opposite corner, so both can show.
+    /// Sets the content-type glyph. Hidden for photos, missing art, or when
+    /// the item is unavailable. Rewind lives in the opposite corner, so both
+    /// can show.
     func setTypeIcon(_ icon: ThumbnailTypeIcon?) {
         contentTypeIcon = icon
         refreshTypeIconVisibility()
@@ -46,7 +47,8 @@ extension LibraryThumbnailCell {
     func refreshTypeIconVisibility() {
         let hasArt = imageView.image != nil && imageView.alpha > 0.5
         let allowEmpty = contentTypeIcon?.showsWithoutThumbnail == true
-        let show = contentTypeIcon != nil && (hasArt || allowEmpty)
+        let show = contentTypeIcon?.showsOnThumbnail == true
+            && (hasArt || allowEmpty)
         typeIconOverlay.apply(show ? contentTypeIcon : nil)
         if show {
             cardView.bringSubviewToFront(typeIconOverlay)

@@ -20,6 +20,13 @@ struct ShowPreviewGalleryTests {
             .screensaver,
             .logo,
             .camera,
+            .livePoll(ShowLivePoll(
+                showId: UUID(),
+                pollId: "poll-1",
+                title: "Session 1",
+                questionCount: 3
+            )),
+            .countdown(ShowCountdown(showId: UUID(), name: "Break", duration: 60)),
             .media(makeItem(id: "a")),
             .slideshow(Slideshow(showId: UUID(), name: "Deck")),
             .media(makeItem(id: "clip", isVideo: true)),

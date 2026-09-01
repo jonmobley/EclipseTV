@@ -123,6 +123,13 @@ struct CameraCutawayParkTests {
         #expect(CameraPreviewView.programVideoGravity == .resizeAspectFill)
     }
 
+    @Test func syncLiveCameraOrientationIsNoOpWhenNotLive() {
+        let mgr = ExternalDisplayManager.shared
+        endCameraIfNeeded(mgr)
+        mgr.syncLiveCameraOrientation()
+        #expect(mgr.isCameraLive == false)
+    }
+
     private func endCameraIfNeeded(_ mgr: ExternalDisplayManager) {
         mgr.resumeCameraFromStillPark()
         if mgr.isCameraModeActive {

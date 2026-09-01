@@ -20,19 +20,23 @@ struct ThumbnailTypeIconTests {
         #expect(ThumbnailTypeIcon.pdf.systemName == "doc.richtext")
         #expect(ThumbnailTypeIcon.camera.systemName == "camera.fill")
         #expect(ThumbnailTypeIcon.livePoll.systemName == "chart.bar.fill")
+        #expect(ThumbnailTypeIcon.countdown.systemName == "timer")
         #expect(ThumbnailTypeIcon.media(isVideo: false) == .photo)
         #expect(ThumbnailTypeIcon.media(isVideo: true) == .video)
         #expect(ThumbnailTypeIcon.camera.showsWithoutThumbnail)
         #expect(ThumbnailTypeIcon.livePoll.showsWithoutThumbnail)
+        #expect(ThumbnailTypeIcon.countdown.showsWithoutThumbnail)
         #expect(ThumbnailTypeIcon.photo.showsWithoutThumbnail == false)
+        #expect(ThumbnailTypeIcon.photo.showsOnThumbnail == false)
+        #expect(ThumbnailTypeIcon.video.showsOnThumbnail)
         #expect(ThumbnailTypeIcon.video.usesPlayFill)
     }
 
-    @Test func photoThumbnailShowsPhotoIcon() {
+    @Test func photoThumbnailHidesTypeIcon() {
         let cell = makeCell()
         cell.configure(with: makeItem(isVideo: false), thumbnail: swatch(), isLive: false)
-        #expect(cell.typeIconOverlay.appliedIcon == .photo)
-        #expect(cell.typeIconOverlay.isHidden == false)
+        #expect(cell.typeIconOverlay.appliedIcon == nil)
+        #expect(cell.typeIconOverlay.isHidden)
     }
 
     @Test func videoThumbnailShowsCornerPlayIcon() {
@@ -46,6 +50,16 @@ struct ThumbnailTypeIconTests {
         let cell = makeCell()
         cell.configure(with: makeItem(isVideo: false), thumbnail: nil, isLive: false)
         #expect(cell.typeIconOverlay.isHidden)
+    }
+
+    @Test func applyLoadedThumbnailFillsPlaceholder() {
+        let cell = makeCell()
+        cell.configure(with: makeItem(isVideo: false), thumbnail: nil, isLive: false)
+        #expect(cell.isShowingPlaceholder)
+
+        cell.applyLoadedThumbnail(swatch())
+
+        #expect(cell.isShowingPlaceholder == false)
     }
 
     @Test func websiteSpecialShowsTypeIconOnArt() {
@@ -115,7 +129,8 @@ struct ThumbnailTypeIconTests {
             isLive: false,
             typeIcon: .photo
         )
-        #expect(cell.typeIconOverlay.appliedIcon == .photo)
+        #expect(cell.typeIconOverlay.appliedIcon == nil)
+        #expect(cell.typeIconOverlay.isHidden)
 
         cell.configureSpecial(
             title: "Background",
@@ -125,13 +140,35 @@ struct ThumbnailTypeIconTests {
             isLive: false,
             typeIcon: .photo
         )
-        #expect(cell.typeIconOverlay.appliedIcon == .photo)
-        #expect(cell.typeIconOverlay.isHidden == false)
+        #expect(cell.typeIconOverlay.appliedIcon == nil)
+        #expect(cell.typeIconOverlay.isHidden)
 
         cell.configureCamera(isLive: false, lastFrame: nil, warmPreview: false)
         #expect(cell.typeIconOverlay.appliedIcon == .camera)
         #expect(cell.typeIconOverlay.isHidden == false)
         #expect(cell.captionLabel.textAlignment == .center)
+
+        cell.configureSpecial(
+            title: "Live Poll",
+            systemImage: "chart.bar.fill",
+            thumbnail: nil,
+            fillColor: .darkGray,
+            isLive: false,
+            typeIcon: .livePoll
+        )
+        #expect(cell.typeIconOverlay.appliedIcon == .livePoll)
+        #expect(cell.typeIconOverlay.isHidden == false)
+
+        cell.configureSpecial(
+            title: "Countdown",
+            systemImage: "timer",
+            thumbnail: nil,
+            fillColor: .darkGray,
+            isLive: false,
+            typeIcon: .countdown
+        )
+        #expect(cell.typeIconOverlay.appliedIcon == .countdown)
+        #expect(cell.typeIconOverlay.isHidden == false)
 
         cell.configureActionTile(title: "New Show")
         #expect(cell.typeIconOverlay.isHidden)

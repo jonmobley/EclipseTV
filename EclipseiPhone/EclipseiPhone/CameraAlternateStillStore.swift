@@ -118,6 +118,9 @@ final class CameraAlternateStillStore {
             NotificationCenter.default.post(
                 name: Self.didChangeNotification, object: self
             )
+            guard !EclipseSyncController.shared.isApplyingRemote else { return stillId }
+            markNeedsUpload(id: stillId)
+            EclipseSyncController.shared.backend.scheduleCutawaySave(id: stillId)
             return stillId
         } catch {
             logger.error("Failed to write cutaway: \(error.localizedDescription)")
@@ -132,6 +135,37 @@ final class CameraAlternateStillStore {
         images[id] = nil
         stills.removeAll { $0.id == id }
         saveIndex()
+        NotificationCenter.default.post(
+            name: Self.didChangeNotification, object: self
+        )
+        guard !EclipseSyncController.shared.isApplyingRemote else { return }
+        markNeedsUpload(id: id)
+        EclipseSyncController.shared.backend.scheduleCutawayDelete(id: id)
+    }
+
+    /// Inserts or replaces a cutaway that arrived from iCloud.
+    func applyRemote(id: UUID, createdAt: Date, assetURL: URL) {
+        let destination = fileURL(for: id)
+        do {
+            if FileManager.default.fileExists(atPath: destination.path) {
+                try FileManager.default.removeItem(at: destination)
+            }
+            try FileManager.default.copyItem(at: assetURL, to: destination)
+        } catch {
+            logger.error("Remote cutaway copy failed: \(error.localizedDescription)")
+            return
+        }
+        images[id] = UIImage(contentsOfFile: destination.path)
+        if let index = stills.firstIndex(where: { $0.id == id }) {
+            stills[index] = CameraCutawayStill(id: id, createdAt: createdAt)
+        } else if stills.count < Self.maxStillCount {
+            stills.append(CameraCutawayStill(id: id, createdAt: createdAt))
+            stills.sort { $0.createdAt < $1.createdAt }
+        } else {
+            return
+        }
+        saveIndex()
+        markSynced(id: id)
         NotificationCenter.default.post(
             name: Self.didChangeNotification, object: self
         )

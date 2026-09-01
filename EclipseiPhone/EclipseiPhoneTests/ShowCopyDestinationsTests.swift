@@ -46,4 +46,15 @@ struct ShowCopyDestinationsTests {
         #expect(groups.count == 1)
         #expect(groups[0].map(\.name) == ["Also Tall"])
     }
+
+    @Test func includesEveryShowWhenNotExcluding() {
+        let a = LocalAlbum(name: "Open", orientation: .landscape)
+        let b = LocalAlbum(name: "Wide", orientation: .landscape)
+        let groups = ShowCopyDestinations.grouped(
+            albums: [a, b],
+            activeOrientation: .landscape
+        )
+        #expect(groups.count == 1)
+        #expect(groups[0].map(\.name) == ["Open", "Wide"])
+    }
 }

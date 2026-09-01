@@ -30,7 +30,6 @@ extension LibraryGridViewController {
         }
         return UIMenu(
             title: "Screen Fit",
-            subtitle: current.rawValue,
             image: UIImage(systemName: "aspectratio"),
             children: actions
         )
@@ -69,7 +68,6 @@ extension LibraryGridViewController {
         }
         return UIMenu(
             title: "Screen Fit",
-            subtitle: current.rawValue,
             image: UIImage(systemName: "aspectratio"),
             children: actions
         )
@@ -84,6 +82,7 @@ extension LibraryGridViewController {
         SlideshowPlaybackController.shared.refreshPresentationIfLive(
             slideshowId: slideshow.id
         )
+        reloadLibraryGrid()
         refreshLiveHeader()
     }
 }

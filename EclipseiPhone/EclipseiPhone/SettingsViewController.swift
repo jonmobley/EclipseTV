@@ -8,9 +8,9 @@
 import UIKit
 
 /// Companion settings root: drill into display, transition, camera, EclipseTV,
-/// and Getting Started.
-/// When a Show is open, a top section hosts the name field and Delete, plus a
-/// Practice Mode toggle.
+/// Guided Access, and Getting Started.
+/// When a Show is open, a top section hosts the name field (trash on the same
+/// row) plus a Practice Mode toggle.
 final class SettingsViewController: UITableViewController, UITextFieldDelegate {
 
     /// Multipeer link state for the Eclipse TV App section.
@@ -42,6 +42,7 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
     var onDeleteShow: (() -> Void)?
 
     private let showNameField = UITextField()
+    private let deleteShowButton = UIButton(type: .system)
 
     /// Current Multipeer link state; host updates via `setConnectionState(_:)`.
     private(set) var connectionState: ConnectionDisplayState = .paused
@@ -50,15 +51,12 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
         case show
         case showLivePreview
         case playback
+        case notes
         case showSharing
         case eclipseTV
         case eclipseMac
+        case recommendations
         case help
-    }
-
-    private enum ShowRow: Int, CaseIterable {
-        case name
-        case delete
     }
 
     private enum ShowSharingRow: Int, CaseIterable {
@@ -83,7 +81,8 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
             result.append(.showLivePreview)
         }
         result.append(contentsOf: [
-            .playback, .showSharing, .eclipseTV, .eclipseMac, .help
+            .playback, .notes, .showSharing, .eclipseTV, .eclipseMac,
+            .recommendations, .help
         ])
         return result
     }
@@ -116,11 +115,18 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
         tableView.keyboardDismissMode = .interactive
         tableView.tableFooterView = makeCopyrightFooter()
         configureShowNameField()
+        configureDeleteShowButton()
 
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(displayModeDidChange),
             name: ExternalOutputSettings.didChangeNotification,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(guidedAccessStatusDidChange),
+            name: UIAccessibility.guidedAccessStatusDidChangeNotification,
             object: nil
         )
     }
@@ -185,6 +191,12 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
         }
     }
 
+    @objc private func guidedAccessStatusDidChange() {
+        if let index = sections.firstIndex(of: .recommendations) {
+            tableView.reloadSections(IndexSet(integer: index), with: .none)
+        }
+    }
+
     // MARK: - Table Data
 
     override func numberOfSections(in tableView: UITableView) -> Int {
@@ -193,12 +205,14 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
 
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         switch sections[section] {
-        case .show: return ShowRow.allCases.count
+        case .show: return 1
         case .showLivePreview: return 1
         case .playback: return PlaybackRow.allCases.count
+        case .notes: return 1
         case .showSharing: return showSharingRows.count
         case .eclipseTV: return 1
         case .eclipseMac: return MacRow.allCases.count
+        case .recommendations: return 1
         case .help: return 1
         }
     }
@@ -212,9 +226,11 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
             return "Show"
         case .showLivePreview: return nil
         case .playback: return "Playback"
+        case .notes: return "Notes"
         case .showSharing: return "Show Sharing"
         case .eclipseTV: return "EclipseTV"
         case .eclipseMac: return "Eclipse for Mac"
+        case .recommendations: return GuidedAccessRecommendation.settingsHeader
         case .help: return "Help"
         }
     }
@@ -226,6 +242,9 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
         switch sections[section] {
         case .showLivePreview:
             return Self.disconnectedLivePreviewFooter
+        case .notes:
+            return "Notes stay attached to each image. Always shows an empty Note "
+                + "card on Preview so you can add notes while browsing."
         case .eclipseTV:
             return "Link an Apple TV running EclipseTV to sync Shows and present over Multipeer. "
                 + "AirPlay still works without a TV link."
@@ -234,6 +253,8 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
         case .eclipseMac:
             return "Control Eclipse on a Mac, or send this iPhone’s camera as a "
                 + "live source (any Apple ID, same Wi‑Fi)."
+        case .recommendations:
+            return GuidedAccessRecommendation.settingsFooter
         case .show, .playback, .help:
             return nil
         }
@@ -243,8 +264,7 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
         _ tableView: UITableView,
         cellForRowAt indexPath: IndexPath
     ) -> UITableViewCell {
-        if sections[indexPath.section] == .show,
-           ShowRow(rawValue: indexPath.row) == .name {
+        if sections[indexPath.section] == .show {
             let cell = tableView.dequeueReusableCell(
                 withIdentifier: "showName", for: indexPath
             )
@@ -261,7 +281,7 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
 
         switch sections[indexPath.section] {
         case .show:
-            configureShowCell(cell, config: &config)
+            break
         case .showLivePreview:
             configureDisconnectedLivePreviewCell(cell, config: &config)
         case .playback:
@@ -275,6 +295,10 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
             case .none:
                 break
             }
+        case .notes:
+            config.text = "Show Notes Section"
+            config.secondaryText = MediaNoteStore.visibility.summary
+            config.image = UIImage(systemName: "note.text")
         case .showSharing:
             configureShowSharingCell(cell, config: &config, row: indexPath.row)
         case .eclipseTV:
@@ -294,6 +318,10 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
             case .none:
                 break
             }
+        case .recommendations:
+            config.text = GuidedAccessRecommendation.rowTitle
+            config.secondaryText = GuidedAccessRecommendation.statusText
+            config.image = UIImage(systemName: "lock.iphone")
         case .help:
             config.text = "Getting Started"
             config.secondaryText = "Learn the basics"
@@ -308,11 +336,7 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
         tableView.deselectRow(at: indexPath, animated: true)
         switch sections[indexPath.section] {
         case .show:
-            if ShowRow(rawValue: indexPath.row) == .name {
-                showNameField.becomeFirstResponder()
-            } else {
-                confirmDeleteShow()
-            }
+            showNameField.becomeFirstResponder()
         case .showLivePreview:
             break
         case .playback:
@@ -328,6 +352,10 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
             case .none:
                 break
             }
+        case .notes:
+            navigationController?.pushViewController(
+                SettingsNotesViewController(), animated: true
+            )
         case .showSharing:
             handleShowSharingRow(indexPath.row)
         case .eclipseTV:
@@ -341,6 +369,10 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
             case .none:
                 break
             }
+        case .recommendations:
+            navigationController?.pushViewController(
+                SettingsGuidedAccessViewController(), animated: true
+            )
         case .help:
             pushGettingStarted()
         }
@@ -366,9 +398,27 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
         )
     }
 
+    private func configureDeleteShowButton() {
+        deleteShowButton.setImage(
+            UIImage(
+                systemName: "trash",
+                withConfiguration: UIImage.SymbolConfiguration(
+                    pointSize: 17, weight: .medium
+                )
+            ),
+            for: .normal
+        )
+        deleteShowButton.tintColor = .systemRed
+        deleteShowButton.accessibilityLabel = "Delete Show"
+        deleteShowButton.frame = CGRect(x: 0, y: 0, width: 44, height: 44)
+        deleteShowButton.addTarget(
+            self, action: #selector(confirmDeleteShow), for: .touchUpInside
+        )
+    }
+
     private func configureShowNameCell(_ cell: UITableViewCell) {
         cell.accessoryType = .none
-        cell.accessoryView = nil
+        cell.accessoryView = deleteShowButton
         cell.selectionStyle = .none
         cell.contentConfiguration = nil
         if !showNameField.isFirstResponder {
@@ -398,20 +448,8 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
         ])
     }
 
-    private func configureShowCell(
-        _ cell: UITableViewCell,
-        config: inout UIListContentConfiguration
-    ) {
-        cell.accessoryType = .none
-        cell.selectionStyle = .default
-        config.text = "Delete Show"
-        config.image = UIImage(systemName: "trash")
-        config.textProperties.color = .systemRed
-        config.imageProperties.tintColor = .systemRed
-    }
-
     /// Confirm in-place so Cancel can stay in Settings.
-    private func confirmDeleteShow() {
+    @objc private func confirmDeleteShow() {
         showNameField.resignFirstResponder()
         let name = openShowName ?? "this Show"
         let alert = UIAlertController(

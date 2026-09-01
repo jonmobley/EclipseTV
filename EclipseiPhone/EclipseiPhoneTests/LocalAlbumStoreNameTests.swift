@@ -73,6 +73,7 @@ struct LocalAlbumStoreNameTests {
         let album = try #require(store.album(id: show.id))
         #expect(album.surfaceIds == nil)
         #expect(album.resolvedSurfaceIds == ShowToolToken.all + ["media-1"])
+        #expect(album.missingToolTokens.isEmpty)
     }
 
     @Test func hideAndShowToolMaterializesSurface() throws {
@@ -82,13 +83,121 @@ struct LocalAlbumStoreNameTests {
         var album = try #require(store.album(id: show.id))
         #expect(album.surfaceIds != nil)
         #expect(!album.resolvedSurfaceIds.contains(ShowToolToken.camera))
-        #expect(album.missingToolTokens == [ShowToolToken.camera])
+        #expect(album.missingToolTokens == [
+            ShowToolToken.camera
+        ])
         #expect(album.itemIds.isEmpty)
 
         store.showTool(ShowToolToken.camera, albumId: show.id)
         album = try #require(store.album(id: show.id))
         #expect(album.resolvedSurfaceIds.last == ShowToolToken.camera)
         #expect(album.missingToolTokens.isEmpty)
+    }
+
+    @Test func retiredBlackoutToolTokenIsDroppedFromSurface() {
+        let leftover = "__eclipse.tool.blackout"
+        let result = LocalAlbum.sanitizedSurface(
+            ShowToolToken.all + [leftover, "media-1"],
+            itemIds: ["media-1"]
+        )
+        #expect(!result.contains(leftover))
+        #expect(result.contains("media-1"))
+        #expect(!ShowToolToken.isTool(leftover))
+    }
+
+    @Test func livePollCardsAppendViaStore() throws {
+        let store = makeStore()
+        let show = try store.create(name: "Poll", orientation: .landscape)
+        store.hideTool(ShowToolToken.camera, albumId: show.id)
+        let first = UUID()
+        store.addLivePoll(first, toAlbumId: show.id)
+        var album = try #require(store.album(id: show.id))
+        let token = ShowLivePollToken.token(for: first)
+        #expect(album.resolvedSurfaceIds.last == token)
+        #expect(!album.itemIds.contains(token))
+
+        store.addLivePoll(first, toAlbumId: show.id)
+        album = try #require(store.album(id: show.id))
+        #expect(album.resolvedSurfaceIds.filter { $0 == token }.count == 1)
+
+        let second = UUID()
+        store.addLivePoll(second, toAlbumId: show.id)
+        album = try #require(store.album(id: show.id))
+        #expect(album.resolvedSurfaceIds.contains(token))
+        #expect(
+            album.resolvedSurfaceIds.contains(ShowLivePollToken.token(for: second))
+        )
+    }
+
+    @Test func dropLegacyLivePollToolRemovesSingleton() throws {
+        let store = makeStore()
+        let show = try store.create(name: "Legacy Poll", orientation: .landscape)
+        store.hideTool(ShowToolToken.camera, albumId: show.id)
+        var album = try #require(store.album(id: show.id))
+        var surface = try #require(album.surfaceIds)
+        surface.append(ShowLivePollToken.legacyTool)
+        store.reorderSurface(surface, albumId: show.id)
+        album = try #require(store.album(id: show.id))
+        #expect(album.surfaceIds?.contains(ShowLivePollToken.legacyTool) == true)
+
+        store.dropLegacyLivePollTool(albumId: show.id)
+        album = try #require(store.album(id: show.id))
+        #expect(album.surfaceIds?.contains(ShowLivePollToken.legacyTool) != true)
+        #expect(album.deletedSurfaceIds.contains(ShowLivePollToken.legacyTool))
+    }
+
+    @Test func addCountdownAppendsWhenSurfaceMaterialized() throws {
+        let store = makeStore()
+        let show = try store.create(name: "Timers", orientation: .landscape)
+        store.hideTool(ShowToolToken.camera, albumId: show.id)
+        let countdownId = UUID()
+        store.addCountdown(countdownId, toAlbumId: show.id)
+        let album = try #require(store.album(id: show.id))
+        #expect(
+            album.resolvedSurfaceIds.last
+                == ShowCountdownToken.token(for: countdownId)
+        )
+        #expect(!album.itemIds.contains(ShowCountdownToken.token(for: countdownId)))
+    }
+
+    @Test func sanitizedSurfaceAppendsCountdownsLast() {
+        let token = ShowCountdownToken.token(for: UUID())
+        let result = LocalAlbum.sanitizedSurface(
+            ShowToolToken.all + ["a"],
+            itemIds: ["a"],
+            countdownIds: [token]
+        )
+        #expect(result == ShowToolToken.all + ["a", token])
+    }
+
+    @Test func countdownTokenRoundTrips() {
+        let id = UUID()
+        let token = ShowCountdownToken.token(for: id)
+        #expect(ShowCountdownToken.isCountdown(token))
+        #expect(!ShowCountdownToken.isCountdown("media-1"))
+        #expect(ShowCountdownToken.countdownId(from: token) == id)
+        #expect(ShowCountdownToken.countdownId(from: "media-1") == nil)
+        #expect(!ShowToolToken.isTool(ShowCountdownToken.legacyTool))
+        #expect(!ShowToolToken.isTool(ShowLivePollToken.legacyTool))
+    }
+
+    @Test func livePollTokenRoundTrips() {
+        let id = UUID()
+        let token = ShowLivePollToken.token(for: id)
+        #expect(ShowLivePollToken.isLivePoll(token))
+        #expect(!ShowLivePollToken.isLivePoll("media-1"))
+        #expect(ShowLivePollToken.livePollId(from: token) == id)
+        #expect(ShowLivePollToken.livePollId(from: "media-1") == nil)
+    }
+
+    @Test func sanitizedSurfaceAppendsLivePollsLast() {
+        let token = ShowLivePollToken.token(for: UUID())
+        let result = LocalAlbum.sanitizedSurface(
+            ShowToolToken.all + ["a"],
+            itemIds: ["a"],
+            livePollIds: [token]
+        )
+        #expect(result == ShowToolToken.all + ["a", token])
     }
 
     @Test func reorderSurfaceMovesToolsAmongMembers() throws {
@@ -151,6 +260,17 @@ struct LocalAlbumStoreNameTests {
         #expect(!ShowSlideshowToken.isSlideshow("media-1"))
         #expect(ShowSlideshowToken.slideshowId(from: token) == id)
         #expect(ShowSlideshowToken.slideshowId(from: "media-1") == nil)
+    }
+
+    @Test func addSlideshowPersistsTokenOnDefaultSurface() throws {
+        let store = makeStore()
+        let show = try store.create(name: "Empty Deck", orientation: .landscape)
+        #expect(store.album(id: show.id)?.surfaceIds == nil)
+        let slideshowId = UUID()
+        store.addSlideshow(slideshowId, toAlbumId: show.id)
+        let album = try #require(store.album(id: show.id))
+        #expect(album.surfaceIds != nil)
+        #expect(album.resolvedSurfaceIds.last == ShowSlideshowToken.token(for: slideshowId))
     }
 
     @Test func addSlideshowAppendsWhenSurfaceMaterialized() throws {

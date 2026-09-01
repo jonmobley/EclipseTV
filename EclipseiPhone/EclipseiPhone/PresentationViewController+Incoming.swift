@@ -39,6 +39,8 @@ extension PresentationViewController {
         case .black:
             // Overlay is already black.
             notifyIfCurrent(generation)
+        case .countdown:
+            notifyIfCurrent(generation)
         case .unavailable(let thumbnail, _):
             installIncomingImage(uiImage: thumbnail, generation: generation)
         }
@@ -315,6 +317,12 @@ extension PresentationViewController {
             applyRotatedLayout(to: frameView, in: transitionOverlayContainer, scale: 1)
             transitionOverlayContainer.bringSubviewToFront(frameView)
         }
+    }
+
+    /// Re-applies incoming-transition camera rotation to Display Mode.
+    func syncIncomingCameraToDisplayModeOrientation() {
+        guard incomingCameraPreview != nil else { return }
+        layoutIncomingCamera()
     }
 
     /// Syncs the incoming-transition camera frame when the store changes mid-hold.

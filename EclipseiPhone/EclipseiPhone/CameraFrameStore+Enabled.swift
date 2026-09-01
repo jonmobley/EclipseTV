@@ -37,6 +37,9 @@ extension CameraFrameStore {
         }
         persistEnabledIds(ids, for: mode)
         NotificationCenter.default.post(name: Self.didChangeNotification, object: self)
+        guard !EclipseSyncController.shared.isApplyingRemote else { return }
+        markSettingsNeedsUpload(orientation: mode)
+        EclipseSyncController.shared.backend.scheduleCameraSettingsSave(orientation: mode)
     }
 
     /// Pins a newly imported frame onto the current-mode ribbon.
@@ -58,16 +61,6 @@ extension CameraFrameStore {
 
     private var enabledIds: Set<UUID> {
         enabledIds(for: ExternalOutputSettings.orientation)
-    }
-
-    private func enabledIds(for orientation: ExternalOutputOrientation) -> Set<UUID> {
-        let key = enabledDefaultsKey(for: orientation)
-        let valid = frameIds(in: orientation)
-        guard let raw = UserDefaults.standard.array(forKey: key) as? [String] else {
-            persistEnabledIds(valid, for: orientation)
-            return valid
-        }
-        return Set(raw.compactMap(UUID.init(uuidString:))).intersection(valid)
     }
 
     private func persistEnabledIds(

@@ -58,6 +58,20 @@ struct PeerPairingTests {
         #expect(decoded?.accountCode == "654321")
     }
 
+    @Test func envelopeSetIdleModeRoundTrips() {
+        let black = EclipseShareEnvelope.setIdleMode(black: true).encoded()
+        #expect(black != nil)
+        let blackDecoded = EclipseShareEnvelope.decode(from: black!)
+        #expect(blackDecoded?.kind == .setIdleMode)
+        #expect(blackDecoded?.mode == "black")
+
+        let clear = EclipseShareEnvelope.setIdleMode(black: false).encoded()
+        #expect(clear != nil)
+        let clearDecoded = EclipseShareEnvelope.decode(from: clear!)
+        #expect(clearDecoded?.kind == .setIdleMode)
+        #expect(clearDecoded?.mode == "clear")
+    }
+
     @Test func albumConfigNormalizeAndValidate() {
         #expect(AlbumConfig.normalize(" 12-34 56 ") == "123456")
         #expect(AlbumConfig.isValidCode("123456"))

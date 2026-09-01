@@ -144,6 +144,7 @@ final class LocalAlbumStore {
         // This has to live here rather than at the confirm-delete alerts: a Show deleted
         // on another device arrives through the sync layer, which never sees that UI.
         SlideshowStore.shared.deleteAll(forShowId: id)
+        CountdownStore.shared.deleteAll(forShowId: id)
         LivePollStore.shared.deleteAll(forShowId: id)
         for itemId in removed?.itemIds ?? [] {
             if let pageId = UUID(uuidString: itemId) {
@@ -166,6 +167,7 @@ final class LocalAlbumStore {
         guard let index = albums.firstIndex(where: { $0.id == albumId }) else { return }
         guard !albums[index].itemIds.contains(itemId) else { return }
         albums[index].itemIds.append(itemId)
+        albums[index].deletedItemIds.removeAll { $0 == itemId }
         if var surface = albums[index].surfaceIds {
             if !surface.contains(itemId) { surface.append(itemId) }
             albums[index].surfaceIds = LocalAlbum.sanitizedSurface(
@@ -182,6 +184,7 @@ final class LocalAlbumStore {
     /// Removes `itemId` from the album when present.
     func remove(itemId: String, fromAlbumId albumId: UUID) {
         guard let index = albums.firstIndex(where: { $0.id == albumId }) else { return }
+        let hadMember = albums[index].itemIds.contains(itemId)
         albums[index].itemIds.removeAll { $0 == itemId }
         if var surface = albums[index].surfaceIds {
             surface.removeAll { $0 == itemId }
@@ -191,6 +194,9 @@ final class LocalAlbumStore {
         }
         if albums[index].coverId == itemId {
             albums[index].coverId = albums[index].itemIds.first
+        }
+        if hadMember, !albums[index].deletedItemIds.contains(itemId) {
+            albums[index].deletedItemIds.append(itemId)
         }
         persist(changedAlbumId: albumId)
         scheduleShowSaveIfNeeded(albumId)
@@ -227,6 +233,9 @@ final class LocalAlbumStore {
         albums[index].surfaceIds = LocalAlbum.sanitizedSurface(
             surface, itemIds: albums[index].itemIds
         )
+        if !albums[index].deletedSurfaceIds.contains(token) {
+            albums[index].deletedSurfaceIds.append(token)
+        }
         persist(changedAlbumId: albumId)
         scheduleShowSaveIfNeeded(albumId)
     }
@@ -239,6 +248,7 @@ final class LocalAlbumStore {
         var surface = albums[index].surfaceIds ?? []
         guard !surface.contains(token) else { return }
         surface.append(token)
+        albums[index].deletedSurfaceIds.removeAll { $0 == token }
         albums[index].surfaceIds = LocalAlbum.sanitizedSurface(
             surface, itemIds: albums[index].itemIds
         )
@@ -246,9 +256,8 @@ final class LocalAlbumStore {
         scheduleShowSaveIfNeeded(albumId)
     }
 
-    /// Replaces the Show grid order (tools + members + slideshows + Live Polls).
-    /// Syncs `itemIds` to member order; slideshow and Live Poll tokens stay on
-    /// the surface only.
+    /// Replaces the Show grid order (tools + members + slideshows).
+    /// Syncs `itemIds` to member order; slideshow tokens stay on the surface only.
     func reorderSurface(_ surfaceIds: [String], albumId: UUID) {
         guard let index = albums.firstIndex(where: { $0.id == albumId }) else { return }
         let sanitized = LocalAlbum.sanitizedSurface(surfaceIds, itemIds: albums[index].itemIds)
@@ -256,7 +265,10 @@ final class LocalAlbumStore {
         let members = sanitized.filter {
             !ShowToolToken.isTool($0)
                 && !ShowSlideshowToken.isSlideshow($0)
+                && !ShowCountdownToken.isCountdown($0)
                 && !ShowLivePollToken.isLivePoll($0)
+                && $0 != ShowCountdownToken.legacyTool
+                && $0 != ShowLivePollToken.legacyTool
         }
         // Preserve membership set; order follows surface for members that appear.
         let memberSet = Set(albums[index].itemIds)
@@ -270,13 +282,24 @@ final class LocalAlbumStore {
         scheduleShowSaveIfNeeded(albumId)
     }
 
-    /// Appends a slideshow tile when this Show already has a customized surface.
+    /// Appends a slideshow tile, materializing the default surface if needed.
     func addSlideshow(_ slideshowId: UUID, toAlbumId albumId: UUID) {
+        appendSurfaceToken(
+            ShowSlideshowToken.token(for: slideshowId),
+            toAlbumId: albumId
+        )
+    }
+
+    /// Drops a slideshow tile from this Show's surface.
+    func removeSlideshow(_ slideshowId: UUID, fromAlbumId albumId: UUID) {
         guard let index = albums.firstIndex(where: { $0.id == albumId }) else { return }
-        guard var surface = albums[index].surfaceIds else { return }
         let token = ShowSlideshowToken.token(for: slideshowId)
-        guard !surface.contains(token) else { return }
-        surface.append(token)
+        guard var surface = albums[index].surfaceIds,
+              surface.contains(token) else { return }
+        surface.removeAll { $0 == token }
+        if !albums[index].deletedSurfaceIds.contains(token) {
+            albums[index].deletedSurfaceIds.append(token)
+        }
         albums[index].surfaceIds = LocalAlbum.sanitizedSurface(
             surface, itemIds: albums[index].itemIds
         )
@@ -284,18 +307,57 @@ final class LocalAlbumStore {
         scheduleShowSaveIfNeeded(albumId)
     }
 
-    /// Appends a Live Poll card when this Show already has a customized surface.
-    func addLivePoll(_ livePollId: UUID, toAlbumId albumId: UUID) {
+    /// Appends a countdown tile, materializing the default surface if needed.
+    func addCountdown(_ countdownId: UUID, toAlbumId albumId: UUID) {
+        appendSurfaceToken(
+            ShowCountdownToken.token(for: countdownId),
+            toAlbumId: albumId
+        )
+    }
+
+    /// Drops a countdown tile from this Show's surface.
+    func removeCountdown(_ countdownId: UUID, fromAlbumId albumId: UUID) {
         guard let index = albums.firstIndex(where: { $0.id == albumId }) else { return }
-        guard var surface = albums[index].surfaceIds else { return }
-        let token = ShowLivePollToken.token(for: livePollId)
-        guard !surface.contains(token) else { return }
-        surface.append(token)
+        let token = ShowCountdownToken.token(for: countdownId)
+        guard var surface = albums[index].surfaceIds,
+              surface.contains(token) else { return }
+        surface.removeAll { $0 == token }
+        if !albums[index].deletedSurfaceIds.contains(token) {
+            albums[index].deletedSurfaceIds.append(token)
+        }
         albums[index].surfaceIds = LocalAlbum.sanitizedSurface(
             surface, itemIds: albums[index].itemIds
         )
         persist(changedAlbumId: albumId)
         scheduleShowSaveIfNeeded(albumId)
+    }
+
+    /// Replaces the retired singleton Countdown tool with a real countdown token.
+    func replaceLegacyCountdownTool(with countdownId: UUID, albumId: UUID) {
+        guard let index = albums.firstIndex(where: { $0.id == albumId }) else { return }
+        materializeSurface(at: index)
+        var surface = albums[index].surfaceIds ?? []
+        let token = ShowCountdownToken.token(for: countdownId)
+        surface = surface.map { $0 == ShowCountdownToken.legacyTool ? token : $0 }
+        if !surface.contains(token) {
+            surface.append(token)
+        }
+        albums[index].deletedSurfaceIds.removeAll {
+            $0 == ShowCountdownToken.legacyTool || $0 == token
+        }
+        albums[index].surfaceIds = LocalAlbum.sanitizedSurface(
+            surface, itemIds: albums[index].itemIds
+        )
+        persist(changedAlbumId: albumId)
+        scheduleShowSaveIfNeeded(albumId)
+    }
+
+    /// Appends a Live Poll card, materializing the default surface if needed.
+    func addLivePoll(_ livePollId: UUID, toAlbumId albumId: UUID) {
+        appendSurfaceToken(
+            ShowLivePollToken.token(for: livePollId),
+            toAlbumId: albumId
+        )
     }
 
     /// Drops a Live Poll card from this Show's surface.
@@ -305,6 +367,9 @@ final class LocalAlbumStore {
         guard var surface = albums[index].surfaceIds,
               surface.contains(token) else { return }
         surface.removeAll { $0 == token }
+        if !albums[index].deletedSurfaceIds.contains(token) {
+            albums[index].deletedSurfaceIds.append(token)
+        }
         albums[index].surfaceIds = LocalAlbum.sanitizedSurface(
             surface, itemIds: albums[index].itemIds
         )
@@ -318,6 +383,9 @@ final class LocalAlbumStore {
         guard var surface = albums[index].surfaceIds,
               surface.contains(ShowLivePollToken.legacyTool) else { return }
         surface.removeAll { $0 == ShowLivePollToken.legacyTool }
+        if !albums[index].deletedSurfaceIds.contains(ShowLivePollToken.legacyTool) {
+            albums[index].deletedSurfaceIds.append(ShowLivePollToken.legacyTool)
+        }
         albums[index].surfaceIds = LocalAlbum.sanitizedSurface(
             surface, itemIds: albums[index].itemIds
         )
@@ -325,13 +393,15 @@ final class LocalAlbumStore {
         scheduleShowSaveIfNeeded(albumId)
     }
 
-    /// Drops a slideshow tile from this Show's surface.
-    func removeSlideshow(_ slideshowId: UUID, fromAlbumId albumId: UUID) {
+    /// Writes `token` onto the Show grid and persists the surface.
+    private func appendSurfaceToken(_ token: String, toAlbumId albumId: UUID) {
         guard let index = albums.firstIndex(where: { $0.id == albumId }) else { return }
-        let token = ShowSlideshowToken.token(for: slideshowId)
-        guard var surface = albums[index].surfaceIds,
-              surface.contains(token) else { return }
-        surface.removeAll { $0 == token }
+        materializeSurface(at: index)
+        var surface = albums[index].surfaceIds ?? []
+        if !surface.contains(token) {
+            surface.append(token)
+        }
+        albums[index].deletedSurfaceIds.removeAll { $0 == token }
         albums[index].surfaceIds = LocalAlbum.sanitizedSurface(
             surface, itemIds: albums[index].itemIds
         )
@@ -345,10 +415,13 @@ final class LocalAlbumStore {
         let showId = albums[index].id
         let slideshows = SlideshowStore.shared.slideshows(forShowId: showId)
             .map { ShowSlideshowToken.token(for: $0.id) }
+        let countdowns = CountdownStore.shared.countdowns(forShowId: showId)
+            .map { ShowCountdownToken.token(for: $0.id) }
         let livePolls = LivePollStore.shared.polls(forShowId: showId)
             .map { ShowLivePollToken.token(for: $0.id) }
         albums[index].surfaceIds =
-            ShowToolToken.all + albums[index].itemIds + slideshows + livePolls
+            ShowToolToken.all + albums[index].itemIds
+            + slideshows + countdowns + livePolls
     }
 
     /// Shows or hides the disconnected live preview hero for `albumId`.
@@ -400,14 +473,18 @@ final class LocalAlbumStore {
 
     /// Removes membership ids that are no longer in the library.
     ///
-    /// Capture library ids, saved website ids (list + Show-retained), and saved PDF
-    /// ids are always kept — they are phone-owned and must not be stripped when an
-    /// Apple TV manifest omits them.
+    /// Capture, import, website, and PDF ids are always kept — they are phone-owned
+    /// and must not be stripped when an Apple TV manifest omits them.
     func pruneMissingItems(keeping validIds: Set<String>) {
         let captureKeep = CaptureStore.shared.keepIds
+        let importKeep = ImportedMediaStore.shared.keepIds
         let webKeep = WebPageStore.shared.keepIds
         let pdfKeep = PDFStore.shared.keepIds
-        let keep = validIds.union(captureKeep).union(webKeep).union(pdfKeep)
+        let keep = validIds
+            .union(captureKeep)
+            .union(importKeep)
+            .union(webKeep)
+            .union(pdfKeep)
         var changedIds: [UUID] = []
         for index in albums.indices {
             let before = albums[index].itemIds

@@ -42,6 +42,16 @@ extension UIInterfaceOrientation {
         default: return 90
         }
     }
+
+    /// True for portrait and portrait upside-down.
+    var isPortrait: Bool {
+        self == .portrait || self == .portraitUpsideDown
+    }
+
+    /// True for landscape left and landscape right.
+    var isLandscape: Bool {
+        self == .landscapeLeft || self == .landscapeRight
+    }
 }
 
 extension UIView {

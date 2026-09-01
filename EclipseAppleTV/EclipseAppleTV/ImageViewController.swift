@@ -59,41 +59,36 @@ class ImageViewController: ManagedViewController, ConnectionManagerDelegate, UIG
     
     /// Grid view that displays thumbnails with rounded corners
     internal lazy var gridView: UICollectionView = {
-        // Create a custom flow layout that enforces 16:9 aspect ratio
+        // Mode-aware flow layout: 16:9 tiles in Landscape, 9:16 in Vertical.
         class AdaptiveFlowLayout: UICollectionViewFlowLayout {
             override func prepare() {
                 super.prepare()
-                
+
                 guard let collectionView = collectionView else { return }
-                
-                // Fixed values for layout
-                let itemsPerRow: CGFloat = 3
+
+                let mode = MediaDataSource.shared.activeLibraryMode
                 let minimumSpacing: CGFloat = 80
                 let sideInset: CGFloat = 120
-                
-                // Available width calculation
-                let availableWidth = collectionView.bounds.width - (sideInset * 2) - (minimumSpacing * (itemsPerRow - 1))
-                let itemWidth = floor(availableWidth / itemsPerRow)
-                
-                // Calculate height based on 16:9 aspect ratio
-                let itemHeight = itemWidth * (9.0/16.0)
-                
-                // Set layout properties
-                itemSize = CGSize(width: itemWidth, height: itemHeight)
+                itemSize = TVGridMetrics.itemSize(
+                    collectionWidth: collectionView.bounds.width,
+                    mode: mode,
+                    sideInset: sideInset,
+                    spacing: minimumSpacing
+                )
                 minimumLineSpacing = 80
                 minimumInteritemSpacing = minimumSpacing
-                sectionInset = UIEdgeInsets(top: 80, left: sideInset, bottom: 50, right: sideInset)
-                
-                // Ensure left-to-right ordering
+                sectionInset = UIEdgeInsets(
+                    top: 80, left: sideInset, bottom: 50, right: sideInset
+                )
                 scrollDirection = .vertical
             }
-            
+
             override func layoutAttributesForElements(in rect: CGRect) -> [UICollectionViewLayoutAttributes]? {
                 let attributes = super.layoutAttributesForElements(in: rect)
                 return attributes?.sorted { $0.indexPath.item < $1.indexPath.item }
             }
         }
-        
+
         // Create collection view with custom layout
         let layout = AdaptiveFlowLayout()
         let collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)

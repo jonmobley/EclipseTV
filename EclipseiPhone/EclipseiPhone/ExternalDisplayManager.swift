@@ -24,6 +24,7 @@ final class ExternalDisplayManager {
         case camera
         case web(URL)
         case pdf(URL)
+        case countdown
     }
 
     /// Shared instance; started once from the main scene delegate.
@@ -110,6 +111,12 @@ final class ExternalDisplayManager {
     /// Whether a web page is the active presentation source (AirPlay path).
     var isWebLive: Bool {
         if case .web = overlaySource { return true }
+        return false
+    }
+
+    /// Whether the countdown clock is the active presentation source.
+    var isCountdownLive: Bool {
+        if case .countdown = overlaySource { return true }
         return false
     }
 
@@ -342,6 +349,9 @@ final class ExternalDisplayManager {
         if overlaySource == .camera {
             dropCameraOverlayAfterDisconnect()
         } else if overlaySource != nil {
+            if overlaySource == .countdown {
+                CountdownController.shared.endLive()
+            }
             overlaySource = nil
             parkedCameraStill = nil
             liveWebPageId = nil
@@ -548,6 +558,8 @@ final class ExternalDisplayManager {
             beginOverlay(.web(url), endingOther: true)
         case .pdf(let url):
             beginOverlay(.pdf(url), endingOther: true)
+        case .countdown:
+            beginOverlay(.countdown, endingOther: true)
         default:
             if let current = overlaySource,
                !(preservingCameraOverlay && current == .camera) {
@@ -569,6 +581,15 @@ final class ExternalDisplayManager {
         isJoinedLive = false
     }
 
+    /// Re-asserts AirPlay camera rotation from Display Mode after the iPad turns.
+    ///
+    /// Program stays Vertical or Landscape as configured. A mismatched hold
+    /// (portrait tablet in Landscape output) must not reorient the TV.
+    func syncLiveCameraOrientation() {
+        guard isCameraLive else { return }
+        presentationVC?.syncCameraToDisplayModeOrientation()
+    }
+
     /// Starts presenting the live camera (AirPlay when a display is attached).
     ///
     /// If still-parked, resumes the live feed — callers that want the camera
@@ -579,6 +600,11 @@ final class ExternalDisplayManager {
             return
         }
         present(.camera)
+    }
+
+    /// Starts presenting the countdown clock (AirPlay when a display is attached).
+    func presentCountdown() {
+        present(.countdown)
     }
 
     /// Parks on a still without ending camera mode or stopping the session.
@@ -777,6 +803,8 @@ final class ExternalDisplayManager {
             present(.web(url))
         case .pdf(let url):
             present(.pdf(url))
+        case .countdown:
+            present(.countdown)
         case .none:
             if let source = resolvedPresentationSource() {
                 present(source)
@@ -919,7 +947,7 @@ final class ExternalDisplayManager {
     /// Whether both overlays are the same content kind (URL may differ).
     private static func isSameOverlayKind(_ a: OverlaySource, _ b: OverlaySource) -> Bool {
         switch (a, b) {
-        case (.web, .web), (.pdf, .pdf), (.camera, .camera):
+        case (.web, .web), (.pdf, .pdf), (.camera, .camera), (.countdown, .countdown):
             return true
         default:
             return false
@@ -944,7 +972,7 @@ final class ExternalDisplayManager {
             liveWebPageId = nil
         case .pdf:
             livePDFDocumentId = nil
-        case .camera:
+        case .camera, .countdown:
             break
         }
     }
@@ -957,6 +985,9 @@ final class ExternalDisplayManager {
             presentationVC?.teardownWeb()
         case .pdf:
             presentationVC?.teardownPDF()
+        case .countdown:
+            CountdownController.shared.endLive()
+            presentationVC?.hideCountdown()
         }
     }
 
@@ -968,6 +999,8 @@ final class ExternalDisplayManager {
             NotificationCenter.default.post(name: Self.webDidEndNotification, object: self)
         case .pdf:
             NotificationCenter.default.post(name: Self.pdfDidEndNotification, object: self)
+        case .countdown:
+            break
         }
     }
 

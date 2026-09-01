@@ -39,8 +39,8 @@ extension CameraLiveViewController {
     /// a sheet fills the screen with no grabber and no swipe-to-dismiss — so the bar
     /// button is the only way out. Edge attachment keeps it a card instead.
     ///
-    /// An in-flight movie is finished and saved first — settings must not open over a
-    /// live recording (no UI left on the shutter to stop it cleanly).
+    /// An in-flight movie is finished and saved first — opening settings over a
+    /// live recording would hide the record control used to stop it.
     @objc func settingsButtonTapped() {
         if CameraManager.shared.isRecording {
             finalizeRecordingIfNeeded { [weak self] in

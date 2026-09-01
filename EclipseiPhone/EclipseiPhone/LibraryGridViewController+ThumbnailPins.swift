@@ -14,9 +14,14 @@ extension LibraryGridViewController {
     /// Pins on-screen media thumbs so an `NSCache` purge can’t blank the grid.
     func refreshVisibleThumbnailPins() {
         var ids = Set<String>()
-        for path in collectionView.indexPathsForVisibleItems {
-            if let id = thumbnailPinId(at: path) {
-                ids.insert(id)
+        let visible = collectionView.indexPathsForVisibleItems
+        if visible.isEmpty {
+            ids.formUnion(fallbackOnScreenThumbnailIds())
+        } else {
+            for path in visible {
+                if let id = thumbnailPinId(at: path, in: collectionView) {
+                    ids.insert(id)
+                }
             }
         }
         if docksLiveSlideshowRibbon {
@@ -33,23 +38,133 @@ extension LibraryGridViewController {
         store.setVisibleThumbnailIds(ids)
     }
 
+    /// Paints a thumb that just landed, including cells UIKit has not yet marked visible.
+    func paintArrivedThumbnail(_ id: String) {
+        refreshVisibleThumbnailPins()
+        paintVisibleCells(showing: id, in: collectionView)
+        if docksLiveSlideshowRibbon {
+            reloadDockedRibbonThumbnail(for: id)
+            paintVisibleCells(showing: id, in: slideshowRibbonView)
+        }
+        let paths = indexPathsShowingThumbnail(id)
+        let painted = paths.contains { collectionView.cellForItem(at: $0) != nil }
+        if !painted {
+            DispatchQueue.main.async { [weak self] in
+                self?.paintArrivedThumbnailNow(id)
+            }
+        }
+    }
+
+    /// Fills a placeholder cell when it appears if the store has the preview now.
+    func fillPlaceholderThumbnailIfReady(
+        _ cell: UICollectionViewCell,
+        at indexPath: IndexPath,
+        in collectionView: UICollectionView
+    ) {
+        applyLoadedThumbnailIfNeeded(to: cell, at: indexPath, in: collectionView)
+    }
+
     /// Library media id whose decoded thumb backs the cell at `path`, if any.
-    private func thumbnailPinId(at path: IndexPath) -> String? {
-        switch homeSection(at: path.section) {
+    func thumbnailPinId(at path: IndexPath) -> String? {
+        thumbnailPinId(at: path, in: collectionView)
+    }
+
+    // MARK: - Private
+
+    private func paintArrivedThumbnailNow(_ id: String) {
+        refreshVisibleThumbnailPins()
+        paintVisibleCells(showing: id, in: collectionView)
+        if docksLiveSlideshowRibbon {
+            paintVisibleCells(showing: id, in: slideshowRibbonView)
+        }
+        let paths = indexPathsShowingThumbnail(id).filter {
+            collectionView.indexPathsForVisibleItems.contains($0)
+        }
+        if !paths.isEmpty {
+            collectionView.reloadItems(at: paths)
+        }
+    }
+
+    private func fallbackOnScreenThumbnailIds() -> Set<String> {
+        var ids = Set<String>()
+        if isShowMode {
+            for item in openShowGridItems.prefix(16) {
+                if let id = item.libraryThumbnailId { ids.insert(id) }
+            }
+        } else {
+            for item in showRibbonItems.prefix(8) {
+                if case .show(let show) = item, let cover = show.resolvedCoverId {
+                    ids.insert(cover)
+                }
+            }
+        }
+        return ids
+    }
+
+    private func indexPathsShowingThumbnail(_ id: String) -> [IndexPath] {
+        guard let showsSection = sectionIndex(for: .shows) else { return [] }
+        if isShowMode {
+            var paths: [IndexPath] = []
+            if !docksLiveSlideshowRibbon,
+               let ribbonSection = sectionIndex(for: .slideshowRibbon),
+               let ribbonIndex = SlideshowPlaybackController.shared.activeSlideIds
+                .firstIndex(of: id) {
+                paths.append(IndexPath(item: ribbonIndex, section: ribbonSection))
+            }
+            for (index, item) in openShowGridItems.enumerated()
+            where item.libraryThumbnailId == id {
+                paths.append(IndexPath(item: index, section: showsSection))
+            }
+            return paths
+        }
+        return showRibbonItems.enumerated().compactMap { index, item in
+            guard case .show(let show) = item,
+                  show.itemIds.contains(id) || show.resolvedCoverId == id else {
+                return nil
+            }
+            return IndexPath(item: index, section: showsSection)
+        }
+    }
+
+    private func paintVisibleCells(showing id: String, in view: UICollectionView) {
+        for path in view.indexPathsForVisibleItems {
+            guard thumbnailPinId(at: path, in: view) == id,
+                  let cell = view.cellForItem(at: path) else { continue }
+            applyLoadedThumbnailIfNeeded(to: cell, at: path, in: view)
+        }
+    }
+
+    private func applyLoadedThumbnailIfNeeded(
+        to cell: UICollectionViewCell,
+        at indexPath: IndexPath,
+        in collectionView: UICollectionView
+    ) {
+        guard let id = thumbnailPinId(at: indexPath, in: collectionView) else { return }
+        guard let image = store.thumbnail(for: id) else { return }
+        if let thumbCell = cell as? LibraryThumbnailCell, thumbCell.isShowingPlaceholder {
+            thumbCell.applyLoadedThumbnail(image)
+        } else if let showCell = cell as? HomeShowTileCell, showCell.isShowingPlaceholder {
+            showCell.applyLoadedCover(image)
+        }
+    }
+
+    private func thumbnailPinId(
+        at path: IndexPath,
+        in collectionView: UICollectionView
+    ) -> String? {
+        if isDockedSlideshowRibbon(collectionView) {
+            let slideIds = SlideshowPlaybackController.shared.activeSlideIds
+            guard slideIds.indices.contains(path.item) else { return nil }
+            return slideIds[path.item]
+        }
+        switch homeSection(at: path.section, in: collectionView) {
         case .slideshowRibbon:
             let slideIds = SlideshowPlaybackController.shared.activeSlideIds
             guard slideIds.indices.contains(path.item) else { return nil }
             return slideIds[path.item]
         case .shows where isShowMode:
             guard openShowGridItems.indices.contains(path.item) else { return nil }
-            switch openShowGridItems[path.item] {
-            case .media(let item):
-                return item.id
-            case .slideshow(let show):
-                return show.resolvedCoverId
-            default:
-                return nil
-            }
+            return openShowGridItems[path.item].libraryThumbnailId
         case .shows:
             guard showRibbonItems.indices.contains(path.item),
                   case .show(let show) = showRibbonItems[path.item] else { return nil }

@@ -43,6 +43,8 @@ protocol ConnectionManagerDelegate: AnyObject {
     func connectionManager(_ manager: ConnectionManager, didReceiveSetAccountCode code: String)
     /// The companion pushed Show groupings to present as albums.
     func connectionManager(_ manager: ConnectionManager, didReceiveLibraryAlbums albums: [LibraryAlbumDTO])
+    /// The companion parked (`true`) or cleared park (`false`) while AirPlay owns program.
+    func connectionManager(_ manager: ConnectionManager, didReceiveIdleModeBlack isBlack: Bool)
 }
 
 class ConnectionManager: NSObject {
@@ -255,15 +257,29 @@ class ConnectionManager: NSObject {
     }
 
     /// Streams a thumbnail file to the first connected peer, keyed by item id.
-    func sendThumbnail(at fileURL: URL, forId id: String) {
-        guard let session = session, let peer = session.connectedPeers.first else { return }
+    ///
+    /// Waits until the Multipeer transfer settles so callers can send one at a time
+    /// and only mark an id sent after a real success. The temp file is always removed.
+    func sendThumbnail(at fileURL: URL, forId id: String) async -> Bool {
+        await withCheckedContinuation { continuation in
+            guard let session = session, let peer = session.connectedPeers.first else {
+                try? FileManager.default.removeItem(at: fileURL)
+                continuation.resume(returning: false)
+                return
+            }
 
-        let resourceName = EclipseShareProtocol.thumbnailResourceName(for: id)
-        session.sendResource(at: fileURL, withName: resourceName, toPeer: peer) { [weak self] error in
-            // Best-effort: clean up the temporary thumbnail once the transfer settles.
-            try? FileManager.default.removeItem(at: fileURL)
-            if let error = error {
-                self?.logger.error("Failed to send library thumbnail for \(id): \(error.localizedDescription)")
+            let resourceName = EclipseShareProtocol.thumbnailResourceName(for: id)
+            session.sendResource(at: fileURL, withName: resourceName, toPeer: peer) {
+                [weak self] error in
+                try? FileManager.default.removeItem(at: fileURL)
+                if let error {
+                    self?.logger.error(
+                        "Failed to send library thumbnail for \(id): \(error.localizedDescription)"
+                    )
+                    continuation.resume(returning: false)
+                } else {
+                    continuation.resume(returning: true)
+                }
             }
         }
     }
@@ -398,6 +414,21 @@ class ConnectionManager: NSObject {
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
                 self.delegate?.connectionManager(self, didReceiveLibraryAlbums: albums)
+            }
+        case .setIdleMode:
+            let raw = envelope.mode ?? ""
+            let isBlack: Bool
+            switch raw {
+            case "black": isBlack = true
+            case "clear": isBlack = false
+            default:
+                logger.error("Ignoring set_idle_mode with unknown mode: \(raw, privacy: .public)")
+                return
+            }
+            logger.info("Received set_idle_mode: \(raw, privacy: .public)")
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                self.delegate?.connectionManager(self, didReceiveIdleModeBlack: isBlack)
             }
         case .libraryManifest, .currentChanged, .playbackStatus, .none:
             // These are TV -> iPhone only; ignore if a peer ever sends them back.

@@ -20,3 +20,18 @@ struct AudioNowPlayingPresentationTests {
         #expect(nav.preferredContentSize.width == AudioMiniPlayerView.compactWidth)
     }
 }
+
+@MainActor
+struct AudioLibraryPickerPresentationTests {
+
+    @Test func pickerSheetMatchesNowPlayingChrome() {
+        let nav = AudioLibraryViewController.makePickerNavigation(onAddMusic: nil)
+        let sheet = nav.sheetPresentationController
+        #expect(sheet?.prefersEdgeAttachedInCompactHeight == true)
+        #expect(sheet?.widthFollowsPreferredContentSizeWhenEdgeAttached == true)
+        #expect(sheet?.prefersGrabberVisible == true)
+        #expect(sheet?.detents.count == 2)
+        #expect(nav.preferredContentSize.width == AudioMiniPlayerView.compactWidth)
+        #expect(nav.viewControllers.first is AudioLibraryViewController)
+    }
+}

@@ -53,6 +53,13 @@ extension PresentationViewController {
         cameraContainer.bringSubviewToFront(cameraFrameOverlayView)
     }
 
+    /// Re-applies Display Mode camera rotation (does not follow the iPad hold).
+    func syncCameraToDisplayModeOrientation() {
+        guard !cameraContainer.isHidden else { return }
+        cameraPreviewView.syncDisplayModeOrientation()
+        syncIncomingCameraToDisplayModeOrientation()
+    }
+
     /// Syncs the AirPlay PNG frame overlay from `CameraFrameStore`.
     func refreshCameraFrameOverlay() {
         let image = CameraFrameStore.shared.selectedImage

@@ -119,6 +119,8 @@ final class ScreensaverStore {
             posterImage = nil
             UserDefaults.standard.set(CustomKind.image.rawValue, forKey: kindKey)
             NotificationCenter.default.post(name: Self.didChangeNotification, object: self)
+            guard !EclipseSyncController.shared.isApplyingRemote else { return }
+            EclipseSyncController.shared.backend.scheduleScreensaverSave()
         } catch {
             logger.error("Failed to write screensaver image: \(error.localizedDescription)")
         }
@@ -143,6 +145,8 @@ final class ScreensaverStore {
                 posterImage = nil
             }
             NotificationCenter.default.post(name: Self.didChangeNotification, object: self)
+            guard !EclipseSyncController.shared.isApplyingRemote else { return }
+            EclipseSyncController.shared.backend.scheduleScreensaverSave()
         } catch {
             logger.error("Failed to save screensaver video: \(error.localizedDescription)")
         }
@@ -157,6 +161,78 @@ final class ScreensaverStore {
         customImage = nil
         posterImage = nil
         UserDefaults.standard.removeObject(forKey: kindKey)
+        NotificationCenter.default.post(name: Self.didChangeNotification, object: self)
+        guard !EclipseSyncController.shared.isApplyingRemote else { return }
+        EclipseSyncController.shared.backend.scheduleScreensaverDelete()
+    }
+
+    /// Payload for CloudKit upload when a custom Screensaver is set.
+    var syncPayload: (kind: String, assetURL: URL, posterURL: URL?)? {
+        switch customKind {
+        case .image:
+            guard FileManager.default.fileExists(atPath: imageFileURL.path) else {
+                return nil
+            }
+            return ("image", imageFileURL, nil)
+        case .video:
+            guard let url = existingCustomVideoURL() else { return nil }
+            let poster = FileManager.default.fileExists(atPath: posterFileURL.path)
+                ? posterFileURL : nil
+            return ("video", url, poster)
+        case .none:
+            return nil
+        }
+    }
+
+    /// Applies a custom Screensaver from iCloud (or clears when `kind` is nil).
+    func applyRemote(kind: String?, assetURL: URL?, posterURL: URL?) {
+        if kind == nil || assetURL == nil {
+            try? FileManager.default.removeItem(at: imageFileURL)
+            removeCustomVideos()
+            try? FileManager.default.removeItem(at: posterFileURL)
+            customKind = nil
+            customImage = nil
+            posterImage = nil
+            UserDefaults.standard.removeObject(forKey: kindKey)
+            NotificationCenter.default.post(name: Self.didChangeNotification, object: self)
+            return
+        }
+        guard let kind, let assetURL else { return }
+        if kind == "image" {
+            do {
+                try? FileManager.default.removeItem(at: imageFileURL)
+                removeCustomVideos()
+                try FileManager.default.copyItem(at: assetURL, to: imageFileURL)
+                customKind = .image
+                customImage = UIImage(contentsOfFile: imageFileURL.path)
+                posterImage = nil
+                UserDefaults.standard.set(CustomKind.image.rawValue, forKey: kindKey)
+            } catch {
+                logger.error("Remote screensaver image copy failed: \(error.localizedDescription)")
+                return
+            }
+        } else {
+            let ext = assetURL.pathExtension.isEmpty ? "mp4" : assetURL.pathExtension
+            let destination = directory.appendingPathComponent("custom.\(ext)")
+            do {
+                removeCustomVideos()
+                try? FileManager.default.removeItem(at: imageFileURL)
+                try FileManager.default.copyItem(at: assetURL, to: destination)
+                customKind = .video
+                customImage = nil
+                UserDefaults.standard.set(CustomKind.video.rawValue, forKey: kindKey)
+                if let posterURL {
+                    try? FileManager.default.removeItem(at: posterFileURL)
+                    try? FileManager.default.copyItem(at: posterURL, to: posterFileURL)
+                    posterImage = UIImage(contentsOfFile: posterFileURL.path)
+                } else {
+                    posterImage = Self.makePoster(for: destination)
+                }
+            } catch {
+                logger.error("Remote screensaver video copy failed: \(error.localizedDescription)")
+                return
+            }
+        }
         NotificationCenter.default.post(name: Self.didChangeNotification, object: self)
     }
 

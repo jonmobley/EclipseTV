@@ -29,6 +29,8 @@ struct PresentationSource: Equatable {
         case pdf(URL)
         /// Solid black screen with no idle brand chrome.
         case black
+        /// Full-screen countdown clock (AirPlay / Practice).
+        case countdown
         /// The full-resolution file isn't on this device; show `thumbnail` (if any) with a
         /// short explanatory caption instead.
         case unavailable(thumbnail: UIImage?, message: String)
@@ -105,6 +107,11 @@ struct PresentationSource: Equatable {
     /// Solid black output for the external display.
     static var black: PresentationSource {
         PresentationSource(content: .black)
+    }
+
+    /// Full-screen countdown clock for AirPlay presentation.
+    static var countdown: PresentationSource {
+        PresentationSource(content: .countdown)
     }
 
     static func unavailable(thumbnail: UIImage?, message: String) -> PresentationSource {

@@ -86,7 +86,8 @@ extension ImageViewController: MediaDataSourceDelegate {
         DispatchQueue.main.async {
             self.reconcileCompanionBrowse()
             self.titleLabel.text = self.usesAlbumHome ? self.albumHomeTitle : "Eclipse"
-            // Always reload the grid when data changes
+            // Mode switches change tile aspect — invalidate before reload.
+            self.gridView.collectionViewLayout.invalidateLayout()
             self.gridView.reloadData()
 
             // Validate selection state after data reload to prevent multiple blue strokes

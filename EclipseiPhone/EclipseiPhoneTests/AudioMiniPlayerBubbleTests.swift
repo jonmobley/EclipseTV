@@ -18,10 +18,11 @@ struct AudioMiniPlayerBubbleTests {
             frame: CGRect(x: 0, y: 0, width: 72, height: 72)
         )
         bubble.reload()
-        #expect(bubble.configuration?.baseBackgroundColor == UIColor.systemBlue)
-        #expect(bubble.configuration?.cornerStyle == .capsule)
-        #expect(bubble.accessibilityTraits.contains(.button))
-        #expect(bubble.accessibilityHint == "Opens the Music page.")
+        #expect(bubble.musicButton.configuration?.baseBackgroundColor == UIColor.systemBlue)
+        #expect(bubble.musicButton.configuration?.cornerStyle == .capsule)
+        #expect(bubble.musicButton.accessibilityTraits.contains(.button))
+        #expect(bubble.musicButton.accessibilityHint == "Choose something to play.")
+        #expect(bubble.intrinsicContentSize.width == AudioMiniPlayerBubbleView.side)
     }
 
     @Test func idleHighlightScalesIn() {
@@ -31,23 +32,49 @@ struct AudioMiniPlayerBubbleTests {
             frame: CGRect(x: 0, y: 0, width: 72, height: 72)
         )
         UIView.performWithoutAnimation {
-            bubble.isHighlighted = true
+            bubble.musicButton.isHighlighted = true
         }
-        #expect(abs(bubble.transform.a - AudioMiniPlayerBubbleView.idlePressScale) < 0.001)
+        #expect(
+            abs(bubble.musicButton.transform.a - AudioMiniPlayerBubbleView.idlePressScale)
+                < 0.001
+        )
         UIView.performWithoutAnimation {
-            bubble.isHighlighted = false
+            bubble.musicButton.isHighlighted = false
         }
-        #expect(abs(bubble.transform.a - 1) < 0.001)
+        #expect(abs(bubble.musicButton.transform.a - 1) < 0.001)
     }
 
-    @Test func playingShowsWaveformAndGlow() {
+    @Test func playingShowsWaveformAsExpand() {
         let bubble = AudioMiniPlayerBubbleView(
             frame: CGRect(x: 0, y: 0, width: 72, height: 72)
         )
-        bubble.applyPlaybackChrome(playing: true)
+        bubble.applySessionChrome(active: true, playing: true)
         #expect(bubble.showsPlaybackWaveform)
-        #expect(bubble.configuration?.image == nil)
-        #expect(bubble.isPlaybackGlowActive)
+        #expect(bubble.musicButton.accessibilityLabel == "Expand")
+        #expect(bubble.musicButton.configuration?.image == nil)
+        #expect(bubble.intrinsicContentSize.width == AudioMiniPlayerBubbleView.side)
+    }
+
+    @Test func expandedSessionShowsStop() {
+        let bubble = AudioMiniPlayerBubbleView(
+            frame: CGRect(x: 0, y: 0, width: 72, height: 72)
+        )
+        bubble.applySessionChrome(active: true, playing: true, expanded: true)
+        #expect(bubble.showsPlaybackWaveform == false)
+        #expect(bubble.musicButton.accessibilityLabel == "Stop")
+        #expect(bubble.musicButton.configuration?.cornerStyle == .capsule)
+        #expect(bubble.musicButton.configuration?.image != nil)
+        #expect(bubble.musicButton.accessibilityHint == "Fades out and stops playback.")
+    }
+
+    @Test func pausedSessionShowsNoteNotStop() {
+        let bubble = AudioMiniPlayerBubbleView(
+            frame: CGRect(x: 0, y: 0, width: 72, height: 72)
+        )
+        bubble.applySessionChrome(active: true, playing: false)
+        #expect(bubble.showsPlaybackWaveform == false)
+        #expect(bubble.musicButton.accessibilityLabel == "Expand")
+        #expect(bubble.musicButton.configuration?.image != nil)
     }
 
     @Test func idleShowsNoteWithoutWaveform() {
@@ -55,19 +82,27 @@ struct AudioMiniPlayerBubbleTests {
         let bubble = AudioMiniPlayerBubbleView(
             frame: CGRect(x: 0, y: 0, width: 72, height: 72)
         )
-        bubble.applyPlaybackChrome(playing: false)
+        bubble.applySessionChrome(active: false, playing: false)
         #expect(bubble.showsPlaybackWaveform == false)
-        #expect(bubble.configuration?.image != nil)
-        #expect(bubble.isPlaybackGlowActive == false)
+        #expect(bubble.musicButton.configuration?.image != nil)
+        #expect(bubble.musicButton.accessibilityLabel == "Music")
     }
 }
 
 @MainActor
 struct AudioMiniPlayerWaveformTests {
 
+    @Test func usesThreeBars() {
+        let wave = AudioMiniPlayerWaveformView(
+            frame: CGRect(x: 0, y: 0, width: 28, height: 26)
+        )
+        wave.layoutIfNeeded()
+        #expect(wave.barCount == 3)
+    }
+
     @Test func barsAnimateOnlyWhilePlaying() {
         let wave = AudioMiniPlayerWaveformView(
-            frame: CGRect(x: 0, y: 0, width: 34, height: 30)
+            frame: CGRect(x: 0, y: 0, width: 28, height: 26)
         )
         wave.layoutIfNeeded()
         wave.setPlaying(true)

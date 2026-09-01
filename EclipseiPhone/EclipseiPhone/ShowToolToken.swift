@@ -18,6 +18,9 @@ enum ShowToolToken {
     /// Default leading tools when a Show has no customized surface.
     static let all: [String] = [screensaver, logo, camera]
 
+    /// Tools that can appear in the + menu when missing from the surface.
+    static let addable: [String] = all
+
     /// Display title for + menu / accessibility.
     static func title(for token: String) -> String? {
         switch token {

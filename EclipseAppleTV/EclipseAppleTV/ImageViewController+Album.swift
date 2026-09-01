@@ -236,7 +236,7 @@ extension ImageViewController {
 
         cell.configure(with: nil, isVideo: item.isVideo)
         let cellSize = (gridView.collectionViewLayout as? UICollectionViewFlowLayout)?.itemSize
-            ?? CGSize(width: 300, height: 169)
+            ?? TVGridMetrics.fallbackItemSize(for: dataSource.activeLibraryMode)
         // Prefer the lightweight server thumbnail when one was downloaded; otherwise fall
         // back to the full media file (the TV generates a thumbnail from it).
         cell.configureAsync(imagePath: item.thumbnailSourcePath,

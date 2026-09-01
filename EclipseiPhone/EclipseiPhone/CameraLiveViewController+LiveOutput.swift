@@ -82,6 +82,13 @@ extension CameraLiveViewController {
             return LiveOutputArt(
                 image: nil, symbol: "moon.fill", fill: .black, title: "Blackout"
             )
+        case .countdown:
+            return LiveOutputArt(
+                image: nil,
+                symbol: "timer",
+                fill: dim,
+                title: CountdownController.shared.displayString
+            )
         case .unavailable(let thumb, _):
             return LiveOutputArt(
                 image: thumb, symbol: "photo", fill: dim, title: "Unavailable"

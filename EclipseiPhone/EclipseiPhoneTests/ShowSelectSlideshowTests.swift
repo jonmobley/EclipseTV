@@ -85,6 +85,23 @@ struct ShowSelectSlideshowTests {
         #expect(ids == nil)
     }
 
+    @Test func showGridFindsAddedSlideshowCard() {
+        let show = Slideshow(showId: UUID(), name: "Deck", itemIds: ["a.jpg"])
+        let items: [ShowGridItem] = [.camera, .slideshow(show), .add]
+        #expect(
+            LibraryGridViewController.indexOfShowMember(
+                ShowSlideshowToken.token(for: show.id),
+                in: items
+            ) == 1
+        )
+        #expect(
+            LibraryGridViewController.indexOfShowMember(
+                show.id.uuidString,
+                in: items
+            ) == 1
+        )
+    }
+
     private func makeItem(id: String, isVideo: Bool = false) -> LibraryItemDTO {
         LibraryItemDTO(
             id: id,

@@ -16,10 +16,9 @@ struct LiveHeroBackdropTests {
         )
     }
 
-    @Test func landscapeDoesNotNeedTheBackdrop() {
+    @Test func landscapeLeadingColumnUsesTheBackdrop() {
         #expect(
             LiveHeroBackdrop.isVisible(showsLiveHero: true, isSideBySideChrome: true)
-                == false
         )
     }
 

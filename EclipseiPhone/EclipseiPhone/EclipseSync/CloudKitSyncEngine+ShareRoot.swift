@@ -35,7 +35,7 @@ extension CloudKitSyncEngine {
         noteShareRootEstablished(uuid)
     }
 
-    /// Re-enqueues captures and PDFs that belong to `showId`.
+    /// Re-enqueues children that belong to `showId`.
     func enqueueShareChildren(of showId: UUID) {
         guard let engine else { return }
         let itemIds = shareChildItemIds(for: showId)
@@ -43,6 +43,27 @@ extension CloudKitSyncEngine {
         var seen = Set<String>()
         for itemId in itemIds {
             appendChildSave(itemId: itemId, into: &changes, seen: &seen)
+        }
+        for show in SlideshowStore.shared.slideshows(forShowId: showId) {
+            let key = show.id.uuidString
+            guard seen.insert(key).inserted else { continue }
+            changes.append(
+                .saveRecord(CloudKitSchema.slideshowRecordID(for: show.id))
+            )
+        }
+        for item in CountdownStore.shared.countdowns(forShowId: showId) {
+            let key = item.id.uuidString
+            guard seen.insert(key).inserted else { continue }
+            changes.append(
+                .saveRecord(CloudKitSchema.countdownRecordID(for: item.id))
+            )
+        }
+        for item in LivePollStore.shared.polls(forShowId: showId) {
+            let key = item.id.uuidString
+            guard seen.insert(key).inserted else { continue }
+            changes.append(
+                .saveRecord(CloudKitSchema.livePollRecordID(for: item.id))
+            )
         }
         if !changes.isEmpty {
             engine.state.add(pendingRecordZoneChanges: changes)
@@ -54,7 +75,10 @@ extension CloudKitSyncEngine {
         let captureIds = CaptureStore.shared.allActive
             .filter { $0.showId == showId }
             .map(\.id)
-        return albumIds + captureIds
+        let importIds = ImportedMediaStore.shared.allActive
+            .filter { $0.showId == showId }
+            .map(\.cloudId)
+        return albumIds + captureIds + importIds
     }
 
     private func appendChildSave(
@@ -69,11 +93,23 @@ extension CloudKitSyncEngine {
             )
             return
         }
-        guard let uuid = UUID(uuidString: itemId),
-              PDFStore.shared.documents.contains(where: { $0.id == uuid }),
-              seen.insert(uuid.uuidString).inserted
-        else { return }
-        changes.append(.saveRecord(CloudKitSchema.pdfRecordID(for: uuid)))
+        if let imported = ImportedMediaStore.shared.record(id: itemId),
+           seen.insert(imported.cloudId).inserted {
+            changes.append(
+                .saveRecord(CloudKitSchema.mediaRecordID(for: imported.cloudId))
+            )
+            return
+        }
+        guard let uuid = UUID(uuidString: itemId) else { return }
+        if WebPageStore.shared.page(id: uuid) != nil,
+           seen.insert(uuid.uuidString).inserted {
+            changes.append(.saveRecord(CloudKitSchema.webPageRecordID(for: uuid)))
+            return
+        }
+        if PDFStore.shared.documents.contains(where: { $0.id == uuid }),
+           seen.insert(uuid.uuidString).inserted {
+            changes.append(.saveRecord(CloudKitSchema.pdfRecordID(for: uuid)))
+        }
     }
 
     /// Unmarks the parent Show so the next batch omits `parent` and can succeed.
@@ -88,6 +124,8 @@ extension CloudKitSyncEngine {
 
     private func membershipShowId(from record: CKRecord) -> UUID? {
         let raw = (record[CloudKitSchema.MediaKey.showId] as? String)
+            ?? (record[CloudKitSchema.SlideshowKey.showId] as? String)
+            ?? (record[CloudKitSchema.PDFKey.showId] as? String)
             ?? record.parent?.recordID.recordName
         return raw.flatMap(UUID.init(uuidString:))
     }

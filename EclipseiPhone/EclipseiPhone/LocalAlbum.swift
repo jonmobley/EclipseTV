@@ -22,12 +22,16 @@ struct LocalAlbum: Codable, Equatable, Identifiable, Hashable {
     let createdAt: Date
     /// Last time the user opened this Show; drives Home “Last opened …” copy.
     var lastOpenedAt: Date?
-    /// Ordered Show grid: tool tokens, member ids, slideshow tokens, and
+    /// Ordered Show grid: tool tokens, member ids, slideshow / countdown /
     /// Live Poll tokens. `nil` = default tools, then members, then those tiles.
     var surfaceIds: [String]?
     /// Practice Mode: live preview plus Lock / Blackout with no AirPlay, HDMI,
     /// or EclipseTV. Default is off; taps then open on-device Preview instead.
     var previewsWhenDisconnected: Bool
+    /// Membership ids removed locally — CloudKit union merge subtracts these.
+    var deletedItemIds: [String]
+    /// Surface ids removed locally (tools / slideshow / countdown / Live Poll).
+    var deletedSurfaceIds: [String]
 
     /// Creates an empty album with `name` in `orientation`.
     init(
@@ -39,7 +43,9 @@ struct LocalAlbum: Codable, Equatable, Identifiable, Hashable {
         createdAt: Date = Date(),
         lastOpenedAt: Date? = nil,
         surfaceIds: [String]? = nil,
-        previewsWhenDisconnected: Bool = false
+        previewsWhenDisconnected: Bool = false,
+        deletedItemIds: [String] = [],
+        deletedSurfaceIds: [String] = []
     ) {
         self.id = id
         self.name = name
@@ -50,6 +56,8 @@ struct LocalAlbum: Codable, Equatable, Identifiable, Hashable {
         self.lastOpenedAt = lastOpenedAt
         self.surfaceIds = surfaceIds
         self.previewsWhenDisconnected = previewsWhenDisconnected
+        self.deletedItemIds = deletedItemIds
+        self.deletedSurfaceIds = deletedSurfaceIds
     }
 
     /// Effective cover id for thumbnail display.
@@ -58,21 +66,25 @@ struct LocalAlbum: Codable, Equatable, Identifiable, Hashable {
         return itemIds.first
     }
 
-    /// Grid order for this Show (tools + members). Slideshow / Live Poll tokens
-    /// already on `surfaceIds` are kept; missing ones are not invented here.
+    /// Grid order for this Show (tools + members). Slideshow / countdown /
+    /// Live Poll tokens already on `surfaceIds` are kept; missing ones are not
+    /// invented here.
     var resolvedSurfaceIds: [String] {
-        resolvedSurfaceIds(slideshowIds: nil, livePollIds: nil)
+        resolvedSurfaceIds(slideshowIds: nil, countdownIds: nil, livePollIds: nil)
     }
 
-    /// Grid order including `slideshowIds` / `livePollIds` (appended when missing).
+    /// Grid order including slideshow / countdown / Live Poll tokens
+    /// (appended when those id lists are non-nil and missing).
     func resolvedSurfaceIds(
         slideshowIds: [String]?,
+        countdownIds: [String]? = nil,
         livePollIds: [String]? = nil
     ) -> [String] {
         Self.sanitizedSurface(
             surfaceIds ?? (ShowToolToken.all + itemIds),
             itemIds: itemIds,
             slideshowIds: slideshowIds,
+            countdownIds: countdownIds,
             livePollIds: livePollIds
         )
     }
@@ -80,22 +92,24 @@ struct LocalAlbum: Codable, Equatable, Identifiable, Hashable {
     /// Tool tokens not currently on the surface (for the + menu restore section).
     var missingToolTokens: [String] {
         let present = Set(resolvedSurfaceIds.filter(ShowToolToken.isTool))
-        return ShowToolToken.all.filter { !present.contains($0) }
+        return ShowToolToken.addable.filter { !present.contains($0) }
     }
 
     /// Drops unknown tools and stale members; appends missing members / tiles.
     ///
-    /// When slideshow / livePoll id lists are nil, those tokens already on
-    /// `surface` are kept but none are appended. When non-nil, only those
-    /// tokens are kept, then any missing ones are appended.
+    /// When slideshow / countdown / livePoll id lists are nil, those tokens
+    /// already on `surface` are kept but none are appended. When non-nil, only
+    /// those tokens are kept, then any missing ones are appended.
     static func sanitizedSurface(
         _ surface: [String],
         itemIds: [String],
         slideshowIds: [String]? = nil,
+        countdownIds: [String]? = nil,
         livePollIds: [String]? = nil
     ) -> [String] {
         let memberSet = Set(itemIds)
         let slideshowSet = slideshowIds.map(Set.init)
+        let countdownSet = countdownIds.map(Set.init)
         let livePollSet = livePollIds.map(Set.init)
         var seen = Set<String>()
         var result: [String] = []
@@ -104,6 +118,7 @@ struct LocalAlbum: Codable, Equatable, Identifiable, Hashable {
                 id,
                 members: memberSet,
                 slideshows: slideshowSet,
+                countdowns: countdownSet,
                 livePolls: livePollSet
             ), seen.insert(id).inserted else { continue }
             result.append(id)
@@ -113,6 +128,11 @@ struct LocalAlbum: Codable, Equatable, Identifiable, Hashable {
         }
         if let slideshowIds {
             for id in slideshowIds where seen.insert(id).inserted {
+                result.append(id)
+            }
+        }
+        if let countdownIds {
+            for id in countdownIds where seen.insert(id).inserted {
                 result.append(id)
             }
         }
@@ -128,13 +148,19 @@ struct LocalAlbum: Codable, Equatable, Identifiable, Hashable {
         _ id: String,
         members: Set<String>,
         slideshows: Set<String>?,
+        countdowns: Set<String>?,
         livePolls: Set<String>?
     ) -> Bool {
         if ShowToolToken.isTool(id) { return true }
+        if id == ShowCountdownToken.legacyTool { return true }
         if id == ShowLivePollToken.legacyTool { return true }
         if members.contains(id) { return true }
         if ShowSlideshowToken.isSlideshow(id) {
             if let slideshows { return slideshows.contains(id) }
+            return true
+        }
+        if ShowCountdownToken.isCountdown(id) {
+            if let countdowns { return countdowns.contains(id) }
             return true
         }
         if ShowLivePollToken.isLivePoll(id) {
@@ -148,7 +174,7 @@ struct LocalAlbum: Codable, Equatable, Identifiable, Hashable {
 
     private enum CodingKeys: String, CodingKey {
         case id, name, itemIds, coverId, orientation, createdAt, lastOpenedAt, surfaceIds
-        case previewsWhenDisconnected
+        case previewsWhenDisconnected, deletedItemIds, deletedSurfaceIds
     }
 
     init(from decoder: Decoder) throws {
@@ -163,6 +189,10 @@ struct LocalAlbum: Codable, Equatable, Identifiable, Hashable {
         previewsWhenDisconnected = try c.decodeIfPresent(
             Bool.self, forKey: .previewsWhenDisconnected
         ) ?? false
+        deletedItemIds = try c.decodeIfPresent([String].self, forKey: .deletedItemIds) ?? []
+        deletedSurfaceIds = try c.decodeIfPresent(
+            [String].self, forKey: .deletedSurfaceIds
+        ) ?? []
         // Pre-mode albums land in Landscape (app default).
         let raw = try c.decodeIfPresent(String.self, forKey: .orientation)
         orientation = ExternalOutputOrientation.resolved(fromStored: raw)
@@ -179,6 +209,8 @@ struct LocalAlbum: Codable, Equatable, Identifiable, Hashable {
         try c.encodeIfPresent(lastOpenedAt, forKey: .lastOpenedAt)
         try c.encodeIfPresent(surfaceIds, forKey: .surfaceIds)
         try c.encode(previewsWhenDisconnected, forKey: .previewsWhenDisconnected)
+        try c.encode(deletedItemIds, forKey: .deletedItemIds)
+        try c.encode(deletedSurfaceIds, forKey: .deletedSurfaceIds)
     }
 
     /// Compact relative open time for Home tiles and Show lists (`3hrs ago`).

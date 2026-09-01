@@ -10,6 +10,7 @@ import Foundation
 import Testing
 @testable import EclipseiPhone
 
+@MainActor
 struct MediaSyncMappingTests {
 
     @Test func showIdFieldDoesNotSetParentByDefault() {

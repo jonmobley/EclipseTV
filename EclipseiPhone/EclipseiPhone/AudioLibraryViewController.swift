@@ -29,7 +29,7 @@ final class AudioLibraryViewController: UITableViewController {
     /// Invoked by the embedded back control to return to the Library page.
     var onRequestClose: (() -> Void)?
 
-    /// When false, hides the embedded Library back chevron (side-by-side home).
+    /// When false, hides the embedded Library back chevron (split or drawer).
     var showsEmbeddedBackButton = true {
         didSet {
             guard showsEmbeddedBackButton != oldValue else { return }
@@ -86,7 +86,7 @@ final class AudioLibraryViewController: UITableViewController {
         tableView.reloadData()
     }
 
-    /// Configures Done (modal) or Library back (embedded pager) / none (split).
+    /// Configures Done (modal) or Library back (embedded pager) / none (split or drawer).
     private func updateLeftBarButton() {
         if isEmbedded {
             guard showsEmbeddedBackButton else {
@@ -288,7 +288,11 @@ final class AudioLibraryViewController: UITableViewController {
         case .tracks:
             guard !trackStore.tracks.isEmpty else { return }
             let track = trackStore.tracks[indexPath.row]
-            player.playAll(startingAt: track.id)
+            if player.tapStopsPlayback(for: track.id) {
+                player.stop()
+            } else {
+                player.playAll(startingAt: track.id)
+            }
         }
     }
 

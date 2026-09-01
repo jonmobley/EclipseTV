@@ -46,6 +46,14 @@ enum MediaFitSettings {
         mode(forId: id) == .fill
     }
 
+    /// Tile framing that matches how `item` is shown live.
+    ///
+    /// Videos always letterbox (`.scaleAspectFit`). Stills use the item's
+    /// Screen Fit setting so a Fit still isn't cropped in the grid.
+    static func thumbnailContentMode(for item: LibraryItemDTO) -> UIView.ContentMode {
+        item.isVideo ? .scaleAspectFit : mode(forId: item.id).contentMode
+    }
+
     static func setMode(_ mode: MediaFitMode, forId id: String) {
         var modes = storedModes()
         if mode == .fit {

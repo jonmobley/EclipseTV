@@ -32,14 +32,25 @@ final class TVLibrarySync {
 
     /// Ids (file names) whose thumbnails have already been sent to the current peer.
     private var sentThumbnailIds = Set<String>()
+    /// Ids whose JPEG could not be built; skip until the next connect / mode switch.
+    private var undeliverableThumbnailIds = Set<String>()
+    /// In-flight sequential send. Overlapping calls request one extra drain.
+    private var thumbnailDrainTask: Task<Void, Never>?
+    private var needsAnotherThumbnailDrain = false
+    /// Bumped on reset so a cancelled drain cannot nil a newer task.
+    private var thumbnailDrainGeneration = 0
 
     /// Cached video durations (seconds) keyed by item id (file name). Populated lazily
     /// when thumbnails are generated; persists across reconnects so the manifest can
     /// report durations without recomputing them.
     private var videoDurations: [String: Double] = [:]
 
-    private let thumbnailTargetSize = CGSize(width: 480, height: 270)
     private let logger = Logger(subsystem: "com.eclipsetv.app", category: "TVLibrarySync")
+
+    /// Decode size for Multipeer thumbs — Landscape 16:9, Vertical 9:16.
+    private var thumbnailTargetSize: CGSize {
+        TVGridMetrics.thumbnailTargetSize(for: dataSource.activeLibraryMode)
+    }
 
     // MARK: - Initialization
 
@@ -56,7 +67,7 @@ final class TVLibrarySync {
         logger.info("Peer connected, pushing full library: \(peer.displayName, privacy: .public)")
         // Catch files purged by tvOS since launch so they're reported as unavailable.
         dataSource.revalidateAvailability()
-        sentThumbnailIds.removeAll()
+        resetThumbnailSendState()
         broadcastManifest()
         sendPendingThumbnails()
     }
@@ -65,7 +76,7 @@ final class TVLibrarySync {
     /// peer receives a fresh, complete set of thumbnails.
     func peerDidDisconnect(_ peer: MCPeerID) {
         if (connectionManager?.connectedPeerCount ?? 0) == 0 {
-            sentThumbnailIds.removeAll()
+            resetThumbnailSendState()
         }
     }
 
@@ -104,7 +115,7 @@ final class TVLibrarySync {
             .dropFirst()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
-                self?.sentThumbnailIds.removeAll()
+                self?.resetThumbnailSendState()
                 self?.broadcastManifest()
                 self?.sendPendingThumbnails()
             }
@@ -159,36 +170,72 @@ final class TVLibrarySync {
 
     // MARK: - Thumbnails
 
-    /// Sends thumbnails for any items the current peer hasn't received yet.
+    /// Clears per-peer send bookkeeping so the next drain starts from scratch.
+    private func resetThumbnailSendState() {
+        sentThumbnailIds.removeAll()
+        undeliverableThumbnailIds.removeAll()
+        needsAnotherThumbnailDrain = false
+        thumbnailDrainGeneration += 1
+        thumbnailDrainTask?.cancel()
+        thumbnailDrainTask = nil
+    }
+
+    /// Sends thumbnails the current peer hasn't received yet, one transfer at a time.
+    ///
+    /// Parallel `sendResource` calls were marked sent up front; a failed transfer then
+    /// never retried, so the companion kept blank tiles. Success-only marking plus a
+    /// second pass recovers congestion failures without blasting Multipeer.
     private func sendPendingThumbnails() {
-        guard let connectionManager = connectionManager, connectionManager.connectedPeerCount > 0 else { return }
+        guard connectionManager?.connectedPeerCount ?? 0 > 0 else { return }
+        if thumbnailDrainTask != nil {
+            needsAnotherThumbnailDrain = true
+            return
+        }
+        let generation = thumbnailDrainGeneration
+        thumbnailDrainTask = Task { [weak self] in
+            await self?.drainPendingThumbnails(generation: generation)
+        }
+    }
 
-        for index in 0..<dataSource.count {
-            guard let path = dataSource.getPath(at: index) else { continue }
+    private func drainPendingThumbnails(generation: Int) async {
+        await sendUnsentThumbnailsOnce()
+        if !unsentThumbnailEntries().isEmpty {
+            try? await Task.sleep(for: .seconds(1.5))
+            guard generation == thumbnailDrainGeneration else { return }
+            await sendUnsentThumbnailsOnce()
+        }
+        guard generation == thumbnailDrainGeneration else { return }
+        thumbnailDrainTask = nil
+        if needsAnotherThumbnailDrain {
+            needsAnotherThumbnailDrain = false
+            sendPendingThumbnails()
+        }
+    }
+
+    private func unsentThumbnailEntries() -> [(path: String, id: String)] {
+        (0..<dataSource.count).compactMap { index in
+            guard let path = dataSource.getPath(at: index) else { return nil }
             let id = URL(fileURLWithPath: path).lastPathComponent
-            guard !sentThumbnailIds.contains(id) else { continue }
+            guard !sentThumbnailIds.contains(id),
+                  !undeliverableThumbnailIds.contains(id) else { return nil }
+            return (path, id)
+        }
+    }
 
-            // Mark optimistically so we don't kick off duplicate generation tasks.
-            sentThumbnailIds.insert(id)
-            Task { [weak self] in
-                await self?.generateAndSendThumbnail(path: path, id: id)
-            }
+    private func sendUnsentThumbnailsOnce() async {
+        for entry in unsentThumbnailEntries() {
+            guard !Task.isCancelled else { return }
+            guard connectionManager?.connectedPeerCount ?? 0 > 0 else { return }
+            guard !sentThumbnailIds.contains(entry.id) else { continue }
+            await generateAndSendThumbnail(path: entry.path, id: entry.id)
         }
     }
 
     private func generateAndSendThumbnail(path: String, id: String) async {
-        let item = MediaItem(path: path)
-        let image: UIImage?
-        if item.isVideo {
-            await cacheDurationIfNeeded(path: path, id: id)
-            image = await VideoThumbnailCache.shared.getThumbnailAsync(for: path, targetSize: thumbnailTargetSize)
-        } else {
-            image = await AsyncImageLoader.shared.loadImage(from: path, targetSize: thumbnailTargetSize)
-        }
-
-        guard let image = image, let data = image.jpegData(compressionQuality: 0.7) else {
+        let image = await thumbnailImage(forPath: path, id: id)
+        guard let image, let data = image.jpegData(compressionQuality: 0.7) else {
             logger.error("Failed to build thumbnail for \(id, privacy: .public)")
-            sentThumbnailIds.remove(id) // allow a retry on the next sync
+            undeliverableThumbnailIds.insert(id)
             return
         }
 
@@ -197,12 +244,28 @@ final class TVLibrarySync {
         do {
             try data.write(to: tempURL, options: [.atomic])
         } catch {
-            logger.error("Failed to write temp thumbnail for \(id, privacy: .public): \(error.localizedDescription)")
-            sentThumbnailIds.remove(id)
+            logger.error(
+                "Failed to write temp thumbnail for \(id, privacy: .public): \(error.localizedDescription)"
+            )
             return
         }
 
-        connectionManager?.sendThumbnail(at: tempURL, forId: id)
+        let sent = await connectionManager?.sendThumbnail(at: tempURL, forId: id) ?? false
+        if sent {
+            sentThumbnailIds.insert(id)
+            undeliverableThumbnailIds.remove(id)
+        }
+    }
+
+    private func thumbnailImage(forPath path: String, id: String) async -> UIImage? {
+        let item = MediaItem(path: path)
+        if item.isVideo {
+            await cacheDurationIfNeeded(path: path, id: id)
+            return await VideoThumbnailCache.shared.getThumbnailAsync(
+                for: path, targetSize: thumbnailTargetSize
+            )
+        }
+        return await AsyncImageLoader.shared.loadImage(from: path, targetSize: thumbnailTargetSize)
     }
 
     /// Loads a video's duration once and caches it, then rebroadcasts the manifest so the

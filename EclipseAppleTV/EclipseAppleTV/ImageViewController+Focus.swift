@@ -174,7 +174,9 @@ extension ImageViewController {
         Task {
             if mediaItem.isVideo {
                 // For videos, ensure the thumbnail is cached via the shared pipeline
-                let cellSize = CGSize(width: 400, height: 225) // Reasonable size for caching
+                let cellSize = TVGridMetrics.preloadItemSize(
+                    for: MediaDataSource.shared.activeLibraryMode
+                )
                 _ = await VideoThumbnailCache.shared.getThumbnailAsync(for: mediaItem.path, targetSize: cellSize)
             } else {
                 // For images, preload the full-size image

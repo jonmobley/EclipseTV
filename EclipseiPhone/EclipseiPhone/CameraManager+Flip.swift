@@ -113,8 +113,9 @@ extension CameraManager {
         }
     }
 
-    /// Mirrors front-camera video on data / movie connections so stills, AirPlay
-    /// mirrors, and recordings match the preview (preview layers auto-mirror).
+    /// Mirrors front-camera video on data / movie connections so stills, the phone
+    /// viewfinder tap, and recordings match the mirrored phone preview.
+    /// AirPlay’s preview layer is unmirrored separately so program text reads correctly.
     func applyVideoMirroringLocked(for position: AVCaptureDevice.Position) {
         let mirror = position == .front
         for output in captureSession.outputs {

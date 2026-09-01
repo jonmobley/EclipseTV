@@ -18,7 +18,7 @@ extension LibraryThumbnailCell {
     }
 
     /// Idle / app-open: warm live preview (last-frame until frames arrive).
-    /// While AirPlay owns the camera: icon + red stroke only (no second feed).
+    /// While AirPlay owns the camera: centered icon + red stroke (feed is in the hero).
     /// Parked cutaway: that still fills the tile.
     /// - Parameter warmPreview: When false, shows a still only (fullscreen Camera open).
     /// - Parameter parkedStill: Quick-change still on program, shown instead of the feed.
@@ -99,8 +99,8 @@ extension LibraryThumbnailCell {
 
     // MARK: - Private
 
-    /// Picks between a parked cutaway still, icon-only (AirPlay owns the feed), a still
-    /// (fullscreen Camera owns it) and the warm live preview.
+    /// Picks between a parked cutaway still, the camera icon (AirPlay owns the feed),
+    /// a still (fullscreen Camera owns it) and the warm live preview.
     private func applyCameraPreviewState(
         lastFrame: UIImage?,
         parkedStill: UIImage?,
@@ -119,7 +119,9 @@ extension LibraryThumbnailCell {
             HomeCameraTilePreview.shared.unbind()
             imageView.image = nil
             imageView.alpha = 0
-            placeholderIcon.isHidden = true
+            placeholderIcon.isHidden = false
+            cardView.bringSubviewToFront(placeholderIcon)
+            updateCaptionScrim()
             return
         }
         if !warmPreview {

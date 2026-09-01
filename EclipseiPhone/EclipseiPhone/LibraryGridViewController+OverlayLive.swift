@@ -16,6 +16,10 @@ extension LibraryGridViewController {
     func presentCameraLiveOnOutput() {
         guard !blockLiveChangeIfLocked() else { return }
         guard hasLiveOutputDestination else { return }
+        if sendShowLiveSelectIfOperator(.camera, itemId: nil) {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            return
+        }
         if ExternalDisplayManager.shared.isCameraTileLive {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             return
@@ -33,6 +37,10 @@ extension LibraryGridViewController {
     func presentWebPageLive(_ page: WebPage) {
         guard !blockLiveChangeIfLocked() else { return }
         guard hasLiveOutputDestination else { return }
+        if sendShowLiveSelectIfOperator(.web, itemId: page.id.uuidString) {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            return
+        }
         let mgr = ExternalDisplayManager.shared
         if mgr.isWebLive, mgr.liveWebPageId == page.id {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -51,6 +59,10 @@ extension LibraryGridViewController {
     func presentPDFLive(_ doc: SavedPDF) {
         guard !blockLiveChangeIfLocked() else { return }
         guard hasLiveOutputDestination else { return }
+        if sendShowLiveSelectIfOperator(.pdf, itemId: doc.id.uuidString) {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            return
+        }
         let mgr = ExternalDisplayManager.shared
         if mgr.isPDFLive, mgr.livePDFDocumentId == doc.id {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()

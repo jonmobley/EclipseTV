@@ -97,6 +97,9 @@ extension LibraryGridViewController {
             for id in ids {
                 if ShowToolToken.isTool(id) {
                     LocalAlbumStore.shared.hideTool(id, albumId: showId)
+                } else if let countdownId = ShowCountdownToken.countdownId(from: id) {
+                    self.endCountdownIfDeleting(countdownId)
+                    CountdownStore.shared.delete(id: countdownId)
                 } else if let livePollId = ShowLivePollToken.livePollId(from: id) {
                     self.endQuestPollIfRemovingMembership(livePollId)
                     LivePollStore.shared.delete(id: livePollId)
@@ -155,6 +158,9 @@ extension LibraryGridViewController {
 
     /// Same live predicates used when configuring Show tiles.
     func isShowGridItemLive(_ item: ShowGridItem) -> Bool {
+        if ShowLiveSession.shared.isRemoteOperator {
+            return isShowGridItemLiveRemotely(item)
+        }
         switch item {
         case .slideshow(let show):
             return SlideshowPlaybackController.shared.isLive(slideshowId: show.id)
@@ -168,6 +174,18 @@ extension LibraryGridViewController {
             return isLogoSelected && !ExternalDisplayManager.shared.isOverlayLive
         case .camera:
             return ExternalDisplayManager.shared.isCameraTileLive
+        case .livePoll(let item):
+            return ExternalDisplayManager.shared.isQuestPollLive
+                && QuestPollSessionStore.shared.membershipId == item.id
+                && !isBlackSelected
+                && !isLogoSelected
+                && !isScreensaverSelected
+        case .countdown(let item):
+            return ExternalDisplayManager.shared.isCountdownLive
+                && CountdownController.shared.liveCountdownId == item.id
+                && !isBlackSelected
+                && !isLogoSelected
+                && !isScreensaverSelected
         case .media(let media):
             return media.id == store.currentId
                 && SlideshowPlaybackController.shared.activeSlideshowId == nil
@@ -196,7 +214,7 @@ extension LibraryGridViewController {
                 && !isBlackSelected
                 && !isLogoSelected
                 && !isScreensaverSelected
-        case .add:
+        case .unresolved, .add:
             return false
         }
     }
@@ -248,6 +266,13 @@ extension LibraryGridViewController {
         for id in ids {
             if ShowToolToken.isTool(id) {
                 LocalAlbumStore.shared.showTool(id, albumId: albumId)
+            } else if let countdownId = ShowCountdownToken.countdownId(from: id),
+                      let source = CountdownStore.shared.countdown(id: countdownId) {
+                try? CountdownStore.shared.create(
+                    name: source.name,
+                    showId: albumId,
+                    duration: source.duration
+                )
             } else if let livePollId = ShowLivePollToken.livePollId(from: id),
                       let source = LivePollStore.shared.poll(id: livePollId) {
                 LivePollStore.shared.create(

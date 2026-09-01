@@ -59,6 +59,11 @@ extension iPhoneMainViewController: iPhoneConnectionManagerDelegate {
             ExternalOutputSettings.contentTransition.rawValue
         )
         connectionManager.sendSetLibraryAlbums(LibraryAlbumPush.currentAlbums())
+        AirPlayOverlayPark.reparkIfNeeded(
+            using: connectionManager,
+            eclipseTVOnline: true,
+            airPlayConnected: ExternalDisplayManager.shared.isConnected
+        )
         let pendingCount = PendingUploadStore.shared.uploads(for: mode).count
         if pendingCount > 0 {
             showTemporaryStatus(

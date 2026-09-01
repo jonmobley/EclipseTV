@@ -121,6 +121,7 @@ extension LiveHeaderView {
         gradientLayer.masksToBounds = true
         webPreviewHost?.layer.cornerRadius = radius
         screensaverPreview?.layer.cornerRadius = radius
+        cameraPreviewHost?.layer.cornerRadius = radius
     }
 
     /// Grows the LIVE badge in local space so it stays legible once scaled down,

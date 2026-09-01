@@ -100,13 +100,26 @@ final class EclipseSyncController {
 
     /// Applies a server tombstone to whichever local store owns `recordName`.
     ///
-    /// Shows and PDFs both use a bare UUID as their record name, so the owner has to be
-    /// resolved by asking the stores; deletions carry no record type. Runs with
-    /// `isApplyingRemote` set so the local delete does not echo back as an upload.
+    /// Shows, PDFs, websites, slideshows, countdowns, and frames all use a bare
+    /// UUID as their record name, so the owner has to be resolved by asking the
+    /// stores; deletions carry no record type. Runs with `isApplyingRemote` set
+    /// so the local delete does not echo back as an upload.
     func applyRemoteDeletion(recordName: String) {
         let wasApplying = isApplyingRemote
         isApplyingRemote = true
         defer { isApplyingRemote = wasApplying }
+
+        if recordName == CloudKitSchema.backgroundRecordName {
+            LogoStore.shared.applyRemote(assetURL: nil)
+            return
+        }
+        if recordName == CloudKitSchema.screensaverRecordName {
+            ScreensaverStore.shared.applyRemote(kind: nil, assetURL: nil, posterURL: nil)
+            return
+        }
+        if recordName.hasPrefix("eclipse.cameraSettings.") {
+            return
+        }
 
         if let uuid = UUID(uuidString: recordName) {
             if LocalAlbumStore.shared.album(id: uuid) != nil {
@@ -117,6 +130,34 @@ final class EclipseSyncController {
                 PDFStore.shared.remove(id: uuid)
                 return
             }
+            if WebPageStore.shared.page(id: uuid) != nil {
+                WebPageStore.shared.purgeRemote(id: uuid)
+                return
+            }
+            if SlideshowStore.shared.slideshow(id: uuid) != nil {
+                SlideshowStore.shared.purgeRemote(id: uuid)
+                return
+            }
+            if CountdownStore.shared.countdown(id: uuid) != nil {
+                CountdownStore.shared.purgeRemote(id: uuid)
+                return
+            }
+            if LivePollStore.shared.poll(id: uuid) != nil {
+                LivePollStore.shared.purgeRemote(id: uuid)
+                return
+            }
+            if CameraFrameStore.shared.frame(id: uuid) != nil {
+                CameraFrameStore.shared.remove(uuid)
+                return
+            }
+            if CameraAlternateStillStore.shared.contains(uuid) {
+                CameraAlternateStillStore.shared.remove(uuid)
+                return
+            }
+        }
+        if ImportedMediaStore.shared.record(id: recordName) != nil {
+            ImportedMediaStore.shared.purge(id: recordName)
+            return
         }
         CaptureStore.shared.purge(id: recordName)
     }

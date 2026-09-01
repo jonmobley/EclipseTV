@@ -16,6 +16,7 @@ enum ThumbnailTypeIcon: Equatable {
     case pdf
     case camera
     case livePoll
+    case countdown
 
     /// SF Symbol used on the overlay (matches existing Show-grid placeholders).
     var systemName: String {
@@ -27,6 +28,7 @@ enum ThumbnailTypeIcon: Equatable {
         case .pdf: return "doc.richtext"
         case .camera: return "camera.fill"
         case .livePoll: return "chart.bar.fill"
+        case .countdown: return "timer"
         }
     }
 
@@ -40,12 +42,18 @@ enum ThumbnailTypeIcon: Equatable {
         case .pdf: return "PDF"
         case .camera: return "camera"
         case .livePoll: return "live poll"
+        case .countdown: return "countdown"
         }
     }
 
-    /// Camera / Live Poll keep the disc with no still so the tile still reads.
+    /// Camera / Live Poll / Countdown keep the disc with no still so the tile reads.
     var showsWithoutThumbnail: Bool {
-        self == .camera || self == .livePoll
+        self == .camera || self == .livePoll || self == .countdown
+    }
+
+    /// Photos already read as stills from the art; skip the overlay disc.
+    var showsOnThumbnail: Bool {
+        self != .photo
     }
 
     /// `play.fill` sits optically left of center in the disc.

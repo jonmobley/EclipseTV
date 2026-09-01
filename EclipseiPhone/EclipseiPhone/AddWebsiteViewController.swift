@@ -115,13 +115,7 @@ final class AddWebsiteViewController: UITableViewController, UITextFieldDelegate
                 title: title,
                 urlString: urlString
             )
-            if let showId = targetShowId {
-                LocalAlbumStore.shared.add(
-                    itemId: page.id.uuidString,
-                    toAlbumId: showId
-                )
-            }
-            finishAdding(page)
+            addPageToShowIfNeeded(page)
         } catch {
             let alert = UIAlertController(
                 title: "Couldn't Add Website",
@@ -135,13 +129,26 @@ final class AddWebsiteViewController: UITableViewController, UITextFieldDelegate
 
     private func selectSuggestion(_ page: WebPage) {
         WebPageStore.shared.touch(page.id)
-        if let showId = targetShowId {
-            LocalAlbumStore.shared.add(
-                itemId: page.id.uuidString,
-                toAlbumId: showId
-            )
+        addPageToShowIfNeeded(page)
+    }
+
+    /// Adds `page` to the target Show, confirming when it is already a member.
+    private func addPageToShowIfNeeded(_ page: WebPage) {
+        guard let showId = targetShowId else {
+            finishAdding(page)
+            return
         }
-        finishAdding(page)
+        let itemId = page.id.uuidString
+        let members = Set(LocalAlbumStore.shared.album(id: showId)?.itemIds ?? [])
+        let proceed = { [weak self] in
+            LocalAlbumStore.shared.add(itemId: itemId, toAlbumId: showId)
+            self?.finishAdding(page)
+        }
+        if members.contains(itemId) {
+            AlreadyInShowAlert.present(from: self, onContinue: proceed)
+            return
+        }
+        proceed()
     }
 
     // MARK: - Table
@@ -296,10 +303,7 @@ final class AddWebsiteViewController: UITableViewController, UITextFieldDelegate
         let query = urlField.text ?? ""
         let titleQuery = titleField.text ?? ""
         let needle = query.isEmpty ? titleQuery : query
-        let next = WebPageStore.shared.suggestions(
-            matching: needle,
-            excludingShowId: targetShowId
-        )
+        let next = WebPageStore.shared.suggestions(matching: needle)
         guard next != suggestions else { return }
         suggestions = next
         tableView.reloadSections(IndexSet(integer: Section.suggestions.rawValue), with: .fade)
