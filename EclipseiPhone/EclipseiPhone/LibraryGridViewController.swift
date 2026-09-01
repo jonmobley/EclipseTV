@@ -974,6 +974,8 @@ final class LibraryGridViewController: UIViewController {
             return .web(url)
         case .pdf(let url):
             return .pdf(url)
+        case .countdown:
+            return .countdown
         case .none:
             break
         }

@@ -44,6 +44,10 @@ final class LiveHeaderView: UIView {
     var libraryVideoFullscreenButton: UIButton?
     /// Toggles the live slide ribbon while a Slideshow owns the hero.
     var slideshowRibbonButton: UIButton?
+    /// Host for the live camera frame-tap mirror (AirPlay keeps the hardware layer).
+    var cameraPreviewHost: UIView?
+    /// In-hero live camera, fed by `CameraManager`'s frame tap.
+    var cameraPreview: CameraMirrorView?
 
     /// Identity of the last applied live content; used to skip no-op crossfades.
     private var presentedContentKey: String?
@@ -57,7 +61,7 @@ final class LiveHeaderView: UIView {
     var collapseProgress: CGFloat = 0
     /// Uniform transform scale the host controller currently applies to this view.
     var collapseScale: CGFloat = 1
-    /// When true, amber stroke (and LIVE badge) mark locked live output.
+    /// When true, amber stroke (and LIVE LOCKED badge) mark locked live output.
     /// Read by collapse chrome so content updates don't wipe the thicker lock stroke.
     private(set) var isOutputLocked = false
 
@@ -241,6 +245,7 @@ final class LiveHeaderView: UIView {
         gradientLayer.frame = bounds
         applyBadgeCounterScale()
         layoutLibraryVideoPreviewIfNeeded()
+        layoutCameraPreviewIfNeeded()
         layoutWebPreviewIfNeeded()
         // Keep the float-mode shadow path matched to the current bounds.
         if layer.shadowOpacity > 0, bounds.width > 1, bounds.height > 1 {
@@ -261,16 +266,22 @@ final class LiveHeaderView: UIView {
     ///   fullscreen Preview.
     /// - Parameter usesRemoteVideoMonitor: When true (AirPlay / EclipseTV owns video),
     ///   show a black program monitor (no poster, no film glyph).
+    /// - Parameter showsLiveBadge: When true (HDMI / AirPlay / EclipseTV), show
+    ///   the LIVE overlay. Practice Mode keeps the preview without the badge.
+    ///   `nil` uses the current HDMI / AirPlay / EclipseTV connection.
     func configure(
         with item: LibraryItemDTO?,
         thumbnail: UIImage?,
         isOnline: Bool,
         showsLocalTransport: Bool = false,
         allowsStillFullscreenTap: Bool = false,
-        usesRemoteVideoMonitor: Bool = false
+        usesRemoteVideoMonitor: Bool = false,
+        showsLiveBadge: Bool? = nil
     ) {
+        let showLiveBadge = showsLiveBadge ?? LiveOutputRouting.showsHeroLiveBadge()
         clearWebPreview(parking: true)
         clearScreensaverPreview()
+        clearCameraPreview()
         if !showsLocalTransport {
             clearLibraryVideoPreview()
         }
@@ -293,7 +304,7 @@ final class LiveHeaderView: UIView {
                 == .scaleAspectFill ? "fill" : "fit")
         let key = "media:\(item.id):\(thumbToken):\(isOnline)"
             + ":local\(showsLocalTransport):fs\(allowsStillFullscreenTap):\(fitToken)"
-            + ":monitor\(usesRemoteVideoMonitor)"
+            + ":monitor\(usesRemoteVideoMonitor):badge\(showLiveBadge)"
         applyContent(key: key) {
             let showControls = item.isVideo && (isOnline || showsLocalTransport)
             if usesRemoteVideoMonitor {
@@ -325,7 +336,7 @@ final class LiveHeaderView: UIView {
             self.wantsPlaybackControls = showControls
             self.allowsFullscreenTap = allowsStillFullscreenTap
             self.gradientLayer.isHidden = !showControls
-            self.liveBadge.isHidden = false
+            self.liveBadge.isHidden = !showLiveBadge
             self.titleLabel.isHidden = true
             self.subtitleLabel.isHidden = true
             self.controls.isHidden = !showControls
@@ -342,8 +353,11 @@ final class LiveHeaderView: UIView {
     }
 
     /// Live overlay (website / camera / black) — never shows leftover media art.
-    /// - Parameter showsLiveBadge: When false (phone-only Live Poll / Practice),
-    ///   hide the red LIVE chip.
+    /// - Parameter showsLiveBadge: When true (HDMI / AirPlay / EclipseTV), show
+    ///   the LIVE overlay. Practice Mode keeps the preview without the badge.
+    ///   `nil` uses the current HDMI / AirPlay / EclipseTV connection.
+    /// - Parameter stableContentKey: When set, ticks (countdown remaining) do not
+    ///   retrigger a hero crossfade.
     func configureOverlay(
         title: String,
         systemImage: String?,
@@ -351,17 +365,27 @@ final class LiveHeaderView: UIView {
         thumbnail: UIImage? = nil,
         keepWebPreview: Bool = false,
         keepScreensaverPreview: Bool = false,
-        showsLiveBadge: Bool = true
+        keepCameraPreview: Bool = false,
+        showsLiveBadge: Bool? = nil,
+        stableContentKey: String? = nil
     ) {
+        let showLiveBadge = showsLiveBadge ?? LiveOutputRouting.showsHeroLiveBadge()
         if !keepWebPreview {
             clearWebPreview(parking: true)
         }
         if !keepScreensaverPreview {
             clearScreensaverPreview()
         }
+        if !keepCameraPreview {
+            clearCameraPreview()
+        }
         clearLibraryVideoPreview()
         let thumbToken = thumbnail.map { "\(ObjectIdentifier($0))" } ?? "nil"
-        let key = "overlay:\(title):\(systemImage ?? ""):\(thumbToken):web\(keepWebPreview):ss\(keepScreensaverPreview):live\(showsLiveBadge)"
+        let key = stableContentKey ?? (
+            "overlay:\(title):\(systemImage ?? ""):\(thumbToken)"
+            + ":web\(keepWebPreview):ss\(keepScreensaverPreview):cam\(keepCameraPreview)"
+            + ":badge\(showLiveBadge)"
+        )
         applyContent(key: key) {
             self.backgroundColor = fillColor
             // Background / website / camera art always fills the hero.
@@ -381,11 +405,12 @@ final class LiveHeaderView: UIView {
             self.allowsHostControllerTap = false
             self.allowsCameraControllerTap = false
             self.gradientLayer.isHidden = true
-            self.liveBadge.isHidden = !showsLiveBadge
+            self.liveBadge.isHidden = !showLiveBadge
             self.subtitleLabel.isHidden = true
             self.controls.isHidden = true
 
             let hidingStatic = keepWebPreview || keepScreensaverPreview
+                || keepCameraPreview
             self.titleLabel.isHidden = thumbnail != nil || hidingStatic
             self.titleLabel.textColor = UIColor.white.withAlphaComponent(0.85)
             self.titleLabel.font = .systemFont(ofSize: 16, weight: .semibold)
@@ -441,6 +466,7 @@ final class LiveHeaderView: UIView {
     func configureSelectToGoLive() {
         clearWebPreview(parking: true)
         clearScreensaverPreview()
+        clearCameraPreview()
         clearLibraryVideoPreview()
         applyContent(key: "selectToGoLive") {
             self.allowsFullscreenTap = false
@@ -452,6 +478,7 @@ final class LiveHeaderView: UIView {
     private func showPlaceholder(message: String) {
         clearWebPreview(parking: true)
         clearScreensaverPreview()
+        clearCameraPreview()
         clearLibraryVideoPreview()
         allowsFullscreenTap = false
         backgroundColor = .secondarySystemBackground
@@ -484,7 +511,6 @@ final class LiveHeaderView: UIView {
     /// Compact mini: tap to return. Expanded: transport / slideshow / still Preview.
     /// The slide-ribbon button must stay tappable even when the ribbon is hidden.
     /// Practice / Start on the Live Poll gate must stay tappable too.
-    /// Live Poll host CONTROLS and Camera open from an expanded hero tap.
     func applyInteractionForPresentation() {
         isUserInteractionEnabled =
             isCompactPresentation
@@ -518,7 +544,7 @@ final class LiveHeaderView: UIView {
         controls.update(isPlaying: state.isPlaying, currentTime: state.currentTime, duration: state.duration)
     }
 
-    /// Amber hero stroke + LIVE badge while live output is locked.
+    /// Amber hero stroke + LIVE LOCKED badge while live output is locked.
     func setOutputLocked(_ locked: Bool) {
         guard isOutputLocked != locked else { return }
         isOutputLocked = locked
@@ -531,9 +557,11 @@ final class LiveHeaderView: UIView {
         if isOutputLocked {
             layer.borderColor = UIColor.systemOrange.cgColor
             liveBadge.backgroundColor = .systemOrange
+            liveBadge.text = "LIVE LOCKED"
         } else {
             layer.borderColor = UIColor.separator.cgColor
             liveBadge.backgroundColor = .systemRed
+            liveBadge.text = "LIVE"
         }
         // Width is owned by collapse chrome (counter-scales with the hero transform).
         applyCollapseChrome()

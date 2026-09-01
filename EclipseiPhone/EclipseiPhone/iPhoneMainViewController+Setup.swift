@@ -128,9 +128,6 @@ extension iPhoneMainViewController {
         headerBar.onNewShow = { [weak self] in
             self?.promptNewAlbum()
         }
-        headerBar.onGoHome = { [weak self] in
-            self?.libraryViewController.closeOpenShow()
-        }
         headerBar.onDoneArranging = { [weak self] in
             self?.libraryViewController.commitArranging()
         }

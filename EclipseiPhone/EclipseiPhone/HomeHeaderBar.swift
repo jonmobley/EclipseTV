@@ -294,12 +294,19 @@ final class HomeHeaderBar: UIView {
     // MARK: - Menus
 
     /// Sets the dropdown title (`"Home"` on Home, show name in Show mode).
-    func setCenterTitle(_ title: String) {
+    /// - Parameter subtitle: Optional second line (e.g. "Live on iPad").
+    func setCenterTitle(_ title: String, subtitle: String? = nil) {
         guard var config = libraryButton.configuration else { return }
         config.title = title
+        config.subtitle = subtitle
         config.titleLineBreakMode = .byTruncatingTail
+        config.subtitleLineBreakMode = .byTruncatingTail
         libraryButton.configuration = config
-        libraryButton.accessibilityLabel = "\(title) menu"
+        if let subtitle {
+            libraryButton.accessibilityLabel = "\(title) menu, \(subtitle)"
+        } else {
+            libraryButton.accessibilityLabel = "\(title) menu"
+        }
     }
 
     /// Attaches the page dropdown (Home, Open Show, New Show, Library, Music, Recents).

@@ -67,6 +67,7 @@ final class LivePollStore {
         polls.append(item)
         persist()
         LocalAlbumStore.shared.addLivePoll(item.id, toAlbumId: showId)
+        scheduleSaveIfNeeded(id: item.id)
         return item
     }
 
@@ -78,6 +79,7 @@ final class LivePollStore {
         polls[index].title = trimmed.isEmpty ? "Live Poll" : trimmed
         polls[index].questionCount = max(summary.questionCount, 1)
         persist()
+        scheduleSaveIfNeeded(id: id)
     }
 
     /// Deletes the card with `id` when present.
@@ -87,6 +89,39 @@ final class LivePollStore {
         syncedIds.remove(id.uuidString)
         persist()
         LocalAlbumStore.shared.removeLivePoll(id, fromAlbumId: item.showId)
+        guard !EclipseSyncController.shared.isApplyingRemote else { return }
+        EclipseSyncController.shared.backend.scheduleLivePollDelete(id: id)
+    }
+
+    /// Purges after a CloudKit tombstone without echoing a delete.
+    func purgeRemote(id: UUID) {
+        guard polls.contains(where: { $0.id == id }) else { return }
+        polls.removeAll { $0.id == id }
+        syncedIds.remove(id.uuidString)
+        persist()
+    }
+
+    /// Inserts or replaces a card that arrived from iCloud.
+    func applyRemote(_ item: ShowLivePoll) {
+        if let index = polls.firstIndex(where: { $0.id == item.id }) {
+            polls[index] = item
+        } else {
+            polls.append(item)
+        }
+        syncedIds.insert(item.id.uuidString)
+        persist()
+    }
+
+    /// Records that the backend accepted this card's upload.
+    func markSynced(id: UUID) {
+        guard !syncedIds.contains(id.uuidString) else { return }
+        syncedIds.insert(id.uuidString)
+        defaults.set(Array(syncedIds), forKey: syncedIdsKey)
+    }
+
+    /// Cards the server has not acknowledged yet.
+    var idsNeedingUpload: [UUID] {
+        polls.filter { !syncedIds.contains($0.id.uuidString) }.map(\.id)
     }
 
     /// Deletes every card belonging to `showId`.
@@ -116,6 +151,11 @@ final class LivePollStore {
             from: defaults,
             logger: logger
         ).elements
+    }
+
+    private func scheduleSaveIfNeeded(id: UUID) {
+        guard !EclipseSyncController.shared.isApplyingRemote else { return }
+        EclipseSyncController.shared.backend.scheduleLivePollSave(id: id)
     }
 
     private func persist() {

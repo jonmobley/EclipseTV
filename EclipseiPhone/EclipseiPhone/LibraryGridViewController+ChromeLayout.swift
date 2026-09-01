@@ -7,24 +7,26 @@
 
 import UIKit
 
-/// Tap goes live (red) only with AirPlay, EclipseTV, or Practice Mode.
+/// Tap goes live (red) with AirPlay, EclipseTV, Practice Mode, or a remote director.
 enum LiveOutputRouting {
-    /// Live when a display, EclipseTV, or Practice Mode is available.
+    /// Live when a display, EclipseTV, Practice Mode, or a remote director is available.
     static func canMarkLive(
         airPlayConnected: Bool,
         eclipseTVOnline: Bool,
-        practiceMode: Bool
+        practiceMode: Bool,
+        isRemoteOperator: Bool = false
     ) -> Bool {
-        airPlayConnected || eclipseTVOnline || practiceMode
+        airPlayConnected || eclipseTVOnline || practiceMode || isRemoteOperator
     }
 
-    /// Live using the current AirPlay / EclipseTV state.
+    /// Live using the current AirPlay / EclipseTV / remote-operator state.
     @MainActor
     static func canMarkLive(practiceMode: Bool) -> Bool {
         canMarkLive(
             airPlayConnected: ExternalDisplayManager.shared.isConnected,
             eclipseTVOnline: TVLibraryStore.shared.isOnline,
-            practiceMode: practiceMode
+            practiceMode: practiceMode,
+            isRemoteOperator: ShowLiveSession.shared.isRemoteOperator
         )
     }
 
@@ -91,18 +93,40 @@ enum LiveOutputRouting {
     static func phoneHeroPlaysLibraryVideo(
         airPlayConnected: Bool,
         eclipseTVOnline: Bool,
-        practiceMode: Bool
+        practiceMode: Bool,
+        isRemoteOperator: Bool = false
     ) -> Bool {
-        practiceMode && !airPlayConnected && !eclipseTVOnline
+        practiceMode && !airPlayConnected && !eclipseTVOnline && !isRemoteOperator
     }
 
-    /// Grey program monitor when library video is live on AirPlay or EclipseTV.
+    /// Grey program monitor when library video is live on AirPlay, EclipseTV, or remote.
     static func usesRemoteVideoMonitor(
         isVideo: Bool,
         airPlayConnected: Bool,
-        eclipseTVOnline: Bool
+        eclipseTVOnline: Bool,
+        isRemoteOperator: Bool = false
     ) -> Bool {
-        isVideo && (airPlayConnected || eclipseTVOnline)
+        isVideo && (airPlayConnected || eclipseTVOnline || isRemoteOperator)
+    }
+
+    /// LIVE overlay on the big preview: HDMI / AirPlay / EclipseTV / remote operator.
+    /// Practice Mode still shows the hero, but it is not program output.
+    static func showsHeroLiveBadge(
+        airPlayConnected: Bool,
+        eclipseTVOnline: Bool,
+        isRemoteOperator: Bool = false
+    ) -> Bool {
+        airPlayConnected || eclipseTVOnline || isRemoteOperator
+    }
+
+    /// LIVE overlay using the current HDMI / AirPlay / EclipseTV / remote state.
+    @MainActor
+    static func showsHeroLiveBadge() -> Bool {
+        showsHeroLiveBadge(
+            airPlayConnected: ExternalDisplayManager.shared.isConnected,
+            eclipseTVOnline: TVLibraryStore.shared.isOnline,
+            isRemoteOperator: ShowLiveSession.shared.isRemoteOperator
+        )
     }
 }
 
