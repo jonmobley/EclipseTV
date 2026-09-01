@@ -235,7 +235,7 @@ final class LibraryGridViewController: UIViewController {
         return !SlideshowPlaybackController.shared.activeSlideIds.isEmpty
     }
 
-    /// Portrait: the live ribbon is a Show-grid section under the stacked hero.
+    /// Live ribbon is never a Show-grid section; it docks under the hero.
     var showsInGridSlideshowRibbon: Bool {
         Self.showsInGridSlideshowRibbon(
             liveRibbon: showsLiveSlideshowRibbon,
@@ -243,9 +243,9 @@ final class LibraryGridViewController: UIViewController {
         )
     }
 
-    /// Phone landscape: the live ribbon docks under the leading preview.
+    /// Live slideshow / Live Poll ribbon stays under the hero (portrait + landscape).
     var docksLiveSlideshowRibbon: Bool {
-        showsLiveSlideshowRibbon && isSideBySideChrome
+        showsLiveSlideshowRibbon
     }
 
     /// Layout inputs for the current mode, sampled by the layout on every pass.
@@ -446,6 +446,12 @@ final class LibraryGridViewController: UIViewController {
         }
         liveHeader.onRequestFullscreen = { [weak self] in
             self?.presentFullscreenForLiveMedia()
+        }
+        liveHeader.onRequestHostController = { [weak self] in
+            self?.presentQuestPollHostController()
+        }
+        liveHeader.onRequestCameraController = { [weak self] in
+            self?.onPresentCamera?()
         }
         liveHeader.onSlideshowSwipe = { delta in
             SlideshowPlaybackController.shared.goToAdjacentSlide(delta: delta)
@@ -849,6 +855,7 @@ final class LibraryGridViewController: UIViewController {
                 systemImage: "camera.fill",
                 fillColor: UIColor(white: 0.12, alpha: 1)
             )
+            liveHeader.allowsCameraControllerTap = true
             liveHeader.updatePlayback(PlaybackState())
             return
         }
@@ -859,6 +866,7 @@ final class LibraryGridViewController: UIViewController {
                 fillColor: UIColor(white: 0.12, alpha: 1),
                 thumbnail: mgr.cameraTileParkedStillImage
             )
+            liveHeader.allowsCameraControllerTap = true
             liveHeader.updatePlayback(PlaybackState())
             return
         }

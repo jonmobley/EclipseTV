@@ -143,13 +143,16 @@ extension LibraryGridViewController {
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 
-    /// Cue-only Live Poll refresh: thumbs in place, then center the active cue once.
+    /// Cue-only Live Poll refresh: update highlights; nudge the strip only if needed.
     func reloadLivePollRibbonThumbsForCueChange() {
         reloadLiveSlideshowRibbonThumbs(rebuiltShowGrid: false)
         scrollLiveSlideshowRibbonToCurrentSlide()
     }
 
-    /// Centers the current slide or poll cue in the ribbon without moving the Show grid.
+    /// Keeps the current slide / poll cue visible without yanking the whole strip.
+    ///
+    /// Already-visible cues stay put (highlight only). Off-screen cues scroll just
+    /// enough to peek into view — never a forced horizontal center.
     func scrollLiveSlideshowRibbonToCurrentSlide() {
         guard showsLiveSlideshowRibbon else { return }
         let index: Int
@@ -163,17 +166,14 @@ extension LibraryGridViewController {
         }
         guard count > 0, index >= 0, index < count else { return }
         if docksLiveSlideshowRibbon {
-            slideshowRibbonView.scrollToItem(
-                at: IndexPath(item: index, section: 0),
-                at: .centeredHorizontally,
-                animated: true
-            )
+            scrollDockedRibbonToRevealItem(at: index, animated: true)
             return
         }
+        // Legacy in-grid path (unused while the ribbon always docks).
         scrollInGridRibbonHorizontally(to: index)
     }
 
-    /// Horizontal strip used under the landscape live preview.
+    /// Horizontal strip used under the live preview.
     func makeDockedSlideshowRibbonView() -> UICollectionView {
         let layout = UICollectionViewFlowLayout()
         layout.scrollDirection = .horizontal
@@ -196,7 +196,7 @@ extension LibraryGridViewController {
         return view
     }
 
-    /// Sizes and shows the docked ribbon under the landscape preview.
+    /// Sizes and shows the docked ribbon under the live preview (both axes).
     func layoutDockedSlideshowRibbon() {
         let docked = docksLiveSlideshowRibbon
         let wasHidden = slideshowRibbonView.isHidden
@@ -209,7 +209,8 @@ extension LibraryGridViewController {
         }
         let width = max(
             liveHeader.bounds.width,
-            heroWidthConstraint?.constant ?? 0
+            heroWidthConstraint?.constant ?? 0,
+            max(0, view.bounds.width - headerInset * 2)
         )
         let thumb = Self.slideshowRibbonThumbSize(
             containerWidth: width,
@@ -219,6 +220,9 @@ extension LibraryGridViewController {
         applyDockedRibbonItemSize(thumb)
         dockedRibbonTopConstraint?.constant = Self.sideBySideGutter
         dockedRibbonHeightConstraint?.constant = thumb.height
+        if showsLiveHero {
+            view.bringSubviewToFront(liveHeader)
+        }
         view.bringSubviewToFront(slideshowRibbonView)
         if wasHidden {
             slideshowRibbonView.reloadData()
@@ -298,10 +302,45 @@ extension LibraryGridViewController {
             slideshowRibbonView.reloadData()
             return
         }
-        let paths = slideshowRibbonView.indexPathsForVisibleItems
-        if !paths.isEmpty {
-            slideshowRibbonView.reloadItems(at: paths)
+        // Reconfigure in place — `reloadItems` can reset offset and make the
+        // whole strip appear to scroll when the highlight moves.
+        for path in slideshowRibbonView.indexPathsForVisibleItems {
+            guard let cell = slideshowRibbonView.cellForItem(at: path)
+                as? LibraryThumbnailCell else { continue }
+            configureLiveSlideshowRibbonCell(cell, at: path)
         }
+    }
+
+    /// Scrolls the docked ribbon the minimum amount so `index` is fully visible.
+    private func scrollDockedRibbonToRevealItem(at index: Int, animated: Bool) {
+        let path = IndexPath(item: index, section: 0)
+        slideshowRibbonView.layoutIfNeeded()
+        guard let frame = slideshowRibbonView.layoutAttributesForItem(at: path)?.frame
+        else { return }
+        let inset = slideshowRibbonView.adjustedContentInset
+        let minVisibleX = slideshowRibbonView.contentOffset.x + inset.left
+        let maxVisibleX = slideshowRibbonView.contentOffset.x
+            + slideshowRibbonView.bounds.width - inset.right
+        // Fully on-screen already — highlight moved; leave offset alone.
+        if frame.minX >= minVisibleX - 0.5, frame.maxX <= maxVisibleX + 0.5 {
+            return
+        }
+        var offsetX = slideshowRibbonView.contentOffset.x
+        if frame.minX < minVisibleX {
+            offsetX = frame.minX - inset.left
+        } else if frame.maxX > maxVisibleX {
+            offsetX = frame.maxX - slideshowRibbonView.bounds.width + inset.right
+        }
+        let minX = -inset.left
+        let maxX = max(
+            minX,
+            slideshowRibbonView.contentSize.width - slideshowRibbonView.bounds.width
+                + inset.right
+        )
+        let clamped = min(max(offsetX, minX), maxX)
+        let target = CGPoint(x: clamped, y: slideshowRibbonView.contentOffset.y)
+        guard abs(target.x - slideshowRibbonView.contentOffset.x) > 0.5 else { return }
+        slideshowRibbonView.setContentOffset(target, animated: animated)
     }
 
     private func applyDockedRibbonItemSize(_ thumb: CGSize) {

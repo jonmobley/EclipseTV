@@ -23,8 +23,8 @@ extension LibraryGridViewController {
     ///
     /// Home: hero carousel, then Recent. A Show uses one media grid
     /// (tools + members from `surfaceIds`); no fixed tools band.
-    /// Phone landscape docks the live slideshow ribbon under the leading
-    /// preview, so pass `showsSlideshowRibbon: false` for that chrome.
+    /// Live ribbon docks under the hero chrome, so pass
+    /// `showsSlideshowRibbon: false` for the scrolling Show grid.
     static func visibleHomeSections(
         isShowMode: Bool,
         showsSlideshowRibbon: Bool
@@ -38,13 +38,14 @@ extension LibraryGridViewController {
         return sections
     }
 
-    /// In-grid ribbon is portrait-only. Phone landscape docks it under the
-    /// leading live preview so the Show grid can scroll on its own.
+    /// Live ribbon stays docked under the hero so Show thumbs can scroll alone.
     static func showsInGridSlideshowRibbon(
         liveRibbon: Bool,
         sideBySideChrome: Bool
     ) -> Bool {
-        liveRibbon && !sideBySideChrome
+        _ = liveRibbon
+        _ = sideBySideChrome
+        return false
     }
 
     /// Home / Show layout inputs, re-read on every layout pass.

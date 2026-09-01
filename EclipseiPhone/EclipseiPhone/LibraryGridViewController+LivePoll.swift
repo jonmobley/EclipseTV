@@ -133,15 +133,22 @@ extension LibraryGridViewController {
         if canShow {
             WarmWebSessionPool.shared.warmIfNeeded(for: page)
         }
+        // LIVE means an external display owns the output. Phone-only / Practice
+        // preview shows the projector page without the red chip.
+        let onExternal = ExternalDisplayManager.shared.isConnected
         liveHeader.configureOverlay(
             title: title,
             systemImage: "chart.bar.fill",
             fillColor: UIColor(white: 0.12, alpha: 1),
-            keepWebPreview: canShow
+            keepWebPreview: canShow,
+            showsLiveBadge: LiveOutputRouting.showsLivePollLiveBadge(
+                externalDisplayConnected: onExternal
+            )
         )
         if canShow {
             liveHeader.showWebPreview(pageId: page.id)
         }
+        liveHeader.allowsHostControllerTap = true
         liveHeader.updatePlayback(PlaybackState())
     }
 
@@ -160,9 +167,9 @@ extension LibraryGridViewController {
                 title: "\(item.title) · Practice",
                 systemImage: "chart.bar.fill",
                 fillColor: UIColor(white: 0.12, alpha: 1),
-                keepWebPreview: canShow
+                keepWebPreview: canShow,
+                showsLiveBadge: false
             )
-            liveHeader.liveBadge.isHidden = true
             if canShow {
                 liveHeader.showWebPreview(pageId: page.id)
             }
@@ -345,6 +352,28 @@ extension LibraryGridViewController {
     }
 
     // MARK: - Session change UI
+
+    /// Opens native CONTROLS for the live room (Responses / Next / QR / End).
+    func presentQuestPollHostController() {
+        guard QuestPollSessionStore.shared.session != nil else { return }
+        if presentedViewController is UINavigationController,
+           (presentedViewController as? UINavigationController)?
+            .viewControllers.first is QuestPollHostViewController {
+            return
+        }
+        let host = QuestPollHostViewController()
+        host.onAdvance = { [weak self] action in
+            self?.sendQuestPollActions([action])
+        }
+        host.onEnd = { [weak self, weak host] in
+            host?.dismiss(animated: true) {
+                self?.confirmEndQuestPoll()
+            }
+        }
+        let nav = UINavigationController(rootViewController: host)
+        nav.modalPresentationStyle = .formSheet
+        present(nav, animated: true)
+    }
 
     /// Applies a QuestPoll store update without reloading the ribbon on poll ticks.
     ///

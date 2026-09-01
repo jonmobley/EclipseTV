@@ -58,6 +58,11 @@ enum LiveOutputRouting {
         return !eclipseTVOnline
     }
 
+    /// Red LIVE chip on the Live Poll hero only when an external display owns it.
+    static func showsLivePollLiveBadge(externalDisplayConnected: Bool) -> Bool {
+        externalDisplayConnected
+    }
+
     /// Screensaver is the live grid item when a destination is up and nothing else is.
     static func isScreensaverFallbackLive(
         hasOutputDestination: Bool,
@@ -231,7 +236,17 @@ extension LibraryGridViewController {
             equalTo: safe.topAnchor, constant: headerInset
         )
         heroTopConstraint = heroTop
-        // Portrait: grid fills the safe area; hero floats above and content scrolls under it.
+        let ribbonTop = slideshowRibbonView.topAnchor.constraint(
+            equalTo: liveHeader.bottomAnchor
+        )
+        let ribbonHeight = slideshowRibbonView.heightAnchor.constraint(
+            equalToConstant: 0
+        )
+        dockedRibbonTopConstraint = ribbonTop
+        dockedRibbonHeightConstraint = ribbonHeight
+
+        // Portrait: grid fills the safe area; hero floats above and content scrolls
+        // under it. The live ribbon docks under the hero so Show thumbs scroll alone.
         //
         // Leading/trailing follow the safe area, not the view. The two are identical in
         // portrait, but this layout also serves landscape Home (no hero), where pinning
@@ -243,30 +258,26 @@ extension LibraryGridViewController {
             gridHost.leadingAnchor.constraint(equalTo: safe.leadingAnchor),
             gridHost.trailingAnchor.constraint(equalTo: safe.trailingAnchor),
             gridHost.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            // Portrait: opaque plate from the page top through the live card so
-            // tiles scrolling under the preview can't show between it and the header.
+            // Opaque plate from the page top through hero + ribbon so tiles
+            // scrolling under the preview can't show between chrome and content.
             heroSpacer.topAnchor.constraint(equalTo: view.topAnchor),
             heroSpacer.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             heroSpacer.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            heroSpacer.bottomAnchor.constraint(equalTo: liveHeader.bottomAnchor),
-            // Park the landscape ribbon; portrait uses the in-grid section.
-            slideshowRibbonView.topAnchor.constraint(equalTo: view.topAnchor),
-            slideshowRibbonView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            slideshowRibbonView.widthAnchor.constraint(equalToConstant: 0),
-            slideshowRibbonView.heightAnchor.constraint(equalToConstant: 0)
+            heroSpacer.bottomAnchor.constraint(
+                equalTo: slideshowRibbonView.bottomAnchor
+            ),
+            slideshowRibbonView.leadingAnchor.constraint(
+                equalTo: liveHeader.leadingAnchor
+            ),
+            slideshowRibbonView.trailingAnchor.constraint(
+                equalTo: liveHeader.trailingAnchor
+            ),
+            ribbonTop,
+            ribbonHeight
         ]
 
-        let ribbonTop = slideshowRibbonView.topAnchor.constraint(
-            equalTo: liveHeader.bottomAnchor
-        )
-        let ribbonHeight = slideshowRibbonView.heightAnchor.constraint(
-            equalToConstant: 0
-        )
-        dockedRibbonTopConstraint = ribbonTop
-        dockedRibbonHeightConstraint = ribbonHeight
-
         // Landscape: live preview leading (top-aligned), grid in the trailing column.
-        // The live slideshow ribbon docks under the preview, matching portrait.
+        // The live ribbon docks under the preview (same strip as portrait).
         // The ambient mini player is a compact trailing card on the parent VC.
         landscapeChromeConstraints = [
             gridHost.topAnchor.constraint(equalTo: safe.topAnchor),
@@ -339,7 +350,7 @@ extension LibraryGridViewController {
 
         if axisChanged {
             applyChromeAxis(sideBySide: sideBySide)
-            // Ribbon moves between the Show grid and the leading preview.
+            // Hero/ribbon width changes with the axis; keep Show layout current.
             applyShowPageLayout()
             if isShowMode {
                 showCollectionView.reloadData()
@@ -450,10 +461,24 @@ extension LibraryGridViewController {
         }
     }
 
-    /// Expanded hero height + breathing room under it. Derived from geometry rather
-    /// than measured bounds so a Display Mode change can't leave a stale inset.
+    /// Expanded hero height + docked ribbon + breathing room under them.
+    /// Derived from geometry rather than measured bounds so a Display Mode
+    /// change can't leave a stale inset.
     func expandedHeroOverlayInset() -> CGFloat {
-        headerInset + estimatedExpandedHeroHeight() + heroBottomPadding
+        var inset = headerInset + estimatedExpandedHeroHeight() + heroBottomPadding
+        if docksLiveSlideshowRibbon {
+            let width = max(
+                0,
+                view.bounds.width - headerInset * 2
+            )
+            let thumb = Self.slideshowRibbonThumbSize(
+                containerWidth: width,
+                sectionInset: 0,
+                spacing: interitemSpacing
+            )
+            inset += Self.sideBySideGutter + thumb.height
+        }
+        return inset
     }
 
     /// Estimated 16:9 / 9:16 hero height before the first layout pass.
@@ -485,6 +510,9 @@ extension LibraryGridViewController {
             NSLayoutConstraint.activate(portraitChromeConstraints)
             if showsLiveHero {
                 view.bringSubviewToFront(liveHeader)
+                if docksLiveSlideshowRibbon {
+                    view.bringSubviewToFront(slideshowRibbonView)
+                }
             }
         }
         updateLiveHeroBackdrop()

@@ -10,8 +10,8 @@ import UIKit
 /// Top header for the home screen.
 ///
 /// Home: page dropdown · + New Show.
-/// Show mode trailing: Lock + Blackout (when a display, EclipseTV, or Practice
-/// Mode is on), Settings, and "+".
+/// Show mode: back (left of dropdown) · page dropdown · Lock + Blackout (when a
+/// display, EclipseTV, or Practice Mode is on), Settings, and "+".
 /// iCloud Sync status surfaces via `EclipseSyncStatusBanner`, not the header.
 final class HomeHeaderBar: UIView {
 
@@ -24,6 +24,7 @@ final class HomeHeaderBar: UIView {
 
     // MARK: - Subviews
 
+    private let backButton = UIButton(type: .system)
     private let menuPill = UIView()
     private let libraryButton = UIButton(type: .system)
     private let trailingStack = UIStackView()
@@ -37,6 +38,8 @@ final class HomeHeaderBar: UIView {
 
     /// Invoked when the Settings control is tapped.
     var onOpenSettings: (() -> Void)?
+    /// Invoked when Show-mode back returns to Home.
+    var onGoBack: (() -> Void)?
     /// Invoked when the live-output Lock control is tapped.
     var onToggleLiveLock: (() -> Void)?
     /// Invoked when the Blackout control is tapped.
@@ -58,6 +61,8 @@ final class HomeHeaderBar: UIView {
     private var previewsWhenDisconnected = false
     private var isArranging = false
     private var isSelecting = false
+    private var menuPillLeadingToBack: NSLayoutConstraint?
+    private var menuPillLeadingToSafe: NSLayoutConstraint?
 
     // MARK: - Init
 
@@ -75,6 +80,18 @@ final class HomeHeaderBar: UIView {
     // MARK: - Setup
 
     private func setupViews() {
+        let symbol = UIImage.SymbolConfiguration(pointSize: 17, weight: .semibold)
+        backButton.configuration = Self.barIconConfig(
+            systemName: "chevron.left",
+            symbolConfig: symbol
+        )
+        backButton.accessibilityLabel = "Back"
+        backButton.accessibilityHint = "Returns to Home"
+        backButton.isHidden = true
+        backButton.addTarget(self, action: #selector(backTapped), for: .touchUpInside)
+        backButton.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(backButton)
+
         menuPill.backgroundColor = .clear
         menuPill.layer.cornerRadius = 18
         menuPill.layer.cornerCurve = .continuous
@@ -204,8 +221,23 @@ final class HomeHeaderBar: UIView {
         }
         addSubview(trailingStack)
 
+        let leadingSafe = menuPill.leadingAnchor.constraint(
+            equalTo: leadingAnchor, constant: 16
+        )
+        let leadingBack = menuPill.leadingAnchor.constraint(
+            equalTo: backButton.trailingAnchor, constant: 4
+        )
+        leadingBack.isActive = false
+        menuPillLeadingToSafe = leadingSafe
+        menuPillLeadingToBack = leadingBack
+
         NSLayoutConstraint.activate([
-            menuPill.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
+            backButton.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
+            backButton.centerYAnchor.constraint(equalTo: centerYAnchor),
+            backButton.widthAnchor.constraint(equalToConstant: 36),
+            backButton.heightAnchor.constraint(equalToConstant: 36),
+
+            leadingSafe,
             menuPill.centerYAnchor.constraint(equalTo: centerYAnchor),
             menuPill.heightAnchor.constraint(equalToConstant: 36),
 
@@ -234,11 +266,12 @@ final class HomeHeaderBar: UIView {
             )
         ])
         for button in [
-            lockButton, blackButton, settingsButton,
+            backButton, lockButton, blackButton, settingsButton,
             addButton, newShowButton
         ] {
             button.setContentCompressionResistancePriority(.required, for: .horizontal)
         }
+        backButton.setContentHuggingPriority(.required, for: .horizontal)
         lockButton.setContentHuggingPriority(.required, for: .horizontal)
         blackButton.setContentHuggingPriority(.required, for: .horizontal)
     }
@@ -281,6 +314,10 @@ final class HomeHeaderBar: UIView {
 
     // MARK: - Actions
 
+    @objc private func backTapped() {
+        onGoBack?()
+    }
+
     @objc private func lockTapped() {
         onToggleLiveLock?()
     }
@@ -304,8 +341,9 @@ final class HomeHeaderBar: UIView {
         guard showsShowChrome != showMode else { return }
         showsShowChrome = showMode
         applyTrailingChrome()
+        applyBackButtonChrome()
         libraryButton.accessibilityHint = showMode
-            ? "Home, Open Show, New Show, Library, Music, and Recent Shows"
+            ? "Open Show, New Show, Library, Music, and Recent Shows"
             : "Open Show, New Show, Library, Music, Settings, and Recent Shows"
     }
 
@@ -366,6 +404,7 @@ final class HomeHeaderBar: UIView {
     private func applyEditingChrome() {
         let editing = isArranging || isSelecting
         applyTrailingChrome()
+        applyBackButtonChrome()
         libraryButton.isEnabled = !editing
         menuPill.alpha = editing ? 0.45 : 1
         doneButton.accessibilityLabel = isSelecting
@@ -374,6 +413,15 @@ final class HomeHeaderBar: UIView {
         doneButton.accessibilityHint = isSelecting
             ? "Leaves select mode"
             : "Saves the new order"
+    }
+
+    /// Show mode: chevron left of the dropdown. Hidden on Home and while editing.
+    private func applyBackButtonChrome() {
+        let show = showsShowChrome && !isArranging && !isSelecting
+        backButton.isHidden = !show
+        backButton.isEnabled = show
+        menuPillLeadingToSafe?.isActive = !show
+        menuPillLeadingToBack?.isActive = show
     }
 
     private func applyTrailingChrome() {

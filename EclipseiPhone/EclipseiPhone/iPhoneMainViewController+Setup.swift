@@ -114,6 +114,9 @@ extension iPhoneMainViewController {
         headerBar.onOpenSettings = { [weak self] in
             self?.presentSettings()
         }
+        headerBar.onGoBack = { [weak self] in
+            self?.libraryViewController.closeOpenShow()
+        }
         headerBar.onToggleLiveLock = { [weak self] in
             self?.libraryViewController.toggleLiveOutputLock()
         }

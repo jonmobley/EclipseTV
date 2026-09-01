@@ -140,6 +140,11 @@ final class WarmWebSessionPool {
         return session.attachPreview(to: host)
     }
 
+    /// Re-scales an attached hero preview when the host bounds change.
+    func layoutPreview(pageId: UUID, in host: UIView) {
+        sessions[pageId]?.layoutPreview(in: host)
+    }
+
     /// Parks a preview that was showing in the LiveHeader.
     func parkPreview(pageId: UUID) {
         sessions[pageId]?.parkOffscreen()

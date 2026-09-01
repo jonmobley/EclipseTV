@@ -224,4 +224,17 @@ struct LiveOutputRoutingTests {
             )
         )
     }
+
+    @Test func livePollLiveBadgeOnlyWhenExternalDisplayConnected() {
+        #expect(
+            LiveOutputRouting.showsLivePollLiveBadge(
+                externalDisplayConnected: false
+            ) == false
+        )
+        #expect(
+            LiveOutputRouting.showsLivePollLiveBadge(
+                externalDisplayConnected: true
+            )
+        )
+    }
 }

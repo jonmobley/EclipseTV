@@ -217,32 +217,33 @@ struct HomeLayoutTests {
         ) == [.hero, .shows])
     }
 
-    @Test func openShowUsesShowsGridAndAddsTheRibbonWhenLive() {
+    @Test func openShowUsesShowsGridWithoutInGridRibbon() {
         #expect(LibraryGridViewController.visibleHomeSections(
             isShowMode: true, showsSlideshowRibbon: false
         ) == [.shows])
 
+        // Ribbon chrome docks under the hero; the scrolling Show grid stays [.shows].
         #expect(LibraryGridViewController.visibleHomeSections(
             isShowMode: true, showsSlideshowRibbon: true
         ) == [.slideshowRibbon, .shows])
     }
 
-    /// Phone landscape docks the live ribbon under the leading preview, so the
-    /// Show grid is just `.shows` and can scroll without a nested strip.
-    @Test func phoneLandscapeOmitsTheInGridRibbon() {
+    /// Live ribbon docks under the hero on both axes, so the Show grid never
+    /// owns an in-grid strip.
+    @Test func liveRibbonNeverUsesTheInGridSection() {
         #expect(LibraryGridViewController.showsInGridSlideshowRibbon(
             liveRibbon: true, sideBySideChrome: true
         ) == false)
         #expect(LibraryGridViewController.showsInGridSlideshowRibbon(
             liveRibbon: true, sideBySideChrome: false
-        ) == true)
+        ) == false)
         #expect(LibraryGridViewController.showsInGridSlideshowRibbon(
             liveRibbon: false, sideBySideChrome: false
         ) == false)
         #expect(LibraryGridViewController.visibleHomeSections(
             isShowMode: true,
             showsSlideshowRibbon: LibraryGridViewController.showsInGridSlideshowRibbon(
-                liveRibbon: true, sideBySideChrome: true
+                liveRibbon: true, sideBySideChrome: false
             )
         ) == [.shows])
     }

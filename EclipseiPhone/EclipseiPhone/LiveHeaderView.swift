@@ -70,6 +70,10 @@ final class LiveHeaderView: UIView {
     var onSeek: ((Double) -> Void)?
     /// Fullscreen Preview for phone-local library media.
     var onRequestFullscreen: (() -> Void)?
+    /// Opens the Live Poll host CONTROLS sheet from the expanded hero.
+    var onRequestHostController: (() -> Void)?
+    /// Opens the Camera live controller from the expanded hero.
+    var onRequestCameraController: (() -> Void)?
     /// Swipe on the hero while a Slideshow is live: `+1` next, `-1` previous.
     var onSlideshowSwipe: ((Int) -> Void)?
     /// Toggles `showRibbonWhenLive` for the active Slideshow from the hero.
@@ -85,6 +89,20 @@ final class LiveHeaderView: UIView {
     var allowsFullscreenTap = false {
         didSet {
             guard allowsFullscreenTap != oldValue else { return }
+            applyInteractionForPresentation()
+        }
+    }
+    /// When true, tapping the expanded Live Poll hero opens host CONTROLS.
+    var allowsHostControllerTap = false {
+        didSet {
+            guard allowsHostControllerTap != oldValue else { return }
+            applyInteractionForPresentation()
+        }
+    }
+    /// When true, tapping the expanded Camera hero opens the camera controller.
+    var allowsCameraControllerTap = false {
+        didSet {
+            guard allowsCameraControllerTap != oldValue else { return }
             applyInteractionForPresentation()
         }
     }
@@ -223,6 +241,7 @@ final class LiveHeaderView: UIView {
         gradientLayer.frame = bounds
         applyBadgeCounterScale()
         layoutLibraryVideoPreviewIfNeeded()
+        layoutWebPreviewIfNeeded()
         // Keep the float-mode shadow path matched to the current bounds.
         if layer.shadowOpacity > 0, bounds.width > 1, bounds.height > 1 {
             layer.shadowPath = UIBezierPath(
@@ -323,13 +342,16 @@ final class LiveHeaderView: UIView {
     }
 
     /// Live overlay (website / camera / black) — never shows leftover media art.
+    /// - Parameter showsLiveBadge: When false (phone-only Live Poll / Practice),
+    ///   hide the red LIVE chip.
     func configureOverlay(
         title: String,
         systemImage: String?,
         fillColor: UIColor,
         thumbnail: UIImage? = nil,
         keepWebPreview: Bool = false,
-        keepScreensaverPreview: Bool = false
+        keepScreensaverPreview: Bool = false,
+        showsLiveBadge: Bool = true
     ) {
         if !keepWebPreview {
             clearWebPreview(parking: true)
@@ -339,7 +361,7 @@ final class LiveHeaderView: UIView {
         }
         clearLibraryVideoPreview()
         let thumbToken = thumbnail.map { "\(ObjectIdentifier($0))" } ?? "nil"
-        let key = "overlay:\(title):\(systemImage ?? ""):\(thumbToken):web\(keepWebPreview):ss\(keepScreensaverPreview)"
+        let key = "overlay:\(title):\(systemImage ?? ""):\(thumbToken):web\(keepWebPreview):ss\(keepScreensaverPreview):live\(showsLiveBadge)"
         applyContent(key: key) {
             self.backgroundColor = fillColor
             // Background / website / camera art always fills the hero.
@@ -356,8 +378,10 @@ final class LiveHeaderView: UIView {
 
             self.wantsPlaybackControls = false
             self.allowsFullscreenTap = false
+            self.allowsHostControllerTap = false
+            self.allowsCameraControllerTap = false
             self.gradientLayer.isHidden = true
-            self.liveBadge.isHidden = false
+            self.liveBadge.isHidden = !showsLiveBadge
             self.subtitleLabel.isHidden = true
             self.controls.isHidden = true
 
@@ -460,19 +484,32 @@ final class LiveHeaderView: UIView {
     /// Compact mini: tap to return. Expanded: transport / slideshow / still Preview.
     /// The slide-ribbon button must stay tappable even when the ribbon is hidden.
     /// Practice / Start on the Live Poll gate must stay tappable too.
+    /// Live Poll host CONTROLS and Camera open from an expanded hero tap.
     func applyInteractionForPresentation() {
         isUserInteractionEnabled =
             isCompactPresentation
             || wantsPlaybackControls
             || allowsSlideshowBrowse
             || allowsFullscreenTap
+            || allowsHostControllerTap
+            || allowsCameraControllerTap
             || slideshowRibbonButton != nil
             || isShowingLivePollGate
     }
 
     /// Expanded phone-live still: open fullscreen Preview.
+    /// Live Poll room: open host CONTROLS. Camera: open the camera controller.
     @objc func handleFullscreenContentTap() {
-        guard allowsFullscreenTap, !isCompactPresentation else { return }
+        guard !isCompactPresentation else { return }
+        if allowsHostControllerTap {
+            onRequestHostController?()
+            return
+        }
+        if allowsCameraControllerTap {
+            onRequestCameraController?()
+            return
+        }
+        guard allowsFullscreenTap else { return }
         onRequestFullscreen?()
     }
 

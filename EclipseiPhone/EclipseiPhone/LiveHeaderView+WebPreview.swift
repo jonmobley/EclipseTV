@@ -30,6 +30,17 @@ extension LiveHeaderView {
         bringWebPreviewChromeToFront()
     }
 
+    /// Re-applies AirPlay-matching scale when the hero size changes.
+    func layoutWebPreviewIfNeeded() {
+        guard let pageId = webPreviewPageId,
+              let host = webPreviewHost,
+              !host.isHidden,
+              host.bounds.width > 1,
+              host.bounds.height > 1
+        else { return }
+        WarmWebSessionPool.shared.layoutPreview(pageId: pageId, in: host)
+    }
+
     /// Removes any in-hero web preview.
     /// - Parameter parking: When true, returns the web view to the off-screen warm host.
     func clearWebPreview(parking: Bool) {

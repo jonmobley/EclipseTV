@@ -22,6 +22,18 @@ enum QuestPollConfig {
         uuidString: "E0E0E0E0-0000-4000-8000-00000000C0DE"
     )!
 
+    /// Audience join page bound to a room code (`/?code=`).
+    static func joinURL(code: String) -> URL {
+        let trimmed = code.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty,
+              var components = URLComponents(
+                url: origin, resolvingAgainstBaseURL: false
+              )
+        else { return origin }
+        components.queryItems = [URLQueryItem(name: "code", value: trimmed)]
+        return components.url ?? origin
+    }
+
     /// Projector URL bound to a join code when the web app honors `?code=`.
     static func presentURL(code: String) -> URL {
         let trimmed = code.trimmingCharacters(in: .whitespacesAndNewlines)

@@ -107,6 +107,9 @@ final class WarmWebSession: NSObject {
     }
 
     /// Moves the warm web view into a visible hero/preview host (no interaction).
+    ///
+    /// Uses the same logical viewport + scale as AirPlay / the phone web stage so
+    /// desktop pages (including Live Poll) fill the host instead of letterboxing.
     /// - Parameter host: LiveHeader (or similar) content container.
     /// - Returns: Whether the preview was attached.
     @discardableResult
@@ -116,18 +119,25 @@ final class WarmWebSession: NSObject {
         web.navigationDelegate = self
         web.uiDelegate = nil
         web.scrollView.delegate = nil
-        web.translatesAutoresizingMaskIntoConstraints = false
+        // Frame + transform layout (not Auto Layout) — matches AirPlay scale-up.
+        web.translatesAutoresizingMaskIntoConstraints = true
+        web.autoresizingMask = []
         if web.superview !== host {
             web.removeFromSuperview()
             host.addSubview(web)
-            NSLayoutConstraint.activate([
-                web.topAnchor.constraint(equalTo: host.topAnchor),
-                web.bottomAnchor.constraint(equalTo: host.bottomAnchor),
-                web.leadingAnchor.constraint(equalTo: host.leadingAnchor),
-                web.trailingAnchor.constraint(equalTo: host.trailingAnchor)
-            ])
         }
+        layoutPreview(in: host)
         return true
+    }
+
+    /// Re-applies logical viewport scaling when the hero host changes size.
+    func layoutPreview(in host: UIView) {
+        guard !isAdopted, let web = webView, web.superview === host else { return }
+        PresentationViewController.applyWebOutputLayout(
+            to: web,
+            in: host,
+            rotationDegrees: 0
+        )
     }
 
     /// Returns the web view to the off-screen park host.

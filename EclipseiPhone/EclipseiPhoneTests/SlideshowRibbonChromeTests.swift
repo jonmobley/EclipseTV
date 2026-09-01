@@ -12,7 +12,7 @@ struct SlideshowRibbonChromeTests {
 
     @Test func firstRibbonChromeRebuildsShowLayout() {
         let next = LibraryGridViewController.SlideshowRibbonChrome(
-            inGrid: true, docked: false
+            inGrid: false, docked: true
         )
         #expect(
             LibraryGridViewController.SlideshowRibbonChrome.needsLayoutRebuild(
@@ -23,7 +23,7 @@ struct SlideshowRibbonChromeTests {
 
     @Test func slideAdvanceDoesNotRebuildShowLayout() {
         let chrome = LibraryGridViewController.SlideshowRibbonChrome(
-            inGrid: true, docked: false
+            inGrid: false, docked: true
         )
         #expect(
             LibraryGridViewController.SlideshowRibbonChrome.needsLayoutRebuild(
@@ -37,7 +37,7 @@ struct SlideshowRibbonChromeTests {
             inGrid: false, docked: false
         )
         let next = LibraryGridViewController.SlideshowRibbonChrome(
-            inGrid: true, docked: false
+            inGrid: false, docked: true
         )
         #expect(
             LibraryGridViewController.SlideshowRibbonChrome.needsLayoutRebuild(
@@ -46,12 +46,12 @@ struct SlideshowRibbonChromeTests {
         )
     }
 
-    @Test func dockingTheRibbonRebuildsShowLayout() {
+    @Test func hidingTheRibbonRebuildsShowLayout() {
         let previous = LibraryGridViewController.SlideshowRibbonChrome(
-            inGrid: true, docked: false
+            inGrid: false, docked: true
         )
         let next = LibraryGridViewController.SlideshowRibbonChrome(
-            inGrid: false, docked: true
+            inGrid: false, docked: false
         )
         #expect(
             LibraryGridViewController.SlideshowRibbonChrome.needsLayoutRebuild(
