@@ -25,13 +25,17 @@ final class QuestPollSessionStore {
     private(set) var isControlInFlight = false
     /// Membership whose Practice preview is in the hero (no room).
     private(set) var practiceMembershipId: UUID?
+    /// Last store mutation that posted `didChangeNotification`.
+    private(set) var lastChange: QuestPollSessionChange = .session
 
     /// Replaces the active room after create or control.
+    @discardableResult
     func adopt(
         _ session: QuestPollSession,
         questionCount: Int? = nil,
         membershipId: UUID? = nil
-    ) {
+    ) -> QuestPollSessionChange {
+        let before = snapshot
         self.session = session
         if let membershipId {
             self.membershipId = membershipId
@@ -42,23 +46,27 @@ final class QuestPollSessionStore {
         } else if let resolved = session.resolvedQuestionCount {
             self.questionCount = max(resolved, 1)
         }
-        notifyChanged()
+        return commitChange(from: before)
     }
 
     /// Marks a card as practicing in the hero without a QuestPoll room.
-    func setPracticeMembershipId(_ id: UUID?) {
+    @discardableResult
+    func setPracticeMembershipId(_ id: UUID?) -> QuestPollSessionChange {
+        let before = snapshot
         practiceMembershipId = id
-        notifyChanged()
+        return commitChange(from: before)
     }
 
     /// Clears the room when the operator unlinks, ends, or removes the card.
-    func clear() {
+    @discardableResult
+    func clear() -> QuestPollSessionChange {
+        let before = snapshot
         session = nil
         membershipId = nil
         practiceMembershipId = nil
         questionCount = 1
         isControlInFlight = false
-        notifyChanged()
+        return commitChange(from: before)
     }
 
     /// Marks a host-control round-trip so ribbon taps do not stack.
@@ -91,7 +99,23 @@ final class QuestPollSessionStore {
         return session.code
     }
 
-    private func notifyChanged() {
+    /// Current session fields used to classify UI updates.
+    var snapshot: QuestPollSessionSnapshot {
+        QuestPollSessionSnapshot(
+            session: session,
+            membershipId: membershipId,
+            questionCount: questionCount,
+            practiceMembershipId: practiceMembershipId
+        )
+    }
+
+    private func commitChange(
+        from before: QuestPollSessionSnapshot
+    ) -> QuestPollSessionChange {
+        let change = QuestPollSessionChange.classify(from: before, to: snapshot)
+        guard change != .none else { return .none }
+        lastChange = change
         NotificationCenter.default.post(name: Self.didChangeNotification, object: nil)
+        return change
     }
 }

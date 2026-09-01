@@ -143,6 +143,12 @@ extension LibraryGridViewController {
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 
+    /// Cue-only Live Poll refresh: thumbs in place, then center the active cue once.
+    func reloadLivePollRibbonThumbsForCueChange() {
+        reloadLiveSlideshowRibbonThumbs(rebuiltShowGrid: false)
+        scrollLiveSlideshowRibbonToCurrentSlide()
+    }
+
     /// Centers the current slide or poll cue in the ribbon without moving the Show grid.
     func scrollLiveSlideshowRibbonToCurrentSlide() {
         guard showsLiveSlideshowRibbon else { return }
@@ -236,7 +242,7 @@ extension LibraryGridViewController {
     /// Refreshes ribbon thumbs after a slide change without rebuilding the Show grid.
     private func reloadLiveSlideshowRibbonThumbs(rebuiltShowGrid: Bool) {
         if docksLiveSlideshowRibbon {
-            slideshowRibbonView.reloadData()
+            reloadDockedRibbonThumbsInPlace()
             return
         }
         guard showsInGridSlideshowRibbon, !rebuiltShowGrid else { return }
@@ -282,6 +288,20 @@ extension LibraryGridViewController {
             view = current.superview
         }
         return nil
+    }
+
+    /// Reloads visible docked thumbs without resetting the strip's offset.
+    private func reloadDockedRibbonThumbsInPlace() {
+        let expected = liveSlideshowRibbonItemCount()
+        let actual = slideshowRibbonView.numberOfItems(inSection: 0)
+        if expected != actual {
+            slideshowRibbonView.reloadData()
+            return
+        }
+        let paths = slideshowRibbonView.indexPathsForVisibleItems
+        if !paths.isEmpty {
+            slideshowRibbonView.reloadItems(at: paths)
+        }
     }
 
     private func applyDockedRibbonItemSize(_ thumb: CGSize) {

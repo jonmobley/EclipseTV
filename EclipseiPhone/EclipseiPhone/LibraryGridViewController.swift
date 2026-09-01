@@ -517,16 +517,7 @@ final class LibraryGridViewController: UIViewController {
             self?.scrollLiveSlideshowRibbonToCurrentSlide()
         }
         observe(QuestPollSessionStore.didChangeNotification) { [weak self] _ in
-            guard let self else { return }
-            self.reloadGridIfSafe()
-            self.refreshSlideshowRibbonPresentation()
-            self.refreshLiveHeader()
-            self.scrollLiveSlideshowRibbonToCurrentSlide()
-            if self.showsLivePollRibbon {
-                self.startQuestPollStatusPolling()
-            } else {
-                self.stopQuestPollStatusPolling()
-            }
+            self?.handleQuestPollSessionChange()
         }
         observe(VideoResumeStore.didChangeNotification) { [weak self] _ in
             self?.reloadGridIfSafe()

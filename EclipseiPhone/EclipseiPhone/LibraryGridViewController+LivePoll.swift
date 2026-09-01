@@ -344,6 +344,45 @@ extension LibraryGridViewController {
         return (QuestPollRibbon.items(questionCount: count), 0)
     }
 
+    // MARK: - Session change UI
+
+    /// Applies a QuestPoll store update without reloading the ribbon on poll ticks.
+    ///
+    /// Identical 2s status polls post nothing. Vote/join-code-only updates refresh
+    /// the Live Poll tile. Cue or room changes refresh thumbs / scroll once.
+    func handleQuestPollSessionChange() {
+        switch QuestPollSessionStore.shared.lastChange {
+        case .none:
+            return
+        case .tile:
+            reloadLivePollTilesInPlace()
+        case .cue:
+            reloadLivePollTilesInPlace()
+            reloadLivePollRibbonThumbsForCueChange()
+        case .session:
+            refreshLivePollPresentation()
+            if showsLivePollRibbon {
+                startQuestPollStatusPolling()
+            } else {
+                stopQuestPollStatusPolling()
+            }
+        }
+    }
+
+    /// Reloads visible Live Poll cards without resetting ribbon offset.
+    func reloadLivePollTilesInPlace() {
+        guard isShowMode, let section = sectionIndex(for: .shows) else { return }
+        let membershipId = QuestPollSessionStore.shared.membershipId
+        let paths = openShowGridItems.enumerated().compactMap { index, item -> IndexPath? in
+            guard case .livePoll(let poll) = item else { return nil }
+            if let membershipId, poll.id != membershipId { return nil }
+            let path = IndexPath(item: index, section: section)
+            return collectionView.indexPathsForVisibleItems.contains(path) ? path : nil
+        }
+        guard !paths.isEmpty else { return }
+        collectionView.reloadItems(at: paths)
+    }
+
     // MARK: - Destination
 
     /// Returns false and alerts when only EclipseTV (or nothing) is available.
