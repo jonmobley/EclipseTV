@@ -252,7 +252,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         ) || (
             mgr.isWebLive
                 && mgr.liveWebPageId.map { show.itemIds.contains($0.uuidString) } == true
-        )
+        ) || isLivePollLive(inShow: show.id)
         let live = isLiveShow && !isBlackSelected && !isLogoSelected
             && !isScreensaverSelected
         cell.configureShow(
@@ -343,7 +343,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             ) || (
                 mgr.isWebLive
                     && mgr.liveWebPageId.map { show.itemIds.contains($0.uuidString) } == true
-            )
+            ) || isLivePollLive(inShow: show.id)
             let live = isLiveShow && !isBlackSelected && !isLogoSelected
                 && !isScreensaverSelected
             cell.configureSpecial(

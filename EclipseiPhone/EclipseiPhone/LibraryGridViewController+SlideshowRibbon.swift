@@ -36,8 +36,11 @@ extension LibraryGridViewController {
         return show
     }
 
-    /// Slide count for the live ribbon section.
+    /// Slide or Live Poll count for the live ribbon section.
     func liveSlideshowRibbonItemCount() -> Int {
+        if showsLivePollRibbon {
+            return livePollRibbonItemCount()
+        }
         guard showsLiveSlideshowRibbon else { return 0 }
         return SlideshowPlaybackController.shared.activeSlideIds.count
     }
@@ -47,6 +50,10 @@ extension LibraryGridViewController {
         _ cell: LibraryThumbnailCell,
         at indexPath: IndexPath
     ) {
+        if showsLivePollRibbon {
+            configureLivePollRibbonCell(cell, at: indexPath)
+            return
+        }
         let playback = SlideshowPlaybackController.shared
         let ids = playback.activeSlideIds
         guard ids.indices.contains(indexPath.item) else { return }
@@ -67,6 +74,10 @@ extension LibraryGridViewController {
 
     /// Jumps the live slideshow to the tapped ribbon slide.
     func handleLiveSlideshowRibbonTap(at indexPath: IndexPath) {
+        if showsLivePollRibbon {
+            handleLivePollRibbonTap(at: indexPath)
+            return
+        }
         SlideshowPlaybackController.shared.goToSlide(at: indexPath.item)
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
@@ -103,7 +114,13 @@ extension LibraryGridViewController {
     }
 
     /// Hero ribbon toggle + swipe browse while this Show’s slideshow is live.
+    /// Live Poll always shows its ribbon (no toggle).
     func syncLiveSlideshowRibbonChrome() {
+        if showsLivePollRibbon {
+            liveHeader.setSlideshowRibbonToggleVisible(false, isOn: false)
+            liveHeader.allowsSlideshowBrowse = false
+            return
+        }
         guard showsLiveHero, !isLiveFromOtherShow,
               let slideshow = activeLiveSlideshow() else {
             liveHeader.setSlideshowRibbonToggleVisible(false, isOn: false)
@@ -126,11 +143,18 @@ extension LibraryGridViewController {
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 
-    /// Centers the current slide in the ribbon without moving the Show grid.
+    /// Centers the current slide or poll cue in the ribbon without moving the Show grid.
     func scrollLiveSlideshowRibbonToCurrentSlide() {
         guard showsLiveSlideshowRibbon else { return }
-        let index = SlideshowPlaybackController.shared.currentSlideIndex
-        let count = SlideshowPlaybackController.shared.activeSlideIds.count
+        let index: Int
+        let count: Int
+        if showsLivePollRibbon {
+            index = livePollRibbonIndex
+            count = livePollRibbonItems.count
+        } else {
+            index = SlideshowPlaybackController.shared.currentSlideIndex
+            count = SlideshowPlaybackController.shared.activeSlideIds.count
+        }
         guard count > 0, index >= 0, index < count else { return }
         if docksLiveSlideshowRibbon {
             slideshowRibbonView.scrollToItem(

@@ -186,8 +186,8 @@ extension iPhoneMainViewController {
     /// System menu for the header "+" control.
     ///
     /// Library and History sit at the top; Image / Video / Website / Slideshow /
-    /// PDF follow under a divider. In a Show, imports add non-live cards; Website
-    /// opens the compose sheet (History is reachable from there).
+    /// Live Poll / PDF follow under a divider. In a Show, imports add non-live
+    /// cards; Website opens the compose sheet (History is reachable from there).
     func makeAddMenu() -> UIMenu {
         let albumId = libraryViewController.openShowId
         let library = UIAction(
@@ -240,6 +240,16 @@ extension iPhoneMainViewController {
         if albumId == nil {
             slideshow.attributes = .disabled
         }
+        let livePoll = UIAction(
+            title: "Live Poll",
+            image: UIImage(systemName: "chart.bar.fill")
+        ) { [weak self] _ in
+            guard let albumId else { return }
+            self?.libraryViewController.addLivePollCard(toShowId: albumId)
+        }
+        if albumId == nil {
+            livePoll.attributes = .disabled
+        }
         let pdf = UIAction(
             title: "PDF",
             image: UIImage(systemName: "doc.richtext")
@@ -250,7 +260,7 @@ extension iPhoneMainViewController {
         let imports = UIMenu(
             title: "",
             options: .displayInline,
-            children: [image, video, website, slideshow, pdf]
+            children: [image, video, website, slideshow, livePoll, pdf]
         )
         // In a Show, Website opens the compose sheet (History is on that sheet).
         // Home keeps History for manage / open.

@@ -21,6 +21,11 @@ extension LibraryGridViewController {
         if mgr.isCameraTileLive || isBlackSelected || isLogoSelected || isScreensaverSelected {
             return nil
         }
+        if mgr.isQuestPollLive,
+           let membershipId = QuestPollSessionStore.shared.membershipId,
+           let poll = LivePollStore.shared.poll(id: membershipId) {
+            return poll.showId
+        }
         if mgr.isWebLive, let pageId = mgr.liveWebPageId {
             return showIdOwning(memberId: pageId.uuidString)
         }
@@ -130,6 +135,16 @@ extension LibraryGridViewController {
 
     private func configureForeignLiveContent() {
         let mgr = ExternalDisplayManager.shared
+        if mgr.isQuestPollLive {
+            let title = QuestPollSessionStore.shared.session?.pollTitle ?? "Live Poll"
+            foreignLiveHeader.configureOverlay(
+                title: title,
+                systemImage: "chart.bar.fill",
+                fillColor: UIColor(white: 0.12, alpha: 1)
+            )
+            pinForeignLiveChrome()
+            return
+        }
         if mgr.isWebLive {
             let pageId = mgr.liveWebPageId
             let page = pageId.flatMap { WebPageStore.shared.page(id: $0) }

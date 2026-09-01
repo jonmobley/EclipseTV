@@ -58,7 +58,7 @@ enum ShowPreviewGallery {
                 ))
             case .media(let dto):
                 return stillItem(dto, localStillURL: localStillURL)
-            case .slideshow, .camera, .website, .pdf, .add:
+            case .slideshow, .livePoll, .camera, .website, .pdf, .add:
                 return nil
             }
         }

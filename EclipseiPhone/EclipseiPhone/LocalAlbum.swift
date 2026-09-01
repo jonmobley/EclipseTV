@@ -22,8 +22,8 @@ struct LocalAlbum: Codable, Equatable, Identifiable, Hashable {
     let createdAt: Date
     /// Last time the user opened this Show; drives Home “Last opened …” copy.
     var lastOpenedAt: Date?
-    /// Ordered Show grid: tool tokens, member ids, and slideshow tokens.
-    /// `nil` = default tools, then members, then slideshows.
+    /// Ordered Show grid: tool tokens, member ids, slideshow tokens, and
+    /// Live Poll tokens. `nil` = default tools, then members, then those tiles.
     var surfaceIds: [String]?
     /// Practice Mode: live preview plus Lock / Blackout with no AirPlay, HDMI,
     /// or EclipseTV. Default is off; taps then open on-device Preview instead.
@@ -58,18 +58,22 @@ struct LocalAlbum: Codable, Equatable, Identifiable, Hashable {
         return itemIds.first
     }
 
-    /// Grid order for this Show (tools + members). Slideshow tokens already on
-    /// `surfaceIds` are kept; missing slideshows are not invented here.
+    /// Grid order for this Show (tools + members). Slideshow / Live Poll tokens
+    /// already on `surfaceIds` are kept; missing ones are not invented here.
     var resolvedSurfaceIds: [String] {
-        resolvedSurfaceIds(slideshowIds: nil)
+        resolvedSurfaceIds(slideshowIds: nil, livePollIds: nil)
     }
 
-    /// Grid order including `slideshowIds` (appended when not already on the surface).
-    func resolvedSurfaceIds(slideshowIds: [String]?) -> [String] {
+    /// Grid order including `slideshowIds` / `livePollIds` (appended when missing).
+    func resolvedSurfaceIds(
+        slideshowIds: [String]?,
+        livePollIds: [String]? = nil
+    ) -> [String] {
         Self.sanitizedSurface(
             surfaceIds ?? (ShowToolToken.all + itemIds),
             itemIds: itemIds,
-            slideshowIds: slideshowIds
+            slideshowIds: slideshowIds,
+            livePollIds: livePollIds
         )
     }
 
@@ -79,23 +83,28 @@ struct LocalAlbum: Codable, Equatable, Identifiable, Hashable {
         return ShowToolToken.all.filter { !present.contains($0) }
     }
 
-    /// Drops unknown tools and stale members; appends missing members / slideshows.
+    /// Drops unknown tools and stale members; appends missing members / tiles.
     ///
-    /// When `slideshowIds` is nil, slideshow tokens already on `surface` are kept
-    /// but none are appended. When non-nil, only those tokens are kept, then
-    /// any missing ones are appended (new slideshows land after tools/media).
+    /// When slideshow / livePoll id lists are nil, those tokens already on
+    /// `surface` are kept but none are appended. When non-nil, only those
+    /// tokens are kept, then any missing ones are appended.
     static func sanitizedSurface(
         _ surface: [String],
         itemIds: [String],
-        slideshowIds: [String]? = nil
+        slideshowIds: [String]? = nil,
+        livePollIds: [String]? = nil
     ) -> [String] {
         let memberSet = Set(itemIds)
         let slideshowSet = slideshowIds.map(Set.init)
+        let livePollSet = livePollIds.map(Set.init)
         var seen = Set<String>()
         var result: [String] = []
         for id in surface {
             guard shouldKeepSurfaceId(
-                id, members: memberSet, slideshows: slideshowSet
+                id,
+                members: memberSet,
+                slideshows: slideshowSet,
+                livePolls: livePollSet
             ), seen.insert(id).inserted else { continue }
             result.append(id)
         }
@@ -107,19 +116,32 @@ struct LocalAlbum: Codable, Equatable, Identifiable, Hashable {
                 result.append(id)
             }
         }
+        if let livePollIds {
+            for id in livePollIds where seen.insert(id).inserted {
+                result.append(id)
+            }
+        }
         return result
     }
 
     private static func shouldKeepSurfaceId(
         _ id: String,
         members: Set<String>,
-        slideshows: Set<String>?
+        slideshows: Set<String>?,
+        livePolls: Set<String>?
     ) -> Bool {
         if ShowToolToken.isTool(id) { return true }
+        if id == ShowLivePollToken.legacyTool { return true }
         if members.contains(id) { return true }
-        guard ShowSlideshowToken.isSlideshow(id) else { return false }
-        if let slideshows { return slideshows.contains(id) }
-        return true
+        if ShowSlideshowToken.isSlideshow(id) {
+            if let slideshows { return slideshows.contains(id) }
+            return true
+        }
+        if ShowLivePollToken.isLivePoll(id) {
+            if let livePolls { return livePolls.contains(id) }
+            return true
+        }
+        return false
     }
 
     // MARK: - Codable

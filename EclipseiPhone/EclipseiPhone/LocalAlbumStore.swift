@@ -144,6 +144,7 @@ final class LocalAlbumStore {
         // This has to live here rather than at the confirm-delete alerts: a Show deleted
         // on another device arrives through the sync layer, which never sees that UI.
         SlideshowStore.shared.deleteAll(forShowId: id)
+        LivePollStore.shared.deleteAll(forShowId: id)
         for itemId in removed?.itemIds ?? [] {
             if let pageId = UUID(uuidString: itemId) {
                 WebPageStore.shared.purgeRetainedIfUnused(id: pageId)
@@ -245,14 +246,17 @@ final class LocalAlbumStore {
         scheduleShowSaveIfNeeded(albumId)
     }
 
-    /// Replaces the Show grid order (tools + members + slideshows).
-    /// Syncs `itemIds` to member order; slideshow tokens stay on the surface only.
+    /// Replaces the Show grid order (tools + members + slideshows + Live Polls).
+    /// Syncs `itemIds` to member order; slideshow and Live Poll tokens stay on
+    /// the surface only.
     func reorderSurface(_ surfaceIds: [String], albumId: UUID) {
         guard let index = albums.firstIndex(where: { $0.id == albumId }) else { return }
         let sanitized = LocalAlbum.sanitizedSurface(surfaceIds, itemIds: albums[index].itemIds)
         albums[index].surfaceIds = sanitized
         let members = sanitized.filter {
-            !ShowToolToken.isTool($0) && !ShowSlideshowToken.isSlideshow($0)
+            !ShowToolToken.isTool($0)
+                && !ShowSlideshowToken.isSlideshow($0)
+                && !ShowLivePollToken.isLivePoll($0)
         }
         // Preserve membership set; order follows surface for members that appear.
         let memberSet = Set(albums[index].itemIds)
@@ -280,6 +284,47 @@ final class LocalAlbumStore {
         scheduleShowSaveIfNeeded(albumId)
     }
 
+    /// Appends a Live Poll card when this Show already has a customized surface.
+    func addLivePoll(_ livePollId: UUID, toAlbumId albumId: UUID) {
+        guard let index = albums.firstIndex(where: { $0.id == albumId }) else { return }
+        guard var surface = albums[index].surfaceIds else { return }
+        let token = ShowLivePollToken.token(for: livePollId)
+        guard !surface.contains(token) else { return }
+        surface.append(token)
+        albums[index].surfaceIds = LocalAlbum.sanitizedSurface(
+            surface, itemIds: albums[index].itemIds
+        )
+        persist(changedAlbumId: albumId)
+        scheduleShowSaveIfNeeded(albumId)
+    }
+
+    /// Drops a Live Poll card from this Show's surface.
+    func removeLivePoll(_ livePollId: UUID, fromAlbumId albumId: UUID) {
+        guard let index = albums.firstIndex(where: { $0.id == albumId }) else { return }
+        let token = ShowLivePollToken.token(for: livePollId)
+        guard var surface = albums[index].surfaceIds,
+              surface.contains(token) else { return }
+        surface.removeAll { $0 == token }
+        albums[index].surfaceIds = LocalAlbum.sanitizedSurface(
+            surface, itemIds: albums[index].itemIds
+        )
+        persist(changedAlbumId: albumId)
+        scheduleShowSaveIfNeeded(albumId)
+    }
+
+    /// Removes the retired singleton Live Poll tool (no pollId to recover).
+    func dropLegacyLivePollTool(albumId: UUID) {
+        guard let index = albums.firstIndex(where: { $0.id == albumId }) else { return }
+        guard var surface = albums[index].surfaceIds,
+              surface.contains(ShowLivePollToken.legacyTool) else { return }
+        surface.removeAll { $0 == ShowLivePollToken.legacyTool }
+        albums[index].surfaceIds = LocalAlbum.sanitizedSurface(
+            surface, itemIds: albums[index].itemIds
+        )
+        persist(changedAlbumId: albumId)
+        scheduleShowSaveIfNeeded(albumId)
+    }
+
     /// Drops a slideshow tile from this Show's surface.
     func removeSlideshow(_ slideshowId: UUID, fromAlbumId albumId: UUID) {
         guard let index = albums.firstIndex(where: { $0.id == albumId }) else { return }
@@ -297,10 +342,13 @@ final class LocalAlbumStore {
     /// Writes the default surface so later hide/show edits persist.
     private func materializeSurface(at index: Int) {
         guard albums[index].surfaceIds == nil else { return }
-        let slideshows = SlideshowStore.shared.slideshows(forShowId: albums[index].id)
+        let showId = albums[index].id
+        let slideshows = SlideshowStore.shared.slideshows(forShowId: showId)
             .map { ShowSlideshowToken.token(for: $0.id) }
+        let livePolls = LivePollStore.shared.polls(forShowId: showId)
+            .map { ShowLivePollToken.token(for: $0.id) }
         albums[index].surfaceIds =
-            ShowToolToken.all + albums[index].itemIds + slideshows
+            ShowToolToken.all + albums[index].itemIds + slideshows + livePolls
     }
 
     /// Shows or hides the disconnected live preview hero for `albumId`.

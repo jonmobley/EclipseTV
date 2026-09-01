@@ -172,4 +172,25 @@ struct LiveOutputRoutingTests {
             ) == false
         )
     }
+
+    @Test func webOverlayNeedsAirPlayOrPractice() {
+        #expect(
+            LiveOutputRouting.canPresentWebOverlay(
+                airPlayConnected: false,
+                practiceMode: false
+            ) == false
+        )
+        #expect(
+            LiveOutputRouting.canPresentWebOverlay(
+                airPlayConnected: true,
+                practiceMode: false
+            )
+        )
+        #expect(
+            LiveOutputRouting.canPresentWebOverlay(
+                airPlayConnected: false,
+                practiceMode: true
+            )
+        )
+    }
 }

@@ -7,10 +7,11 @@
 
 import Foundation
 
-/// One cell in an open Show's grid: tools, members, and slideshows in
-/// `LocalAlbum.resolvedSurfaceIds` order. Empty Shows append a trailing Add tile.
+/// One cell in an open Show's grid: tools, members, slideshows, and Live Poll
+/// cards in `LocalAlbum.resolvedSurfaceIds` order. Empty Shows append a trailing Add tile.
 enum ShowGridItem: Equatable {
     case slideshow(Slideshow)
+    case livePoll(ShowLivePoll)
     case screensaver
     case logo
     case camera
@@ -28,6 +29,7 @@ enum ShowGridItem: Equatable {
         case .media(let media): return media.id
         case .website(let page): return page.id.uuidString
         case .pdf(let doc): return doc.id.uuidString
+        case .livePoll(let item): return ShowLivePollToken.token(for: item.id)
         case .slideshow, .add: return nil
         }
     }

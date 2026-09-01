@@ -97,6 +97,9 @@ extension LibraryGridViewController {
             for id in ids {
                 if ShowToolToken.isTool(id) {
                     LocalAlbumStore.shared.hideTool(id, albumId: showId)
+                } else if let livePollId = ShowLivePollToken.livePollId(from: id) {
+                    self.endQuestPollIfRemovingMembership(livePollId)
+                    LivePollStore.shared.delete(id: livePollId)
                 } else {
                     LocalAlbumStore.shared.remove(itemId: id, fromAlbumId: showId)
                 }
@@ -184,6 +187,15 @@ extension LibraryGridViewController {
                 && !isBlackSelected
                 && !isLogoSelected
                 && !isScreensaverSelected
+        case .livePoll(let item):
+            if QuestPollSessionStore.shared.practiceMembershipId == item.id {
+                return true
+            }
+            return ExternalDisplayManager.shared.isQuestPollLive
+                && QuestPollSessionStore.shared.membershipId == item.id
+                && !isBlackSelected
+                && !isLogoSelected
+                && !isScreensaverSelected
         case .add:
             return false
         }
@@ -236,6 +248,14 @@ extension LibraryGridViewController {
         for id in ids {
             if ShowToolToken.isTool(id) {
                 LocalAlbumStore.shared.showTool(id, albumId: albumId)
+            } else if let livePollId = ShowLivePollToken.livePollId(from: id),
+                      let source = LivePollStore.shared.poll(id: livePollId) {
+                LivePollStore.shared.create(
+                    pollId: source.pollId,
+                    title: source.title,
+                    questionCount: source.questionCount,
+                    showId: albumId
+                )
             } else {
                 LocalAlbumStore.shared.add(itemId: id, toAlbumId: albumId)
             }

@@ -42,6 +42,9 @@ extension LibraryGridViewController {
                 return page.id.uuidString.caseInsensitiveCompare(id) == .orderedSame
             case .pdf(let doc):
                 return doc.id.uuidString.caseInsensitiveCompare(id) == .orderedSame
+            case .livePoll(let item):
+                return ShowLivePollToken.token(for: item.id)
+                    .caseInsensitiveCompare(id) == .orderedSame
             default:
                 return false
             }

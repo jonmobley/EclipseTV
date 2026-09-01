@@ -113,6 +113,18 @@ final class ExternalDisplayManager {
         return false
     }
 
+    /// URL of the live web overlay, if any.
+    var liveWebURL: URL? {
+        guard case .web(let url) = overlaySource else { return nil }
+        return url
+    }
+
+    /// Whether the QuestPoll projector page is on the external display.
+    var isQuestPollLive: Bool {
+        guard let liveWebURL else { return false }
+        return QuestPollConfig.isPresentURL(liveWebURL)
+    }
+
     /// Whether a PDF is the active presentation source (AirPlay path).
     var isPDFLive: Bool {
         if case .pdf = overlaySource { return true }

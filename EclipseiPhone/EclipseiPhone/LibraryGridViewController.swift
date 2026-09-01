@@ -112,6 +112,10 @@ final class LibraryGridViewController: UIViewController {
     var isSelecting = false
     /// Membership / tool ids checked while `isSelecting`.
     var selectedShowItemIds = Set<String>()
+    /// Cancels Live Poll status polling when the ribbon hides or the Show closes.
+    var questPollStatusPollTask: Task<Void, Never>?
+    /// Idle Live Poll card waiting for Practice / Start in the hero.
+    var livePollGateMembershipId: UUID?
     /// Working copy of the library order used while arranging and until the Apple TV
     /// confirms the saved order with a fresh manifest. `nil` means show `store.items`.
     var arrangeItems: [LibraryItemDTO]?
@@ -177,11 +181,20 @@ final class LibraryGridViewController: UIViewController {
         return SlideshowStore.shared.slideshows(forShowId: openShowId)
     }
 
-    /// Ordered Show-grid surface ids (tools, members, slideshows). Add is not included.
+    /// Live Poll cards belonging to the open Show.
+    var openShowLivePolls: [ShowLivePoll] {
+        guard let openShowId else { return [] }
+        return LivePollStore.shared.polls(forShowId: openShowId)
+    }
+
+    /// Ordered Show-grid surface ids (tools, members, slideshows, Live Polls).
+    /// Add is not included.
     var openShowSurfaceIds: [String] {
         guard let album = openShow else { return [] }
+        LivePollStore.shared.dropLegacyToolTokensIfNeeded()
         let slideshows = openShowSlideshows.map { ShowSlideshowToken.token(for: $0.id) }
-        return album.resolvedSurfaceIds(slideshowIds: slideshows)
+        let livePolls = openShowLivePolls.map { ShowLivePollToken.token(for: $0.id) }
+        return album.resolvedSurfaceIds(slideshowIds: slideshows, livePollIds: livePolls)
     }
 
     /// Show-grid rows in surface order. Empty Shows append a trailing Add tile
@@ -200,18 +213,20 @@ final class LibraryGridViewController: UIViewController {
         openShowSurfaceIds.count
     }
 
-    /// Empty Show (no media, websites, or slideshows) offers an Add tile
+    /// Empty Show (no media, websites, slideshows, or Live Polls) offers an Add tile
     /// (unless arranging or selecting).
     var showsShowAddTile: Bool {
         isShowMode
             && openShowMembershipIds.isEmpty
             && openShowSlideshows.isEmpty
+            && openShowLivePolls.isEmpty
             && !isArranging
             && !isSelecting
     }
 
-    /// Live slideshow ribbon is on for the open Show's active slideshow.
+    /// Live slideshow or Live Poll ribbon is on for the open Show.
     var showsLiveSlideshowRibbon: Bool {
+        if showsLivePollRibbon { return true }
         guard isShowMode,
               let id = SlideshowPlaybackController.shared.activeSlideshowId,
               let show = SlideshowStore.shared.slideshow(id: id),
@@ -410,6 +425,7 @@ final class LibraryGridViewController: UIViewController {
         observe(WarmWebSession.didRelinquishNotification) { [weak self] _ in
             self?.refreshLiveHeader()
         }
+        LivePollStore.shared.dropLegacyToolTokensIfNeeded()
         registerForTraitChanges(
             [UITraitVerticalSizeClass.self]
         ) { (self: Self, _: UITraitCollection) in
@@ -491,10 +507,26 @@ final class LibraryGridViewController: UIViewController {
             self?.reloadGridIfSafe()
             self?.updateEmptyState()
         }
+        observe(LivePollStore.didChangeNotification) { [weak self] _ in
+            self?.reloadGridIfSafe()
+            self?.updateEmptyState()
+        }
         observe(SlideshowPlaybackController.didChangeNotification) { [weak self] _ in
             self?.refreshSlideshowRibbonPresentation()
             self?.refreshLiveHeader()
             self?.scrollLiveSlideshowRibbonToCurrentSlide()
+        }
+        observe(QuestPollSessionStore.didChangeNotification) { [weak self] _ in
+            guard let self else { return }
+            self.reloadGridIfSafe()
+            self.refreshSlideshowRibbonPresentation()
+            self.refreshLiveHeader()
+            self.scrollLiveSlideshowRibbonToCurrentSlide()
+            if self.showsLivePollRibbon {
+                self.startQuestPollStatusPolling()
+            } else {
+                self.stopQuestPollStatusPolling()
+            }
         }
         observe(VideoResumeStore.didChangeNotification) { [weak self] _ in
             self?.reloadGridIfSafe()
@@ -753,6 +785,7 @@ final class LibraryGridViewController: UIViewController {
             liveHeader.clearWebPreview(parking: true)
             liveHeader.clearScreensaverPreview()
             liveHeader.clearLibraryVideoPreview()
+            liveHeader.hideLivePollGate()
             liveHeader.setSlideshowRibbonToggleVisible(false, isOn: false)
             liveHeader.allowsSlideshowBrowse = false
             liveHeader.isHidden = true
@@ -776,7 +809,14 @@ final class LibraryGridViewController: UIViewController {
         }
         refreshForeignLivePreview()
 
+        if applyLivePollIdleHeaderIfNeeded() {
+            return
+        }
         if mgr.isWebLive {
+            if mgr.isQuestPollLive {
+                applyQuestPollLiveHeader()
+                return
+            }
             let pageId = mgr.liveWebPageId
             let page = pageId.flatMap { WebPageStore.shared.page(id: $0) }
             let title = page?.title ?? "Website"

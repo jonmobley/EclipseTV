@@ -459,6 +459,7 @@ final class LiveHeaderView: UIView {
 
     /// Compact mini: tap to return. Expanded: transport / slideshow / still Preview.
     /// The slide-ribbon button must stay tappable even when the ribbon is hidden.
+    /// Practice / Start on the Live Poll gate must stay tappable too.
     func applyInteractionForPresentation() {
         isUserInteractionEnabled =
             isCompactPresentation
@@ -466,6 +467,7 @@ final class LiveHeaderView: UIView {
             || allowsSlideshowBrowse
             || allowsFullscreenTap
             || slideshowRibbonButton != nil
+            || isShowingLivePollGate
     }
 
     /// Expanded phone-live still: open fullscreen Preview.

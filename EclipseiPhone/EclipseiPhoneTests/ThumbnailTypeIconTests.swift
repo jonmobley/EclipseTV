@@ -19,9 +19,11 @@ struct ThumbnailTypeIconTests {
         #expect(ThumbnailTypeIcon.website.systemName == "safari")
         #expect(ThumbnailTypeIcon.pdf.systemName == "doc.richtext")
         #expect(ThumbnailTypeIcon.camera.systemName == "camera.fill")
+        #expect(ThumbnailTypeIcon.livePoll.systemName == "chart.bar.fill")
         #expect(ThumbnailTypeIcon.media(isVideo: false) == .photo)
         #expect(ThumbnailTypeIcon.media(isVideo: true) == .video)
         #expect(ThumbnailTypeIcon.camera.showsWithoutThumbnail)
+        #expect(ThumbnailTypeIcon.livePoll.showsWithoutThumbnail)
         #expect(ThumbnailTypeIcon.photo.showsWithoutThumbnail == false)
         #expect(ThumbnailTypeIcon.video.usesPlayFill)
     }

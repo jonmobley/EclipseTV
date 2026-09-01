@@ -28,6 +28,24 @@ enum LiveOutputRouting {
         )
     }
 
+    /// Web overlays (Live Poll / websites) only reach AirPlay / HDMI or Practice.
+    /// Linked EclipseTV stays on the companion library and cannot show a WKWebView.
+    static func canPresentWebOverlay(
+        airPlayConnected: Bool,
+        practiceMode: Bool
+    ) -> Bool {
+        airPlayConnected || practiceMode
+    }
+
+    /// Web overlay using the current AirPlay / Practice state.
+    @MainActor
+    static func canPresentWebOverlay(practiceMode: Bool) -> Bool {
+        canPresentWebOverlay(
+            airPlayConnected: ExternalDisplayManager.shared.isConnected,
+            practiceMode: practiceMode
+        )
+    }
+
     /// Screensaver is the live grid item when a destination is up and nothing else is.
     static func isScreensaverFallbackLive(
         hasOutputDestination: Bool,

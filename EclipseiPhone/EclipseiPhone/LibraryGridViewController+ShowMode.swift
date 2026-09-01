@@ -39,6 +39,8 @@ extension LibraryGridViewController {
             cancelSelecting()
         }
         stopHomeCameraPreviewIfNeeded()
+        stopQuestPollStatusPolling()
+        livePollGateMembershipId = nil
         openShowId = nil
         onOpenShowChanged?(nil)
         enforceHomeLiveHeroTeardownIfNeeded()
@@ -59,6 +61,8 @@ extension LibraryGridViewController {
         }
         // Freeze the tile on a still while it's still on screen to grab from.
         stopHomeCameraPreviewIfNeeded()
+        stopQuestPollStatusPolling()
+        livePollGateMembershipId = nil
         openShowId = nil
         // Header first — otherwise Home chrome lags and the grid can briefly keep
         // Show tool cells (Screensaver / Background) after the title already says Home.
@@ -176,6 +180,9 @@ extension LibraryGridViewController {
         // Always refresh — switching Shows may park prior live into the foreign mini.
         refreshLiveHeader()
         updateHeroCollapse()
+        if showsLivePollRibbon {
+            startQuestPollStatusPolling()
+        }
         if !wasShowMode {
             // The Camera tile only exists once the new sections are laid out, and
             // an already-running session won't fire a start notification to retry on.
@@ -202,6 +209,11 @@ extension LibraryGridViewController {
                let show = SlideshowStore.shared.slideshow(id: uuid),
                show.showId == openShowId {
                 return .slideshow(show)
+            }
+            if let uuid = ShowLivePollToken.livePollId(from: id),
+               let item = LivePollStore.shared.poll(id: uuid),
+               item.showId == openShowId {
+                return .livePoll(item)
             }
             if let item = store.items.first(where: { $0.id == id }) {
                 return .media(item)
@@ -239,6 +251,11 @@ extension LibraryGridViewController {
             )
             cell.setMoreMenu(
                 (isArranging || isSelecting) ? nil : slideshowContextMenu(show)
+            )
+        case .livePoll(let item):
+            configureLivePollTile(cell, item: item, isLive: live)
+            cell.setMoreMenu(
+                (isArranging || isSelecting) ? nil : livePollContextMenu(item)
             )
         case .screensaver:
             cell.configureSpecial(
@@ -354,6 +371,8 @@ extension LibraryGridViewController {
             isLogoSelected = false
             isScreensaverSelected = false
             presentSlideshow(show)
+        case .livePoll(let item):
+            selectLivePoll(item)
         case .screensaver:
             if isLiveOutputLocked {
                 presentScreensaverPhonePreview()
@@ -672,7 +691,7 @@ extension LibraryGridViewController {
         return UIMenu(children: children)
     }
 
-    private func arrangeAction() -> UIAction {
+    func arrangeAction() -> UIAction {
         UIAction(
             title: "Arrange",
             image: UIImage(systemName: "arrow.up.arrow.down"),
@@ -682,7 +701,7 @@ extension LibraryGridViewController {
         }
     }
 
-    private func selectAction(seedId: String) -> UIAction {
+    func selectAction(seedId: String) -> UIAction {
         UIAction(
             title: "Select…",
             image: UIImage(systemName: "checkmark.circle")

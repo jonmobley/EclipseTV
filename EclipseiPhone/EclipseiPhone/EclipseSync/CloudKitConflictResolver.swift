@@ -55,10 +55,12 @@ enum CloudKitConflictResolver {
                 preferredOrder: preferred, other: otherSurface
             )
             let slideshows = union.filter(ShowSlideshowToken.isSlideshow)
+            let livePolls = union.filter(ShowLivePollToken.isLivePoll)
             merged.surfaceIds = LocalAlbum.sanitizedSurface(
                 union,
                 itemIds: merged.itemIds,
-                slideshowIds: slideshows
+                slideshowIds: slideshows,
+                livePollIds: livePolls
             )
         }
         if let cover = merged.coverId, !merged.itemIds.contains(cover) {
