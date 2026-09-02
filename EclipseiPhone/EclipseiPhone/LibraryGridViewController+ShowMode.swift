@@ -284,11 +284,6 @@ extension LibraryGridViewController {
             cell.setMoreMenu(
                 (isArranging || isSelecting) ? nil : slideshowContextMenu(show)
             )
-        case .livePoll(let item):
-            configureLivePollTile(cell, item: item, isLive: live)
-            cell.setMoreMenu(
-                (isArranging || isSelecting) ? nil : livePollContextMenu(item)
-            )
         case .screensaver:
             cell.configureSpecial(
                 title: "Screensaver",
@@ -428,8 +423,6 @@ extension LibraryGridViewController {
             isLogoSelected = false
             isScreensaverSelected = false
             presentSlideshow(show)
-        case .livePoll(let item):
-            selectLivePoll(item)
         case .screensaver:
             if isLiveOutputLocked {
                 presentScreensaverPhonePreview()

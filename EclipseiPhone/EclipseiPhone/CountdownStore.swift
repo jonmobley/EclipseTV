@@ -78,9 +78,6 @@ final class CountdownStore {
         guard let trimmed = UserDisplayName.normalized(name) else {
             throw StoreError.emptyName
         }
-        guard let trimmed = UserDisplayName.normalized(name) else {
-            throw StoreError.emptyName
-        }
         let item = ShowCountdown(
             showId: showId,
             name: trimmed,

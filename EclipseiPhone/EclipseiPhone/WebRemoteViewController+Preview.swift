@@ -150,9 +150,10 @@ extension WebRemoteViewController: UIScrollViewDelegate,
 
         guard let panelView = webPanelView else { return }
         web.translatesAutoresizingMaskIntoConstraints = true
-        PresentationViewController.applyWebOutputLayout(
+        PresentationViewController.applyWebLayout(
             to: web,
             in: panelView,
+            pageURL: web.url,
             rotationDegrees: 0
         )
     }

@@ -238,7 +238,7 @@ final class ExternalDisplayManager {
                 }
             },
             center.addObserver(
-                forName: UIScreen.didConnectNotification,
+                forName: UIScene.willConnectNotification,
                 object: nil,
                 queue: .main
             ) { [weak self] _ in

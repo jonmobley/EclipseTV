@@ -77,10 +77,14 @@ extension PresentationViewController: WKNavigationDelegate {
         if case .web = presentedSource?.content { presentedSource = nil }
     }
 
-    /// Applies scale-up + portrait rotation from `ExternalOutputSettings`.
+    /// Applies present-embed or desktop scale-up + portrait rotation.
     func applyWebLayout() {
         guard !webContainer.isHidden, let webView = webView else { return }
-        Self.applyWebOutputLayout(to: webView, in: webContainer)
+        Self.applyWebLayout(
+            to: webView,
+            in: webContainer,
+            pageURL: webView.url
+        )
     }
 
     /// Loads `url` into the live web view without tearing down the overlay.

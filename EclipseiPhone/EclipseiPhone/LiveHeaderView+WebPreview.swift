@@ -30,7 +30,7 @@ extension LiveHeaderView {
         bringWebPreviewChromeToFront()
     }
 
-    /// Re-applies AirPlay-matching scale when the hero size changes.
+    /// Re-applies present-embed or desktop scale when the hero size changes.
     func layoutWebPreviewIfNeeded() {
         guard let pageId = webPreviewPageId,
               let host = webPreviewHost,

@@ -174,12 +174,6 @@ extension LibraryGridViewController {
             return isLogoSelected && !ExternalDisplayManager.shared.isOverlayLive
         case .camera:
             return ExternalDisplayManager.shared.isCameraTileLive
-        case .livePoll(let item):
-            return ExternalDisplayManager.shared.isQuestPollLive
-                && QuestPollSessionStore.shared.membershipId == item.id
-                && !isBlackSelected
-                && !isLogoSelected
-                && !isScreensaverSelected
         case .countdown(let item):
             return ExternalDisplayManager.shared.isCountdownLive
                 && CountdownController.shared.liveCountdownId == item.id
@@ -268,7 +262,7 @@ extension LibraryGridViewController {
                 LocalAlbumStore.shared.showTool(id, albumId: albumId)
             } else if let countdownId = ShowCountdownToken.countdownId(from: id),
                       let source = CountdownStore.shared.countdown(id: countdownId) {
-                try? CountdownStore.shared.create(
+                _ = try? CountdownStore.shared.create(
                     name: source.name,
                     showId: albumId,
                     duration: source.duration

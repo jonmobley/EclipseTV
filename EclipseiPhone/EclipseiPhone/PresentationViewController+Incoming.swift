@@ -335,7 +335,7 @@ extension PresentationViewController {
 
     private func layoutIncomingWeb() {
         guard let web = incomingWebView else { return }
-        Self.applyWebOutputLayout(to: web, in: transitionOverlayContainer)
+        Self.applyWebLayout(to: web, in: transitionOverlayContainer, pageURL: web.url)
     }
 
     private func layoutIncomingPDF() {

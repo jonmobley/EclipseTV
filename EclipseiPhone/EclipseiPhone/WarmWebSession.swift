@@ -28,6 +28,9 @@ final class WarmWebSession: NSObject {
 
     var currentURL: URL? { webView?.url }
 
+    /// Last URL passed to `warm` / `adopt` (may precede `webView.url` while loading).
+    private(set) var intendedURL: URL?
+
     /// Whether this session currently holds a live `WKWebView` (and web content process).
     var hasWebView: Bool { webView != nil }
 
@@ -49,6 +52,7 @@ final class WarmWebSession: NSObject {
 
     /// Ensures the web view exists and has loaded `url` when idle.
     func warm(url: URL) {
+        intendedURL = url
         let web = ensureWebView()
         guard !isAdopted else {
             settleWarm()
@@ -65,6 +69,7 @@ final class WarmWebSession: NSObject {
 
     /// Hands the warm web view to the phone browser.
     func adopt(into remote: WebRemoteViewController, url: URL) -> WKWebView {
+        intendedURL = url
         let web = ensureWebView()
         isAdopted = true
         mediaConsumer = remote
@@ -108,8 +113,8 @@ final class WarmWebSession: NSObject {
 
     /// Moves the warm web view into a visible hero/preview host (no interaction).
     ///
-    /// Uses the same logical viewport + scale as AirPlay / the phone web stage so
-    /// desktop pages (including Live Poll) fill the host instead of letterboxing.
+    /// Bookmarks use the desktop logical viewport + scale (AirPlay parity).
+    /// QuestPoll `/present` fills the host 1:1 so the page’s stage scaler is alone.
     /// - Parameter host: LiveHeader (or similar) content container.
     /// - Returns: Whether the preview was attached.
     @discardableResult
@@ -130,12 +135,14 @@ final class WarmWebSession: NSObject {
         return true
     }
 
-    /// Re-applies logical viewport scaling when the hero host changes size.
+    /// Re-applies embed or desktop scaling when the hero host changes size.
     func layoutPreview(in host: UIView) {
         guard !isAdopted, let web = webView, web.superview === host else { return }
-        PresentationViewController.applyWebOutputLayout(
+        let pageURL = intendedURL ?? web.url
+        PresentationViewController.applyWebLayout(
             to: web,
             in: host,
+            pageURL: pageURL,
             rotationDegrees: 0
         )
     }

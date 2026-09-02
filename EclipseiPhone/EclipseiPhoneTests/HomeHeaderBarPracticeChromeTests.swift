@@ -64,45 +64,46 @@ struct HomeHeaderBarBackButtonTests {
     @Test func backHiddenOnHome() {
         let bar = HomeHeaderBar(frame: CGRect(x: 0, y: 0, width: 390, height: 52))
         bar.setShowModeChrome(false)
-        #expect(bar.showsHomeBackButton == false)
+        #expect(homeBackButton(in: bar)?.isHidden != false)
     }
 
     @Test func backShownInShowMode() {
         let bar = HomeHeaderBar(frame: CGRect(x: 0, y: 0, width: 390, height: 52))
         bar.setShowModeChrome(true)
-        #expect(bar.showsHomeBackButton == true)
+        let button = homeBackButton(in: bar)
+        #expect(button?.isHidden == false)
+        #expect(button?.isEnabled == true)
     }
 
     @Test func backHiddenAgainAfterLeavingShowMode() {
         let bar = HomeHeaderBar(frame: CGRect(x: 0, y: 0, width: 390, height: 52))
         bar.setShowModeChrome(true)
         bar.setShowModeChrome(false)
-        #expect(bar.showsHomeBackButton == false)
+        #expect(homeBackButton(in: bar)?.isHidden != false)
     }
 
-    @Test func backTapCallsOnGoHome() {
+    @Test func backTapCallsOnGoBack() {
         let bar = HomeHeaderBar(frame: CGRect(x: 0, y: 0, width: 390, height: 52))
         bar.setShowModeChrome(true)
-        var didGoHome = false
-        bar.onGoHome = { didGoHome = true }
+        var didGoBack = false
+        bar.onGoBack = { didGoBack = true }
         let button = homeBackButton(in: bar)
         #expect(button != nil)
         button?.sendActions(for: .touchUpInside)
-        #expect(didGoHome)
+        #expect(didGoBack)
     }
 
-    @Test func backStaysVisibleWhileArranging() {
+    @Test func backHiddenWhileArranging() {
         let bar = HomeHeaderBar(frame: CGRect(x: 0, y: 0, width: 390, height: 52))
         bar.setShowModeChrome(true)
         bar.setArranging(true)
-        #expect(bar.showsHomeBackButton == true)
-        #expect(homeBackButton(in: bar)?.isEnabled == false)
+        #expect(homeBackButton(in: bar)?.isHidden != false)
     }
 }
 
 @MainActor
 private func homeBackButton(in root: UIView) -> UIButton? {
-    if let button = root as? UIButton, button.accessibilityLabel == "Back to Home" {
+    if let button = root as? UIButton, button.accessibilityLabel == "Back" {
         return button
     }
     for subview in root.subviews {
@@ -110,4 +111,3 @@ private func homeBackButton(in root: UIView) -> UIButton? {
     }
     return nil
 }
-

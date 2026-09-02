@@ -200,7 +200,9 @@ final class CountdownController {
         timer?.invalidate()
         let timer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) {
             [weak self] _ in
-            self?.handleTick()
+            Task { @MainActor in
+                self?.handleTick()
+            }
         }
         RunLoop.main.add(timer, forMode: .common)
         self.timer = timer

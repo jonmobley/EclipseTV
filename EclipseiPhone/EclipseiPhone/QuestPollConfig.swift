@@ -8,6 +8,10 @@
 import Foundation
 
 /// Hosted QuestPoll origin and projector URL.
+///
+/// `/present` is always a single 16:9 stage (1920×1080). Companion hero and
+/// AirPlay show a scaled copy of that stage — Eclipse fills the host 1:1 and
+/// lets the page’s CSS stage scaler do the only shrink/fit.
 enum QuestPollConfig {
     static let origin = URL(string: "https://questpoll.live")!
 

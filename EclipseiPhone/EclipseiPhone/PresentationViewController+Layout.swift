@@ -97,4 +97,46 @@ extension PresentationViewController {
             rotationDegrees: degrees
         )
     }
+
+    /// Lays out QuestPoll `/present`: host bounds are the CSS viewport.
+    ///
+    /// The page owns a fixed 1920×1080 stage and scales once into that viewport.
+    /// Using the desktop `webLogicalSize` path here would double-scale and shrink
+    /// the composition. Generic website bookmarks still use `applyWebOutputLayout`.
+    ///
+    /// - Parameter rotationDegrees: Pass `0` on the phone hero; TV may rotate.
+    static func applyPresentEmbedLayout(
+        to webView: UIView,
+        in container: UIView,
+        rotationDegrees: Double? = nil
+    ) {
+        applyRotatedLayout(
+            to: webView,
+            in: container,
+            scale: 1,
+            rotationDegrees: rotationDegrees
+        )
+    }
+
+    /// Picks present-embed vs desktop logical layout from `pageURL`.
+    static func applyWebLayout(
+        to webView: UIView,
+        in container: UIView,
+        pageURL: URL?,
+        rotationDegrees: Double? = nil
+    ) {
+        if let pageURL, QuestPollConfig.isPresentURL(pageURL) {
+            applyPresentEmbedLayout(
+                to: webView,
+                in: container,
+                rotationDegrees: rotationDegrees
+            )
+        } else {
+            applyWebOutputLayout(
+                to: webView,
+                in: container,
+                rotationDegrees: rotationDegrees
+            )
+        }
+    }
 }

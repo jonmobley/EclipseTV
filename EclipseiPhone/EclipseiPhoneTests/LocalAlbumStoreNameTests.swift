@@ -283,25 +283,6 @@ struct LocalAlbumStoreNameTests {
         #expect(album.resolvedSurfaceIds.last == ShowSlideshowToken.token(for: slideshowId))
     }
 
-    @Test func livePollTokenRoundTrips() {
-        let id = UUID()
-        let token = ShowLivePollToken.token(for: id)
-        #expect(ShowLivePollToken.isLivePoll(token))
-        #expect(!ShowLivePollToken.isLivePoll("media-1"))
-        #expect(ShowLivePollToken.livePollId(from: token) == id)
-        #expect(ShowLivePollToken.livePollId(from: "media-1") == nil)
-    }
-
-    @Test func sanitizedSurfaceAppendsLivePollsLast() {
-        let token = ShowLivePollToken.token(for: UUID())
-        let result = LocalAlbum.sanitizedSurface(
-            ShowToolToken.all + ["a"],
-            itemIds: ["a"],
-            livePollIds: [token]
-        )
-        #expect(result == ShowToolToken.all + ["a", token])
-    }
-
     @Test func addLivePollAppendsWhenSurfaceMaterialized() throws {
         let store = makeStore()
         let show = try store.create(name: "Polls", orientation: .landscape)
