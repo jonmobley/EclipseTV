@@ -52,16 +52,11 @@ extension LibraryGridViewController {
     /// Live hero for the countdown clock.
     func applyCountdownLiveHeader() {
         let clock = CountdownController.shared
-        liveHeader.configureOverlay(
-            title: clock.displayString,
-            systemImage: "timer",
-            fillColor: UIColor(white: 0.08, alpha: 1),
-            stableContentKey: "overlay:countdown"
+        liveHeader.configureCountdownClock(
+            text: clock.displayString,
+            isExpired: clock.remaining == 0
         )
         liveHeader.updatePlayback(PlaybackState())
-        liveHeader.titleLabel.font = .monospacedDigitSystemFont(
-            ofSize: 28, weight: .semibold
-        )
     }
 
     /// Whether the live ribbon is showing duration presets.
@@ -105,15 +100,16 @@ extension LibraryGridViewController {
         item: ShowCountdown,
         isLive: Bool
     ) {
-        let remaining = isLive ? CountdownController.shared.remaining : nil
-        cell.configureSpecial(
-            title: item.tileTitle(remaining: remaining),
-            systemImage: "timer",
-            thumbnail: nil,
-            fillColor: UIColor(white: 0.12, alpha: 1),
+        let seconds = isLive
+            ? CountdownController.shared.remaining
+            : item.duration
+        let isExpired = isLive && seconds == 0
+        cell.configureCountdown(
+            name: item.name,
+            seconds: seconds,
             isLive: isLive,
             isLocked: isLiveOutputLocked,
-            typeIcon: .countdown
+            isExpired: isExpired
         )
     }
 
@@ -150,7 +146,15 @@ extension LibraryGridViewController {
             refreshLiveHeader()
             return
         }
-        applyCountdownLiveHeader()
+        let clock = CountdownController.shared
+        if liveHeader.countdownClockLabel.isHidden {
+            applyCountdownLiveHeader()
+        } else {
+            liveHeader.applyCountdownClock(
+                text: clock.displayString,
+                isExpired: clock.remaining == 0
+            )
+        }
         updateVisibleCountdownTiles()
     }
 
@@ -259,6 +263,7 @@ extension LibraryGridViewController {
     private func updateVisibleCountdownTiles() {
         guard let showsSection = sectionIndex(for: .shows) else { return }
         let liveId = CountdownController.shared.liveCountdownId
+        let clock = CountdownController.shared
         for (index, row) in openShowGridItems.enumerated() {
             guard case .countdown(let item) = row,
                   let cell = collectionView.cellForItem(
@@ -267,12 +272,17 @@ extension LibraryGridViewController {
             else { continue }
             let isLive = item.id == liveId
                 && ExternalDisplayManager.shared.isCountdownLive
-            let remaining = isLive ? CountdownController.shared.remaining : nil
-            let title = item.tileTitle(remaining: remaining)
-            cell.captionLabel.text = title
+            let seconds = isLive ? clock.remaining : item.duration
+            let isExpired = isLive && seconds == 0
+            if isLive {
+                cell.applyCountdownTime(seconds, isExpired: isExpired)
+            }
+            let spoken = "\(item.name), \(CountdownController.displayString(seconds: seconds))"
             cell.accessibilityLabel = isLive
-                ? (isLiveOutputLocked ? "\(title), live, locked" : "\(title), live")
-                : title
+                ? (isLiveOutputLocked
+                    ? "\(spoken), live, locked, countdown"
+                    : "\(spoken), live, countdown")
+                : "\(spoken), countdown"
         }
     }
 

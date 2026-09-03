@@ -529,6 +529,12 @@ final class LibraryGridViewController: UIViewController {
             self?.reloadGridIfSafe()
             self?.updateEmptyState()
         }
+        observe(CountdownStore.didChangeNotification) { [weak self] _ in
+            self?.reloadGridIfSafe()
+        }
+        observe(CountdownController.didChangeNotification) { [weak self] _ in
+            self?.refreshCountdownChrome()
+        }
         observe(SlideshowPlaybackController.didChangeNotification) { [weak self] _ in
             self?.refreshSlideshowRibbonPresentation()
             self?.refreshLiveHeader()
@@ -885,6 +891,10 @@ final class LibraryGridViewController: UIViewController {
             )
             liveHeader.allowsCameraControllerTap = true
             liveHeader.updatePlayback(PlaybackState())
+            return
+        }
+        if mgr.isCountdownLive {
+            applyCountdownLiveHeader()
             return
         }
         if isBlackSelected {

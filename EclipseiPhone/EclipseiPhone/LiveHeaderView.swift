@@ -22,7 +22,9 @@ final class LiveHeaderView: UIView {
     let gradientLayer = CAGradientLayer()
     let liveBadge = PaddedLabel()
     let titleLabel = UILabel()
-    private let subtitleLabel = UILabel()
+    let subtitleLabel = UILabel()
+    /// Large remaining-time clock while Countdown owns the hero.
+    let countdownClockLabel = UILabel()
 
     /// Remote transport controls, shown only when the live item is a video.
     let controls = PlaybackControlsView()
@@ -173,6 +175,16 @@ final class LiveHeaderView: UIView {
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         addSubview(titleLabel)
 
+        countdownClockLabel.font = .monospacedDigitSystemFont(ofSize: 56, weight: .semibold)
+        countdownClockLabel.textColor = .white
+        countdownClockLabel.textAlignment = .center
+        countdownClockLabel.adjustsFontSizeToFitWidth = true
+        countdownClockLabel.minimumScaleFactor = 0.4
+        countdownClockLabel.numberOfLines = 1
+        countdownClockLabel.isHidden = true
+        countdownClockLabel.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(countdownClockLabel)
+
         subtitleLabel.font = .systemFont(ofSize: 13, weight: .semibold)
         subtitleLabel.textColor = UIColor.white.withAlphaComponent(0.85)
         subtitleLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -208,6 +220,15 @@ final class LiveHeaderView: UIView {
             placeholderIcon.centerYAnchor.constraint(equalTo: centerYAnchor, constant: -14),
             placeholderIcon.widthAnchor.constraint(equalToConstant: 52),
             placeholderIcon.heightAnchor.constraint(equalToConstant: 52),
+
+            countdownClockLabel.centerXAnchor.constraint(equalTo: centerXAnchor),
+            countdownClockLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
+            countdownClockLabel.leadingAnchor.constraint(
+                greaterThanOrEqualTo: leadingAnchor, constant: 24
+            ),
+            countdownClockLabel.trailingAnchor.constraint(
+                lessThanOrEqualTo: trailingAnchor, constant: -24
+            ),
 
             liveBadge.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
             liveBadge.topAnchor.constraint(equalTo: topAnchor, constant: 14),
@@ -310,6 +331,7 @@ final class LiveHeaderView: UIView {
             + ":local\(showsLocalTransport):fs\(allowsStillFullscreenTap):\(fitToken)"
             + ":monitor\(usesRemoteVideoMonitor):badge\(showLiveBadge)"
         applyContent(key: key) {
+            self.hideCountdownClock()
             let showControls = item.isVideo && (isOnline || showsLocalTransport)
             if usesRemoteVideoMonitor {
                 // Match the black stage behind the card — a grey fill + film glyph
@@ -391,6 +413,7 @@ final class LiveHeaderView: UIView {
             + ":badge\(showLiveBadge)"
         )
         applyContent(key: key) {
+            self.hideCountdownClock()
             self.backgroundColor = fillColor
             // Background / website / camera art always fills the hero.
             self.imageView.contentMode = .scaleAspectFill
@@ -484,6 +507,7 @@ final class LiveHeaderView: UIView {
         clearScreensaverPreview()
         clearCameraPreview()
         clearLibraryVideoPreview()
+        hideCountdownClock()
         allowsFullscreenTap = false
         backgroundColor = .secondarySystemBackground
         imageView.image = nil
@@ -575,7 +599,7 @@ final class LiveHeaderView: UIView {
     // MARK: - Crossfade
 
     /// Instant update (Cut / same content) or snapshot dissolve matching AirPlay.
-    private func applyContent(key: String, update: () -> Void) {
+    func applyContent(key: String, update: () -> Void) {
         // A snapshot added as our own subview would inherit the collapse transform on
         // top of the scale it was captured at, so cut instead of dissolving while
         // the hero is anything but fully expanded.

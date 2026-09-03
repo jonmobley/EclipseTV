@@ -71,6 +71,7 @@ extension LiveHeaderView {
         }
         gradientLayer.opacity = Float(controlsFade)
         titleLabel.alpha = max(0, 1 - progress * 2)
+        countdownClockLabel.alpha = max(0, 1 - progress * 2)
 
         // Locked preview keeps a thicker amber stroke; both widths counter-scale so
         // the hairline stays constant under the host's uniform transform.

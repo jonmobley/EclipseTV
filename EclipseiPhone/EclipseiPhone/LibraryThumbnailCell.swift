@@ -26,6 +26,8 @@ final class LibraryThumbnailCell: UICollectionViewCell {
     /// Last content type applied; visibility can hide the overlay without clearing this.
     var contentTypeIcon: ThumbnailTypeIcon?
     let durationLabel = PaddedLabel()
+    /// Large monospaced clock for Countdown tiles (set duration / remaining).
+    let countdownTimeLabel = UILabel()
     private let unavailableBadge = PaddedLabel()
     /// Multi-select tick for the Add-to-Show picker and Show-grid select mode.
     let selectionBadge = UIImageView()
@@ -107,6 +109,16 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         captionLabel.translatesAutoresizingMaskIntoConstraints = false
         cardView.addSubview(captionLabel)
 
+        countdownTimeLabel.font = .monospacedDigitSystemFont(ofSize: 28, weight: .semibold)
+        countdownTimeLabel.textColor = .white
+        countdownTimeLabel.textAlignment = .center
+        countdownTimeLabel.adjustsFontSizeToFitWidth = true
+        countdownTimeLabel.minimumScaleFactor = 0.45
+        countdownTimeLabel.numberOfLines = 1
+        countdownTimeLabel.isHidden = true
+        countdownTimeLabel.translatesAutoresizingMaskIntoConstraints = false
+        cardView.addSubview(countdownTimeLabel)
+
         configurePill(durationLabel, background: UIColor.black.withAlphaComponent(0.6), textColor: .white)
         durationLabel.isHidden = true
         cardView.addSubview(durationLabel)
@@ -148,6 +160,17 @@ final class LibraryThumbnailCell: UICollectionViewCell {
             placeholderIcon.centerXAnchor.constraint(equalTo: cardView.centerXAnchor),
             placeholderIcon.widthAnchor.constraint(equalToConstant: 36),
             placeholderIcon.heightAnchor.constraint(equalToConstant: 36),
+
+            countdownTimeLabel.centerXAnchor.constraint(equalTo: cardView.centerXAnchor),
+            countdownTimeLabel.centerYAnchor.constraint(
+                equalTo: cardView.centerYAnchor, constant: -8
+            ),
+            countdownTimeLabel.leadingAnchor.constraint(
+                greaterThanOrEqualTo: cardView.leadingAnchor, constant: 8
+            ),
+            countdownTimeLabel.trailingAnchor.constraint(
+                lessThanOrEqualTo: cardView.trailingAnchor, constant: -8
+            ),
 
             captionScrimView.leadingAnchor.constraint(equalTo: cardView.leadingAnchor),
             captionScrimView.trailingAnchor.constraint(equalTo: cardView.trailingAnchor),
@@ -386,6 +409,9 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         imageView.contentMode = .scaleAspectFill
         placeholderIcon.isHidden = false
         placeholderCenterY.constant = -10
+        countdownTimeLabel.isHidden = true
+        countdownTimeLabel.text = nil
+        countdownTimeLabel.textColor = .white
         captionLabel.isHidden = true
         captionLabel.text = nil
         captionLabel.textColor = .white
