@@ -6,6 +6,7 @@
 //
 
 import Testing
+import UIKit
 @testable import EclipseiPhone
 
 struct SlideshowRibbonChromeTests {
@@ -58,5 +59,163 @@ struct SlideshowRibbonChromeTests {
                 from: previous, to: next
             )
         )
+    }
+
+    @Test func phonePortraitStaysStacked() {
+        #expect(
+            LibraryGridViewController.prefersSideBySideChrome(
+                showsLiveHero: true,
+                verticalSizeClass: .regular,
+                horizontalSizeClass: .compact,
+                bounds: CGSize(width: 390, height: 844)
+            ) == false
+        )
+        #expect(
+            LibraryGridViewController.usesVerticalDockedRibbon(
+                isSideBySide: false,
+                horizontalSizeClass: .compact
+            ) == false
+        )
+    }
+
+    @Test func phoneLandscapeUsesHorizontalSideBySide() {
+        #expect(
+            LibraryGridViewController.prefersSideBySideChrome(
+                showsLiveHero: true,
+                verticalSizeClass: .compact,
+                horizontalSizeClass: .compact,
+                bounds: CGSize(width: 844, height: 390)
+            )
+        )
+        #expect(
+            LibraryGridViewController.usesVerticalDockedRibbon(
+                isSideBySide: true,
+                horizontalSizeClass: .compact
+            ) == false
+        )
+    }
+
+    @Test func iPadPortraitStaysStacked() {
+        #expect(
+            LibraryGridViewController.prefersSideBySideChrome(
+                showsLiveHero: true,
+                verticalSizeClass: .regular,
+                horizontalSizeClass: .regular,
+                bounds: CGSize(width: 1024, height: 1366)
+            ) == false
+        )
+    }
+
+    @Test func iPadLandscapeKeepsRibbonUnderThePreview() {
+        #expect(
+            LibraryGridViewController.prefersSideBySideChrome(
+                showsLiveHero: true,
+                verticalSizeClass: .regular,
+                horizontalSizeClass: .regular,
+                bounds: CGSize(width: 1366, height: 1024)
+            )
+        )
+        #expect(
+            LibraryGridViewController.usesVerticalDockedRibbon(
+                isSideBySide: true,
+                horizontalSizeClass: .regular
+            ) == false
+        )
+    }
+
+    @Test func tallRegularSplitPaneStaysStacked() {
+        #expect(
+            LibraryGridViewController.prefersSideBySideChrome(
+                showsLiveHero: true,
+                verticalSizeClass: .regular,
+                horizontalSizeClass: .regular,
+                bounds: CGSize(width: 700, height: 1024)
+            ) == false
+        )
+    }
+
+    @Test func noLiveHeroNeverGoesSideBySide() {
+        #expect(
+            LibraryGridViewController.prefersSideBySideChrome(
+                showsLiveHero: false,
+                verticalSizeClass: .compact,
+                horizontalSizeClass: .regular,
+                bounds: CGSize(width: 1366, height: 1024)
+            ) == false
+        )
+    }
+
+    @Test func regularWidthSideBySideHeroLeavesAUsableGrid() {
+        let availableWidth: CGFloat = 1200
+        let availableHeight: CGFloat = 700
+        let aspect: CGFloat = 16.0 / 9.0
+        let phone = LibraryGridViewController.sideBySideHeroSize(
+            availableWidth: availableWidth,
+            availableHeight: availableHeight,
+            aspect: aspect,
+            horizontalSizeClass: .compact,
+            containerWidth: 1366
+        )
+        let tablet = LibraryGridViewController.sideBySideHeroSize(
+            availableWidth: availableWidth,
+            availableHeight: availableHeight,
+            aspect: aspect,
+            horizontalSizeClass: .regular,
+            containerWidth: 1366
+        )
+        #expect(tablet.width > phone.width)
+        #expect(tablet.width <= 1366 * 0.58 + 0.5)
+        #expect(
+            availableWidth - tablet.width
+                >= LibraryGridViewController.sideBySideRegularMinGridWidth - 0.5
+        )
+    }
+
+    @Test func liveRibbonNeverUsesVerticalStrip() {
+        #expect(
+            LibraryGridViewController.usesVerticalDockedRibbon(
+                isSideBySide: true,
+                horizontalSizeClass: .regular
+            ) == false
+        )
+        #expect(
+            LibraryGridViewController.usesVerticalDockedRibbon(
+                isSideBySide: true,
+                horizontalSizeClass: .compact
+            ) == false
+        )
+        #expect(
+            LibraryGridViewController.usesVerticalDockedRibbon(
+                isSideBySide: false,
+                horizontalSizeClass: .regular
+            ) == false
+        )
+    }
+
+    @Test func verticalRevealScrollsOffscreenItems() {
+        let item = CGRect(x: 0, y: 400, width: 80, height: 45)
+        let offset = LibraryGridViewController.dockedRibbonRevealOffset(
+            itemFrame: item,
+            bounds: CGRect(x: 0, y: 0, width: 80, height: 200),
+            contentSize: CGSize(width: 80, height: 600),
+            contentOffset: .zero,
+            adjustedContentInset: .zero,
+            scrollsVertically: true
+        )
+        #expect(offset != nil)
+        #expect(offset?.y == 245)
+    }
+
+    @Test func verticalRevealLeavesVisibleItemsAlone() {
+        let item = CGRect(x: 0, y: 40, width: 80, height: 45)
+        let offset = LibraryGridViewController.dockedRibbonRevealOffset(
+            itemFrame: item,
+            bounds: CGRect(x: 0, y: 0, width: 80, height: 200),
+            contentSize: CGSize(width: 80, height: 600),
+            contentOffset: .zero,
+            adjustedContentInset: .zero,
+            scrollsVertically: true
+        )
+        #expect(offset == nil)
     }
 }

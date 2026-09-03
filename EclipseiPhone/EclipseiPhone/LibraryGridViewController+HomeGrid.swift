@@ -269,6 +269,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
 
     /// Presents the full Shows list (both Display Modes, All / Horizontal / Vertical).
     func presentAllShows() {
+        guard !isAlreadyOpen(AllShowsViewController.self) else { return }
         let list = AllShowsViewController()
         list.onOpenShow = { [weak self] id in
             self?.openLocalAlbum(id: id)
@@ -362,7 +363,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
     private func handleTap(_ item: HomeGridItem) {
         switch item {
         case .logo:
-            if isLiveOutputLocked {
+            if prefersPhonePreviewOnTap {
                 presentLogoPhonePreview()
                 return
             }
@@ -370,7 +371,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             isScreensaverSelected = false
             presentLogoLive()
         case .screensaver:
-            if isLiveOutputLocked {
+            if prefersPhonePreviewOnTap {
                 presentScreensaverPhonePreview()
                 return
             }
@@ -378,7 +379,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             isLogoSelected = false
             presentScreensaverLive()
         case .camera:
-            if isLiveOutputLocked || !hasLiveOutputDestination {
+            if prefersPhonePreviewOnTap {
                 onPresentCamera?()
                 return
             }
@@ -553,7 +554,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
     }
 
     func presentMedia(_ item: LibraryItemDTO) {
-        if isLiveOutputLocked {
+        if prefersPhonePreviewOnTap {
             presentLocalPreview(for: item, in: openShowItems.isEmpty ? displayItems : openShowItems)
             return
         }

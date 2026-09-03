@@ -26,7 +26,7 @@ struct LocalAlbum: Codable, Equatable, Identifiable, Hashable {
     /// Live Poll tokens. `nil` = default tools, then members, then those tiles.
     var surfaceIds: [String]?
     /// Practice Mode: live preview plus Lock / Blackout with no AirPlay, HDMI,
-    /// or EclipseTV. Default is off; taps then open on-device Preview instead.
+    /// or EclipseTV. Default is on so a Show is rehearsable without a display.
     var previewsWhenDisconnected: Bool
     /// Membership ids removed locally — CloudKit union merge subtracts these.
     var deletedItemIds: [String]
@@ -43,7 +43,7 @@ struct LocalAlbum: Codable, Equatable, Identifiable, Hashable {
         createdAt: Date = Date(),
         lastOpenedAt: Date? = nil,
         surfaceIds: [String]? = nil,
-        previewsWhenDisconnected: Bool = false,
+        previewsWhenDisconnected: Bool = true,
         deletedItemIds: [String] = [],
         deletedSurfaceIds: [String] = []
     ) {
@@ -188,7 +188,7 @@ struct LocalAlbum: Codable, Equatable, Identifiable, Hashable {
         surfaceIds = try c.decodeIfPresent([String].self, forKey: .surfaceIds)
         previewsWhenDisconnected = try c.decodeIfPresent(
             Bool.self, forKey: .previewsWhenDisconnected
-        ) ?? false
+        ) ?? true
         deletedItemIds = try c.decodeIfPresent([String].self, forKey: .deletedItemIds) ?? []
         deletedSurfaceIds = try c.decodeIfPresent(
             [String].self, forKey: .deletedSurfaceIds

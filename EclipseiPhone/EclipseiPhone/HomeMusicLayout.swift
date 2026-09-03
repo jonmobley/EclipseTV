@@ -7,35 +7,39 @@
 
 import UIKit
 
-/// Layout math and pin preference for the home Music pane.
+/// Layout math for the home Music pane (drawer on regular, paging on compact).
 enum HomeMusicLayout {
 
     /// Preferred Music sidebar / drawer width in regular-width layout.
     static let sidebarPreferredWidth: CGFloat = 340
-    /// Minimum Library pane width when Music is pinned beside it.
+    /// Minimum Library pane width when Music was pinned beside it (legacy).
     static let librarySplitMinWidth: CGFloat = 360
     /// Floor for a squeezed Music sidebar on narrower regular widths.
     static let sidebarMinWidth: CGFloat = 280
-    /// UserDefaults key for the pinned (always-visible) sidebar.
+    /// UserDefaults key for the legacy pinned-sidebar preference.
     static let pinDefaultsKey = "EclipseTV.home.musicSidebarPinned"
 
     /// How Library and Music share the home screen.
     enum Mode: Equatable {
         /// Compact width: swipe between full-width Library and Music pages.
         case paging
-        /// Regular width, pinned: persistent side-by-side sidebar.
+        /// Legacy: persistent side-by-side sidebar (no longer selected).
         case split
-        /// Regular width, default: Library is full width; Music is a drawer.
+        /// Regular width: Library is full width; Music is a slide-out drawer.
         case drawer
     }
 
-    /// Resolves the home Music layout for the current size class and pin.
+    /// Resolves the home Music layout for the current size class.
+    ///
+    /// Regular width always uses the slide-out drawer (no pinned split). The
+    /// blue Music circle toggles that pane; there is no Music header tab.
     static func mode(
         horizontalSizeClass: UIUserInterfaceSizeClass,
         pinned: Bool
     ) -> Mode {
+        _ = pinned
         guard horizontalSizeClass == .regular else { return .paging }
-        return pinned ? .split : .drawer
+        return .drawer
     }
 
     /// Music sidebar width, keeping Library at least `librarySplitMinWidth`

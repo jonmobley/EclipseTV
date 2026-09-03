@@ -68,17 +68,8 @@ extension LibraryGridViewController {
     }
 
     func presentQuestPollError(_ error: Error) {
-        let message: String
-        if let poll = error as? QuestPollError {
-            switch poll {
-            case .invalidPIN: message = "That PIN is wrong."
-            case .server(let text): message = text
-            case .decoding: message = "Could not read QuestPoll."
-            case .transport: message = "Could not reach questpoll.live."
-            }
-        } else {
-            message = "Could not start the poll."
-        }
+        let message = (error as? QuestPollError)?.userMessage
+            ?? "Could not start the poll."
         let alert = UIAlertController(
             title: "QuestPoll", message: message, preferredStyle: .alert
         )

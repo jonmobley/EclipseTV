@@ -173,9 +173,9 @@ extension LibraryGridViewController {
         openShowId = album.id
         updateVisibleLibraryPage()
         applyShowPageLayout()
-        if !wasShowMode {
-            updateHeroVisibility()
-        }
+        // Always re-evaluate — Practice Mode / destination can differ per Show.
+        updateHeroVisibility()
+        applyHeroChrome()
         reloadLibraryGrid()
         scrollGridToTop()
         updateEmptyState()
@@ -424,7 +424,7 @@ extension LibraryGridViewController {
             isScreensaverSelected = false
             presentSlideshow(show)
         case .screensaver:
-            if isLiveOutputLocked {
+            if prefersPhonePreviewOnTap {
                 presentScreensaverPhonePreview()
                 return
             }
@@ -432,7 +432,7 @@ extension LibraryGridViewController {
             isLogoSelected = false
             presentScreensaverLive()
         case .logo:
-            if isLiveOutputLocked {
+            if prefersPhonePreviewOnTap {
                 presentLogoPhonePreview()
                 return
             }
@@ -440,7 +440,7 @@ extension LibraryGridViewController {
             isScreensaverSelected = false
             presentLogoLive()
         case .camera:
-            if isLiveOutputLocked || !hasLiveOutputDestination {
+            if prefersPhonePreviewOnTap {
                 onPresentCamera?()
                 return
             }
@@ -457,7 +457,7 @@ extension LibraryGridViewController {
             isScreensaverSelected = false
             beginCountdown(item)
         case .media(let item):
-            if isLiveOutputLocked {
+            if prefersPhonePreviewOnTap {
                 presentLocalPreview(for: item, in: openShowItems)
                 return
             }
@@ -467,7 +467,7 @@ extension LibraryGridViewController {
             SlideshowPlaybackController.shared.stop()
             presentMedia(item)
         case .website(let page):
-            if isLiveOutputLocked || !hasLiveOutputDestination {
+            if prefersPhonePreviewOnTap {
                 presentWebPage(page)
                 return
             }
@@ -476,7 +476,7 @@ extension LibraryGridViewController {
             isScreensaverSelected = false
             presentWebPageLive(page)
         case .pdf(let doc):
-            if isLiveOutputLocked || !hasLiveOutputDestination {
+            if prefersPhonePreviewOnTap {
                 presentPDF(doc)
                 return
             }

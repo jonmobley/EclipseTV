@@ -21,9 +21,14 @@ extension iPhoneMainViewController {
         refreshAudioMiniPlayer()
     }
 
-    /// Circle tap: expand when collapsed, stop when the footer is showing;
-    /// idle opens the picker.
+    /// Circle tap: on regular width toggles the Music drawer. On compact,
+    /// expands the footer when a session is active, stops when expanded, or
+    /// opens the picker when idle.
     func handleAudioMiniBubbleToggle() {
+        if usesMusicDrawerChrome {
+            toggleMusicDrawer()
+            return
+        }
         if AudioPlayerController.shared.hasActiveSession {
             if audioMiniCollapsed {
                 setAudioMiniCollapsed(false, animated: true)
@@ -33,6 +38,21 @@ extension iPhoneMainViewController {
         } else {
             presentMusicPicker()
         }
+    }
+
+    /// Opens or closes the slide-out Music pane (regular width).
+    func toggleMusicDrawer(animated: Bool = true) {
+        updateHomeSplitLayoutIfNeeded()
+        guard isMusicInDrawer else {
+            showMusicPage(animated: animated)
+            return
+        }
+        musicDrawer.setOpen(musicDrawer.progress < 0.5, animated: animated)
+    }
+
+    /// Regular width uses the drawer only — never the expanded mini-player footer.
+    var usesMusicDrawerChrome: Bool {
+        traitCollection.horizontalSizeClass == .regular
     }
 
     /// Refreshes chrome and dismisses the Music picker when a session first starts.
@@ -47,7 +67,13 @@ extension iPhoneMainViewController {
     }
 
     /// Expands or collapses ambient chrome. User gestures pass `animated: true`.
+    /// Regular width never expands the footer (Music is the drawer only).
     func setAudioMiniCollapsed(_ collapsed: Bool, animated: Bool) {
+        if usesMusicDrawerChrome {
+            audioMiniCollapsed = true
+            refreshAudioMiniPlayer()
+            return
+        }
         guard AudioPlayerController.shared.hasActiveSession else {
             audioMiniCollapsed = true
             refreshAudioMiniPlayer()
@@ -84,28 +110,39 @@ extension iPhoneMainViewController {
     /// Shows the mini bar or the persistent Music bubble, and insets Library + Music.
     ///
     /// The corner button stays up even when idle so Music is always one tap away.
-    /// Circle expands the bar (or opens the picker when idle); the same circle
-    /// becomes Stop while expanded; chevron collapses.
+    /// Compact: circle expands the bar (or opens the picker when idle); the same
+    /// circle becomes Stop while expanded; close collapses. Regular: circle
+    /// toggles the Music drawer; the footer never appears.
     func refreshAudioMiniPlayer() {
+        let drawerChrome = usesMusicDrawerChrome
+        if drawerChrome { audioMiniCollapsed = true }
+
         if isAudioMiniChromeAnimating {
-            let showBar = AudioPlayerController.shared.hasActiveSession
+            let showBar = !drawerChrome
+                && AudioPlayerController.shared.hasActiveSession
                 && !audioMiniCollapsed
             audioMiniPlayer.reload()
-            audioMiniBubble.reload(barExpanded: showBar)
+            audioMiniBubble.reload(
+                barExpanded: showBar,
+                togglesMusicPane: drawerChrome
+            )
             return
         }
 
         let active = AudioPlayerController.shared.hasActiveSession
         if !active { audioMiniCollapsed = true }
 
-        let showBar = active && !audioMiniCollapsed
+        let showBar = !drawerChrome && active && !audioMiniCollapsed
         if !showBar {
             audioMiniPlayer.collapseVolumeControl()
         }
 
         audioMiniPlayer.reload()
-        audioMiniBubble.reload(barExpanded: showBar)
-        view.bringSubviewToFront(audioMiniBubble)
+        audioMiniBubble.reload(
+            barExpanded: showBar,
+            togglesMusicPane: drawerChrome
+        )
+        raiseAudioMiniChrome()
 
         let chromeHeight: CGFloat = showBar ? AudioMiniPlayerView.preferredHeight : 0
         audioMiniHeightConstraint?.constant = showBar ? audioMiniBarHeight() : 0
@@ -149,7 +186,7 @@ extension iPhoneMainViewController {
         bar.alpha = 0
         audioMiniHeightConstraint?.constant = audioMiniBarHeight()
         applyMiniPlayerBottomInset(AudioMiniPlayerView.preferredHeight)
-        view.bringSubviewToFront(bubble)
+        raiseAudioMiniChrome()
         view.layoutIfNeeded()
 
         bubble.isHidden = false
@@ -182,7 +219,7 @@ extension iPhoneMainViewController {
         bar.alpha = 1
         bubble.isHidden = false
         bubble.alpha = 1
-        view.bringSubviewToFront(bubble)
+        raiseAudioMiniChrome()
         view.layoutIfNeeded()
         applyMiniPlayerBottomInset(0)
 
@@ -206,7 +243,7 @@ extension iPhoneMainViewController {
         }
         audioMiniBubble.isHidden = false
         audioMiniBubble.alpha = 1
-        view.bringSubviewToFront(audioMiniBubble)
+        raiseAudioMiniChrome()
         resetBarChromeAppearance()
         libraryViewController.refreshMusicSwipeHintVisibility()
     }
@@ -222,6 +259,7 @@ extension iPhoneMainViewController {
         resetBarChromeAppearance()
         audioMiniBubble.isHidden = false
         audioMiniBubble.alpha = 1
+        raiseAudioMiniChrome()
         libraryViewController.refreshMusicSwipeHintVisibility()
     }
 
@@ -294,10 +332,21 @@ extension iPhoneMainViewController {
     /// the expand animation.
     private func updateAudioMiniBarHeightIfNeeded() {
         guard !isAudioMiniChromeAnimating else { return }
-        let showBar = AudioPlayerController.shared.hasActiveSession && !audioMiniCollapsed
+        let showBar = !usesMusicDrawerChrome
+            && AudioPlayerController.shared.hasActiveSession
+            && !audioMiniCollapsed
         let next: CGFloat = showBar ? audioMiniBarHeight() : 0
         guard audioMiniHeightConstraint?.constant != next else { return }
         audioMiniHeightConstraint?.constant = next
+    }
+
+    /// Expanded footer and Music bubble stay above the Music drawer.
+    func raiseAudioMiniChrome() {
+        AudioMiniChromeZOrder.raise(
+            player: audioMiniPlayer,
+            bubble: audioMiniBubble,
+            in: view
+        )
     }
 
     private func updateLandscapeCompactWidth() {
@@ -310,5 +359,29 @@ extension iPhoneMainViewController {
             AudioMiniPlayerView.compactWidth,
             max(280, available)
         )
+    }
+}
+
+/// Sibling order for ambient chrome: expanded footer, then the Music bubble.
+enum AudioMiniChromeZOrder {
+    /// Raises the mini player and bubble above earlier siblings (the Music drawer).
+    static func raise(player: UIView, bubble: UIView, in host: UIView) {
+        host.bringSubviewToFront(player)
+        host.bringSubviewToFront(bubble)
+    }
+
+    /// Whether `player` and `bubble` are both above `drawer` in `host`.
+    static func isAboveDrawer(
+        player: UIView,
+        bubble: UIView,
+        drawer: UIView,
+        in host: UIView
+    ) -> Bool {
+        let views = host.subviews
+        guard let drawerIndex = views.firstIndex(of: drawer),
+              let playerIndex = views.firstIndex(of: player),
+              let bubbleIndex = views.firstIndex(of: bubble)
+        else { return false }
+        return playerIndex > drawerIndex && bubbleIndex > drawerIndex
     }
 }

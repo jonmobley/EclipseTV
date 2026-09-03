@@ -64,7 +64,8 @@ extension LibraryGridViewController {
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 
-    /// Fullscreen Preview of a local full-res copy (⋯ Preview, or tap when locked).
+    /// Fullscreen Preview of a local full-res copy (⋯ Preview, or tap when locked
+    /// / disconnected without Practice Mode).
     ///
     /// Videos use system `AVPlayerViewController` chrome; images use the swipe gallery.
     func presentLocalPreview(for item: LibraryItemDTO) {
@@ -154,7 +155,7 @@ extension LibraryGridViewController {
         present(preview, animated: true)
     }
 
-    /// Phone Preview for Background (⋯ Preview, or tap when live output is locked).
+    /// Phone Preview for Background (⋯ Preview, or tap when locked / disconnected).
     func presentLogoPhonePreview() {
         guard let url = LogoStore.shared.fileURL else {
             onChooseLogo?()
@@ -168,7 +169,7 @@ extension LibraryGridViewController {
         )
     }
 
-    /// Phone Preview for Screensaver (⋯ Preview, or tap when live output is locked).
+    /// Phone Preview for Screensaver (⋯ Preview, or tap when locked / disconnected).
     func presentScreensaverPhonePreview() {
         guard let source = ScreensaverStore.shared.presentationSource else { return }
         if isShowMode, presentShowPreviewGallery(startingAt: ShowToolToken.screensaver) {

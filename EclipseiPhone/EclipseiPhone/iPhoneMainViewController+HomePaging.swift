@@ -55,7 +55,6 @@ extension iPhoneMainViewController: UIScrollViewDelegate {
     }
 
     /// Reveals Music: drawer on regular width, pager page when compact.
-    /// No-op when Music is already pinned beside Library.
     func showMusicPage(animated: Bool = true) {
         if isMusicInDrawer {
             musicDrawer.setOpen(true, animated: animated)
@@ -87,7 +86,7 @@ extension iPhoneMainViewController: UIScrollViewDelegate {
         refreshHomePagerScrollEnabled()
     }
 
-    /// Switches among compact paging, pinned split, and the Music drawer.
+    /// Switches among compact paging and the Music drawer on regular width.
     func updateHomeSplitLayoutIfNeeded() {
         let width = homePagerScrollView.bounds.width
         guard width > 0 else { return }

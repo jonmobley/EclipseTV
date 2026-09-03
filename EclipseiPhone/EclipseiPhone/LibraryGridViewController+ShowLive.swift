@@ -123,6 +123,7 @@ extension LibraryGridViewController {
         liveHeader.clearLibraryVideoPreview()
         liveHeader.hideLivePollGate()
         liveHeader.setSlideshowRibbonToggleVisible(false, isOn: false)
+        liveHeader.setScreenFitToggleVisible(false, mode: .fit)
         liveHeader.allowsSlideshowBrowse = false
         if snap.isBlackout || snap.liveKind == .black {
             liveHeader.configureOverlay(

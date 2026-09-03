@@ -44,6 +44,8 @@ final class LiveHeaderView: UIView {
     var libraryVideoFullscreenButton: UIButton?
     /// Toggles the live slide ribbon while a Slideshow owns the hero.
     var slideshowRibbonButton: UIButton?
+    /// Circular Fit / Fill shortcut while a still or slideshow owns the hero.
+    var screenFitButton: UIButton?
     /// Host for the live camera frame-tap mirror (AirPlay keeps the hardware layer).
     var cameraPreviewHost: UIView?
     /// In-hero live camera, fed by `CameraManager`'s frame tap.
@@ -82,6 +84,8 @@ final class LiveHeaderView: UIView {
     var onSlideshowSwipe: ((Int) -> Void)?
     /// Toggles `showRibbonWhenLive` for the active Slideshow from the hero.
     var onToggleSlideshowRibbon: (() -> Void)?
+    /// Toggles Fit / Fill for the live still or slideshow from the hero.
+    var onToggleScreenFit: (() -> Void)?
     /// When true, the expanded hero accepts left/right swipes (and stays tappable).
     var allowsSlideshowBrowse = false {
         didSet {
@@ -509,7 +513,7 @@ final class LiveHeaderView: UIView {
     }
 
     /// Compact mini: tap to return. Expanded: transport / slideshow / still Preview.
-    /// The slide-ribbon button must stay tappable even when the ribbon is hidden.
+    /// The slide-ribbon and Screen Fit buttons must stay tappable when shown.
     /// Practice / Start on the Live Poll gate must stay tappable too.
     func applyInteractionForPresentation() {
         isUserInteractionEnabled =
@@ -520,6 +524,7 @@ final class LiveHeaderView: UIView {
             || allowsHostControllerTap
             || allowsCameraControllerTap
             || slideshowRibbonButton != nil
+            || screenFitButton != nil
             || isShowingLivePollGate
     }
 

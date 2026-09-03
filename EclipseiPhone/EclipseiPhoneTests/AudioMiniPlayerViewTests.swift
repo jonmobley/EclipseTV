@@ -70,8 +70,9 @@ struct AudioMiniPlayerViewTests {
     }
 
     @Test func volumeControlOpensOnDemand() {
+        let side = AudioMiniVolumeControl.buttonSide
         let control = AudioMiniVolumeControl(
-            frame: CGRect(x: 0, y: 0, width: 44, height: 44)
+            frame: CGRect(x: 0, y: 0, width: side, height: side)
         )
         control.layoutIfNeeded()
         #expect(control.isExpanded == false)
@@ -91,8 +92,9 @@ struct AudioMiniPlayerViewTests {
     }
 
     @Test func volumeReadoutAppearsWhileDragging() {
+        let side = AudioMiniVolumeControl.buttonSide
         let control = AudioMiniVolumeControl(
-            frame: CGRect(x: 0, y: 0, width: 44, height: 44)
+            frame: CGRect(x: 0, y: 0, width: side, height: side)
         )
         var last: (Float, Bool)?
         control.onVolumeChange = { last = ($0, $1) }
@@ -123,5 +125,14 @@ struct AudioMiniPlayerViewTests {
             AudioMiniPlayerView.minimizeTrailingInset(floating: true)
                 == AudioMiniPlayerView.controlTrailingInset
         )
+    }
+
+    @Test func chromeControlsFillBarHeight() {
+        #expect(
+            AudioMiniPlayerView.controlSide
+                == AudioMiniPlayerView.preferredHeight
+                - AudioMiniPlayerView.controlChromeInset * 2
+        )
+        #expect(AudioMiniVolumeControl.buttonSide == AudioMiniPlayerView.controlSide)
     }
 }

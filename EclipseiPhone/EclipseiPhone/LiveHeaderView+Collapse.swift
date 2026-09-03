@@ -62,6 +62,13 @@ extension LiveHeaderView {
                 ribbon.isHidden = hideRibbon
             }
         }
+        if let fit = screenFitButton {
+            fit.alpha = controlsFade
+            let hideFit = controlsFade <= 0.01
+            if fit.isHidden != hideFit {
+                fit.isHidden = hideFit
+            }
+        }
         gradientLayer.opacity = Float(controlsFade)
         titleLabel.alpha = max(0, 1 - progress * 2)
 

@@ -60,7 +60,7 @@ enum CloudKitRecordMapper {
         let orientation = ExternalOutputOrientation.resolved(fromStored: rawOrientation)
         let createdAt = (record[CloudKitSchema.ShowKey.createdAt] as? Date) ?? Date()
         let previewsWhenDisconnected =
-            (record[CloudKitSchema.ShowKey.previewsWhenDisconnected] as? Bool) ?? false
+            (record[CloudKitSchema.ShowKey.previewsWhenDisconnected] as? Bool) ?? true
         let deletedItemIds =
             (record[CloudKitSchema.ShowKey.deletedItemIds] as? [String]) ?? []
         let deletedSurfaceIds =

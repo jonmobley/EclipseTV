@@ -44,13 +44,14 @@ class iPhoneMainViewController: UIViewController {
     var audioLibraryNavController: UINavigationController?
     /// 0 = Library, 1 = Music.
     var homePageIndex = 0
-    /// True when Library and Music share the home screen (regular width, pinned).
+    /// True when Library and Music share the home screen (unused; drawer-only on
+    /// regular width). Kept so layout math can still branch on `.split`.
     var isHomeSplitLayout = false
-    /// True when the user pinned Music beside Library (regular width only).
+    /// Legacy pinned-sidebar preference (ignored for layout; regular is drawer).
     var isMusicSidebarPinned = HomeMusicLayout.isPinned()
-    /// True while Music is hosted in the floating drawer (regular width, unpinned).
+    /// True while Music is hosted in the floating drawer (regular width).
     var isMusicInDrawer = false
-    /// Overlay drawer for Music when unpinned on regular width.
+    /// Overlay drawer for Music on regular width.
     let musicDrawer = HomeMusicDrawerView()
     /// Pager constraints for the Music page; empty while Music is in the drawer.
     var musicPagerConstraints: [NSLayoutConstraint] = []
@@ -137,8 +138,8 @@ class iPhoneMainViewController: UIViewController {
 
     /// Footer mini player for ambient music.
     let audioMiniPlayer = AudioMiniPlayerView()
-    /// Persistent Music control. Idle opens picker; session expands the footer;
-    /// expanded tap stops.
+    /// Persistent Music control. Regular: toggles the drawer. Compact: picker /
+    /// expand footer / stop.
     let audioMiniBubble = AudioMiniPlayerBubbleView()
     /// When true, the bar is hidden; the Music circle stays visible.
     /// Ambient control prefers the floating bubble; expand is temporary.

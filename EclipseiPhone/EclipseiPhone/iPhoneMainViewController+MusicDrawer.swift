@@ -7,7 +7,7 @@
 
 import UIKit
 
-// MARK: - Music drawer (regular width, unpinned)
+// MARK: - Music drawer (regular width)
 
 extension iPhoneMainViewController: UIGestureRecognizerDelegate {
 
@@ -32,7 +32,7 @@ extension iPhoneMainViewController: UIGestureRecognizerDelegate {
         musicEdgePanRecognizer = edge
     }
 
-    /// Pins or unpins the always-visible Music sidebar (regular width only).
+    /// Legacy pin API — regular width always uses the drawer; pinning is a no-op.
     func setMusicSidebarPinned(_ pinned: Bool, animated: Bool) {
         guard pinned != isMusicSidebarPinned else { return }
         isMusicSidebarPinned = pinned
@@ -78,6 +78,7 @@ extension iPhoneMainViewController: UIGestureRecognizerDelegate {
             musicDrawer.panelWidth = HomeMusicLayout.sidebarWidth(
                 for: max(homePagerScrollView.bounds.width, 1)
             )
+            raiseAudioMiniChrome()
         } else {
             musicDrawer.setOpen(false, animated: false)
         }
@@ -96,6 +97,9 @@ extension iPhoneMainViewController: UIGestureRecognizerDelegate {
     }
 
     @objc private func handleMusicEdgePan(_ gesture: UIScreenEdgePanGestureRecognizer) {
+        if gesture.state == .began {
+            raiseAudioMiniChrome()
+        }
         musicDrawer.handleEdgePan(gesture)
     }
 

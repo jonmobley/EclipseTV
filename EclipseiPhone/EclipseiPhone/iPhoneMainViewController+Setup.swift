@@ -105,7 +105,7 @@ extension iPhoneMainViewController {
         embedHomePager()
         setupAudioMiniPlayer()
         setupMusicDrawer()
-        view.bringSubviewToFront(musicDrawer)
+        raiseAudioMiniChrome()
         setupTransferOverlay()
     }
 
@@ -133,6 +133,9 @@ extension iPhoneMainViewController {
         }
         headerBar.onDoneSelecting = { [weak self] in
             self?.libraryViewController.cancelSelecting()
+        }
+        headerBar.onSelectDestination = { [weak self] destination in
+            self?.selectHeaderDestination(destination)
         }
         view.addSubview(headerBar)
 
@@ -234,7 +237,7 @@ extension iPhoneMainViewController {
         refreshAudioMiniPlayer()
     }
 
-    /// Reveals Music: pager page, floating drawer, or no-op when already pinned.
+    /// Reveals Music: pager page or floating drawer.
     func presentAudioLibrary() {
         showMusicPage(animated: true)
     }

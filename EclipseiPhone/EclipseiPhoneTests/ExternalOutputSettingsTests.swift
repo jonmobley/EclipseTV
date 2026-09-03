@@ -6,6 +6,7 @@
 //
 
 import Testing
+import UIKit
 @testable import EclipseiPhone
 
 @Suite(.serialized)
@@ -36,5 +37,37 @@ struct ExternalOutputSettingsTests {
         #expect(WebTextSize.small.logicalWidth == 1440)
         #expect(WebTextSize.small.logicalWidth > WebTextSize.medium.logicalWidth)
         #expect(WebTextSize.medium.logicalWidth > WebTextSize.large.logicalWidth)
+    }
+
+    @Test func phoneColumnCountsStayAtTheModeBaseline() {
+        let inset: CGFloat = 16
+        let spacing: CGFloat = 12
+        #expect(
+            ExternalOutputOrientation.landscape.gridColumnCount(
+                forWidth: 390, sectionInset: inset, spacing: spacing
+            ) == 2
+        )
+        #expect(
+            ExternalOutputOrientation.portrait.gridColumnCount(
+                forWidth: 390, sectionInset: inset, spacing: spacing
+            ) == 3
+        )
+        #expect(
+            ExternalOutputOrientation.portrait.gridColumnCount(
+                forWidth: 780, sectionInset: inset, spacing: spacing
+            ) == 4
+        )
+    }
+
+    @Test func thirteenInchDoesNotExceedFourColumns() {
+        let inset: CGFloat = 16
+        let spacing: CGFloat = 12
+        for orientation in ExternalOutputOrientation.allCases {
+            #expect(
+                orientation.gridColumnCount(
+                    forWidth: 1366, sectionInset: inset, spacing: spacing
+                ) == ExternalOutputOrientation.maxGridColumnCount
+            )
+        }
     }
 }

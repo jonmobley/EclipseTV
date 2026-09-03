@@ -10,7 +10,7 @@ import UIKit
 /// Speaker button that reveals a vertical volume slider above the footer.
 final class AudioMiniVolumeControl: UIView {
 
-    static let buttonSide: CGFloat = 44
+    static let buttonSide: CGFloat = AudioMiniPlayerView.controlSide
 
     /// `notify` is false while dragging so lists don't reload every tick.
     var onVolumeChange: ((_ value: Float, _ notify: Bool) -> Void)?
@@ -163,12 +163,6 @@ final class AudioMiniVolumeControl: UIView {
     }
 
     private func configureSpeaker() {
-        var config = UIButton.Configuration.plain()
-        config.baseForegroundColor = .secondaryLabel
-        config.contentInsets = NSDirectionalEdgeInsets(
-            top: 10, leading: 10, bottom: 10, trailing: 10
-        )
-        speakerButton.configuration = config
         speakerButton.accessibilityLabel = "Volume"
         speakerButton.accessibilityHint = "Shows a volume slider above the player."
         speakerButton.addTarget(self, action: #selector(toggleExpanded), for: .touchUpInside)
@@ -281,13 +275,9 @@ final class AudioMiniVolumeControl: UIView {
     }
 
     private func refreshSpeaker() {
-        var config = speakerButton.configuration ?? .plain()
-        config.image = UIImage(
-            systemName: Self.speakerSymbol(for: volume),
-            withConfiguration: UIImage.SymbolConfiguration(pointSize: 16, weight: .semibold)
+        speakerButton.configuration = AudioMiniPlayerView.roundControlConfiguration(
+            systemName: Self.speakerSymbol(for: volume)
         )
-        config.baseForegroundColor = .secondaryLabel
-        speakerButton.configuration = config
         speakerButton.accessibilityValue = "\(Int((volume * 100).rounded())) percent"
     }
 

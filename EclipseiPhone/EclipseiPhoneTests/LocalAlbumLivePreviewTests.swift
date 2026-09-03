@@ -13,19 +13,19 @@ import Testing
 @MainActor
 struct LocalAlbumLivePreviewTests {
 
-    @Test func newShowDefaultsPracticePreviewOff() {
+    @Test func newShowDefaultsPracticePreviewOn() {
         let album = LocalAlbum(name: "Rehearsal")
-        #expect(album.previewsWhenDisconnected == false)
+        #expect(album.previewsWhenDisconnected == true)
     }
 
-    @Test func missingJSONKeyDecodesAsOff() throws {
-        let album = LocalAlbum(name: "Legacy")
+    @Test func missingJSONKeyDecodesAsOn() throws {
+        let album = LocalAlbum(name: "Legacy", previewsWhenDisconnected: false)
         let encoded = try JSONEncoder().encode(album)
         var object = try JSONSerialization.jsonObject(with: encoded) as! [String: Any]
         object.removeValue(forKey: "previewsWhenDisconnected")
         let stripped = try JSONSerialization.data(withJSONObject: object)
         let decoded = try JSONDecoder().decode(LocalAlbum.self, from: stripped)
-        #expect(decoded.previewsWhenDisconnected == false)
+        #expect(decoded.previewsWhenDisconnected == true)
         #expect(decoded.name == "Legacy")
     }
 
@@ -43,13 +43,13 @@ struct LocalAlbumLivePreviewTests {
         defaults.removePersistentDomain(forName: suite)
         let store = LocalAlbumStore(defaults: defaults)
         let show = try store.create(name: "Stage", orientation: .landscape)
-        #expect(show.previewsWhenDisconnected == false)
-
-        store.setPreviewsWhenDisconnected(true, albumId: show.id)
-        #expect(store.album(id: show.id)?.previewsWhenDisconnected == true)
+        #expect(show.previewsWhenDisconnected == true)
 
         store.setPreviewsWhenDisconnected(false, albumId: show.id)
         #expect(store.album(id: show.id)?.previewsWhenDisconnected == false)
+
+        store.setPreviewsWhenDisconnected(true, albumId: show.id)
+        #expect(store.album(id: show.id)?.previewsWhenDisconnected == true)
     }
 
     @Test func cloudKitRoundTripPreservesPracticePreview() throws {
@@ -62,11 +62,22 @@ struct LocalAlbumLivePreviewTests {
         #expect(decoded.previewsWhenDisconnected == true)
     }
 
-    @Test func cloudKitMissingFieldDefaultsOff() throws {
-        let album = LocalAlbum(name: "Old Record")
+    @Test func cloudKitMissingFieldDefaultsOn() throws {
+        let album = LocalAlbum(name: "Old Record", previewsWhenDisconnected: false)
         let record = CloudKitRecordMapper.makeShowRecord(from: album)
         record[CloudKitSchema.ShowKey.previewsWhenDisconnected] = nil
         let decoded = try #require(CloudKitRecordMapper.album(from: record))
-        #expect(decoded.previewsWhenDisconnected == false)
+        #expect(decoded.previewsWhenDisconnected == true)
+    }
+
+    @Test func storeMigratesLegacyPracticePreviewOffToOn() throws {
+        let suite = "LocalAlbumLivePreviewMigration.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        let seed = LocalAlbum(name: "Old", previewsWhenDisconnected: false)
+        defaults.set(try JSONEncoder().encode([seed]), forKey: "EclipseTV.localAlbums.items")
+
+        let store = LocalAlbumStore(defaults: defaults)
+        #expect(store.album(id: seed.id)?.previewsWhenDisconnected == true)
     }
 }

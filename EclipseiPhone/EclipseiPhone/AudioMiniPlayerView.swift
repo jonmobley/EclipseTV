@@ -24,8 +24,35 @@ final class AudioMiniPlayerView: UIView, UIGestureRecognizerDelegate {
     static let compactBottomInset: CGFloat = 10
     /// Space between the compact card and the Music circle.
     static let circleFooterGap: CGFloat = 8
-    /// Trailing inset for minimize when the circle sits beside the card.
-    static let controlTrailingInset: CGFloat = 10
+    /// Padding around the round volume and close controls inside the 64pt bar.
+    static let controlChromeInset: CGFloat = 4
+    /// Round volume and close controls; same size, filling the bar height.
+    static let controlSide: CGFloat = preferredHeight - controlChromeInset * 2
+    /// Gap between the volume and close circles.
+    static let controlGap: CGFloat = 6
+    /// Trailing inset for close when the circle sits beside the card.
+    static let controlTrailingInset: CGFloat = controlChromeInset
+
+    /// Round filled chrome shared by volume and close.
+    static func roundControlConfiguration(
+        systemName: String,
+        pointSize: CGFloat = 20
+    ) -> UIButton.Configuration {
+        var config = UIButton.Configuration.plain()
+        config.image = UIImage(
+            systemName: systemName,
+            withConfiguration: UIImage.SymbolConfiguration(
+                pointSize: pointSize, weight: .bold
+            )
+        )
+        config.baseForegroundColor = .secondaryLabel
+        config.background.backgroundColor = UIColor.white.withAlphaComponent(0.12)
+        config.background.cornerRadius = controlSide / 2
+        config.contentInsets = NSDirectionalEdgeInsets(
+            top: 16, leading: 16, bottom: 16, trailing: 16
+        )
+        return config
+    }
 
     /// Compact trailing card in phone landscape and on regular-width layouts (iPad).
     /// Phone portrait stays a full-width footer.
@@ -185,36 +212,26 @@ final class AudioMiniPlayerView: UIView, UIGestureRecognizerDelegate {
             ),
 
             minimizeTrailing,
-            minimizeButton.centerYAnchor.constraint(
-                equalTo: safeAreaLayoutGuide.centerYAnchor
+            minimizeButton.topAnchor.constraint(
+                equalTo: topAnchor, constant: Self.controlChromeInset
             ),
-            minimizeButton.widthAnchor.constraint(equalToConstant: 44),
-            minimizeButton.heightAnchor.constraint(equalToConstant: 44),
+            minimizeButton.widthAnchor.constraint(equalToConstant: Self.controlSide),
+            minimizeButton.heightAnchor.constraint(equalToConstant: Self.controlSide),
 
             volumeControl.trailingAnchor.constraint(
-                equalTo: minimizeButton.leadingAnchor, constant: -4
+                equalTo: minimizeButton.leadingAnchor, constant: -Self.controlGap
             ),
-            volumeControl.centerYAnchor.constraint(
-                equalTo: safeAreaLayoutGuide.centerYAnchor
+            volumeControl.topAnchor.constraint(
+                equalTo: topAnchor, constant: Self.controlChromeInset
             )
         ])
     }
 
     private func configureMinimizeButton() {
-        var minimizeConfig = UIButton.Configuration.plain()
-        minimizeConfig.image = UIImage(
-            systemName: "chevron.right",
-            withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .bold)
-        )
-        minimizeConfig.baseForegroundColor = .secondaryLabel
-        minimizeConfig.background.backgroundColor = UIColor.white.withAlphaComponent(0.12)
-        minimizeConfig.background.cornerRadius = 22
-        minimizeConfig.contentInsets = NSDirectionalEdgeInsets(
-            top: 12, leading: 12, bottom: 12, trailing: 12
-        )
-        minimizeButton.configuration = minimizeConfig
-        minimizeButton.accessibilityLabel = "Collapse"
-        minimizeButton.accessibilityHint = "Collapse to a floating button. Music keeps playing."
+        minimizeButton.configuration = Self.roundControlConfiguration(systemName: "xmark")
+        minimizeButton.accessibilityLabel = "Close"
+        minimizeButton.accessibilityHint =
+            "Collapse to a floating button. Music keeps playing."
     }
 
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
