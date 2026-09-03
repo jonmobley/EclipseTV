@@ -173,7 +173,7 @@ extension LibraryGridViewController {
         scrollInGridRibbonHorizontally(to: index)
     }
 
-    /// Horizontal strip used under the live preview.
+    /// Strip used beside / under the live preview (axis chosen at layout time).
     func makeDockedSlideshowRibbonView() -> UICollectionView {
         let layout = UICollectionViewFlowLayout()
         layout.scrollDirection = .horizontal
@@ -182,7 +182,9 @@ extension LibraryGridViewController {
         let view = UICollectionView(frame: .zero, collectionViewLayout: layout)
         view.backgroundColor = .clear
         view.showsHorizontalScrollIndicator = false
+        view.showsVerticalScrollIndicator = false
         view.alwaysBounceHorizontal = true
+        view.alwaysBounceVertical = false
         view.isDirectionalLockEnabled = true
         view.contentInsetAdjustmentBehavior = .never
         view.isHidden = true
@@ -196,30 +198,43 @@ extension LibraryGridViewController {
         return view
     }
 
-    /// Sizes and shows the docked ribbon under the live preview (both axes).
+    /// Sizes and shows the docked ribbon under or beside the live preview.
     func layoutDockedSlideshowRibbon() {
+        applyDockedRibbonChromeAxis()
         let docked = docksLiveSlideshowRibbon
         let wasHidden = slideshowRibbonView.isHidden
+        let vertical = usesVerticalDockedRibbon
         slideshowRibbonView.isHidden = !docked
         slideshowRibbonView.isUserInteractionEnabled = docked
         guard docked else {
+            // Parked strip: zero size only. Vertical top/bottom pins must already
+            // be off (`applyDockedRibbonChromeAxis`) so this cannot crush the hero.
             dockedRibbonTopConstraint?.constant = 0
             dockedRibbonHeightConstraint?.constant = 0
+            dockedRibbonHeightConstraint?.isActive = true
+            dockedRibbonWidthConstraint?.constant = 0
+            dockedRibbonWidthConstraint?.isActive = true
             return
         }
-        let width = max(
-            liveHeader.bounds.width,
-            heroWidthConstraint?.constant ?? 0,
-            max(0, view.bounds.width - headerInset * 2)
-        )
         let thumb = Self.slideshowRibbonThumbSize(
-            containerWidth: width,
-            sectionInset: 0,
+            containerWidth: ribbonThumbContainerWidth(),
+            sectionInset: sectionInset,
             spacing: interitemSpacing
         )
-        applyDockedRibbonItemSize(thumb)
-        dockedRibbonTopConstraint?.constant = Self.sideBySideGutter
-        dockedRibbonHeightConstraint?.constant = thumb.height
+        applyDockedRibbonItemSize(thumb, vertical: vertical)
+        if vertical {
+            dockedRibbonTopConstraint?.constant = 0
+            dockedRibbonHeightConstraint?.constant = 0
+            dockedRibbonHeightConstraint?.isActive = false
+            dockedRibbonWidthConstraint?.constant = thumb.width
+            dockedRibbonWidthConstraint?.isActive = true
+        } else {
+            dockedRibbonTopConstraint?.constant = Self.sideBySideGutter
+            dockedRibbonHeightConstraint?.constant = thumb.height
+            dockedRibbonHeightConstraint?.isActive = true
+            dockedRibbonWidthConstraint?.constant = 0
+            dockedRibbonWidthConstraint?.isActive = false
+        }
         if showsLiveHero {
             view.bringSubviewToFront(liveHeader)
         }
@@ -317,39 +332,81 @@ extension LibraryGridViewController {
         slideshowRibbonView.layoutIfNeeded()
         guard let frame = slideshowRibbonView.layoutAttributesForItem(at: path)?.frame
         else { return }
-        let inset = slideshowRibbonView.adjustedContentInset
-        let minVisibleX = slideshowRibbonView.contentOffset.x + inset.left
-        let maxVisibleX = slideshowRibbonView.contentOffset.x
-            + slideshowRibbonView.bounds.width - inset.right
-        // Fully on-screen already — highlight moved; leave offset alone.
-        if frame.minX >= minVisibleX - 0.5, frame.maxX <= maxVisibleX + 0.5 {
-            return
+        let target = Self.dockedRibbonRevealOffset(
+            itemFrame: frame,
+            bounds: slideshowRibbonView.bounds,
+            contentSize: slideshowRibbonView.contentSize,
+            contentOffset: slideshowRibbonView.contentOffset,
+            adjustedContentInset: slideshowRibbonView.adjustedContentInset,
+            scrollsVertically: usesVerticalDockedRibbon
+        )
+        guard let target else { return }
+        slideshowRibbonView.setContentOffset(target, animated: animated)
+    }
+
+    /// Minimum content offset that fully reveals `itemFrame`, or `nil` if already visible.
+    static func dockedRibbonRevealOffset(
+        itemFrame: CGRect,
+        bounds: CGRect,
+        contentSize: CGSize,
+        contentOffset: CGPoint,
+        adjustedContentInset: UIEdgeInsets,
+        scrollsVertically: Bool
+    ) -> CGPoint? {
+        let inset = adjustedContentInset
+        if scrollsVertically {
+            let minVisible = contentOffset.y + inset.top
+            let maxVisible = contentOffset.y + bounds.height - inset.bottom
+            if itemFrame.minY >= minVisible - 0.5, itemFrame.maxY <= maxVisible + 0.5 {
+                return nil
+            }
+            var offsetY = contentOffset.y
+            if itemFrame.minY < minVisible {
+                offsetY = itemFrame.minY - inset.top
+            } else if itemFrame.maxY > maxVisible {
+                offsetY = itemFrame.maxY - bounds.height + inset.bottom
+            }
+            let minY = -inset.top
+            let maxY = max(
+                minY,
+                contentSize.height - bounds.height + inset.bottom
+            )
+            let clamped = min(max(offsetY, minY), maxY)
+            guard abs(clamped - contentOffset.y) > 0.5 else { return nil }
+            return CGPoint(x: contentOffset.x, y: clamped)
         }
-        var offsetX = slideshowRibbonView.contentOffset.x
-        if frame.minX < minVisibleX {
-            offsetX = frame.minX - inset.left
-        } else if frame.maxX > maxVisibleX {
-            offsetX = frame.maxX - slideshowRibbonView.bounds.width + inset.right
+
+        let minVisible = contentOffset.x + inset.left
+        let maxVisible = contentOffset.x + bounds.width - inset.right
+        if itemFrame.minX >= minVisible - 0.5, itemFrame.maxX <= maxVisible + 0.5 {
+            return nil
+        }
+        var offsetX = contentOffset.x
+        if itemFrame.minX < minVisible {
+            offsetX = itemFrame.minX - inset.left
+        } else if itemFrame.maxX > maxVisible {
+            offsetX = itemFrame.maxX - bounds.width + inset.right
         }
         let minX = -inset.left
         let maxX = max(
             minX,
-            slideshowRibbonView.contentSize.width - slideshowRibbonView.bounds.width
-                + inset.right
+            contentSize.width - bounds.width + inset.right
         )
         let clamped = min(max(offsetX, minX), maxX)
-        let target = CGPoint(x: clamped, y: slideshowRibbonView.contentOffset.y)
-        guard abs(target.x - slideshowRibbonView.contentOffset.x) > 0.5 else { return }
-        slideshowRibbonView.setContentOffset(target, animated: animated)
+        guard abs(clamped - contentOffset.x) > 0.5 else { return nil }
+        return CGPoint(x: clamped, y: contentOffset.y)
     }
 
-    private func applyDockedRibbonItemSize(_ thumb: CGSize) {
+    private func applyDockedRibbonItemSize(_ thumb: CGSize, vertical: Bool) {
         guard let layout = slideshowRibbonView.collectionViewLayout
             as? UICollectionViewFlowLayout else { return }
         layout.itemSize = thumb
         layout.minimumLineSpacing = interitemSpacing
         layout.minimumInteritemSpacing = interitemSpacing
         layout.sectionInset = .zero
+        layout.scrollDirection = vertical ? .vertical : .horizontal
+        slideshowRibbonView.alwaysBounceHorizontal = !vertical
+        slideshowRibbonView.alwaysBounceVertical = vertical
         layout.invalidateLayout()
     }
 }

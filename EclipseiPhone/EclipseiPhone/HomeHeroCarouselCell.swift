@@ -12,14 +12,57 @@ final class HomeHeroCarouselCell: UICollectionViewCell, UIScrollViewDelegate {
 
     static let reuseIdentifier = "HomeHeroCarouselCell"
 
-    /// Preferred card height for the Home hero band.
-    static let cardHeight: CGFloat = 168
+    /// Card width ÷ height. The Home hero is always 16:9.
+    static let cardAspectWidthOverHeight: CGFloat = 16.0 / 9.0
+    /// Page dots under the card (gap + control).
+    static let pageControlBand: CGFloat = 28
+
+    /// 16:9 card that spans the pane on the phone and caps on wide iPad.
+    static func cardSize(
+        availableWidth: CGFloat,
+        containerHeight: CGFloat,
+        horizontalSizeClass: UIUserInterfaceSizeClass
+    ) -> CGSize {
+        let maxWidth = max(availableWidth, 1)
+        let fullBleedHeight = (maxWidth / cardAspectWidthOverHeight).rounded(.down)
+        let heightCap: CGFloat
+        if horizontalSizeClass == .regular, containerHeight > 0 {
+            heightCap = max(
+                StackedHeroMetrics.phoneMaxHeight,
+                (containerHeight * StackedHeroMetrics.regularWidthHeightFraction)
+                    .rounded(.down)
+            )
+        } else {
+            heightCap = fullBleedHeight
+        }
+        let height = max(min(fullBleedHeight, heightCap), 1)
+        let width = min(
+            maxWidth,
+            (height * cardAspectWidthOverHeight).rounded(.down)
+        )
+        return CGSize(width: max(width, 1), height: height)
+    }
+
+    /// Card + page-control band for the Home hero section.
+    static func bandHeight(
+        availableWidth: CGFloat,
+        containerHeight: CGFloat,
+        horizontalSizeClass: UIUserInterfaceSizeClass
+    ) -> CGFloat {
+        cardSize(
+            availableWidth: availableWidth,
+            containerHeight: containerHeight,
+            horizontalSizeClass: horizontalSizeClass
+        ).height + pageControlBand
+    }
 
     private let scrollView = UIScrollView()
     private let pageControl = UIPageControl()
     private var pageViews: [UIView] = []
     private var configuredWidth: CGFloat = 0
     private var isAdjustingOffset = false
+    private var cardWidthConstraint: NSLayoutConstraint?
+    private var cardHeightConstraint: NSLayoutConstraint?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -32,7 +75,8 @@ final class HomeHeroCarouselCell: UICollectionViewCell, UIScrollViewDelegate {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        let width = contentView.bounds.width
+        applyCardSize()
+        let width = scrollView.bounds.width
         guard width > 0, abs(width - configuredWidth) > 0.5 else { return }
         configuredWidth = width
         layoutPages(width: width)
@@ -41,7 +85,8 @@ final class HomeHeroCarouselCell: UICollectionViewCell, UIScrollViewDelegate {
     /// Rebuilds pages from `HomeHeroSlide.all`.
     func reload() {
         configuredWidth = 0
-        layoutPages(width: contentView.bounds.width)
+        applyCardSize()
+        layoutPages(width: scrollView.bounds.width)
     }
 
     // MARK: - Private
@@ -67,11 +112,15 @@ final class HomeHeroCarouselCell: UICollectionViewCell, UIScrollViewDelegate {
         pageControl.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(pageControl)
 
+        let widthConstraint = scrollView.widthAnchor.constraint(equalToConstant: 320)
+        let heightConstraint = scrollView.heightAnchor.constraint(equalToConstant: 180)
+        cardWidthConstraint = widthConstraint
+        cardHeightConstraint = heightConstraint
         NSLayoutConstraint.activate([
             scrollView.topAnchor.constraint(equalTo: contentView.topAnchor),
-            scrollView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
-            scrollView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-            scrollView.heightAnchor.constraint(equalToConstant: Self.cardHeight),
+            scrollView.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+            widthConstraint,
+            heightConstraint,
 
             pageControl.topAnchor.constraint(equalTo: scrollView.bottomAnchor, constant: 8),
             pageControl.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
@@ -83,9 +132,35 @@ final class HomeHeroCarouselCell: UICollectionViewCell, UIScrollViewDelegate {
         accessibilityHint = "Swipe horizontally for more"
     }
 
+    /// Centers a 16:9 card in the cell; full-bleed on the phone, inset on wide iPad.
+    private func applyCardSize() {
+        let card = Self.cardSize(
+            availableWidth: contentView.bounds.width,
+            containerHeight: enclosingCollectionViewHeight,
+            horizontalSizeClass: traitCollection.horizontalSizeClass
+        )
+        guard abs((cardWidthConstraint?.constant ?? 0) - card.width) > 0.5
+            || abs((cardHeightConstraint?.constant ?? 0) - card.height) > 0.5
+        else { return }
+        cardWidthConstraint?.constant = card.width
+        cardHeightConstraint?.constant = card.height
+    }
+
+    private var enclosingCollectionViewHeight: CGFloat {
+        var view: UIView? = superview
+        while let current = view {
+            if let collection = current as? UICollectionView {
+                return collection.bounds.height
+            }
+            view = current.superview
+        }
+        return 0
+    }
+
     /// Content order: [last clone, …slides…, first clone] so paging can wrap.
     private func layoutPages(width: CGFloat) {
-        guard width > 0 else { return }
+        let height = scrollView.bounds.height
+        guard width > 0, height > 0 else { return }
         let slides = HomeHeroSlide.all
         guard !slides.isEmpty else { return }
 
@@ -97,14 +172,14 @@ final class HomeHeroCarouselCell: UICollectionViewCell, UIScrollViewDelegate {
                 x: CGFloat(index) * width,
                 y: 0,
                 width: width,
-                height: Self.cardHeight
+                height: height
             )
             scrollView.addSubview(page)
             return page
         }
         scrollView.contentSize = CGSize(
             width: width * CGFloat(looped.count),
-            height: Self.cardHeight
+            height: height
         )
 
         let logical = min(max(0, pageControl.currentPage), slides.count - 1)

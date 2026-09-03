@@ -60,6 +60,19 @@ struct LiveHeaderViewCameraPreviewTests {
         #expect(header.titleLabel.isHidden)
     }
 
+    /// The Camera overlay glyph is not the live feed — Practice Mode must call
+    /// `showCameraPreview()` after configure, same as the web hero path.
+    @Test func cameraOverlayDoesNotStartTheMirrorByItself() {
+        let header = makeHeader()
+        header.configureOverlay(
+            title: "Camera",
+            systemImage: "camera.fill",
+            fillColor: UIColor(white: 0.12, alpha: 1)
+        )
+        #expect(header.isCameraPreviewActive == false)
+        #expect(header.placeholderIcon.isHidden == false)
+    }
+
     private func makeHeader() -> LiveHeaderView {
         LiveHeaderView(frame: CGRect(x: 0, y: 0, width: 320, height: 180))
     }

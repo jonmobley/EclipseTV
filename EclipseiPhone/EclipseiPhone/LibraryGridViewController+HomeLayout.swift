@@ -89,7 +89,12 @@ extension LibraryGridViewController {
             }
             switch visible[sectionIndex] {
             case .hero:
-                return Self.heroSection(sectionInset: sectionInset)
+                return Self.heroSection(
+                    containerWidth: width,
+                    containerHeight: environment.container.effectiveContentSize.height,
+                    sectionInset: sectionInset,
+                    horizontalSizeClass: environment.traitCollection.horizontalSizeClass
+                )
             case .tools:
                 return Self.toolsSection(
                     containerWidth: width,
@@ -120,19 +125,37 @@ extension LibraryGridViewController {
         }
     }
 
-    /// Estimated height of the Home hero carousel (card + page dots).
-    static var heroEstimatedHeight: CGFloat {
-        HomeHeroCarouselCell.cardHeight + 28
+    /// Height of the Home hero carousel (16:9 card + page dots).
+    static func heroBandHeight(
+        containerWidth: CGFloat,
+        containerHeight: CGFloat,
+        sectionInset: CGFloat,
+        horizontalSizeClass: UIUserInterfaceSizeClass
+    ) -> CGFloat {
+        HomeHeroCarouselCell.bandHeight(
+            availableWidth: containerWidth - sectionInset * 2,
+            containerHeight: containerHeight,
+            horizontalSizeClass: horizontalSizeClass
+        )
     }
 
-    /// Marketing carousel above Recent.
+    /// Marketing carousel above Recent. Full-bleed 16:9 on the phone; a centered
+    /// 16:9 card on wide iPad so the band is not a short full-width strip.
     private static func heroSection(
-        sectionInset: CGFloat
+        containerWidth: CGFloat,
+        containerHeight: CGFloat,
+        sectionInset: CGFloat,
+        horizontalSizeClass: UIUserInterfaceSizeClass
     ) -> NSCollectionLayoutSection {
-        let height = heroEstimatedHeight
+        let height = heroBandHeight(
+            containerWidth: containerWidth,
+            containerHeight: containerHeight,
+            sectionInset: sectionInset,
+            horizontalSizeClass: horizontalSizeClass
+        )
         let itemSize = NSCollectionLayoutSize(
             widthDimension: .fractionalWidth(1),
-            heightDimension: .absolute(height)
+            heightDimension: .absolute(max(height, 1))
         )
         let item = NSCollectionLayoutItem(layoutSize: itemSize)
         let group = NSCollectionLayoutGroup.vertical(
@@ -238,7 +261,7 @@ extension LibraryGridViewController {
 
     /// Columns for every tile band in the home collection view, from the Display
     /// Mode: 2-up for 16:9 Landscape, 3-up for 9:16 Vertical (4-up when the phone
-    /// is turned), gaining further columns on iPad rather than growing the tile.
+    /// is turned), gaining columns on iPad up to four, then growing the tile.
     static func homeGridColumnCount(
         containerWidth: CGFloat,
         sectionInset: CGFloat,
@@ -340,34 +363,31 @@ extension LibraryGridViewController {
         return section
     }
 
-    /// Short side of a live-ribbon thumb, as a fraction of a 3-up column.
-    private static let slideshowRibbonShortSideScale: CGFloat = 0.72
+    /// Ribbon thumb edge as a fraction of a Show-grid tile (same aspect).
+    static let slideshowRibbonShortSideScale: CGFloat = 0.72
 
-    /// Ribbon thumb size: short side is a fraction of a 3-up column; long side
-    /// follows Display Mode (16:9 Landscape, 9:16 Vertical), matching the Show.
+    /// Ribbon thumb size: scaled Show-grid tile (16:9 Landscape / 9:16 Vertical).
+    ///
+    /// Uses the same column math as the media grid so thumbs stay proportional on
+    /// iPad (4-up-then-grow) instead of a fake 3-up of the full pane.
     static func slideshowRibbonThumbSize(
         containerWidth: CGFloat,
         sectionInset: CGFloat,
         spacing: CGFloat,
         orientation: ExternalOutputOrientation = ExternalOutputSettings.orientation
     ) -> CGSize {
-        let full = columnWidth(
+        let tile = homeTileSize(
             containerWidth: containerWidth,
             sectionInset: sectionInset,
             spacing: spacing,
-            columns: 3
+            orientation: orientation
         )
-        let short = max(
-            (full * slideshowRibbonShortSideScale).rounded(.down),
-            minimumTileSide
-        )
-        let aspect = orientation.aspectRatio
         let width = max(
-            (aspect >= 1 ? short * aspect : short).rounded(.down),
+            (tile.width * slideshowRibbonShortSideScale).rounded(.down),
             minimumTileSide
         )
         let height = max(
-            (aspect >= 1 ? short : short / aspect).rounded(.down),
+            (tile.height * slideshowRibbonShortSideScale).rounded(.down),
             minimumTileSide
         )
         return CGSize(width: width, height: height)

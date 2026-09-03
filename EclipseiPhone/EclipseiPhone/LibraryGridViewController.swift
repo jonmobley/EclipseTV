@@ -63,14 +63,11 @@ final class LibraryGridViewController: UIViewController {
     let headerInset: CGFloat = 16
     /// Black gap inserted between the hero banner and the grid below it.
     let heroBottomPadding: CGFloat = 16
-    /// Caps Vertical-mode hero height so a 9:16 frame doesn't fill the phone.
-    /// Also used to height-cap Landscape heroes on wide (iPad) panes.
-    let verticalHeroMaxHeight: CGFloat = 280
     /// Last width used for hero / grid sizing; avoids redundant layout work.
     var lastLayoutWidth: CGFloat = 0
     /// Last height used for side-by-side chrome; avoids redundant layout work.
     var lastLayoutHeight: CGFloat = 0
-    /// True while grid|preview are side-by-side (phone landscape).
+    /// True while grid|preview are side-by-side (phone / iPad landscape).
     var isSideBySideChrome = false
 
     var heroHeightConstraint: NSLayoutConstraint?
@@ -82,7 +79,7 @@ final class LibraryGridViewController: UIViewController {
     var heroTopConstraint: NSLayoutConstraint?
     /// Stacked hero-above-grid constraints (phone portrait / iPad).
     var portraitChromeConstraints: [NSLayoutConstraint] = []
-    /// Preview-left / grid-right constraints (phone landscape).
+    /// Preview-left / grid-right constraints (phone + iPad landscape).
     var landscapeChromeConstraints: [NSLayoutConstraint] = []
     /// Always 0 for this Show's hero (pinned). Foreign live uses its own mini view.
     var heroCollapseProgress: CGFloat = 0
@@ -373,10 +370,20 @@ final class LibraryGridViewController: UIViewController {
     lazy var slideshowRibbonView: UICollectionView = makeDockedSlideshowRibbonView()
     /// Last in-grid / docked ribbon placement. Slide advances must not rebuild this.
     var lastSlideshowRibbonChrome: SlideshowRibbonChrome?
-    /// Height of the docked ribbon (0 when it is parked or hidden).
+    /// Height of the docked ribbon (0 when it is parked, hidden, or vertical).
     var dockedRibbonHeightConstraint: NSLayoutConstraint?
+    /// Width of the docked ribbon (0 when it is parked, hidden, or horizontal).
+    var dockedRibbonWidthConstraint: NSLayoutConstraint?
     /// Gap between the landscape preview and the docked ribbon (0 when hidden).
     var dockedRibbonTopConstraint: NSLayoutConstraint?
+    /// Landscape grid leading pinned to the hero trailing edge (horizontal ribbon).
+    var landscapeGridLeadingFromHeroConstraint: NSLayoutConstraint?
+    /// Landscape grid leading pinned to the vertical ribbon trailing edge.
+    var landscapeGridLeadingFromRibbonConstraint: NSLayoutConstraint?
+    /// Ribbon pins used when the strip sits under the hero (portrait + phone landscape).
+    var horizontalDockedRibbonConstraints: [NSLayoutConstraint] = []
+    /// Ribbon pins used when the strip sits beside the hero (iPad landscape).
+    var verticalDockedRibbonConstraints: [NSLayoutConstraint] = []
 
     let emptyLabel: UILabel = {
         let label = UILabel()
@@ -460,6 +467,9 @@ final class LibraryGridViewController: UIViewController {
         liveHeader.onToggleSlideshowRibbon = { [weak self] in
             self?.toggleLiveSlideshowRibbon()
         }
+        liveHeader.onToggleScreenFit = { [weak self] in
+            self?.toggleLiveScreenFit()
+        }
 
         // Grid under the floating live hero so content can scroll beneath it.
         installLibraryPages()
@@ -505,7 +515,9 @@ final class LibraryGridViewController: UIViewController {
             self?.validateOpenShow()
             self?.reloadGridIfSafe()
             self?.updateEmptyState()
+            // Practice Mode (and other Show prefs) can flip the live hero on/off.
             self?.updateHeroVisibility()
+            self?.applyHeroChrome()
             self?.refreshLiveHeader()
         }
         observe(SlideshowStore.didChangeNotification) { [weak self] _ in
@@ -640,6 +652,7 @@ final class LibraryGridViewController: UIViewController {
         layoutForeignLivePreview()
         // Phone turn: keep the Camera tile upright without rebuilding the freeze still.
         syncVisibleCameraTileOrientation()
+        liveHeader.layoutCameraPreviewIfNeeded()
         // Content size is final here — pin leftover offset if the grid no longer overflows.
         updateHomeVerticalScrollPolicy()
     }
@@ -700,7 +713,12 @@ final class LibraryGridViewController: UIViewController {
                 spacing: interitemSpacing
             )
             emptyTopConstraint?.constant = collectionView.contentInset.top
-                + Self.heroEstimatedHeight
+                + Self.heroBandHeight(
+                    containerWidth: collectionView.bounds.width,
+                    containerHeight: collectionView.bounds.height,
+                    sectionInset: sectionInset,
+                    horizontalSizeClass: traitCollection.horizontalSizeClass
+                )
                 + Self.showsGridTopInset
                 + Self.sectionHeaderEstimatedHeight
                 + tile.height
@@ -782,8 +800,10 @@ final class LibraryGridViewController: UIViewController {
             liveHeader.clearWebPreview(parking: true)
             liveHeader.clearScreensaverPreview()
             liveHeader.clearLibraryVideoPreview()
+            liveHeader.clearCameraPreview()
             liveHeader.hideLivePollGate()
             liveHeader.setSlideshowRibbonToggleVisible(false, isOn: false)
+            liveHeader.setScreenFitToggleVisible(false, mode: .fit)
             liveHeader.allowsSlideshowBrowse = false
             liveHeader.isHidden = true
             liveHeader.isUserInteractionEnabled = false
@@ -792,8 +812,11 @@ final class LibraryGridViewController: UIViewController {
         }
         liveHeader.isHidden = false
         liveHeader.isUserInteractionEnabled = true
-        // Ribbon toggle visibility follows the active slideshow for this Show.
-        defer { syncLiveSlideshowRibbonChrome() }
+        // Ribbon + Screen Fit follow the active still / slideshow for this Show.
+        defer {
+            syncLiveSlideshowRibbonChrome()
+            syncLiveScreenFitChrome()
+        }
 
         // Another Show still owns live output — keep AirPlay as-is, show an empty
         // hero here, and park the live art in the tucked mini preview.
@@ -850,13 +873,7 @@ final class LibraryGridViewController: UIViewController {
             return
         }
         if mgr.isCameraLive {
-            liveHeader.configureOverlay(
-                title: "Camera",
-                systemImage: "camera.fill",
-                fillColor: UIColor(white: 0.12, alpha: 1)
-            )
-            liveHeader.allowsCameraControllerTap = true
-            liveHeader.updatePlayback(PlaybackState())
+            presentCameraInLiveHeader()
             return
         }
         if mgr.isParkedOnQuickChangeStill {
@@ -941,6 +958,27 @@ final class LibraryGridViewController: UIViewController {
             for: item,
             in: openShowItems.isEmpty ? displayItems : openShowItems
         )
+    }
+
+    /// Live camera feed in the hero; the Camera tile shows the icon instead.
+    ///
+    /// Practice Mode has no AirPlay `AVCaptureVideoPreviewLayer`, so the hero
+    /// mirrors the same frame tap the TV uses. A freeze still covers the glyph
+    /// until the first sample arrives.
+    private func presentCameraInLiveHeader() {
+        let freeze = CameraManager.shared.latestSampleImage
+            ?? CameraManager.shared.lastFrame
+        let thumb = freeze.flatMap { CameraManager.isNearlyBlack($0) ? nil : $0 }
+        liveHeader.configureOverlay(
+            title: "Camera",
+            systemImage: "camera.fill",
+            fillColor: UIColor(white: 0.12, alpha: 1),
+            thumbnail: thumb,
+            keepCameraPreview: liveHeader.isCameraPreviewActive
+        )
+        liveHeader.showCameraPreview()
+        liveHeader.allowsCameraControllerTap = true
+        liveHeader.updatePlayback(PlaybackState())
     }
 
     /// Static poster chrome + muted looping video in the phone preview.

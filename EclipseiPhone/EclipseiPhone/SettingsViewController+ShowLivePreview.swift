@@ -13,7 +13,7 @@ extension SettingsViewController {
 
     /// Footer under the per-Show Practice Mode toggle.
     static let disconnectedLivePreviewFooter =
-        "When nothing is connected, tapping a card opens Preview on this iPhone. "
+        "When nothing is connected, tapping a card opens Preview on this device. "
         + "Practice Mode uses the live preview and Lock / Blackout instead."
 
     /// Toggle: live preview plus Lock / Blackout with no display connected.

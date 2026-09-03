@@ -16,12 +16,9 @@ struct HomeMusicLayoutTests {
         #expect(HomeMusicLayout.mode(horizontalSizeClass: .compact, pinned: true) == .paging)
     }
 
-    @Test func regularWidthDefaultsToDrawerWhenUnpinned() {
+    @Test func regularWidthAlwaysUsesDrawer() {
         #expect(HomeMusicLayout.mode(horizontalSizeClass: .regular, pinned: false) == .drawer)
-    }
-
-    @Test func regularWidthPinsToSplit() {
-        #expect(HomeMusicLayout.mode(horizontalSizeClass: .regular, pinned: true) == .split)
+        #expect(HomeMusicLayout.mode(horizontalSizeClass: .regular, pinned: true) == .drawer)
     }
 
     @Test func sidebarKeepsPreferredWidthWhenLibraryFits() {
@@ -81,5 +78,32 @@ struct HomeMusicDrawerViewTests {
         #expect(abs(drawer.progress - 1) < 0.01)
         drawer.setOpen(false, animated: false)
         #expect(abs(drawer.progress) < 0.01)
+    }
+}
+
+@MainActor
+struct AudioMiniChromeZOrderTests {
+
+    @Test func raisePutsPlayerAndBubbleAboveDrawer() {
+        let host = UIView()
+        let drawer = UIView()
+        let player = UIView()
+        let bubble = UIView()
+        host.addSubview(player)
+        host.addSubview(bubble)
+        host.addSubview(drawer)
+        #expect(
+            !AudioMiniChromeZOrder.isAboveDrawer(
+                player: player, bubble: bubble, drawer: drawer, in: host
+            )
+        )
+        AudioMiniChromeZOrder.raise(player: player, bubble: bubble, in: host)
+        #expect(
+            AudioMiniChromeZOrder.isAboveDrawer(
+                player: player, bubble: bubble, drawer: drawer, in: host
+            )
+        )
+        let views = host.subviews
+        #expect(views.firstIndex(of: bubble)! > views.firstIndex(of: player)!)
     }
 }

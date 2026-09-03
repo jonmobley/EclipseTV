@@ -25,13 +25,16 @@ enum ExternalOutputOrientation: String, CaseIterable {
         self == .landscape ? 2 : 3
     }
 
-    /// Preferred cell width so iPad / wide panes add columns instead of huge tiles.
+    /// Preferred cell width used to add columns on iPad, up to `maxGridColumnCount`.
     ///
     /// Vertical uses a wider target than Landscape's per-column density so a
     /// phone turned sideways lands on 4-up rather than packing 5–6 skinny tiles.
     var preferredGridItemWidth: CGFloat {
         self == .landscape ? 180 : 160
     }
+
+    /// Widest grids stop here so 13-inch tiles grow instead of packing 6–7-up.
+    static let maxGridColumnCount = 4
 
     /// Width at which a Vertical grid gains its phone-landscape column (3 → 4).
     ///
@@ -41,8 +44,9 @@ enum ExternalOutputOrientation: String, CaseIterable {
 
     /// Column count for a collection width, never below the phone baseline.
     ///
-    /// Vertical: 3-up in portrait, 4-up once the pane is phone-landscape wide,
-    /// then more on iPad. Landscape: 2-up on a phone, more on wider panes.
+    /// Vertical: 3-up in portrait, 4-up once the pane is phone-landscape wide
+    /// or on iPad. Landscape: 2-up on a phone, up to 4-up on wider panes.
+    /// Past four columns, leftover width goes into the tile.
     func gridColumnCount(
         forWidth width: CGFloat,
         sectionInset: CGFloat,
@@ -59,7 +63,7 @@ enum ExternalOutputOrientation: String, CaseIterable {
         guard available > 0 else { return minimum }
         let preferred = preferredGridItemWidth
         let fitted = Int(floor((available + spacing) / (preferred + spacing)))
-        return max(minimum, fitted)
+        return min(max(minimum, fitted), Self.maxGridColumnCount)
     }
 
     /// Cell height ÷ width: 16:9 cells in Landscape, 9:16 cells in Vertical.

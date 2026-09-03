@@ -24,6 +24,13 @@ extension iPhoneMainViewController {
         headerBar.setCenterTitle(openShow?.name ?? "Home", subtitle: subtitle)
         headerBar.setPreviewsWhenDisconnected(openShow?.previewsWhenDisconnected ?? false)
         headerBar.setShowModeChrome(openShow != nil)
+        headerBar.setNavSelection(
+            HomeHeaderNavSelection(
+                isShowMode: openShow != nil,
+                isMusicPinned: false,
+                showTitle: openShow?.name ?? HomeHeaderDestination.show.title
+            )
+        )
         headerBar.setLibraryMenu(makeLibraryMenu())
         headerBar.setAddMenu(makeAddMenu())
         refreshPresentedSettingsConnectionState()
@@ -31,8 +38,8 @@ extension iPhoneMainViewController {
 
     /// Open Show → New Show → Library → Music → Settings, then Recent Shows.
     /// Show mode drops Settings — the header gear already opens it. Return to
-    /// Home is the header back control, not this menu. Home Settings omits
-    /// show-specific rows.
+    /// Home is the compact back control or the iPad Home tab, not this menu.
+    /// Home Settings omits show-specific rows.
     /// Getting Started lives in Settings, not this dropdown.
     ///
     /// Open Show presents the same Shows list as Home See All (not a nested menu).
@@ -59,6 +66,30 @@ extension iPhoneMainViewController {
         return UIMenu(children: children)
     }
 
+    /// iPad header tabs: Home closes Show, Show opens the list, Library opens
+    /// the media library. Music is the blue circle (and dropdown), not a tab.
+    func selectHeaderDestination(_ destination: HomeHeaderDestination) {
+        switch destination {
+        case .home:
+            libraryViewController.closeOpenShow()
+        case .show:
+            libraryViewController.presentAllShows()
+        case .library:
+            presentMediaLibrary()
+        case .music:
+            selectMusicDestination()
+        }
+    }
+
+    /// Compact: opens the Music page. Regular: toggles the slide-out Music pane.
+    private func selectMusicDestination() {
+        if traitCollection.horizontalSizeClass == .regular {
+            toggleMusicDrawer()
+        } else {
+            presentAudioLibrary()
+        }
+    }
+
     /// Opens the Library picker from the Home dropdown.
     private func mediaLibraryAction() -> UIAction {
         UIAction(
@@ -69,21 +100,13 @@ extension iPhoneMainViewController {
         }
     }
 
-    /// Compact: opens the Music page. Regular: pins or unpins the sidebar.
+    /// Compact: opens the Music page. Regular: toggles the slide-out Music pane.
     private func musicAction() -> UIAction {
-        let canPin = traitCollection.horizontalSizeClass == .regular
-        let pinned = canPin && isMusicSidebarPinned
-        return UIAction(
+        UIAction(
             title: "Music",
-            image: UIImage(systemName: "music.note"),
-            state: pinned ? .on : .off
+            image: UIImage(systemName: "music.note")
         ) { [weak self] _ in
-            guard let self else { return }
-            if self.traitCollection.horizontalSizeClass == .regular {
-                self.setMusicSidebarPinned(!self.isMusicSidebarPinned, animated: true)
-            } else {
-                self.presentAudioLibrary()
-            }
+            self?.selectMusicDestination()
         }
     }
 

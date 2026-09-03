@@ -77,6 +77,21 @@ struct AudioMiniPlayerBubbleTests {
         #expect(bubble.musicButton.configuration?.image != nil)
     }
 
+    @Test func drawerModeKeepsMusicLabelWithoutStop() {
+        let bubble = AudioMiniPlayerBubbleView(
+            frame: CGRect(x: 0, y: 0, width: 72, height: 72)
+        )
+        bubble.applySessionChrome(
+            active: true, playing: true, expanded: true, togglesMusicPane: true
+        )
+        #expect(bubble.showsPlaybackWaveform)
+        #expect(bubble.musicButton.accessibilityLabel == "Music")
+        #expect(
+            bubble.musicButton.accessibilityHint
+                == "Shows or hides the Music pane."
+        )
+    }
+
     @Test func idleShowsNoteWithoutWaveform() {
         AudioPlayerController.shared.stop()
         let bubble = AudioMiniPlayerBubbleView(

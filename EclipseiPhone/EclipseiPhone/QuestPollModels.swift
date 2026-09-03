@@ -99,4 +99,14 @@ enum QuestPollError: Error, Equatable {
     case server(String)
     case decoding
     case transport
+
+    /// Copy for the PIN sheet and QuestPoll alerts.
+    var userMessage: String {
+        switch self {
+        case .invalidPIN: return "That PIN is wrong."
+        case .server(let text): return text
+        case .decoding: return "Could not read QuestPoll."
+        case .transport: return "Could not reach questpoll.live."
+        }
+    }
 }

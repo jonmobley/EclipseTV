@@ -79,6 +79,47 @@ struct HomeLayoutTests {
         }
     }
 
+    /// The Home marketing card is 16:9 at every pane size.
+    @Test func homeHeroCardIsAlwaysSixteenByNine() {
+        for width in [CGFloat(320), 390, 430, 744, 1024, 1366] {
+            for height in [CGFloat(844), 1024, 1366] {
+                for sizeClass in [UIUserInterfaceSizeClass.compact, .regular] {
+                    let card = HomeHeroCarouselCell.cardSize(
+                        availableWidth: width - inset * 2,
+                        containerHeight: height,
+                        horizontalSizeClass: sizeClass
+                    )
+                    #expect(card.width > 0 && card.height > 0)
+                    #expect(
+                        abs(card.width / card.height - 16.0 / 9.0) < 0.02,
+                        "hero \(card) is not 16:9 at \(width)×\(height) \(sizeClass.rawValue)"
+                    )
+                }
+            }
+        }
+    }
+
+    @Test func homeHeroSpansThePhonePortraitPane() {
+        let available: CGFloat = 390 - inset * 2
+        let card = HomeHeroCarouselCell.cardSize(
+            availableWidth: available,
+            containerHeight: 844,
+            horizontalSizeClass: .compact
+        )
+        #expect(abs(card.width - available) < 2)
+    }
+
+    @Test func homeHeroDoesNotSpanThirteenInchLandscape() {
+        let available: CGFloat = 1366 - inset * 2
+        let card = HomeHeroCarouselCell.cardSize(
+            availableWidth: available,
+            containerHeight: 1024,
+            horizontalSizeClass: .regular
+        )
+        #expect(card.width < available - 40)
+        #expect(abs(card.width / card.height - 16.0 / 9.0) < 0.02)
+    }
+
     @Test func columnCountNeverFallsBelowTheModeBaseline() {
         for orientation in ExternalOutputOrientation.allCases {
             for width in Self.widths {
@@ -94,7 +135,7 @@ struct HomeLayoutTests {
         }
     }
 
-    @Test func widerPanesGainColumnsRatherThanBiggerTiles() {
+    @Test func widerPanesGainColumnsUpToFour() {
         for orientation in ExternalOutputOrientation.allCases {
             let phone = LibraryGridViewController.homeGridColumnCount(
                 containerWidth: 390, sectionInset: inset, spacing: spacing,
@@ -107,17 +148,33 @@ struct HomeLayoutTests {
 
             #expect(CGFloat(phone) == orientation.gridColumnCount)
             #expect(tablet > phone)
+            #expect(tablet <= ExternalOutputOrientation.maxGridColumnCount)
+        }
+    }
 
-            // The point of adding columns is that the tile itself stops growing.
-            let phoneTile = LibraryGridViewController.homeTileSize(
-                containerWidth: 390, sectionInset: inset, spacing: spacing,
-                orientation: orientation
-            )
-            let tabletTile = LibraryGridViewController.homeTileSize(
+    /// 13-inch landscape keeps four columns so leftover width grows the tile.
+    @Test func largestIPadGrowsTilesInsteadOfAddingColumns() {
+        for orientation in ExternalOutputOrientation.allCases {
+            let mid = LibraryGridViewController.homeGridColumnCount(
                 containerWidth: 1024, sectionInset: inset, spacing: spacing,
                 orientation: orientation
             )
-            #expect(tabletTile.width < phoneTile.width * 2)
+            let largest = LibraryGridViewController.homeGridColumnCount(
+                containerWidth: 1366, sectionInset: inset, spacing: spacing,
+                orientation: orientation
+            )
+            #expect(mid == ExternalOutputOrientation.maxGridColumnCount)
+            #expect(largest == ExternalOutputOrientation.maxGridColumnCount)
+
+            let midTile = LibraryGridViewController.homeTileSize(
+                containerWidth: 1024, sectionInset: inset, spacing: spacing,
+                orientation: orientation
+            )
+            let largeTile = LibraryGridViewController.homeTileSize(
+                containerWidth: 1366, sectionInset: inset, spacing: spacing,
+                orientation: orientation
+            )
+            #expect(largeTile.width > midTile.width)
         }
     }
 
@@ -268,7 +325,8 @@ struct HomeLayoutTests {
                 landscape.width > landscape.height,
                 "Landscape ribbon thumb \(landscape) is not wide"
             )
-            #expect(vertical.width == landscape.height)
+            // Short sides can differ across modes (Vertical is 3-up, Landscape 2-up
+            // on phone); each thumb still keeps the stage aspect of its mode.
             #expect(abs(landscape.width / landscape.height - 16.0 / 9.0) < 0.05)
             #expect(abs(vertical.height / vertical.width - 16.0 / 9.0) < 0.05)
         }
@@ -284,6 +342,29 @@ struct HomeLayoutTests {
                 #expect(
                     thumb.width > 0 && thumb.height > 0,
                     "ribbon thumb \(thumb) for \(orientation) at width \(width)"
+                )
+            }
+        }
+    }
+
+    /// Ribbon thumbs stay a fixed fraction of the Show-grid tile at every width.
+    @Test func slideshowRibbonThumbsScaleFromTheShowGridTile() {
+        let scale = LibraryGridViewController.slideshowRibbonShortSideScale
+        for orientation in ExternalOutputOrientation.allCases {
+            for width in [CGFloat(390), 1024, 1366] {
+                let tile = LibraryGridViewController.homeTileSize(
+                    containerWidth: width, sectionInset: inset, spacing: spacing,
+                    orientation: orientation
+                )
+                let thumb = LibraryGridViewController.slideshowRibbonThumbSize(
+                    containerWidth: width, sectionInset: inset, spacing: spacing,
+                    orientation: orientation
+                )
+                #expect(thumb.width == (tile.width * scale).rounded(.down))
+                #expect(thumb.height == (tile.height * scale).rounded(.down))
+                #expect(
+                    thumb.width < tile.width && thumb.height < tile.height,
+                    "ribbon \(thumb) should be smaller than grid tile \(tile)"
                 )
             }
         }

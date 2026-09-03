@@ -7,19 +7,19 @@
 
 import UIKit
 
-/// Persistent Music control: idle tap opens a picker sheet; session tap expands
-/// the footer. The same circle becomes Stop while the footer is showing.
+/// Persistent Music control. Compact: idle opens a picker; session expands the
+/// footer; expanded becomes Stop. Regular: always toggles the Music drawer.
 final class AudioMiniPlayerBubbleView: UIView {
 
     static let side: CGFloat = 72
     /// Pressed-in scale while idle so opening Music still feels like a control.
     static let idlePressScale: CGFloat = 0.9
 
-    /// Idle opens the picker; collapsed session expands; expanded session stops.
+    /// Compact: picker / expand / stop. Regular: Music drawer toggle.
     var onToggle: (() -> Void)?
 
     private let musicCircle = HighlightForwardingButton(type: .system)
-    /// Circle control: picker, expand, or stop depending on session and footer.
+    /// Circle control: picker, expand, stop, or drawer toggle.
     var musicButton: UIButton { musicCircle }
     private let waveformView = AudioMiniPlayerWaveformView()
 
@@ -34,21 +34,33 @@ final class AudioMiniPlayerBubbleView: UIView {
 
     /// Updates chrome from the shared player.
     /// - Parameter barExpanded: Footer is showing; this circle is Stop.
-    func reload(barExpanded: Bool = false) {
+    /// - Parameter togglesMusicPane: Regular-width drawer mode (no footer).
+    func reload(barExpanded: Bool = false, togglesMusicPane: Bool = false) {
         let player = AudioPlayerController.shared
         applySessionChrome(
             active: player.hasActiveSession,
             playing: player.hasActiveSession && player.isPlaying,
-            expanded: barExpanded
+            expanded: barExpanded,
+            togglesMusicPane: togglesMusicPane
         )
         applyIdlePressReaction(highlighted: musicButton.isHighlighted)
     }
 
     /// Playing: waveform. Expanded: stop. Otherwise: music note.
-    func applySessionChrome(active: Bool, playing: Bool, expanded: Bool = false) {
-        let showStop = active && expanded
+    func applySessionChrome(
+        active: Bool,
+        playing: Bool,
+        expanded: Bool = false,
+        togglesMusicPane: Bool = false
+    ) {
+        let showStop = active && expanded && !togglesMusicPane
         applyPlaybackChrome(playing: playing && !showStop, showStop: showStop)
-        applyAccessibility(active: active, playing: playing, showStop: showStop)
+        applyAccessibility(
+            active: active,
+            playing: playing,
+            showStop: showStop,
+            togglesMusicPane: togglesMusicPane
+        )
     }
 
     /// Playing: 3-bar waveform. Stop: stop glyph. Otherwise: music note.
@@ -147,8 +159,20 @@ final class AudioMiniPlayerBubbleView: UIView {
         return config
     }
 
-    private func applyAccessibility(active: Bool, playing: Bool, showStop: Bool) {
+    private func applyAccessibility(
+        active: Bool,
+        playing: Bool,
+        showStop: Bool,
+        togglesMusicPane: Bool
+    ) {
         musicButton.accessibilityTraits = .button
+        if togglesMusicPane {
+            musicButton.accessibilityLabel = "Music"
+            musicButton.accessibilityHint = "Shows or hides the Music pane."
+            musicButton.accessibilityValue = playing ? "Playing"
+                : (active ? "Paused" : nil)
+            return
+        }
         if showStop {
             musicButton.accessibilityLabel = "Stop"
             musicButton.accessibilityHint = "Fades out and stops playback."

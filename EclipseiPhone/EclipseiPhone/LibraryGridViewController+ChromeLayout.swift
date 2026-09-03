@@ -30,6 +30,14 @@ enum LiveOutputRouting {
         )
     }
 
+    /// Tap opens on-device Preview when live is locked or there is no destination.
+    static func prefersPhonePreviewOnTap(
+        isLiveOutputLocked: Bool,
+        hasOutputDestination: Bool
+    ) -> Bool {
+        isLiveOutputLocked || !hasOutputDestination
+    }
+
     /// Web overlays (Live Poll / websites) only reach AirPlay / HDMI or Practice.
     /// Linked EclipseTV stays on the companion library and cannot show a WKWebView.
     static func canPresentWebOverlay(
@@ -156,6 +164,14 @@ extension LibraryGridViewController {
         LiveOutputRouting.canMarkLive(practiceMode: prefersDisconnectedLivePreview)
     }
 
+    /// Locked live output, or no AirPlay / Practice destination: tap Preview.
+    var prefersPhonePreviewOnTap: Bool {
+        LiveOutputRouting.prefersPhonePreviewOnTap(
+            isLiveOutputLocked: isLiveOutputLocked,
+            hasOutputDestination: hasLiveOutputDestination
+        )
+    }
+
     /// Live hero on an open Show: a real destination, Practice Mode, or a Live
     /// Poll the phone is hosting with no display attached.
     var showsLiveHero: Bool {
@@ -180,10 +196,47 @@ extension LibraryGridViewController {
         return false
     }
 
-    /// Phone landscape (`verticalSizeClass == .compact`): live preview left, grid
-    /// right. With no hero to pair against, the grid takes the full width instead.
+    /// Side-by-side chrome: phone landscape (compact height) or regular-width
+    /// landscape panes (iPad). Portrait / tall split panes stay stacked.
     var prefersSideBySideChrome: Bool {
-        showsLiveHero && traitCollection.verticalSizeClass == .compact
+        Self.prefersSideBySideChrome(
+            showsLiveHero: showsLiveHero,
+            verticalSizeClass: traitCollection.verticalSizeClass,
+            horizontalSizeClass: traitCollection.horizontalSizeClass,
+            bounds: view.bounds.size
+        )
+    }
+
+    /// Vertical filmstrip beside the preview. Reserved for future use; iPad and
+    /// phone always dock the live ribbon under the main preview.
+    var usesVerticalDockedRibbon: Bool {
+        Self.usesVerticalDockedRibbon(
+            isSideBySide: isSideBySideChrome,
+            horizontalSizeClass: traitCollection.horizontalSizeClass
+        )
+    }
+
+    /// Whether live chrome should run side-by-side for the given traits and pane.
+    static func prefersSideBySideChrome(
+        showsLiveHero: Bool,
+        verticalSizeClass: UIUserInterfaceSizeClass,
+        horizontalSizeClass: UIUserInterfaceSizeClass,
+        bounds: CGSize
+    ) -> Bool {
+        guard showsLiveHero else { return false }
+        if verticalSizeClass == .compact { return true }
+        guard horizontalSizeClass == .regular else { return false }
+        return bounds.width > bounds.height
+    }
+
+    /// Always false: live ribbon docks under the preview on every device.
+    static func usesVerticalDockedRibbon(
+        isSideBySide: Bool,
+        horizontalSizeClass: UIUserInterfaceSizeClass
+    ) -> Bool {
+        _ = isSideBySide
+        _ = horizontalSizeClass
+        return false
     }
 
     /// Shows or hides the live hero for the current mode and relays out around it.
@@ -200,6 +253,7 @@ extension LibraryGridViewController {
         if shouldHide {
             liveHeader.clearWebPreview(parking: true)
             liveHeader.clearScreensaverPreview()
+            liveHeader.clearCameraPreview()
             liveHeader.transform = .identity
             liveHeader.applyCollapse(progress: 0, scale: 1)
             heroCollapseProgress = 0
@@ -266,8 +320,46 @@ extension LibraryGridViewController {
         let ribbonHeight = slideshowRibbonView.heightAnchor.constraint(
             equalToConstant: 0
         )
+        let ribbonWidth = slideshowRibbonView.widthAnchor.constraint(
+            equalToConstant: 0
+        )
         dockedRibbonTopConstraint = ribbonTop
         dockedRibbonHeightConstraint = ribbonHeight
+        dockedRibbonWidthConstraint = ribbonWidth
+
+        let gridLeadingFromHero = gridHost.leadingAnchor.constraint(
+            equalTo: liveHeader.trailingAnchor, constant: gutter
+        )
+        let gridLeadingFromRibbon = gridHost.leadingAnchor.constraint(
+            equalTo: slideshowRibbonView.trailingAnchor, constant: gutter
+        )
+        landscapeGridLeadingFromHeroConstraint = gridLeadingFromHero
+        landscapeGridLeadingFromRibbonConstraint = gridLeadingFromRibbon
+
+        // Horizontal strip under the hero (portrait + phone / iPad landscape).
+        // Height/width constants are applied in `layoutDockedSlideshowRibbon()`.
+        horizontalDockedRibbonConstraints = [
+            slideshowRibbonView.leadingAnchor.constraint(
+                equalTo: liveHeader.leadingAnchor
+            ),
+            slideshowRibbonView.trailingAnchor.constraint(
+                equalTo: liveHeader.trailingAnchor
+            ),
+            ribbonTop
+        ]
+
+        // Unused beside-preview pins (kept inactive; ribbon always docks under).
+        verticalDockedRibbonConstraints = [
+            slideshowRibbonView.leadingAnchor.constraint(
+                equalTo: liveHeader.trailingAnchor, constant: gutter
+            ),
+            slideshowRibbonView.topAnchor.constraint(
+                equalTo: liveHeader.topAnchor
+            ),
+            slideshowRibbonView.bottomAnchor.constraint(
+                equalTo: liveHeader.bottomAnchor
+            )
+        ]
 
         // Portrait: grid fills the safe area; hero floats above and content scrolls
         // under it. The live ribbon docks under the hero so Show thumbs scroll alone.
@@ -290,26 +382,17 @@ extension LibraryGridViewController {
             heroSpacer.bottomAnchor.constraint(
                 equalTo: slideshowRibbonView.bottomAnchor
             ),
-            slideshowRibbonView.leadingAnchor.constraint(
-                equalTo: liveHeader.leadingAnchor
-            ),
-            slideshowRibbonView.trailingAnchor.constraint(
-                equalTo: liveHeader.trailingAnchor
-            ),
-            ribbonTop,
-            ribbonHeight
-        ]
+            ribbonHeight,
+            ribbonWidth
+        ] + horizontalDockedRibbonConstraints
 
         // Landscape: live preview leading (top-aligned), grid in the trailing column.
-        // The live ribbon docks under the preview (same strip as portrait).
-        // The ambient mini player is a compact trailing card on the parent VC.
+        // Ribbon axis (under vs beside the preview) is swapped in
+        // `applyDockedRibbonChromeAxis()`. Mini player stays a trailing parent card.
         landscapeChromeConstraints = [
             gridHost.topAnchor.constraint(equalTo: safe.topAnchor),
             gridHost.trailingAnchor.constraint(equalTo: safe.trailingAnchor),
             gridHost.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            gridHost.leadingAnchor.constraint(
-                equalTo: liveHeader.trailingAnchor, constant: gutter
-            ),
             liveHeader.leadingAnchor.constraint(
                 equalTo: safe.leadingAnchor, constant: headerInset
             ),
@@ -319,25 +402,21 @@ extension LibraryGridViewController {
             liveHeader.bottomAnchor.constraint(
                 lessThanOrEqualTo: safe.bottomAnchor, constant: -8
             ),
-            slideshowRibbonView.leadingAnchor.constraint(
-                equalTo: liveHeader.leadingAnchor
-            ),
-            slideshowRibbonView.trailingAnchor.constraint(
-                equalTo: liveHeader.trailingAnchor
-            ),
-            ribbonTop,
-            ribbonHeight,
             slideshowRibbonView.bottomAnchor.constraint(
                 lessThanOrEqualTo: safe.bottomAnchor, constant: -8
             ),
             heroSpacer.topAnchor.constraint(equalTo: view.topAnchor),
             heroSpacer.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             heroSpacer.widthAnchor.constraint(equalToConstant: 0),
-            heroSpacer.heightAnchor.constraint(equalToConstant: 0)
+            heroSpacer.heightAnchor.constraint(equalToConstant: 0),
+            ribbonHeight,
+            ribbonWidth
         ]
 
         NSLayoutConstraint.activate(portraitChromeConstraints)
         isSideBySideChrome = false
+        landscapeGridLeadingFromHeroConstraint?.isActive = false
+        landscapeGridLeadingFromRibbonConstraint?.isActive = false
         updateLiveHeroBackdrop()
         view.bringSubviewToFront(liveHeader)
 
@@ -411,6 +490,7 @@ extension LibraryGridViewController {
             liveHeader.isHidden = true
             liveHeader.clearWebPreview(parking: true)
             liveHeader.clearScreensaverPreview()
+            liveHeader.clearCameraPreview()
             updateLiveHeroBackdrop()
             syncHeroOverlayInsets(preservingProgress: currentHeroScrollProgress())
             updateHeroCollapse()
@@ -491,13 +571,9 @@ extension LibraryGridViewController {
     func expandedHeroOverlayInset() -> CGFloat {
         var inset = headerInset + estimatedExpandedHeroHeight() + heroBottomPadding
         if docksLiveSlideshowRibbon {
-            let width = max(
-                0,
-                view.bounds.width - headerInset * 2
-            )
             let thumb = Self.slideshowRibbonThumbSize(
-                containerWidth: width,
-                sectionInset: 0,
+                containerWidth: ribbonThumbContainerWidth(),
+                sectionInset: sectionInset,
                 spacing: interitemSpacing
             )
             inset += Self.sideBySideGutter + thumb.height
@@ -507,20 +583,47 @@ extension LibraryGridViewController {
 
     /// Estimated 16:9 / 9:16 hero height before the first layout pass.
     func estimatedExpandedHeroHeight() -> CGFloat {
+        let aspect: CGFloat = ExternalOutputSettings.isVerticalMode
+            ? 9.0 / 16.0 : 16.0 / 9.0
+        let maxHeight = stackedHeroMaxHeight(aspectWidthOverHeight: aspect)
         if ExternalOutputSettings.isVerticalMode {
-            return verticalHeroMaxHeight
+            return maxHeight
         }
         let bleedWidth = max(0, view.bounds.width - headerInset * 2)
         let bleedHeight = bleedWidth * 9.0 / 16.0
-        return min(bleedHeight, verticalHeroMaxHeight)
+        return min(bleedHeight, maxHeight)
+    }
+
+    /// Stacked live-preview height for this pane and Display Mode aspect.
+    private func stackedHeroMaxHeight(aspectWidthOverHeight: CGFloat) -> CGFloat {
+        StackedHeroMetrics.maxHeight(
+            containerSize: view.bounds.size,
+            horizontalSizeClass: traitCollection.horizontalSizeClass,
+            headerInset: headerInset,
+            safeAreaInsets: view.safeAreaInsets,
+            aspectWidthOverHeight: aspectWidthOverHeight
+        )
     }
 
     // MARK: - Private
 
     static let sideBySideGutter: CGFloat = 12
-    /// Keeps the grid usable when the 16:9 hero would otherwise dominate.
-    private static let sideBySideMinGridWidth: CGFloat = 300
-    private static let sideBySideMaxHeroWidthFraction: CGFloat = 0.46
+    /// Keeps the grid usable when the 16:9 hero would otherwise dominate (phone).
+    static let sideBySideMinGridWidth: CGFloat = 300
+    /// Regular-width panes keep a wider trailing grid so 4-up tiles stay usable.
+    static let sideBySideRegularMinGridWidth: CGFloat = 420
+    static let sideBySideMaxHeroWidthFraction: CGFloat = 0.46
+    /// Soft ceiling on iPad so the leading preview cannot swallow the grid.
+    static let sideBySideRegularMaxHeroWidthFraction: CGFloat = 0.58
+
+    /// Minimum trailing-grid width for the current size class.
+    static func sideBySideMinGridWidth(
+        horizontalSizeClass: UIUserInterfaceSizeClass
+    ) -> CGFloat {
+        horizontalSizeClass == .regular
+            ? sideBySideRegularMinGridWidth
+            : sideBySideMinGridWidth
+    }
 
     private func applyChromeAxis(sideBySide: Bool) {
         isSideBySideChrome = sideBySide
@@ -531,6 +634,9 @@ extension LibraryGridViewController {
             NSLayoutConstraint.activate(landscapeChromeConstraints)
         } else {
             NSLayoutConstraint.deactivate(landscapeChromeConstraints)
+            NSLayoutConstraint.deactivate(verticalDockedRibbonConstraints)
+            landscapeGridLeadingFromHeroConstraint?.isActive = false
+            landscapeGridLeadingFromRibbonConstraint?.isActive = false
             NSLayoutConstraint.activate(portraitChromeConstraints)
             if showsLiveHero {
                 view.bringSubviewToFront(liveHeader)
@@ -539,7 +645,24 @@ extension LibraryGridViewController {
                 }
             }
         }
+        applyDockedRibbonChromeAxis()
         updateLiveHeroBackdrop()
+    }
+
+    /// Pins the docked ribbon under the hero (portrait + landscape).
+    ///
+    /// The strip always sits below the preview. Vertical beside-preview pins stay
+    /// inactive so a parked zero-height ribbon cannot collapse the hero height.
+    func applyDockedRibbonChromeAxis() {
+        NSLayoutConstraint.deactivate(verticalDockedRibbonConstraints)
+        landscapeGridLeadingFromRibbonConstraint?.isActive = false
+        if isSideBySideChrome {
+            landscapeGridLeadingFromHeroConstraint?.isActive = true
+            NSLayoutConstraint.activate(horizontalDockedRibbonConstraints)
+        } else {
+            landscapeGridLeadingFromHeroConstraint?.isActive = false
+            // Portrait already includes horizontal ribbon pins.
+        }
     }
 
     private func deactivateHeroSizeConstraints() {
@@ -573,20 +696,21 @@ extension LibraryGridViewController {
         }
         let bleedWidth = max(0, view.bounds.width - headerInset * 2)
         let bleedHeight = bleedWidth * 9.0 / 16.0
-        if bleedHeight > verticalHeroMaxHeight + 0.5 {
+        let maxHeight = stackedHeroMaxHeight(aspectWidthOverHeight: 16.0 / 9.0)
+        if bleedHeight > maxHeight + 1 {
             applyCappedHero(aspectWidthOverHeight: 16.0 / 9.0)
         } else {
             applyFullBleedLandscapeHero()
         }
     }
 
-    /// Landscape phone: aspect-fit hero in the leading column (top-aligned).
+    /// Landscape: aspect-fit hero in the leading column (top-aligned).
     private func applySideBySideHeroChrome() {
         deactivateHeroSizeConstraints()
         heroWidthConstraint?.isActive = true
 
         let safe = view.safeAreaInsets
-        let availableWidth = max(
+        var availableWidth = max(
             0,
             view.bounds.width - safe.left - safe.right - headerInset
                 - Self.sideBySideGutter
@@ -603,24 +727,56 @@ extension LibraryGridViewController {
         let aspect = ExternalOutputSettings.isVerticalMode
             ? (9.0 / 16.0)
             : (16.0 / 9.0)
+        let sizeClass = traitCollection.horizontalSizeClass
+        let minGrid = Self.sideBySideMinGridWidth(horizontalSizeClass: sizeClass)
 
         var hero = sideBySideHeroSize(
             availableWidth: availableWidth,
             availableHeight: availableHeight,
-            aspect: aspect
+            aspect: aspect,
+            horizontalSizeClass: sizeClass
         )
         if docksLiveSlideshowRibbon {
-            let thumb = Self.slideshowRibbonThumbSize(
-                containerWidth: hero.width,
-                sectionInset: 0,
-                spacing: interitemSpacing
-            )
-            availableHeight = max(0, availableHeight - Self.sideBySideGutter - thumb.height)
-            hero = sideBySideHeroSize(
-                availableWidth: availableWidth,
-                availableHeight: availableHeight,
-                aspect: aspect
-            )
+            if usesVerticalDockedRibbon {
+                // Two-pass: size thumbs from the trailing grid, then reserve width.
+                let gridWidth = max(
+                    minGrid,
+                    availableWidth - hero.width - Self.sideBySideGutter
+                )
+                let thumb = Self.slideshowRibbonThumbSize(
+                    containerWidth: gridWidth,
+                    sectionInset: sectionInset,
+                    spacing: interitemSpacing
+                )
+                availableWidth = max(
+                    0,
+                    availableWidth - Self.sideBySideGutter - thumb.width
+                )
+                hero = sideBySideHeroSize(
+                    availableWidth: availableWidth,
+                    availableHeight: availableHeight,
+                    aspect: aspect,
+                    horizontalSizeClass: sizeClass
+                )
+            } else {
+                let thumb = Self.slideshowRibbonThumbSize(
+                    containerWidth: ribbonThumbContainerWidth(
+                        sideBySideHeroWidth: hero.width
+                    ),
+                    sectionInset: sectionInset,
+                    spacing: interitemSpacing
+                )
+                availableHeight = max(
+                    0,
+                    availableHeight - Self.sideBySideGutter - thumb.height
+                )
+                hero = sideBySideHeroSize(
+                    availableWidth: availableWidth,
+                    availableHeight: availableHeight,
+                    aspect: aspect,
+                    horizontalSizeClass: sizeClass
+                )
+            }
         }
 
         heroWidthConstraint?.constant = hero.width
@@ -631,17 +787,32 @@ extension LibraryGridViewController {
         heroHeightConstraint = heightConstraint
     }
 
-    /// Aspect-fit hero that leaves at least `sideBySideMinGridWidth` for the grid.
-    private func sideBySideHeroSize(
+    /// Aspect-fit hero that leaves a usable trailing grid.
+    ///
+    /// Phone keeps the 0.46 width fraction. Regular-width (iPad) panes use a
+    /// wider min grid and a softer 0.58 ceiling so the preview can grow without
+    /// crushing 4-up Show tiles.
+    static func sideBySideHeroSize(
         availableWidth: CGFloat,
         availableHeight: CGFloat,
-        aspect: CGFloat
+        aspect: CGFloat,
+        horizontalSizeClass: UIUserInterfaceSizeClass,
+        containerWidth: CGFloat,
+        minGridWidth: CGFloat? = nil,
+        maxHeroWidthFraction: CGFloat? = nil
     ) -> CGSize {
+        let minGrid = minGridWidth
+            ?? sideBySideMinGridWidth(horizontalSizeClass: horizontalSizeClass)
+        let fraction = maxHeroWidthFraction ?? (
+            horizontalSizeClass == .regular
+                ? sideBySideRegularMaxHeroWidthFraction
+                : sideBySideMaxHeroWidthFraction
+        )
         var heroHeight = availableHeight
         var heroWidth = (heroHeight * aspect).rounded(.down)
         let maxWidth = min(
-            availableWidth - Self.sideBySideMinGridWidth,
-            (view.bounds.width * Self.sideBySideMaxHeroWidthFraction).rounded(.down)
+            availableWidth - minGrid,
+            (containerWidth * fraction).rounded(.down)
         )
         if maxWidth > 0, heroWidth > maxWidth {
             heroWidth = maxWidth
@@ -650,12 +821,53 @@ extension LibraryGridViewController {
         return CGSize(width: max(120, heroWidth), height: max(68, heroHeight))
     }
 
+    private func sideBySideHeroSize(
+        availableWidth: CGFloat,
+        availableHeight: CGFloat,
+        aspect: CGFloat,
+        horizontalSizeClass: UIUserInterfaceSizeClass
+    ) -> CGSize {
+        Self.sideBySideHeroSize(
+            availableWidth: availableWidth,
+            availableHeight: availableHeight,
+            aspect: aspect,
+            horizontalSizeClass: horizontalSizeClass,
+            containerWidth: view.bounds.width
+        )
+    }
+
+    /// Container width used to size ribbon thumbs relative to the Show grid.
+    func ribbonThumbContainerWidth(sideBySideHeroWidth: CGFloat? = nil) -> CGFloat {
+        if isSideBySideChrome {
+            let safe = view.safeAreaInsets
+            let heroWidth = sideBySideHeroWidth
+                ?? heroWidthConstraint?.constant
+                ?? liveHeader.bounds.width
+            let minGrid = Self.sideBySideMinGridWidth(
+                horizontalSizeClass: traitCollection.horizontalSizeClass
+            )
+            var width = view.bounds.width - safe.left - safe.right
+                - headerInset - Self.sideBySideGutter - max(0, heroWidth)
+            if usesVerticalDockedRibbon, docksLiveSlideshowRibbon {
+                // Approximate ribbon width as a scaled grid tile of the remainder.
+                let provisional = Self.slideshowRibbonThumbSize(
+                    containerWidth: max(minGrid, width),
+                    sectionInset: sectionInset,
+                    spacing: interitemSpacing
+                )
+                width -= Self.sideBySideGutter + provisional.width
+            }
+            return max(0, width)
+        }
+        return view.bounds.width
+    }
+
     /// Centers a fixed-height hero (Vertical always; Landscape on wide panes).
     private func applyCappedHero(aspectWidthOverHeight: CGFloat) {
         deactivateHeroSizeConstraints()
         heroCenterXConstraint?.isActive = true
         heroWidthConstraint?.isActive = true
-        let height = verticalHeroMaxHeight
+        let height = stackedHeroMaxHeight(aspectWidthOverHeight: aspectWidthOverHeight)
         let width = (height * aspectWidthOverHeight).rounded(.down)
         heroWidthConstraint?.constant = width
         let heightConstraint = liveHeader.heightAnchor.constraint(equalToConstant: height)

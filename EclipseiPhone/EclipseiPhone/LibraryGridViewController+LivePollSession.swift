@@ -86,44 +86,31 @@ extension LibraryGridViewController {
     }
 
     func promptQuestPollPIN(mode: QuestPollPickerMode) {
-        let alert = UIAlertController(
-            title: "QuestPoll",
-            message: "Enter the host PIN so Eclipse can run your live polls.",
-            preferredStyle: .alert
-        )
-        alert.addTextField { field in
-            field.keyboardType = .numberPad
-            field.isSecureTextEntry = true
-            field.placeholder = "Host PIN"
+        let pin = QuestPollPINViewController()
+        let nav = UINavigationController(rootViewController: pin)
+        nav.modalPresentationStyle = .formSheet
+        nav.preferredContentSize = QuestPollPINViewController.sheetSize
+        pin.onLinked = { [weak self, weak nav] in
+            guard let self, let nav else { return }
+            nav.setViewControllers(
+                [self.makeQuestPollPicker(mode: mode)],
+                animated: true
+            )
         }
-        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        alert.addAction(UIAlertAction(title: "Link", style: .default) { [weak self] _ in
-            let pin = alert.textFields?.first?.text?
-                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            self?.verifyQuestPollPIN(pin, mode: mode)
-        })
-        present(alert, animated: true)
-    }
-
-    func verifyQuestPollPIN(_ pin: String, mode: QuestPollPickerMode) {
-        guard !pin.isEmpty else { return }
-        let busy = presentQuestPollBusy(message: "Linking…")
-        Task { @MainActor [weak self] in
-            do {
-                try await QuestPollClient().verifyPIN(pin)
-                QuestPollAccount.shared.link(pin: pin)
-                busy.dismiss(animated: true) {
-                    self?.presentQuestPollPicker(mode: mode)
-                }
-            } catch {
-                busy.dismiss(animated: true) {
-                    self?.presentQuestPollError(error)
-                }
-            }
-        }
+        present(nav, animated: true)
     }
 
     func presentQuestPollPicker(mode: QuestPollPickerMode) {
+        let nav = UINavigationController(
+            rootViewController: makeQuestPollPicker(mode: mode)
+        )
+        nav.modalPresentationStyle = .formSheet
+        present(nav, animated: true)
+    }
+
+    private func makeQuestPollPicker(
+        mode: QuestPollPickerMode
+    ) -> QuestPollPickerViewController {
         let picker = QuestPollPickerViewController()
         picker.onUnlink = { [weak self] in
             Task { @MainActor in
@@ -138,9 +125,7 @@ extension LibraryGridViewController {
                 self?.handleQuestPollPick(poll, mode: mode)
             }
         }
-        let nav = UINavigationController(rootViewController: picker)
-        nav.modalPresentationStyle = .formSheet
-        present(nav, animated: true)
+        return picker
     }
 
     func handleQuestPollPick(_ poll: QuestPollSummary, mode: QuestPollPickerMode) {

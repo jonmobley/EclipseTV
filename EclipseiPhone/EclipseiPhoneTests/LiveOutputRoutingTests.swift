@@ -18,6 +18,30 @@ struct LiveOutputRoutingTests {
                 practiceMode: false
             ) == false
         )
+        #expect(
+            LiveOutputRouting.prefersPhonePreviewOnTap(
+                isLiveOutputLocked: false,
+                hasOutputDestination: false
+            )
+        )
+    }
+
+    @Test func lockOpensPreviewEvenWithADestination() {
+        #expect(
+            LiveOutputRouting.prefersPhonePreviewOnTap(
+                isLiveOutputLocked: true,
+                hasOutputDestination: true
+            )
+        )
+    }
+
+    @Test func destinationWithoutLockGoesLive() {
+        #expect(
+            LiveOutputRouting.prefersPhonePreviewOnTap(
+                isLiveOutputLocked: false,
+                hasOutputDestination: true
+            ) == false
+        )
     }
 
     @Test func practiceModeMarksLiveWhenDisconnected() {

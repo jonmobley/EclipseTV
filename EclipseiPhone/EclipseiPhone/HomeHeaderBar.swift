@@ -9,9 +9,10 @@ import UIKit
 
 /// Top header for the home screen.
 ///
-/// Home: page dropdown · + New Show.
-/// Show mode: back (left of dropdown) · page dropdown · Lock + Blackout (when a
-/// display, EclipseTV, or Practice Mode is on), Settings, and "+".
+/// Compact: page dropdown · + New Show (Home) or Lock / Blackout / Settings / +
+/// (Show). Regular-width and -height iPad replaces the dropdown with Home, Show,
+/// and Library tabs; Home tab returns from Show, so the back chevron is
+/// hidden. Compact Split View and iPhone keep the dropdown.
 /// iCloud Sync status surfaces via `EclipseSyncStatusBanner`, not the header.
 final class HomeHeaderBar: UIView {
 
@@ -25,8 +26,10 @@ final class HomeHeaderBar: UIView {
     // MARK: - Subviews
 
     private let backButton = UIButton(type: .system)
+    private let leadingNavStack = UIStackView()
     private let menuPill = UIView()
     private let libraryButton = UIButton(type: .system)
+    private let navTabs = HomeHeaderNavTabs()
     private let trailingStack = UIStackView()
     private let lockButton = UIButton(type: .system)
     private let blackButton = UIButton(type: .system)
@@ -50,6 +53,8 @@ final class HomeHeaderBar: UIView {
     var onDoneArranging: (() -> Void)?
     /// Invoked when Done is tapped while multi-selecting tiles.
     var onDoneSelecting: (() -> Void)?
+    /// Invoked by an iPad destination tab (Home, Show, Library, Music).
+    var onSelectDestination: ((HomeHeaderDestination) -> Void)?
 
     /// EclipseTV Multipeer link — read by output-status chrome.
     private(set) var connectionState: ConnectionDisplayState = .paused
@@ -98,13 +103,29 @@ final class HomeHeaderBar: UIView {
         menuPill.layer.borderWidth = 1
         menuPill.layer.borderColor = UIColor.separator.cgColor
         menuPill.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(menuPill)
+        navTabs.translatesAutoresizingMaskIntoConstraints = false
+        navTabs.onSelect = { [weak self] destination in
+            self?.onSelectDestination?(destination)
+        }
+        leadingNavStack.axis = .horizontal
+        leadingNavStack.alignment = .center
+        leadingNavStack.spacing = 0
+        leadingNavStack.translatesAutoresizingMaskIntoConstraints = false
+        leadingNavStack.addArrangedSubview(menuPill)
+        leadingNavStack.addArrangedSubview(navTabs)
+        addSubview(leadingNavStack)
         registerForTraitChanges([UITraitUserInterfaceStyle.self]) {
             (view: Self, _: UITraitCollection) in
             view.menuPill.layer.borderColor = UIColor.separator.cgColor
             view.applyLockButtonAppearance()
             view.applyBlackButtonAppearance()
             view.applyNewShowButtonAppearance()
+        }
+        registerForTraitChanges([
+            UITraitHorizontalSizeClass.self,
+            UITraitVerticalSizeClass.self
+        ]) { (view: Self, _: UITraitCollection) in
+            view.applySizeClassChrome()
         }
 
         var libraryConfig = UIButton.Configuration.plain()
@@ -135,7 +156,10 @@ final class HomeHeaderBar: UIView {
         libraryButton.setContentCompressionResistancePriority(
             .defaultLow, for: .horizontal
         )
-        menuPill.setContentCompressionResistancePriority(
+        leadingNavStack.setContentCompressionResistancePriority(
+            .defaultLow, for: .horizontal
+        )
+        navTabs.setContentCompressionResistancePriority(
             .defaultLow, for: .horizontal
         )
         menuPill.addSubview(libraryButton)
@@ -221,10 +245,10 @@ final class HomeHeaderBar: UIView {
         }
         addSubview(trailingStack)
 
-        let leadingSafe = menuPill.leadingAnchor.constraint(
+        let leadingSafe = leadingNavStack.leadingAnchor.constraint(
             equalTo: leadingAnchor, constant: 16
         )
-        let leadingBack = menuPill.leadingAnchor.constraint(
+        let leadingBack = leadingNavStack.leadingAnchor.constraint(
             equalTo: backButton.trailingAnchor, constant: 4
         )
         leadingBack.isActive = false
@@ -238,7 +262,9 @@ final class HomeHeaderBar: UIView {
             backButton.heightAnchor.constraint(equalToConstant: 36),
 
             leadingSafe,
-            menuPill.centerYAnchor.constraint(equalTo: centerYAnchor),
+            leadingNavStack.centerYAnchor.constraint(equalTo: centerYAnchor),
+            leadingNavStack.heightAnchor.constraint(equalToConstant: 36),
+
             menuPill.heightAnchor.constraint(equalToConstant: 36),
 
             libraryButton.leadingAnchor.constraint(equalTo: menuPill.leadingAnchor),
@@ -261,7 +287,7 @@ final class HomeHeaderBar: UIView {
             selectActionsButton.heightAnchor.constraint(equalToConstant: 36),
             doneButton.heightAnchor.constraint(equalToConstant: 36),
 
-            menuPill.trailingAnchor.constraint(
+            leadingNavStack.trailingAnchor.constraint(
                 lessThanOrEqualTo: trailingStack.leadingAnchor, constant: -8
             )
         ])
@@ -274,6 +300,7 @@ final class HomeHeaderBar: UIView {
         backButton.setContentHuggingPriority(.required, for: .horizontal)
         lockButton.setContentHuggingPriority(.required, for: .horizontal)
         blackButton.setContentHuggingPriority(.required, for: .horizontal)
+        applySizeClassChrome()
     }
 
     /// Toolbar-style icon button (plain SF Symbol, no stroked circle chrome).
@@ -314,6 +341,12 @@ final class HomeHeaderBar: UIView {
         libraryButton.menu = menu
     }
 
+    /// Updates iPad destination-tab selection (Home vs Show, Music pin).
+    func setNavSelection(_ selection: HomeHeaderNavSelection) {
+        navTabs.apply(selection)
+        applySizeClassChrome()
+    }
+
     /// Attaches the system add menu to the "+" control (primary action).
     func setAddMenu(_ menu: UIMenu) {
         addButton.menu = menu
@@ -347,8 +380,7 @@ final class HomeHeaderBar: UIView {
     func setShowModeChrome(_ showMode: Bool) {
         guard showsShowChrome != showMode else { return }
         showsShowChrome = showMode
-        applyTrailingChrome()
-        applyBackButtonChrome()
+        applySizeClassChrome()
         libraryButton.accessibilityHint = showMode
             ? "Open Show, New Show, Library, Music, and Recent Shows"
             : "Open Show, New Show, Library, Music, Settings, and Recent Shows"
@@ -410,10 +442,11 @@ final class HomeHeaderBar: UIView {
 
     private func applyEditingChrome() {
         let editing = isArranging || isSelecting
-        applyTrailingChrome()
-        applyBackButtonChrome()
         libraryButton.isEnabled = !editing
         menuPill.alpha = editing ? 0.45 : 1
+        navTabs.isUserInteractionEnabled = !editing
+        navTabs.alpha = editing ? 0.45 : 1
+        applySizeClassChrome()
         doneButton.accessibilityLabel = isSelecting
             ? "Done selecting"
             : "Done arranging"
@@ -422,13 +455,43 @@ final class HomeHeaderBar: UIView {
             : "Saves the new order"
     }
 
-    /// Show mode: chevron left of the dropdown. Hidden on Home and while editing.
+    /// Show mode: chevron left of the dropdown. Hidden on Home, while editing,
+    /// and on iPad tabs (Home is the return control).
     private func applyBackButtonChrome() {
         let show = showsShowChrome && !isArranging && !isSelecting
+            && !showsDestinationTabs
         backButton.isHidden = !show
         backButton.isEnabled = show
         menuPillLeadingToSafe?.isActive = !show
         menuPillLeadingToBack?.isActive = show
+    }
+
+    /// Compact dropdown vs iPad destination tabs, plus trailing/back that
+    /// depend on that choice.
+    private func applySizeClassChrome() {
+        applyLeadingNavChrome()
+        applyTrailingChrome()
+        applyBackButtonChrome()
+    }
+
+    /// Compact dropdown vs iPad destination tabs.
+    private func applyLeadingNavChrome() {
+        let tabs = showsDestinationTabs
+        menuPill.isHidden = tabs
+        navTabs.isHidden = !tabs
+    }
+
+    /// iPad full-width header shows Home / Show / Library tabs.
+    var showsDestinationTabs: Bool {
+        destinationTabsOverride ?? HomeHeaderNavLayout.showsDestinationTabs(
+            horizontalSizeClass: traitCollection.horizontalSizeClass,
+            verticalSizeClass: traitCollection.verticalSizeClass
+        )
+    }
+
+    /// Testing only. Forces tab vs dropdown chrome; `nil` follows size class.
+    var destinationTabsOverride: Bool? {
+        didSet { applySizeClassChrome() }
     }
 
     private func applyTrailingChrome() {
@@ -448,7 +511,7 @@ final class HomeHeaderBar: UIView {
         }
         lockButton.isHidden = !showsLiveOutputChrome
         blackButton.isHidden = !showsLiveOutputChrome
-        settingsButton.isHidden = !showsShowChrome
+        settingsButton.isHidden = !(showsShowChrome || showsDestinationTabs)
         addButton.isHidden = !showsShowChrome
         newShowButton.isHidden = showsShowChrome
     }
@@ -476,7 +539,7 @@ final class HomeHeaderBar: UIView {
     var addAnchor: UIView { addButton }
 
     /// The page title control, for anchoring Show-related popovers.
-    var libraryAnchor: UIView { libraryButton }
+    var libraryAnchor: UIView { showsDestinationTabs ? navTabs : libraryButton }
 
     /// New Show control, for anchoring popovers when "+" is hidden on Home.
     var newShowAnchor: UIView { newShowButton }
