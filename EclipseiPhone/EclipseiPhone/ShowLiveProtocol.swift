@@ -40,6 +40,8 @@ enum ShowLiveCommandVerb: String, Codable, Equatable {
     case videoSkip
     /// Absolute seek; `value` is seconds.
     case videoSeek
+    /// Pause the live countdown if running, otherwise start it.
+    case countdownToggleRunning
     /// Reset the live countdown to its duration.
     case countdownReset
     /// Set the live countdown duration; `value` is whole seconds.

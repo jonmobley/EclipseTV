@@ -43,6 +43,9 @@ extension LibraryGridViewController {
         case .videoSeek:
             guard let position = command.value else { return }
             handleLiveVideoSeek(to: position)
+        case .countdownToggleRunning:
+            guard ExternalDisplayManager.shared.isCountdownLive else { return }
+            CountdownController.shared.toggleRunning()
         case .countdownReset:
             guard ExternalDisplayManager.shared.isCountdownLive else { return }
             CountdownController.shared.reset()

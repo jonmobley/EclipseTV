@@ -12,6 +12,13 @@ extension LibraryGridViewController {
     /// Countdown tile: go live, or pause/resume when this timer is already on output.
     func beginCountdown(_ item: ShowCountdown) {
         guard ensureCountdownDestination() else { return }
+        // Operator: same tap semantics as local — pause/resume the clock that is
+        // already on the director, otherwise ask the director to go live with it.
+        if isRemoteCountdownLive(item.id),
+           sendShowLiveCommandIfOperator(.countdownToggleRunning) {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            return
+        }
         if sendShowLiveSelectIfOperator(.countdown, itemId: item.id.uuidString) {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             return

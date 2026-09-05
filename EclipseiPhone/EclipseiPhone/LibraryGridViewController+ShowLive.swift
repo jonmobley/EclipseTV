@@ -56,7 +56,8 @@ extension LibraryGridViewController {
         case .countdown:
             guard let itemId, let uuid = UUID(uuidString: itemId),
                   let item = CountdownStore.shared.countdown(id: uuid) else { return }
-            presentCountdownLive(item)
+            // Tile-tap semantics: pause/resume when already live, else go live.
+            beginCountdown(item)
         case .slideshow:
             guard let itemId, let uuid = UUID(uuidString: itemId),
                   let show = SlideshowStore.shared.slideshow(id: uuid) else { return }

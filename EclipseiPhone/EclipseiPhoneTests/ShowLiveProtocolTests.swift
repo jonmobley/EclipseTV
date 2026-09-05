@@ -69,6 +69,19 @@ struct ShowLiveProtocolTests {
         #expect(received.command?.value == 42.5)
     }
 
+    @Test func commandVerbWireValuesAreStable() {
+        let expected: [ShowLiveCommandVerb: String] = [
+            .videoToggle: "videoToggle", .videoSkip: "videoSkip",
+            .videoSeek: "videoSeek", .countdownToggleRunning: "countdownToggleRunning",
+            .countdownReset: "countdownReset",
+            .countdownSetDuration: "countdownSetDuration", .lockToggle: "lockToggle"
+        ]
+        for (verb, raw) in expected {
+            #expect(verb.rawValue == raw)
+            #expect(ShowLiveCommandVerb(rawValue: raw) == verb)
+        }
+    }
+
     @Test func legacySnapshotWithoutTransportStateDecodes() throws {
         let showId = UUID()
         let json = """
