@@ -74,12 +74,16 @@ extension LibraryGridViewController {
                   let item = LivePollStore.shared.poll(id: uuid) else { return }
             if QuestPollSessionStore.shared.membershipId == item.id,
                QuestPollSessionStore.shared.session != nil {
-                presentQuestPollLive()
+                selectLivePoll(item)
             } else {
+                // No local tap to answer the hero gate, so skip straight to Start.
+                // Replacing a live room still confirms on the director.
                 startLivePoll(item)
             }
         case .black:
-            if !isBlackSelected { toggleBlackLive() }
+            // Toggle, not set: the wire has no "un-black", and the operator's moon
+            // already shows the director's state from the snapshot.
+            toggleBlackLive()
         }
     }
 

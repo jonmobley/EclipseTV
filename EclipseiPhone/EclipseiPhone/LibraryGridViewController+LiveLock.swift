@@ -16,6 +16,8 @@ extension LibraryGridViewController {
     func toggleLiveOutputLock() {
         isLiveOutputLocked.toggle()
         applyLiveOutputLockChrome()
+        // Operators mirror the director's lock, so they must hear about it.
+        broadcastShowLiveSnapshotIfNeeded()
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
     }
 
