@@ -57,6 +57,55 @@ struct ShowLiveProtocolTests {
         #expect(object?.count == 2)
     }
 
+    @Test func commandEnvelopeRoundTrips() throws {
+        let sent = ShowLiveEnvelope(
+            kind: .command,
+            command: ShowLiveCommand(verb: .videoSeek, value: 42.5)
+        )
+        let data = try JSONEncoder().encode(sent)
+        let received = try JSONDecoder().decode(ShowLiveEnvelope.self, from: data)
+        #expect(received == sent)
+        #expect(received.command?.verb == .videoSeek)
+        #expect(received.command?.value == 42.5)
+    }
+
+    @Test func legacySnapshotWithoutTransportStateDecodes() throws {
+        let showId = UUID()
+        let json = """
+        {"kind":"state","snapshot":{"showId":"\(showId.uuidString)",
+        "liveKind":"media","liveItemId":"m1","isBlackout":false,
+        "isLocked":false,"directorName":"Old build"}}
+        """
+        let received = try JSONDecoder().decode(
+            ShowLiveEnvelope.self, from: Data(json.utf8)
+        )
+        #expect(received.snapshot?.video == nil)
+        #expect(received.snapshot?.countdown == nil)
+        #expect(received.command == nil)
+    }
+
+    @Test func tickOnlyChangesKeepTheSameProgram() {
+        let showId = UUID()
+        let first = ShowLiveSnapshot(
+            showId: showId, liveItemId: "v1", liveKind: .media,
+            isBlackout: false, isLocked: false, directorName: "A",
+            video: ShowLiveVideoState(isPlaying: true, currentTime: 3, duration: 90)
+        )
+        var tick = first
+        tick.video?.currentTime = 4
+        #expect(tick.isSameProgram(as: first))
+        #expect(tick != first)
+
+        var locked = first
+        locked.isLocked = true
+        #expect(locked.isSameProgram(as: first) == false)
+
+        var other = first
+        other.liveItemId = "v2"
+        #expect(other.isSameProgram(as: first) == false)
+        #expect(first.isSameProgram(as: nil) == false)
+    }
+
     @Test func unknownItemKindIsRejectedNotCrashed() {
         let json = #"{"kind":"select","itemKind":"hologram","itemId":"x"}"#
         let decoded = try? JSONDecoder().decode(

@@ -14,6 +14,11 @@ extension LibraryGridViewController {
     /// Toggles lock: live output stays put; media / Screensaver / Background
     /// taps open phone Preview instead.
     func toggleLiveOutputLock() {
+        // The director owns Lock; an operator asks and the snapshot echoes it back.
+        if sendShowLiveCommandIfOperator(.lockToggle) {
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            return
+        }
         isLiveOutputLocked.toggle()
         applyLiveOutputLockChrome()
         // Operators mirror the director's lock, so they must hear about it.

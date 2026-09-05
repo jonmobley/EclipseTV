@@ -140,7 +140,7 @@ extension LibraryGridViewController {
             return
         }
         applyRemoteLiveHeaderContent(snap)
-        liveHeader.updatePlayback(PlaybackState())
+        liveHeader.updatePlayback(remotePlaybackState(snap))
     }
 
     /// Pushes current program to operators after a local go-live.
@@ -151,10 +151,19 @@ extension LibraryGridViewController {
         ShowLiveSession.shared.broadcastSnapshot(makeShowLiveSnapshot(showId: showId))
     }
 
-    func handleShowLiveSessionChanged() {
+    func handleShowLiveSessionChanged(_ note: Notification) {
         if ShowLiveSession.shared.isRemoteOperator,
            let snap = ShowLiveSession.shared.snapshot {
             isLiveOutputLocked = snap.isLocked
+        }
+        // Video / clock ticks arrive about once a second; only the hero and the
+        // live countdown tile need them, not a grid rebuild.
+        let programChanged = note.userInfo?[ShowLiveSession.programChangedKey]
+            as? Bool ?? true
+        guard programChanged else {
+            refreshLiveHeader()
+            updateVisibleCountdownTiles()
+            return
         }
         updateHeroVisibility()
         reloadLibraryGrid()
@@ -191,7 +200,8 @@ extension LibraryGridViewController {
         if mgr.isCountdownLive, let id = CountdownController.shared.liveCountdownId {
             return ShowLiveSnapshot(
                 showId: showId, liveItemId: id.uuidString, liveKind: .countdown,
-                isBlackout: false, isLocked: isLiveOutputLocked, directorName: name
+                isBlackout: false, isLocked: isLiveOutputLocked, directorName: name,
+                countdown: showLiveCountdownState
             )
         }
         if mgr.isQuestPollLive, let id = QuestPollSessionStore.shared.membershipId {
@@ -234,7 +244,8 @@ extension LibraryGridViewController {
         if let id = store.currentId {
             return ShowLiveSnapshot(
                 showId: showId, liveItemId: id, liveKind: .media,
-                isBlackout: false, isLocked: isLiveOutputLocked, directorName: name
+                isBlackout: false, isLocked: isLiveOutputLocked, directorName: name,
+                video: showLiveVideoState
             )
         }
         return ShowLiveSnapshot(
@@ -249,10 +260,12 @@ extension LibraryGridViewController {
             let item = snap.liveItemId.flatMap { id in
                 store.items.first(where: { $0.id == id })
             }
+            // Transport shows for video; taps go to the director as commands.
             liveHeader.configure(
                 with: item,
                 thumbnail: item.flatMap { store.thumbnail(for: $0.id) },
                 isOnline: true,
+                showsLocalTransport: item?.isVideo == true,
                 usesRemoteVideoMonitor: item?.isVideo == true,
                 showsLiveBadge: true
             )
@@ -271,7 +284,7 @@ extension LibraryGridViewController {
         case .camera:
             applyRemoteOverlayHeader(title: "Camera", systemImage: "camera.fill")
         case .countdown:
-            applyRemoteOverlayHeader(title: "Countdown", systemImage: "timer")
+            applyRemoteCountdownHeader(snap)
         case .slideshow:
             applyRemoteOverlayHeader(
                 title: remoteSlideshowTitle(snap.liveItemId),
@@ -298,7 +311,7 @@ extension LibraryGridViewController {
         }
     }
 
-    private func applyRemoteOverlayHeader(
+    func applyRemoteOverlayHeader(
         title: String,
         systemImage: String,
         thumbnail: UIImage? = nil

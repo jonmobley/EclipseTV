@@ -621,11 +621,14 @@ final class LibraryGridViewController: UIViewController {
             self.applyHeroChrome()
             overlayReload(note)
         }
-        observe(ShowLiveSession.didChangeNotification) { [weak self] _ in
-            self?.handleShowLiveSessionChanged()
+        observe(ShowLiveSession.didChangeNotification) { [weak self] note in
+            self?.handleShowLiveSessionChanged(note)
         }
         observe(ShowLiveSession.incomingSelectNotification) { [weak self] note in
             self?.handleIncomingShowLiveSelect(note)
+        }
+        observe(ShowLiveSession.incomingCommandNotification) { [weak self] note in
+            self?.handleIncomingShowLiveCommand(note)
         }
         observe(ExternalDisplayManager.webDidEndNotification, using: overlayReload)
         observe(ExternalDisplayManager.pdfDidEndNotification, using: overlayReload)
