@@ -614,10 +614,21 @@ final class LibraryGridViewController: UIViewController {
                 // AirPlay / HDMI dropped — keep phone camera / web / PDF open; tip the user.
                 self.showPresentationToast("External display disconnected")
             }
+            // HDMI gained → this device can become director; lost → it steps down.
+            self.syncShowLiveSession()
             // Hero follows a real destination or Practice Mode.
             self.updateHeroVisibility()
             self.applyHeroChrome()
             overlayReload(note)
+        }
+        observe(ShowLiveSession.didChangeNotification) { [weak self] note in
+            self?.handleShowLiveSessionChanged(note)
+        }
+        observe(ShowLiveSession.incomingSelectNotification) { [weak self] note in
+            self?.handleIncomingShowLiveSelect(note)
+        }
+        observe(ShowLiveSession.incomingCommandNotification) { [weak self] note in
+            self?.handleIncomingShowLiveCommand(note)
         }
         observe(ExternalDisplayManager.webDidEndNotification, using: overlayReload)
         observe(ExternalDisplayManager.pdfDidEndNotification, using: overlayReload)
@@ -818,7 +829,14 @@ final class LibraryGridViewController: UIViewController {
     /// there. Blackout chrome still updates so the header moon reflects live state.
     func refreshLiveHeader() {
         let mgr = ExternalDisplayManager.shared
-        let blackLive = isBlackSelected && !mgr.isOverlayLive
+        // Every go-live path ends here, so this is where the director publishes
+        // program to operators (deduped inside the session).
+        broadcastShowLiveSnapshotIfNeeded()
+        // An operator's header moon reflects the director's program, not local flags.
+        let remoteSnapshot = ShowLiveSession.shared.isRemoteOperator
+            ? ShowLiveSession.shared.snapshot : nil
+        let blackLive = remoteSnapshot?.isBlackout
+            ?? (isBlackSelected && !mgr.isOverlayLive)
         onBlackLiveChanged?(blackLive)
         onLiveOutputLockChanged?(isLiveOutputLocked)
         liveHeader.setOutputLocked(isLiveOutputLocked)
@@ -844,6 +862,13 @@ final class LibraryGridViewController: UIViewController {
         defer {
             syncSlideshowRibbonIfChromeChanged()
             syncLiveScreenFitChrome()
+        }
+
+        // Operator: the hero is a follow monitor for the director's program.
+        if let remoteSnapshot {
+            refreshForeignLivePreview()
+            applyRemoteLiveHeader(remoteSnapshot)
+            return
         }
 
         // Another Show still owns live output — keep AirPlay as-is, show an empty

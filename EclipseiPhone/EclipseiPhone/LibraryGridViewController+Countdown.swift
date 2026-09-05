@@ -12,6 +12,13 @@ extension LibraryGridViewController {
     /// Countdown tile: go live, or pause/resume when this timer is already on output.
     func beginCountdown(_ item: ShowCountdown) {
         guard ensureCountdownDestination() else { return }
+        // Operator: same tap semantics as local — pause/resume the clock that is
+        // already on the director, otherwise ask the director to go live with it.
+        if isRemoteCountdownLive(item.id),
+           sendShowLiveCommandIfOperator(.countdownToggleRunning) {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            return
+        }
         if sendShowLiveSelectIfOperator(.countdown, itemId: item.id.uuidString) {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             return
@@ -61,7 +68,14 @@ extension LibraryGridViewController {
 
     /// Whether the live ribbon is showing duration presets.
     var showsCountdownRibbon: Bool {
-        isShowMode && ExternalDisplayManager.shared.isCountdownLive
+        isShowMode
+            && (ExternalDisplayManager.shared.isCountdownLive
+                || isRemoteCountdownLive(nil))
+    }
+
+    /// Duration the chips should mark selected: the director's when operating.
+    var selectedCountdownDuration: Int {
+        remoteCountdownState?.duration ?? CountdownController.shared.duration
     }
 
     /// Duration-preset count plus Custom for the live ribbon.
@@ -82,7 +96,7 @@ extension LibraryGridViewController {
         }
         guard presets.indices.contains(indexPath.item) else { return }
         let seconds = presets[indexPath.item]
-        let selected = seconds == CountdownController.shared.duration
+        let selected = seconds == selectedCountdownDuration
         cell.configureSpecial(
             title: CountdownController.displayString(seconds: seconds),
             systemImage: "timer",
@@ -101,7 +115,7 @@ extension LibraryGridViewController {
         isLive: Bool
     ) {
         let seconds = isLive
-            ? CountdownController.shared.remaining
+            ? (remoteCountdownState?.remaining ?? CountdownController.shared.remaining)
             : item.duration
         let isExpired = isLive && seconds == 0
         cell.configureCountdown(
@@ -141,6 +155,8 @@ extension LibraryGridViewController {
 
     /// Refreshes hero + visible tiles without reloading the whole grid.
     func refreshCountdownChrome() {
+        // Director clock ticks once a second; operators mirror it from the snapshot.
+        broadcastShowLiveSnapshotIfNeeded()
         guard ExternalDisplayManager.shared.isCountdownLive else {
             reloadGridIfSafe()
             refreshLiveHeader()
@@ -199,15 +215,15 @@ extension LibraryGridViewController {
 
     /// Reset and duration chips for a countdown ⋯ menu.
     func countdownToolActions(for item: ShowCountdown) -> [UIMenuElement] {
-        let clock = CountdownController.shared
-        let isLive = clock.liveCountdownId == item.id
-            && ExternalDisplayManager.shared.isCountdownLive
-        let selectedDuration = isLive ? clock.duration : item.duration
+        // Live here or on the director; both read the same predicate as the tile.
+        let isLive = isShowGridItemLive(.countdown(item))
+        let selectedDuration = isLive ? selectedCountdownDuration : item.duration
         let reset = UIAction(
             title: "Reset",
             image: UIImage(systemName: "arrow.counterclockwise")
-        ) { _ in
+        ) { [weak self] _ in
             guard isLive else { return }
+            if self?.sendShowLiveCommandIfOperator(.countdownReset) == true { return }
             CountdownController.shared.reset()
         }
         var durationActions: [UIMenuElement] = CountdownController.durationPresets.map {
@@ -277,19 +293,19 @@ extension LibraryGridViewController {
         )
     }
 
-    private func updateVisibleCountdownTiles() {
+    /// Ticks the live countdown tile (local clock, or the director's on an operator).
+    func updateVisibleCountdownTiles() {
         guard let showsSection = sectionIndex(for: .shows) else { return }
-        let liveId = CountdownController.shared.liveCountdownId
-        let clock = CountdownController.shared
+        let remaining = remoteCountdownState?.remaining
+            ?? CountdownController.shared.remaining
         for (index, row) in openShowGridItems.enumerated() {
             guard case .countdown(let item) = row,
                   let cell = collectionView.cellForItem(
                     at: IndexPath(item: index, section: showsSection)
                   ) as? LibraryThumbnailCell
             else { continue }
-            let isLive = item.id == liveId
-                && ExternalDisplayManager.shared.isCountdownLive
-            let seconds = isLive ? clock.remaining : item.duration
+            let isLive = isShowGridItemLive(.countdown(item))
+            let seconds = isLive ? remaining : item.duration
             let isExpired = isLive && seconds == 0
             if isLive {
                 cell.applyCountdownTime(seconds, isExpired: isExpired)
@@ -331,6 +347,9 @@ extension LibraryGridViewController {
     }
 
     private func durationForPrompt(itemId: UUID?) -> Int {
+        if isRemoteCountdownLive(itemId), let remote = remoteCountdownState {
+            return remote.duration
+        }
         if let itemId,
            CountdownController.shared.liveCountdownId == itemId {
             return CountdownController.shared.duration
@@ -353,6 +372,14 @@ extension LibraryGridViewController {
     }
 
     private func applyCountdownDuration(_ seconds: Int, to itemId: UUID?) {
+        // Operator editing the director's live clock: the director applies it.
+        if isRemoteCountdownLive(itemId),
+           sendShowLiveCommandIfOperator(
+               .countdownSetDuration,
+               value: Double(CountdownController.clampedDuration(seconds))
+           ) {
+            return
+        }
         if let itemId, CountdownController.shared.liveCountdownId == itemId,
            ExternalDisplayManager.shared.isCountdownLive {
             CountdownController.shared.setDuration(seconds)
