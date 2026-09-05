@@ -265,7 +265,8 @@ extension LibraryGridViewController {
                 _ = try? CountdownStore.shared.create(
                     name: source.name,
                     showId: albumId,
-                    duration: source.duration
+                    duration: source.duration,
+                    layout: source.layout
                 )
             } else if let livePollId = ShowLivePollToken.livePollId(from: id),
                       let source = LivePollStore.shared.poll(id: livePollId) {

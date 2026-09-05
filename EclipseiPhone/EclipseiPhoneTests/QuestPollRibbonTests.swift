@@ -106,7 +106,7 @@ struct QuestPollRibbonTests {
         )
     }
 
-    @Test func ribbonShowsOnGateAndPracticeBeforeLiveRoom() {
+    @Test func ribbonTracksOnProgramPracticeOrGateNotALeftoverRoom() {
         #expect(QuestPollRibbon.shouldShow(
             isShowMode: true,
             liveRoomActive: false,
@@ -125,6 +125,7 @@ struct QuestPollRibbonTests {
             isPracticing: false,
             isGated: false
         ))
+        // A leftover QuestPoll room after switching to a photo is not live.
         #expect(QuestPollRibbon.shouldShow(
             isShowMode: true,
             liveRoomActive: false,
@@ -136,6 +137,25 @@ struct QuestPollRibbonTests {
             liveRoomActive: true,
             isPracticing: true,
             isGated: true
+        ) == false)
+    }
+
+    @Test func currentCueIsLiveOnlyOnProgramOrPractice() {
+        #expect(QuestPollRibbon.cueIsLive(
+            index: 2, currentIndex: 2,
+            pollIsOnProgram: true, isPracticing: false
+        ))
+        #expect(QuestPollRibbon.cueIsLive(
+            index: 0, currentIndex: 0,
+            pollIsOnProgram: false, isPracticing: true
+        ))
+        #expect(QuestPollRibbon.cueIsLive(
+            index: 0, currentIndex: 0,
+            pollIsOnProgram: false, isPracticing: false
+        ) == false)
+        #expect(QuestPollRibbon.cueIsLive(
+            index: 1, currentIndex: 2,
+            pollIsOnProgram: true, isPracticing: false
         ) == false)
     }
 }

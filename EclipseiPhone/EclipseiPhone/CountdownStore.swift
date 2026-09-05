@@ -73,7 +73,8 @@ final class CountdownStore {
     func create(
         name: String,
         showId: UUID,
-        duration: Int
+        duration: Int,
+        layout: CountdownClockLayout = .default
     ) throws -> ShowCountdown {
         guard let trimmed = UserDisplayName.normalized(name) else {
             throw StoreError.emptyName
@@ -81,7 +82,8 @@ final class CountdownStore {
         let item = ShowCountdown(
             showId: showId,
             name: trimmed,
-            duration: CountdownController.clampedDuration(duration)
+            duration: CountdownController.clampedDuration(duration),
+            layout: layout
         )
         countdowns.append(item)
         persist()
@@ -107,6 +109,16 @@ final class CountdownStore {
         let next = CountdownController.clampedDuration(seconds)
         guard countdowns[index].duration != next else { return }
         countdowns[index].duration = next
+        persist()
+        scheduleSaveIfNeeded(id: id)
+    }
+
+    /// Sets the output size and position of the countdown with `id`.
+    func setLayout(id: UUID, layout: CountdownClockLayout) {
+        guard let index = countdowns.firstIndex(where: { $0.id == id }) else { return }
+        let next = layout.clampedScale
+        guard countdowns[index].layout != next else { return }
+        countdowns[index].layout = next
         persist()
         scheduleSaveIfNeeded(id: id)
     }

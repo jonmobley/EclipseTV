@@ -112,6 +112,9 @@ enum CloudKitSchema {
         static let showId = "showId"
         static let name = "name"
         static let duration = "duration"
+        static let layoutCenterX = "layoutCenterX"
+        static let layoutCenterY = "layoutCenterY"
+        static let layoutScale = "layoutScale"
         static let createdAt = "createdAt"
         static let modifiedAt = "modifiedAt"
     }

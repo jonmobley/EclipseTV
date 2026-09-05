@@ -302,7 +302,9 @@ final class LibraryThumbnailCell: UICollectionViewCell {
     func applyLoadedThumbnail(_ image: UIImage) {
         guard imageView.image == nil else { return }
         imageView.image = image
+        if imageView.alpha == 0 { imageView.alpha = 1 }
         placeholderIcon.isHidden = true
+        refreshTypeIconVisibility()
     }
 
     /// Soft “add” tile (New Show / Add media) — quiet fill, blue glyph.
@@ -468,9 +470,11 @@ final class LibraryThumbnailCell: UICollectionViewCell {
     }
 
     /// - Parameter isLocked: When live is locked, the stroke uses amber.
-    func setLive(_ isLive: Bool, isLocked: Bool = false) {
+    /// - Parameter isPreview: Phone preview (not on AirPlay). Blue instead of red.
+    func setLive(_ isLive: Bool, isLocked: Bool = false, isPreview: Bool = false) {
         cardView.layer.borderWidth = isLive ? 3 : 0
-        let accent: UIColor = isLocked ? .systemOrange : .systemRed
+        let accent: UIColor = isPreview ? .systemBlue
+            : (isLocked ? .systemOrange : .systemRed)
         cardView.layer.borderColor = isLive ? accent.cgColor : UIColor.clear.cgColor
     }
 

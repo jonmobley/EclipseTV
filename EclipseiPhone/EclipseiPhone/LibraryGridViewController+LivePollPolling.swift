@@ -20,12 +20,11 @@ extension LibraryGridViewController {
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
                 guard let self, !Task.isCancelled else { return }
-                guard self.showsLivePollRibbon,
-                      let session = QuestPollSessionStore.shared.session,
+                guard let session = QuestPollSessionStore.shared.session,
                       let pin = QuestPollAccount.shared.hostPIN,
                       !QuestPollSessionStore.shared.isControlInFlight
                 else {
-                    if !self.showsLivePollRibbon { return }
+                    if QuestPollSessionStore.shared.session == nil { return }
                     continue
                 }
                 do {

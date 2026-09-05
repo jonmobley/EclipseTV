@@ -131,13 +131,12 @@ extension CameraLiveViewController {
 
     /// Places Frame · photo · record · Flip in the outside dock (not over the preview).
     ///
-    /// Vertical: bottom dock under the panel. Landscape: trailing dock — the same
-    /// physical spot when the phone is held sideways.
+    /// Portrait hold: bottom dock under the panel. Landscape hold: trailing dock.
     func layoutBottomChromeInPanel() {
         let panel = panelView.convert(panelView.bounds, to: view)
         guard panel.width > 1, panel.height > 1 else { return }
 
-        if ExternalOutputSettings.isVerticalMode {
+        if isPhoneCameraPortraitLayout {
             layoutVerticalCaptureChrome(panel: panel)
         } else {
             layoutLandscapeCaptureChrome(panel: panel)
@@ -154,7 +153,7 @@ extension CameraLiveViewController {
         updateShutterAccessibilityHint()
     }
 
-    /// Frame · photo · record · Flip in a row in the bottom dock under the Vertical panel.
+    /// Frame · photo · record · Flip in a row in the bottom dock under the panel.
     private func layoutVerticalCaptureChrome(panel: CGRect) {
         let inset: CGFloat = 20
         let controlSize = Self.chromeControlSize
@@ -187,7 +186,7 @@ extension CameraLiveViewController {
         flipButton.transform = .identity
     }
 
-    /// Same chrome as Vertical, in the trailing dock beside the Landscape panel.
+    /// Same chrome as the bottom dock, in the trailing column beside the panel.
     private func layoutLandscapeCaptureChrome(panel: CGRect) {
         let inset: CGFloat = 20
         let controlSize = Self.chromeControlSize

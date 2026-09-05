@@ -182,7 +182,7 @@ final class LiveHeaderView: UIView {
         countdownClockLabel.minimumScaleFactor = 0.4
         countdownClockLabel.numberOfLines = 1
         countdownClockLabel.isHidden = true
-        countdownClockLabel.translatesAutoresizingMaskIntoConstraints = false
+        countdownClockLabel.translatesAutoresizingMaskIntoConstraints = true
         addSubview(countdownClockLabel)
 
         subtitleLabel.font = .systemFont(ofSize: 13, weight: .semibold)
@@ -220,15 +220,6 @@ final class LiveHeaderView: UIView {
             placeholderIcon.centerYAnchor.constraint(equalTo: centerYAnchor, constant: -14),
             placeholderIcon.widthAnchor.constraint(equalToConstant: 52),
             placeholderIcon.heightAnchor.constraint(equalToConstant: 52),
-
-            countdownClockLabel.centerXAnchor.constraint(equalTo: centerXAnchor),
-            countdownClockLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
-            countdownClockLabel.leadingAnchor.constraint(
-                greaterThanOrEqualTo: leadingAnchor, constant: 24
-            ),
-            countdownClockLabel.trailingAnchor.constraint(
-                lessThanOrEqualTo: trailingAnchor, constant: -24
-            ),
 
             liveBadge.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
             liveBadge.topAnchor.constraint(equalTo: topAnchor, constant: 14),
@@ -272,6 +263,7 @@ final class LiveHeaderView: UIView {
         layoutLibraryVideoPreviewIfNeeded()
         layoutCameraPreviewIfNeeded()
         layoutWebPreviewIfNeeded()
+        layoutCountdownClockIfNeeded()
         // Keep the float-mode shadow path matched to the current bounds.
         if layer.shadowOpacity > 0, bounds.width > 1, bounds.height > 1 {
             layer.shadowPath = UIBezierPath(

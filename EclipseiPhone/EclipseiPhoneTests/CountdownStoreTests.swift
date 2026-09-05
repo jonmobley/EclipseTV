@@ -36,6 +36,33 @@ struct CountdownStoreTests {
         )
         #expect(item.tileTitle() == "Break\n1:30")
         #expect(item.tileTitle(remaining: 5) == "Break\n0:05")
+        #expect(item.layout == .default)
+    }
+
+    @Test func setLayoutPersists() {
+        let store = makeStore()
+        let item = ShowCountdown(
+            showId: UUID(), name: "Break", duration: 60
+        )
+        store.applyRemote(item)
+        let layout = CountdownClockLayout(centerX: 0.2, centerY: 0.8, scale: 1.5)
+        store.setLayout(id: item.id, layout: layout)
+        #expect(store.countdown(id: item.id)?.layout == layout)
+    }
+
+    @Test func missingLayoutDecodesAsDefault() throws {
+        let item = ShowCountdown(
+            showId: UUID(), name: "Break", duration: 90
+        )
+        let encoded = try JSONEncoder().encode(item)
+        var object = try #require(
+            JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+        )
+        object.removeValue(forKey: "layout")
+        let stripped = try JSONSerialization.data(withJSONObject: object)
+        let decoded = try JSONDecoder().decode(ShowCountdown.self, from: stripped)
+        #expect(decoded.layout == .default)
+        #expect(decoded.name == "Break")
     }
 
     // MARK: - Helpers

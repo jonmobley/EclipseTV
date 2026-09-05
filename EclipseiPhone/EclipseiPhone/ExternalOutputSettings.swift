@@ -134,9 +134,10 @@ enum ExternalOutputSettings {
     private static let transitionKey = "EclipseTV.contentTransition"
     private static let includeFrameInCapturesKey = "EclipseTV.camera.includeFrameInCaptures"
     private static let alwaysRecordWhenLiveKey = "EclipseTV.camera.alwaysRecordWhenLive"
+    private static let pauseMusicForVideoKey = "EclipseTV.audio.pauseMusicForVideo"
 
     /// Posted when orientation, rotation, text size, transition,
-    /// frame-in-captures, or always-record-when-live changes.
+    /// frame-in-captures, always-record-when-live, or pause-music-for-video changes.
     static let didChangeNotification = Notification.Name("ExternalOutputSettings.didChange")
 
     static var orientation: ExternalOutputOrientation {
@@ -229,6 +230,18 @@ enum ExternalOutputSettings {
         }
         set {
             UserDefaults.standard.set(newValue, forKey: includeFrameInCapturesKey)
+            NotificationCenter.default.post(name: didChangeNotification, object: nil)
+        }
+    }
+
+    /// When true, unmuted video and website media pause Background Music.
+    ///
+    /// Defaults off so music keeps playing underneath. Yielding still pauses rather
+    /// than stops, so the queue and mini player survive the video.
+    static var pauseMusicForVideo: Bool {
+        get { UserDefaults.standard.bool(forKey: pauseMusicForVideoKey) }
+        set {
+            UserDefaults.standard.set(newValue, forKey: pauseMusicForVideoKey)
             NotificationCenter.default.post(name: didChangeNotification, object: nil)
         }
     }

@@ -22,6 +22,33 @@ struct QuestPollSessionChangeTests {
         #expect(QuestPollSessionChange.classify(from: snap, to: snap) == .none)
     }
 
+    @Test func questionPayloadOnlyIsNone() {
+        let membership = UUID()
+        let old = QuestPollSessionSnapshot(
+            session: makeSession(status: "question", questionIndex: 0, voteCount: 2),
+            membershipId: membership,
+            questionCount: 3,
+            practiceMembershipId: nil
+        )
+        let new = QuestPollSessionSnapshot(
+            session: makeSession(
+                status: "question",
+                questionIndex: 0,
+                voteCount: 2,
+                question: QuestPollQuestion(
+                    id: "q1",
+                    text: "How long?",
+                    index: 0,
+                    totalQuestions: 3
+                )
+            ),
+            membershipId: membership,
+            questionCount: 3,
+            practiceMembershipId: nil
+        )
+        #expect(QuestPollSessionChange.classify(from: old, to: new) == .none)
+    }
+
     @Test func voteOnlyChangeIsTile() {
         let membership = UUID()
         let old = QuestPollSessionSnapshot(
@@ -100,7 +127,8 @@ struct QuestPollSessionChangeTests {
     private func makeSession(
         status: String,
         questionIndex: Int,
-        voteCount: Int
+        voteCount: Int,
+        question: QuestPollQuestion? = nil
     ) -> QuestPollSession {
         QuestPollSession(
             id: "sess-1",
@@ -113,7 +141,8 @@ struct QuestPollSessionChangeTests {
             voteCount: voteCount,
             isHost: true,
             isController: true,
-            question: nil
+            question: question,
+            joinQrVisible: nil
         )
     }
 }

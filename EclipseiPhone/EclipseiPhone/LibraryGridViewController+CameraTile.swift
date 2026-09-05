@@ -42,12 +42,14 @@ extension LibraryGridViewController {
         homeCameraWarmPreviewSuspended = true
         if let cell = visibleCameraCell() {
             CameraManager.shared.captureLastFrame(from: cell.cameraPreview)
+            let live = ExternalDisplayManager.shared.isCameraTileLive
             cell.configureCamera(
-                isLive: ExternalDisplayManager.shared.isCameraTileLive,
+                isLive: live,
                 lastFrame: CameraManager.shared.lastFrame,
                 parkedStill: ExternalDisplayManager.shared.cameraTileParkedStillImage,
                 warmPreview: false,
-                isLocked: isLiveOutputLocked
+                isLocked: isLiveOutputLocked,
+                isPreview: cameraTileIsPreview(live)
             )
         } else {
             CameraManager.shared.captureLastFrame(from: nil)
@@ -77,12 +79,14 @@ extension LibraryGridViewController {
         else {
             return
         }
+        let live = ExternalDisplayManager.shared.isCameraTileLive
         cell.configureCamera(
-            isLive: ExternalDisplayManager.shared.isCameraTileLive,
+            isLive: live,
             lastFrame: CameraManager.shared.lastFrame,
             parkedStill: ExternalDisplayManager.shared.cameraTileParkedStillImage,
             warmPreview: true,
-            isLocked: isLiveOutputLocked
+            isLocked: isLiveOutputLocked,
+            isPreview: cameraTileIsPreview(live)
         )
         cell.refreshLiveCameraPreview()
     }
@@ -163,5 +167,14 @@ extension LibraryGridViewController {
               let item = cameraShowItemIndex else { return nil }
         let indexPath = IndexPath(item: item, section: showsSection)
         return collectionView.cellForItem(at: indexPath) as? LibraryThumbnailCell
+    }
+
+    /// Blue stroke when Camera is in the phone hero, not on AirPlay / HDMI.
+    func cameraTileIsPreview(_ isLive: Bool) -> Bool {
+        LiveOutputRouting.cameraTileUsesPreviewStroke(
+            isTileLive: isLive,
+            isDisplayConnected: ExternalDisplayManager.shared.isConnected,
+            isRemoteOperator: ShowLiveSession.shared.isRemoteOperator
+        )
     }
 }

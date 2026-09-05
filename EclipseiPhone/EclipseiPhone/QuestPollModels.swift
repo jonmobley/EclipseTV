@@ -66,6 +66,11 @@ struct QuestPollSession: Codable, Equatable, Sendable {
     let isController: Bool
     /// Present when a question is open; omitted or null in lobby.
     let question: QuestPollQuestion?
+    /// Projector join QR overlay. Omitted on older payloads.
+    let joinQrVisible: Bool?
+
+    /// Projector is showing the join QR (host toggle, not lobby).
+    var showsJoinQR: Bool { joinQrVisible == true }
 
     /// Prompt for the open question, if the API included one.
     var questionPrompt: String? {

@@ -12,10 +12,11 @@ import UIKit
 
 extension LibraryGridViewController {
 
-    /// Puts Camera on AirPlay / Practice without opening the phone viewfinder.
+    /// Puts Camera live on the grid without opening the controller.
+    ///
+    /// The phone viewfinder opens from the live preview tap (or ⋯ Open Controller).
     func presentCameraLiveOnOutput() {
         guard !blockLiveChangeIfLocked() else { return }
-        guard hasLiveOutputDestination else { return }
         if sendShowLiveSelectIfOperator(.camera, itemId: nil) {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             return

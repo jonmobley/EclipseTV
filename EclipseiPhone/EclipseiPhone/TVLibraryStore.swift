@@ -193,6 +193,11 @@ final class TVLibraryStore {
         thumbnails.setVisibleIds(ids)
     }
 
+    /// Pins one on-screen thumb without walking the rest of the grid.
+    func pinVisibleThumbnailId(_ id: String) {
+        thumbnails.pinVisibleId(id)
+    }
+
     /// Loads a cached thumb, or rebuilds one from LocalMedia / the other mode's cache.
     private func loadThumbnailFromDisk(_ id: String) {
         guard !pendingDiskLoads.contains(id) else { return }

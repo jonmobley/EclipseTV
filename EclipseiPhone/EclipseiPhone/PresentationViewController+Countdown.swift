@@ -51,23 +51,8 @@ extension PresentationViewController {
             countdownClockHost.backgroundColor = .black
             countdownClockHost.translatesAutoresizingMaskIntoConstraints = true
             countdownContainer.addSubview(countdownClockHost)
+            countdownTimeLabel.translatesAutoresizingMaskIntoConstraints = true
             countdownClockHost.addSubview(countdownTimeLabel)
-            NSLayoutConstraint.activate([
-                countdownTimeLabel.centerXAnchor.constraint(
-                    equalTo: countdownClockHost.centerXAnchor
-                ),
-                countdownTimeLabel.centerYAnchor.constraint(
-                    equalTo: countdownClockHost.centerYAnchor
-                ),
-                countdownTimeLabel.leadingAnchor.constraint(
-                    greaterThanOrEqualTo: countdownClockHost.leadingAnchor,
-                    constant: 40
-                ),
-                countdownTimeLabel.trailingAnchor.constraint(
-                    lessThanOrEqualTo: countdownClockHost.trailingAnchor,
-                    constant: -40
-                )
-            ])
         }
         if countdownObserver == nil {
             countdownObserver = NotificationCenter.default.addObserver(
@@ -78,19 +63,35 @@ extension PresentationViewController {
                 self?.refreshCountdownClock()
             }
         }
+        if countdownLayoutObserver == nil {
+            let refresh: (Notification) -> Void = { [weak self] _ in
+                self?.refreshCountdownClock()
+            }
+            countdownLayoutObserver = NotificationCenter.default.addObserver(
+                forName: CountdownStore.didChangeNotification,
+                object: nil,
+                queue: .main,
+                using: refresh
+            )
+            countdownPreviewObserver = NotificationCenter.default.addObserver(
+                forName: CountdownClockLayoutPreview.didChangeNotification,
+                object: nil,
+                queue: .main,
+                using: refresh
+            )
+        }
     }
 
     private func refreshCountdownClock() {
         let clock = CountdownController.shared
-        countdownTimeLabel.text = clock.displayString
-        countdownTimeLabel.textColor = clock.remaining == 0
-            ? .systemRed
-            : .white
-        let side = max(countdownClockHost.bounds.width, 1)
-        let size = max(48, min(side * 0.28, 280))
-        countdownTimeLabel.font = .monospacedDigitSystemFont(
-            ofSize: size,
-            weight: .semibold
+        let layout = clock.liveCountdownId.map {
+            CountdownClockLayoutPreview.resolved(for: $0)
+        } ?? .default
+        layout.apply(
+            to: countdownTimeLabel,
+            text: clock.displayString,
+            isExpired: clock.remaining == 0,
+            in: countdownClockHost.bounds
         )
     }
 }

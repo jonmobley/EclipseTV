@@ -44,6 +44,36 @@ struct LiveOutputRoutingTests {
         )
     }
 
+    @Test func cameraLiveShowsHeroWithoutOutputDestination() {
+        #expect(
+            LiveOutputRouting.showsLiveHero(
+                hasOutputDestination: false,
+                isLivePollPhoneHeroActive: false,
+                isCameraModeActive: true
+            )
+        )
+    }
+
+    @Test func cameraInactiveDoesNotShowHeroWithoutDestination() {
+        #expect(
+            LiveOutputRouting.showsLiveHero(
+                hasOutputDestination: false,
+                isLivePollPhoneHeroActive: false,
+                isCameraModeActive: false
+            ) == false
+        )
+    }
+
+    @Test func outputDestinationShowsHeroWithoutCamera() {
+        #expect(
+            LiveOutputRouting.showsLiveHero(
+                hasOutputDestination: true,
+                isLivePollPhoneHeroActive: false,
+                isCameraModeActive: false
+            )
+        )
+    }
+
     @Test func practiceModeMarksLiveWhenDisconnected() {
         #expect(
             LiveOutputRouting.canMarkLive(
@@ -259,6 +289,34 @@ struct LiveOutputRoutingTests {
             LiveOutputRouting.showsLivePollLiveBadge(
                 externalDisplayConnected: true
             )
+        )
+    }
+
+    @Test func cameraTilePreviewStrokeWhenNotOnDisplay() {
+        #expect(
+            LiveOutputRouting.cameraTileUsesPreviewStroke(
+                isTileLive: true,
+                isDisplayConnected: false
+            )
+        )
+        #expect(
+            LiveOutputRouting.cameraTileUsesPreviewStroke(
+                isTileLive: true,
+                isDisplayConnected: true
+            ) == false
+        )
+        #expect(
+            LiveOutputRouting.cameraTileUsesPreviewStroke(
+                isTileLive: false,
+                isDisplayConnected: false
+            ) == false
+        )
+        #expect(
+            LiveOutputRouting.cameraTileUsesPreviewStroke(
+                isTileLive: true,
+                isDisplayConnected: false,
+                isRemoteOperator: true
+            ) == false
         )
     }
 }

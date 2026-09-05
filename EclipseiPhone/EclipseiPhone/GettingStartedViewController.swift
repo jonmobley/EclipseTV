@@ -91,8 +91,8 @@ final class GettingStartedViewController: UITableViewController {
             Tap Music in the bottom-right corner for quick access, swipe left from Home \
             when you can, or choose Music in the Home menu. The circle stays visible — \
             tap to open Music, or tap to stop while a track is playing. A button beside \
-            the circle expands playback controls. Ambient audio pauses when a video \
-            needs the speakers.
+            the circle expands playback controls. Music keeps playing under video \
+            unless you turn on Pause Music for Video in Settings.
             """,
             systemImage: "music.note",
             tint: .systemPink

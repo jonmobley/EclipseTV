@@ -340,6 +340,18 @@ extension iPhoneMainViewController: UIScrollViewDelegate {
         )
         trailing.isActive = false
         libraryTrailingToContentConstraint = trailing
+
+        // Docked live ribbon (slideshow / countdown / Live Poll) owns horizontal
+        // pans that start on it — including rubber-band at the ends — so they
+        // never transfer into Library→Music paging.
+        wireHomePagerToYieldToLiveRibbon()
+    }
+
+    /// Pager pan waits for the docked ribbon pan to fail before it can begin.
+    func wireHomePagerToYieldToLiveRibbon() {
+        homePagerScrollView.panGestureRecognizer.require(
+            toFail: libraryViewController.slideshowRibbonView.panGestureRecognizer
+        )
     }
 
     private func embedMusicPage() {

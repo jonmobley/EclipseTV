@@ -19,15 +19,18 @@ extension LibraryThumbnailCell {
 
     /// Idle / app-open: warm live preview (last-frame until frames arrive).
     /// While AirPlay owns the camera: centered icon + red stroke (feed is in the hero).
+    /// Phone preview (Practice / no display): blue stroke — not live.
     /// Parked cutaway: that still fills the tile.
     /// - Parameter warmPreview: When false, shows a still only (fullscreen Camera open).
     /// - Parameter parkedStill: Quick-change still on program, shown instead of the feed.
+    /// - Parameter isPreview: Phone hero only. Blue stroke instead of red.
     func configureCamera(
         isLive: Bool,
         lastFrame: UIImage?,
         parkedStill: UIImage? = nil,
         warmPreview: Bool = true,
-        isLocked: Bool = false
+        isLocked: Bool = false,
+        isPreview: Bool = false
     ) {
         // Don't call resetChrome() — it would detach before we can freeze the frame.
         imageView.contentMode = .scaleAspectFill
@@ -39,7 +42,7 @@ extension LibraryThumbnailCell {
         setTypeIcon(.camera)
         placeholderIcon.isHidden = true
         updateCaptionScrim()
-        setLive(isLive, isLocked: isLocked)
+        setLive(isLive, isLocked: isLocked, isPreview: isPreview)
         if !isLive {
             cardView.layer.borderWidth = 1
             cardView.layer.borderColor =
@@ -55,9 +58,9 @@ extension LibraryThumbnailCell {
             warmPreview: warmPreview
         )
 
-        accessibilityLabel = isLive
-            ? (isLocked ? "Camera, live, locked" : "Camera, live")
-            : "Camera"
+        accessibilityLabel = cameraAccessibilityLabel(
+            isLive: isLive, isLocked: isLocked, isPreview: isPreview
+        )
         isAccessibilityElement = true
     }
 
@@ -98,6 +101,17 @@ extension LibraryThumbnailCell {
     }
 
     // MARK: - Private
+
+    /// Spoken name for live (red), locked, phone preview (blue), or idle.
+    private func cameraAccessibilityLabel(
+        isLive: Bool,
+        isLocked: Bool,
+        isPreview: Bool
+    ) -> String {
+        if isPreview { return "Camera, preview" }
+        if isLive { return isLocked ? "Camera, live, locked" : "Camera, live" }
+        return "Camera"
+    }
 
     /// Picks between a parked cutaway still, the camera icon (AirPlay owns the feed),
     /// a still (fullscreen Camera owns it) and the warm live preview.

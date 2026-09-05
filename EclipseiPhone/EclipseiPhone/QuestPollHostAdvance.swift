@@ -46,4 +46,20 @@ extension QuestPollHostAdvance {
         let display = min(max(questionIndex, 0), count - 1) + 1
         return "Question \(display) of \(count)"
     }
+
+    /// Projector join-QR overlay while a question or results is up.
+    static func joinQRToggle(
+        status: String,
+        isVisible: Bool
+    ) -> QuestPollHostAdvance? {
+        switch status.lowercased() {
+        case "lobby", "join", "waiting", "ended", "complete", "done":
+            return nil
+        default:
+            if isVisible {
+                return QuestPollHostAdvance(title: "Hide QR", action: "hideqr")
+            }
+            return QuestPollHostAdvance(title: "Show QR", action: "showqr")
+        }
+    }
 }

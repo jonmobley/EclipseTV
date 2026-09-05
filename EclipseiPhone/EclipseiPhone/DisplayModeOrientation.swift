@@ -13,9 +13,9 @@ extension ExternalOutputSettings {
 
     /// Interface orientations that match the active Display Mode.
     ///
-    /// Screens that stage the AirPlay viewport (camera, web browser) pin themselves to
-    /// this so a 16:9 container is shown on a turned phone rather than as a letterbox
-    /// strip across a portrait screen.
+    /// The in-app web browser pins itself to this so a 16:9 container is shown on a
+    /// turned phone rather than as a letterbox strip across a portrait screen.
+    /// Camera follows the phone instead: a Landscape Show in portrait is a 16:9 crop.
     static var phoneOrientationMask: UIInterfaceOrientationMask {
         isVerticalMode ? .portrait : .landscape
     }

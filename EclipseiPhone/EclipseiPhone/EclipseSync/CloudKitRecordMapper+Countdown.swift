@@ -25,6 +25,12 @@ extension CloudKitRecordMapper {
         )
         record[CloudKitSchema.CountdownKey.name] = item.name as CKRecordValue
         record[CloudKitSchema.CountdownKey.duration] = item.duration as CKRecordValue
+        record[CloudKitSchema.CountdownKey.layoutCenterX] =
+            item.layout.centerX as CKRecordValue
+        record[CloudKitSchema.CountdownKey.layoutCenterY] =
+            item.layout.centerY as CKRecordValue
+        record[CloudKitSchema.CountdownKey.layoutScale] =
+            item.layout.scale as CKRecordValue
         record[CloudKitSchema.CountdownKey.createdAt] = item.createdAt as CKRecordValue
         record[CloudKitSchema.CountdownKey.modifiedAt] = modifiedAt as CKRecordValue
         applyShowLink(
@@ -48,12 +54,33 @@ extension CloudKitRecordMapper {
             ?? CountdownController.defaultDuration
         let createdAt = (record[CloudKitSchema.CountdownKey.createdAt] as? Date)
             ?? Date()
+        let layout = CountdownClockLayout(
+            centerX: cloudDouble(
+                record[CloudKitSchema.CountdownKey.layoutCenterX],
+                fallback: CountdownClockLayout.default.centerX
+            ),
+            centerY: cloudDouble(
+                record[CloudKitSchema.CountdownKey.layoutCenterY],
+                fallback: CountdownClockLayout.default.centerY
+            ),
+            scale: cloudDouble(
+                record[CloudKitSchema.CountdownKey.layoutScale],
+                fallback: CountdownClockLayout.default.scale
+            )
+        )
         return ShowCountdown(
             id: uuid,
             showId: showId,
             name: UserDisplayName.clamp(name),
             duration: CountdownController.clampedDuration(duration),
+            layout: layout.clampedScale,
             createdAt: createdAt
         )
+    }
+
+    private static func cloudDouble(_ raw: Any?, fallback: Double) -> Double {
+        if let value = raw as? Double { return value }
+        if let number = raw as? NSNumber { return number.doubleValue }
+        return fallback
     }
 }

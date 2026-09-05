@@ -38,20 +38,24 @@ extension LibraryGridViewController {
         store.setVisibleThumbnailIds(ids)
     }
 
-    /// Paints a thumb that just landed, including cells UIKit has not yet marked visible.
+    /// Pins the thumb for a cell that just appeared, without walking the grid.
+    func pinArrivingThumbnail(
+        at indexPath: IndexPath,
+        in collectionView: UICollectionView
+    ) {
+        guard let id = thumbnailPinId(at: indexPath, in: collectionView) else { return }
+        store.pinVisibleThumbnailId(id)
+    }
+
+    /// Paints a thumb that just landed onto visible placeholders.
+    ///
+    /// Does not `reloadItems` — that hitches a fling and rebuilds ⋯ menus. Tiles
+    /// that have not appeared yet pick the image up in `cellForItemAt`.
     func paintArrivedThumbnail(_ id: String) {
-        refreshVisibleThumbnailPins()
+        store.pinVisibleThumbnailId(id)
         paintVisibleCells(showing: id, in: collectionView)
         if docksLiveSlideshowRibbon {
-            reloadDockedRibbonThumbnail(for: id)
             paintVisibleCells(showing: id, in: slideshowRibbonView)
-        }
-        let paths = indexPathsShowingThumbnail(id)
-        let painted = paths.contains { collectionView.cellForItem(at: $0) != nil }
-        if !painted {
-            DispatchQueue.main.async { [weak self] in
-                self?.paintArrivedThumbnailNow(id)
-            }
         }
     }
 
@@ -69,21 +73,25 @@ extension LibraryGridViewController {
         thumbnailPinId(at: path, in: collectionView)
     }
 
-    // MARK: - Private
-
-    private func paintArrivedThumbnailNow(_ id: String) {
-        refreshVisibleThumbnailPins()
-        paintVisibleCells(showing: id, in: collectionView)
-        if docksLiveSlideshowRibbon {
-            paintVisibleCells(showing: id, in: slideshowRibbonView)
-        }
-        let paths = indexPathsShowingThumbnail(id).filter {
-            collectionView.indexPathsForVisibleItems.contains($0)
-        }
-        if !paths.isEmpty {
-            collectionView.reloadItems(at: paths)
+    /// Kicks off a disk decode for tiles about to appear.
+    func prefetchThumbnails(
+        at indexPaths: [IndexPath],
+        in collectionView: UICollectionView
+    ) {
+        for path in indexPaths {
+            guard let id = thumbnailPinId(at: path, in: collectionView) else {
+                continue
+            }
+            _ = store.thumbnail(for: id)
         }
     }
+
+    /// Home, Show, or the docked live-slideshow strip.
+    func isLibraryThumbnailScrollView(_ scrollView: UIScrollView) -> Bool {
+        scrollView === collectionView || scrollView === slideshowRibbonView
+    }
+
+    // MARK: - Private
 
     private func fallbackOnScreenThumbnailIds() -> Set<String> {
         var ids = Set<String>()
@@ -99,31 +107,6 @@ extension LibraryGridViewController {
             }
         }
         return ids
-    }
-
-    private func indexPathsShowingThumbnail(_ id: String) -> [IndexPath] {
-        guard let showsSection = sectionIndex(for: .shows) else { return [] }
-        if isShowMode {
-            var paths: [IndexPath] = []
-            if !docksLiveSlideshowRibbon,
-               let ribbonSection = sectionIndex(for: .slideshowRibbon),
-               let ribbonIndex = SlideshowPlaybackController.shared.activeSlideIds
-                .firstIndex(of: id) {
-                paths.append(IndexPath(item: ribbonIndex, section: ribbonSection))
-            }
-            for (index, item) in openShowGridItems.enumerated()
-            where item.libraryThumbnailId == id {
-                paths.append(IndexPath(item: index, section: showsSection))
-            }
-            return paths
-        }
-        return showRibbonItems.enumerated().compactMap { index, item in
-            guard case .show(let show) = item,
-                  show.itemIds.contains(id) || show.resolvedCoverId == id else {
-                return nil
-            }
-            return IndexPath(item: index, section: showsSection)
-        }
     }
 
     private func paintVisibleCells(showing id: String, in view: UICollectionView) {
@@ -172,5 +155,17 @@ extension LibraryGridViewController {
         case .hero, .tools, .none:
             return nil
         }
+    }
+}
+
+// MARK: - Prefetch
+
+extension LibraryGridViewController: UICollectionViewDataSourcePrefetching {
+
+    func collectionView(
+        _ collectionView: UICollectionView,
+        prefetchItemsAt indexPaths: [IndexPath]
+    ) {
+        prefetchThumbnails(at: indexPaths, in: collectionView)
     }
 }

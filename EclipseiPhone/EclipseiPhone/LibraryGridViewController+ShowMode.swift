@@ -184,7 +184,7 @@ extension LibraryGridViewController {
         // Always refresh — switching Shows may park prior live into the foreign mini.
         refreshLiveHeader()
         updateHeroCollapse()
-        if showsLivePollRibbon {
+        if QuestPollSessionStore.shared.session != nil {
             startQuestPollStatusPolling()
         }
         syncShowLiveSession()
@@ -326,7 +326,8 @@ extension LibraryGridViewController {
                 warmPreview: !ShowLiveSession.shared.isRemoteOperator
                     && !isCameraControlPresented
                     && !homeCameraWarmPreviewSuspended,
-                isLocked: isLiveOutputLocked
+                isLocked: isLiveOutputLocked,
+                isPreview: cameraTileIsPreview(live)
             )
             cell.setMoreMenu(
                 (isArranging || isSelecting)
@@ -440,13 +441,6 @@ extension LibraryGridViewController {
             isScreensaverSelected = false
             presentLogoLive()
         case .camera:
-            if prefersPhonePreviewOnTap {
-                onPresentCamera?()
-                return
-            }
-            isBlackSelected = false
-            isLogoSelected = false
-            isScreensaverSelected = false
             presentCameraLiveOnOutput()
         case .livePoll(let item):
             isLogoSelected = false

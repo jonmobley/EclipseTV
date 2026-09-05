@@ -113,8 +113,23 @@ extension LibraryGridViewController {
         syncLiveSlideshowRibbonChrome()
     }
 
+    /// Docked ribbon follows live output; skip a full rebuild when nothing moved.
+    func syncSlideshowRibbonIfChromeChanged() {
+        let chrome = SlideshowRibbonChrome(
+            inGrid: showsInGridSlideshowRibbon,
+            docked: docksLiveSlideshowRibbon
+        )
+        if SlideshowRibbonChrome.needsLayoutRebuild(
+            from: lastSlideshowRibbonChrome, to: chrome
+        ) {
+            refreshSlideshowRibbonPresentation()
+        } else {
+            syncLiveSlideshowRibbonChrome()
+        }
+    }
+
     /// Hero ribbon toggle + swipe browse while this Show’s slideshow is live.
-    /// Live Poll always shows its ribbon (no toggle).
+    /// Live Poll shows its ribbon on program / Practice / Start gate (no toggle).
     func syncLiveSlideshowRibbonChrome() {
         if showsLivePollRibbon {
             liveHeader.setSlideshowRibbonToggleVisible(false, isOn: false)
@@ -190,6 +205,8 @@ extension LibraryGridViewController {
         view.isHidden = true
         view.dataSource = self
         view.delegate = self
+        view.prefetchDataSource = self
+        view.isPrefetchingEnabled = true
         view.translatesAutoresizingMaskIntoConstraints = false
         view.register(
             LibraryThumbnailCell.self,
@@ -207,13 +224,13 @@ extension LibraryGridViewController {
         slideshowRibbonView.isHidden = !docked
         slideshowRibbonView.isUserInteractionEnabled = docked
         guard docked else {
-            // Parked strip: zero size only. Vertical top/bottom pins must already
-            // be off (`applyDockedRibbonChromeAxis`) so this cannot crush the hero.
+            // Parked strip: zero height only. Do not activate a 0-width pin —
+            // the strip still shares the hero's leading/trailing, and that pair
+            // would collapse the landscape preview to nothing.
             dockedRibbonTopConstraint?.constant = 0
             dockedRibbonHeightConstraint?.constant = 0
             dockedRibbonHeightConstraint?.isActive = true
-            dockedRibbonWidthConstraint?.constant = 0
-            dockedRibbonWidthConstraint?.isActive = true
+            dockedRibbonWidthConstraint?.isActive = false
             return
         }
         let thumb = Self.slideshowRibbonThumbSize(
@@ -230,7 +247,8 @@ extension LibraryGridViewController {
             dockedRibbonWidthConstraint?.isActive = true
         } else {
             dockedRibbonTopConstraint?.constant = Self.sideBySideGutter
-            dockedRibbonHeightConstraint?.constant = thumb.height
+            dockedRibbonHeightConstraint?.constant =
+                Self.dockedSlideshowRibbonHeight(thumbHeight: thumb.height)
             dockedRibbonHeightConstraint?.isActive = true
             dockedRibbonWidthConstraint?.constant = 0
             dockedRibbonWidthConstraint?.isActive = false
@@ -242,18 +260,6 @@ extension LibraryGridViewController {
         if wasHidden {
             slideshowRibbonView.reloadData()
         }
-    }
-
-    /// Reloads a visible docked-ribbon thumb after its library image arrives.
-    func reloadDockedRibbonThumbnail(for id: String) {
-        guard docksLiveSlideshowRibbon,
-              let item = SlideshowPlaybackController.shared.activeSlideIds
-                .firstIndex(of: id) else { return }
-        let path = IndexPath(item: item, section: 0)
-        guard slideshowRibbonView.indexPathsForVisibleItems.contains(path) else {
-            return
-        }
-        slideshowRibbonView.reloadItems(at: [path])
     }
 
     // MARK: - Private
@@ -344,6 +350,14 @@ extension LibraryGridViewController {
         slideshowRibbonView.setContentOffset(target, animated: animated)
     }
 
+    /// Breathing room under docked thumbs so they aren't flush with the chrome.
+    static let slideshowRibbonBottomPadding: CGFloat = 8
+
+    /// Docked horizontal ribbon height: thumbs plus bottom padding.
+    static func dockedSlideshowRibbonHeight(thumbHeight: CGFloat) -> CGFloat {
+        thumbHeight + slideshowRibbonBottomPadding
+    }
+
     /// Minimum content offset that fully reveals `itemFrame`, or `nil` if already visible.
     static func dockedRibbonRevealOffset(
         itemFrame: CGRect,
@@ -403,7 +417,11 @@ extension LibraryGridViewController {
         layout.itemSize = thumb
         layout.minimumLineSpacing = interitemSpacing
         layout.minimumInteritemSpacing = interitemSpacing
-        layout.sectionInset = .zero
+        layout.sectionInset = UIEdgeInsets(
+            top: 0, left: 0,
+            bottom: vertical ? 0 : Self.slideshowRibbonBottomPadding,
+            right: 0
+        )
         layout.scrollDirection = vertical ? .vertical : .horizontal
         slideshowRibbonView.alwaysBounceHorizontal = !vertical
         slideshowRibbonView.alwaysBounceVertical = vertical

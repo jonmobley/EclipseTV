@@ -11,12 +11,14 @@ import AVFoundation
 /// Phone-side camera control: Display Mode preview, tap to toggle live.
 ///
 /// The preview is the largest 16:9 / 9:16 panel that fits the stage (edge contact
-/// where the aspect allows). Capture controls sit outside that panel, like the
-/// system Camera app: a photo shutter beside a record button. Tap record to
-/// start/stop video (except Always Record When Live, which owns recording
-/// while on-air). Photos work in preview, live, and while a clip is rolling.
-/// Tap the stage to go live or stop when AirPlay, EclipseTV, or Practice Mode
-/// is on. Otherwise the stage stays a viewfinder.
+/// where the aspect allows). A Landscape Show on a portrait-held phone keeps
+/// that 16:9 crop — same framing as the home Camera tile — instead of rotating
+/// the camera UI. Capture controls sit outside the panel, like the system
+/// Camera app: a photo shutter beside a record button. Tap record to start/stop
+/// video (except Always Record When Live, which owns recording while on-air).
+/// Photos work in preview, live, and while a clip is rolling. Tap the stage to
+/// go live or stop when AirPlay, EclipseTV, or Practice Mode is on. Otherwise
+/// the stage stays a viewfinder.
 final class CameraLiveViewController: UIViewController {
 
     // MARK: - Subviews
@@ -271,13 +273,15 @@ final class CameraLiveViewController: UIViewController {
         startCameraPreviewIfNeeded()
     }
 
-    /// Landscape Display Mode → landscape camera UI; Vertical → portrait.
+    /// Vertical Show stays portrait. Landscape Show follows the phone so a
+    /// portrait hold keeps a 16:9 crop instead of rotating the camera UI.
     override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
-        ExternalOutputSettings.phoneOrientationMask
+        ExternalOutputSettings.isVerticalMode ? .portrait : .allButUpsideDown
     }
 
     override var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation {
-        ExternalOutputSettings.preferredPhoneOrientation
+        if ExternalOutputSettings.isVerticalMode { return .portrait }
+        return view.phoneInterfaceOrientation
     }
 
     override var shouldAutorotate: Bool { true }
@@ -322,7 +326,6 @@ final class CameraLiveViewController: UIViewController {
 
     /// Flip rebuilds the preview connection — re-apply rotation on phone + mirror.
     @objc private func cameraPositionDidChange() {
-        previewView.syncDisplayModeOrientation()
         layoutPhoneCameraViewport()
     }
 
@@ -336,7 +339,16 @@ final class CameraLiveViewController: UIViewController {
         let bounds = stageView.bounds
         guard bounds.width > 0, bounds.height > 0 else { return }
 
-        let panel = phoneCameraPanelRect(in: bounds)
+        let portrait = isPhoneCameraPortraitLayout
+        let dock = Self.captureDockSpan(safeTrailing: portrait
+            ? view.safeAreaInsets.bottom
+            : view.safeAreaInsets.right)
+        let panel = Self.phoneCameraPanelRect(
+            in: bounds,
+            aspect: ExternalOutputSettings.orientation.aspectRatio,
+            dockOnBottom: portrait,
+            dockSpan: dock
+        )
         panelView.frame = panel
         layoutTopChromeInPanel()
         layoutBottomChromeInPanel()
@@ -351,33 +363,38 @@ final class CameraLiveViewController: UIViewController {
         freezeFrameView.transform = previewView.transform
         layoutMirrorView()
         layoutFrameOverlay()
-        previewView.syncDisplayModeOrientation()
+        previewView.syncPhoneViewerOrientation(previewView.phoneInterfaceOrientation)
+    }
+
+    /// Bottom shutter dock when the camera UI is taller than it is wide.
+    var isPhoneCameraPortraitLayout: Bool {
+        stageView.bounds.height >= stageView.bounds.width
     }
 
     /// Largest Display Mode panel in the stage, with the shutter strip reserved outside.
     ///
-    /// Vertical: preview region above a bottom shutter dock; Landscape: preview left of
-    /// a trailing dock (physical bottom when the phone is held sideways). Aspect stays
-    /// 16:9 / 9:16 — the panel touches the stage edges where that ratio allows.
-    private func phoneCameraPanelRect(in bounds: CGRect) -> CGRect {
-        let isVertical = ExternalOutputSettings.isVerticalMode
-        let aspect = ExternalOutputSettings.orientation.aspectRatio
-        let dock = Self.captureDockSpan(safeTrailing: isVertical
-            ? view.safeAreaInsets.bottom
-            : view.safeAreaInsets.right)
+    /// Dock follows how the phone is held, not Show format: bottom in portrait,
+    /// trailing in landscape. Aspect stays the Show's 16:9 / 9:16 — a Landscape
+    /// Show on a portrait phone is a 16:9 crop, matching the home Camera tile.
+    static func phoneCameraPanelRect(
+        in bounds: CGRect,
+        aspect: CGFloat,
+        dockOnBottom: Bool,
+        dockSpan: CGFloat
+    ) -> CGRect {
         let available: CGRect
-        if isVertical {
+        if dockOnBottom {
             available = CGRect(
                 x: 0,
                 y: 0,
                 width: bounds.width,
-                height: max(0, bounds.height - dock)
+                height: max(0, bounds.height - dockSpan)
             )
         } else {
             available = CGRect(
                 x: 0,
                 y: 0,
-                width: max(0, bounds.width - dock),
+                width: max(0, bounds.width - dockSpan),
                 height: bounds.height
             )
         }
@@ -401,8 +418,12 @@ final class CameraLiveViewController: UIViewController {
         chromeGap + shutterSize + max(8, safeTrailing)
     }
 
-    /// Asks the window scene to match Display Mode (Landscape ↔ landscape UI).
+    /// Vertical Show still pins portrait. Landscape Show stays with the phone.
     func requestDisplayModeGeometry() {
+        guard ExternalOutputSettings.isVerticalMode else {
+            setNeedsUpdateOfSupportedInterfaceOrientations()
+            return
+        }
         requestDisplayModeSceneGeometry()
     }
 

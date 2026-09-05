@@ -73,6 +73,17 @@ final class ThumbnailMemoryCache {
         }
     }
 
+    /// Pins one on-screen id without rebuilding the visible set.
+    ///
+    /// Used while the grid is scrolling so each `willDisplay` is O(1). Off-screen
+    /// pins are trimmed when scrolling settles via `setVisibleIds(_:)`.
+    func pinVisibleId(_ id: String) {
+        visibleIds.insert(id)
+        if visiblePins[id] == nil, let cached = cache.object(forKey: id as NSString) {
+            visiblePins[id] = cached
+        }
+    }
+
     /// Pins currently visible tile ids so an `NSCache` purge can’t blank the grid.
     ///
     /// Keeps existing pins for ids that remain visible (even if `NSCache` already

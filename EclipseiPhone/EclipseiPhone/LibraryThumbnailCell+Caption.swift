@@ -86,4 +86,26 @@ extension LibraryThumbnailCell {
             cardView.bringSubviewToFront(rewindButton)
         }
     }
+
+    /// Updates a special-tile caption without resetting ⋯ chrome.
+    func applySpecialTitle(
+        _ title: String,
+        isLive: Bool,
+        isLocked: Bool = false,
+        typeIcon: ThumbnailTypeIcon? = nil
+    ) {
+        captionLabel.text = title
+        captionLabel.isHidden = false
+        var label = isLive
+            ? (isLocked ? "\(title), live, locked" : "\(title), live")
+            : title
+        if let typeIcon {
+            let spoken = typeIcon.spokenName
+            if title.compare(spoken, options: .caseInsensitive) != .orderedSame {
+                label = "\(label), \(spoken)"
+            }
+        }
+        accessibilityLabel = label
+        updateCaptionScrim()
+    }
 }

@@ -15,20 +15,24 @@ struct ShowCountdown: Codable, Equatable, Identifiable, Hashable {
     var name: String
     /// Length in seconds (clamped 1s…24h).
     var duration: Int
+    /// Clock size and position on AirPlay / HDMI / Practice.
+    var layout: CountdownClockLayout
     let createdAt: Date
 
-    /// Creates a countdown with `name` and `duration`.
+    /// Creates a countdown with `name`, `duration`, and optional `layout`.
     init(
         id: UUID = UUID(),
         showId: UUID,
         name: String,
         duration: Int,
+        layout: CountdownClockLayout = .default,
         createdAt: Date = Date()
     ) {
         self.id = id
         self.showId = showId
         self.name = name
         self.duration = duration
+        self.layout = layout
         self.createdAt = createdAt
     }
 
@@ -36,5 +40,23 @@ struct ShowCountdown: Codable, Equatable, Identifiable, Hashable {
     func tileTitle(remaining: Int? = nil) -> String {
         let seconds = remaining ?? duration
         return "\(name)\n\(CountdownController.displayString(seconds: seconds))"
+    }
+
+    // MARK: - Codable
+
+    private enum CodingKeys: String, CodingKey {
+        case id, showId, name, duration, layout, createdAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        showId = try c.decode(UUID.self, forKey: .showId)
+        name = try c.decode(String.self, forKey: .name)
+        duration = try c.decode(Int.self, forKey: .duration)
+        layout = try c.decodeIfPresent(
+            CountdownClockLayout.self, forKey: .layout
+        ) ?? .default
+        createdAt = try c.decode(Date.self, forKey: .createdAt)
     }
 }

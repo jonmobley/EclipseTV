@@ -62,6 +62,37 @@ struct ThumbnailTypeIconTests {
         #expect(cell.isShowingPlaceholder == false)
     }
 
+    @Test func applyLoadedThumbnailRevealsSpecialTileArt() {
+        let cell = makeCell()
+        cell.configureSpecial(
+            title: "Deck",
+            systemImage: "rectangle.stack.fill",
+            thumbnail: nil,
+            fillColor: .darkGray,
+            isLive: false,
+            typeIcon: .slideshow
+        )
+        #expect(cell.imageView.alpha == 0)
+
+        cell.applyLoadedThumbnail(swatch())
+
+        #expect(cell.isShowingPlaceholder == false)
+        #expect(cell.imageView.alpha == 1)
+        #expect(cell.placeholderIcon.isHidden)
+        #expect(cell.typeIconOverlay.appliedIcon == .slideshow)
+    }
+
+    @Test func applyLoadedThumbnailShowsVideoTypeIcon() {
+        let cell = makeCell()
+        cell.configure(with: makeItem(isVideo: true), thumbnail: nil, isLive: false)
+        #expect(cell.typeIconOverlay.isHidden)
+
+        cell.applyLoadedThumbnail(swatch())
+
+        #expect(cell.typeIconOverlay.appliedIcon == .video)
+        #expect(cell.typeIconOverlay.isHidden == false)
+    }
+
     @Test func websiteSpecialShowsTypeIconOnArt() {
         let cell = makeCell()
         cell.configureSpecial(

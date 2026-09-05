@@ -434,7 +434,7 @@ final class LibraryGridViewController: UIViewController {
         }
         LivePollStore.shared.dropLegacyToolTokensIfNeeded()
         registerForTraitChanges(
-            [UITraitVerticalSizeClass.self]
+            [UITraitVerticalSizeClass.self, UITraitHorizontalSizeClass.self]
         ) { (self: Self, _: UITraitCollection) in
             // Bounds may not have updated yet; clear cache so layout reapplies.
             self.lastLayoutWidth = 0
@@ -506,6 +506,7 @@ final class LibraryGridViewController: UIViewController {
             // Cross-mode Show opens clear `openShowId` first so nothing is rewritten.
             self?.validateOpenShow(adoptingCurrentDisplayMode: true)
             self?.refreshVisibleCameraTilePreview()
+            self?.reloadLivePollForDisplayMode()
         }
         observe(WebPageStore.didChangeNotification) { [weak self] _ in
             self?.reloadGridIfSafe()
@@ -531,6 +532,10 @@ final class LibraryGridViewController: UIViewController {
         }
         observe(CountdownStore.didChangeNotification) { [weak self] _ in
             self?.reloadGridIfSafe()
+            self?.refreshCountdownChrome()
+        }
+        observe(CountdownClockLayoutPreview.didChangeNotification) { [weak self] _ in
+            self?.refreshCountdownChrome()
         }
         observe(CountdownController.didChangeNotification) { [weak self] _ in
             self?.refreshCountdownChrome()
@@ -647,6 +652,22 @@ final class LibraryGridViewController: UIViewController {
         for token in observerTokens {
             NotificationCenter.default.removeObserver(token)
         }
+    }
+
+    override func viewWillTransition(
+        to size: CGSize,
+        with coordinator: UIViewControllerTransitionCoordinator
+    ) {
+        super.viewWillTransition(to: size, with: coordinator)
+        lastLayoutWidth = 0
+        lastLayoutHeight = 0
+        coordinator.animate(alongsideTransition: { [weak self] _ in
+            self?.updateChromeLayoutIfNeeded()
+        }, completion: { [weak self] _ in
+            self?.lastLayoutWidth = 0
+            self?.lastLayoutHeight = 0
+            self?.updateChromeLayoutIfNeeded()
+        })
     }
 
     override func viewDidLayoutSubviews() {
@@ -814,13 +835,14 @@ final class LibraryGridViewController: UIViewController {
             liveHeader.isHidden = true
             liveHeader.isUserInteractionEnabled = false
             refreshForeignLivePreview()
+            syncSlideshowRibbonIfChromeChanged()
             return
         }
         liveHeader.isHidden = false
         liveHeader.isUserInteractionEnabled = true
         // Ribbon + Screen Fit follow the active still / slideshow for this Show.
         defer {
-            syncLiveSlideshowRibbonChrome()
+            syncSlideshowRibbonIfChromeChanged()
             syncLiveScreenFitChrome()
         }
 
@@ -1274,55 +1296,10 @@ extension LibraryGridViewController: TVLibraryStoreDelegate {
         if id == store.currentId {
             refreshLiveHeader()
         }
-        // Still paint during arrange — entry reload can miss a purged NSCache, and
-        // skipping the update left blank tiles for the whole arrange session.
-        // Item/order reloads stay gated; only the thumb for this id refreshes.
-        guard let showsSection = sectionIndex(for: .shows) else { return }
-        if isShowMode {
-            var paths: [IndexPath] = []
-            if docksLiveSlideshowRibbon {
-                reloadDockedRibbonThumbnail(for: id)
-            } else if let ribbonSection = sectionIndex(for: .slideshowRibbon),
-               let ribbonIndex = SlideshowPlaybackController.shared.activeSlideIds
-                .firstIndex(of: id) {
-                let path = IndexPath(item: ribbonIndex, section: ribbonSection)
-                if collectionView.indexPathsForVisibleItems.contains(path) {
-                    paths.append(path)
-                }
-            }
-            // Use grid item order (not raw surface ids) — compactMap can drop
-            // unresolved members and skew indexes, leaving blanks stuck.
-            let gridPaths: [IndexPath] = openShowGridItems.enumerated().compactMap { index, item in
-                let matches: Bool
-                switch item {
-                case .media(let media):
-                    matches = media.id == id
-                case .slideshow(let show):
-                    matches = show.resolvedCoverId == id
-                default:
-                    matches = false
-                }
-                guard matches else { return nil }
-                let path = IndexPath(item: index, section: showsSection)
-                return collectionView.indexPathsForVisibleItems.contains(path) ? path : nil
-            }
-            paths.append(contentsOf: gridPaths)
-            if !paths.isEmpty {
-                collectionView.reloadItems(at: paths)
-            }
-            return
-        }
-        // Home shows Show covers; reload any ribbon tile that uses this media.
-        let items = showRibbonItems
-        let paths: [IndexPath] = items.enumerated().compactMap { index, item in
-            guard case .show(let show) = item,
-                  show.itemIds.contains(id) else { return nil }
-            let path = IndexPath(item: index, section: showsSection)
-            return collectionView.indexPathsForVisibleItems.contains(path) ? path : nil
-        }
-        if !paths.isEmpty {
-            collectionView.reloadItems(at: paths)
-        }
+        // Paint in place — `reloadItems` mid-fling rebuilds cells (and ⋯ menus)
+        // and hitches scrolling. `cellForItemAt` picks up the cache for tiles that
+        // have not appeared yet.
+        paintArrivedThumbnail(id)
     }
 
     func libraryStoreDidChangeConnection(_ store: TVLibraryStore) {

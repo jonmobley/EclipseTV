@@ -95,6 +95,35 @@ struct SlideshowRibbonChromeTests {
         )
     }
 
+    /// Bounds can flip before `verticalSizeClass` during a turn. Keep the
+    /// left-aligned preview rather than staying stacked and centered.
+    @Test func phoneLandscapeBoundsWinWhenPortraitTraitsLag() {
+        #expect(
+            LibraryGridViewController.prefersSideBySideChrome(
+                showsLiveHero: true,
+                verticalSizeClass: .regular,
+                horizontalSizeClass: .compact,
+                bounds: CGSize(width: 844, height: 390)
+            )
+        )
+    }
+
+    /// Plus/Max landscape is `.regular` width; the preview still uses phone
+    /// sizing (0.46 cap) so it stays a leading column, not an iPad pane.
+    @Test func phoneLandscapeHeroStaysALeadingColumn() {
+        let size = LibraryGridViewController.sideBySideHeroSize(
+            availableWidth: 780,
+            availableHeight: 260,
+            aspect: 16.0 / 9.0,
+            horizontalSizeClass: .compact,
+            containerWidth: 844
+        )
+        #expect(size.width >= 120)
+        #expect(size.height >= 68)
+        #expect(size.width <= 844 * 0.46 + 0.5)
+        #expect(size.width < 780 - LibraryGridViewController.sideBySideMinGridWidth)
+    }
+
     @Test func iPadPortraitStaysStacked() {
         #expect(
             LibraryGridViewController.prefersSideBySideChrome(
@@ -204,6 +233,15 @@ struct SlideshowRibbonChromeTests {
         )
         #expect(offset != nil)
         #expect(offset?.y == 245)
+    }
+
+    @Test func dockedRibbonHeightAddsBottomPadding() {
+        let padding = LibraryGridViewController.slideshowRibbonBottomPadding
+        #expect(padding > 0)
+        #expect(
+            LibraryGridViewController.dockedSlideshowRibbonHeight(thumbHeight: 80)
+            == 80 + padding
+        )
     }
 
     @Test func verticalRevealLeavesVisibleItemsAlone() {

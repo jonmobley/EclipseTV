@@ -5,13 +5,18 @@
 //  Copyright © 2026 Moxie LLC. All rights reserved.
 //
 
+import AVFoundation
 import Foundation
 
 /// Rules for when ambient music yields to (or coexists with) presentation content.
 enum AudioAmbientPolicy {
 
     /// Whether starting `source` should pause ambient audio.
+    ///
+    /// Off by default (`pauseMusicForVideo`): music keeps playing under video. When the
+    /// setting is on, unmuted library video still pauses rather than stops.
     static func shouldYield(to source: PresentationSource) -> Bool {
+        guard ExternalOutputSettings.pauseMusicForVideo else { return false }
         switch source.content {
         case .video(_, _, let isMuted):
             // Muted library video can sit under Background Music; audible video cannot.
@@ -24,6 +29,7 @@ enum AudioAmbientPolicy {
 
     /// Whether a phone-browser media event means audible content is playing.
     static func shouldYield(toWebMedia event: EclipseWebMediaSync.Event) -> Bool {
+        guard ExternalOutputSettings.pauseMusicForVideo else { return false }
         guard !event.muted, !event.paused else { return false }
         switch event.action {
         case "play", "timeupdate", "seeked", "volumechange", "ratechange":
@@ -31,6 +37,11 @@ enum AudioAmbientPolicy {
         default:
             return false
         }
+    }
+
+    /// `.moviePlayback` ducks other audio; use it only when music is supposed to yield.
+    static var presentationAudioMode: AVAudioSession.Mode {
+        ExternalOutputSettings.pauseMusicForVideo ? .moviePlayback : .default
     }
 
     /// Pauses ambient audio when `source` is audible video; no-op otherwise.

@@ -70,4 +70,18 @@ struct ExternalOutputSettingsTests {
             )
         }
     }
+
+    @Test func pauseMusicForVideoDefaultsOff() {
+        let key = "EclipseTV.audio.pauseMusicForVideo"
+        let previous = UserDefaults.standard.object(forKey: key)
+        UserDefaults.standard.removeObject(forKey: key)
+        defer {
+            if let previous {
+                UserDefaults.standard.set(previous, forKey: key)
+            } else {
+                UserDefaults.standard.removeObject(forKey: key)
+            }
+        }
+        #expect(ExternalOutputSettings.pauseMusicForVideo == false)
+    }
 }

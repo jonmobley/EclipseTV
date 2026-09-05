@@ -21,6 +21,7 @@ final class QuestPollHostViewController: UIViewController {
     private let responsesValue = UILabel()
     private let progressLabel = UILabel()
     private let primaryButton = UIButton(type: .system)
+    private let projectorQRButton = UIButton(type: .system)
     private let joinQRButton = UIButton(type: .system)
     private let projectorButton = UIButton(type: .system)
     private let endButton = UIButton(type: .system)
@@ -86,6 +87,14 @@ final class QuestPollHostViewController: UIViewController {
         }, for: .touchUpInside)
         stack.addArrangedSubview(primaryButton)
 
+        styleSecondary(
+            projectorQRButton, title: "Show QR", systemImage: "qrcode.viewfinder"
+        )
+        projectorQRButton.addAction(UIAction { [weak self] _ in
+            self?.handleProjectorQR()
+        }, for: .touchUpInside)
+        stack.addArrangedSubview(projectorQRButton)
+
         styleSecondary(joinQRButton, title: "Join QR", systemImage: "qrcode")
         joinQRButton.addAction(UIAction { [weak self] _ in
             self?.presentJoinQR()
@@ -123,6 +132,7 @@ final class QuestPollHostViewController: UIViewController {
             stack.bottomAnchor.constraint(equalTo: guide.bottomAnchor, constant: -28),
             stack.widthAnchor.constraint(equalTo: frame.widthAnchor, constant: -40),
             primaryButton.heightAnchor.constraint(equalToConstant: 52),
+            projectorQRButton.heightAnchor.constraint(equalToConstant: 48),
             joinQRButton.heightAnchor.constraint(equalToConstant: 48),
             projectorButton.heightAnchor.constraint(equalToConstant: 48)
         ])
@@ -233,8 +243,21 @@ final class QuestPollHostViewController: UIViewController {
             config.title = advance?.title ?? ""
             primaryButton.configuration = config
         }
+        let qrToggle = QuestPollHostAdvance.joinQRToggle(
+            status: session.status,
+            isVisible: session.showsJoinQR
+        )
+        projectorQRButton.isHidden = qrToggle == nil
+        if var config = projectorQRButton.configuration {
+            config.title = qrToggle?.title ?? "Show QR"
+            config.image = UIImage(
+                systemName: session.showsJoinQR ? "eye.slash" : "qrcode.viewfinder"
+            )
+            projectorQRButton.configuration = config
+        }
         let busy = store.isControlInFlight
         primaryButton.isEnabled = !busy && advance != nil
+        projectorQRButton.isEnabled = !busy && qrToggle != nil
         endButton.isEnabled = !busy
     }
 
@@ -250,6 +273,16 @@ final class QuestPollHostViewController: UIViewController {
               )
         else { return }
         onAdvance?(advance.action)
+    }
+
+    private func handleProjectorQR() {
+        guard let session = QuestPollSessionStore.shared.session,
+              let toggle = QuestPollHostAdvance.joinQRToggle(
+                status: session.status,
+                isVisible: session.showsJoinQR
+              )
+        else { return }
+        onAdvance?(toggle.action)
     }
 
     private func presentJoinQR() {

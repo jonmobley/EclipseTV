@@ -144,16 +144,25 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         _ scrollView: UIScrollView,
         willDecelerate decelerate: Bool
     ) {
-        guard scrollView === collectionView else { return }
-        updateHomeVerticalScrollPolicy()
+        if scrollView === collectionView {
+            updateHomeVerticalScrollPolicy()
+        }
+        guard isLibraryThumbnailScrollView(scrollView) else { return }
         if !decelerate {
             refreshVisibleThumbnailPins()
         }
     }
 
     func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
-        guard scrollView === collectionView else { return }
-        updateHomeVerticalScrollPolicy()
+        if scrollView === collectionView {
+            updateHomeVerticalScrollPolicy()
+        }
+        guard isLibraryThumbnailScrollView(scrollView) else { return }
+        refreshVisibleThumbnailPins()
+    }
+
+    func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
+        guard isLibraryThumbnailScrollView(scrollView) else { return }
         refreshVisibleThumbnailPins()
     }
 
@@ -162,16 +171,8 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         willDisplay cell: UICollectionViewCell,
         forItemAt indexPath: IndexPath
     ) {
-        refreshVisibleThumbnailPins()
+        pinArrivingThumbnail(at: indexPath, in: collectionView)
         fillPlaceholderThumbnailIfReady(cell, at: indexPath, in: collectionView)
-    }
-
-    func collectionView(
-        _ collectionView: UICollectionView,
-        didEndDisplaying cell: UICollectionViewCell,
-        forItemAt indexPath: IndexPath
-    ) {
-        refreshVisibleThumbnailPins()
     }
 
     func collectionView(
@@ -316,12 +317,14 @@ extension LibraryGridViewController: UICollectionViewDataSource,
                 typeIcon: .media(isVideo: ScreensaverStore.isVideo)
             )
         case .camera:
+            let live = ExternalDisplayManager.shared.isCameraTileLive
             cell.configureCamera(
-                isLive: ExternalDisplayManager.shared.isCameraTileLive,
+                isLive: live,
                 lastFrame: CameraManager.shared.lastFrame,
                 parkedStill: ExternalDisplayManager.shared.cameraTileParkedStillImage,
                 warmPreview: !isCameraControlPresented && !homeCameraWarmPreviewSuspended,
-                isLocked: isLiveOutputLocked
+                isLocked: isLiveOutputLocked,
+                isPreview: cameraTileIsPreview(live)
             )
         case .createShow:
             cell.configureActionTile(title: "New Show", systemImage: "plus")
@@ -379,13 +382,6 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             isLogoSelected = false
             presentScreensaverLive()
         case .camera:
-            if prefersPhonePreviewOnTap {
-                onPresentCamera?()
-                return
-            }
-            isBlackSelected = false
-            isLogoSelected = false
-            isScreensaverSelected = false
             presentCameraLiveOnOutput()
         case .createShow:
             onCreateShow?()

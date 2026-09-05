@@ -160,10 +160,12 @@ final class PresentationViewController: UIViewController {
         label.adjustsFontSizeToFitWidth = true
         label.minimumScaleFactor = 0.3
         label.numberOfLines = 1
-        label.translatesAutoresizingMaskIntoConstraints = false
+        label.translatesAutoresizingMaskIntoConstraints = true
         return label
     }()
     var countdownObserver: NSObjectProtocol?
+    var countdownLayoutObserver: NSObjectProtocol?
+    var countdownPreviewObserver: NSObjectProtocol?
 
     /// Incoming dual-layer host — next content builds here while underlay stays live.
     let transitionOverlayContainer: UIView = {
@@ -388,6 +390,12 @@ final class PresentationViewController: UIViewController {
         }
         if let countdownObserver {
             NotificationCenter.default.removeObserver(countdownObserver)
+        }
+        if let countdownLayoutObserver {
+            NotificationCenter.default.removeObserver(countdownLayoutObserver)
+        }
+        if let countdownPreviewObserver {
+            NotificationCenter.default.removeObserver(countdownPreviewObserver)
         }
     }
 

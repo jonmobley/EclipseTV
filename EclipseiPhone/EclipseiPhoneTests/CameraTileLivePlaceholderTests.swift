@@ -28,6 +28,35 @@ struct CameraTileLivePlaceholderTests {
         endCameraIfNeeded(mgr)
     }
 
+    @Test func previewCameraTileUsesBlueStroke() {
+        let cell = LibraryThumbnailCell(
+            frame: CGRect(x: 0, y: 0, width: 160, height: 90)
+        )
+        cell.configureCamera(
+            isLive: true,
+            lastFrame: nil,
+            warmPreview: false,
+            isPreview: true
+        )
+        #expect(cell.cardView.layer.borderWidth == 3)
+        #expect(cell.cardView.layer.borderColor == UIColor.systemBlue.cgColor)
+        #expect(cell.accessibilityLabel == "Camera, preview")
+    }
+
+    @Test func liveCameraTileUsesRedStroke() {
+        let cell = LibraryThumbnailCell(
+            frame: CGRect(x: 0, y: 0, width: 160, height: 90)
+        )
+        cell.configureCamera(
+            isLive: true,
+            lastFrame: nil,
+            warmPreview: false
+        )
+        #expect(cell.cardView.layer.borderWidth == 3)
+        #expect(cell.cardView.layer.borderColor == UIColor.systemRed.cgColor)
+        #expect(cell.accessibilityLabel == "Camera, live")
+    }
+
     @Test func idleCameraTileHidesCenteredIconWithoutAStill() {
         let mgr = ExternalDisplayManager.shared
         endCameraIfNeeded(mgr)

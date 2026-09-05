@@ -33,6 +33,19 @@ struct QuestPollClientTests {
         #expect(session.status == "lobby")
         #expect(session.isHost)
         #expect(session.question == nil)
+        #expect(session.joinQrVisible == nil)
+        #expect(!session.showsJoinQR)
+    }
+
+    @Test func decodesJoinQRVisible() throws {
+        let data = Data("""
+            {"session":{"id":"abc","code":"E2LG","pollId":"poll-1","pollTitle":"Session 1","mode":"live","status":"voting","questionIndex":0,"voteCount":0,"isHost":true,"isController":true,"joinQrVisible":true}}
+            """.utf8)
+        let envelope = try JSONDecoder().decode(
+            QuestPollSessionEnvelope.self, from: data
+        )
+        let session = try #require(envelope.session)
+        #expect(session.showsJoinQR)
     }
 
     @Test func decodesSessionWithQuestionPrompt() throws {
@@ -73,11 +86,55 @@ struct QuestPollClientTests {
 
     @Test func presentURLIncludesJoinCode() throws {
         let url = QuestPollConfig.presentURL(code: "VR2V")
-        #expect(url.absoluteString.contains("code=VR2V"))
+        let items = queryItems(url)
+        #expect(items.contains { $0.name == "code" && $0.value == "VR2V" })
+        #expect(items.contains { $0.name == "aspect" })
         #expect(QuestPollConfig.isPresentURL(url))
         let page = QuestPollConfig.previewPage(code: "VR2V")
         #expect(page.url == url)
         #expect(page.id == QuestPollConfig.previewPageId)
+    }
+
+    @Test func presentURLsCarryDisplayModeAspect() {
+        let previous = ExternalOutputSettings.orientation
+        defer { ExternalOutputSettings.orientation = previous }
+
+        ExternalOutputSettings.orientation = .landscape
+        #expect(QuestPollConfig.presentAspectQueryItem.value == "16x9")
+        #expect(aspect(of: QuestPollConfig.presentURL) == "16x9")
+        let landscapeCode = QuestPollConfig.presentURL(code: "VR2V")
+        #expect(aspect(of: landscapeCode) == "16x9")
+        #expect(queryItems(landscapeCode).contains {
+            $0.name == "code" && $0.value == "VR2V"
+        })
+        #expect(QuestPollConfig.isPresentURL(landscapeCode))
+        let landscapePreview = QuestPollConfig.presentPreviewURL(pollId: "poll-1")
+        #expect(aspect(of: landscapePreview) == "16x9")
+        #expect(queryItems(landscapePreview).contains {
+            $0.name == "pollId" && $0.value == "poll-1"
+        })
+        #expect(QuestPollConfig.previewPage(code: "VR2V").url == landscapeCode)
+        #expect(QuestPollConfig.previewPage(pollId: "poll-1").url == landscapePreview)
+
+        ExternalOutputSettings.orientation = .portrait
+        #expect(QuestPollConfig.presentAspectQueryItem.value == "9x16")
+        #expect(aspect(of: QuestPollConfig.presentURL) == "9x16")
+        let verticalCode = QuestPollConfig.presentURL(code: "VR2V")
+        #expect(aspect(of: verticalCode) == "9x16")
+        #expect(queryItems(verticalCode).contains {
+            $0.name == "code" && $0.value == "VR2V"
+        })
+        #expect(QuestPollConfig.isPresentURL(verticalCode))
+        let verticalPreview = QuestPollConfig.presentPreviewURL(pollId: "poll-1")
+        #expect(aspect(of: verticalPreview) == "9x16")
+        #expect(queryItems(verticalPreview).contains {
+            $0.name == "pollId" && $0.value == "poll-1"
+        })
+        #expect(queryItems(verticalPreview).contains {
+            $0.name == "preview" && $0.value == "1"
+        })
+        #expect(QuestPollConfig.previewPage(code: "VR2V").url == verticalCode)
+        #expect(QuestPollConfig.previewPage(pollId: "poll-1").url == verticalPreview)
     }
 
     @Test func accountLinkRoundTripMigratesKeychain() {
@@ -136,6 +193,7 @@ struct QuestPollClientTests {
             .queryItems ?? []
         #expect(items.contains { $0.name == "pollId" && $0.value == "poll-1" })
         #expect(items.contains { $0.name == "preview" && $0.value == "1" })
+        #expect(items.contains { $0.name == "aspect" })
         #expect(!items.contains { $0.name == "code" })
         let page = QuestPollConfig.previewPage(pollId: "poll-1")
         #expect(page.url == url)
@@ -146,5 +204,13 @@ struct QuestPollClientTests {
 
     @Test func hostURLPointsAtHostConsole() {
         #expect(QuestPollConfig.hostURL.absoluteString.hasSuffix("/host"))
+    }
+
+    private func queryItems(_ url: URL) -> [URLQueryItem] {
+        URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+    }
+
+    private func aspect(of url: URL) -> String? {
+        queryItems(url).first { $0.name == "aspect" }?.value
     }
 }

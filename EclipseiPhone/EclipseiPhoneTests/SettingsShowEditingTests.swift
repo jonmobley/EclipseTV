@@ -89,4 +89,20 @@ struct SettingsShowEditingTests {
         let header = settings.tableView(table, titleForHeaderInSection: 0)
         #expect(header == "Playback")
     }
+
+    @Test func playbackIncludesPauseMusicForVideoToggle() throws {
+        let settings = SettingsViewController()
+        settings.loadViewIfNeeded()
+
+        let table = try #require(settings.tableView)
+        #expect(table.numberOfRows(inSection: 0) == 3)
+        let cell = settings.tableView(
+            table, cellForRowAt: IndexPath(row: 2, section: 0)
+        )
+        let config = cell.contentConfiguration as? UIListContentConfiguration
+        #expect(config?.text == "Pause Music for Video")
+        let toggle = try #require(cell.accessoryView as? UISwitch)
+        #expect(toggle.isOn == ExternalOutputSettings.pauseMusicForVideo)
+        #expect(toggle.accessibilityLabel == "Pause Music for Video")
+    }
 }

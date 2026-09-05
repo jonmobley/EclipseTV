@@ -186,7 +186,9 @@ extension PresentationViewController {
         guard !muted else { return }
         let session = AVAudioSession.sharedInstance()
         do {
-            try session.setCategory(.playback, mode: .moviePlayback)
+            try session.setCategory(
+                .playback, mode: AudioAmbientPolicy.presentationAudioMode
+            )
             try session.setActive(true)
         } catch {
             logger.error("Failed to configure audio session: \(error.localizedDescription)")

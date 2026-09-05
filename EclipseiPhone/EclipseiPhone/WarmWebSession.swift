@@ -277,6 +277,10 @@ final class WarmWebSession: NSObject {
     private func captureThumbnailIfPossible() {
         guard let web = webView, !isAdopted else { return }
         guard let url = web.url, url.scheme != "about" else { return }
+        // Live Poll /present is a projector page, not a website tile. Capturing it
+        // posted a thumbnail change and reloaded the Show grid, which dismissed
+        // ⋯ menus while a room was live.
+        if QuestPollConfig.isPresentURL(url) { return }
         settleWorkItem?.cancel()
         let work = DispatchWorkItem { [weak self] in
             guard let self, let web = self.webView, !self.isAdopted else { return }

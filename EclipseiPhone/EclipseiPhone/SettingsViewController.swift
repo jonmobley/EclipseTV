@@ -67,6 +67,7 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
     private enum PlaybackRow: Int, CaseIterable {
         case displayMode
         case transition
+        case pauseMusicForVideo
     }
 
     private enum MacRow: Int, CaseIterable {
@@ -191,6 +192,31 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
         }
     }
 
+    // MARK: - Pause Music for Video
+
+    private func configurePauseMusicForVideoCell(
+        _ cell: UITableViewCell,
+        config: inout UIListContentConfiguration
+    ) {
+        cell.accessoryType = .none
+        cell.selectionStyle = .none
+        config.text = "Pause Music for Video"
+        config.secondaryText = nil
+        let toggle = UISwitch()
+        toggle.isOn = ExternalOutputSettings.pauseMusicForVideo
+        toggle.accessibilityLabel = "Pause Music for Video"
+        toggle.addTarget(
+            self,
+            action: #selector(pauseMusicForVideoChanged(_:)),
+            for: .valueChanged
+        )
+        cell.accessoryView = toggle
+    }
+
+    @objc private func pauseMusicForVideoChanged(_ sender: UISwitch) {
+        ExternalOutputSettings.pauseMusicForVideo = sender.isOn
+    }
+
     @objc private func guidedAccessStatusDidChange() {
         if let index = sections.firstIndex(of: .recommendations) {
             tableView.reloadSections(IndexSet(integer: index), with: .none)
@@ -255,7 +281,10 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
                 + "live source (any Apple ID, same Wi‑Fi)."
         case .recommendations:
             return GuidedAccessRecommendation.settingsFooter
-        case .show, .playback, .help:
+        case .playback:
+            return "When on, unmuted videos and website media pause Background Music. "
+                + "When off, music keeps playing."
+        case .show, .help:
             return nil
         }
     }
@@ -292,6 +321,8 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
             case .transition:
                 config.text = "Content Transition"
                 config.secondaryText = ExternalOutputSettings.contentTransition.rawValue
+            case .pauseMusicForVideo:
+                configurePauseMusicForVideoCell(cell, config: &config)
             case .none:
                 break
             }
@@ -349,7 +380,7 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
                 navigationController?.pushViewController(
                     SettingsTransitionViewController(), animated: true
                 )
-            case .none:
+            case .pauseMusicForVideo, .none:
                 break
             }
         case .notes:

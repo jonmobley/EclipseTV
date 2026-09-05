@@ -9,17 +9,30 @@ import Foundation
 
 /// Hosted QuestPoll origin and projector URL.
 ///
-/// `/present` is always a single 16:9 stage (1920×1080). Companion hero and
-/// AirPlay show a scaled copy of that stage — Eclipse fills the host 1:1 and
-/// lets the page’s CSS stage scaler do the only shrink/fit.
+/// `/present` takes `aspect=16x9` or `aspect=9x16` from Display Mode. Companion
+/// hero and AirPlay fill the host 1:1; QuestPoll’s CSS stage scaler does the
+/// only shrink/fit.
 enum QuestPollConfig {
     static let origin = URL(string: "https://questpoll.live")!
 
     /// Host console for editing decks (Safari deep link).
     static let hostURL = origin.appendingPathComponent("host")
 
+    /// Bare `/present` path. Query items (code, pollId, aspect) are added per URL.
+    private static let presentPath = origin.appendingPathComponent("present")
+
+    /// Display Mode for `/present`: Vertical is 9:16, Landscape is 16:9.
+    static var presentAspectQueryItem: URLQueryItem {
+        URLQueryItem(
+            name: "aspect",
+            value: ExternalOutputSettings.isVerticalMode ? "9x16" : "16x9"
+        )
+    }
+
     /// Audience / AirPlay page (QR + live question), unbound.
-    static let presentURL = origin.appendingPathComponent("present")
+    static var presentURL: URL {
+        projectorURL(queryItems: [])
+    }
 
     /// Stable id for the in-hero projector preview (not a user bookmark).
     static let previewPageId = UUID(
@@ -41,28 +54,20 @@ enum QuestPollConfig {
     /// Projector URL bound to a join code when the web app honors `?code=`.
     static func presentURL(code: String) -> URL {
         let trimmed = code.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty,
-              var components = URLComponents(
-                url: presentURL, resolvingAgainstBaseURL: false
-              )
-        else { return presentURL }
-        components.queryItems = [URLQueryItem(name: "code", value: trimmed)]
-        return components.url ?? presentURL
+        guard !trimmed.isEmpty else { return presentURL }
+        return projectorURL(queryItems: [
+            URLQueryItem(name: "code", value: trimmed)
+        ])
     }
 
     /// Deck-only Practice preview (no room): `/present?pollId=&preview=1`.
     static func presentPreviewURL(pollId: String) -> URL {
         let trimmed = pollId.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty,
-              var components = URLComponents(
-                url: presentURL, resolvingAgainstBaseURL: false
-              )
-        else { return presentURL }
-        components.queryItems = [
+        guard !trimmed.isEmpty else { return presentURL }
+        return projectorURL(queryItems: [
             URLQueryItem(name: "pollId", value: trimmed),
             URLQueryItem(name: "preview", value: "1")
-        ]
-        return components.url ?? presentURL
+        ])
     }
 
     /// Stable warm-pool id for a Practice deck preview.
@@ -120,5 +125,16 @@ enum QuestPollConfig {
     static func isPresentURL(_ url: URL) -> Bool {
         url.host?.lowercased() == origin.host
             && url.path.hasPrefix("/present")
+    }
+
+    /// `/present` plus `items`, always ending with Display Mode `aspect=`.
+    private static func projectorURL(queryItems: [URLQueryItem]) -> URL {
+        var components = URLComponents(
+            url: presentPath, resolvingAgainstBaseURL: false
+        )
+        var items = queryItems
+        items.append(presentAspectQueryItem)
+        components?.queryItems = items
+        return components?.url ?? presentPath
     }
 }

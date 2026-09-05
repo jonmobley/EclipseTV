@@ -11,7 +11,7 @@ import UIKit
 
 extension LiveHeaderView {
 
-    /// Large centered remaining-time clock for a live Countdown.
+    /// Large remaining-time clock for a live Countdown, matching AirPlay layout.
     ///
     /// Uses a stable content key so ticks do not crossfade the hero.
     /// - Parameter isExpired: When true, the digits turn red (matches AirPlay).
@@ -38,8 +38,7 @@ extension LiveHeaderView {
             self.controls.isHidden = true
 
             self.countdownClockLabel.isHidden = false
-            self.countdownClockLabel.text = text
-            self.countdownClockLabel.textColor = isExpired ? .systemRed : .white
+            self.layoutCountdownClock(text: text, isExpired: isExpired)
             self.bringSubviewToFront(self.countdownClockLabel)
             self.bringSubviewToFront(self.liveBadge)
             self.applyCollapseChrome()
@@ -51,14 +50,37 @@ extension LiveHeaderView {
 
     /// Updates clock digits during ticks without rebuilding hero chrome.
     func applyCountdownClock(text: String, isExpired: Bool) {
-        countdownClockLabel.text = text
-        countdownClockLabel.textColor = isExpired ? .systemRed : .white
         countdownClockLabel.isHidden = false
+        layoutCountdownClock(text: text, isExpired: isExpired)
     }
 
     /// Hides the countdown clock so it cannot leak onto other overlays.
     func hideCountdownClock() {
         countdownClockLabel.isHidden = true
         countdownClockLabel.text = nil
+    }
+
+    /// Positions the hero clock from the live countdown's saved or draft layout.
+    func layoutCountdownClockIfNeeded() {
+        guard !countdownClockLabel.isHidden else { return }
+        let clock = CountdownController.shared
+        layoutCountdownClock(
+            text: countdownClockLabel.text ?? clock.displayString,
+            isExpired: clock.remaining == 0
+        )
+    }
+
+    // MARK: - Private
+
+    private func layoutCountdownClock(text: String, isExpired: Bool) {
+        let layout = CountdownController.shared.liveCountdownId.map {
+            CountdownClockLayoutPreview.resolved(for: $0)
+        } ?? .default
+        layout.apply(
+            to: countdownClockLabel,
+            text: text,
+            isExpired: isExpired,
+            in: bounds
+        )
     }
 }

@@ -23,10 +23,13 @@ front — that competed with the first frame and made the whole app sluggish at 
 
 ## Ambient audio pauses, it never stops
 
-`AudioAmbientPolicy.applyYieldIfNeeded(for:)` / `forWebMedia:` call `pause()` (with fade).
-`stop()` tears down the queue and mini player, so yielding to audible video or website
-media would silently discard the user's playback state. Pausing is the point, not an
-oversight. Muted library video and silent web pages do not yield.
+`AudioAmbientPolicy.applyYieldIfNeeded(for:)` / `forWebMedia:` call `pause()` (with fade)
+when Settings → Pause Music for Video is on. `stop()` tears down the queue and mini
+player, so yielding to audible video or website media would silently discard the user's
+playback state. Pausing is the point, not an oversight. Default is off: music keeps
+playing under video. Muted library video and silent web pages do not yield even when
+the preference is on. Audible presentation uses `.moviePlayback` only when yielding;
+otherwise it stays on `.default` so the mix is not ducked.
 
 ## Photo capture has no fallback
 

@@ -152,6 +152,8 @@ extension LibraryGridViewController {
         }
         view.dataSource = self
         view.delegate = self
+        view.prefetchDataSource = self
+        view.isPrefetchingEnabled = true
         view.translatesAutoresizingMaskIntoConstraints = false
         view.isDirectionalLockEnabled = true
         return view

@@ -158,10 +158,18 @@ extension LibraryGridViewController {
         updateVisibleCountdownTiles()
     }
 
-    /// ⋯ menu: duration, rename, arrange, delete.
+    /// ⋯ menu: edit layout, duration, rename, arrange, delete.
     func countdownContextMenu(_ item: ShowCountdown) -> UIMenu {
         let token = ShowCountdownToken.token(for: item.id)
-        var children: [UIMenuElement] = countdownToolActions(for: item)
+        var children: [UIMenuElement] = [
+            UIAction(
+                title: "Edit",
+                image: UIImage(systemName: "slider.horizontal.3")
+            ) { [weak self] _ in
+                self?.presentCountdownLayoutEditor(item)
+            }
+        ]
+        children.append(contentsOf: countdownToolActions(for: item))
         children.append(UIAction(
             title: "Rename",
             image: UIImage(systemName: "pencil")
@@ -178,6 +186,15 @@ extension LibraryGridViewController {
             self?.confirmDeleteCountdown(item)
         })
         return UIMenu(children: children)
+    }
+
+    /// Full-screen drag / pinch canvas for this countdown's output layout.
+    func presentCountdownLayoutEditor(_ item: ShowCountdown) {
+        let editor = CountdownLayoutEditorViewController(item: item)
+        let nav = UINavigationController(rootViewController: editor)
+        nav.modalPresentationStyle = .fullScreen
+        nav.overrideUserInterfaceStyle = .dark
+        present(nav, animated: true)
     }
 
     /// Reset and duration chips for a countdown ⋯ menu.

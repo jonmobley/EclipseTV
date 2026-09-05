@@ -137,6 +137,19 @@ struct ThumbnailMemoryCacheTests {
         #expect(cache["missing"] != nil)
     }
 
+    @Test func pinVisibleIdPromotesCachedImageWithoutReplacingOthers() {
+        let cache = makeCache()
+        cache["a"] = swatch()
+        cache["b"] = swatch()
+        cache.setVisibleIds(["a"])
+
+        cache.pinVisibleId("b")
+        cache.setVisibleIds(["a", "b"])
+
+        #expect(cache["a"] != nil)
+        #expect(cache["b"] != nil)
+    }
+
     @Test func defaultMegabyteLimitIsClamped() {
         let limit = ThumbnailMemoryCache.defaultMegabyteLimit()
         #expect(limit >= 32)

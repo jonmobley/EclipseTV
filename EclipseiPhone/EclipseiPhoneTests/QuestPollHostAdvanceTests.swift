@@ -56,4 +56,25 @@ struct QuestPollHostAdvanceTests {
         #expect(url.absoluteString.contains("code=VR2V"))
         #expect(url.host == "questpoll.live")
     }
+
+    @Test func joinQRToggleHiddenInLobby() {
+        #expect(
+            QuestPollHostAdvance.joinQRToggle(
+                status: "lobby", isVisible: true
+            ) == nil
+        )
+    }
+
+    @Test func joinQRToggleShowsDuringQuestion() {
+        #expect(
+            QuestPollHostAdvance.joinQRToggle(
+                status: "voting", isVisible: false
+            ) == QuestPollHostAdvance(title: "Show QR", action: "showqr")
+        )
+        #expect(
+            QuestPollHostAdvance.joinQRToggle(
+                status: "results", isVisible: true
+            ) == QuestPollHostAdvance(title: "Hide QR", action: "hideqr")
+        )
+    }
 }

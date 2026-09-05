@@ -155,6 +155,10 @@ extension LibraryGridViewController {
     /// Practice preview or Practice/Start gate when a card is selected idle.
     func applyLivePollIdleHeaderIfNeeded() -> Bool {
         if ExternalDisplayManager.shared.isQuestPollLive { return false }
+        if !canShowLivePollIdleChrome {
+            liveHeader.hideLivePollGate()
+            return false
+        }
         if let membershipId = QuestPollSessionStore.shared.practiceMembershipId,
            let item = LivePollStore.shared.poll(id: membershipId) {
             liveHeader.hideLivePollGate()
@@ -189,14 +193,37 @@ extension LibraryGridViewController {
         return false
     }
 
-    /// Join / Question / Results strip: live room, Practice preview, or Start gate.
+    /// Join / Question / Results strip while this Show's poll is on program,
+    /// in Practice, or on the Start gate. A leftover room after switching
+    /// to a photo does not keep the ribbon (or its red live stroke).
     var showsLivePollRibbon: Bool {
         QuestPollRibbon.shouldShow(
             isShowMode: isShowMode,
-            liveRoomActive: QuestPollSessionStore.shared.session != nil,
-            isPracticing: QuestPollSessionStore.shared.practiceMembershipId != nil,
-            isGated: livePollGateMembershipId != nil
+            liveRoomActive: openShowId.map { isLivePollLive(inShow: $0) } ?? false,
+            isPracticing: canShowLivePollIdleChrome
+                && livePollBelongsToOpenShow(
+                    QuestPollSessionStore.shared.practiceMembershipId
+                ),
+            isGated: canShowLivePollIdleChrome
+                && livePollBelongsToOpenShow(livePollGateMembershipId)
         )
+    }
+
+    /// True when no photo, overlay, or Show tool has taken program.
+    var canShowLivePollIdleChrome: Bool {
+        let mgr = ExternalDisplayManager.shared
+        if mgr.isOverlayLive { return false }
+        if store.currentId != nil { return false }
+        if isLogoSelected || isScreensaverSelected || isBlackSelected {
+            return false
+        }
+        return SlideshowPlaybackController.shared.activeSlideshowId == nil
+    }
+
+    /// True when `membershipId` is a Live Poll card in the open Show.
+    func livePollBelongsToOpenShow(_ membershipId: UUID?) -> Bool {
+        guard let membershipId, let showId = openShowId else { return false }
+        return LivePollStore.shared.poll(id: membershipId)?.showId == showId
     }
 
     /// Join + Question/Results count for the live ribbon.
@@ -228,7 +255,7 @@ extension LibraryGridViewController {
             systemImage: item.systemImage,
             thumbnail: nil,
             fillColor: UIColor(white: 0.16, alpha: 1),
-            isLive: indexPath.item == livePollRibbonIndex,
+            isLive: livePollRibbonCueIsLive(at: indexPath.item),
             outlined: true
         )
     }
@@ -238,6 +265,18 @@ extension LibraryGridViewController {
         guard QuestPollSessionStore.shared.session != nil else { return }
         cueQuestPollStage(at: indexPath.item)
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
+    }
+
+    /// Red stroke on the current cue only while this poll is on program or Practice.
+    func livePollRibbonCueIsLive(at index: Int) -> Bool {
+        QuestPollRibbon.cueIsLive(
+            index: index,
+            currentIndex: livePollRibbonIndex,
+            pollIsOnProgram: openShowId.map { isLivePollLive(inShow: $0) } ?? false,
+            isPracticing: livePollBelongsToOpenShow(
+                QuestPollSessionStore.shared.practiceMembershipId
+            )
+        )
     }
 
     /// Configures a Show-grid Live Poll card (join code / votes when this card is live).
@@ -353,7 +392,7 @@ extension LibraryGridViewController {
 
     // MARK: - Session change UI
 
-    /// Opens native CONTROLS for the live room (Responses / Next / QR / End).
+    /// Opens native CONTROLS for the live room (Responses / Next / Show QR / End).
     func presentQuestPollHostController() {
         guard QuestPollSessionStore.shared.session != nil else { return }
         if presentedViewController is UINavigationController,
@@ -377,8 +416,8 @@ extension LibraryGridViewController {
 
     /// Applies a QuestPoll store update without reloading the ribbon on poll ticks.
     ///
-    /// Identical 2s status polls post nothing. Vote/join-code-only updates refresh
-    /// the Live Poll tile. Cue or room changes refresh thumbs / scroll once.
+    /// Identical 2s status polls post nothing. Vote-count ticks patch the card
+    /// caption in place so ⋯ menus stay up. Cue or room changes refresh thumbs.
     func handleQuestPollSessionChange() {
         switch QuestPollSessionStore.shared.lastChange {
         case .none:
@@ -390,7 +429,7 @@ extension LibraryGridViewController {
             reloadLivePollRibbonThumbsForCueChange()
         case .session:
             refreshLivePollPresentation()
-            if showsLivePollRibbon {
+            if QuestPollSessionStore.shared.session != nil {
                 startQuestPollStatusPolling()
             } else {
                 stopQuestPollStatusPolling()
@@ -398,18 +437,44 @@ extension LibraryGridViewController {
         }
     }
 
-    /// Reloads visible Live Poll cards without resetting ribbon offset.
+    /// Patches visible Live Poll captions without recycling cells (keeps ⋯ menus).
     func reloadLivePollTilesInPlace() {
         guard isShowMode, let section = sectionIndex(for: .shows) else { return }
-        let membershipId = QuestPollSessionStore.shared.membershipId
-        let paths = openShowGridItems.enumerated().compactMap { index, item -> IndexPath? in
-            guard case .livePoll(let poll) = item else { return nil }
-            if let membershipId, poll.id != membershipId { return nil }
+        let store = QuestPollSessionStore.shared
+        let membershipId = store.membershipId
+        for (index, item) in openShowGridItems.enumerated() {
+            guard case .livePoll(let poll) = item else { continue }
+            if let membershipId, poll.id != membershipId { continue }
             let path = IndexPath(item: index, section: section)
-            return collectionView.indexPathsForVisibleItems.contains(path) ? path : nil
+            guard let cell = collectionView.cellForItem(at: path)
+                    as? LibraryThumbnailCell else { continue }
+            let subtitle = store.membershipId == poll.id ? store.tileSubtitle : nil
+            cell.applySpecialTitle(
+                poll.tileTitle(subtitle: subtitle),
+                isLive: isShowGridItemLive(item),
+                isLocked: isLiveOutputLocked,
+                typeIcon: .livePoll
+            )
         }
-        guard !paths.isEmpty else { return }
-        collectionView.reloadItems(at: paths)
+    }
+
+    // MARK: - Display Mode
+
+    /// Reloads `/present` so Landscape ↔ Vertical picks up a new `aspect=`.
+    ///
+    /// Warm-pool `needsLoad` compares `absoluteString`, so the hero stays on the
+    /// old stage unless we rebuild `previewPage` and load. AirPlay uses `presentWeb`.
+    func reloadLivePollForDisplayMode() {
+        let live = ExternalDisplayManager.shared.isQuestPollLive
+        let practicing = QuestPollSessionStore.shared.practiceMembershipId != nil
+        guard live || practicing else { return }
+        if live {
+            let page = QuestPollConfig.previewPage(
+                code: QuestPollSessionStore.shared.session?.code
+            )
+            ExternalDisplayManager.shared.presentWeb(page.url, pageId: page.id)
+        }
+        refreshLiveHeader()
     }
 
     // MARK: - Destination

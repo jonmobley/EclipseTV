@@ -9,8 +9,9 @@ import Foundation
 
 /// HTTPS client for questpoll.live (PIN, decks, sessions, host control).
 ///
-/// Expected control actions: `start`, `results`, `next`, `prev`, `end`.
-/// Missing `prev` / `end` on the server surface as `QuestPollError.server`.
+/// Expected control actions: `start`, `results`, `next`, `prev`, `end`,
+/// `showqr`, `hideqr`.
+/// Missing actions on the server surface as `QuestPollError.server`.
 struct QuestPollClient: Sendable {
     var origin: URL
     var session: URLSession
@@ -120,7 +121,8 @@ struct QuestPollClient: Sendable {
 
     /// `POST /api/sessions/:code/control` with `{ action }`.
     ///
-    /// Actions: `start` / `results` / `next` / `prev` / `end`.
+    /// Actions: `start` / `results` / `next` / `prev` / `end` /
+    /// `showqr` / `hideqr`.
     /// The path key is the join code (e.g. `VR2V`), not the session UUID.
     func control(
         joinCode: String,

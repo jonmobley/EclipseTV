@@ -155,7 +155,6 @@ extension CameraLiveViewController {
             session: CameraManager.shared.captureSession,
             videoGravity: CameraPreviewView.programVideoGravity
         )
-        previewView.syncDisplayModeOrientation()
         layoutPhoneCameraViewport()
         guard coverHandoff else { return }
         DispatchQueue.main.asyncAfter(

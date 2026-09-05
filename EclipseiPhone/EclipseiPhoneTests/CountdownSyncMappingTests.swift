@@ -28,6 +28,19 @@ struct CountdownSyncMappingTests {
         #expect(decoded.showId == showId)
         #expect(decoded.name == "Intermission")
         #expect(decoded.duration == 450)
+        #expect(decoded.layout == .default)
+    }
+
+    @Test func recordRoundTripPreservesLayout() throws {
+        let item = ShowCountdown(
+            showId: UUID(),
+            name: "Corner",
+            duration: 60,
+            layout: CountdownClockLayout(centerX: 0.2, centerY: 0.85, scale: 1.4)
+        )
+        let record = CloudKitRecordMapper.makeCountdownRecord(from: item)
+        let decoded = try #require(CloudKitRecordMapper.countdown(from: record))
+        #expect(decoded.layout == item.layout)
     }
 
     @Test func shareChildSetsParent() throws {

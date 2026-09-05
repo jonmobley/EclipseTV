@@ -43,7 +43,10 @@ extension QuestPollSessionChange {
         }
         if isSessionChromeChange(from: old, to: new) { return .session }
         if cue(of: old) != cue(of: new) { return .cue }
-        return .tile
+        if voteCount(of: old) != voteCount(of: new) { return .tile }
+        // Question payload / host flags can change every 2s status poll
+        // without a visible tile or ribbon change.
+        return .none
     }
 
     // MARK: - Private
@@ -71,5 +74,9 @@ extension QuestPollSessionChange {
             questionCount: snap.questionCount
         )
         return (index, count)
+    }
+
+    private static func voteCount(of snap: QuestPollSessionSnapshot) -> Int {
+        snap.session?.voteCount ?? 0
     }
 }
