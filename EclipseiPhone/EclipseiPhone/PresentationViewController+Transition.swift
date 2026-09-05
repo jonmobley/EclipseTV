@@ -200,10 +200,7 @@ extension PresentationViewController {
         incomingCameraFrameOverlay?.removeFromSuperview()
         incomingCameraFrameOverlay = nil
 
-        incomingWebView?.stopLoading()
-        incomingWebView?.navigationDelegate = nil
-        incomingWebView?.removeFromSuperview()
-        incomingWebView = nil
+        discardIncomingWebView()
 
         incomingPDFView?.document = nil
         incomingPDFView?.removeFromSuperview()

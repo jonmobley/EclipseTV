@@ -127,6 +127,9 @@ final class PresentationViewController: UIViewController {
     }()
 
     var webView: WKWebView?
+    /// URL last asked of `webView`. Compared instead of `webView.url`, which a
+    /// redirect or in-page navigation can change and thereby force a reload.
+    var webRequestedURL: URL?
     /// Matches overscroll gutters to the page colour; does not alter the page.
     var webBackgroundTint: WebBackgroundTint?
 
@@ -420,11 +423,12 @@ final class PresentationViewController: UIViewController {
     /// Installs `source`, skipping the rebuild when the same web page is already live.
     ///
     /// Re-assertion runs on every scene reconnect, foreground, and Display Mode rotation,
-    /// and `show(_:)` always rebuilds. For web that means a fresh `WKWebView` and a
-    /// reload, which discards the scroll position and in-page state the phone browser has
-    /// already synced. Other content is only skipped at the cost of correctness — video
-    /// in particular relies on the rebuild to resume after a background — so the shortcut
-    /// is deliberately limited to web.
+    /// and `show(_:)` always runs a transition. For a web page that is already on the
+    /// primary surface that is pointless churn (the hidden-primary reuse in
+    /// `installIncomingWeb` only applies when the page is *not* currently showing).
+    /// Other content is only skipped at the cost of correctness — video in particular
+    /// relies on the rebuild to resume after a background — so the shortcut is
+    /// deliberately limited to web.
     func showIfNeeded(_ source: PresentationSource) {
         if pendingTransitionSource == source { return }
         guard case .web = source.content else {

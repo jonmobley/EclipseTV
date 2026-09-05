@@ -239,7 +239,23 @@ extension PresentationViewController {
 
     // MARK: - Web
 
+    /// Reuses the hidden primary when it already holds `url` (e.g. Live Poll →
+    /// photo → Live Poll): no network, and the page keeps its live state. Otherwise
+    /// loads a fresh view, which `showWeb` adopts as primary on commit.
     private func installIncomingWeb(url: URL, generation: Int) {
+        if let primary = webView, webRequestedURL == url {
+            primary.removeFromSuperview()
+            incomingWebView = primary
+            transitionOverlayContainer.addSubview(primary)
+            layoutIncomingWeb()
+            // `hideWeb` parked it at zero bounds; give WebKit a beat to relayout
+            // at full size so a Cut does not reveal a stale first frame.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                self?.notifyIfCurrent(generation)
+            }
+            return
+        }
+
         let view = WKWebView(frame: .zero, configuration: EclipseWebKit.makeConfiguration())
         EclipseWebKit.applyDesktopSite(to: view)
         view.scrollView.showsVerticalScrollIndicator = false

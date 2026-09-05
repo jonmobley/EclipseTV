@@ -40,7 +40,10 @@ extension PresentationViewController: WKNavigationDelegate {
         return view
     }
 
-    /// Loads `url` into the external web view and applies Vertical/scale layout.
+    /// Shows `url` on the external web view and applies Vertical/scale layout.
+    ///
+    /// Called from the transition commit, so the page that just painted on the
+    /// overlay is adopted as primary rather than loaded a second time.
     func showWeb(url: URL) {
         hideCamera()
         hidePDF()
@@ -51,12 +54,60 @@ extension PresentationViewController: WKNavigationDelegate {
         activityIndicator.stopAnimating()
 
         webContainer.isHidden = false
+        adoptIncomingWebView(loadedWith: url)
         let view = ensureWebView()
         applyWebLayout()
 
-        if view.url != url {
+        if webRequestedURL != url {
+            webRequestedURL = url
             view.load(URLRequest(url: url))
         }
+    }
+
+    /// Promotes the overlay's web view to primary, replacing any older primary.
+    ///
+    /// The overlay view already holds the rendered page. Reloading it into a
+    /// separate primary view showed a blank primary the moment the overlay was
+    /// dropped, and paid the network twice.
+    /// - Parameter url: What the overlay view was asked to load.
+    private func adoptIncomingWebView(loadedWith url: URL) {
+        guard let incoming = incomingWebView else { return }
+        incomingWebView = nil
+        incomingWebNavigation = nil
+        if let old = webView, old !== incoming {
+            old.stopLoading()
+            old.navigationDelegate = nil
+            old.removeFromSuperview()
+        }
+        incoming.navigationDelegate = self
+        if incoming.superview !== webContainer {
+            incoming.removeFromSuperview()
+            webContainer.addSubview(incoming)
+        }
+        if webView !== incoming {
+            webView = incoming
+            webRequestedURL = url
+            webBackgroundTint = WebBackgroundTint(webView: incoming)
+        }
+    }
+
+    /// Returns the overlay web view to wherever it belongs when a transition is
+    /// cancelled or finished without a web commit.
+    ///
+    /// A borrowed primary (see `installIncomingWeb`) goes back to `webContainer`
+    /// still loaded; a throwaway overlay view is destroyed.
+    func discardIncomingWebView() {
+        guard let incoming = incomingWebView else { return }
+        incomingWebView = nil
+        incomingWebNavigation = nil
+        if incoming === webView {
+            incoming.removeFromSuperview()
+            webContainer.addSubview(incoming)
+            return
+        }
+        incoming.stopLoading()
+        incoming.navigationDelegate = nil
+        incoming.removeFromSuperview()
     }
 
     /// Hides the web view without destroying it (keeps process warm for reconnect).
@@ -72,6 +123,7 @@ extension PresentationViewController: WKNavigationDelegate {
         webView?.loadHTMLString("", baseURL: nil)
         webView?.removeFromSuperview()
         webView = nil
+        webRequestedURL = nil
         webBackgroundTint = nil
         webContainer.isHidden = true
         if case .web = presentedSource?.content { presentedSource = nil }
@@ -94,7 +146,8 @@ extension PresentationViewController: WKNavigationDelegate {
             return
         }
         let view = ensureWebView()
-        if view.url != url {
+        if webRequestedURL != url {
+            webRequestedURL = url
             view.load(URLRequest(url: url))
         }
     }
