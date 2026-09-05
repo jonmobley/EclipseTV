@@ -183,32 +183,28 @@ struct CameraLiveChromeTests {
     }
 
     @Test func landscapeShowAllowsPortraitCameraInterface() {
-        let previous = ExternalOutputSettings.orientation
-        ExternalOutputSettings.orientation = .landscape
-        defer { ExternalOutputSettings.orientation = previous }
-
-        let vc = CameraLiveViewController()
-        vc.loadViewIfNeeded()
-        #expect(vc.supportedInterfaceOrientations.contains(.portrait))
-        #expect(vc.supportedInterfaceOrientations.contains(.landscapeLeft))
+        ExternalOutputOrientationFixture.with(.landscape) {
+            let vc = CameraLiveViewController()
+            vc.loadViewIfNeeded()
+            #expect(vc.supportedInterfaceOrientations.contains(.portrait))
+            #expect(vc.supportedInterfaceOrientations.contains(.landscapeLeft))
+        }
     }
 
     @Test func portraitCameraLayoutDocksShutterUnderSixteenByNinePanel() {
-        let previous = ExternalOutputSettings.orientation
-        ExternalOutputSettings.orientation = .landscape
-        defer { ExternalOutputSettings.orientation = previous }
+        ExternalOutputOrientationFixture.with(.landscape) {
+            let vc = CameraLiveViewController()
+            vc.loadViewIfNeeded()
+            vc.view.bounds = CGRect(x: 0, y: 0, width: 390, height: 844)
+            vc.view.layoutIfNeeded()
+            vc.refreshLiveChrome()
 
-        let vc = CameraLiveViewController()
-        vc.loadViewIfNeeded()
-        vc.view.bounds = CGRect(x: 0, y: 0, width: 390, height: 844)
-        vc.view.layoutIfNeeded()
-        vc.refreshLiveChrome()
-
-        let panel = vc.panelView.frame
-        #expect(abs(panel.width / panel.height - 16.0 / 9.0) < 0.02)
-        #expect(vc.isPhoneCameraPortraitLayout)
-        #expect(vc.shutterButton.frame.minY >= panel.maxY - 0.5)
-        #expect(abs(vc.shutterButton.center.x - panel.midX) < 1)
+            let panel = vc.panelView.frame
+            #expect(abs(panel.width / panel.height - 16.0 / 9.0) < 0.02)
+            #expect(vc.isPhoneCameraPortraitLayout)
+            #expect(vc.shutterButton.frame.minY >= panel.maxY - 0.5)
+            #expect(abs(vc.shutterButton.center.x - panel.midX) < 1)
+        }
     }
 
     private func endCameraIfNeeded(_ mgr: ExternalDisplayManager) {

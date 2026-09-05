@@ -17,18 +17,17 @@ struct ExternalOutputSettingsTests {
         #expect(album.orientation == .landscape)
     }
 
-    @Test func restoreLandscapeDependsOnVerticalShows() {
-        let previous = ExternalOutputSettings.orientation
-        defer { ExternalOutputSettings.orientation = previous }
+    @Test @MainActor func restoreLandscapeDependsOnVerticalShows() {
+        ExternalOutputOrientationFixture.withSwitching { set in
+            set(.portrait)
+            ExternalOutputSettings.restoreLandscapeIfNoVerticalShows([])
+            #expect(ExternalOutputSettings.orientation == .landscape)
 
-        ExternalOutputSettings.orientation = .portrait
-        ExternalOutputSettings.restoreLandscapeIfNoVerticalShows([])
-        #expect(ExternalOutputSettings.orientation == .landscape)
-
-        ExternalOutputSettings.orientation = .portrait
-        let shows = [LocalAlbum(name: "Tall", orientation: .portrait)]
-        ExternalOutputSettings.restoreLandscapeIfNoVerticalShows(shows)
-        #expect(ExternalOutputSettings.orientation == .portrait)
+            set(.portrait)
+            let shows = [LocalAlbum(name: "Tall", orientation: .portrait)]
+            ExternalOutputSettings.restoreLandscapeIfNoVerticalShows(shows)
+            #expect(ExternalOutputSettings.orientation == .portrait)
+        }
     }
 
     @Test func webLogicalWidthsUseDesktopBreakpoints() {

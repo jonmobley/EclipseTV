@@ -112,34 +112,30 @@ struct LandscapeBrowserChromeTests {
     )
 
     @Test func landscapeHidesURLTitle() {
-        let previous = ExternalOutputSettings.orientation
-        defer { ExternalOutputSettings.orientation = previous }
-        ExternalOutputSettings.orientation = .landscape
+        ExternalOutputOrientationFixture.with(.landscape) {
+            let browser = WebRemoteViewController(page: Self.samplePage)
+            let nav = UINavigationController(rootViewController: browser)
+            browser.loadViewIfNeeded()
 
-        let browser = WebRemoteViewController(page: Self.samplePage)
-        let nav = UINavigationController(rootViewController: browser)
-        browser.loadViewIfNeeded()
-
-        #expect(browser.usesOverlayBrowserChrome)
-        #expect(browser.navigationItem.title == nil)
-        #expect(nav.isNavigationBarHidden)
-        #expect(browser.overlayBackButton.isHidden == false)
-        #expect(browser.overlayBookmarksButton.isHidden == false)
+            #expect(browser.usesOverlayBrowserChrome)
+            #expect(browser.navigationItem.title == nil)
+            #expect(nav.isNavigationBarHidden)
+            #expect(browser.overlayBackButton.isHidden == false)
+            #expect(browser.overlayBookmarksButton.isHidden == false)
+        }
     }
 
     @Test func verticalShowsHostTitle() {
-        let previous = ExternalOutputSettings.orientation
-        defer { ExternalOutputSettings.orientation = previous }
-        ExternalOutputSettings.orientation = .portrait
+        ExternalOutputOrientationFixture.with(.portrait) {
+            let browser = WebRemoteViewController(page: Self.samplePage)
+            let nav = UINavigationController(rootViewController: browser)
+            browser.loadViewIfNeeded()
 
-        let browser = WebRemoteViewController(page: Self.samplePage)
-        let nav = UINavigationController(rootViewController: browser)
-        browser.loadViewIfNeeded()
-
-        #expect(browser.usesOverlayBrowserChrome == false)
-        #expect(browser.navigationItem.title == "example.com")
-        #expect(nav.isNavigationBarHidden == false)
-        #expect(browser.overlayBackButton.isHidden)
-        #expect(browser.overlayBookmarksButton.isHidden)
+            #expect(browser.usesOverlayBrowserChrome == false)
+            #expect(browser.navigationItem.title == "example.com")
+            #expect(nav.isNavigationBarHidden == false)
+            #expect(browser.overlayBackButton.isHidden)
+            #expect(browser.overlayBookmarksButton.isHidden)
+        }
     }
 }

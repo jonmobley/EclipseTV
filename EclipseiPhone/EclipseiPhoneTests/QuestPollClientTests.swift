@@ -95,46 +95,30 @@ struct QuestPollClientTests {
         #expect(page.id == QuestPollConfig.previewPageId)
     }
 
-    @Test func presentURLsCarryDisplayModeAspect() {
-        let previous = ExternalOutputSettings.orientation
-        defer { ExternalOutputSettings.orientation = previous }
+    @Test @MainActor func presentURLsCarryDisplayModeAspect() {
+        ExternalOutputOrientationFixture.withSwitching { set in
+            set(.landscape)
+            expectPresentURLs(aspect: "16x9")
+            set(.portrait)
+            expectPresentURLs(aspect: "9x16")
+        }
+    }
 
-        ExternalOutputSettings.orientation = .landscape
-        #expect(QuestPollConfig.presentAspectQueryItem.value == "16x9")
-        #expect(aspect(of: QuestPollConfig.presentURL) == "16x9")
-        let landscapeCode = QuestPollConfig.presentURL(code: "VR2V")
-        #expect(aspect(of: landscapeCode) == "16x9")
-        #expect(queryItems(landscapeCode).contains {
-            $0.name == "code" && $0.value == "VR2V"
-        })
-        #expect(QuestPollConfig.isPresentURL(landscapeCode))
-        let landscapePreview = QuestPollConfig.presentPreviewURL(pollId: "poll-1")
-        #expect(aspect(of: landscapePreview) == "16x9")
-        #expect(queryItems(landscapePreview).contains {
+    private func expectPresentURLs(aspect expected: String) {
+        #expect(QuestPollConfig.presentAspectQueryItem.value == expected)
+        #expect(aspect(of: QuestPollConfig.presentURL) == expected)
+        let code = QuestPollConfig.presentURL(code: "VR2V")
+        #expect(aspect(of: code) == expected)
+        #expect(queryItems(code).contains { $0.name == "code" && $0.value == "VR2V" })
+        #expect(QuestPollConfig.isPresentURL(code))
+        let preview = QuestPollConfig.presentPreviewURL(pollId: "poll-1")
+        #expect(aspect(of: preview) == expected)
+        #expect(queryItems(preview).contains {
             $0.name == "pollId" && $0.value == "poll-1"
         })
-        #expect(QuestPollConfig.previewPage(code: "VR2V").url == landscapeCode)
-        #expect(QuestPollConfig.previewPage(pollId: "poll-1").url == landscapePreview)
-
-        ExternalOutputSettings.orientation = .portrait
-        #expect(QuestPollConfig.presentAspectQueryItem.value == "9x16")
-        #expect(aspect(of: QuestPollConfig.presentURL) == "9x16")
-        let verticalCode = QuestPollConfig.presentURL(code: "VR2V")
-        #expect(aspect(of: verticalCode) == "9x16")
-        #expect(queryItems(verticalCode).contains {
-            $0.name == "code" && $0.value == "VR2V"
-        })
-        #expect(QuestPollConfig.isPresentURL(verticalCode))
-        let verticalPreview = QuestPollConfig.presentPreviewURL(pollId: "poll-1")
-        #expect(aspect(of: verticalPreview) == "9x16")
-        #expect(queryItems(verticalPreview).contains {
-            $0.name == "pollId" && $0.value == "poll-1"
-        })
-        #expect(queryItems(verticalPreview).contains {
-            $0.name == "preview" && $0.value == "1"
-        })
-        #expect(QuestPollConfig.previewPage(code: "VR2V").url == verticalCode)
-        #expect(QuestPollConfig.previewPage(pollId: "poll-1").url == verticalPreview)
+        #expect(queryItems(preview).contains { $0.name == "preview" && $0.value == "1" })
+        #expect(QuestPollConfig.previewPage(code: "VR2V").url == code)
+        #expect(QuestPollConfig.previewPage(pollId: "poll-1").url == preview)
     }
 
     @Test func accountLinkRoundTripMigratesKeychain() {

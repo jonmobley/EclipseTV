@@ -16,9 +16,12 @@ struct LiveHeroBackdropTests {
         )
     }
 
-    @Test func landscapeLeadingColumnUsesTheBackdrop() {
+    /// Landscape puts the grid in its own column, so nothing scrolls under the
+    /// preview and the plate is pinned to 0×0 in `landscapeChromeConstraints`.
+    @Test func landscapeDoesNotNeedTheBackdrop() {
         #expect(
             LiveHeroBackdrop.isVisible(showsLiveHero: true, isSideBySideChrome: true)
+                == false
         )
     }
 

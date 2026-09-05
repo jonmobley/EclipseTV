@@ -223,44 +223,42 @@ struct HomeLayoutTests {
     /// A double-counted inset (sizing against the full width, then insetting again)
     /// left a ~32pt black band on the right of a 3-up Vertical row.
     @Test func verticalRowFillsTheContainerInARealCollectionView() {
-        let previous = ExternalOutputSettings.orientation
-        ExternalOutputSettings.orientation = .portrait
-        defer { ExternalOutputSettings.orientation = previous }
+        ExternalOutputOrientationFixture.with(.portrait) {
+            let width: CGFloat = 390
+            let layout = LibraryGridViewController.makeHomeLayout(
+                sectionInset: inset,
+                spacing: spacing
+            ) { .home }
 
-        let width: CGFloat = 390
-        let layout = LibraryGridViewController.makeHomeLayout(
-            sectionInset: inset,
-            spacing: spacing
-        ) { .home }
+            let collectionView = UICollectionView(
+                frame: CGRect(x: 0, y: 0, width: width, height: 844),
+                collectionViewLayout: layout
+            )
+            let dataSource = OverreportingDataSource()
+            dataSource.register(on: collectionView)
+            // Home is hero (0) + Recent (1); size the Shows grid.
+            dataSource.sectionCount = 2
+            dataSource.itemsPerSection = 6
+            collectionView.dataSource = dataSource
+            collectionView.reloadData()
+            collectionView.layoutIfNeeded()
 
-        let collectionView = UICollectionView(
-            frame: CGRect(x: 0, y: 0, width: width, height: 844),
-            collectionViewLayout: layout
-        )
-        let dataSource = OverreportingDataSource()
-        dataSource.register(on: collectionView)
-        // Home is hero (0) + Recent (1); size the Shows grid.
-        dataSource.sectionCount = 2
-        dataSource.itemsPerSection = 6
-        collectionView.dataSource = dataSource
-        collectionView.reloadData()
-        collectionView.layoutIfNeeded()
+            let showsSection = 1
+            let frames = (0..<3).compactMap { item -> CGRect? in
+                collectionView.layoutAttributesForItem(
+                    at: IndexPath(item: item, section: showsSection)
+                )?.frame
+            }
+            #expect(frames.count == 3)
 
-        let showsSection = 1
-        let frames = (0..<3).compactMap { item -> CGRect? in
-            collectionView.layoutAttributesForItem(
-                at: IndexPath(item: item, section: showsSection)
-            )?.frame
+            let trailing = frames.map(\.maxX).max() ?? 0
+            let gutter = width - trailing
+            // Section trailing inset (16) plus sub-point flooring slack — not a tile gap.
+            #expect(
+                gutter <= inset + 2,
+                "Vertical 3-up left a \(gutter)pt trailing gutter (frames \(frames))"
+            )
         }
-        #expect(frames.count == 3)
-
-        let trailing = frames.map(\.maxX).max() ?? 0
-        let gutter = width - trailing
-        // Section trailing inset (16) plus sub-point flooring slack — not a tile gap.
-        #expect(
-            gutter <= inset + 2,
-            "Vertical 3-up left a \(gutter)pt trailing gutter (frames \(frames))"
-        )
     }
 
     @Test func homeLeadsWithHeroThenShows() {
@@ -373,38 +371,36 @@ struct HomeLayoutTests {
     /// The live ribbon section must emit the same size as `slideshowRibbonThumbSize`.
     @Test func slideshowRibbonCellsMatchDisplayModeInARealCollectionView() {
         for orientation in ExternalOutputOrientation.allCases {
-            let previous = ExternalOutputSettings.orientation
-            ExternalOutputSettings.orientation = orientation
-            defer { ExternalOutputSettings.orientation = previous }
+            ExternalOutputOrientationFixture.with(orientation) {
+                let width: CGFloat = 390
+                let layout = LibraryGridViewController.makeHomeLayout(
+                    sectionInset: inset,
+                    spacing: spacing
+                ) {
+                    .init(isShowMode: true, showsSlideshowRibbon: true)
+                }
 
-            let width: CGFloat = 390
-            let layout = LibraryGridViewController.makeHomeLayout(
-                sectionInset: inset,
-                spacing: spacing
-            ) {
-                .init(isShowMode: true, showsSlideshowRibbon: true)
+                let collectionView = UICollectionView(
+                    frame: CGRect(x: 0, y: 0, width: width, height: 844),
+                    collectionViewLayout: layout
+                )
+                let dataSource = OverreportingDataSource()
+                dataSource.register(on: collectionView)
+                dataSource.sectionCount = 2
+                dataSource.itemsPerSection = 4
+                collectionView.dataSource = dataSource
+                collectionView.reloadData()
+                collectionView.layoutIfNeeded()
+
+                let frame = collectionView.layoutAttributesForItem(
+                    at: IndexPath(item: 0, section: 0)
+                )?.frame
+                let expected = LibraryGridViewController.slideshowRibbonThumbSize(
+                    containerWidth: width, sectionInset: inset, spacing: spacing,
+                    orientation: orientation
+                )
+                #expect(frame?.size == expected, "ribbon cell \(String(describing: frame?.size))")
             }
-
-            let collectionView = UICollectionView(
-                frame: CGRect(x: 0, y: 0, width: width, height: 844),
-                collectionViewLayout: layout
-            )
-            let dataSource = OverreportingDataSource()
-            dataSource.register(on: collectionView)
-            dataSource.sectionCount = 2
-            dataSource.itemsPerSection = 4
-            collectionView.dataSource = dataSource
-            collectionView.reloadData()
-            collectionView.layoutIfNeeded()
-
-            let frame = collectionView.layoutAttributesForItem(
-                at: IndexPath(item: 0, section: 0)
-            )?.frame
-            let expected = LibraryGridViewController.slideshowRibbonThumbSize(
-                containerWidth: width, sectionInset: inset, spacing: spacing,
-                orientation: orientation
-            )
-            #expect(frame?.size == expected, "ribbon cell \(String(describing: frame?.size))")
         }
     }
 
