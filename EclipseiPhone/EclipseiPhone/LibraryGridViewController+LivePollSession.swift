@@ -155,28 +155,46 @@ extension LibraryGridViewController {
         }
     }
 
+    /// Starts a room for `item`, or rejoins one already running its deck
+    /// (after a relaunch, or started from another device such as the Mac).
     func confirmStartOrReplaceQuestPoll(_ item: ShowLivePoll) {
         guard ensureQuestPollDestination() else { return }
         let hasLocal = QuestPollSessionStore.shared.session != nil
         if hasLocal {
-            presentReplaceConfirm(for: item)
+            presentReplaceConfirm(for: item, running: nil)
             return
         }
         Task { @MainActor [weak self] in
             guard let self else { return }
-            let hasActive = await self.serverHasActiveQuestPoll()
-            if hasActive {
-                self.presentReplaceConfirm(for: item)
-            } else {
+            let active = await self.fetchActiveQuestPoll()
+            let decision = QuestPollStartDecision.decide(
+                hasLocalSession: false, active: active, pollId: item.pollId
+            )
+            switch decision {
+            case .start:
                 self.startQuestPoll(item)
+            case .resume(let session):
+                self.resumeQuestPoll(session, for: item)
+            case .replace(let running):
+                self.presentReplaceConfirm(for: item, running: running)
             }
         }
     }
 
-    private func presentReplaceConfirm(for item: ShowLivePoll) {
+    private func presentReplaceConfirm(
+        for item: ShowLivePoll,
+        running: QuestPollSession?
+    ) {
+        let message: String
+        if let running {
+            message = "\(running.pollTitle) is live in room \(running.code), "
+                + "possibly from another device. End it and start \(item.title)?"
+        } else {
+            message = "Ends the current room and starts \(item.title)."
+        }
         let alert = UIAlertController(
             title: "Replace Poll?",
-            message: "Ends the current room and starts \(item.title).",
+            message: message,
             preferredStyle: .alert
         )
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
@@ -190,15 +208,16 @@ extension LibraryGridViewController {
         present(alert, animated: true)
     }
 
-    private func serverHasActiveQuestPoll() async -> Bool {
-        guard let pin = QuestPollAccount.shared.hostPIN else { return false }
+    /// Server's active PIN room, or nil when none, unlinked, or unreachable.
+    private func fetchActiveQuestPoll() async -> QuestPollSession? {
+        guard let pin = QuestPollAccount.shared.hostPIN else { return nil }
         do {
             return try await QuestPollClient().activeSession(
                 pin: pin,
                 hostId: QuestPollAccount.shared.hostId
-            ) != nil
+            )
         } catch {
-            return false
+            return nil
         }
     }
 
@@ -232,34 +251,17 @@ extension LibraryGridViewController {
         }
     }
 
-    /// Adopts the server's active room when local store is empty. Returns true if adopted.
-    @discardableResult
-    func reattachActiveQuestPollIfNeeded(for item: ShowLivePoll) async -> Bool {
-        guard QuestPollSessionStore.shared.session == nil,
-              let pin = QuestPollAccount.shared.hostPIN
-        else { return false }
-        do {
-            guard let session = try await QuestPollClient().activeSession(
-                pin: pin,
-                hostId: QuestPollAccount.shared.hostId
-            ), session.pollId == item.pollId else { return false }
-            var count = session.resolvedQuestionCount ?? item.questionCount
-            if session.resolvedQuestionCount == nil {
-                let polls = try? await QuestPollClient().listPolls(
-                    pin: pin, hostId: QuestPollAccount.shared.hostId
-                )
-                count = polls?.first(where: { $0.id == session.pollId })?
-                    .questionCount ?? item.questionCount
-            }
-            QuestPollSessionStore.shared.adopt(
-                session,
-                questionCount: max(count, 1),
-                membershipId: item.id
-            )
-            return true
-        } catch {
-            return false
-        }
+    /// Adopts a room already running `item`'s deck and goes live on it,
+    /// instead of ending it. The card's own question count is the fallback
+    /// while the room is still in the lobby (no `totalQuestions` yet).
+    private func resumeQuestPoll(_ session: QuestPollSession, for item: ShowLivePoll) {
+        QuestPollSessionStore.shared.adopt(
+            session,
+            questionCount: session.resolvedQuestionCount ?? item.questionCount,
+            membershipId: item.id
+        )
+        presentQuestPollLive()
+        showPresentationToast("Rejoined room \(session.code)")
     }
 
     // MARK: - Ribbon cues

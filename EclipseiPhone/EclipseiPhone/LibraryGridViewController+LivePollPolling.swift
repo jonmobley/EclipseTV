@@ -19,7 +19,9 @@ extension LibraryGridViewController {
         questPollStatusPollTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
-                guard let self, !Task.isCancelled else { return }
+                // The loop body reads only shared stores, so `self` is a liveness
+                // check: stop polling once the grid is gone.
+                guard self != nil, !Task.isCancelled else { return }
                 guard let session = QuestPollSessionStore.shared.session,
                       let pin = QuestPollAccount.shared.hostPIN,
                       !QuestPollSessionStore.shared.isControlInFlight

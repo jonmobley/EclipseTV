@@ -152,47 +152,6 @@ extension LibraryGridViewController {
         liveHeader.updatePlayback(PlaybackState())
     }
 
-    /// Practice preview or Practice/Start gate when a card is selected idle.
-    func applyLivePollIdleHeaderIfNeeded() -> Bool {
-        if ExternalDisplayManager.shared.isQuestPollLive { return false }
-        if !canShowLivePollIdleChrome {
-            liveHeader.hideLivePollGate()
-            return false
-        }
-        if let membershipId = QuestPollSessionStore.shared.practiceMembershipId,
-           let item = LivePollStore.shared.poll(id: membershipId) {
-            liveHeader.hideLivePollGate()
-            let page = QuestPollConfig.previewPage(pollId: item.pollId)
-            let canShow = !WarmWebSessionPool.shared.isAdopted(pageId: page.id)
-            if canShow {
-                WarmWebSessionPool.shared.warmIfNeeded(for: page)
-            }
-            liveHeader.configureOverlay(
-                title: "\(item.title) · Practice",
-                systemImage: "chart.bar.fill",
-                fillColor: UIColor(white: 0.12, alpha: 1),
-                keepWebPreview: canShow,
-                showsLiveBadge: false
-            )
-            if canShow {
-                liveHeader.showWebPreview(pageId: page.id)
-            }
-            liveHeader.updatePlayback(PlaybackState())
-            return true
-        }
-        if let membershipId = livePollGateMembershipId,
-           let item = LivePollStore.shared.poll(id: membershipId) {
-            liveHeader.showLivePollGate(
-                title: item.title,
-                onPractice: { [weak self] in self?.practiceLivePoll(item) },
-                onStart: { [weak self] in self?.startLivePoll(item) }
-            )
-            return true
-        }
-        liveHeader.hideLivePollGate()
-        return false
-    }
-
     /// Join / Question / Results strip while this Show's poll is on program,
     /// in Practice, or on the Start gate. A leftover room after switching
     /// to a photo does not keep the ribbon (or its red live stroke).
@@ -207,17 +166,6 @@ extension LibraryGridViewController {
             isGated: canShowLivePollIdleChrome
                 && livePollBelongsToOpenShow(livePollGateMembershipId)
         )
-    }
-
-    /// True when no photo, overlay, or Show tool has taken program.
-    var canShowLivePollIdleChrome: Bool {
-        let mgr = ExternalDisplayManager.shared
-        if mgr.isOverlayLive { return false }
-        if store.currentId != nil { return false }
-        if isLogoSelected || isScreensaverSelected || isBlackSelected {
-            return false
-        }
-        return SlideshowPlaybackController.shared.activeSlideshowId == nil
     }
 
     /// True when `membershipId` is a Live Poll card in the open Show.
@@ -393,6 +341,9 @@ extension LibraryGridViewController {
     // MARK: - Session change UI
 
     /// Opens native CONTROLS for the live room (Responses / Next / Show QR / End).
+    ///
+    /// Presented as a half-height undimmed sheet, so the live preview and cue
+    /// ribbon above it stay visible and tappable — see `makeNavigation`.
     func presentQuestPollHostController() {
         guard QuestPollSessionStore.shared.session != nil else { return }
         if presentedViewController is UINavigationController,
@@ -400,17 +351,14 @@ extension LibraryGridViewController {
             .viewControllers.first is QuestPollHostViewController {
             return
         }
-        let host = QuestPollHostViewController()
-        host.onAdvance = { [weak self] action in
-            self?.sendQuestPollActions([action])
-        }
-        host.onEnd = { [weak self, weak host] in
-            host?.dismiss(animated: true) {
+        let nav = QuestPollHostViewController.makeNavigation(
+            onAdvance: { [weak self] action in
+                self?.sendQuestPollActions([action])
+            },
+            onEnd: { [weak self] in
                 self?.confirmEndQuestPoll()
             }
-        }
-        let nav = UINavigationController(rootViewController: host)
-        nav.modalPresentationStyle = .formSheet
+        )
         present(nav, animated: true)
     }
 
