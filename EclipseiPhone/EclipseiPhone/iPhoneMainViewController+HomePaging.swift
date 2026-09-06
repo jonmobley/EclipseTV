@@ -347,11 +347,19 @@ extension iPhoneMainViewController: UIScrollViewDelegate {
         wireHomePagerToYieldToLiveRibbon()
     }
 
-    /// Pager pan waits for the docked ribbon pan to fail before it can begin.
+    /// Pager pan waits for the docked ribbon pan and the hero browse swipes to
+    /// fail before it can begin.
+    ///
+    /// Without the hero requirement a flick across the live preview both stepped
+    /// the live item and paged over to Music, since the swipe recognizers and the
+    /// pager's pan live on different views and would otherwise each recognize.
     func wireHomePagerToYieldToLiveRibbon() {
         homePagerScrollView.panGestureRecognizer.require(
             toFail: libraryViewController.slideshowRibbonView.panGestureRecognizer
         )
+        for swipe in libraryViewController.liveHeader.browseSwipeRecognizers {
+            homePagerScrollView.panGestureRecognizer.require(toFail: swipe)
+        }
     }
 
     private func embedMusicPage() {

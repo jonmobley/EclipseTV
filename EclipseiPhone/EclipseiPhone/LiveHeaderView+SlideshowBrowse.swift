@@ -7,24 +7,9 @@
 
 import UIKit
 
-// MARK: - Live Slideshow Swipe & Ribbon Toggle
+// MARK: - Live Slideshow Ribbon Toggle
 
 extension LiveHeaderView {
-
-    /// Installs left/right swipes that call `onSlideshowSwipe` (±1).
-    func installSlideshowBrowseGestures() {
-        let left = UISwipeGestureRecognizer(
-            target: self, action: #selector(slideshowSwipeLeft)
-        )
-        left.direction = .left
-        addGestureRecognizer(left)
-
-        let right = UISwipeGestureRecognizer(
-            target: self, action: #selector(slideshowSwipeRight)
-        )
-        right.direction = .right
-        addGestureRecognizer(right)
-    }
 
     /// Shows or hides the hero control that toggles the live slide ribbon.
     ///
@@ -93,15 +78,5 @@ extension LiveHeaderView {
         if let button = slideshowRibbonButton {
             bringSubviewToFront(button)
         }
-    }
-
-    @objc private func slideshowSwipeLeft() {
-        guard allowsSlideshowBrowse else { return }
-        onSlideshowSwipe?(1)
-    }
-
-    @objc private func slideshowSwipeRight() {
-        guard allowsSlideshowBrowse else { return }
-        onSlideshowSwipe?(-1)
     }
 }
