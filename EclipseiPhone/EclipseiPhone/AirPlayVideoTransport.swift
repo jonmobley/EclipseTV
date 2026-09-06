@@ -14,6 +14,10 @@ import Foundation
 /// only — never `AVPlayerViewController` or on-screen controls.
 enum AirPlayVideoTransport {
 
+    /// Resume-from-park seek window. Frame-accurate seeks force decode from the
+    /// previous keyframe; a quarter-second tolerance is invisible to an audience.
+    static let resumeSeekTolerance = CMTime(seconds: 0.25, preferredTimescale: 600)
+
     /// Keeps video in `AVPlayerLayer` when a second screen is attached.
     ///
     /// Do not set `allowsExternalPlayback = false`: that can stop the AirPlay
@@ -22,6 +26,14 @@ enum AirPlayVideoTransport {
     /// the system AirPlay Video chrome (transport controls on the TV).
     static func configureLayerOnlyPlayback(on player: AVPlayer) {
         player.usesExternalPlaybackWhileExternalScreenIsActive = false
+    }
+
+    /// Local files cannot stall; skip the stall heuristic so playback starts immediately.
+    ///
+    /// Remote URLs keep AVPlayer's default `automaticallyWaitsToMinimizeStalling`.
+    static func configurePlaybackTiming(on player: AVPlayer, url: URL) {
+        guard url.isFileURL else { return }
+        player.automaticallyWaitsToMinimizeStalling = false
     }
 
     /// Whether `url` is the file for `itemId` (local path or id in the name).
@@ -41,6 +53,18 @@ enum AirPlayVideoTransport {
         }
         return target
     }
+
+    /// Whether the playhead is parked at the end of the item.
+    ///
+    /// `AVPlayer.play()` at the end of a non-looping item is a no-op, so transport
+    /// play has to seek back to the start instead of just resuming.
+    static func isAtEnd(currentTime: TimeInterval, duration: TimeInterval) -> Bool {
+        guard currentTime.isFinite, duration.isFinite, duration > 0 else { return false }
+        return currentTime >= duration - endThreshold
+    }
+
+    /// Slack for `isAtEnd` — the last reported time can sit a frame short of duration.
+    private static let endThreshold: TimeInterval = 0.05
 
     /// Phone-hero `PlaybackState` from an AirPlay player snapshot.
     static func playbackState(
@@ -65,16 +89,38 @@ enum AirPlayVideoTransport {
         return seconds
     }
 
+    /// Seek tolerance for resume vs. scrub.
+    ///
+    /// - Parameter precise: True for user scrubs (frame-accurate); false for resume.
+    static func seekTolerance(precise: Bool) -> CMTime {
+        precise ? .zero : resumeSeekTolerance
+    }
+
     /// Seeks, then plays or holds a paused frame (`playImmediately(atRate: 0)`).
+    ///
+    /// - Parameters:
+    ///   - player: Player to start.
+    ///   - startAt: Absolute seconds to seek before play/pause.
+    ///   - autoplay: When false, parks on a decoded frame.
+    ///   - url: Media URL — local files use `playImmediately` and skip stall waits.
+    ///   - preciseSeek: Frame-accurate seek (scrubs); resume uses a modest tolerance.
+    ///   - completion: Invoked on the main queue after seek + play/pause.
     static func start(
         _ player: AVPlayer,
         at startAt: TimeInterval,
         autoplay: Bool,
+        url: URL? = nil,
+        preciseSeek: Bool = false,
         completion: (() -> Void)? = nil
     ) {
+        let isLocal = url?.isFileURL ?? false
         let go = {
             if autoplay {
-                player.play()
+                if isLocal {
+                    player.playImmediately(atRate: 1)
+                } else {
+                    player.play()
+                }
             } else {
                 player.pause()
                 player.playImmediately(atRate: 0)
@@ -83,7 +129,12 @@ enum AirPlayVideoTransport {
         }
         if startAt > 0 {
             let time = CMTime(seconds: startAt, preferredTimescale: 600)
-            player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero) { _ in
+            let tolerance = seekTolerance(precise: preciseSeek)
+            player.seek(
+                to: time,
+                toleranceBefore: tolerance,
+                toleranceAfter: tolerance
+            ) { _ in
                 go()
             }
         } else {

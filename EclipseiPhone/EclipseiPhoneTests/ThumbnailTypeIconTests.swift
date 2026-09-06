@@ -17,16 +17,22 @@ struct ThumbnailTypeIconTests {
         #expect(ThumbnailTypeIcon.video.systemName == "play.fill")
         #expect(ThumbnailTypeIcon.slideshow.systemName == "rectangle.stack.fill")
         #expect(ThumbnailTypeIcon.website.systemName == "safari")
+        #expect(ThumbnailTypeIcon.webVideo.systemName == "play.rectangle.fill")
         #expect(ThumbnailTypeIcon.pdf.systemName == "doc.richtext")
         #expect(ThumbnailTypeIcon.camera.systemName == "camera.fill")
         #expect(ThumbnailTypeIcon.livePoll.systemName == "chart.bar.fill")
         #expect(ThumbnailTypeIcon.countdown.systemName == "timer")
+        #expect(ThumbnailTypeIcon.webVideo.spokenName == "video link")
+        #expect(ThumbnailTypeIcon.webVideo.usesPlayFill == false)
         #expect(ThumbnailTypeIcon.media(isVideo: false) == .photo)
         #expect(ThumbnailTypeIcon.media(isVideo: true) == .video)
         #expect(ThumbnailTypeIcon.camera.showsWithoutThumbnail)
         #expect(ThumbnailTypeIcon.livePoll.showsWithoutThumbnail)
         #expect(ThumbnailTypeIcon.countdown.showsWithoutThumbnail)
         #expect(ThumbnailTypeIcon.photo.showsWithoutThumbnail == false)
+        #expect(ThumbnailTypeIcon.camera.hidesCenterPlaceholder)
+        #expect(ThumbnailTypeIcon.countdown.hidesCenterPlaceholder)
+        #expect(ThumbnailTypeIcon.livePoll.hidesCenterPlaceholder == false)
         #expect(ThumbnailTypeIcon.photo.showsOnThumbnail == false)
         #expect(ThumbnailTypeIcon.video.showsOnThumbnail)
         #expect(ThumbnailTypeIcon.video.usesPlayFill)
@@ -189,6 +195,8 @@ struct ThumbnailTypeIconTests {
         )
         #expect(cell.typeIconOverlay.appliedIcon == .livePoll)
         #expect(cell.typeIconOverlay.isHidden == false)
+        // A poll card has no preview or clock, so it keeps the centred glyph.
+        #expect(cell.placeholderIcon.isHidden == false)
 
         cell.configureSpecial(
             title: "Countdown",
@@ -200,6 +208,7 @@ struct ThumbnailTypeIconTests {
         )
         #expect(cell.typeIconOverlay.appliedIcon == .countdown)
         #expect(cell.typeIconOverlay.isHidden == false)
+        #expect(cell.placeholderIcon.isHidden)
 
         cell.configureActionTile(title: "New Show")
         #expect(cell.typeIconOverlay.isHidden)

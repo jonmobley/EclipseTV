@@ -109,6 +109,15 @@ extension CameraLiveViewController {
                 fill: dim,
                 title: page?.title ?? "Website"
             )
+        case .webVideo:
+            let id = ExternalDisplayManager.shared.liveWebVideoPageId
+            let page = id.flatMap { WebPageStore.shared.page(id: $0) }
+            return LiveOutputArt(
+                image: id.flatMap { WebThumbnailStore.shared.image(for: $0) },
+                symbol: "play.rectangle.fill",
+                fill: dim,
+                title: page?.title ?? "Video"
+            )
         case .pdf:
             let id = ExternalDisplayManager.shared.livePDFDocumentId
             let doc = PDFStore.shared.documents.first { $0.id == id }
@@ -118,7 +127,7 @@ extension CameraLiveViewController {
                 fill: dim,
                 title: doc?.title ?? "PDF"
             )
-        case .image(let url, _):
+        case .image(let url, _, _):
             return LiveOutputArt(
                 image: stillFromPresentationURL(url),
                 symbol: "photo",
@@ -146,7 +155,7 @@ extension CameraLiveViewController {
             return LogoStore.shared.image
         }
         if let ss = ScreensaverStore.presentationSource,
-           case .image(let ssURL, _) = ss.content,
+           case .image(let ssURL, _, _) = ss.content,
            url.standardizedFileURL == ssURL.standardizedFileURL {
             return ScreensaverStore.poster
         }
@@ -164,7 +173,7 @@ extension CameraLiveViewController {
             return "Background"
         }
         if let ss = ScreensaverStore.presentationSource,
-           case .image(let ssURL, _) = ss.content,
+           case .image(let ssURL, _, _) = ss.content,
            url.standardizedFileURL == ssURL.standardizedFileURL {
             return "Screensaver"
         }
@@ -196,7 +205,7 @@ final class CameraLiveOutputThumbView: UIView {
     private let badge: UILabel = {
         let label = UILabel()
         label.text = "LIVE"
-        label.font = .systemFont(ofSize: 8, weight: .bold)
+        label.font = .systemFont(ofSize: 11, weight: .bold)
         label.textColor = .white
         label.textAlignment = .center
         label.backgroundColor = .systemRed

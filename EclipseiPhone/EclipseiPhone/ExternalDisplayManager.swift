@@ -23,6 +23,7 @@ final class ExternalDisplayManager {
     enum OverlaySource: Equatable {
         case camera
         case web(URL)
+        case webVideo(WebVideoLink)
         case pdf(URL)
         case countdown
     }
@@ -48,6 +49,12 @@ final class ExternalDisplayManager {
 
     /// Whether an external display scene is attached and showing app content.
     private(set) var isConnected = false
+
+    /// True when an external scene is connected, or (iOS 27+) when the scene
+    /// accessory reports a display is available before the scene attaches.
+    var isAirPlayAvailable: Bool {
+        isConnected || ExternalDisplaySceneAccessory.isDisplayAvailable
+    }
 
     /// Active overlay (camera, web, or PDF), if any.
     private(set) var overlaySource: OverlaySource?
@@ -93,7 +100,7 @@ final class ExternalDisplayManager {
 
     /// True when program is the Show Background still.
     var isShowingBackgroundStill: Bool {
-        guard case .image(let url, _) = lastSource?.content else { return false }
+        guard case .image(let url, _, _) = lastSource?.content else { return false }
         return LogoStore.shared.isLogoFileURL(url)
     }
 
@@ -140,6 +147,9 @@ final class ExternalDisplayManager {
 
     /// Bookmark that owns the live web overlay (survives closing the phone browser).
     private(set) var liveWebPageId: UUID?
+
+    /// Bookmark that owns the live web-video overlay / direct-file playback.
+    private(set) var liveWebVideoPageId: UUID?
 
     /// Bookmark that owns the live PDF overlay (survives closing the phone reader).
     private(set) var livePDFDocumentId: UUID?
@@ -300,7 +310,6 @@ final class ExternalDisplayManager {
         let presentationVC = PresentationViewController()
         let window = UIWindow(windowScene: windowScene)
         window.rootViewController = presentationVC
-        window.overrideUserInterfaceStyle = .dark
         // Unhiding kicks AirPlay out of phone-mirroring into this window's content.
         window.isHidden = false
         externalWindow = window
@@ -355,6 +364,7 @@ final class ExternalDisplayManager {
             overlaySource = nil
             parkedCameraStill = nil
             liveWebPageId = nil
+            liveWebVideoPageId = nil
             livePDFDocumentId = nil
         }
 
@@ -364,6 +374,8 @@ final class ExternalDisplayManager {
         externalWindow = nil
         presentationVC = nil
         isConnected = false
+        PresentationAudioSession.reset()
+        PresentationPrewarmer.shared.clear()
         endBackgroundPresentationTask()
         updateIdleTimer()
         NotificationCenter.default.post(
@@ -499,6 +511,12 @@ final class ExternalDisplayManager {
         return presentationVC
     }
 
+    /// Presentation host when a YouTube / Vimeo embed is live.
+    var webVideoPresentation: PresentationViewController? {
+        guard isConnected, case .webVideo = lastSource?.content else { return nil }
+        return presentationVC
+    }
+
     /// Parks resume state when AirPlay leaves a library video for different content.
     private func parkLeavingVideoIfNeeded(
         replacing previous: PresentationSource?,
@@ -550,12 +568,26 @@ final class ExternalDisplayManager {
             blackoutRestore = nil
         }
         AudioAmbientPolicy.applyYieldIfNeeded(for: source)
+        // Direct-file web videos clear here; `presentWebVideo` re-sets the page id.
+        if case .webVideo = source.content {
+            // Keep until `presentWebVideo` assigns (or restore keeps the prior id).
+        } else {
+            liveWebVideoPageId = nil
+        }
+        switch source.content {
+        case .video(let url, _, _):
+            PresentationPrewarmer.shared.prewarm(url: url)
+        default:
+            PresentationPrewarmer.shared.clear()
+        }
         switch source.content {
         case .camera:
             beginOverlay(.camera, endingOther: true)
             parkedCameraStill = nil
         case .web(let url):
             beginOverlay(.web(url), endingOther: true)
+        case .webVideo(let link):
+            beginOverlay(.webVideo(link), endingOther: true)
         case .pdf(let url):
             beginOverlay(.pdf(url), endingOther: true)
         case .countdown:
@@ -581,10 +613,10 @@ final class ExternalDisplayManager {
         isJoinedLive = false
     }
 
-    /// Re-asserts AirPlay camera rotation from Display Mode after the iPad turns.
+    /// Re-asserts AirPlay camera rotation after the phone or iPad turns.
     ///
-    /// Program stays Vertical or Landscape as configured. A mismatched hold
-    /// (portrait tablet in Landscape output) must not reorient the TV.
+    /// Program stays Vertical or Landscape as configured; the picture inside rotates
+    /// so subjects stay upright (a mismatched hold is an upright crop, not sideways).
     func syncLiveCameraOrientation() {
         guard isCameraLive else { return }
         presentationVC?.syncCameraToDisplayModeOrientation()
@@ -686,6 +718,31 @@ final class ExternalDisplayManager {
         }
     }
 
+    /// Starts presenting a YouTube / Vimeo embed or a direct media URL.
+    ///
+    /// - Parameter pageId: Saved bookmark id so the Show tile stays live.
+    func presentWebVideo(_ link: WebVideoLink, pageId: UUID? = nil) {
+        switch link {
+        case .directFile(let url):
+            present(.video(url, isLooping: false, isMuted: false))
+        case .youTube, .vimeo:
+            present(.webVideo(link))
+        }
+        if let pageId {
+            liveWebVideoPageId = pageId
+        }
+    }
+
+    /// Whether a web-video card is the active presentation source.
+    var isWebVideoLive: Bool {
+        if case .webVideo = overlaySource { return true }
+        if liveWebVideoPageId != nil, case .video = lastSource?.content {
+            return true
+        }
+        if case .webVideo = lastSource?.content { return true }
+        return false
+    }
+
     /// Starts presenting a PDF on the external display.
     /// - Parameter documentId: Saved id so the home tile stays live after the
     ///   phone reader is closed.
@@ -711,14 +768,14 @@ final class ExternalDisplayManager {
                 blackoutRestore = BlackoutRestore(
                     source: parkedVideoSource(last),
                     joined: isJoinedLive,
-                    webPageId: liveWebPageId,
+                    webPageId: liveWebPageId ?? liveWebVideoPageId,
                     pdfDocumentId: livePDFDocumentId
                 )
             } else if let provided = currentSourceProvider?(), provided.content != .black {
                 blackoutRestore = BlackoutRestore(
                     source: parkedVideoSource(provided),
                     joined: false,
-                    webPageId: liveWebPageId,
+                    webPageId: liveWebPageId ?? liveWebVideoPageId,
                     pdfDocumentId: livePDFDocumentId
                 )
             }
@@ -737,6 +794,8 @@ final class ExternalDisplayManager {
         switch restore.source.content {
         case .web(let url):
             presentWeb(url, pageId: restore.webPageId)
+        case .webVideo(let link):
+            presentWebVideo(link, pageId: restore.webPageId)
         case .pdf(let url):
             presentPDF(url, documentId: restore.pdfDocumentId)
         case .black:
@@ -801,6 +860,8 @@ final class ExternalDisplayManager {
             present(.camera)
         case .web(let url):
             present(.web(url))
+        case .webVideo(let link):
+            present(.webVideo(link))
         case .pdf(let url):
             present(.pdf(url))
         case .countdown:
@@ -904,6 +965,8 @@ final class ExternalDisplayManager {
 
         guard !wasConnected else { return }
         logger.info("External display connected")
+        // Activate once on connect so video transitions don't pay setActive latency.
+        PresentationAudioSession.activateIfNeeded(muted: false)
         NotificationCenter.default.post(name: Self.didChangeNotification, object: self)
     }
 
@@ -947,7 +1010,8 @@ final class ExternalDisplayManager {
     /// Whether both overlays are the same content kind (URL may differ).
     private static func isSameOverlayKind(_ a: OverlaySource, _ b: OverlaySource) -> Bool {
         switch (a, b) {
-        case (.web, .web), (.pdf, .pdf), (.camera, .camera), (.countdown, .countdown):
+        case (.web, .web), (.webVideo, .webVideo), (.pdf, .pdf),
+             (.camera, .camera), (.countdown, .countdown):
             return true
         default:
             return false
@@ -970,6 +1034,8 @@ final class ExternalDisplayManager {
         switch source {
         case .web:
             liveWebPageId = nil
+        case .webVideo:
+            liveWebVideoPageId = nil
         case .pdf:
             livePDFDocumentId = nil
         case .camera, .countdown:
@@ -981,7 +1047,7 @@ final class ExternalDisplayManager {
         switch source {
         case .camera:
             CameraManager.shared.stopSession()
-        case .web:
+        case .web, .webVideo:
             presentationVC?.teardownWeb()
         case .pdf:
             presentationVC?.teardownPDF()
@@ -995,7 +1061,7 @@ final class ExternalDisplayManager {
         switch source {
         case .camera:
             NotificationCenter.default.post(name: Self.cameraDidEndNotification, object: self)
-        case .web:
+        case .web, .webVideo:
             NotificationCenter.default.post(name: Self.webDidEndNotification, object: self)
         case .pdf:
             NotificationCenter.default.post(name: Self.pdfDidEndNotification, object: self)

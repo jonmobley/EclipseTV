@@ -18,11 +18,10 @@ extension LibraryGridViewController {
     func presentCameraLiveOnOutput() {
         guard !blockLiveChangeIfLocked() else { return }
         if sendShowLiveSelectIfOperator(.camera, itemId: nil) {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            Haptics.impactLight()
             return
         }
         if ExternalDisplayManager.shared.isCameraTileLive {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
             return
         }
         isBlackSelected = false
@@ -35,23 +34,37 @@ extension LibraryGridViewController {
     }
 
     /// Marks a saved website live without opening the phone browser.
+    ///
+    /// YouTube / Vimeo / direct-file URLs play edge-to-edge instead of loading
+    /// the desktop watch page.
     func presentWebPageLive(_ page: WebPage) {
         guard !blockLiveChangeIfLocked() else { return }
         guard hasLiveOutputDestination else { return }
         if sendShowLiveSelectIfOperator(.web, itemId: page.id.uuidString) {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            Haptics.impactLight()
             return
         }
         let mgr = ExternalDisplayManager.shared
+        if let link = page.videoLink {
+            if mgr.isWebVideoLive, mgr.liveWebVideoPageId == page.id {
+                return
+            }
+            SlideshowPlaybackController.shared.stop()
+            mgr.presentWebVideo(link, pageId: page.id)
+            announceAirPlayOverlayIfLinked()
+            Haptics.impactLight()
+            reloadLibraryGrid()
+            refreshLiveHeader()
+            return
+        }
         if mgr.isWebLive, mgr.liveWebPageId == page.id {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
             return
         }
         SlideshowPlaybackController.shared.stop()
         WarmWebSessionPool.shared.warmIfNeeded(for: page)
         mgr.presentWeb(page.url, pageId: page.id)
         announceAirPlayOverlayIfLinked()
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptics.impactLight()
         reloadLibraryGrid()
         refreshLiveHeader()
     }
@@ -61,19 +74,18 @@ extension LibraryGridViewController {
         guard !blockLiveChangeIfLocked() else { return }
         guard hasLiveOutputDestination else { return }
         if sendShowLiveSelectIfOperator(.pdf, itemId: doc.id.uuidString) {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            Haptics.impactLight()
             return
         }
         let mgr = ExternalDisplayManager.shared
         if mgr.isPDFLive, mgr.livePDFDocumentId == doc.id {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
             return
         }
         guard let url = resolvedPDFFileURL(for: doc) else { return }
         SlideshowPlaybackController.shared.stop()
         mgr.presentPDF(url, documentId: doc.id)
         announceAirPlayOverlayIfLinked()
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptics.impactLight()
         reloadLibraryGrid()
         refreshLiveHeader()
     }
@@ -129,12 +141,13 @@ extension LibraryGridViewController {
         HomeCameraTilePreview.shared.unbind()
         ExternalDisplayManager.shared.presentCamera()
         announceAirPlayOverlayIfLinked()
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptics.impactLight()
         reloadLibraryGrid()
         refreshLiveHeader()
     }
 
     private func presentCameraPermissionNeededAlert() {
+        Haptics.error()
         let alert = UIAlertController(
             title: "Camera Access Needed",
             message: "Enable camera access in Settings to use the camera.",

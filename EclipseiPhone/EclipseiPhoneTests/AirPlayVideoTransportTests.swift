@@ -62,6 +62,33 @@ struct AirPlayVideoTransportTests {
         #expect(player.allowsExternalPlayback == true)
     }
 
+    @Test func resumeSeekToleranceIsQuarterSecond() {
+        let tolerance = AirPlayVideoTransport.seekTolerance(precise: false)
+        #expect(CMTimeCompare(tolerance, AirPlayVideoTransport.resumeSeekTolerance) == 0)
+        let seconds = CMTimeGetSeconds(tolerance)
+        #expect(abs(seconds - 0.25) < 0.001)
+    }
+
+    @Test func preciseSeekToleranceIsZero() {
+        let tolerance = AirPlayVideoTransport.seekTolerance(precise: true)
+        #expect(CMTimeCompare(tolerance, .zero) == 0)
+    }
+
+    @Test func localFileDisablesStallWaiting() {
+        let player = AVPlayer()
+        let local = URL(fileURLWithPath: "/tmp/clip.mp4")
+        AirPlayVideoTransport.configurePlaybackTiming(on: player, url: local)
+        #expect(player.automaticallyWaitsToMinimizeStalling == false)
+    }
+
+    @Test func remoteURLKeepsDefaultStallWaiting() {
+        let player = AVPlayer()
+        let before = player.automaticallyWaitsToMinimizeStalling
+        let remote = URL(string: "https://example.com/clip.mp4")!
+        AirPlayVideoTransport.configurePlaybackTiming(on: player, url: remote)
+        #expect(player.automaticallyWaitsToMinimizeStalling == before)
+    }
+
     @Test @MainActor func presentationViewHasNoTransportChrome() {
         let vc = PresentationViewController()
         _ = vc.view
@@ -92,6 +119,22 @@ struct AirPlayVideoTransportTests {
         )
         #expect(state.currentTime == 0)
         #expect(state.duration == 0)
+    }
+
+    @Test func isAtEndDetectsFinishedPlayhead() {
+        #expect(AirPlayVideoTransport.isAtEnd(currentTime: 40, duration: 40))
+        #expect(AirPlayVideoTransport.isAtEnd(currentTime: 39.98, duration: 40))
+    }
+
+    @Test func isAtEndFalseMidPlayback() {
+        #expect(AirPlayVideoTransport.isAtEnd(currentTime: 0, duration: 40) == false)
+        #expect(AirPlayVideoTransport.isAtEnd(currentTime: 39.5, duration: 40) == false)
+    }
+
+    @Test func isAtEndFalseForUnknownDuration() {
+        #expect(AirPlayVideoTransport.isAtEnd(currentTime: 5, duration: .nan) == false)
+        #expect(AirPlayVideoTransport.isAtEnd(currentTime: 5, duration: 0) == false)
+        #expect(AirPlayVideoTransport.isAtEnd(currentTime: .nan, duration: 40) == false)
     }
 
     @Test func parkedStartTimeUsesFallbackWithoutPlayer() {

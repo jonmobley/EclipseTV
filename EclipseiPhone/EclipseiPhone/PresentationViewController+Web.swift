@@ -53,6 +53,11 @@ extension PresentationViewController: WKNavigationDelegate {
         imageView.image = nil
         activityIndicator.stopAnimating()
 
+        // Embed shell has a different message handler — rebuild for bookmarks.
+        if webVideoLink != nil {
+            teardownWebKeepingContainerVisible()
+        }
+
         webContainer.isHidden = false
         adoptIncomingWebView(loadedWith: url)
         let view = ensureWebView()
@@ -70,7 +75,7 @@ extension PresentationViewController: WKNavigationDelegate {
     /// separate primary view showed a blank primary the moment the overlay was
     /// dropped, and paid the network twice.
     /// - Parameter url: What the overlay view was asked to load.
-    private func adoptIncomingWebView(loadedWith url: URL) {
+    func adoptIncomingWebView(loadedWith url: URL) {
         guard let incoming = incomingWebView else { return }
         incomingWebView = nil
         incomingWebNavigation = nil
@@ -125,8 +130,25 @@ extension PresentationViewController: WKNavigationDelegate {
         webView = nil
         webRequestedURL = nil
         webBackgroundTint = nil
+        teardownWebVideo()
         webContainer.isHidden = true
-        if case .web = presentedSource?.content { presentedSource = nil }
+        switch presentedSource?.content {
+        case .web, .webVideo:
+            presentedSource = nil
+        default:
+            break
+        }
+    }
+
+    /// Drops the current web view without hiding the container (rebuild mid-show).
+    func teardownWebKeepingContainerVisible() {
+        webView?.stopLoading()
+        webView?.loadHTMLString("", baseURL: nil)
+        webView?.removeFromSuperview()
+        webView = nil
+        webRequestedURL = nil
+        webBackgroundTint = nil
+        teardownWebVideo()
     }
 
     /// Applies present-embed or desktop scale-up + portrait rotation.
@@ -135,7 +157,8 @@ extension PresentationViewController: WKNavigationDelegate {
         Self.applyWebLayout(
             to: webView,
             in: webContainer,
-            pageURL: webView.url
+            pageURL: webView.url,
+            isWebVideoShell: webVideoLink != nil
         )
     }
 

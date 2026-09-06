@@ -78,9 +78,11 @@ final class WarmWebSessionPool {
     ///
     /// Opportunistic: skipped when the pool is already at its web-view cap and every
     /// live session is pinned (adopted by a browser or live on AirPlay).
+    /// Video links are never warmed — they play via an embed shell or AVPlayer.
     /// - Returns: Whether a warm load was attempted.
     @discardableResult
     func warmIfNeeded(for page: WebPage) -> Bool {
+        guard page.videoLink == nil else { return false }
         warmQueue.removeAll { $0.id == page.id }
         let session = session(for: page)
         if session.hasWebView {
@@ -102,8 +104,13 @@ final class WarmWebSessionPool {
     /// Pages that already hold a live web view are skipped, so this is safe to call
     /// repeatedly from scroll-driven hooks. The first load is deferred so callers
     /// like Bookmarks `willDisplay` never spin up WebKit mid-gesture.
+    /// Video links are skipped (poster art comes from `WebVideoPosterFetcher`).
     func warmSoon(_ pages: [WebPage]) {
         for page in pages {
+            guard page.videoLink == nil else {
+                WebVideoPosterFetcher.shared.fetchIfNeeded(for: page)
+                continue
+            }
             guard sessions[page.id]?.hasWebView != true,
                   page.id != warmInFlight,
                   !warmQueue.contains(where: { $0.id == page.id })

@@ -8,31 +8,46 @@
 import AVFoundation
 import UIKit
 
-/// Muted dual-player host that crossfades at the loop point for a seamless Screensaver.
+/// Muted looping video host for the Screensaver.
+///
+/// With `crossfadesAtLoop` on, two players blend at the loop point so a clip that
+/// doesn't loop cleanly never shows a cut. With it off, a single `AVPlayerLooper`
+/// plays the clip gaplessly, which is what a perfectly looping clip wants.
 final class SeamlessLoopPlayerView: UIView {
 
     /// Fired once the active player has a frame ready to display.
     var onReady: (() -> Void)?
 
+    /// Whether the loop point is blended (dual player) or hard (gapless looper).
+    let crossfadesAtLoop: Bool
+
     private let players: [AVPlayer]
     private let playerLayers: [AVPlayerLayer]
+    private let looper: AVPlayerLooper?
     private var activeIndex = 0
     private var timeObserver: Any?
     private var endObservers: [NSObjectProtocol] = []
     private var displayReadyObservation: NSKeyValueObservation?
+    private var standbyStatusObservation: NSKeyValueObservation?
     private var isCrossfading = false
     private var didSignalReady = false
     /// Fade-in only (underlay stays opaque) — simultaneous fades dip to black.
     private let fadeDuration: TimeInterval = 1.4
 
     /// Creates a looping player for the local (or remote) video at `url`.
-    init(url: URL) {
-        let primary = AVPlayer(url: url)
-        let secondary = AVPlayer(url: url)
-        players = [primary, secondary]
-        let layerA = AVPlayerLayer(player: primary)
-        let layerB = AVPlayerLayer(player: secondary)
-        playerLayers = [layerA, layerB]
+    ///
+    /// - Parameter crossfadesAtLoop: Blend the loop point. Off plays a hard, gapless loop.
+    init(url: URL, crossfadesAtLoop: Bool = true) {
+        self.crossfadesAtLoop = crossfadesAtLoop
+        if crossfadesAtLoop {
+            players = [AVPlayer(url: url), AVPlayer(url: url)]
+            looper = nil
+        } else {
+            let queue = AVQueuePlayer()
+            looper = AVPlayerLooper(player: queue, templateItem: AVPlayerItem(url: url))
+            players = [queue]
+        }
+        playerLayers = players.map { AVPlayerLayer(player: $0) }
         super.init(frame: .zero)
         backgroundColor = .black
         clipsToBounds = true
@@ -43,10 +58,13 @@ final class SeamlessLoopPlayerView: UIView {
         }
         for player in players {
             player.isMuted = true
-            player.actionAtItemEnd = .pause
             AirPlayVideoTransport.configureLayerOnlyPlayback(on: player)
         }
         observeReady()
+        guard crossfadesAtLoop else { return }
+        for player in players {
+            player.actionAtItemEnd = .pause
+        }
         observeEnds()
     }
 
@@ -72,16 +90,9 @@ final class SeamlessLoopPlayerView: UIView {
 
     /// Starts muted playback from the current active player.
     func play() {
-        guard timeObserver == nil else {
-            players[activeIndex].play()
-            return
-        }
-        let interval = CMTime(seconds: 0.05, preferredTimescale: 600)
-        timeObserver = players[activeIndex].addPeriodicTimeObserver(
-            forInterval: interval,
-            queue: .main
-        ) { [weak self] time in
-            self?.considerCrossfade(at: time)
+        if crossfadesAtLoop, timeObserver == nil {
+            installLoopWatch(on: activeIndex)
+            primeStandby()
         }
         players[activeIndex].play()
     }
@@ -97,6 +108,7 @@ final class SeamlessLoopPlayerView: UIView {
         }
         endObservers.removeAll()
         displayReadyObservation = nil
+        standbyStatusObservation = nil
         for player in players {
             player.pause()
         }
@@ -104,6 +116,17 @@ final class SeamlessLoopPlayerView: UIView {
     }
 
     // MARK: - Private
+
+    /// Polls the active player so the blend can start `fadeDuration` before the end.
+    private func installLoopWatch(on index: Int) {
+        let interval = CMTime(seconds: 0.05, preferredTimescale: 600)
+        timeObserver = players[index].addPeriodicTimeObserver(
+            forInterval: interval,
+            queue: .main
+        ) { [weak self] time in
+            self?.considerCrossfade(at: time)
+        }
+    }
 
     private func observeReady() {
         let layer = playerLayers[0]
@@ -124,7 +147,10 @@ final class SeamlessLoopPlayerView: UIView {
                 object: player.currentItem,
                 queue: .main
             ) { [weak self, weak player] _ in
-                guard let self, let player, !self.isCrossfading else { return }
+                // Hard-loop fallback for the active player only (e.g. unknown duration).
+                // The standby must stay paused and primed, or its preroll is voided.
+                guard let self, let player, !self.isCrossfading,
+                      player === self.players[self.activeIndex] else { return }
                 player.seek(to: .zero)
                 player.play()
             }
@@ -132,8 +158,35 @@ final class SeamlessLoopPlayerView: UIView {
         }
     }
 
+    /// Rewinds and prerolls the standby player so the blend can start the instant
+    /// the active player nears its end. Waits for `readyToPlay` first: preroll throws
+    /// before that, and fails whenever the player's rate is nonzero.
+    private func primeStandby() {
+        guard crossfadesAtLoop, players.count == 2 else { return }
+        let standby = players[1 - activeIndex]
+        standbyStatusObservation = nil
+        guard standby.status == .readyToPlay else {
+            standbyStatusObservation = standby.observe(\.status, options: [.new]) {
+                [weak self] player, _ in
+                guard player.status == .readyToPlay else { return }
+                DispatchQueue.main.async { self?.primeStandby() }
+            }
+            return
+        }
+        guard standby.rate == 0 else { return }
+        standby.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero) {
+            [weak self, weak standby] finished in
+            DispatchQueue.main.async {
+                guard let self, let standby, finished, !self.isCrossfading,
+                      standby === self.players[1 - self.activeIndex],
+                      standby.rate == 0, standby.status == .readyToPlay else { return }
+                standby.preroll(atRate: 1) { _ in }
+            }
+        }
+    }
+
     private func considerCrossfade(at time: CMTime) {
-        guard !isCrossfading,
+        guard crossfadesAtLoop, !isCrossfading,
               let item = players[activeIndex].currentItem else { return }
         let duration = item.duration
         guard duration.isNumeric, duration.seconds.isFinite else { return }
@@ -142,69 +195,58 @@ final class SeamlessLoopPlayerView: UIView {
         beginCrossfade()
     }
 
+    /// Starts the blend immediately. The standby was rewound and prerolled by
+    /// `primeStandby()`, so nothing asynchronous sits between "1.4 s left" and the
+    /// first blended frame — a late start would leave the outgoing clip frozen on
+    /// its last frame for the tail of the fade.
     private func beginCrossfade() {
         isCrossfading = true
+        standbyStatusObservation = nil
         let from = activeIndex
         let to = 1 - activeIndex
         let incoming = players[to]
         let fromLayer = playerLayers[from]
         let toLayer = playerLayers[to]
 
-        incoming.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero) {
-            [weak self] finished in
-            DispatchQueue.main.async {
-                guard let self else { return }
-                guard finished else {
-                    self.isCrossfading = false
-                    return
-                }
-                // Preroll so the first frame exists before we reveal the layer.
-                incoming.preroll(atRate: 1) { [weak self] prerolled in
-                    DispatchQueue.main.async {
-                        guard let self else { return }
-                        guard prerolled else {
-                            self.isCrossfading = false
-                            incoming.play()
-                            return
-                        }
-                        self.layer.insertSublayer(toLayer, above: fromLayer)
-                        fromLayer.opacity = 1
-                        toLayer.opacity = 0
-                        incoming.play()
-
-                        CATransaction.begin()
-                        CATransaction.setAnimationDuration(self.fadeDuration)
-                        CATransaction.setCompletionBlock {
-                            DispatchQueue.main.async { [weak self] in
-                                self?.finishCrossfade(from: from, to: to)
-                            }
-                        }
-                        // Fade only the incoming layer in — underlay stays fully opaque
-                        // so black never shows through mid-blend.
-                        toLayer.opacity = 1
-                        CATransaction.commit()
-                    }
-                }
-            }
+        if incoming.currentTime() != .zero {
+            // Priming didn't land; rewind inline. AVPlayer orders the play after the seek,
+            // and an undecoded AVPlayerLayer is transparent, so the underlay still shows.
+            incoming.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero)
         }
+
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        layer.insertSublayer(toLayer, above: fromLayer)
+        fromLayer.opacity = 1
+        toLayer.opacity = 0
+        CATransaction.commit()
+        incoming.play()
+
+        CATransaction.begin()
+        CATransaction.setAnimationDuration(fadeDuration)
+        CATransaction.setCompletionBlock { [weak self] in
+            DispatchQueue.main.async { self?.finishCrossfade(from: from, to: to) }
+        }
+        // Fade only the incoming layer in — underlay stays fully opaque so black
+        // never shows through mid-blend.
+        toLayer.opacity = 1
+        CATransaction.commit()
     }
 
     private func finishCrossfade(from: Int, to: Int) {
+        guard activeIndex == from else { return }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
         playerLayers[from].opacity = 0
+        CATransaction.commit()
         players[from].pause()
-        players[from].seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero)
         if let timeObserver {
             players[from].removeTimeObserver(timeObserver)
             self.timeObserver = nil
         }
         activeIndex = to
-        let interval = CMTime(seconds: 0.05, preferredTimescale: 600)
-        timeObserver = players[to].addPeriodicTimeObserver(
-            forInterval: interval,
-            queue: .main
-        ) { [weak self] time in
-            self?.considerCrossfade(at: time)
-        }
+        installLoopWatch(on: to)
         isCrossfading = false
+        primeStandby()
     }
 }

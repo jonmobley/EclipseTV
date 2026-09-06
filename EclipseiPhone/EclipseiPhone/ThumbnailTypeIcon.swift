@@ -13,6 +13,7 @@ enum ThumbnailTypeIcon: Equatable {
     case video
     case slideshow
     case website
+    case webVideo
     case pdf
     case camera
     case livePoll
@@ -25,6 +26,7 @@ enum ThumbnailTypeIcon: Equatable {
         case .video: return "play.fill"
         case .slideshow: return "rectangle.stack.fill"
         case .website: return "safari"
+        case .webVideo: return "play.rectangle.fill"
         case .pdf: return "doc.richtext"
         case .camera: return "camera.fill"
         case .livePoll: return "chart.bar.fill"
@@ -39,6 +41,7 @@ enum ThumbnailTypeIcon: Equatable {
         case .video: return "video"
         case .slideshow: return "slideshow"
         case .website: return "website"
+        case .webVideo: return "video link"
         case .pdf: return "PDF"
         case .camera: return "camera"
         case .livePoll: return "live poll"
@@ -49,6 +52,12 @@ enum ThumbnailTypeIcon: Equatable {
     /// Camera / Live Poll / Countdown keep the disc with no still so the tile reads.
     var showsWithoutThumbnail: Bool {
         self == .camera || self == .livePoll || self == .countdown
+    }
+
+    /// Camera and Countdown fill the card centre themselves (preview / clock), so
+    /// the large placeholder glyph is dropped. A poll card has nothing else there.
+    var hidesCenterPlaceholder: Bool {
+        self == .camera || self == .countdown
     }
 
     /// Photos already read as stills from the art; skip the overlay disc.

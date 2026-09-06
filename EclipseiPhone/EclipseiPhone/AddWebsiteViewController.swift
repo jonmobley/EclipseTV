@@ -19,6 +19,8 @@ final class AddWebsiteViewController: UITableViewController, UITextFieldDelegate
     private let titleField = UITextField()
     private var suggestions: [WebPage] = []
     private var addButton: UIBarButtonItem!
+    /// Last video-link footer string; avoids reloading fields (and stealing focus).
+    private var lastVideoFooterHint: String?
 
     private enum Section: Int, CaseIterable {
         case fields
@@ -107,6 +109,21 @@ final class AddWebsiteViewController: UITableViewController, UITextFieldDelegate
     @objc private func fieldEditingChanged() {
         refreshSuggestions()
         updateAddEnabled()
+        refreshVideoFooterHintIfNeeded()
+    }
+
+    /// Reloads the fields section only when the video-link footer text changes.
+    private func refreshVideoFooterHintIfNeeded() {
+        let hint = videoLinkFooterHint()
+        guard hint != lastVideoFooterHint else { return }
+        lastVideoFooterHint = hint
+        tableView.reloadSections(
+            IndexSet(integer: Section.fields.rawValue), with: .none
+        )
+        // Keep typing in the URL field after the footer swap.
+        if !urlField.isFirstResponder {
+            urlField.becomeFirstResponder()
+        }
     }
 
     private func commit(title: String, urlString: String) {
@@ -182,9 +199,20 @@ final class AddWebsiteViewController: UITableViewController, UITextFieldDelegate
         titleForFooterInSection section: Int
     ) -> String? {
         guard Section(rawValue: section) == .fields else { return nil }
+        if let videoHint = videoLinkFooterHint() {
+            return videoHint
+        }
         return targetShowId == nil
             ? "Saved sites show up here as you type."
             : "Adds a website card to this Show. Matching History fills in as you type."
+    }
+
+    /// Footer when the typed URL is a YouTube / Vimeo / direct video link.
+    private func videoLinkFooterHint() -> String? {
+        let raw = urlField.text ?? ""
+        guard let normalized = try? WebPageStore.normalizedHTTPSURL(from: raw),
+              let link = WebVideoLink(url: normalized) else { return nil }
+        return "Plays fullscreen as a \(link.providerName) video."
     }
 
     override func tableView(

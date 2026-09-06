@@ -42,7 +42,7 @@ final class DisplayModeMediaPreviewPageViewController: UIViewController {
     /// - Parameters:
     ///   - fileURL: Local still or video file.
     ///   - isVideo: Plays video instead of showing a still.
-    ///   - usesSeamlessLoop: Screensaver dual-player crossfade.
+    ///   - usesSeamlessLoop: Screensaver muted loop host (follows its Crossfade setting).
     ///   - index: Page index in the hosting gallery.
     init(fileURL: URL, isVideo: Bool, usesSeamlessLoop: Bool, index: Int) {
         self.fileURL = fileURL
@@ -115,7 +115,10 @@ final class DisplayModeMediaPreviewPageViewController: UIViewController {
 
     private func setupVideo() {
         if usesSeamlessLoop {
-            let player = SeamlessLoopPlayerView(url: fileURL)
+            // Only the Screensaver uses this host, so mirror its loop preference.
+            let player = SeamlessLoopPlayerView(
+                url: fileURL, crossfadesAtLoop: ScreensaverStore.shared.crossfadesAtLoop
+            )
             panelView.addSubview(player)
             loopPlayer = player
             return

@@ -37,8 +37,14 @@ final class WebThumbnailPrefetcher: NSObject, WKNavigationDelegate {
     }
 
     /// Adds pages to the capture queue (deduped by id).
+    ///
+    /// Video links are excluded — their posters come from `WebVideoPosterFetcher`.
     func enqueue(_ pages: [WebPage]) {
         for page in pages {
+            if page.videoLink != nil {
+                WebVideoPosterFetcher.shared.fetchIfNeeded(for: page)
+                continue
+            }
             if queue.contains(where: { $0.id == page.id }) { continue }
             if currentPage?.id == page.id { continue }
             queue.append(page)

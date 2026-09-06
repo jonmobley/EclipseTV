@@ -102,11 +102,11 @@ enum ShowPreviewGallery {
     private static func screensaverMedia() -> (url: URL, isVideo: Bool)? {
         guard let source = ScreensaverStore.shared.presentationSource else { return nil }
         switch source.content {
-        case .image(let url, _):
+        case .image(let url, _, _):
             return (url, false)
-        case .screensaver(let url), .video(let url, _, _):
+        case .screensaver(let url, _), .video(let url, _, _):
             return (url, true)
-        case .camera, .web, .pdf, .black, .countdown, .unavailable:
+        case .camera, .web, .webVideo, .pdf, .black, .countdown, .unavailable:
             return nil
         }
     }

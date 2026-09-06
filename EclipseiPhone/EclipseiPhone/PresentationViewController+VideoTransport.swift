@@ -26,15 +26,30 @@ extension PresentationViewController {
     }
 
     /// Play/pause the AirPlay library video. Returns false when none is live.
+    ///
+    /// Play after the video finished restarts it from the top.
     @discardableResult
     func toggleLibraryVideoPlayback() -> Bool {
         guard let player else { return false }
         if player.timeControlStatus == .playing {
             player.pause()
-        } else {
-            player.play()
+            notifyVideoTransportChanged()
+            return true
         }
-        notifyVideoTransportChanged()
+        let atEnd = AirPlayVideoTransport.isAtEnd(
+            currentTime: player.currentTime().seconds,
+            duration: player.currentItem?.duration.seconds ?? .nan
+        )
+        guard atEnd else {
+            player.play()
+            notifyVideoTransportChanged()
+            return true
+        }
+        player.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero) {
+            [weak self, weak player] _ in
+            player?.play()
+            self?.notifyVideoTransportChanged()
+        }
         return true
     }
 

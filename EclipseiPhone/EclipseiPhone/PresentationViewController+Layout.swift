@@ -118,20 +118,39 @@ extension PresentationViewController {
         )
     }
 
+    /// How a web surface fills its host panel.
+    enum WebLayoutMode: Equatable {
+        /// Desktop logical viewport scaled up to the panel (generic bookmarks).
+        case desktopLogical
+        /// Host bounds are the CSS viewport (QuestPoll `/present`, video embeds).
+        case nativeViewport
+    }
+
+    /// Layout mode for a live page URL (or video shell with no navigable URL).
+    static func webLayoutMode(pageURL: URL?, isWebVideoShell: Bool = false) -> WebLayoutMode {
+        if isWebVideoShell { return .nativeViewport }
+        if let pageURL, QuestPollConfig.isPresentURL(pageURL) {
+            return .nativeViewport
+        }
+        return .desktopLogical
+    }
+
     /// Picks present-embed vs desktop logical layout from `pageURL`.
     static func applyWebLayout(
         to webView: UIView,
         in container: UIView,
         pageURL: URL?,
-        rotationDegrees: Double? = nil
+        rotationDegrees: Double? = nil,
+        isWebVideoShell: Bool = false
     ) {
-        if let pageURL, QuestPollConfig.isPresentURL(pageURL) {
+        switch webLayoutMode(pageURL: pageURL, isWebVideoShell: isWebVideoShell) {
+        case .nativeViewport:
             applyPresentEmbedLayout(
                 to: webView,
                 in: container,
                 rotationDegrees: rotationDegrees
             )
-        } else {
+        case .desktopLogical:
             applyWebOutputLayout(
                 to: webView,
                 in: container,

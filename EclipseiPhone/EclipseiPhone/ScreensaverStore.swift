@@ -31,6 +31,26 @@ final class ScreensaverStore {
     /// True when the active Screensaver is a loop (bundled or custom video).
     var isVideo: Bool { videoURL != nil }
 
+    /// True when the user replaced the Screensaver with their own video.
+    var hasCustomVideo: Bool { customKind == .video }
+
+    /// Crossfade preference for a custom video loop. Off by default so a clip that
+    /// already loops perfectly plays gaplessly; on blends the loop point for one that doesn't.
+    var isLoopCrossfadeEnabled: Bool {
+        get { UserDefaults.standard.bool(forKey: crossfadeKey) }
+        set {
+            guard newValue != isLoopCrossfadeEnabled else { return }
+            UserDefaults.standard.set(newValue, forKey: crossfadeKey)
+            NotificationCenter.default.post(name: Self.didChangeNotification, object: self)
+        }
+    }
+
+    /// Whether the active loop blends at its loop point. The bundled Eclipse loop
+    /// always blends; a custom video follows `isLoopCrossfadeEnabled`.
+    var crossfadesAtLoop: Bool {
+        hasCustomVideo ? isLoopCrossfadeEnabled : true
+    }
+
     /// Looping video URL when the active Screensaver is video (bundled or custom).
     var videoURL: URL? {
         switch customKind {
@@ -50,7 +70,7 @@ final class ScreensaverStore {
             return .image(imageFileURL, fill: true)
         case .video, .none:
             guard let url = videoURL else { return nil }
-            return .screensaver(url)
+            return .screensaver(url, crossfade: crossfadesAtLoop)
         }
     }
 
@@ -76,6 +96,7 @@ final class ScreensaverStore {
     private let imageFileURL: URL
     private let posterFileURL: URL
     private let kindKey = "EclipseTV.screensaver.customKind"
+    private let crossfadeKey = "EclipseTV.screensaver.loopCrossfade"
     private let logger = Logger(
         subsystem: "com.eclipseapp.ios", category: "ScreensaverStore"
     )

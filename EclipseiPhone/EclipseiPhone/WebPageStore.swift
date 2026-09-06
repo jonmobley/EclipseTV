@@ -86,7 +86,11 @@ final class WebPageStore {
         retainedPages.removeAll { $0.id == page.id }
         persist()
         scheduleSaveIfNeeded(id: page.id)
-        WarmWebSessionPool.shared.warmIfNeeded(for: page)
+        if page.videoLink != nil {
+            WebVideoPosterFetcher.shared.fetchIfNeeded(for: page)
+        } else {
+            WarmWebSessionPool.shared.warmIfNeeded(for: page)
+        }
         return page
     }
 
@@ -152,7 +156,11 @@ final class WebPageStore {
         retainedPages.removeAll { $0.id == id }
         pages.insert(retained, at: 0)
         persist()
-        WarmWebSessionPool.shared.warmIfNeeded(for: retained)
+        if retained.videoLink != nil {
+            WebVideoPosterFetcher.shared.fetchIfNeeded(for: retained)
+        } else {
+            WarmWebSessionPool.shared.warmIfNeeded(for: retained)
+        }
     }
 
     /// Removes the page from the History list.

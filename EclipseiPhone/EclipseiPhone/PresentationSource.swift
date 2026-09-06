@@ -15,16 +15,20 @@ struct PresentationSource: Equatable {
 
     enum Content: Equatable {
         /// A still image at `url` (a local file or an HTTPS URL). `fill` crops the image
-        /// to fill the panel instead of letterboxing it.
-        case image(url: URL, fill: Bool)
+        /// to fill the panel instead of letterboxing it. When `framing` is set, the panel
+        /// crops to that normalized rect and letterboxes the result instead.
+        case image(url: URL, fill: Bool, framing: MediaFraming?)
         /// A video at `url` (a local file or an HTTPS URL), with playback options.
         case video(url: URL, isLooping: Bool, isMuted: Bool)
-        /// Muted looping Screensaver; aspect-fill with a seamless crossfade at the loop.
-        case screensaver(url: URL)
+        /// Muted looping Screensaver, aspect-fill. `crossfade` blends the loop point;
+        /// otherwise the clip plays as a hard, gapless loop.
+        case screensaver(url: URL, crossfade: Bool)
         /// Live back-camera feed from `CameraManager` (AirPlay only).
         case camera
         /// A web page rendered full-bleed on the external display (AirPlay only).
         case web(URL)
+        /// YouTube / Vimeo embed played edge-to-edge (AirPlay only).
+        case webVideo(WebVideoLink)
         /// A PDF rendered full-bleed on the external display (AirPlay only).
         case pdf(URL)
         /// Solid black screen with no idle brand chrome.
@@ -56,8 +60,12 @@ struct PresentationSource: Equatable {
 
     // MARK: - Convenience builders
 
-    static func image(_ url: URL, fill: Bool = false) -> PresentationSource {
-        PresentationSource(content: .image(url: url, fill: fill))
+    static func image(
+        _ url: URL,
+        fill: Bool = false,
+        framing: MediaFraming? = nil
+    ) -> PresentationSource {
+        PresentationSource(content: .image(url: url, fill: fill, framing: framing))
     }
 
     static func video(
@@ -84,9 +92,11 @@ struct PresentationSource: Equatable {
         )
     }
 
-    /// Muted seamless-loop Screensaver for AirPlay presentation.
-    static func screensaver(_ url: URL) -> PresentationSource {
-        PresentationSource(content: .screensaver(url: url))
+    /// Muted looping Screensaver for AirPlay presentation.
+    ///
+    /// - Parameter crossfade: Blend the loop point (default) or play a hard, gapless loop.
+    static func screensaver(_ url: URL, crossfade: Bool = true) -> PresentationSource {
+        PresentationSource(content: .screensaver(url: url, crossfade: crossfade))
     }
 
     /// Live camera feed for AirPlay presentation.
@@ -97,6 +107,11 @@ struct PresentationSource: Equatable {
     /// Web page for AirPlay presentation.
     static func web(_ url: URL) -> PresentationSource {
         PresentationSource(content: .web(url))
+    }
+
+    /// YouTube / Vimeo embed for AirPlay presentation.
+    static func webVideo(_ link: WebVideoLink) -> PresentationSource {
+        PresentationSource(content: .webVideo(link))
     }
 
     /// PDF for AirPlay presentation.
@@ -121,7 +136,8 @@ struct PresentationSource: Equatable {
     /// Builds a source for a mirrored TV-library item, using the phone's local full-res
     /// copy when present and falling back to its thumbnail otherwise.
     ///
-    /// Stills carry Fit / Fill (`fill` when set, otherwise the item's `MediaFitSettings`).
+    /// Stills carry Fit / Fill (`fill` when set, otherwise the item's `MediaFitSettings`)
+    /// and any saved custom framing from `MediaFramingStore`.
     /// - Parameter startAt: Resume offset for video (0 = from the start).
     /// - Parameter fill: Slideshow-level framing override for stills.
     static func forLibraryItem(
@@ -142,6 +158,10 @@ struct PresentationSource: Equatable {
                 startAt: startAt
             )
         }
-        return .image(localURL, fill: fill ?? MediaFitSettings.isFill(forId: item.id))
+        return .image(
+            localURL,
+            fill: fill ?? MediaFitSettings.isFill(forId: item.id),
+            framing: MediaFramingStore.framing(forId: item.id)
+        )
     }
 }

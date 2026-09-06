@@ -21,4 +21,10 @@ struct WebPage: Codable, Equatable, Identifiable, Hashable {
         self.url = url
         self.createdAt = createdAt
     }
+
+    /// YouTube / Vimeo / direct-file video when the URL should play fullscreen.
+    ///
+    /// Derived at use time from `url` — never stored — so CloudKit and History
+    /// keep a single page shape.
+    var videoLink: WebVideoLink? { WebVideoLink(url: url) }
 }

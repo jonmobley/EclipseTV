@@ -202,6 +202,12 @@ extension LibraryGridViewController {
                 isBlackout: false, isLocked: isLiveOutputLocked, directorName: name
             )
         }
+        if mgr.isWebVideoLive, let pageId = mgr.liveWebVideoPageId {
+            return ShowLiveSnapshot(
+                showId: showId, liveItemId: pageId.uuidString, liveKind: .web,
+                isBlackout: false, isLocked: isLiveOutputLocked, directorName: name
+            )
+        }
         if mgr.isPDFLive, let docId = mgr.livePDFDocumentId {
             return ShowLiveSnapshot(
                 showId: showId, liveItemId: docId.uuidString, liveKind: .pdf,
@@ -253,9 +259,13 @@ extension LibraryGridViewController {
                 showsLiveBadge: true
             )
         case .web:
+            let page = snap.liveItemId
+                .flatMap(UUID.init(uuidString:))
+                .flatMap { WebPageStore.shared.page(id: $0) }
+            let isVideo = page?.videoLink != nil
             applyRemoteOverlayHeader(
                 title: remoteWebTitle(snap.liveItemId),
-                systemImage: "safari",
+                systemImage: isVideo ? "play.rectangle.fill" : "safari",
                 thumbnail: remoteWebThumb(snap.liveItemId)
             )
         case .pdf:

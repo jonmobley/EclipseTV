@@ -35,14 +35,13 @@ struct AudioAmbientPolicyTests {
         }
     }
 
-    @Test func preferenceYieldsToUnmutedWebPlay() throws {
-        let play = try #require(webEvent(action: "play", paused: false, muted: false))
-        let muted = try #require(webEvent(action: "play", paused: false, muted: true))
-        let paused = try #require(webEvent(action: "play", paused: true, muted: false))
+    @Test func preferenceYieldsToWebVideoEmbed() {
+        let link = WebVideoLink.youTube(id: "dQw4w9WgXcQ", startAt: 0)
         withPauseMusicForVideo(true) {
-            #expect(AudioAmbientPolicy.shouldYield(toWebMedia: play))
-            #expect(AudioAmbientPolicy.shouldYield(toWebMedia: muted) == false)
-            #expect(AudioAmbientPolicy.shouldYield(toWebMedia: paused) == false)
+            #expect(AudioAmbientPolicy.shouldYield(to: .webVideo(link)))
+        }
+        withPauseMusicForVideo(false) {
+            #expect(AudioAmbientPolicy.shouldYield(to: .webVideo(link)) == false)
         }
     }
 }

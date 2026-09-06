@@ -17,30 +17,47 @@ extension ExternalDisplayManager {
     )
 
     /// True when the external display is showing library video (player, no overlay).
-    var isLibraryVideoLive: Bool { libraryVideoPlayer != nil }
-
-    /// Phone-hero scrubber state. Empty when AirPlay is not on library video.
-    var libraryVideoPlaybackState: PlaybackState {
-        var state = libraryVideoPresentation?.libraryVideoPlaybackState ?? PlaybackState()
-        state.itemId = TVLibraryStore.shared.currentId
-        return state
+    var isLibraryVideoLive: Bool {
+        libraryVideoPlayer != nil || webVideoPresentation != nil
     }
 
-    /// Play/pause AirPlay library video. False when that player is not live.
+    /// Phone-hero scrubber state. Empty when AirPlay is not on library / web video.
+    var libraryVideoPlaybackState: PlaybackState {
+        if let presentation = libraryVideoPresentation {
+            var state = presentation.libraryVideoPlaybackState
+            state.itemId = TVLibraryStore.shared.currentId
+            return state
+        }
+        if let presentation = webVideoPresentation {
+            return presentation.webVideoPlaybackState
+        }
+        return PlaybackState()
+    }
+
+    /// Play/pause AirPlay library or web video. False when neither player is live.
     @discardableResult
     func toggleLibraryVideoPlayback() -> Bool {
-        libraryVideoPresentation?.toggleLibraryVideoPlayback() ?? false
+        if let presentation = libraryVideoPresentation {
+            return presentation.toggleLibraryVideoPlayback()
+        }
+        return webVideoPresentation?.toggleWebVideoPlayback() ?? false
     }
 
-    /// Relative skip on AirPlay library video.
+    /// Relative skip on AirPlay library or web video.
     @discardableResult
     func skipLibraryVideo(by delta: TimeInterval) -> Bool {
-        libraryVideoPresentation?.skipLibraryVideo(by: delta) ?? false
+        if let presentation = libraryVideoPresentation {
+            return presentation.skipLibraryVideo(by: delta)
+        }
+        return webVideoPresentation?.skipWebVideo(by: delta) ?? false
     }
 
-    /// Absolute seek on AirPlay library video.
+    /// Absolute seek on AirPlay library or web video.
     @discardableResult
     func seekLibraryVideo(to position: TimeInterval) -> Bool {
-        libraryVideoPresentation?.seekLibraryVideo(to: position) ?? false
+        if let presentation = libraryVideoPresentation {
+            return presentation.seekLibraryVideo(to: position)
+        }
+        return webVideoPresentation?.seekWebVideo(to: position) ?? false
     }
 }

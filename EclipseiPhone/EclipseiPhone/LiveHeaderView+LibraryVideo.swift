@@ -42,6 +42,7 @@ extension LiveHeaderView {
         if libraryVideoItemId == itemId, libraryVideoPlayer != nil {
             libraryVideoPlayer?.isMuted = isMuted
             libraryVideoIsLooping = isLooping
+            PresentationAudioSession.activateIfNeeded(muted: isMuted)
             setStaticPreviewHidden(true)
             setLibraryVideoFullscreenButtonVisible(true)
             bringLibraryVideoChromeToFront()
@@ -65,6 +66,8 @@ extension LiveHeaderView {
             host.trailingAnchor.constraint(equalTo: trailingAnchor)
         ])
         libraryVideoHost = host
+
+        PresentationAudioSession.activateIfNeeded(muted: isMuted)
 
         let player = AVPlayer(url: url)
         player.isMuted = isMuted
@@ -119,15 +122,31 @@ extension LiveHeaderView {
     }
 
     /// Toggles play/pause on the in-hero library video player.
+    ///
+    /// Play after the video finished restarts it from the top.
     @discardableResult
     func toggleLibraryVideoPlayback() -> Bool {
         guard let player = libraryVideoPlayer else { return false }
         if player.timeControlStatus == .playing {
             player.pause()
-        } else {
-            player.play()
+            pushLibraryVideoPlaybackToControls()
+            return true
         }
-        pushLibraryVideoPlaybackToControls()
+        PresentationAudioSession.activateIfNeeded(muted: player.isMuted)
+        let atEnd = AirPlayVideoTransport.isAtEnd(
+            currentTime: player.currentTime().seconds,
+            duration: player.currentItem?.duration.seconds ?? .nan
+        )
+        guard atEnd else {
+            player.play()
+            pushLibraryVideoPlaybackToControls()
+            return true
+        }
+        player.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero) {
+            [weak self, weak player] _ in
+            player?.play()
+            self?.pushLibraryVideoPlaybackToControls()
+        }
         return true
     }
 
@@ -186,6 +205,9 @@ extension LiveHeaderView {
             libraryVideoPlayer?.seek(
                 to: cm, toleranceBefore: .zero, toleranceAfter: .zero
             )
+        }
+        if let player = libraryVideoPlayer {
+            PresentationAudioSession.activateIfNeeded(muted: player.isMuted)
         }
         libraryVideoPlayer?.play()
         pushLibraryVideoPlaybackToControls()

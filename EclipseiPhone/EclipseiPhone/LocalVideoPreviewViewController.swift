@@ -77,6 +77,7 @@ final class LocalVideoPreviewViewController: AVPlayerViewController {
     // MARK: - Setup
 
     private func setupPlayer() {
+        PresentationAudioSession.activateIfNeeded(muted: isMuted)
         let item = AVPlayer(url: fileURL)
         item.isMuted = isMuted
         item.actionAtItemEnd = isLooping ? .none : .pause

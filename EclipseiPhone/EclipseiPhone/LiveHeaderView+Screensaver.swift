@@ -30,7 +30,9 @@ extension LiveHeaderView {
         clearWebPreview(parking: true)
         clearCameraPreview()
 
-        let preview = SeamlessLoopPlayerView(url: url)
+        let preview = SeamlessLoopPlayerView(
+            url: url, crossfadesAtLoop: ScreensaverStore.shared.crossfadesAtLoop
+        )
         preview.translatesAutoresizingMaskIntoConstraints = false
         preview.isUserInteractionEnabled = false
         insertSubview(preview, at: 0)

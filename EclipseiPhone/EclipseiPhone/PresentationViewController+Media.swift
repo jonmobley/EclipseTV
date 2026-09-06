@@ -37,14 +37,20 @@ extension PresentationViewController {
     /// Shows a still on the primary media surface.
     /// - Parameter fill: Crops the image to fill the panel instead of letterboxing it.
     ///   The Logo always fills regardless of this flag.
-    func showImage(at url: URL, fill: Bool) {
+    /// - Parameter framing: When set, crops to that rect and letterboxes the result.
+    func showImage(at url: URL, fill: Bool, framing: MediaFraming? = nil) {
         messageLabel.text = nil
         imageView.isHidden = false
         imageView.image = nil
         imageView.alpha = 1.0
-        imageView.contentMode = fill || LogoStore.shared.isLogoFileURL(url)
-            ? .scaleAspectFill
-            : .scaleAspectFit
+        let isLogo = LogoStore.shared.isLogoFileURL(url)
+        if framing != nil, !isLogo {
+            imageView.contentMode = .scaleAspectFit
+        } else {
+            imageView.contentMode = fill || isLogo
+                ? .scaleAspectFill
+                : .scaleAspectFit
+        }
         teardownScreensaver()
         showMediaContainer()
         activityIndicator.startAnimating()
@@ -52,8 +58,21 @@ extension PresentationViewController {
         if url.isFileURL {
             imageLoadGeneration += 1
             let generation = imageLoadGeneration
+            let maxEdge = PresentationImageDecoder.maxPixelEdge(
+                for: view.window?.windowScene?.screen
+            )
             DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-                let image = UIImage(contentsOfFile: url.path)
+                let decoded = PresentationImageDecoder.decode(
+                    fileURL: url,
+                    maxPixelEdge: maxEdge
+                )
+                let image: UIImage?
+                if let framing, let decoded, !isLogo {
+                    let crop = framing.rect(in: decoded.size)
+                    image = MediaAspect.crop(decoded, to: crop) ?? decoded
+                } else {
+                    image = decoded
+                }
                 DispatchQueue.main.async {
                     guard let self = self, generation == self.imageLoadGeneration else { return }
                     self.activityIndicator.stopAnimating()
@@ -62,8 +81,14 @@ extension PresentationViewController {
             }
         } else {
             imageRequest = RemoteImageLoader.shared.loadImage(from: url) { [weak self] image in
-                self?.activityIndicator.stopAnimating()
-                self?.imageView.image = image
+                guard let self else { return }
+                self.activityIndicator.stopAnimating()
+                if let framing, let image, !isLogo {
+                    let crop = framing.rect(in: image.size)
+                    self.imageView.image = MediaAspect.crop(image, to: crop) ?? image
+                } else {
+                    self.imageView.image = image
+                }
             }
         }
     }
@@ -94,11 +119,9 @@ extension PresentationViewController {
         }
 
         videoReadyObservation = nil
-        let player = AVPlayer(url: url)
-        player.isMuted = isMuted
-        player.actionAtItemEnd = isLooping ? .none : .pause
-        AirPlayVideoTransport.configureLayerOnlyPlayback(on: player)
-
+        let player = makePresentationPlayer(
+            url: url, isMuted: isMuted, isLooping: isLooping
+        )
         let layer = AVPlayerLayer(player: player)
         layer.videoGravity = .resizeAspect
         mediaContentView.layer.insertSublayer(layer, at: 0)
@@ -119,7 +142,28 @@ extension PresentationViewController {
             }
         }
 
-        AirPlayVideoTransport.start(player, at: startAt, autoplay: autoplay)
+        AirPlayVideoTransport.start(
+            player, at: startAt, autoplay: autoplay, url: url
+        )
+    }
+
+    /// Builds an `AVPlayer` from a prewarmed item when available, else from `url`.
+    func makePresentationPlayer(
+        url: URL,
+        isMuted: Bool,
+        isLooping: Bool
+    ) -> AVPlayer {
+        let player: AVPlayer
+        if let item = PresentationPrewarmer.shared.takeItem(matching: url) {
+            player = AVPlayer(playerItem: item)
+        } else {
+            player = AVPlayer(url: url)
+        }
+        player.isMuted = isMuted
+        player.actionAtItemEnd = isLooping ? .none : .pause
+        AirPlayVideoTransport.configureLayerOnlyPlayback(on: player)
+        AirPlayVideoTransport.configurePlaybackTiming(on: player, url: url)
+        return player
     }
 
     /// Moves the incoming overlay player onto the primary surface without rebuilding.
@@ -145,8 +189,10 @@ extension PresentationViewController {
         return true
     }
 
-    /// Plays the muted seamless-loop Screensaver (aspect fill).
-    func showScreensaver(at url: URL) {
+    /// Plays the muted looping Screensaver (aspect fill).
+    ///
+    /// - Parameter crossfade: Blend the loop point; false plays a hard, gapless loop.
+    func showScreensaver(at url: URL, crossfade: Bool = true) {
         messageLabel.text = nil
         imageView.isHidden = true
         activityIndicator.stopAnimating()
@@ -159,7 +205,7 @@ extension PresentationViewController {
         }
 
         teardownScreensaver()
-        let view = SeamlessLoopPlayerView(url: url)
+        let view = SeamlessLoopPlayerView(url: url, crossfadesAtLoop: crossfade)
         view.frame = mediaContentView.bounds
         view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         mediaContentView.insertSubview(view, at: 0)
@@ -183,16 +229,7 @@ extension PresentationViewController {
 
     /// Activates playback audio for AirPlay video / web media (no-op when muted).
     func configureAudioSession(muted: Bool) {
-        guard !muted else { return }
-        let session = AVAudioSession.sharedInstance()
-        do {
-            try session.setCategory(
-                .playback, mode: AudioAmbientPolicy.presentationAudioMode
-            )
-            try session.setActive(true)
-        } catch {
-            logger.error("Failed to configure audio session: \(error.localizedDescription)")
-        }
+        PresentationAudioSession.activateIfNeeded(muted: muted)
     }
 
     func teardownPlayer() {

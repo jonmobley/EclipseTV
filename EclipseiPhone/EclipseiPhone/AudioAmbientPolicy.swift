@@ -21,6 +21,9 @@ enum AudioAmbientPolicy {
         case .video(_, _, let isMuted):
             // Muted library video can sit under Background Music; audible video cannot.
             return !isMuted
+        case .webVideo:
+            // YouTube / Vimeo embeds are audible by default.
+            return true
         case .image, .screensaver, .camera, .web, .pdf, .black, .countdown, .unavailable:
             // Web yields later, when HTML5 media actually plays unmuted.
             return false
@@ -58,6 +61,14 @@ enum AudioAmbientPolicy {
     @MainActor
     static func applyYieldIfNeeded(forWebMedia event: EclipseWebMediaSync.Event) {
         guard shouldYield(toWebMedia: event) else { return }
+        AudioPlayerController.shared.pause()
+    }
+
+    /// Pauses ambient audio when a YouTube / Vimeo embed is playing unmuted.
+    @MainActor
+    static func applyYieldIfNeeded(forWebVideoPlaying playing: Bool, muted: Bool) {
+        guard ExternalOutputSettings.pauseMusicForVideo else { return }
+        guard playing, !muted else { return }
         AudioPlayerController.shared.pause()
     }
 }
