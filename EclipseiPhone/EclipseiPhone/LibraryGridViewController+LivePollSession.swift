@@ -5,6 +5,7 @@
 //  Copyright © 2026 Moxie LLC. All rights reserved.
 //
 
+import LivePollKit
 import SafariServices
 import UIKit
 
@@ -22,7 +23,7 @@ enum QuestPollPickerMode {
 
 extension LibraryGridViewController {
 
-    /// Opens questpoll.live/host in Safari for deck editing.
+    /// Opens the Live Poll host editor in Safari for deck editing.
     func presentQuestPollHostEditor() {
         let safari = SFSafariViewController(url: QuestPollConfig.hostURL)
         present(safari, animated: true)
@@ -32,15 +33,12 @@ extension LibraryGridViewController {
     func endQuestPollSession(clearAccount: Bool) async {
         stopQuestPollStatusPolling()
         livePollGateMembershipId = nil
-        let account = QuestPollAccount.shared
         if let session = QuestPollSessionStore.shared.session,
-           let pin = account.hostPIN {
+           LivePollAccountStore.isSignedIn {
             do {
-                _ = try await QuestPollClient().control(
+                _ = try await LivePollAccountStore.client().control(
                     joinCode: session.code,
-                    action: "end",
-                    pin: pin,
-                    hostId: account.hostId
+                    command: .end
                 )
             } catch {
                 // Room may already be gone; still clear local state.
@@ -48,7 +46,7 @@ extension LibraryGridViewController {
         }
         QuestPollSessionStore.shared.clear()
         if clearAccount {
-            account.unlink()
+            LivePollAccountStore.signOut()
         }
         if ExternalDisplayManager.shared.isQuestPollLive {
             ExternalDisplayManager.shared.stopWebAndRestoreLibrary()
@@ -74,23 +72,24 @@ extension LibraryGridViewController {
         present(alert, animated: true)
     }
 
-    // MARK: - PIN / picker / start
+    // MARK: - Sign-in / picker / start
 
-    /// Opens the deck list, prompting for a PIN when unlinked.
+    /// Opens the deck list, prompting for email sign-in when needed.
     func presentQuestPollPickerOrLink(mode: QuestPollPickerMode) {
-        if QuestPollAccount.shared.isLinked {
+        if LivePollAccountStore.isSignedIn {
             presentQuestPollPicker(mode: mode)
             return
         }
-        promptQuestPollPIN(mode: mode)
+        promptLivePollSignIn(mode: mode)
     }
 
-    func promptQuestPollPIN(mode: QuestPollPickerMode) {
-        let pin = QuestPollPINViewController()
-        let nav = UINavigationController(rootViewController: pin)
+    func promptLivePollSignIn(mode: QuestPollPickerMode) {
+        let migrate = LivePollAccountStore.prepareEmailSignInPrompt()
+        let signIn = LivePollSignInViewController(showsMigrationMessage: migrate)
+        let nav = UINavigationController(rootViewController: signIn)
         nav.modalPresentationStyle = .formSheet
-        nav.preferredContentSize = QuestPollPINViewController.sheetSize
-        pin.onLinked = { [weak self, weak nav] in
+        nav.preferredContentSize = LivePollSignInViewController.sheetSize
+        signIn.onSignedIn = { [weak self, weak nav] in
             guard let self, let nav else { return }
             nav.setViewControllers(
                 [self.makeQuestPollPicker(mode: mode)],
@@ -112,7 +111,7 @@ extension LibraryGridViewController {
         mode: QuestPollPickerMode
     ) -> QuestPollPickerViewController {
         let picker = QuestPollPickerViewController()
-        picker.onUnlink = { [weak self] in
+        picker.onSignOut = { [weak self] in
             Task { @MainActor in
                 await self?.endQuestPollSession(clearAccount: true)
             }
@@ -128,7 +127,7 @@ extension LibraryGridViewController {
         return picker
     }
 
-    func handleQuestPollPick(_ poll: QuestPollSummary, mode: QuestPollPickerMode) {
+    func handleQuestPollPick(_ poll: LivePollDeckSummary, mode: QuestPollPickerMode) {
         switch mode {
         case .add(let showId):
             let item = LivePollStore.shared.create(
@@ -167,8 +166,10 @@ extension LibraryGridViewController {
         Task { @MainActor [weak self] in
             guard let self else { return }
             let active = await self.fetchActiveQuestPoll()
-            let decision = QuestPollStartDecision.decide(
-                hasLocalSession: false, active: active, pollId: item.pollId
+            let decision = LivePollStartDecision.decide(
+                hasLocalSession: false,
+                active: active,
+                matchingDeckTitle: item.title
             )
             switch decision {
             case .start:
@@ -183,11 +184,11 @@ extension LibraryGridViewController {
 
     private func presentReplaceConfirm(
         for item: ShowLivePoll,
-        running: QuestPollSession?
+        running: LivePollSession?
     ) {
         let message: String
         if let running {
-            message = "\(running.pollTitle) is live in room \(running.code), "
+            message = "\(running.deckTitle) is live in room \(running.code), "
                 + "possibly from another device. End it and start \(item.title)?"
         } else {
             message = "Ends the current room and starts \(item.title)."
@@ -208,14 +209,11 @@ extension LibraryGridViewController {
         present(alert, animated: true)
     }
 
-    /// Server's active PIN room, or nil when none, unlinked, or unreachable.
-    private func fetchActiveQuestPoll() async -> QuestPollSession? {
-        guard let pin = QuestPollAccount.shared.hostPIN else { return nil }
+    /// Server's active account room, or nil when none, signed out, or unreachable.
+    private func fetchActiveQuestPoll() async -> LivePollSession? {
+        guard LivePollAccountStore.isSignedIn else { return nil }
         do {
-            return try await QuestPollClient().activeSession(
-                pin: pin,
-                hostId: QuestPollAccount.shared.hostId
-            )
+            return try await LivePollAccountStore.client().activeSession()
         } catch {
             return nil
         }
@@ -223,21 +221,27 @@ extension LibraryGridViewController {
 
     func startQuestPoll(_ item: ShowLivePoll) {
         guard ensureQuestPollDestination() else { return }
-        guard let pin = QuestPollAccount.shared.hostPIN else {
-            promptQuestPollPIN(mode: .start(item))
+        guard LivePollAccountStore.isSignedIn else {
+            promptLivePollSignIn(mode: .start(item))
             return
         }
         let busy = presentQuestPollBusy(message: "Starting…")
         Task { @MainActor [weak self] in
             do {
-                let session = try await QuestPollClient().startSession(
-                    pollId: item.pollId,
-                    pin: pin,
-                    hostId: QuestPollAccount.shared.hostId
+                let response = try await LivePollAccountStore.client().startSession(
+                    deckId: item.pollId
                 )
+                let session: LivePollSession
+                if let created = response.session {
+                    session = created
+                } else {
+                    session = try await LivePollAccountStore.client().fetchSession(
+                        joinCode: response.joinCode
+                    )
+                }
                 QuestPollSessionStore.shared.adopt(
                     session,
-                    questionCount: item.questionCount,
+                    questionCount: max(item.questionCount, session.questionCount),
                     membershipId: item.id
                 )
                 busy.dismiss(animated: true) {
@@ -253,11 +257,13 @@ extension LibraryGridViewController {
 
     /// Adopts a room already running `item`'s deck and goes live on it,
     /// instead of ending it. The card's own question count is the fallback
-    /// while the room is still in the lobby (no `totalQuestions` yet).
-    private func resumeQuestPoll(_ session: QuestPollSession, for item: ShowLivePoll) {
+    /// while the room is still in the lobby.
+    private func resumeQuestPoll(_ session: LivePollSession, for item: ShowLivePoll) {
         QuestPollSessionStore.shared.adopt(
             session,
-            questionCount: session.resolvedQuestionCount ?? item.questionCount,
+            questionCount: session.questionCount > 0
+                ? session.questionCount
+                : item.questionCount,
             membershipId: item.id
         )
         presentQuestPollLive()
@@ -271,35 +277,38 @@ extension LibraryGridViewController {
         guard store.session != nil, !store.isControlInFlight else { return }
         let current = store.ribbonIndex
         if index > current {
-            let actions = QuestPollRibbon.forwardActions(
+            let commands = QuestPollRibbon.forwardCommands(
                 from: current,
                 to: index,
                 questionCount: store.questionCount
             )
-            guard !actions.isEmpty else { return }
-            if actions.count > 1 {
-                confirmSkipAheadQuestPoll(to: index, actions: actions)
+            guard !commands.isEmpty else { return }
+            if commands.count > 1 {
+                confirmSkipAheadQuestPoll(to: index, commands: commands)
                 return
             }
-            sendQuestPollActions(actions)
+            sendQuestPollCommands(commands)
             return
         }
         if index < current {
-            let actions = QuestPollRibbon.backwardActions(
+            let commands = QuestPollRibbon.backwardCommands(
                 from: current,
                 to: index,
                 questionCount: store.questionCount
             )
-            if actions.isEmpty {
+            if commands.isEmpty {
                 showPresentationToast("Already on this cue")
                 return
             }
-            sendQuestPollActions(actions)
+            sendQuestPollCommands(commands)
             return
         }
     }
 
-    private func confirmSkipAheadQuestPoll(to index: Int, actions: [String]) {
+    private func confirmSkipAheadQuestPoll(
+        to index: Int,
+        commands: [LivePollHostCommand]
+    ) {
         let items = QuestPollSessionStore.shared.ribbonItems
         let label = items.indices.contains(index) ? items[index].title : "that cue"
         let alert = UIAlertController(
@@ -309,25 +318,23 @@ extension LibraryGridViewController {
         )
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         alert.addAction(UIAlertAction(title: "Skip", style: .default) { [weak self] _ in
-            self?.sendQuestPollActions(actions)
+            self?.sendQuestPollCommands(commands)
         })
         present(alert, animated: true)
     }
 
-    func sendQuestPollActions(_ actions: [String]) {
-        guard let pin = QuestPollAccount.shared.hostPIN else { return }
+    func sendQuestPollCommands(_ commands: [LivePollHostCommand]) {
+        guard LivePollAccountStore.isSignedIn else { return }
         QuestPollSessionStore.shared.setControlInFlight(true)
         Task { @MainActor [weak self] in
             defer { QuestPollSessionStore.shared.setControlInFlight(false) }
-            var remaining = actions
+            var remaining = commands
             while !remaining.isEmpty {
                 guard let session = QuestPollSessionStore.shared.session else { return }
                 do {
-                    let updated = try await QuestPollClient().control(
+                    let updated = try await LivePollAccountStore.client().control(
                         joinCode: session.code,
-                        action: remaining.removeFirst(),
-                        pin: pin,
-                        hostId: QuestPollAccount.shared.hostId
+                        command: remaining.removeFirst()
                     )
                     QuestPollSessionStore.shared.adopt(
                         updated,

@@ -6,20 +6,22 @@
 //
 
 import Foundation
+import LivePollKit
 
-/// Hosted QuestPoll origin and projector URL.
+/// Eclipse wrappers around `LivePollConfig` (Display Mode aspect + warm-pool pages).
 ///
 /// `/present` takes `aspect=16x9` or `aspect=9x16` from Display Mode. Companion
-/// hero and AirPlay fill the host 1:1; QuestPoll’s CSS stage scaler does the
+/// hero and AirPlay fill the host 1:1; the projector CSS stage scaler does the
 /// only shrink/fit.
 enum QuestPollConfig {
-    static let origin = URL(string: "https://questpoll.live")!
+    /// Unified Live Poll relay origin.
+    static var origin: URL { LivePollConfig.origin }
 
     /// Host console for editing decks (Safari deep link).
-    static let hostURL = origin.appendingPathComponent("host")
+    static var hostURL: URL { LivePollConfig.hostURL }
 
     /// Bare `/present` path. Query items (code, pollId, aspect) are added per URL.
-    private static let presentPath = origin.appendingPathComponent("present")
+    private static let presentPath = LivePollConfig.origin.appendingPathComponent("present")
 
     /// Display Mode for `/present`: Vertical is 9:16, Landscape is 16:9.
     static var presentAspectQueryItem: URLQueryItem {
@@ -39,16 +41,9 @@ enum QuestPollConfig {
         uuidString: "E0E0E0E0-0000-4000-8000-00000000C0DE"
     )!
 
-    /// Audience join page bound to a room code (`/?code=`).
+    /// Audience join page bound to a room code.
     static func joinURL(code: String) -> URL {
-        let trimmed = code.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty,
-              var components = URLComponents(
-                url: origin, resolvingAgainstBaseURL: false
-              )
-        else { return origin }
-        components.queryItems = [URLQueryItem(name: "code", value: trimmed)]
-        return components.url ?? origin
+        LivePollConfig.joinURL(code: code)
     }
 
     /// Projector URL bound to a join code when the web app honors `?code=`.
@@ -121,10 +116,9 @@ enum QuestPollConfig {
         )
     }
 
-    /// Whether `url` is the QuestPoll projector page (path may grow a slash).
+    /// Whether `url` is the Live Poll projector page (path may grow a slash).
     static func isPresentURL(_ url: URL) -> Bool {
-        url.host?.lowercased() == origin.host
-            && url.path.hasPrefix("/present")
+        LivePollConfig.isPresentURL(url)
     }
 
     /// `/present` plus `items`, always ending with Display Mode `aspect=`.

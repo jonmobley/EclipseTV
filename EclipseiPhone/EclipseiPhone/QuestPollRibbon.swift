@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import LivePollKit
 
 /// One cue in the live-poll ribbon: Join, then Question / Results per item.
 struct QuestPollRibbonItem: Equatable {
@@ -20,12 +21,12 @@ struct QuestPollRibbonItem: Equatable {
     var systemImage: String
 }
 
-/// Builds and advances the Live Poll ribbon from session status.
+/// Builds and advances the Live Poll ribbon from session phase.
 enum QuestPollRibbon {
 
     /// Join / Question / Results strip while the poll is on program, in
-    /// Practice, or on the Start gate. A leftover QuestPoll room after the
-    /// user switched to a photo is not `liveRoomActive`.
+    /// Practice, or on the Start gate. A leftover room after the user switched
+    /// to a photo is not `liveRoomActive`.
     static func shouldShow(
         isShowMode: Bool,
         liveRoomActive: Bool,
@@ -72,81 +73,79 @@ enum QuestPollRibbon {
 
     /// Ribbon index for `session` (Join while in the lobby).
     static func currentIndex(
-        status: String,
+        phase: LivePollPhase,
         questionIndex: Int,
         questionCount: Int
     ) -> Int {
         let items = items(questionCount: questionCount)
-        let kind = kind(status: status, questionIndex: questionIndex, count: questionCount)
+        let kind = kind(phase: phase, questionIndex: questionIndex, count: questionCount)
         return items.firstIndex { $0.kind == kind } ?? 0
     }
 
-    /// Host control actions to walk forward from `currentIndex` to `targetIndex`.
-    static func forwardActions(
+    /// Host commands to walk forward from `currentIndex` to `targetIndex`.
+    static func forwardCommands(
         from currentIndex: Int,
         to targetIndex: Int,
         questionCount: Int
-    ) -> [String] {
+    ) -> [LivePollHostCommand] {
         guard targetIndex > currentIndex else { return [] }
         let items = items(questionCount: questionCount)
         let last = items.count - 1
-        var actions: [String] = []
+        var commands: [LivePollHostCommand] = []
         var index = currentIndex
         while index < targetIndex, items.indices.contains(index) {
-            guard let action = forwardAction(from: items[index], isLast: index == last)
+            guard let command = forwardCommand(from: items[index], isLast: index == last)
             else { break }
-            actions.append(action)
+            commands.append(command)
             index += 1
         }
-        return actions
+        return commands
     }
 
-    /// Host control actions to walk backward (`prev`) from `currentIndex` to `target`.
-    static func backwardActions(
+    /// Host commands to walk backward (`prev`) from `currentIndex` to `target`.
+    static func backwardCommands(
         from currentIndex: Int,
         to targetIndex: Int,
         questionCount: Int
-    ) -> [String] {
+    ) -> [LivePollHostCommand] {
         guard targetIndex < currentIndex else { return [] }
-        var actions: [String] = []
+        var commands: [LivePollHostCommand] = []
         var index = currentIndex
         while index > targetIndex {
-            actions.append("prev")
+            commands.append(.prev)
             index -= 1
         }
-        return actions
+        return commands
     }
 
     // MARK: - Private
 
     private static func kind(
-        status: String,
+        phase: LivePollPhase,
         questionIndex: Int,
         count: Int
     ) -> QuestPollRibbonItem.Kind {
         let clamped = min(max(questionIndex, 0), max(count - 1, 0))
-        switch status.lowercased() {
-        case "lobby", "join", "waiting":
+        switch phase {
+        case .lobby:
             return .join
-        case "results", "reveal", "score":
+        case .reveal, .leaderboard:
             return .results(clamped)
-        case "ended", "complete", "done":
+        case .ended:
             return .results(max(count - 1, 0))
-        case "voting", "locked", "question":
-            return .question(clamped)
-        default:
+        case .questionOpen, .locked:
             return .question(clamped)
         }
     }
 
-    private static func forwardAction(
+    private static func forwardCommand(
         from item: QuestPollRibbonItem,
         isLast: Bool
-    ) -> String? {
+    ) -> LivePollHostCommand? {
         switch item.kind {
-        case .join: return "start"
-        case .question: return "results"
-        case .results: return isLast ? nil : "next"
+        case .join: return .startQuestion(index: 0)
+        case .question: return .reveal
+        case .results: return isLast ? nil : .next
         }
     }
 }

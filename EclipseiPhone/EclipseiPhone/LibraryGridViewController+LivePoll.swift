@@ -128,7 +128,7 @@ extension LibraryGridViewController {
         liveHeader.hideLivePollGate()
         let code = QuestPollSessionStore.shared.session?.code
         let page = QuestPollConfig.previewPage(code: code)
-        let title = QuestPollSessionStore.shared.session?.pollTitle ?? "Live Poll"
+        let title = QuestPollSessionStore.shared.session?.deckTitle ?? "Live Poll"
         let canShow = !WarmWebSessionPool.shared.isAdopted(pageId: page.id)
         if canShow {
             WarmWebSessionPool.shared.warmIfNeeded(for: page)
@@ -352,8 +352,8 @@ extension LibraryGridViewController {
             return
         }
         let nav = QuestPollHostViewController.makeNavigation(
-            onAdvance: { [weak self] action in
-                self?.sendQuestPollActions([action])
+            onAdvance: { [weak self] command in
+                self?.sendQuestPollCommands([command])
             },
             onEnd: { [weak self] in
                 self?.confirmEndQuestPoll()

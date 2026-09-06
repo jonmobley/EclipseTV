@@ -5,6 +5,7 @@
 //  Copyright © 2026 Moxie LLC. All rights reserved.
 //
 
+import LivePollKit
 import UIKit
 
 // MARK: - Status polling / busy chrome
@@ -23,17 +24,15 @@ extension LibraryGridViewController {
                 // check: stop polling once the grid is gone.
                 guard self != nil, !Task.isCancelled else { return }
                 guard let session = QuestPollSessionStore.shared.session,
-                      let pin = QuestPollAccount.shared.hostPIN,
+                      LivePollAccountStore.isSignedIn,
                       !QuestPollSessionStore.shared.isControlInFlight
                 else {
                     if QuestPollSessionStore.shared.session == nil { return }
                     continue
                 }
                 do {
-                    let updated = try await QuestPollClient().fetchSession(
-                        joinCode: session.code,
-                        pin: pin,
-                        hostId: QuestPollAccount.shared.hostId
+                    let updated = try await LivePollAccountStore.client().fetchSession(
+                        joinCode: session.code
                     )
                     QuestPollSessionStore.shared.adopt(updated)
                 } catch {
@@ -69,10 +68,10 @@ extension LibraryGridViewController {
     }
 
     func presentQuestPollError(_ error: Error) {
-        let message = (error as? QuestPollError)?.userMessage
+        let message = (error as? LivePollError)?.userMessage
             ?? "Could not start the poll."
         let alert = UIAlertController(
-            title: "QuestPoll", message: message, preferredStyle: .alert
+            title: "Live Poll", message: message, preferredStyle: .alert
         )
         alert.addAction(UIAlertAction(title: "OK", style: .default))
         present(alert, animated: true)

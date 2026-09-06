@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import LivePollKit
 import Testing
 @testable import EclipseiPhone
 
@@ -29,7 +30,7 @@ struct QuestPollRibbonTests {
     @Test func lobbyIsJoinCue() {
         #expect(
             QuestPollRibbon.currentIndex(
-                status: "lobby", questionIndex: 0, questionCount: 3
+                phase: .lobby, questionIndex: 0, questionCount: 3
             ) == 0
         )
     }
@@ -37,7 +38,7 @@ struct QuestPollRibbonTests {
     @Test func liveQuestionMapsToQuestionCue() {
         #expect(
             QuestPollRibbon.currentIndex(
-                status: "question", questionIndex: 1, questionCount: 3
+                phase: .questionOpen, questionIndex: 1, questionCount: 3
             ) == 3
         )
     }
@@ -45,38 +46,38 @@ struct QuestPollRibbonTests {
     @Test func resultsMapsToResultsCue() {
         #expect(
             QuestPollRibbon.currentIndex(
-                status: "results", questionIndex: 0, questionCount: 3
+                phase: .reveal, questionIndex: 0, questionCount: 3
             ) == 2
         )
     }
 
     @Test func forwardFromJoinToFirstQuestionIsStart() {
         #expect(
-            QuestPollRibbon.forwardActions(
+            QuestPollRibbon.forwardCommands(
                 from: 0, to: 1, questionCount: 2
-            ) == ["start"]
+            ) == [.startQuestion(index: 0)]
         )
     }
 
-    @Test func forwardFromQuestionToItsResultsIsResults() {
+    @Test func forwardFromQuestionToItsResultsIsReveal() {
         #expect(
-            QuestPollRibbon.forwardActions(
+            QuestPollRibbon.forwardCommands(
                 from: 1, to: 2, questionCount: 2
-            ) == ["results"]
+            ) == [.reveal]
         )
     }
 
     @Test func jumpJoinToSecondQuestionChains() {
         #expect(
-            QuestPollRibbon.forwardActions(
+            QuestPollRibbon.forwardCommands(
                 from: 0, to: 3, questionCount: 2
-            ) == ["start", "results", "next"]
+            ) == [.startQuestion(index: 0), .reveal, .next]
         )
     }
 
-    @Test func forwardBackwardProducesNoActions() {
+    @Test func forwardBackwardProducesNoCommands() {
         #expect(
-            QuestPollRibbon.forwardActions(
+            QuestPollRibbon.forwardCommands(
                 from: 2, to: 0, questionCount: 2
             ).isEmpty
         )
@@ -84,23 +85,23 @@ struct QuestPollRibbonTests {
 
     @Test func backwardFromResultsToQuestionIsPrev() {
         #expect(
-            QuestPollRibbon.backwardActions(
+            QuestPollRibbon.backwardCommands(
                 from: 2, to: 1, questionCount: 2
-            ) == ["prev"]
+            ) == [.prev]
         )
     }
 
     @Test func backwardFromQuestionToJoinChainsPrev() {
         #expect(
-            QuestPollRibbon.backwardActions(
+            QuestPollRibbon.backwardCommands(
                 from: 1, to: 0, questionCount: 2
-            ) == ["prev"]
+            ) == [.prev]
         )
     }
 
     @Test func backwardOnJoinIsEmpty() {
         #expect(
-            QuestPollRibbon.backwardActions(
+            QuestPollRibbon.backwardCommands(
                 from: 0, to: 0, questionCount: 2
             ).isEmpty
         )
@@ -125,7 +126,6 @@ struct QuestPollRibbonTests {
             isPracticing: false,
             isGated: false
         ))
-        // A leftover QuestPoll room after switching to a photo is not live.
         #expect(QuestPollRibbon.shouldShow(
             isShowMode: true,
             liveRoomActive: false,

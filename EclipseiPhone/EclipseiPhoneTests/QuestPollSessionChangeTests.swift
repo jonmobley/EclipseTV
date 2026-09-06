@@ -6,13 +6,14 @@
 //
 
 import Foundation
+import LivePollKit
 import Testing
 @testable import EclipseiPhone
 
 struct QuestPollSessionChangeTests {
 
     @Test func identicalSnapshotsAreNone() {
-        let session = makeSession(status: "lobby", questionIndex: 0, voteCount: 2)
+        let session = makeSession(phase: .lobby, questionIndex: 0, answeredCount: 2)
         let snap = QuestPollSessionSnapshot(
             session: session,
             membershipId: UUID(),
@@ -25,21 +26,21 @@ struct QuestPollSessionChangeTests {
     @Test func questionPayloadOnlyIsNone() {
         let membership = UUID()
         let old = QuestPollSessionSnapshot(
-            session: makeSession(status: "question", questionIndex: 0, voteCount: 2),
+            session: makeSession(phase: .questionOpen, questionIndex: 0, answeredCount: 2),
             membershipId: membership,
             questionCount: 3,
             practiceMembershipId: nil
         )
         let new = QuestPollSessionSnapshot(
             session: makeSession(
-                status: "question",
+                phase: .questionOpen,
                 questionIndex: 0,
-                voteCount: 2,
-                question: QuestPollQuestion(
+                answeredCount: 2,
+                question: LivePollPublicQuestion(
                     id: "q1",
-                    text: "How long?",
-                    index: 0,
-                    totalQuestions: 3
+                    prompt: "How long?",
+                    options: [],
+                    timeLimitSeconds: 30
                 )
             ),
             membershipId: membership,
@@ -49,16 +50,16 @@ struct QuestPollSessionChangeTests {
         #expect(QuestPollSessionChange.classify(from: old, to: new) == .none)
     }
 
-    @Test func voteOnlyChangeIsTile() {
+    @Test func answerOnlyChangeIsTile() {
         let membership = UUID()
         let old = QuestPollSessionSnapshot(
-            session: makeSession(status: "question", questionIndex: 0, voteCount: 1),
+            session: makeSession(phase: .questionOpen, questionIndex: 0, answeredCount: 1),
             membershipId: membership,
             questionCount: 3,
             practiceMembershipId: nil
         )
         let new = QuestPollSessionSnapshot(
-            session: makeSession(status: "question", questionIndex: 0, voteCount: 4),
+            session: makeSession(phase: .questionOpen, questionIndex: 0, answeredCount: 4),
             membershipId: membership,
             questionCount: 3,
             practiceMembershipId: nil
@@ -66,16 +67,16 @@ struct QuestPollSessionChangeTests {
         #expect(QuestPollSessionChange.classify(from: old, to: new) == .tile)
     }
 
-    @Test func statusCueChangeIsCue() {
+    @Test func phaseCueChangeIsCue() {
         let membership = UUID()
         let old = QuestPollSessionSnapshot(
-            session: makeSession(status: "lobby", questionIndex: 0, voteCount: 0),
+            session: makeSession(phase: .lobby, questionIndex: 0, answeredCount: 0),
             membershipId: membership,
             questionCount: 3,
             practiceMembershipId: nil
         )
         let new = QuestPollSessionSnapshot(
-            session: makeSession(status: "question", questionIndex: 0, voteCount: 0),
+            session: makeSession(phase: .questionOpen, questionIndex: 0, answeredCount: 0),
             membershipId: membership,
             questionCount: 3,
             practiceMembershipId: nil
@@ -92,7 +93,7 @@ struct QuestPollSessionChangeTests {
             practiceMembershipId: nil
         )
         let new = QuestPollSessionSnapshot(
-            session: makeSession(status: "lobby", questionIndex: 0, voteCount: 0),
+            session: makeSession(phase: .lobby, questionIndex: 0, answeredCount: 0),
             membershipId: membership,
             questionCount: 3,
             practiceMembershipId: nil
@@ -103,7 +104,7 @@ struct QuestPollSessionChangeTests {
     @Test @MainActor
     func adoptSkipsNotifyWhenUnchanged() {
         let store = QuestPollSessionStore()
-        let session = makeSession(status: "lobby", questionIndex: 0, voteCount: 0)
+        let session = makeSession(phase: .lobby, questionIndex: 0, answeredCount: 0)
         let first = store.adopt(session, questionCount: 2, membershipId: UUID())
         #expect(first == .session)
 
@@ -125,24 +126,19 @@ struct QuestPollSessionChangeTests {
     // MARK: - Fixtures
 
     private func makeSession(
-        status: String,
+        phase: LivePollPhase,
         questionIndex: Int,
-        voteCount: Int,
-        question: QuestPollQuestion? = nil
-    ) -> QuestPollSession {
-        QuestPollSession(
-            id: "sess-1",
-            code: "ABCD",
-            pollId: "poll-1",
-            pollTitle: "Session 1",
-            mode: "live",
-            status: status,
+        answeredCount: Int,
+        question: LivePollPublicQuestion? = nil
+    ) -> LivePollSession {
+        LivePollSession(
+            phase: phase,
+            joinCode: "ABCD",
+            deckTitle: "Session 1",
             questionIndex: questionIndex,
-            voteCount: voteCount,
-            isHost: true,
-            isController: true,
+            questionCount: 3,
             question: question,
-            joinQrVisible: nil
+            answeredCount: answeredCount
         )
     }
 }

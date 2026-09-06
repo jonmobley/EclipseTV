@@ -229,9 +229,10 @@ final class LibraryGridViewController: UIViewController {
             && !isSelecting
     }
 
-    /// Live slideshow or Live Poll ribbon is on for the open Show.
+    /// Live slideshow, Live Poll, or countdown ribbon is on for the open Show.
     var showsLiveSlideshowRibbon: Bool {
         if showsLivePollRibbon { return true }
+        if showsCountdownRibbon { return true }
         guard isShowMode,
               let id = SlideshowPlaybackController.shared.activeSlideshowId,
               let show = SlideshowStore.shared.slideshow(id: id),

@@ -5,22 +5,23 @@
 //  Copyright © 2026 Moxie LLC. All rights reserved.
 //
 
+import LivePollKit
 import UIKit
 
-/// Lists QuestPoll decks after the host PIN is linked.
+/// Lists account decks (Poll and Quiz) after email sign-in.
 final class QuestPollPickerViewController: UITableViewController {
 
-    var onPick: ((QuestPollSummary) -> Void)?
-    var onUnlink: (() -> Void)?
+    var onPick: ((LivePollDeckSummary) -> Void)?
+    var onSignOut: (() -> Void)?
     var onEditHost: (() -> Void)?
 
-    private let client: QuestPollClient
-    private var polls: [QuestPollSummary] = []
+    private let client: LivePollClient
+    private var polls: [LivePollDeckSummary] = []
     private var loadError: String?
     private var isLoading = true
 
-    /// - Parameter client: Injected for tests; production talks to questpoll.live.
-    init(client: QuestPollClient = QuestPollClient()) {
+    /// - Parameter client: Injected for tests; production uses the account token.
+    init(client: LivePollClient = LivePollAccountStore.client()) {
         self.client = client
         super.init(style: .insetGrouped)
     }
@@ -38,10 +39,10 @@ final class QuestPollPickerViewController: UITableViewController {
         )
         navigationItem.rightBarButtonItems = [
             UIBarButtonItem(
-                title: "Unlink",
+                title: "Sign Out",
                 style: .plain,
                 target: self,
-                action: #selector(unlinkTapped)
+                action: #selector(signOutTapped)
             ),
             UIBarButtonItem(
                 title: "Edit",
@@ -61,8 +62,8 @@ final class QuestPollPickerViewController: UITableViewController {
         dismiss(animated: true)
     }
 
-    @objc private func unlinkTapped() {
-        onUnlink?()
+    @objc private func signOutTapped() {
+        onSignOut?()
         dismiss(animated: true)
     }
 
@@ -77,9 +78,7 @@ final class QuestPollPickerViewController: UITableViewController {
         Task { @MainActor [weak self] in
             guard let self else { return }
             do {
-                let pin = QuestPollAccount.shared.hostPIN
-                let hostId = pin.map { _ in QuestPollAccount.shared.hostId }
-                self.polls = try await self.client.listPolls(pin: pin, hostId: hostId)
+                self.polls = try await self.client.listDecks()
             } catch {
                 self.polls = []
                 self.loadError = Self.message(for: error)
@@ -107,13 +106,14 @@ final class QuestPollPickerViewController: UITableViewController {
         if let loadError {
             content.text = loadError
         } else if isLoading {
-            content.text = "Loading polls…"
+            content.text = "Loading decks…"
         } else if polls.isEmpty {
-            content.text = "No polls on this account yet."
+            content.text = "No decks on this account yet."
         } else {
             let poll = polls[indexPath.row]
             content.text = poll.title
-            content.secondaryText = "\(poll.questionCount) questions"
+            let modeLabel = poll.mode == .quiz ? "Quiz" : "Poll"
+            content.secondaryText = "\(modeLabel) · \(poll.questionCount) questions"
             cell.accessoryType = .disclosureIndicator
             cell.selectionStyle = .default
         }
@@ -131,14 +131,9 @@ final class QuestPollPickerViewController: UITableViewController {
     }
 
     private static func message(for error: Error) -> String {
-        if let poll = error as? QuestPollError {
-            switch poll {
-            case .invalidPIN: return "That PIN is wrong."
-            case .server(let text): return text
-            case .decoding: return "Could not read polls."
-            case .transport: return "Could not reach questpoll.live."
-            }
+        if let poll = error as? LivePollError {
+            return poll.userMessage
         }
-        return "Could not load polls."
+        return "Could not load decks."
     }
 }
