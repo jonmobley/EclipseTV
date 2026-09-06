@@ -78,6 +78,11 @@ extension UIViewController {
         }
     }
 
+    /// Clears any on-screen presentation toast (e.g. after a long download).
+    func removePresentationToastIfPresent() {
+        removePresentationToast()
+    }
+
 }
 
 // MARK: - View
@@ -91,7 +96,7 @@ private final class PresentationToastView: UIView {
         accessibilityLabel = message
         isAccessibilityElement = true
         backgroundColor = UIColor.secondarySystemBackground.withAlphaComponent(0.96)
-        layer.cornerRadius = 14
+        layer.applyContinuousCorner(radius: CornerRadii.standard)
         layer.masksToBounds = true
 
         let label = UILabel()

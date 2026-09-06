@@ -128,7 +128,7 @@ struct RemoteControlView: View {
             Image(systemName: "moon.fill")
                 .font(.system(size: 20, weight: .regular))
                 .foregroundStyle(isOn ? Color.white : Color.primary)
-                .frame(width: 36, height: 36)
+                .frame(width: 44, height: 44)
                 .background(
                     Capsule(style: .continuous)
                         .fill(isOn ? Color.accentColor : Color.clear)

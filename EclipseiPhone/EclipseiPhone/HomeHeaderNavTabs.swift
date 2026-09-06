@@ -117,7 +117,7 @@ final class HomeHeaderNavTabs: UIView {
             stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
             stack.topAnchor.constraint(equalTo: topAnchor),
             stack.bottomAnchor.constraint(equalTo: bottomAnchor),
-            heightAnchor.constraint(equalToConstant: 36)
+            heightAnchor.constraint(equalToConstant: 44)
         ])
 
         registerForTraitChanges([UITraitUserInterfaceStyle.self]) {
@@ -127,7 +127,7 @@ final class HomeHeaderNavTabs: UIView {
     }
 
     private func makeTabButton(_ destination: HomeHeaderDestination) -> UIButton {
-        let button = UIButton(type: .system)
+        let button = MinimumHitTargetButton(type: .system)
         button.accessibilityIdentifier = destination.accessibilityIdentifier
         button.addAction(UIAction { [weak self] _ in
             self?.onSelect?(destination)

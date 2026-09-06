@@ -20,6 +20,7 @@ extension PresentationViewController {
         badge.layer.cornerRadius = 14
         badge.clipsToBounds = true
         badge.isHidden = true
+        badge.applyReduceTransparencyFallback(opaqueFill: UIColor(white: 0.12, alpha: 1))
 
         let icon = UIImageView(image: UIImage(systemName: "music.note"))
         icon.tintColor = .white

@@ -38,7 +38,7 @@ extension LiveHeaderView {
         config.contentInsets = NSDirectionalEdgeInsets(
             top: 8, leading: 8, bottom: 8, trailing: 8
         )
-        let button = UIButton(configuration: config)
+        let button = MinimumHitTargetButton(configuration: config)
         button.backgroundColor = UIColor.black.withAlphaComponent(0.45)
         button.layer.cornerRadius = 18
         button.clipsToBounds = true

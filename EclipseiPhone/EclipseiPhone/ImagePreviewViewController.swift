@@ -67,7 +67,7 @@ final class ImagePreviewViewController: UIViewController {
         button.titleLabel?.font = UIFont.systemFont(ofSize: 18, weight: .medium)
         button.setTitleColor(.systemRed, for: .normal)
         button.backgroundColor = UIColor.systemRed.withAlphaComponent(0.1)
-        button.layer.cornerRadius = 25
+        button.layer.applyContinuousCorner(radius: CornerRadii.large)
         return button
     }()
 
@@ -76,7 +76,7 @@ final class ImagePreviewViewController: UIViewController {
         button.titleLabel?.font = UIFont.systemFont(ofSize: 18, weight: .medium)
         button.setTitleColor(.white, for: .normal)
         button.backgroundColor = .systemBlue
-        button.layer.cornerRadius = 25
+        button.layer.applyContinuousCorner(radius: CornerRadii.large)
         return button
     }()
 

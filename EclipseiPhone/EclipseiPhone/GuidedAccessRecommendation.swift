@@ -12,8 +12,8 @@ enum GuidedAccessRecommendation {
 
     static let settingsHeader = "Recommendations"
     static let rowTitle = "Guided Access"
-    static let statusOn = "On"
-    static let statusOff = "Off"
+    static let statusSessionActive = "Session active"
+    static let statusNoSession = "Not in a session"
 
     static let settingsFooter =
         "Turn on Guided Access in Settings → Accessibility before you present. "
@@ -35,8 +35,10 @@ enum GuidedAccessRecommendation {
         "Triple-click again and enter the passcode when you’re done presenting.",
     ]
 
-    /// "On" when a Guided Access session is active on this device.
+    /// Reflects whether a Guided Access session is running right now. iOS gives
+    /// apps no way to read the Settings → Accessibility toggle itself, so the
+    /// wording deliberately avoids "On"/"Off".
     static var statusText: String {
-        UIAccessibility.isGuidedAccessEnabled ? statusOn : statusOff
+        UIAccessibility.isGuidedAccessEnabled ? statusSessionActive : statusNoSession
     }
 }

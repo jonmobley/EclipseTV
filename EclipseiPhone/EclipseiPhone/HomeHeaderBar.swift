@@ -25,19 +25,19 @@ final class HomeHeaderBar: UIView {
 
     // MARK: - Subviews
 
-    private let backButton = UIButton(type: .system)
+    private let backButton = MinimumHitTargetButton(type: .system)
     private let leadingNavStack = UIStackView()
     private let menuPill = UIView()
-    private let libraryButton = UIButton(type: .system)
+    private let libraryButton = MinimumHitTargetButton(type: .system)
     private let navTabs = HomeHeaderNavTabs()
     private let trailingStack = UIStackView()
-    private let lockButton = UIButton(type: .system)
-    private let blackButton = UIButton(type: .system)
-    private let settingsButton = UIButton(type: .system)
-    private let addButton = UIButton(type: .system)
-    private let newShowButton = UIButton(type: .system)
+    private let lockButton = MinimumHitTargetButton(type: .system)
+    private let blackButton = MinimumHitTargetButton(type: .system)
+    private let settingsButton = MinimumHitTargetButton(type: .system)
+    private let addButton = MinimumHitTargetButton(type: .system)
+    private let newShowButton = MinimumHitTargetButton(type: .system)
     private let doneButton = ArrangeDoneButton()
-    private let selectActionsButton = UIButton(type: .system)
+    private let selectActionsButton = MinimumHitTargetButton(type: .system)
 
     /// Invoked when the Settings control is tapped.
     var onOpenSettings: (() -> Void)?
@@ -263,7 +263,7 @@ final class HomeHeaderBar: UIView {
 
             leadingSafe,
             leadingNavStack.centerYAnchor.constraint(equalTo: centerYAnchor),
-            leadingNavStack.heightAnchor.constraint(equalToConstant: 36),
+            leadingNavStack.heightAnchor.constraint(equalToConstant: 44),
 
             menuPill.heightAnchor.constraint(equalToConstant: 36),
 

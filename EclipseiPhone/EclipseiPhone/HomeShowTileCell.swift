@@ -135,12 +135,14 @@ final class HomeShowTileCell: UICollectionViewCell {
         scrimView.translatesAutoresizingMaskIntoConstraints = false
         cardView.addSubview(scrimView)
 
-        titleLabel.font = .systemFont(ofSize: 17, weight: .semibold)
+        let titleBase = UIFont.systemFont(ofSize: 17, weight: .semibold)
+        titleLabel.font = UIFontMetrics(forTextStyle: .headline).scaledFont(for: titleBase)
         titleLabel.adjustsFontForContentSizeCategory = true
         titleLabel.textColor = .label
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
 
-        subtitleLabel.font = .systemFont(ofSize: 13, weight: .regular)
+        let subtitleBase = UIFont.systemFont(ofSize: 13, weight: .regular)
+        subtitleLabel.font = UIFontMetrics(forTextStyle: .footnote).scaledFont(for: subtitleBase)
         subtitleLabel.adjustsFontForContentSizeCategory = true
         subtitleLabel.textColor = .secondaryLabel
         subtitleLabel.numberOfLines = 2

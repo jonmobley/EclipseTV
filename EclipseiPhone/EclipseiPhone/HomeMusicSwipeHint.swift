@@ -22,7 +22,7 @@ final class HomeMusicSwipeHint: UIView {
     private let titleLabel = UILabel()
     private let subtitleLabel = UILabel()
     private let textStack = UIStackView()
-    private let dismissButton = UIButton(type: .system)
+    private let dismissButton = MinimumHitTargetButton(type: .system)
     private var musicPagingAvailable = true
 
     override init(frame: CGRect) {
@@ -37,21 +37,24 @@ final class HomeMusicSwipeHint: UIView {
 
     private func setup() {
         backgroundColor = .clear
-        layer.cornerRadius = 22
-        layer.cornerCurve = .continuous
+        layer.applyContinuousCorner(radius: CornerRadii.large)
         clipsToBounds = false
         layer.shadowColor = UIColor.black.cgColor
         layer.shadowOpacity = 0.35
         layer.shadowRadius = 18
         layer.shadowOffset = CGSize(width: 0, height: 8)
 
-        blurView.layer.cornerRadius = 22
-        blurView.layer.cornerCurve = .continuous
+        blurView.layer.applyContinuousCorner(radius: CornerRadii.large)
         blurView.clipsToBounds = true
         blurView.translatesAutoresizingMaskIntoConstraints = false
+        blurView.applyReduceTransparencyFallback(
+            opaqueFill: UIColor(white: 0.16, alpha: 1)
+        )
         addSubview(blurView)
 
-        iconBackground.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.45)
+        iconBackground.backgroundColor = UIAccessibility.isReduceTransparencyEnabled
+            ? UIColor.systemBlue
+            : UIColor.systemBlue.withAlphaComponent(0.45)
         iconBackground.layer.cornerRadius = 10
         iconBackground.layer.cornerCurve = .continuous
         iconBackground.translatesAutoresizingMaskIntoConstraints = false
@@ -66,13 +69,17 @@ final class HomeMusicSwipeHint: UIView {
         iconBackground.addSubview(iconView)
 
         titleLabel.text = "Music"
-        titleLabel.font = .systemFont(ofSize: 15, weight: .semibold)
+        titleLabel.font = UIFontMetrics(forTextStyle: .subheadline).scaledFont(
+            for: .systemFont(ofSize: 15, weight: .semibold)
+        )
         titleLabel.adjustsFontForContentSizeCategory = true
         titleLabel.textColor = .label
         titleLabel.numberOfLines = 1
 
         subtitleLabel.text = "Swipe left to open"
-        subtitleLabel.font = .systemFont(ofSize: 13, weight: .regular)
+        subtitleLabel.font = UIFontMetrics(forTextStyle: .footnote).scaledFont(
+            for: .systemFont(ofSize: 13, weight: .regular)
+        )
         subtitleLabel.adjustsFontForContentSizeCategory = true
         subtitleLabel.textColor = .secondaryLabel
         subtitleLabel.numberOfLines = 1
@@ -90,7 +97,9 @@ final class HomeMusicSwipeHint: UIView {
             withConfiguration: UIImage.SymbolConfiguration(pointSize: 12, weight: .bold)
         )
         dismissConfig.baseForegroundColor = .secondaryLabel
-        dismissConfig.background.backgroundColor = UIColor.white.withAlphaComponent(0.12)
+        dismissConfig.background.backgroundColor = UIAccessibility.isReduceTransparencyEnabled
+            ? UIColor(white: 0.28, alpha: 1)
+            : UIColor.white.withAlphaComponent(0.12)
         dismissConfig.background.cornerRadius = 12
         dismissConfig.contentInsets = NSDirectionalEdgeInsets(
             top: 7, leading: 7, bottom: 7, trailing: 7

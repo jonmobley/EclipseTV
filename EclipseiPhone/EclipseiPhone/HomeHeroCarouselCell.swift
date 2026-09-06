@@ -226,12 +226,16 @@ final class HomeHeroCarouselCell: UICollectionViewCell, UIScrollViewDelegate {
 
         let title = makeHeroLabel(
             text: slide.title,
-            font: .systemFont(ofSize: 28, weight: .bold),
+            font: UIFontMetrics(forTextStyle: .title1).scaledFont(
+                for: .systemFont(ofSize: 28, weight: .bold)
+            ),
             color: .white
         )
         let subtitle = makeHeroLabel(
             text: slide.subtitle,
-            font: .systemFont(ofSize: 15, weight: .regular),
+            font: UIFontMetrics(forTextStyle: .subheadline).scaledFont(
+                for: .systemFont(ofSize: 15, weight: .regular)
+            ),
             color: UIColor.white.withAlphaComponent(0.78)
         )
         subtitle.numberOfLines = 2
@@ -288,6 +292,7 @@ final class HomeHeroCarouselCell: UICollectionViewCell, UIScrollViewDelegate {
         let label = UILabel()
         label.text = text
         label.font = font
+        label.adjustsFontForContentSizeCategory = true
         label.textColor = color
         label.textAlignment = .center
         return label

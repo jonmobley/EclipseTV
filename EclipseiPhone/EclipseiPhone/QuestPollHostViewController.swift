@@ -150,7 +150,10 @@ final class QuestPollHostViewController: UIViewController {
         caption.textColor = UIColor.white.withAlphaComponent(0.55)
         caption.translatesAutoresizingMaskIntoConstraints = false
 
-        responsesValue.font = .systemFont(ofSize: 56, weight: .bold)
+        responsesValue.font = UIFontMetrics(forTextStyle: .largeTitle).scaledFont(
+            for: .systemFont(ofSize: 56, weight: .bold)
+        )
+        responsesValue.adjustsFontForContentSizeCategory = true
         responsesValue.textColor = .white
         responsesValue.textAlignment = .center
         responsesValue.translatesAutoresizingMaskIntoConstraints = false

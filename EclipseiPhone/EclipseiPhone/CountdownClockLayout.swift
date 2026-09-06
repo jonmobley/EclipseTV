@@ -91,7 +91,7 @@ struct CountdownClockLayout: Codable, Equatable, Hashable {
         label.textAlignment = .center
         label.numberOfLines = 1
         label.adjustsFontSizeToFitWidth = frame.width >= bounds.width - 1
-        label.minimumScaleFactor = 0.3
+        label.minimumScaleFactor = 0.6
         label.frame = frame
     }
 
