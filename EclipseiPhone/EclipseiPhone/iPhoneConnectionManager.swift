@@ -457,10 +457,14 @@ class iPhoneConnectionManager: NSObject {
     @MainActor
     @discardableResult
     func sendPlayRequest(id: String, startAt: Double? = nil, isFill: Bool? = nil) -> Bool {
+        let framing = MediaFramingStore.framing(forId: id)
+        let resolvedFill = isFill
+            ?? (framing != nil ? true : MediaFitSettings.isFill(forId: id))
         let sent = sendCommand(
             .playRequest(
                 id: id,
-                isFill: isFill ?? MediaFitSettings.isFill(forId: id),
+                isFill: resolvedFill,
+                framing: framing.map { $0.asDTO },
                 startAt: startAt
             ),
             description: "play request"
@@ -502,12 +506,28 @@ class iPhoneConnectionManager: NSObject {
                            description: "video setting", broadcast: true)
     }
 
-    /// Asks the Apple TV to letterbox (Fit) or crop (Fill) a still. Broadcast to all
-    /// synced TVs so every screen frames the item the same way.
+    /// Asks the Apple TV to letterbox (Fit), crop (Fill), or apply a custom crop
+    /// position for a still. Broadcast to all synced TVs so every screen frames
+    /// the item the same way.
+    ///
+    /// When `framing` is non-nil, always sends `isFill: true` so older TVs that
+    /// ignore the framing field still fill rather than letterbox.
     @discardableResult
-    func sendImageFit(id: String, isFill: Bool) -> Bool {
-        return sendCommand(.setImageFit(id: id, isFill: isFill),
-                           description: "image fit", broadcast: true)
+    func sendImageFit(
+        id: String,
+        isFill: Bool,
+        framing: MediaFraming? = nil
+    ) -> Bool {
+        let resolvedFill = framing != nil ? true : isFill
+        return sendCommand(
+            .setImageFit(
+                id: id,
+                isFill: resolvedFill,
+                framing: framing.map { $0.asDTO }
+            ),
+            description: "image fit",
+            broadcast: true
+        )
     }
 
     /// Sends a remote playback command for the live video. `position` is the absolute

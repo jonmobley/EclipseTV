@@ -183,6 +183,11 @@ enum CloudKitRecordMapper {
     ) {
         record[CloudKitSchema.MediaKey.fitMode] =
             MediaFitSettings.mode(forId: libraryId).rawValue as CKRecordValue
+        if let framing = MediaFramingStore.framing(forId: libraryId) {
+            record[CloudKitSchema.MediaKey.framing] = framing.asArray as CKRecordValue
+        } else {
+            record[CloudKitSchema.MediaKey.framing] = nil
+        }
         if isVideo {
             let item = TVLibraryStore.shared.items.first { $0.id == libraryId }
             record[CloudKitSchema.MediaKey.isLooping] =
@@ -279,12 +284,22 @@ enum CloudKitRecordMapper {
         )
     }
 
-    /// Applies Fit / loop / mute from a MediaItem onto local prefs.
+    /// Applies Fit / framing / loop / mute from a MediaItem onto local prefs.
     @MainActor
     static func applyRemoteMediaPrefs(from record: CKRecord, libraryId: String) {
         if let raw = record[CloudKitSchema.MediaKey.fitMode] as? String,
            let mode = MediaFitMode(rawValue: raw) {
             MediaFitSettings.setMode(mode, forId: libraryId)
+        }
+        // Only touch framing when the field is present so older records without it
+        // don't wipe a locally saved custom position.
+        if record[CloudKitSchema.MediaKey.framing] != nil {
+            if let values = record[CloudKitSchema.MediaKey.framing] as? [Double],
+               let framing = MediaFraming.fromArray(values) {
+                MediaFramingStore.set(framing, forId: libraryId)
+            } else {
+                MediaFramingStore.clear(forId: libraryId)
+            }
         }
         let isVideo = (record[CloudKitSchema.MediaKey.isVideo] as? Bool) ?? false
         guard isVideo else { return }

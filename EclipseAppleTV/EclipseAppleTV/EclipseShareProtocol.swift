@@ -165,6 +165,17 @@ struct LibraryAlbumDTO: Codable, Equatable {
     }
 }
 
+/// Normalized crop rectangle for a still (unit space, origin top-left).
+///
+/// Carried on `playRequest` and `setImageFit` so the TV crops to the companion's
+/// custom position without rewriting the on-disk file. Older peers ignore the field.
+struct MediaFramingDTO: Codable, Equatable {
+    var x: Double
+    var y: Double
+    var width: Double
+    var height: Double
+}
+
 // MARK: - Envelope
 
 /// JSON envelope for every control message. Only the fields relevant to a given
@@ -204,6 +215,9 @@ struct EclipseShareEnvelope: Codable {
     var albums: [LibraryAlbumDTO]? = nil
     /// `"black"` / `"clear"` — park the TV stage or release park (`set_idle_mode`).
     var mode: String? = nil
+    /// Normalized crop rect for a still (`setImageFit` / `playRequest`). Nil clears
+    /// any saved custom position so Fit / Fill alone apply.
+    var framing: MediaFramingDTO? = nil
 
     var kind: EclipseShareProtocol.Kind? {
         EclipseShareProtocol.Kind(rawValue: eclipseMsg)
@@ -243,11 +257,13 @@ struct EclipseShareEnvelope: Codable {
     /// Makes an item live on the TV.
     /// - Parameter isFill: Fit / Fill framing for a still, so the TV matches the phone on
     ///   the first show. Nil leaves the TV's stored choice untouched.
+    /// - Parameter framing: Custom crop rect (unit space). Nil clears a saved position.
     /// - Parameter startAt: Absolute seconds to seek when the item is a video (nil / 0 =
     ///   from the start). Carried in `position` for wire compatibility.
     static func playRequest(
         id: String,
         isFill: Bool? = nil,
+        framing: MediaFramingDTO? = nil,
         startAt: Double? = nil
     ) -> EclipseShareEnvelope {
         let seek = (startAt ?? 0) > 0 ? startAt : nil
@@ -257,7 +273,8 @@ struct EclipseShareEnvelope: Codable {
             items: nil,
             id: id,
             isFill: isFill,
-            position: seek
+            position: seek,
+            framing: framing
         )
     }
 
@@ -274,13 +291,19 @@ struct EclipseShareEnvelope: Codable {
     }
 
     /// Sets whether a still fills (crops to) the TV screen instead of letterboxing.
-    static func setImageFit(id: String, isFill: Bool) -> EclipseShareEnvelope {
+    /// - Parameter framing: Custom crop rect. Pass nil to clear a saved position.
+    static func setImageFit(
+        id: String,
+        isFill: Bool,
+        framing: MediaFramingDTO? = nil
+    ) -> EclipseShareEnvelope {
         EclipseShareEnvelope(
             eclipseMsg: EclipseShareProtocol.Kind.setImageFit.rawValue,
             currentId: nil,
             items: nil,
             id: id,
-            isFill: isFill
+            isFill: isFill,
+            framing: framing
         )
     }
 

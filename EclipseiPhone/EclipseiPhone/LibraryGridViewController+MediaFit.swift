@@ -7,21 +7,23 @@
 
 import UIKit
 
-// MARK: - Screen Fit (Fit / Fill)
+// MARK: - Screen Fit (Fit / Fill / Custom)
 
 extension LibraryGridViewController {
 
-    /// Fit / Fill submenu controlling how a still is framed on the external display.
+    /// Fit / Fill / Custom submenu for how a still is framed on the external display.
     ///
     /// Offered on the tile ⋯ menu for stills only — video framing is fixed to
-    /// aspect fit. The hero circle is a shortcut for the same setting.
+    /// aspect fit. Custom opens the pan/zoom editor; Fit and Fill discard any
+    /// saved position. The hero circle is a Fit / Fill shortcut.
     func screenFitMenu(for item: LibraryItemDTO) -> UIMenu {
+        let hasCustom = MediaFramingStore.hasFraming(forId: item.id)
         let current = MediaFitSettings.mode(forId: item.id)
         // Checkmark rides in the trailing image slot rather than `state:` so the
         // selected row keeps the same title inset as the others. See
         // `videoOptionActions` for the UIKit behaviour behind this.
-        let actions = MediaFitMode.allCases.map { mode in
-            let isCurrent = mode == current
+        var actions: [UIMenuElement] = MediaFitMode.allCases.map { mode in
+            let isCurrent = !hasCustom && mode == current
             return UIAction(
                 title: mode.rawValue,
                 image: UIImage(systemName: isCurrent ? "checkmark" : mode.iconName)
@@ -29,6 +31,13 @@ extension LibraryGridViewController {
                 self?.applyScreenFit(mode, to: item)
             }
         }
+        let custom = UIAction(
+            title: "Custom",
+            image: UIImage(systemName: hasCustom ? "checkmark" : "crop")
+        ) { [weak self] _ in
+            self?.onRequestEdit?(item.id)
+        }
+        actions.append(custom)
         return UIMenu(
             title: "Screen Fit",
             image: UIImage(systemName: "aspectratio"),
@@ -36,16 +45,49 @@ extension LibraryGridViewController {
         )
     }
 
-    /// Saves the choice, tells the Apple TV, and re-pushes the still when it's the live
-    /// item so every screen reframes without waiting for the next selection.
+    /// Saves Fit / Fill, clears any custom position, tells the Apple TV, and
+    /// re-pushes the still when it's live so every screen reframes.
     func applyScreenFit(_ mode: MediaFitMode, to item: LibraryItemDTO) {
-        guard MediaFitSettings.mode(forId: item.id) != mode else { return }
+        let hadFraming = MediaFramingStore.hasFraming(forId: item.id)
+        let modeChanged = MediaFitSettings.mode(forId: item.id) != mode
+        guard modeChanged || hadFraming else { return }
+        MediaFramingStore.clear(forId: item.id)
         MediaFitSettings.setMode(mode, forId: item.id)
         UISelectionFeedbackGenerator().selectionChanged()
         connectionManager.sendImageFit(id: item.id, isFill: mode == .fill)
         reloadLibraryGrid()
         refreshLiveHeader()
+        refreshLivePresentationIfNeeded(for: item)
+    }
 
+    /// Saves a custom crop position, tells the Apple TV, and re-pushes when live.
+    func applyFraming(_ framing: MediaFraming, to item: LibraryItemDTO) {
+        MediaFramingStore.set(framing, forId: item.id)
+        UISelectionFeedbackGenerator().selectionChanged()
+        connectionManager.sendImageFit(
+            id: item.id,
+            isFill: true,
+            framing: framing
+        )
+        reloadLibraryGrid()
+        refreshLiveHeader()
+        refreshLivePresentationIfNeeded(for: item)
+    }
+
+    /// Drops a custom position so Fit / Fill take over again.
+    func clearFraming(for item: LibraryItemDTO) {
+        guard MediaFramingStore.hasFraming(forId: item.id) else { return }
+        MediaFramingStore.clear(forId: item.id)
+        UISelectionFeedbackGenerator().selectionChanged()
+        let isFill = MediaFitSettings.isFill(forId: item.id)
+        connectionManager.sendImageFit(id: item.id, isFill: isFill)
+        reloadLibraryGrid()
+        refreshLiveHeader()
+        refreshLivePresentationIfNeeded(for: item)
+    }
+
+    /// Re-presents the live still when `item` is currently on the external panel.
+    private func refreshLivePresentationIfNeeded(for item: LibraryItemDTO) {
         let manager = ExternalDisplayManager.shared
         guard store.currentId == item.id,
               !manager.isOverlayLive,
@@ -115,13 +157,17 @@ extension LibraryGridViewController {
             liveHeader.setScreenFitToggleVisible(false, mode: .fit)
             return
         }
-        liveHeader.setScreenFitToggleVisible(
-            true,
-            mode: MediaFitSettings.mode(forId: item.id)
-        )
+        // Custom framing acts like Fill for the hero shortcut icon.
+        let mode: MediaFitMode =
+            MediaFramingStore.hasFraming(forId: item.id)
+            ? .fill
+            : MediaFitSettings.mode(forId: item.id)
+        liveHeader.setScreenFitToggleVisible(true, mode: mode)
     }
 
     /// Flips Fit / Fill for the live still or slideshow (hero shortcut).
+    ///
+    /// Also clears any custom position so the toggle always lands on Fit or Fill.
     func toggleLiveScreenFit() {
         if let slideshow = activeLiveSlideshow() {
             applyScreenFit(slideshow.isFill ? .fit : .fill, to: slideshow)

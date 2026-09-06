@@ -306,6 +306,18 @@ class ConnectionManager: NSObject {
         }
     }
 
+    /// Stores or clears a custom crop position from a companion envelope.
+    ///
+    /// Absence of `framing` means Fit / Fill alone — clear any saved position so
+    /// picking Fit after Custom does not leave a stale crop on the TV.
+    private func applyIncomingFraming(_ framing: MediaFramingDTO?, forFileName id: String) {
+        if let framing {
+            ImageFramingSettings.set(framing, forFileName: id)
+        } else {
+            ImageFramingSettings.clear(forFileName: id)
+        }
+    }
+
     /// Routes a decoded control envelope received from a peer.
     private func handleControlEnvelope(_ envelope: EclipseShareEnvelope, from peerID: MCPeerID) {
         switch envelope.kind {
@@ -325,6 +337,7 @@ class ConnectionManager: NSObject {
             guard let id = envelope.id else { return }
             logger.info("Received play request for id: \(id, privacy: .public)")
             let isFill = envelope.isFill
+            let framing = envelope.framing
             let startAt = envelope.position
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
@@ -334,6 +347,7 @@ class ConnectionManager: NSObject {
                 if let isFill {
                     ImageFitSettings.setFill(isFill, forFileName: id)
                 }
+                self.applyIncomingFraming(framing, forFileName: id)
                 self.delegate?.connectionManager(
                     self, didReceivePlayRequestForId: id, startAt: startAt
                 )
@@ -376,10 +390,12 @@ class ConnectionManager: NSObject {
         case .setImageFit:
             guard let id = envelope.id, let isFill = envelope.isFill else { return }
             logger.info("Received image fit for id: \(id, privacy: .public) fill: \(isFill)")
+            let framing = envelope.framing
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
                 self.activateModeIfNeeded(from: envelope)
                 ImageFitSettings.setFill(isFill, forFileName: id)
+                self.applyIncomingFraming(framing, forFileName: id)
                 self.delegate?.connectionManager(self, didReceiveImageFitForId: id)
             }
         case .restoreItem:

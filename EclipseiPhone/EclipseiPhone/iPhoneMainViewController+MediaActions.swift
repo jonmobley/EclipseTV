@@ -49,6 +49,9 @@ extension iPhoneMainViewController {
     }
 
     /// Opens the aspect cropper so the user can re-frame an existing library item.
+    ///
+    /// Stills use non-destructive framing (the original file is left alone). Videos
+    /// still permanently crop via `VideoCropExporter`.
     func beginEditCrop(forItemId id: String) {
         guard let item = TVLibraryStore.shared.items.first(where: { $0.id == id }) else { return }
         let target = MediaAspect.activeTarget
@@ -56,58 +59,99 @@ extension iPhoneMainViewController {
         let instruction = "Drag and pinch to reframe your \(modeName) crop"
 
         if item.isVideo {
-            guard let url = LocalMediaStore.shared.localURL(forId: id) else {
-                showTemporaryStatus("Couldn't edit that video.")
-                return
-            }
-            showTemporaryStatus("Preparing crop…", duration: 30)
-            Task { @MainActor in
-                guard let frame = await VideoCropExporter.previewFrame(at: url) else {
-                    self.showTemporaryStatus("Couldn't edit that video.")
-                    return
-                }
-                self.statusLabel.alpha = 0
-                self.pendingEditItemId = id
-                self.pendingVideoCropURL = url
-                self.pendingVideoThumbnail = TVLibraryStore.shared.thumbnail(for: id) ?? frame
-                self.pendingVideoCropPreviewSize = MediaAspect.normalized(frame).size
-                let cropper = AspectCropViewController(
-                    image: frame,
-                    targetAspect: target,
-                    instruction: instruction,
-                    confirmTitle: "Save"
-                )
-                cropper.delegate = self
-                cropper.modalPresentationStyle = .overFullScreen
-                self.present(cropper, animated: true)
-            }
+            beginVideoEditCrop(
+                itemId: id,
+                target: target,
+                instruction: instruction
+            )
             return
         }
 
+        beginStillFramingEdit(
+            item: item,
+            target: target,
+            instruction: instruction
+        )
+    }
+
+    /// Destructive video re-crop via the existing exporter path.
+    private func beginVideoEditCrop(
+        itemId id: String,
+        target: CGFloat,
+        instruction: String
+    ) {
+        guard let url = LocalMediaStore.shared.localURL(forId: id) else {
+            showTemporaryStatus("Couldn't edit that video.")
+            return
+        }
+        showTemporaryStatus("Preparing crop…", duration: 30)
+        Task { @MainActor in
+            guard let frame = await VideoCropExporter.previewFrame(at: url) else {
+                self.showTemporaryStatus("Couldn't edit that video.")
+                return
+            }
+            self.statusLabel.alpha = 0
+            self.pendingEditItemId = id
+            self.pendingVideoCropURL = url
+            self.pendingVideoThumbnail = TVLibraryStore.shared.thumbnail(for: id) ?? frame
+            self.pendingVideoCropPreviewSize = MediaAspect.normalized(frame).size
+            let cropper = AspectCropViewController(
+                image: frame,
+                targetAspect: target,
+                instruction: instruction,
+                confirmTitle: "Save"
+            )
+            cropper.delegate = self
+            cropper.modalPresentationStyle = .overFullScreen
+            self.present(cropper, animated: true)
+        }
+    }
+
+    /// Non-destructive still framing: Save stores a normalized rect, Reset clears it.
+    private func beginStillFramingEdit(
+        item: LibraryItemDTO,
+        target: CGFloat,
+        instruction: String
+    ) {
         let image: UIImage?
-        if let url = LocalMediaStore.shared.localURL(forId: id) {
+        if let url = LocalMediaStore.shared.localURL(forId: item.id) {
             image = UIImage(contentsOfFile: url.path)
         } else {
-            image = TVLibraryStore.shared.thumbnail(for: id)
+            image = TVLibraryStore.shared.thumbnail(for: item.id)
         }
         guard let image else {
             showTemporaryStatus("Couldn't edit that image.")
             return
         }
 
-        pendingEditItemId = id
+        let normalized = MediaAspect.normalized(image)
         let cropper = AspectCropViewController(
-            image: image,
+            image: normalized,
             targetAspect: target,
             instruction: instruction,
             confirmTitle: "Save"
         )
+        if let framing = MediaFramingStore.framing(forId: item.id) {
+            cropper.initialCropRect = framing.rect(in: normalized.size)
+        }
+        cropper.onFramingChosen = { [weak self, weak cropper] rect in
+            guard let self, let cropper else { return }
+            let framing = MediaFraming(rect: rect, in: cropper.sourceImage.size)
+            self.libraryViewController.applyFraming(framing, to: item)
+            cropper.dismiss(animated: true)
+        }
+        cropper.onFramingReset = { [weak self, weak cropper] in
+            self?.libraryViewController.clearFraming(for: item)
+            cropper?.dismiss(animated: true)
+        }
         cropper.delegate = self
         cropper.modalPresentationStyle = .overFullScreen
         present(cropper, animated: true)
     }
 
     /// Writes a re-cropped still over the existing library item and re-sends if linked.
+    ///
+    /// Kept for the import / video-adjacent destructive path; still Edit uses framing.
     func replaceEditedImage(_ image: UIImage, itemId: String) {
         let optimized = MediaValidator.downscaleImage(image)
         guard let data = optimized.jpegData(compressionQuality: 0.85) else {

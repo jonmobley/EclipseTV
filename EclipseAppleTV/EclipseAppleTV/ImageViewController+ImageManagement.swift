@@ -62,9 +62,9 @@ extension ImageViewController {
             
             await MainActor.run {
                 if let image = image {
-                    self.imageView.contentMode =
-                        ImageFitSettings.mode(forPath: mediaItem.path).contentMode
-                    self.imageView.image = image
+                    let framed = Self.framedStill(image, forPath: mediaItem.path)
+                    self.imageView.contentMode = framed.contentMode
+                    self.imageView.image = framed.image
                     self.imageView.isHidden = false
                     self.playerView.view.isHidden = true
                     self.isVideo = false
@@ -124,11 +124,11 @@ extension ImageViewController {
                 // the player is detached once the animation finishes.
                 self.retireCurrentPlayer(stopBroadcasting: true, detachPlayer: false)
 
-                let fitMode = ImageFitSettings.mode(forPath: mediaItem.path).contentMode
+                let framed = Self.framedStill(image, forPath: mediaItem.path)
 
                 // Create temp image view for smooth transition
-                let tempImageView = UIImageView(image: image)
-                tempImageView.contentMode = fitMode
+                let tempImageView = UIImageView(image: framed.image)
+                tempImageView.contentMode = framed.contentMode
                 tempImageView.clipsToBounds = true
                 tempImageView.frame = self.view.bounds
                 tempImageView.alpha = 0
@@ -143,8 +143,8 @@ extension ImageViewController {
                     tempImageView.alpha = 1
                 }) { _ in
                                     // Update main image view
-                self.imageView.contentMode = fitMode
-                self.imageView.image = image
+                self.imageView.contentMode = framed.contentMode
+                self.imageView.image = framed.image
                 self.imageView.alpha = 1
                 self.imageView.isHidden = false
                 self.isVideo = false
@@ -373,10 +373,30 @@ extension ImageViewController {
     // MARK: - Image Fit
 
     /// Re-frames the still already on screen, e.g. after the companion switches it
-    /// between Fit and Fill.
+    /// between Fit, Fill, and Custom.
     internal func applyImageFitToCurrentImage() {
         guard !isVideo, let path = currentDisplayPath() else { return }
-        imageView.contentMode = ImageFitSettings.mode(forPath: path).contentMode
+        Task { @MainActor in
+            let image = await AsyncImageLoader.shared.loadImage(
+                from: path, targetSize: self.view.bounds.size
+            )
+            guard let image else { return }
+            let framed = Self.framedStill(image, forPath: path)
+            self.imageView.contentMode = framed.contentMode
+            self.imageView.image = framed.image
+        }
+    }
+
+    /// Crops to a saved custom position when present; otherwise Fit / Fill.
+    private static func framedStill(
+        _ image: UIImage,
+        forPath path: String
+    ) -> (image: UIImage, contentMode: UIView.ContentMode) {
+        ImageFraming.apply(
+            image,
+            framing: ImageFramingSettings.framing(forPath: path),
+            fill: ImageFitSettings.mode(forPath: path) == .fill
+        )
     }
 
     // MARK: - Image Positioning

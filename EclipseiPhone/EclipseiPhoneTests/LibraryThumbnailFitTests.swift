@@ -13,6 +13,23 @@ import UIKit
 @MainActor
 struct LibraryThumbnailFitTests {
 
+    @Test func stillThumbnailLetterboxesWhenCustomFraming() {
+        let id = uniqueId()
+        defer {
+            MediaFitSettings.clear(forId: id)
+            MediaFramingStore.clear(forId: id)
+        }
+        MediaFitSettings.setMode(.fill, forId: id)
+        MediaFramingStore.set(
+            MediaFraming(x: 0.1, y: 0.1, width: 0.8, height: 0.8),
+            forId: id
+        )
+
+        let cell = makeCell()
+        cell.configure(with: makeStill(id: id), thumbnail: swatch(), isLive: false)
+        #expect(cell.imageView.contentMode == .scaleAspectFit)
+    }
+
     @Test func stillThumbnailLetterboxesWhenFit() {
         let id = uniqueId()
         defer { MediaFitSettings.clear(forId: id) }
