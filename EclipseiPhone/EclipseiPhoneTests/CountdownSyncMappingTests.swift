@@ -43,6 +43,26 @@ struct CountdownSyncMappingTests {
         #expect(decoded.layout == item.layout)
     }
 
+    @Test func recordRoundTripPreservesEndAction() throws {
+        let item = ShowCountdown(
+            showId: UUID(),
+            name: "Pre-Service",
+            duration: 300,
+            endAction: .next
+        )
+        let record = CloudKitRecordMapper.makeCountdownRecord(from: item)
+        let decoded = try #require(CloudKitRecordMapper.countdown(from: record))
+        #expect(decoded.endAction == .next)
+    }
+
+    @Test func recordFromAnOlderDeviceDecodesAsHold() throws {
+        let item = ShowCountdown(showId: UUID(), name: "Legacy", duration: 300)
+        let record = CloudKitRecordMapper.makeCountdownRecord(from: item)
+        record[CloudKitSchema.CountdownKey.endAction] = nil as CKRecordValue?
+        let decoded = try #require(CloudKitRecordMapper.countdown(from: record))
+        #expect(decoded.endAction == .hold)
+    }
+
     @Test func shareChildSetsParent() throws {
         let showId = UUID()
         let item = ShowCountdown(showId: showId, name: "Shared", duration: 60)

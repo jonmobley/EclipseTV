@@ -89,6 +89,53 @@ struct CountdownControllerTests {
         #expect(CountdownController.parseDuration("1:2:3:4") == nil)
     }
 
+    @Test func freshClockHasNoExpiry() {
+        let clock = makeClock()
+        #expect(clock.expiredAt == nil)
+        #expect(clock.secondsSinceExpiry == nil)
+        #expect(clock.syncRemainingFromDeadline() == false)
+    }
+
+    @Test func clockCrossesZeroOnceAndKeepsTheTrueZeroMoment() async throws {
+        let clock = makeClock()
+        clock.setDuration(1)
+        let startedAt = Date()
+        clock.start()
+        try await Task.sleep(for: .milliseconds(1400))
+        // No-op when the timer already crossed zero during the sleep.
+        clock.syncRemainingFromDeadline()
+
+        #expect(clock.running == false)
+        #expect(clock.remaining == 0)
+        #expect(clock.displayString == "0:00")
+        // Zero is one second after start, whichever tick happened to notice.
+        let expiredAt = try #require(clock.expiredAt)
+        #expect(abs(expiredAt.timeIntervalSince(startedAt) - 1) < 0.3)
+        let age = try #require(clock.secondsSinceExpiry)
+        #expect(age >= 0)
+        #expect(age < CountdownEndAction.maximumLateness)
+        // The end action must run once, so nothing may cross zero twice.
+        #expect(clock.syncRemainingFromDeadline() == false)
+
+        clock.start()
+        #expect(clock.expiredAt == nil)
+        #expect(clock.secondsSinceExpiry == nil)
+        #expect(clock.remaining == 1)
+        clock.pause()
+    }
+
+    @Test func resetAndEndLiveClearTheExpiryStamp() {
+        let clock = makeClock()
+        clock.setDuration(30)
+        clock.start()
+        clock.reset()
+        #expect(clock.expiredAt == nil)
+        clock.start()
+        clock.endLive()
+        #expect(clock.expiredAt == nil)
+        #expect(clock.liveCountdownId == nil)
+    }
+
     @Test func isPresetDurationIsFalseForCustomLength() {
         let clock = makeClock()
         clock.setDuration(60)

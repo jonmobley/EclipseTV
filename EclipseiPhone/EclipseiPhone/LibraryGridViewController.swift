@@ -61,7 +61,10 @@ final class LibraryGridViewController: UIViewController {
     let sectionInset: CGFloat = 16
     let interitemSpacing: CGFloat = 12
     let headerInset: CGFloat = 16
-    /// Black gap inserted between the hero banner and the grid below it.
+    /// Black gap inserted between the hero banner and the grid below it. Both the
+    /// grid's resting top inset and the `heroSpacer` plate extend by this amount,
+    /// so the first row starts flush with the plate's shadowed bottom edge.
+    /// A docked ribbon brings its own padding — see `liveChromeBottomPadding`.
     let heroBottomPadding: CGFloat = 16
     /// Last width used for hero / grid sizing; avoids redundant layout work.
     var lastLayoutWidth: CGFloat = 0
@@ -99,6 +102,11 @@ final class LibraryGridViewController: UIViewController {
 
     /// Open Show id while in Show mode; `nil` means Home (Recent ribbon).
     var openShowId: UUID?
+    /// Surface ids of the open Show as of the last album-store change. Anything new
+    /// on the next change is a just-added tile the grid snaps to.
+    var revealedShowSurface: (showId: UUID, ids: Set<String>)?
+    /// One-shot cold-launch restore of the most recently opened Show.
+    private static var didAttemptRestoreLastShow = false
     /// Show that `validateOpenShow()` had to close because its Display Mode went
     /// inactive, or because its album was momentarily absent. It reopens as soon as it
     /// is valid again, so a detour through Settings returns the user to the same Show.
@@ -337,12 +345,11 @@ final class LibraryGridViewController: UIViewController {
         return header
     }()
 
-    /// Parked view kept only so landscape chrome constraints stay unambiguous.
     /// Black plate behind the portrait live card so tiles can't show in the
-    /// gap under the header (or beside a capped Vertical preview).
-    let heroSpacer: UIView = {
-        let view = UIView()
-        view.backgroundColor = .black
+    /// gap under the header (or beside a capped Vertical preview). Parked at
+    /// 0×0 in landscape so those chrome constraints stay unambiguous.
+    let heroSpacer: LiveHeroBackdropView = {
+        let view = LiveHeroBackdropView()
         view.isHidden = true
         view.isUserInteractionEnabled = true
         view.translatesAutoresizingMaskIntoConstraints = false
@@ -368,14 +375,39 @@ final class LibraryGridViewController: UIViewController {
 
     /// Horizontal slide strip docked under the landscape live preview.
     lazy var slideshowRibbonView: UICollectionView = makeDockedSlideshowRibbonView()
+
+    /// Note for the live item, docked under the preview (and under the ribbon).
+    let liveNoteCard: LiveNoteCardView = {
+        let card = LiveNoteCardView()
+        card.isHidden = true
+        card.translatesAutoresizingMaskIntoConstraints = false
+        return card
+    }()
+    /// Item whose note the card is showing; `nil` while the card is parked.
+    var presentedLiveNoteId: String?
+    /// Note text the card currently carries.
+    var presentedLiveNote: String?
+    /// Gap between the bottom-most live chrome and the note card (0 when parked).
+    var liveNoteTopConstraint: NSLayoutConstraint?
+    /// Measured note-card height (0 when parked).
+    var liveNoteHeightConstraint: NSLayoutConstraint?
+
     /// Last in-grid / docked ribbon placement. Slide advances must not rebuild this.
     var lastSlideshowRibbonChrome: SlideshowRibbonChrome?
+    /// Hero + ribbon presentation the last chrome pass applied (`nil` before the first).
+    var presentedLiveChrome: LiveChromeState?
+    /// Docked ribbon is fading out; keep it unhidden until the animation lands.
+    var isFadingOutDockedRibbon = false
+    /// Invalidates the completion of a superseded ribbon show / hide animation.
+    var dockedRibbonTransitionToken = 0
     /// Height of the docked ribbon (0 when it is parked, hidden, or vertical).
     var dockedRibbonHeightConstraint: NSLayoutConstraint?
     /// Width of the docked ribbon (0 when it is parked, hidden, or horizontal).
     var dockedRibbonWidthConstraint: NSLayoutConstraint?
     /// Gap between the landscape preview and the docked ribbon (0 when hidden).
     var dockedRibbonTopConstraint: NSLayoutConstraint?
+    /// How far the black plate runs past the bottom-most live chrome.
+    var heroBackdropBottomConstraint: NSLayoutConstraint?
     /// Landscape grid leading pinned to the hero trailing edge (horizontal ribbon).
     var landscapeGridLeadingFromHeroConstraint: NSLayoutConstraint?
     /// Landscape grid leading pinned to the vertical ribbon trailing edge.
@@ -464,18 +496,28 @@ final class LibraryGridViewController: UIViewController {
             SlideshowPlaybackController.shared.goToAdjacentSlide(delta: delta)
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
         }
+        liveHeader.onLibraryBrowse = { [weak self] delta in
+            self?.browseLiveHero(delta: delta)
+        }
         liveHeader.onToggleSlideshowRibbon = { [weak self] in
             self?.toggleLiveSlideshowRibbon()
         }
         liveHeader.onToggleScreenFit = { [weak self] in
             self?.toggleLiveScreenFit()
         }
+        liveHeader.onFlipCamera = { [weak self] in
+            self?.flipLiveCameraLens()
+        }
+        liveNoteCard.addTarget(
+            self, action: #selector(handleLiveNoteTap), for: .touchUpInside
+        )
 
         // Grid under the floating live hero so content can scroll beneath it.
         installLibraryPages()
         view.addSubview(heroSpacer)
         view.addSubview(liveHeader)
         view.addSubview(slideshowRibbonView)
+        view.addSubview(liveNoteCard)
         view.addSubview(emptyLabel)
         let bottomChrome = UIStackView(arrangedSubviews: [syncStatusBanner, musicSwipeHint])
         bottomChrome.axis = .vertical
@@ -514,6 +556,7 @@ final class LibraryGridViewController: UIViewController {
         }
         observe(LocalAlbumStore.didChangeNotification) { [weak self] _ in
             self?.validateOpenShow()
+            self?.revealShowMembersAddedSinceLastChange()
             self?.reloadGridIfSafe()
             self?.updateEmptyState()
             // Practice Mode (and other Show prefs) can flip the live hero on/off.
@@ -530,6 +573,9 @@ final class LibraryGridViewController: UIViewController {
             self?.reloadGridIfSafe()
             self?.updateEmptyState()
         }
+        observe(MediaNoteStore.didChangeNotification) { [weak self] _ in
+            self?.syncLiveNoteChrome()
+        }
         observe(CountdownStore.didChangeNotification) { [weak self] _ in
             self?.reloadGridIfSafe()
             self?.refreshCountdownChrome()
@@ -539,6 +585,9 @@ final class LibraryGridViewController: UIViewController {
         }
         observe(CountdownController.didChangeNotification) { [weak self] _ in
             self?.refreshCountdownChrome()
+        }
+        observe(CountdownController.didExpireNotification) { [weak self] _ in
+            self?.handleCountdownExpiry()
         }
         observe(SlideshowPlaybackController.didChangeNotification) { [weak self] _ in
             self?.refreshSlideshowRibbonPresentation()
@@ -709,6 +758,23 @@ final class LibraryGridViewController: UIViewController {
         // Cold launch: viewWillAppear can run before the app is active; retry here.
         warmHomeCameraPreview()
         updateHeroCollapse()
+        restoreLastOpenedShowIfNeeded()
+    }
+
+    /// Reopens the most recently used Show once per process launch.
+    private func restoreLastOpenedShowIfNeeded() {
+        guard !Self.didAttemptRestoreLastShow else { return }
+        Self.didAttemptRestoreLastShow = true
+        guard !isShowMode else { return }
+        let candidate = LocalAlbumStore.shared.albums
+            .compactMap { album -> (LocalAlbum, Date)? in
+                guard let opened = album.lastOpenedAt else { return nil }
+                return (album, opened)
+            }
+            .max(by: { $0.1 < $1.1 })?
+            .0
+        guard let album = candidate else { return }
+        openLocalAlbum(id: album.id)
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -731,7 +797,7 @@ final class LibraryGridViewController: UIViewController {
         }
         let hasShows = !LocalAlbumStore.shared.albums.isEmpty
         if !hasShows {
-            emptyLabel.text = "Create a Show to get started."
+            emptyLabel.text = String(localized: "Create a Show to get started.")
             emptyLabel.isHidden = false
             // Sit just below the lone New Show tile rather than over it.
             let tile = Self.homeRecentTileSize(
@@ -831,19 +897,27 @@ final class LibraryGridViewController: UIViewController {
             liveHeader.hideLivePollGate()
             liveHeader.setSlideshowRibbonToggleVisible(false, isOn: false)
             liveHeader.setScreenFitToggleVisible(false, mode: .fit)
+            liveHeader.setCameraFlipVisible(false)
             liveHeader.allowsSlideshowBrowse = false
+            liveHeader.allowsLibraryBrowse = false
             liveHeader.isHidden = true
             liveHeader.isUserInteractionEnabled = false
             refreshForeignLivePreview()
             syncSlideshowRibbonIfChromeChanged()
+            syncLiveNoteChrome()
             return
         }
         liveHeader.isHidden = false
         liveHeader.isUserInteractionEnabled = true
-        // Ribbon + Screen Fit follow the active still / slideshow for this Show.
+        // Ribbon, Screen Fit, Flip Camera, swipe browse, and the note follow the
+        // active still / slideshow / camera. Browse runs last: it defers to the
+        // ribbon's `allowsSlideshowBrowse` when a slideshow owns the gesture.
         defer {
             syncSlideshowRibbonIfChromeChanged()
             syncLiveScreenFitChrome()
+            syncLiveCameraFlipChrome()
+            syncLiveHeroBrowseChrome()
+            syncLiveNoteChrome()
         }
 
         // Another Show still owns live output — keep AirPlay as-is, show an empty
@@ -884,6 +958,21 @@ final class LibraryGridViewController: UIViewController {
                 liveHeader.showWebPreview(pageId: pageId)
             }
             liveHeader.updatePlayback(PlaybackState())
+            return
+        }
+        if mgr.isWebVideoLive {
+            let pageId = mgr.liveWebVideoPageId
+            let page = pageId.flatMap { WebPageStore.shared.page(id: $0) }
+            let title = page?.title ?? page?.videoLink?.providerName ?? "Video"
+            let thumb = pageId.flatMap { WebThumbnailStore.shared.image(for: $0) }
+            liveHeader.configureOverlay(
+                title: title,
+                systemImage: "play.rectangle.fill",
+                fillColor: UIColor(white: 0.12, alpha: 1),
+                thumbnail: thumb,
+                showsTransport: true
+            )
+            liveHeader.updatePlayback(mgr.libraryVideoPlaybackState)
             return
         }
         if mgr.isPDFLive {
@@ -1042,6 +1131,8 @@ final class LibraryGridViewController: UIViewController {
             return .camera
         case .web(let url):
             return .web(url)
+        case .webVideo(let link):
+            return .webVideo(link)
         case .pdf(let url):
             return .pdf(url)
         case .countdown:

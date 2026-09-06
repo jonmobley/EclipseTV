@@ -18,6 +18,7 @@ final class CountdownLayoutEditorViewController: UIViewController,
     private var clockObserver: NSObjectProtocol?
 
     private let canvas = UIView()
+    private let background = CountdownBackgroundView()
     private let clockLabel = UILabel()
     private let instructionLabel = UILabel()
     private let resetButton = UIButton(type: .system)
@@ -36,7 +37,6 @@ final class CountdownLayoutEditorViewController: UIViewController,
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .black
-        overrideUserInterfaceStyle = .dark
         isModalInPresentation = true
         title = item.name
         navigationItem.leftBarButtonItem = UIBarButtonItem(
@@ -53,6 +53,18 @@ final class CountdownLayoutEditorViewController: UIViewController,
         setupGestures()
         observeClock()
         CountdownClockLayoutPreview.set(layout, for: item.id)
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        // Position is judged against the picture, so the canvas shows it too.
+        background.apply(CountdownBackground.resolved(for: item.id).media)
+        background.play()
+    }
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        background.stop()
     }
 
     override func viewDidLayoutSubviews() {
@@ -86,6 +98,15 @@ final class CountdownLayoutEditorViewController: UIViewController,
         canvas.layer.borderColor = UIColor.white.withAlphaComponent(0.18).cgColor
         canvas.layer.borderWidth = 1
         view.addSubview(canvas)
+
+        background.translatesAutoresizingMaskIntoConstraints = false
+        canvas.addSubview(background)
+        NSLayoutConstraint.activate([
+            background.topAnchor.constraint(equalTo: canvas.topAnchor),
+            background.bottomAnchor.constraint(equalTo: canvas.bottomAnchor),
+            background.leadingAnchor.constraint(equalTo: canvas.leadingAnchor),
+            background.trailingAnchor.constraint(equalTo: canvas.trailingAnchor)
+        ])
 
         clockLabel.textColor = .white
         clockLabel.textAlignment = .center

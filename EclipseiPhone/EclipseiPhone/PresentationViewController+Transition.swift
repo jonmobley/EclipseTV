@@ -121,6 +121,11 @@ extension PresentationViewController {
             return
         }
 
+        if case .countdown = source.content {
+            waitUntilCountdownBackgroundDisplayed(generation: generation, then: finish)
+            return
+        }
+
         guard case .video = source.content,
               let layer = playerLayer, !layer.isReadyForDisplay else {
             finish()
@@ -152,6 +157,27 @@ extension PresentationViewController {
             finish()
         }
         guard let view = screensaverView, !view.isReadyForDisplay else {
+            complete()
+            return
+        }
+        view.onReady = { complete() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: complete)
+    }
+
+    /// Holds the overlay until the primary countdown background has a frame.
+    ///
+    /// Without this the overlay drops as soon as the clock is installed and the
+    /// still or loop fades in a beat later, on top of an already-visible clock.
+    private func waitUntilCountdownBackgroundDisplayed(
+        generation: Int,
+        then finish: @escaping () -> Void
+    ) {
+        let complete = { [weak self] in
+            guard let self, generation == self.transitionGeneration else { return }
+            self.countdownBackgroundView?.onReady = nil
+            finish()
+        }
+        guard let view = countdownBackgroundView, !view.isReadyForDisplay else {
             complete()
             return
         }
@@ -193,6 +219,13 @@ extension PresentationViewController {
         incomingScreensaverView?.stop()
         incomingScreensaverView?.removeFromSuperview()
         incomingScreensaverView = nil
+
+        incomingCountdownBackground?.onReady = nil
+        incomingCountdownBackground?.stop()
+        incomingCountdownBackground?.removeFromSuperview()
+        incomingCountdownBackground = nil
+        incomingCountdownLabel?.removeFromSuperview()
+        incomingCountdownLabel = nil
 
         incomingCameraPreview?.detach()
         incomingCameraPreview?.removeFromSuperview()

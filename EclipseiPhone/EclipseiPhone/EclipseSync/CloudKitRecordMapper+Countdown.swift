@@ -31,6 +31,10 @@ extension CloudKitRecordMapper {
             item.layout.centerY as CKRecordValue
         record[CloudKitSchema.CountdownKey.layoutScale] =
             item.layout.scale as CKRecordValue
+        record[CloudKitSchema.CountdownKey.background] =
+            item.background.token as CKRecordValue
+        record[CloudKitSchema.CountdownKey.endAction] =
+            item.endAction.token as CKRecordValue
         record[CloudKitSchema.CountdownKey.createdAt] = item.createdAt as CKRecordValue
         record[CloudKitSchema.CountdownKey.modifiedAt] = modifiedAt as CKRecordValue
         applyShowLink(
@@ -68,12 +72,20 @@ extension CloudKitRecordMapper {
                 fallback: CountdownClockLayout.default.scale
             )
         )
+        let background = CountdownBackground(
+            token: record[CloudKitSchema.CountdownKey.background] as? String
+        )
+        let endAction = CountdownEndAction(
+            token: record[CloudKitSchema.CountdownKey.endAction] as? String
+        )
         return ShowCountdown(
             id: uuid,
             showId: showId,
             name: UserDisplayName.clamp(name),
             duration: CountdownController.clampedDuration(duration),
             layout: layout.clampedScale,
+            background: background,
+            endAction: endAction,
             createdAt: createdAt
         )
     }

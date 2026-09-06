@@ -74,7 +74,9 @@ final class CountdownStore {
         name: String,
         showId: UUID,
         duration: Int,
-        layout: CountdownClockLayout = .default
+        layout: CountdownClockLayout = .default,
+        background: CountdownBackground = .black,
+        endAction: CountdownEndAction = .hold
     ) throws -> ShowCountdown {
         guard let trimmed = UserDisplayName.normalized(name) else {
             throw StoreError.emptyName
@@ -83,7 +85,9 @@ final class CountdownStore {
             showId: showId,
             name: trimmed,
             duration: CountdownController.clampedDuration(duration),
-            layout: layout
+            layout: layout,
+            background: background,
+            endAction: endAction
         )
         countdowns.append(item)
         persist()
@@ -119,6 +123,24 @@ final class CountdownStore {
         let next = layout.clampedScale
         guard countdowns[index].layout != next else { return }
         countdowns[index].layout = next
+        persist()
+        scheduleSaveIfNeeded(id: id)
+    }
+
+    /// Sets what renders behind the clock for the countdown with `id`.
+    func setBackground(id: UUID, _ background: CountdownBackground) {
+        guard let index = countdowns.firstIndex(where: { $0.id == id }) else { return }
+        guard countdowns[index].background != background else { return }
+        countdowns[index].background = background
+        persist()
+        scheduleSaveIfNeeded(id: id)
+    }
+
+    /// Sets what output does at 0:00 for the countdown with `id`.
+    func setEndAction(id: UUID, _ action: CountdownEndAction) {
+        guard let index = countdowns.firstIndex(where: { $0.id == id }) else { return }
+        guard countdowns[index].endAction != action else { return }
+        countdowns[index].endAction = action
         persist()
         scheduleSaveIfNeeded(id: id)
     }

@@ -146,6 +146,12 @@ extension LibraryGridViewController {
             refreshLiveHeader()
             return
         }
+        // Live Poll Practice / Start chrome owns the hero while the clock keeps
+        // running on the projector; a tick must not paint the clock back over it.
+        guard !showsLivePollIdleHeader else {
+            updateVisibleCountdownTiles()
+            return
+        }
         let clock = CountdownController.shared
         if liveHeader.countdownClockLabel.isHidden {
             applyCountdownLiveHeader()
@@ -158,7 +164,7 @@ extension LibraryGridViewController {
         updateVisibleCountdownTiles()
     }
 
-    /// ⋯ menu: edit layout, duration, rename, arrange, delete.
+    /// ⋯ menu: edit layout, duration, background, rename, arrange, delete.
     func countdownContextMenu(_ item: ShowCountdown) -> UIMenu {
         let token = ShowCountdownToken.token(for: item.id)
         var children: [UIMenuElement] = [
@@ -170,6 +176,7 @@ extension LibraryGridViewController {
             }
         ]
         children.append(contentsOf: countdownToolActions(for: item))
+        children.append(countdownBackgroundMenu(for: item))
         children.append(UIAction(
             title: "Rename",
             image: UIImage(systemName: "pencil")
@@ -193,7 +200,6 @@ extension LibraryGridViewController {
         let editor = CountdownLayoutEditorViewController(item: item)
         let nav = UINavigationController(rootViewController: editor)
         nav.modalPresentationStyle = .fullScreen
-        nav.overrideUserInterfaceStyle = .dark
         present(nav, animated: true)
     }
 
@@ -234,7 +240,7 @@ extension LibraryGridViewController {
             image: UIImage(systemName: "timer"),
             children: durationActions
         )
-        return [reset, duration]
+        return [reset, duration, countdownEndActionMenu(for: item)]
     }
 
     // MARK: - Destination

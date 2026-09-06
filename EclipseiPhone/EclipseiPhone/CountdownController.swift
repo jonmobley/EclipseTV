@@ -20,6 +20,15 @@ final class CountdownController {
         "CountdownController.didChange"
     )
 
+    /// Posted once each time the clock runs down to zero on its own.
+    ///
+    /// Separate from `didChangeNotification` because `remaining == 0` is a state the
+    /// UI reads on every tick, while the end action must run exactly once. A manual
+    /// pause landing on zero is not an expiry and does not post.
+    static let didExpireNotification = Notification.Name(
+        "CountdownController.didExpire"
+    )
+
     /// Ribbon / ⋯ duration chips, shortest first.
     nonisolated static let durationPresets: [Int] = [30, 60, 120, 300, 600]
 
@@ -40,6 +49,10 @@ final class CountdownController {
 
     /// True while the clock is counting toward zero.
     private(set) var running = false
+
+    /// The moment the clock actually reached zero, or nil if it hasn't since the
+    /// last start. Taken from the deadline, not from when the tick noticed.
+    private(set) var expiredAt: Date?
 
     /// Creates a controller; tests pass an isolated defaults suite.
     init(defaults: UserDefaults = .standard) {
@@ -122,6 +135,7 @@ final class CountdownController {
     /// Clears the live id and pauses (overlay teardown).
     func endLive() {
         liveCountdownId = nil
+        expiredAt = nil
         if running {
             pause()
         } else {
@@ -134,6 +148,7 @@ final class CountdownController {
         if remaining <= 0 {
             remaining = duration
         }
+        expiredAt = nil
         deadline = Date().addingTimeInterval(TimeInterval(remaining))
         running = true
         installTimer()
@@ -164,6 +179,7 @@ final class CountdownController {
     func reset() {
         pause()
         remaining = duration
+        expiredAt = nil
         notify()
     }
 
@@ -172,6 +188,7 @@ final class CountdownController {
         let next = Self.clampedDuration(seconds)
         duration = next
         remaining = next
+        expiredAt = nil
         defaults.set(next, forKey: Self.durationKey)
         if running {
             deadline = Date().addingTimeInterval(TimeInterval(next))
@@ -182,16 +199,26 @@ final class CountdownController {
         notify()
     }
 
+    /// How long ago the clock hit zero, or nil when it hasn't since the last start.
+    var secondsSinceExpiry: TimeInterval? {
+        expiredAt.map { -$0.timeIntervalSinceNow }
+    }
+
     /// Recomputes remaining from `deadline`. Tests call this instead of waiting.
-    func syncRemainingFromDeadline() {
-        guard running, let deadline else { return }
+    ///
+    /// - Returns: `true` when this call is the one that crossed zero. Clearing
+    ///   `running` and `deadline` here is what keeps that true only once.
+    @discardableResult
+    func syncRemainingFromDeadline() -> Bool {
+        guard running, let deadline else { return false }
         remaining = max(0, Int(ceil(deadline.timeIntervalSinceNow)))
-        if remaining == 0 {
-            running = false
-            self.deadline = nil
-            timer?.invalidate()
-            timer = nil
-        }
+        guard remaining == 0 else { return false }
+        running = false
+        expiredAt = deadline
+        self.deadline = nil
+        timer?.invalidate()
+        timer = nil
+        return true
     }
 
     // MARK: - Private
@@ -211,9 +238,17 @@ final class CountdownController {
     private func handleTick() {
         let wasRunning = running
         let previous = remaining
-        syncRemainingFromDeadline()
-        guard remaining != previous || running != wasRunning else { return }
-        notify()
+        let didExpire = syncRemainingFromDeadline()
+        if remaining != previous || running != wasRunning {
+            notify()
+        }
+        // Posted after `notify()` so output paints red 0:00 before any end action.
+        if didExpire {
+            NotificationCenter.default.post(
+                name: Self.didExpireNotification,
+                object: self
+            )
+        }
     }
 
     private func notify() {

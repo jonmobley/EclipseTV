@@ -17,6 +17,10 @@ struct ShowCountdown: Codable, Equatable, Identifiable, Hashable {
     var duration: Int
     /// Clock size and position on AirPlay / HDMI / Practice.
     var layout: CountdownClockLayout
+    /// What renders behind the clock. `.none` is solid black.
+    var background: CountdownBackground
+    /// What output does at 0:00.
+    var endAction: CountdownEndAction
     let createdAt: Date
 
     /// Creates a countdown with `name`, `duration`, and optional `layout`.
@@ -26,6 +30,8 @@ struct ShowCountdown: Codable, Equatable, Identifiable, Hashable {
         name: String,
         duration: Int,
         layout: CountdownClockLayout = .default,
+        background: CountdownBackground = .black,
+        endAction: CountdownEndAction = .hold,
         createdAt: Date = Date()
     ) {
         self.id = id
@@ -33,6 +39,8 @@ struct ShowCountdown: Codable, Equatable, Identifiable, Hashable {
         self.name = name
         self.duration = duration
         self.layout = layout
+        self.background = background
+        self.endAction = endAction
         self.createdAt = createdAt
     }
 
@@ -45,7 +53,7 @@ struct ShowCountdown: Codable, Equatable, Identifiable, Hashable {
     // MARK: - Codable
 
     private enum CodingKeys: String, CodingKey {
-        case id, showId, name, duration, layout, createdAt
+        case id, showId, name, duration, layout, background, endAction, createdAt
     }
 
     init(from decoder: Decoder) throws {
@@ -57,6 +65,12 @@ struct ShowCountdown: Codable, Equatable, Identifiable, Hashable {
         layout = try c.decodeIfPresent(
             CountdownClockLayout.self, forKey: .layout
         ) ?? .default
+        background = try c.decodeIfPresent(
+            CountdownBackground.self, forKey: .background
+        ) ?? .black
+        endAction = try c.decodeIfPresent(
+            CountdownEndAction.self, forKey: .endAction
+        ) ?? .fallback
         createdAt = try c.decode(Date.self, forKey: .createdAt)
     }
 }

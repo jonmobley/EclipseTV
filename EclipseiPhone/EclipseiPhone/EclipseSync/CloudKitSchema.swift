@@ -73,6 +73,8 @@ enum CloudKitSchema {
         /// Show membership / LocalMedia filename (imports; optional for captures).
         static let libraryId = "libraryId"
         static let fitMode = "fitMode"
+        /// Normalized crop `[x, y, width, height]` for custom still framing. Missing → none.
+        static let framing = "framing"
         static let isLooping = "isLooping"
         static let isMuted = "isMuted"
     }
@@ -115,6 +117,8 @@ enum CloudKitSchema {
         static let layoutCenterX = "layoutCenterX"
         static let layoutCenterY = "layoutCenterY"
         static let layoutScale = "layoutScale"
+        static let background = "background"
+        static let endAction = "endAction"
         static let createdAt = "createdAt"
         static let modifiedAt = "modifiedAt"
     }

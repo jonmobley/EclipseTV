@@ -189,7 +189,9 @@ extension LibraryGridViewController {
                 && !ExternalDisplayManager.shared.isOverlayLive
         case .website(let page):
             let mgr = ExternalDisplayManager.shared
-            return mgr.isWebLive && mgr.liveWebPageId == page.id
+            let webLive = mgr.isWebLive && mgr.liveWebPageId == page.id
+            let videoLive = mgr.isWebVideoLive && mgr.liveWebVideoPageId == page.id
+            return (webLive || videoLive)
                 && !isBlackSelected
                 && !isLogoSelected
                 && !isScreensaverSelected
@@ -266,7 +268,8 @@ extension LibraryGridViewController {
                     name: source.name,
                     showId: albumId,
                     duration: source.duration,
-                    layout: source.layout
+                    layout: source.layout,
+                    background: source.background
                 )
             } else if let livePollId = ShowLivePollToken.livePollId(from: id),
                       let source = LivePollStore.shared.poll(id: livePollId) {

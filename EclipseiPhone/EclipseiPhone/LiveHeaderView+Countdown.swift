@@ -38,6 +38,7 @@ extension LiveHeaderView {
             self.controls.isHidden = true
 
             self.countdownClockLabel.isHidden = false
+            self.refreshCountdownBackground()
             self.layoutCountdownClock(text: text, isExpired: isExpired)
             self.bringSubviewToFront(self.countdownClockLabel)
             self.bringSubviewToFront(self.liveBadge)
@@ -58,6 +59,14 @@ extension LiveHeaderView {
     func hideCountdownClock() {
         countdownClockLabel.isHidden = true
         countdownClockLabel.text = nil
+        clearCountdownBackground()
+    }
+
+    /// Stops and removes the in-hero countdown background.
+    func clearCountdownBackground() {
+        countdownBackground?.stop()
+        countdownBackground?.removeFromSuperview()
+        countdownBackground = nil
     }
 
     /// Positions the hero clock from the live countdown's saved or draft layout.
@@ -70,7 +79,44 @@ extension LiveHeaderView {
         )
     }
 
+    /// Mirrors the live countdown's background behind the hero clock.
+    ///
+    /// Callable while the clock is already up so choosing a background applies
+    /// without rebuilding hero chrome. Not driven by ticks: resolving media touches
+    /// the file system, and the digits change every second.
+    func refreshCountdownBackground() {
+        // The clock owns the hero or nothing does — never paint a background under
+        // whatever other content happens to be live.
+        guard !countdownClockLabel.isHidden else { return }
+        let background = CountdownController.shared.liveCountdownId
+            .map { CountdownBackground.resolved(for: $0) } ?? .black
+        guard let media = background.media else {
+            clearCountdownBackground()
+            return
+        }
+        let view = countdownBackground ?? installCountdownBackground()
+        view.apply(media)
+        insertSubview(view, at: 0)
+        bringSubviewToFront(countdownClockLabel)
+        bringSubviewToFront(liveBadge)
+        view.play()
+    }
+
     // MARK: - Private
+
+    private func installCountdownBackground() -> CountdownBackgroundView {
+        let view = CountdownBackgroundView()
+        view.translatesAutoresizingMaskIntoConstraints = false
+        insertSubview(view, at: 0)
+        NSLayoutConstraint.activate([
+            view.topAnchor.constraint(equalTo: topAnchor),
+            view.bottomAnchor.constraint(equalTo: bottomAnchor),
+            view.leadingAnchor.constraint(equalTo: leadingAnchor),
+            view.trailingAnchor.constraint(equalTo: trailingAnchor)
+        ])
+        countdownBackground = view
+        return view
+    }
 
     private func layoutCountdownClock(text: String, isExpired: Bool) {
         let layout = CountdownController.shared.liveCountdownId.map {

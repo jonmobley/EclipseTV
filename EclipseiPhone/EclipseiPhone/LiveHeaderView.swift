@@ -35,6 +35,8 @@ final class LiveHeaderView: UIView {
     var webPreviewPageId: UUID?
     /// In-hero muted Screensaver loop (phone preview; external has its own player).
     var screensaverPreview: SeamlessLoopPlayerView?
+    /// In-hero still or muted loop behind the countdown clock.
+    var countdownBackground: CountdownBackgroundView?
     /// In-hero library video (phone-only live; cleared when AirPlay owns playback).
     var libraryVideoHost: UIView?
     var libraryVideoPlayer: AVPlayer?
@@ -48,6 +50,11 @@ final class LiveHeaderView: UIView {
     var slideshowRibbonButton: UIButton?
     /// Circular Fit / Fill shortcut while a still or slideshow owns the hero.
     var screenFitButton: UIButton?
+    /// Circular front / back shortcut while the live camera owns the hero.
+    var cameraFlipButton: UIButton?
+    /// Left/right swipes that browse slides or the Show's stills from the hero.
+    /// Exposed so the Library↔Music pager can be told to yield to them.
+    var browseSwipeRecognizers: [UISwipeGestureRecognizer] = []
     /// Host for the live camera frame-tap mirror (AirPlay keeps the hardware layer).
     var cameraPreviewHost: UIView?
     /// In-hero live camera, fed by `CameraManager`'s frame tap.
@@ -84,14 +91,27 @@ final class LiveHeaderView: UIView {
     var onRequestCameraController: (() -> Void)?
     /// Swipe on the hero while a Slideshow is live: `+1` next, `-1` previous.
     var onSlideshowSwipe: ((Int) -> Void)?
+    /// Swipe on the hero while a Show still is live: `+1` next, `-1` previous.
+    var onLibraryBrowse: ((Int) -> Void)?
     /// Toggles `showRibbonWhenLive` for the active Slideshow from the hero.
     var onToggleSlideshowRibbon: (() -> Void)?
     /// Toggles Fit / Fill for the live still or slideshow from the hero.
     var onToggleScreenFit: (() -> Void)?
+    /// Switches the live camera between the front and back lenses from the hero.
+    var onFlipCamera: (() -> Void)?
     /// When true, the expanded hero accepts left/right swipes (and stays tappable).
     var allowsSlideshowBrowse = false {
         didSet {
             guard allowsSlideshowBrowse != oldValue else { return }
+            applyInteractionForPresentation()
+        }
+    }
+    /// When true, hero swipes take live output to the previous / next Show still.
+    /// Ignored while `allowsSlideshowBrowse` is set — a running Slideshow owns
+    /// the gesture.
+    var allowsLibraryBrowse = false {
+        didSet {
+            guard allowsLibraryBrowse != oldValue else { return }
             applyInteractionForPresentation()
         }
     }
@@ -125,7 +145,7 @@ final class LiveHeaderView: UIView {
         // and dumps unsatisfiable-constraint logs at construction.
         translatesAutoresizingMaskIntoConstraints = false
         setupViews()
-        installSlideshowBrowseGestures()
+        installHeroBrowseGestures()
     }
 
     required init?(coder: NSCoder) {
@@ -160,7 +180,9 @@ final class LiveHeaderView: UIView {
         gradientLayer.locations = [0.45, 1.0]
         layer.addSublayer(gradientLayer)
 
-        liveBadge.font = .systemFont(ofSize: 13, weight: .bold)
+        let liveBadgeBase = UIFont.systemFont(ofSize: 13, weight: .bold)
+        liveBadge.font = UIFontMetrics(forTextStyle: .caption1).scaledFont(for: liveBadgeBase)
+        liveBadge.adjustsFontForContentSizeCategory = true
         liveBadge.textColor = .white
         liveBadge.text = "LIVE"
         liveBadge.layer.cornerRadius = 6
@@ -168,7 +190,9 @@ final class LiveHeaderView: UIView {
         liveBadge.translatesAutoresizingMaskIntoConstraints = false
         addSubview(liveBadge)
 
-        titleLabel.font = .systemFont(ofSize: 20, weight: .bold)
+        let titleBase = UIFont.systemFont(ofSize: 20, weight: .bold)
+        titleLabel.font = UIFontMetrics(forTextStyle: .title3).scaledFont(for: titleBase)
+        titleLabel.adjustsFontForContentSizeCategory = true
         titleLabel.textColor = .white
         titleLabel.numberOfLines = 2
         titleLabel.lineBreakMode = .byWordWrapping
@@ -179,13 +203,15 @@ final class LiveHeaderView: UIView {
         countdownClockLabel.textColor = .white
         countdownClockLabel.textAlignment = .center
         countdownClockLabel.adjustsFontSizeToFitWidth = true
-        countdownClockLabel.minimumScaleFactor = 0.4
+        countdownClockLabel.minimumScaleFactor = 0.6
         countdownClockLabel.numberOfLines = 1
         countdownClockLabel.isHidden = true
         countdownClockLabel.translatesAutoresizingMaskIntoConstraints = true
         addSubview(countdownClockLabel)
 
-        subtitleLabel.font = .systemFont(ofSize: 13, weight: .semibold)
+        let subtitleBase = UIFont.systemFont(ofSize: 13, weight: .semibold)
+        subtitleLabel.font = UIFontMetrics(forTextStyle: .footnote).scaledFont(for: subtitleBase)
+        subtitleLabel.adjustsFontForContentSizeCategory = true
         subtitleLabel.textColor = UIColor.white.withAlphaComponent(0.85)
         subtitleLabel.translatesAutoresizingMaskIntoConstraints = false
         addSubview(subtitleLabel)
@@ -202,6 +228,7 @@ final class LiveHeaderView: UIView {
             target: self,
             action: #selector(handleFullscreenContentTap)
         )
+        fullscreenTap.delegate = self
         addGestureRecognizer(fullscreenTap)
 
         NSLayoutConstraint.activate([
@@ -315,10 +342,15 @@ final class LiveHeaderView: UIView {
         }
 
         let thumbToken = thumbnail.map { "\(ObjectIdentifier($0))" } ?? "nil"
-        let fitToken = item.isVideo
-            ? "video"
-            : (SlideshowPlaybackController.shared.contentModeForLiveStill(id: item.id)
-                == .scaleAspectFill ? "fill" : "fit")
+        let fitToken: String
+        if item.isVideo {
+            fitToken = "video"
+        } else if MediaFramingStore.hasFraming(forId: item.id) {
+            fitToken = "custom"
+        } else {
+            fitToken = SlideshowPlaybackController.shared.contentModeForLiveStill(id: item.id)
+                == .scaleAspectFill ? "fill" : "fit"
+        }
         let key = "media:\(item.id):\(thumbToken):\(isOnline)"
             + ":local\(showsLocalTransport):fs\(allowsStillFullscreenTap):\(fitToken)"
             + ":monitor\(usesRemoteVideoMonitor):badge\(showLiveBadge)"
@@ -337,10 +369,18 @@ final class LiveHeaderView: UIView {
                 // Video letterboxes on black so the card matches the stage; stills
                 // keep the light fill. Never put a film glyph on a video preview.
                 self.backgroundColor = item.isVideo ? .black : .secondarySystemBackground
-                self.imageView.contentMode = item.isVideo
-                    ? .scaleAspectFit
-                    : SlideshowPlaybackController.shared.contentModeForLiveStill(id: item.id)
-                self.imageView.image = thumbnail
+                if item.isVideo {
+                    self.imageView.contentMode = .scaleAspectFit
+                    self.imageView.image = thumbnail
+                } else {
+                    let fallback = SlideshowPlaybackController.shared
+                        .contentModeForLiveStill(id: item.id)
+                    let framed = MediaFramingStore.framedStill(
+                        thumbnail, forId: item.id, fallback: fallback
+                    )
+                    self.imageView.contentMode = framed.contentMode
+                    self.imageView.image = framed.image
+                }
                 self.imageView.isHidden = false
                 self.imageView.alpha = 1
                 self.placeholderIcon.isHidden = thumbnail != nil || item.isVideo
@@ -385,6 +425,7 @@ final class LiveHeaderView: UIView {
         keepScreensaverPreview: Bool = false,
         keepCameraPreview: Bool = false,
         showsLiveBadge: Bool? = nil,
+        showsTransport: Bool = false,
         stableContentKey: String? = nil
     ) {
         let showLiveBadge = showsLiveBadge ?? LiveOutputRouting.showsHeroLiveBadge()
@@ -402,7 +443,7 @@ final class LiveHeaderView: UIView {
         let key = stableContentKey ?? (
             "overlay:\(title):\(systemImage ?? ""):\(thumbToken)"
             + ":web\(keepWebPreview):ss\(keepScreensaverPreview):cam\(keepCameraPreview)"
-            + ":badge\(showLiveBadge)"
+            + ":badge\(showLiveBadge):transport\(showsTransport)"
         )
         applyContent(key: key) {
             self.hideCountdownClock()
@@ -419,18 +460,18 @@ final class LiveHeaderView: UIView {
                 self.placeholderIcon.isHidden = true
             }
 
-            self.wantsPlaybackControls = false
+            self.wantsPlaybackControls = showsTransport
             self.allowsFullscreenTap = false
             self.allowsHostControllerTap = false
             self.allowsCameraControllerTap = false
             self.gradientLayer.isHidden = true
             self.liveBadge.isHidden = !showLiveBadge
             self.subtitleLabel.isHidden = true
-            self.controls.isHidden = true
+            self.controls.isHidden = !showsTransport
 
             let hidingStatic = keepWebPreview || keepScreensaverPreview
                 || keepCameraPreview
-            self.titleLabel.isHidden = thumbnail != nil || hidingStatic
+            self.titleLabel.isHidden = thumbnail != nil || hidingStatic || showsTransport
             self.titleLabel.textColor = UIColor.white.withAlphaComponent(0.85)
             self.titleLabel.font = .systemFont(ofSize: 16, weight: .semibold)
             self.titleLabel.textAlignment = .center
@@ -529,18 +570,20 @@ final class LiveHeaderView: UIView {
     }
 
     /// Compact mini: tap to return. Expanded: transport / slideshow / still Preview.
-    /// The slide-ribbon and Screen Fit buttons must stay tappable when shown.
-    /// Practice / Start on the Live Poll gate must stay tappable too.
+    /// The slide-ribbon, Screen Fit, and Flip Camera buttons must stay tappable
+    /// when shown. Practice / Start on the Live Poll gate must stay tappable too.
     func applyInteractionForPresentation() {
         isUserInteractionEnabled =
             isCompactPresentation
             || wantsPlaybackControls
             || allowsSlideshowBrowse
+            || allowsLibraryBrowse
             || allowsFullscreenTap
             || allowsHostControllerTap
             || allowsCameraControllerTap
             || slideshowRibbonButton != nil
             || screenFitButton != nil
+            || cameraFlipButton != nil
             || isShowingLivePollGate
     }
 
@@ -549,14 +592,17 @@ final class LiveHeaderView: UIView {
     @objc func handleFullscreenContentTap() {
         guard !isCompactPresentation else { return }
         if allowsHostControllerTap {
+            Haptics.impactLight()
             onRequestHostController?()
             return
         }
         if allowsCameraControllerTap {
+            Haptics.impactLight()
             onRequestCameraController?()
             return
         }
         guard allowsFullscreenTap else { return }
+        Haptics.impactLight()
         onRequestFullscreen?()
     }
 

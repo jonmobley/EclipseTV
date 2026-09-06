@@ -17,8 +17,10 @@ extension PresentationViewController {
     /// Builds the next source inside `transitionOverlayContainer` (underlay stays live).
     func installIncoming(_ source: PresentationSource, generation: Int) {
         switch source.content {
-        case .image(let url, let fill):
-            installIncomingImage(url: url, fill: fill, generation: generation)
+        case .image(let url, let fill, let framing):
+            installIncomingImage(
+                url: url, fill: fill, framing: framing, generation: generation
+            )
         case .video(let url, let isLooping, let isMuted):
             installIncomingVideo(
                 url: url,
@@ -28,19 +30,23 @@ extension PresentationViewController {
                 autoplay: source.videoAutoplay,
                 generation: generation
             )
-        case .screensaver(let url):
-            installIncomingScreensaver(url: url, generation: generation)
+        case .screensaver(let url, let crossfade):
+            installIncomingScreensaver(
+                url: url, crossfade: crossfade, generation: generation
+            )
         case .camera:
             installIncomingCamera(generation: generation)
         case .web(let url):
             installIncomingWeb(url: url, generation: generation)
+        case .webVideo(let link):
+            installIncomingWebVideo(link, generation: generation)
         case .pdf(let url):
             installIncomingPDF(url: url, generation: generation)
         case .black:
             // Overlay is already black.
             notifyIfCurrent(generation)
         case .countdown:
-            notifyIfCurrent(generation)
+            installIncomingCountdown(generation: generation)
         case .unavailable(let thumbnail, _):
             installIncomingImage(uiImage: thumbnail, generation: generation)
         }
@@ -48,14 +54,37 @@ extension PresentationViewController {
 
     // MARK: - Image
 
-    private func installIncomingImage(url: URL, fill: Bool, generation: Int) {
+    private func installIncomingImage(
+        url: URL,
+        fill: Bool,
+        framing: MediaFraming?,
+        generation: Int
+    ) {
         let imageView = makeIncomingImageView()
-        imageView.contentMode = fill || LogoStore.shared.isLogoFileURL(url)
-            ? .scaleAspectFill : .scaleAspectFit
+        let isLogo = LogoStore.shared.isLogoFileURL(url)
+        if framing != nil, !isLogo {
+            imageView.contentMode = .scaleAspectFit
+        } else {
+            imageView.contentMode = fill || isLogo
+                ? .scaleAspectFill : .scaleAspectFit
+        }
 
         if url.isFileURL {
+            let maxEdge = PresentationImageDecoder.maxPixelEdge(
+                for: view.window?.windowScene?.screen
+            )
             DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-                let image = UIImage(contentsOfFile: url.path)
+                let decoded = PresentationImageDecoder.decode(
+                    fileURL: url,
+                    maxPixelEdge: maxEdge
+                )
+                let image: UIImage?
+                if let framing, let decoded, !isLogo {
+                    let crop = framing.rect(in: decoded.size)
+                    image = MediaAspect.crop(decoded, to: crop) ?? decoded
+                } else {
+                    image = decoded
+                }
                 DispatchQueue.main.async {
                     guard let self, generation == self.transitionGeneration else { return }
                     imageView.image = image
@@ -65,7 +94,12 @@ extension PresentationViewController {
         } else {
             incomingImageRequest = RemoteImageLoader.shared.loadImage(from: url) { [weak self] image in
                 guard let self, generation == self.transitionGeneration else { return }
-                imageView.image = image
+                if let framing, let image, !isLogo {
+                    let crop = framing.rect(in: image.size)
+                    imageView.image = MediaAspect.crop(image, to: crop) ?? image
+                } else {
+                    imageView.image = image
+                }
                 self.notifyIfCurrent(generation)
             }
         }
@@ -109,11 +143,9 @@ extension PresentationViewController {
         let host = makeIncomingMediaHost()
         configureAudioSession(muted: isMuted)
 
-        let player = AVPlayer(url: url)
-        player.isMuted = isMuted
-        player.actionAtItemEnd = isLooping ? .none : .pause
-        AirPlayVideoTransport.configureLayerOnlyPlayback(on: player)
-
+        let player = makePresentationPlayer(
+            url: url, isMuted: isMuted, isLooping: isLooping
+        )
         let layer = AVPlayerLayer(player: player)
         layer.videoGravity = .resizeAspect
         host.layer.insertSublayer(layer, at: 0)
@@ -135,7 +167,9 @@ extension PresentationViewController {
 
         let beginPlayback = { [weak self, weak player] in
             guard let player else { return }
-            AirPlayVideoTransport.start(player, at: startAt, autoplay: autoplay) {
+            AirPlayVideoTransport.start(
+                player, at: startAt, autoplay: autoplay, url: url
+            ) {
                 self?.revealIncomingVideoWhenDisplayed(layer, generation: generation)
             }
         }
@@ -181,9 +215,9 @@ extension PresentationViewController {
 
     // MARK: - Screensaver
 
-    private func installIncomingScreensaver(url: URL, generation: Int) {
+    private func installIncomingScreensaver(url: URL, crossfade: Bool, generation: Int) {
         let host = makeIncomingMediaHost()
-        let screensaver = SeamlessLoopPlayerView(url: url)
+        let screensaver = SeamlessLoopPlayerView(url: url, crossfadesAtLoop: crossfade)
         screensaver.translatesAutoresizingMaskIntoConstraints = false
         host.addSubview(screensaver)
         NSLayoutConstraint.activate([
@@ -279,6 +313,43 @@ extension PresentationViewController {
         view.load(URLRequest(url: url))
     }
 
+    /// Loads a YouTube / Vimeo shell into the transition overlay.
+    private func installIncomingWebVideo(_ link: WebVideoLink, generation: Int) {
+        guard let html = WebVideoShellHTML.document(for: link),
+              let base = link.shellBaseURL else {
+            notifyIfCurrent(generation)
+            return
+        }
+
+        let config = EclipseWebKit.makeConfiguration()
+        // Same bridge as the primary surface so adopt keeps transport working.
+        let proxy = WeakScriptMessageHandler(delegate: self)
+        config.userContentController.add(
+            proxy, name: WebVideoPlayerBridge.messageName
+        )
+        let view = WKWebView(frame: .zero, configuration: config)
+        EclipseWebKit.applyDesktopSite(to: view)
+        view.scrollView.showsVerticalScrollIndicator = false
+        view.scrollView.showsHorizontalScrollIndicator = false
+        view.scrollView.bounces = false
+        view.scrollView.contentInsetAdjustmentBehavior = .never
+        view.isOpaque = true
+        view.backgroundColor = .black
+        view.scrollView.backgroundColor = .black
+        view.isUserInteractionEnabled = false
+        view.translatesAutoresizingMaskIntoConstraints = true
+
+        let nav = IncomingWebNavigation { [weak self] in
+            self?.notifyIfCurrent(generation)
+        }
+        view.navigationDelegate = nav
+        incomingWebNavigation = nav
+        incomingWebView = view
+        transitionOverlayContainer.addSubview(view)
+        layoutIncomingWeb()
+        view.loadHTMLString(html, baseURL: base)
+    }
+
     // MARK: - PDF
 
     private func installIncomingPDF(url: URL, generation: Int) {
@@ -302,7 +373,7 @@ extension PresentationViewController {
 
     // MARK: - Layout
 
-    private func makeIncomingMediaHost() -> UIView {
+    func makeIncomingMediaHost() -> UIView {
         let host = UIView()
         host.backgroundColor = .black
         host.translatesAutoresizingMaskIntoConstraints = true
@@ -313,12 +384,13 @@ extension PresentationViewController {
 
     func layoutIncomingOverlayContent() {
         layoutIncomingMediaHost()
+        layoutIncomingCountdown()
         layoutIncomingCamera()
         layoutIncomingWeb()
         layoutIncomingPDF()
     }
 
-    private func layoutIncomingMediaHost() {
+    func layoutIncomingMediaHost() {
         guard let host = incomingMediaHost else { return }
         applyRotatedLayout(to: host, in: transitionOverlayContainer, scale: 1)
         incomingPlayerLayer?.frame = host.bounds
@@ -351,7 +423,18 @@ extension PresentationViewController {
 
     private func layoutIncomingWeb() {
         guard let web = incomingWebView else { return }
-        Self.applyWebLayout(to: web, in: transitionOverlayContainer, pageURL: web.url)
+        let isShell: Bool
+        if case .webVideo = pendingTransitionSource?.content {
+            isShell = true
+        } else {
+            isShell = false
+        }
+        Self.applyWebLayout(
+            to: web,
+            in: transitionOverlayContainer,
+            pageURL: web.url,
+            isWebVideoShell: isShell
+        )
     }
 
     private func layoutIncomingPDF() {
@@ -360,7 +443,7 @@ extension PresentationViewController {
         pdf.autoScales = true
     }
 
-    private func notifyIfCurrent(_ generation: Int) {
+    func notifyIfCurrent(_ generation: Int) {
         guard generation == transitionGeneration else { return }
         notifyContentReadyForTransition()
     }

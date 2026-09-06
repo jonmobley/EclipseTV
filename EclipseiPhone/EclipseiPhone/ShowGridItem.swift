@@ -32,6 +32,20 @@ enum ShowGridItem: Equatable {
         }
     }
 
+    /// Whether an automatic advance can put this tile on output unattended.
+    ///
+    /// Camera, Live Polls, and other countdowns each need a person to grant,
+    /// start, or time them, so advancing onto one would park a dead tile on the
+    /// projector. `unresolved` has no local file yet, and `add` is a button.
+    var canAutoPresentLive: Bool {
+        switch self {
+        case .slideshow, .screensaver, .logo, .media, .website, .pdf:
+            return true
+        case .camera, .livePoll, .countdown, .unresolved, .add:
+            return false
+        }
+    }
+
     /// Multi-select id (nil for slideshow / Add).
     var selectionId: String? {
         switch self {

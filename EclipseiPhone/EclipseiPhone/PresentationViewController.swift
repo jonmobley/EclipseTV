@@ -132,6 +132,10 @@ final class PresentationViewController: UIViewController {
     var webRequestedURL: URL?
     /// Matches overscroll gutters to the page colour; does not alter the page.
     var webBackgroundTint: WebBackgroundTint?
+    /// Active YouTube / Vimeo shell, if the web view is hosting an embed.
+    var webVideoLink: WebVideoLink?
+    /// Latest embed playback snapshot for the phone hero scrubber.
+    var webVideoPlaybackState = PlaybackState()
 
     /// Host for the scaled/rotated PDF view on the external display.
     let pdfContainer: UIView = {
@@ -161,11 +165,13 @@ final class PresentationViewController: UIViewController {
         label.textColor = .white
         label.textAlignment = .center
         label.adjustsFontSizeToFitWidth = true
-        label.minimumScaleFactor = 0.3
+        label.minimumScaleFactor = 0.6
         label.numberOfLines = 1
         label.translatesAutoresizingMaskIntoConstraints = true
         return label
     }()
+    /// Still or muted loop behind the clock, installed only when one is chosen.
+    var countdownBackgroundView: CountdownBackgroundView?
     var countdownObserver: NSObjectProtocol?
     var countdownLayoutObserver: NSObjectProtocol?
     var countdownPreviewObserver: NSObjectProtocol?
@@ -219,6 +225,9 @@ final class PresentationViewController: UIViewController {
     /// Seamless looping Screensaver (dual-player crossfade).
     var screensaverView: SeamlessLoopPlayerView?
     var incomingScreensaverView: SeamlessLoopPlayerView?
+    /// Countdown composed in the transition overlay: background plus frozen digits.
+    var incomingCountdownBackground: CountdownBackgroundView?
+    var incomingCountdownLabel: UILabel?
     var imageRequest: RemoteImageRequest?
     var imageLoadGeneration = 0
     var settingsObserver: NSObjectProtocol?
@@ -431,12 +440,13 @@ final class PresentationViewController: UIViewController {
     /// deliberately limited to web.
     func showIfNeeded(_ source: PresentationSource) {
         if pendingTransitionSource == source { return }
-        guard case .web = source.content else {
+        switch source.content {
+        case .web, .webVideo:
+            if presentedSource == source, !isTransitionInFlight { return }
             show(source)
-            return
+        default:
+            show(source)
         }
-        if presentedSource == source, !isTransitionInFlight { return }
-        show(source)
     }
 
     /// Installs `source` into the primary containers. Caller must cover with the
@@ -446,20 +456,21 @@ final class PresentationViewController: UIViewController {
         imageRequest?.cancel()
         imageRequest = nil
         setIdleBrandVisible(false)
-        // Library video hides ambient chrome; muted Screensaver does not.
-        if case .video = source.content {
+        // Library video and web-video embeds hide ambient chrome; muted Screensaver does not.
+        switch source.content {
+        case .video, .webVideo:
             isPresentingVideo = true
-        } else {
+        default:
             isPresentingVideo = false
         }
 
         switch source.content {
-        case .image(let url, let fill):
+        case .image(let url, let fill, let framing):
             hideCountdown()
             hideCamera()
             hideWeb()
             hidePDF()
-            showImage(at: url, fill: fill)
+            showImage(at: url, fill: fill, framing: framing)
         case .video(let url, let isLooping, let isMuted):
             hideCountdown()
             hideCamera()
@@ -472,12 +483,12 @@ final class PresentationViewController: UIViewController {
                 startAt: source.videoStartAt,
                 autoplay: source.videoAutoplay
             )
-        case .screensaver(let url):
+        case .screensaver(let url, let crossfade):
             hideCountdown()
             hideCamera()
             hideWeb()
             hidePDF()
-            showScreensaver(at: url)
+            showScreensaver(at: url, crossfade: crossfade)
         case .camera:
             hideCountdown()
             hideMediaContainer()
@@ -486,6 +497,10 @@ final class PresentationViewController: UIViewController {
             hideCountdown()
             hideMediaContainer()
             showWeb(url: url)
+        case .webVideo(let link):
+            hideCountdown()
+            hideMediaContainer()
+            showWebVideo(link)
         case .pdf(let url):
             hideCountdown()
             hideMediaContainer()
