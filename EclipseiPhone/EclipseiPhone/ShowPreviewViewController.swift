@@ -15,8 +15,19 @@ final class ShowPreviewViewController: UIViewController {
 
     private let items: [ShowPreviewItem]
     private let startIndex: Int
-    private let closeButton = UIButton(type: .system)
+    /// Page currently on screen; swiping updates it once the transition lands.
+    private var currentIndex: Int
+    private let header = PreviewHeaderView()
     private var pageController: UIPageViewController!
+    private var dismissDriver: PreviewDismissDriver?
+
+    /// Called as the gallery closes with the id (library id or `ShowToolToken`) of
+    /// the page that was on screen, so the Show grid can bring that tile into view.
+    var onDismiss: ((String) -> Void)?
+
+    /// Supplies the header ⋯ menu, so Preview mirrors the Show tile menu. Only
+    /// stills carry an id, so Screensaver and Background pages hide the button.
+    var optionsMenuProvider: ((PreviewMenuContext) -> UIMenu?)?
 
     /// - Parameters:
     ///   - items: Ordered gallery entries (must be non-empty).
@@ -26,6 +37,7 @@ final class ShowPreviewViewController: UIViewController {
         precondition(items.indices.contains(startIndex))
         self.items = items
         self.startIndex = startIndex
+        self.currentIndex = startIndex
         super.init(nibName: nil, bundle: nil)
         modalPresentationStyle = .fullScreen
     }
@@ -38,7 +50,26 @@ final class ShowPreviewViewController: UIViewController {
         super.viewDidLoad()
         view.backgroundColor = .black
         setupPager()
-        setupCloseButton()
+        setupHeader()
+        setupDismissDrag()
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        // The note composer is a sheet, so this only fires for the gallery itself.
+        guard isBeingDismissed else { return }
+        // A drag-to-close that springs back still runs this, so wait for the
+        // transition to land before parking the grid on a page we did not leave on.
+        let id = items[currentIndex].id
+        let notify = onDismiss
+        guard let coordinator = transitionCoordinator else {
+            notify?(id)
+            return
+        }
+        coordinator.animate(alongsideTransition: nil) { context in
+            guard !context.isCancelled else { return }
+            notify?(id)
+        }
     }
 
     // MARK: - Setup
@@ -62,18 +93,41 @@ final class ShowPreviewViewController: UIViewController {
         pager.setViewControllers([first], direction: .forward, animated: false)
     }
 
-    private func setupCloseButton() {
-        closeButton.applyPreviewCloseAppearance()
-        closeButton.translatesAutoresizingMaskIntoConstraints = false
-        closeButton.addTarget(self, action: #selector(closeTapped), for: .touchUpInside)
-        view.addSubview(closeButton)
-        view.bringSubviewToFront(closeButton)
+    private func setupHeader() {
+        header.translatesAutoresizingMaskIntoConstraints = false
+        header.onClose = { [weak self] in
+            self?.dismiss(animated: true)
+        }
+        header.onShare = { [weak self] url, button in
+            self?.presentPreviewShareSheet(for: url, from: button)
+        }
+        if let build = optionsMenuProvider {
+            header.menuProvider = { [weak self] itemId in
+                guard let self else { return nil }
+                return build(self.previewMenuContext(itemId: itemId))
+            }
+        }
+        view.addSubview(header)
+        view.bringSubviewToFront(header)
         NSLayoutConstraint.activate([
-            closeButton.topAnchor.constraint(
-                equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
-            closeButton.trailingAnchor.constraint(
-                equalTo: view.trailingAnchor, constant: -16)
+            header.topAnchor.constraint(equalTo: view.topAnchor),
+            header.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            header.trailingAnchor.constraint(equalTo: view.trailingAnchor)
         ])
+        updateHeader()
+    }
+
+    private func setupDismissDrag() {
+        let driver = PreviewDismissDriver(host: self)
+        driver.onDraggingChanged = { [weak self] dragging in
+            self?.setPagingEnabled(!dragging)
+        }
+        dismissDriver = driver
+    }
+
+    /// Retitles the header for whichever page is on screen.
+    private func updateHeader() {
+        header.configure(with: .showPage(items[currentIndex]))
     }
 
     private func makePage(at index: Int) -> UIViewController? {
@@ -82,7 +136,7 @@ final class ShowPreviewViewController: UIViewController {
         case .still(let item):
             let page = LocalMediaPreviewPageViewController(item: item, index: index)
             page.onZoomedChanged = { [weak self] zoomed in
-                self?.setPagingEnabled(!zoomed)
+                self?.pageZoomChanged(zoomed)
             }
             return page
         case .displayMode(let spec):
@@ -93,10 +147,16 @@ final class ShowPreviewViewController: UIViewController {
                 index: index
             )
             page.onZoomedChanged = { [weak self] zoomed in
-                self?.setPagingEnabled(!zoomed)
+                self?.pageZoomChanged(zoomed)
             }
             return page
         }
+    }
+
+    private func pageZoomChanged(_ zoomed: Bool) {
+        setPagingEnabled(!zoomed)
+        // Zoomed in, a drag pans the still; only a fitted page can be pulled away.
+        dismissDriver?.isEnabled = !zoomed
     }
 
     private func setPagingEnabled(_ enabled: Bool) {
@@ -120,10 +180,6 @@ final class ShowPreviewViewController: UIViewController {
         (viewController as? LocalMediaPreviewPageViewController)?.resetZoom()
         (viewController as? DisplayModeMediaPreviewPageViewController)?.pausePlayback()
         (viewController as? DisplayModeMediaPreviewPageViewController)?.resetZoom()
-    }
-
-    @objc private func closeTapped() {
-        dismiss(animated: true)
     }
 }
 
@@ -156,6 +212,11 @@ extension ShowPreviewViewController: UIPageViewControllerDataSource,
     ) {
         guard completed else { return }
         setPagingEnabled(true)
+        if let current = pageViewController.viewControllers?.first,
+           let index = pageIndex(of: current) {
+            currentIndex = index
+            updateHeader()
+        }
         previousViewControllers.forEach(recycle)
     }
 }

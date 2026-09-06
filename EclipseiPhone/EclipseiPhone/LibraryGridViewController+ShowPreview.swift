@@ -20,7 +20,14 @@ extension LibraryGridViewController {
         let pages = ShowPreviewGallery.items(from: openShowGridItems)
         guard let index = pages.firstIndex(where: { $0.id == id }) else { return false }
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        present(ShowPreviewViewController(items: pages, startIndex: index), animated: true)
+        let preview = ShowPreviewViewController(items: pages, startIndex: index)
+        preview.onDismiss = { [weak self] id in
+            self?.revealShowMember(id: id)
+        }
+        preview.optionsMenuProvider = { [weak self] context in
+            self?.previewOptionsMenu(context)
+        }
+        present(preview, animated: true)
         return true
     }
 

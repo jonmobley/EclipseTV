@@ -171,6 +171,7 @@ extension LibraryGridViewController {
         LocalAlbumStore.shared.touchRecentlyOpened(id: album.id)
         let wasShowMode = isShowMode
         openShowId = album.id
+        markShowSurfaceRevealed()
         updateVisibleLibraryPage()
         applyShowPageLayout()
         // Always re-evaluate — Practice Mode / destination can differ per Show.
@@ -326,8 +327,7 @@ extension LibraryGridViewController {
                 warmPreview: !ShowLiveSession.shared.isRemoteOperator
                     && !isCameraControlPresented
                     && !homeCameraWarmPreviewSuspended,
-                isLocked: isLiveOutputLocked,
-                isPreview: cameraTileIsPreview(live)
+                isLocked: isLiveOutputLocked
             )
             cell.setMoreMenu(
                 (isArranging || isSelecting)
@@ -363,14 +363,15 @@ extension LibraryGridViewController {
                 applyVideoRewind(to: cell, item: item, isLive: live)
             }
         case .website(let page):
+            let isVideoLink = page.videoLink != nil
             cell.configureSpecial(
                 title: page.title,
-                systemImage: "safari",
+                systemImage: isVideoLink ? "play.rectangle.fill" : "safari",
                 thumbnail: WebThumbnailStore.shared.image(for: page.id),
                 fillColor: UIColor(white: 0.16, alpha: 1),
                 isLive: live,
                 isLocked: isLiveOutputLocked,
-                typeIcon: .website
+                typeIcon: isVideoLink ? .webVideo : .website
             )
             if isArranging || isSelecting {
                 cell.clearMoreMenu()
@@ -418,7 +419,9 @@ extension LibraryGridViewController {
         guard !isArranging, !isSelecting else { return }
         let items = openShowGridItems
         guard items.indices.contains(indexPath.item) else { return }
-        switch items[indexPath.item] {
+        let tapped = items[indexPath.item]
+        dismissLivePollGateIfNeeded(for: tapped)
+        switch tapped {
         case .slideshow(let show):
             isBlackSelected = false
             isLogoSelected = false
@@ -588,6 +591,19 @@ extension LibraryGridViewController {
         return UIMenu(children: [edit, screenFitMenu(for: show), rename, arrangeAction(), delete])
     }
 
+    /// Opens the pan/zoom cropper so the user can re-frame the stored file.
+    ///
+    /// Sits beside Screen Fit because both decide what the audience sees, but this
+    /// one rewrites the media instead of choosing Fit vs Fill at display time.
+    private func editAction(for item: LibraryItemDTO) -> UIAction {
+        UIAction(
+            title: "Edit",
+            image: UIImage(systemName: "crop")
+        ) { [weak self] _ in
+            self?.onRequestEdit?(item.id)
+        }
+    }
+
     private func mediaContextMenu(_ item: LibraryItemDTO, in album: LocalAlbum) -> UIMenu {
         let items = openShowItems
         let isCover = album.resolvedCoverId == item.id
@@ -620,8 +636,11 @@ extension LibraryGridViewController {
         if item.isVideo {
             children.append(contentsOf: videoOptionActions(for: item))
         } else {
-            children.append(screenFitMenu(for: item))
             children.append(noteAction(for: item))
+            children.append(screenFitMenu(for: item))
+        }
+        if item.isAvailable != false {
+            children.append(editAction(for: item))
         }
         if let capture = CaptureStore.shared.record(id: item.id),
            LocalMediaStore.shared.hasMedia(
@@ -706,12 +725,7 @@ extension LibraryGridViewController {
                 })
             }
         case ShowToolToken.camera:
-            children.append(UIAction(
-                title: "Open Controller",
-                image: UIImage(systemName: "camera.viewfinder")
-            ) { [weak self] _ in
-                self?.onPresentCamera?()
-            })
+            children.append(contentsOf: cameraToolActions())
         case ShowToolToken.screensaver:
             children.append(UIAction(
                 title: "Preview",
@@ -725,6 +739,9 @@ extension LibraryGridViewController {
             ) { [weak self] _ in
                 self?.onChooseScreensaver?()
             })
+            if let crossfade = screensaverCrossfadeAction() {
+                children.append(crossfade)
+            }
             if ScreensaverStore.hasCustomMedia {
                 children.append(UIAction(
                     title: "Reset to Default",
@@ -749,6 +766,22 @@ extension LibraryGridViewController {
         }
         children.append(remove)
         return UIMenu(children: children)
+    }
+
+    /// Crossfade toggle for a custom Screensaver video whose loop point isn't clean.
+    /// Nil for the bundled loop and custom stills, which have no loop to blend.
+    private func screensaverCrossfadeAction() -> UIAction? {
+        let store = ScreensaverStore.shared
+        guard store.hasCustomVideo else { return nil }
+        let on = store.isLoopCrossfadeEnabled
+        // Checkmark rides in the image slot (see VideoOptions) so the title holds still.
+        return UIAction(
+            title: "Crossfade",
+            subtitle: "Blend the loop point if the video doesn't loop cleanly",
+            image: UIImage(systemName: on ? "checkmark" : "circle.lefthalf.filled")
+        ) { _ in
+            ScreensaverStore.shared.isLoopCrossfadeEnabled = !on
+        }
     }
 
     func arrangeAction() -> UIAction {

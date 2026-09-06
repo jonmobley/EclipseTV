@@ -62,7 +62,19 @@ extension MediaLibraryPickerViewController {
             items: previewable,
             startIndex: index
         )
+        preview.onDismiss = { [weak self] id in
+            self?.revealItemAfterPreview(id: id)
+        }
+        preview.optionsMenuProvider = { [weak self] context in
+            self?.previewOptionsMenu(context)
+        }
         present(preview, animated: true)
+    }
+
+    /// Parks the grid on the tile the gallery closed on (if the filter still shows it).
+    private func revealItemAfterPreview(id: String) {
+        guard let index = items.firstIndex(of: .media(id)) else { return }
+        collectionView.revealItemIfNeeded(at: IndexPath(item: index, section: 0))
     }
 
     private func previewVideo(_ item: LibraryItemDTO, fileURL: URL) {

@@ -16,11 +16,12 @@ final class DisplayModeMediaPreviewViewController: UIViewController {
 
     private let page: DisplayModeMediaPreviewPageViewController
     private let closeButton = UIButton(type: .system)
+    private var dismissDriver: PreviewDismissDriver?
 
     /// - Parameters:
     ///   - fileURL: Local still or video file.
     ///   - isVideo: Plays video instead of showing a still.
-    ///   - usesSeamlessLoop: Screensaver dual-player crossfade; otherwise simple loop.
+    ///   - usesSeamlessLoop: Screensaver muted loop host; otherwise simple loop.
     init(fileURL: URL, isVideo: Bool, usesSeamlessLoop: Bool = false) {
         page = DisplayModeMediaPreviewPageViewController(
             fileURL: fileURL,
@@ -45,6 +46,7 @@ final class DisplayModeMediaPreviewViewController: UIViewController {
         view.addSubview(page.view)
         page.didMove(toParent: self)
         setupCloseButton()
+        setupDismissDrag()
     }
 
     override func viewDidLayoutSubviews() {
@@ -67,6 +69,15 @@ final class DisplayModeMediaPreviewViewController: UIViewController {
                 equalTo: view.trailingAnchor, constant: -16
             )
         ])
+    }
+
+    private func setupDismissDrag() {
+        let driver = PreviewDismissDriver(host: self)
+        page.onZoomedChanged = { [weak driver] zoomed in
+            // Zoomed in, a drag pans the panel; only a fitted one can be pulled away.
+            driver?.isEnabled = !zoomed
+        }
+        dismissDriver = driver
     }
 
     @objc private func closeTapped() {

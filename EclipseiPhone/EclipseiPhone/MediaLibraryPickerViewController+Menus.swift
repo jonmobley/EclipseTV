@@ -79,7 +79,7 @@ extension MediaLibraryPickerViewController {
         }
     }
 
-    private func titleAction(forId id: String) -> UIAction {
+    func titleAction(forId id: String) -> UIAction {
         UIAction(
             title: MediaTitleStore.menuTitle(forId: id),
             image: UIImage(systemName: "textformat")
@@ -88,7 +88,7 @@ extension MediaLibraryPickerViewController {
         }
     }
 
-    private func noteAction(forId id: String) -> UIAction {
+    func noteAction(forId id: String) -> UIAction {
         UIAction(
             title: MediaNoteStore.menuTitle(forId: id),
             image: UIImage(systemName: "note.text")
@@ -107,7 +107,7 @@ extension MediaLibraryPickerViewController {
         }
     }
 
-    private func videoLibraryActions(for item: LibraryItemDTO) -> [UIMenuElement] {
+    func videoLibraryActions(for item: LibraryItemDTO) -> [UIMenuElement] {
         guard item.isVideo, item.isAvailable != false else { return [] }
         let loopOn = item.isLooping ?? false
         let muted = item.isMuted ?? false
@@ -138,7 +138,12 @@ extension MediaLibraryPickerViewController {
         return actions
     }
 
-    private func addToShowMenu(membershipId: String) -> UIMenuElement {
+    /// - Parameter presenter: Screen the "already in Show" alert comes from. Pass
+    ///   Preview when the menu is opened there, since it covers this picker.
+    func addToShowMenu(
+        membershipId: String,
+        presenter: UIViewController? = nil
+    ) -> UIMenuElement {
         let groups = ShowCopyDestinations.grouped(
             albums: LocalAlbumStore.shared.albums,
             activeOrientation: ExternalOutputSettings.orientation
@@ -159,23 +164,33 @@ extension MediaLibraryPickerViewController {
                     title: "",
                     options: .displayInline,
                     children: group.map { show in
-                        self.addToShowAction(membershipId: membershipId, show: show)
+                        self.addToShowAction(
+                            membershipId: membershipId, show: show, presenter: presenter
+                        )
                     }
                 )
             }
         )
     }
 
-    private func addToShowAction(membershipId: String, show: LocalAlbum) -> UIAction {
+    private func addToShowAction(
+        membershipId: String,
+        show: LocalAlbum,
+        presenter: UIViewController? = nil
+    ) -> UIAction {
         UIAction(
             title: show.name,
             image: UIImage(systemName: show.showPickerIconName)
         ) { [weak self] _ in
-            self?.addMembership(membershipId, to: show)
+            self?.addMembership(membershipId, to: show, presenter: presenter)
         }
     }
 
-    private func addMembership(_ membershipId: String, to show: LocalAlbum) {
+    private func addMembership(
+        _ membershipId: String,
+        to show: LocalAlbum,
+        presenter: UIViewController? = nil
+    ) {
         let members = Set(show.itemIds)
         let finish = {
             LocalAlbumStore.shared.add(itemId: membershipId, toAlbumId: show.id)
@@ -184,7 +199,7 @@ extension MediaLibraryPickerViewController {
             selectedIds: [membershipId],
             memberIds: members
         ) {
-            AlreadyInShowAlert.present(from: self, onContinue: finish)
+            AlreadyInShowAlert.present(from: presenter ?? self, onContinue: finish)
             return
         }
         finish()
@@ -215,7 +230,7 @@ extension MediaLibraryPickerViewController {
         }
     }
 
-    private func confirmDeleteMedia(_ item: LibraryItemDTO) {
+    func confirmDeleteMedia(_ item: LibraryItemDTO) {
         let isPending = PendingUploadStore.shared.contains(id: item.id)
         let linked = onIsEclipseTVLinked?() ?? false
         if !isPending && !linked {

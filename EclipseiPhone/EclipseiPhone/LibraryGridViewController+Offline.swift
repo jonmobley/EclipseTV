@@ -40,6 +40,7 @@ extension LibraryGridViewController {
         }
         if sent || wasPending {
             MediaFitSettings.clear(forId: id)
+            MediaFramingStore.clear(forId: id)
             MediaNoteStore.clear(forId: id)
             MediaTitleStore.clear(forId: id)
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -52,6 +53,11 @@ extension LibraryGridViewController {
     func presentOfflineLive(for item: LibraryItemDTO) {
         if item.isVideo {
             AudioPlayerController.shared.stop()
+            if let localURL = LocalMediaStore.shared.localURL(forId: item.id) {
+                PresentationPrewarmer.shared.prewarm(url: localURL)
+            }
+        } else {
+            PresentationPrewarmer.shared.clear()
         }
         let startAt = item.isVideo ? (VideoResumeStore.shared.position(for: item.id) ?? 0) : 0
         if item.isVideo { VideoResumeStore.shared.clear(for: item.id) }
@@ -84,8 +90,7 @@ extension LibraryGridViewController {
 
     /// Opens the slide-up note composer for a still.
     func presentNoteComposer(forId id: String) {
-        let nav = MediaNoteComposerViewController.makeNavigation(itemId: id)
-        present(nav, animated: true)
+        presentMediaNoteComposer(forId: id)
     }
 
     /// Presents Preview for `item` among `neighbors` (images swipe; video is modal).
@@ -129,6 +134,12 @@ extension LibraryGridViewController {
 
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         let preview = LocalMediaPreviewViewController(items: previewable, startIndex: index)
+        preview.onDismiss = { [weak self] id in
+            self?.revealShowMember(id: id)
+        }
+        preview.optionsMenuProvider = { [weak self] context in
+            self?.previewOptionsMenu(context)
+        }
         present(preview, animated: true)
     }
 
@@ -176,15 +187,15 @@ extension LibraryGridViewController {
             return
         }
         switch source.content {
-        case .image(let url, _):
+        case .image(let url, _, _):
             presentPhonePreview(
                 id: ShowToolToken.screensaver, fileURL: url, isVideo: false
             )
-        case .screensaver(let url), .video(let url, _, _):
+        case .screensaver(let url, _), .video(let url, _, _):
             presentPhonePreview(
                 id: ShowToolToken.screensaver, fileURL: url, isVideo: true
             )
-        case .camera, .web, .pdf, .black, .countdown, .unavailable:
+        case .camera, .web, .webVideo, .pdf, .black, .countdown, .unavailable:
             break
         }
     }

@@ -24,8 +24,9 @@ struct LocalMediaPreviewItem: Equatable {
 final class LocalMediaPreviewViewController: UIViewController {
 
     private let items: [LocalMediaPreviewItem]
-    private let closeButton = UIButton(type: .system)
+    private let header = PreviewHeaderView()
     private var pageController: UIPageViewController!
+    private var dismissDriver: PreviewDismissDriver?
 
     /// Builds preview items from library DTOs that have a local full-res copy.
     static func previewableItems(from items: [LibraryItemDTO]) -> [LocalMediaPreviewItem] {
@@ -47,6 +48,16 @@ final class LocalMediaPreviewViewController: UIViewController {
     }
 
     private let startIndex: Int
+    /// Page currently on screen; swiping updates it once the transition lands.
+    private var currentIndex: Int
+
+    /// Called as the gallery closes with the id of the page that was on screen, so
+    /// the presenting grid can bring that tile back into view.
+    var onDismiss: ((String) -> Void)?
+
+    /// Supplies the header ⋯ menu, so Preview mirrors the tile menu of the screen
+    /// that opened it. Leave `nil` to hide the button.
+    var optionsMenuProvider: ((PreviewMenuContext) -> UIMenu?)?
 
     /// - Parameters:
     ///   - items: Ordered gallery entries (must be non-empty).
@@ -56,6 +67,7 @@ final class LocalMediaPreviewViewController: UIViewController {
         precondition(items.indices.contains(startIndex))
         self.items = items
         self.startIndex = startIndex
+        self.currentIndex = startIndex
         super.init(nibName: nil, bundle: nil)
         modalPresentationStyle = .fullScreen
     }
@@ -68,7 +80,26 @@ final class LocalMediaPreviewViewController: UIViewController {
         super.viewDidLoad()
         view.backgroundColor = .black
         setupPager()
-        setupCloseButton()
+        setupHeader()
+        setupDismissDrag()
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        // The note composer is a sheet, so this only fires for the gallery itself.
+        guard isBeingDismissed else { return }
+        // A drag-to-close that springs back still runs this, so wait for the
+        // transition to land before parking the grid on a page we did not leave on.
+        let id = items[currentIndex].id
+        let notify = onDismiss
+        guard let coordinator = transitionCoordinator else {
+            notify?(id)
+            return
+        }
+        coordinator.animate(alongsideTransition: nil) { context in
+            guard !context.isCancelled else { return }
+            notify?(id)
+        }
     }
 
     // MARK: - Setup
@@ -92,18 +123,42 @@ final class LocalMediaPreviewViewController: UIViewController {
         pager.setViewControllers([first], direction: .forward, animated: false)
     }
 
-    private func setupCloseButton() {
-        closeButton.applyPreviewCloseAppearance()
-        closeButton.translatesAutoresizingMaskIntoConstraints = false
-        closeButton.addTarget(self, action: #selector(closeTapped), for: .touchUpInside)
-        view.addSubview(closeButton)
-        view.bringSubviewToFront(closeButton)
+    private func setupHeader() {
+        header.translatesAutoresizingMaskIntoConstraints = false
+        header.onClose = { [weak self] in
+            self?.dismiss(animated: true)
+        }
+        header.onShare = { [weak self] url, button in
+            self?.presentPreviewShareSheet(for: url, from: button)
+        }
+        if let build = optionsMenuProvider {
+            header.menuProvider = { [weak self] itemId in
+                guard let self else { return nil }
+                return build(self.previewMenuContext(itemId: itemId))
+            }
+        }
+        view.addSubview(header)
+        view.bringSubviewToFront(header)
         NSLayoutConstraint.activate([
-            closeButton.topAnchor.constraint(
-                equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
-            closeButton.trailingAnchor.constraint(
-                equalTo: view.trailingAnchor, constant: -16)
+            header.topAnchor.constraint(equalTo: view.topAnchor),
+            header.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            header.trailingAnchor.constraint(equalTo: view.trailingAnchor)
         ])
+        updateHeader()
+    }
+
+    private func setupDismissDrag() {
+        let driver = PreviewDismissDriver(host: self)
+        driver.onDraggingChanged = { [weak self] dragging in
+            self?.setPagingEnabled(!dragging)
+        }
+        dismissDriver = driver
+    }
+
+    /// Retitles the header for whichever page is on screen.
+    private func updateHeader() {
+        let item = items[currentIndex]
+        header.configure(with: .libraryItem(id: item.id, fileURL: item.fileURL))
     }
 
     private func makePage(at index: Int) -> LocalMediaPreviewPageViewController? {
@@ -111,6 +166,8 @@ final class LocalMediaPreviewViewController: UIViewController {
         let page = LocalMediaPreviewPageViewController(item: items[index], index: index)
         page.onZoomedChanged = { [weak self] zoomed in
             self?.setPagingEnabled(!zoomed)
+            // Zoomed in, a drag pans the still; only a fitted page can be pulled away.
+            self?.dismissDriver?.isEnabled = !zoomed
         }
         return page
     }
@@ -119,10 +176,6 @@ final class LocalMediaPreviewViewController: UIViewController {
         pageController.view.subviews
             .compactMap { $0 as? UIScrollView }
             .forEach { $0.isScrollEnabled = enabled }
-    }
-
-    @objc private func closeTapped() {
-        dismiss(animated: true)
     }
 }
 
@@ -155,6 +208,11 @@ extension LocalMediaPreviewViewController: UIPageViewControllerDataSource,
     ) {
         guard completed else { return }
         setPagingEnabled(true)
+        if let current = pageViewController.viewControllers?.first
+            as? LocalMediaPreviewPageViewController {
+            currentIndex = current.index
+            updateHeader()
+        }
         for previous in previousViewControllers {
             (previous as? LocalMediaPreviewPageViewController)?.pausePlayback()
             (previous as? LocalMediaPreviewPageViewController)?.resetZoom()
