@@ -11,7 +11,7 @@ class ToastView: UIView {
     private let messageLabel: UILabel = {
         let label = UILabel()
         label.textColor = .white
-        label.font = UIFont.systemFont(ofSize: 24, weight: .medium)
+        label.font = UIFont.preferredFont(forTextStyle: .title3)
         label.textAlignment = .left
         label.numberOfLines = 0
         return label

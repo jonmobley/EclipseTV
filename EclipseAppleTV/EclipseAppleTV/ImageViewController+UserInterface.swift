@@ -51,7 +51,7 @@ extension ImageViewController {
         label.text = message
         label.textColor = .white
         label.textAlignment = .center
-        label.font = UIFont.systemFont(ofSize: 24)
+        label.font = UIFont.preferredFont(forTextStyle: .title3)
         
         toastView.addSubview(label)
         view.addSubview(toastView)

@@ -30,7 +30,7 @@ class HelpView: UIView {
         label.text = """
         • Press Play/Pause to toggle between the grid and fullscreen
         
-        • Press Menu in fullscreen to return to the grid; press Menu in the grid to open options
+        • Press Menu in fullscreen to return to the grid; press Menu in the grid to exit to Home. Use the ••• button for options
         
         • Swipe Left/Right in fullscreen to move between items
         
@@ -117,6 +117,9 @@ class HelpView: UIView {
         ])
         
         closeButton.addTarget(self, action: #selector(closeButtonTapped), for: .primaryActionTriggered)
+        closeButton.accessibilityLabel = "Close help"
+        titleLabel.accessibilityTraits = .header
+        helpTextLabel.accessibilityLabel = helpTextLabel.text
     }
     
     @objc private func closeButtonTapped() {

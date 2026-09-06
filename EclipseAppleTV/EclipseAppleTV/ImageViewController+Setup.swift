@@ -180,15 +180,4 @@ extension ImageViewController {
         // Add the new gradient layer
         gradientView.layer.insertSublayer(gradientLayer, at: 0)
     }
-
-    func setupFocusGuide() {
-        view.addLayoutGuide(focusGuide)
-
-        NSLayoutConstraint.activate([
-            focusGuide.topAnchor.constraint(equalTo: view.topAnchor),
-            focusGuide.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            focusGuide.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            focusGuide.bottomAnchor.constraint(equalTo: view.bottomAnchor)
-        ])
-    }
 }

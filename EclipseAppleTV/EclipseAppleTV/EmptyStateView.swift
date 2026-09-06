@@ -92,6 +92,8 @@ class EmptyStateView: UIView {
         imageView.contentMode = .scaleAspectFit
         imageView.image = UIImage(named: "eclipse-qrcode")
         imageView.translatesAutoresizingMaskIntoConstraints = false
+        imageView.isAccessibilityElement = true
+        imageView.accessibilityLabel = "QR code to open Eclipse on iPhone"
         return imageView
     }()
     
@@ -111,6 +113,8 @@ class EmptyStateView: UIView {
         button.layer.shadowOffset = CGSize.zero
         button.layer.shadowRadius = 0
         button.layer.shadowOpacity = 0
+        button.accessibilityLabel = "Open App"
+        button.accessibilityHint = "Opens pairing instructions for the Eclipse iPhone app"
         
         return button
     }()
@@ -270,10 +274,12 @@ class EmptyStateView: UIView {
         let normalized = PeerPairing.normalizePIN(pin)
         guard PeerPairing.isValidPIN(normalized) else {
             pairingCodeLabel.text = "------"
+            pairingCodeLabel.accessibilityLabel = "Pairing code unavailable"
             return
         }
         let mid = normalized.index(normalized.startIndex, offsetBy: 3)
         pairingCodeLabel.text = "\(normalized[..<mid]) \(normalized[mid...])"
+        pairingCodeLabel.accessibilityLabel = "Pairing code \(normalized)"
     }
 
     // MARK: - Actions
@@ -296,7 +302,9 @@ class EmptyStateView: UIView {
                 // Add glow effect when focused
                 self.openAppButton.layer.shadowOpacity = 0.8
                 self.openAppButton.layer.shadowRadius = 20
-                self.openAppButton.transform = CGAffineTransform(scaleX: 1.05, y: 1.05)
+                if !UIAccessibility.isReduceMotionEnabled {
+                    self.openAppButton.transform = CGAffineTransform(scaleX: 1.05, y: 1.05)
+                }
             } else if context.previouslyFocusedView == self.openAppButton {
                 // Remove glow effect when focus leaves
                 self.openAppButton.layer.shadowOpacity = 0

@@ -268,7 +268,9 @@ extension ImageViewController {
             cell.transform = CGAffineTransform(scaleX: 1.1, y: 1.1)
             cell.alpha = 0.8
         }
-        
+
+        guard !UIAccessibility.isReduceMotionEnabled else { return }
+
         // Add a pulsing animation
         let pulseAnimation = CABasicAnimation(keyPath: "transform.scale")
         pulseAnimation.duration = 0.8
@@ -299,7 +301,7 @@ extension ImageViewController {
         instructionLabel.text = "Navigate to reposition, press SELECT when done"
         instructionLabel.textColor = .white
         instructionLabel.textAlignment = .center
-        instructionLabel.font = UIFont.systemFont(ofSize: 22)
+        instructionLabel.font = UIFont.preferredFont(forTextStyle: .title3)
         
         overlayView.addSubview(instructionLabel)
         view.addSubview(overlayView)

@@ -67,7 +67,7 @@ class ImageThumbnailCell: UICollectionViewCell {
     private let durationLabel: UILabel = {
         let label = UILabel()
         label.textColor = .white
-        label.font = UIFont.systemFont(ofSize: 24, weight: .medium)  // Updated to match DURATION_FONT_SIZE
+        label.font = UIFont.preferredFont(forTextStyle: .title3)
         label.textAlignment = .center
         label.isHidden = true
         return label
@@ -135,9 +135,12 @@ class ImageThumbnailCell: UICollectionViewCell {
     // MARK: - UI Setup
     
     private func setupUI() {
-        // Add corner radius to cell
+        // Keep shadow / focus lift visible outside the tile bounds.
         layer.cornerRadius = 12
-        clipsToBounds = true
+        clipsToBounds = false
+        contentView.clipsToBounds = false
+        imageView.layer.cornerRadius = 12
+        imageView.clipsToBounds = true
         
         // Add image view
         contentView.addSubview(imageView)
@@ -276,6 +279,7 @@ class ImageThumbnailCell: UICollectionViewCell {
         durationBackground.isHidden = !isVideo
         durationLabel.isHidden = !isVideo
         indicatorsStack.isHidden = !isVideo
+        refreshAccessibilityLabel()
         // Focus effect is now handled by isFocused override
     }
     
@@ -334,11 +338,31 @@ class ImageThumbnailCell: UICollectionViewCell {
             loopIndicator.isHidden = true
             muteIndicator.isHidden = true
         }
+        refreshAccessibilityLabel()
     }
     
     // Returns the current duration value
     func getDuration() -> TimeInterval? {
         return currentDuration
+    }
+
+    /// Builds VoiceOver labels for stills and videos (duration / loop / mute).
+    private func refreshAccessibilityLabel() {
+        isAccessibilityElement = true
+        accessibilityTraits = .button
+        if isVideo {
+            var parts = ["Video"]
+            if let duration = currentDuration {
+                let minutes = Int(duration) / 60
+                let seconds = Int(duration) % 60
+                parts.append(String(format: "%d:%02d", minutes, seconds))
+            }
+            if !loopIndicator.isHidden { parts.append("Looping") }
+            if !muteIndicator.isHidden { parts.append("Muted") }
+            accessibilityLabel = parts.joined(separator: ", ")
+        } else {
+            accessibilityLabel = "Photo"
+        }
     }
     
     // MARK: - Focus
@@ -354,7 +378,10 @@ class ImageThumbnailCell: UICollectionViewCell {
         
         // Use the coordinator to ensure smooth transitions for transform and shadow
         coordinator.addCoordinatedAnimations({
-            if self.isFocused {
+            if UIAccessibility.isReduceMotionEnabled {
+                self.transform = .identity
+                self.layer.shadowOpacity = self.isFocused ? 0.6 : 0
+            } else if self.isFocused {
                 self.transform = CGAffineTransform(scaleX: 1.1, y: 1.1)
                 self.layer.shadowOpacity = 0.6
             } else {
@@ -411,6 +438,7 @@ class ImageThumbnailCell: UICollectionViewCell {
         // Set initial state
         self.isVideo = isVideo
         videoIndicator.isHidden = !isVideo
+        refreshAccessibilityLabel()
 
         // Start async loading
         currentLoadingTask = Task {

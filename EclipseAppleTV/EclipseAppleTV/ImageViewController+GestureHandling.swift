@@ -174,11 +174,10 @@ extension ImageViewController {
             showGridViewTransition()
         } else if popCompanionAlbumHome() {
             // Inside an album: Menu returns to the album list.
-        } else {
-            // Already in grid view: open the options menu (album setup/refresh, help).
-            // Exiting to the Home screen is handled by the TV/Home button.
-            showOptionsMenu()
         }
+        // Root grid: do not intercept Menu. The recognizer fails in
+        // gestureRecognizerShouldBegin so the system can exit to Home.
+        // Settings remain reachable via the Options (•••) button.
     }
     
     @objc func handleCenterSelectPress() {
@@ -237,6 +236,15 @@ extension ImageViewController {
         if gestureRecognizer is UISwipeGestureRecognizer {
             return !isInGridMode && !isVideo
         }
+
+        // Menu: only claim the press when we have somewhere to go back.
+        // At the root grid, fail so tvOS can exit to the Home screen (HIG).
+        if gestureRecognizer is UITapGestureRecognizer,
+           gestureRecognizer.allowedPressTypes.contains(
+               NSNumber(value: UIPress.PressType.menu.rawValue)
+           ) {
+            return shouldHandleMenuPress()
+        }
         
         // Prevent zoom/pinch gestures from beginning (iOS only)
         #if !os(tvOS)
@@ -261,6 +269,16 @@ extension ImageViewController {
         }
         
         return true
+    }
+
+    /// Whether Menu should be handled in-app instead of exiting to Home.
+    private func shouldHandleMenuPress() -> Bool {
+        if presentedViewController != nil { return true }
+        if isMoveMode { return true }
+        if !isInGridMode { return true }
+        // Nested companion album: Menu pops to the album list.
+        if usesAlbumHome, companionBrowse != .root { return true }
+        return false
     }
 
     // Setup player view gestures - now minimal to let AVPlayerViewController handle most interactions

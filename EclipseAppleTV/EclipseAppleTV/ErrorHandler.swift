@@ -142,7 +142,7 @@ class ErrorHandler: ObservableObject {
         let label = UILabel()
         label.text = message
         label.textColor = .white
-        label.font = UIFont.systemFont(ofSize: 16, weight: .medium)
+        label.font = UIFont.preferredFont(forTextStyle: .callout)
         label.numberOfLines = 0
         label.textAlignment = .center
         

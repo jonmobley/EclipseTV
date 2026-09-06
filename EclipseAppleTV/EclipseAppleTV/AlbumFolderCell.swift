@@ -41,7 +41,7 @@ final class AlbumFolderCell: UICollectionViewCell {
     private let countLabel: UILabel = {
         let label = UILabel()
         label.textColor = UIColor.white.withAlphaComponent(0.8)
-        label.font = UIFont.systemFont(ofSize: 22, weight: .medium)
+        label.font = UIFont.preferredFont(forTextStyle: .title3)
         return label
     }()
 
@@ -98,8 +98,12 @@ final class AlbumFolderCell: UICollectionViewCell {
         super.didUpdateFocus(in: context, with: coordinator)
         coordinator.addCoordinatedAnimations {
             self.focusRing.isHidden = !self.isFocused
-            self.transform = self.isFocused
-                ? CGAffineTransform(scaleX: 1.06, y: 1.06) : .identity
+            if UIAccessibility.isReduceMotionEnabled {
+                self.transform = .identity
+            } else {
+                self.transform = self.isFocused
+                    ? CGAffineTransform(scaleX: 1.06, y: 1.06) : .identity
+            }
         }
     }
 
@@ -108,6 +112,9 @@ final class AlbumFolderCell: UICollectionViewCell {
         titleLabel.text = title
         countLabel.text = count == 1 ? "1 item" : "\(count) items"
         setCover(cover)
+        isAccessibilityElement = true
+        accessibilityTraits = .button
+        accessibilityLabel = "\(title), \(countLabel.text ?? "")"
     }
 
     /// Updates only the cover still after an async load.

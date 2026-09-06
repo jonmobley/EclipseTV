@@ -78,7 +78,7 @@ class ImageViewController: ManagedViewController, ConnectionManagerDelegate, UIG
                 minimumLineSpacing = 80
                 minimumInteritemSpacing = minimumSpacing
                 sectionInset = UIEdgeInsets(
-                    top: 80, left: sideInset, bottom: 50, right: sideInset
+                    top: 80, left: sideInset, bottom: 60, right: sideInset
                 )
                 scrollDirection = .vertical
             }
@@ -115,8 +115,6 @@ class ImageViewController: ManagedViewController, ConnectionManagerDelegate, UIG
         
         return collectionView
     }()
-    
-    internal let focusGuide = UIFocusGuide()
     
     internal let activityIndicator: UIActivityIndicatorView = {
         let indicator = UIActivityIndicatorView(style: .large)
@@ -303,7 +301,6 @@ class ImageViewController: ManagedViewController, ConnectionManagerDelegate, UIG
         setupOptionsButton()
         setupGradientBackground()
         setupGestures()
-        setupFocusGuide()
 
         // The selection manager must exist before setupViewModel(): on a returning
         // launch that call runs presentInitialMedia() synchronously, which selects
