@@ -86,7 +86,9 @@ extension LibraryGridViewController {
     ///
     /// Slide advances keep the Show grid's offset; only ribbon thumbs refresh.
     func refreshSlideshowRibbonPresentation() {
-        let wasDocked = !slideshowRibbonView.isHidden
+        // Presented state, not `isHidden`: a ribbon fading out is still unhidden.
+        let wasDocked = presentedLiveChrome?.ribbonDocked
+            ?? !slideshowRibbonView.isHidden
         let chrome = SlideshowRibbonChrome(
             inGrid: showsInGridSlideshowRibbon,
             docked: docksLiveSlideshowRibbon
@@ -221,7 +223,14 @@ extension LibraryGridViewController {
         let docked = docksLiveSlideshowRibbon
         let wasHidden = slideshowRibbonView.isHidden
         let vertical = usesVerticalDockedRibbon
-        slideshowRibbonView.isHidden = !docked
+        // Runs inside the show / hide animation, so the plate eases with the strip.
+        heroBackdropBottomConstraint?.constant = liveChromeBottomPadding
+        if docked {
+            slideshowRibbonView.isHidden = false
+        } else if !isFadingOutDockedRibbon {
+            // A fading strip stays unhidden; its animation completion hides it.
+            slideshowRibbonView.isHidden = true
+        }
         slideshowRibbonView.isUserInteractionEnabled = docked
         guard docked else {
             // Parked strip: zero height only. Do not activate a 0-width pin —
@@ -258,7 +267,10 @@ extension LibraryGridViewController {
         }
         view.bringSubviewToFront(slideshowRibbonView)
         if wasHidden {
-            slideshowRibbonView.reloadData()
+            // This can run inside the show transition; thumbs must not animate in.
+            UIView.performWithoutAnimation {
+                slideshowRibbonView.reloadData()
+            }
         }
     }
 

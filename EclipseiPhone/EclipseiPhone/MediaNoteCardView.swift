@@ -10,9 +10,7 @@ import UIKit
 /// Welcome-style note card without the Getting Started icon badge.
 final class MediaNoteCardView: UIView {
 
-    private let titleLabel = UILabel()
     private let bodyLabel = UILabel()
-    private let textStack = UIStackView()
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -25,7 +23,6 @@ final class MediaNoteCardView: UIView {
 
     /// Fills the card. Empty `note` shows the tap-to-add placeholder.
     func configure(note: String?) {
-        titleLabel.text = "Note"
         if let note, !note.isEmpty {
             bodyLabel.text = note
             bodyLabel.textColor = .secondaryLabel
@@ -47,29 +44,18 @@ final class MediaNoteCardView: UIView {
         isAccessibilityElement = true
         accessibilityTraits = .button
 
-        titleLabel.font = .preferredFont(forTextStyle: .headline)
-        titleLabel.adjustsFontForContentSizeCategory = true
-        titleLabel.textColor = .label
-        titleLabel.numberOfLines = 1
-
         bodyLabel.font = .preferredFont(forTextStyle: .subheadline)
         bodyLabel.adjustsFontForContentSizeCategory = true
         bodyLabel.textColor = .secondaryLabel
         bodyLabel.numberOfLines = 5
-
-        textStack.axis = .vertical
-        textStack.alignment = .fill
-        textStack.spacing = 6
-        textStack.addArrangedSubview(titleLabel)
-        textStack.addArrangedSubview(bodyLabel)
-        textStack.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(textStack)
+        bodyLabel.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(bodyLabel)
 
         NSLayoutConstraint.activate([
-            textStack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
-            textStack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
-            textStack.topAnchor.constraint(equalTo: topAnchor, constant: 16),
-            textStack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -16)
+            bodyLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
+            bodyLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
+            bodyLabel.topAnchor.constraint(equalTo: topAnchor, constant: 16),
+            bodyLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -16)
         ])
     }
 }

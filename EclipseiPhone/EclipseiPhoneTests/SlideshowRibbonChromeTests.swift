@@ -61,6 +61,46 @@ struct SlideshowRibbonChromeTests {
         )
     }
 
+    @Test func ribbonAppearingUnderAnOnScreenHeroAnimates() {
+        let previous = LiveChromeState(heroVisible: true, ribbonDocked: false)
+        let next = LiveChromeState(heroVisible: true, ribbonDocked: true)
+        #expect(LiveChromeState.animatesRibbonTransition(from: previous, to: next))
+    }
+
+    @Test func ribbonHidingUnderAnOnScreenHeroAnimates() {
+        let previous = LiveChromeState(heroVisible: true, ribbonDocked: true)
+        let next = LiveChromeState(heroVisible: true, ribbonDocked: false)
+        #expect(LiveChromeState.animatesRibbonTransition(from: previous, to: next))
+    }
+
+    @Test func firstChromePassNeverAnimatesTheRibbon() {
+        let next = LiveChromeState(heroVisible: true, ribbonDocked: true)
+        #expect(LiveChromeState.animatesRibbonTransition(from: nil, to: next) == false)
+    }
+
+    @Test func ribbonArrivingWithTheHeroDoesNotAnimate() {
+        let previous = LiveChromeState(heroVisible: false, ribbonDocked: false)
+        let next = LiveChromeState(heroVisible: true, ribbonDocked: true)
+        #expect(
+            LiveChromeState.animatesRibbonTransition(from: previous, to: next) == false
+        )
+    }
+
+    @Test func ribbonLeavingWithTheHeroDoesNotAnimate() {
+        let previous = LiveChromeState(heroVisible: true, ribbonDocked: true)
+        let next = LiveChromeState(heroVisible: false, ribbonDocked: false)
+        #expect(
+            LiveChromeState.animatesRibbonTransition(from: previous, to: next) == false
+        )
+    }
+
+    @Test func unchangedRibbonDoesNotAnimate() {
+        let chrome = LiveChromeState(heroVisible: true, ribbonDocked: true)
+        #expect(
+            LiveChromeState.animatesRibbonTransition(from: chrome, to: chrome) == false
+        )
+    }
+
     @Test func phonePortraitStaysStacked() {
         #expect(
             LibraryGridViewController.prefersSideBySideChrome(
@@ -241,6 +281,22 @@ struct SlideshowRibbonChromeTests {
         #expect(
             LibraryGridViewController.dockedSlideshowRibbonHeight(thumbHeight: 80)
             == 80 + padding
+        )
+    }
+
+    @Test func heroCardKeepsItsBlackBandWithNoRibbon() {
+        #expect(
+            LibraryGridViewController.liveChromeBottomPadding(
+                heroBottomPadding: 16, ribbonDocked: false
+            ) == 16
+        )
+    }
+
+    @Test func dockedRibbonDoesNotStackASecondBlackBand() {
+        #expect(
+            LibraryGridViewController.liveChromeBottomPadding(
+                heroBottomPadding: 16, ribbonDocked: true
+            ) == 0
         )
     }
 

@@ -23,7 +23,7 @@ enum LiveOutputRouting {
     @MainActor
     static func canMarkLive(practiceMode: Bool) -> Bool {
         canMarkLive(
-            airPlayConnected: ExternalDisplayManager.shared.isConnected,
+            airPlayConnected: ExternalDisplayManager.shared.isAirPlayAvailable,
             eclipseTVOnline: TVLibraryStore.shared.isOnline,
             practiceMode: practiceMode,
             isRemoteOperator: ShowLiveSession.shared.isRemoteOperator
@@ -63,7 +63,7 @@ enum LiveOutputRouting {
     @MainActor
     static func canPresentWebOverlay(practiceMode: Bool) -> Bool {
         canPresentWebOverlay(
-            airPlayConnected: ExternalDisplayManager.shared.isConnected,
+            airPlayConnected: ExternalDisplayManager.shared.isAirPlayAvailable,
             practiceMode: practiceMode
         )
     }
@@ -83,18 +83,6 @@ enum LiveOutputRouting {
     /// Red LIVE chip on the Live Poll hero only when an external display owns it.
     static func showsLivePollLiveBadge(externalDisplayConnected: Bool) -> Bool {
         externalDisplayConnected
-    }
-
-    /// Camera in the phone hero (Practice / no AirPlay) is preview, not program.
-    ///
-    /// Blue stroke on the tile; red is reserved for AirPlay / HDMI, or a remote
-    /// operator following a director whose output actually has the feed.
-    static func cameraTileUsesPreviewStroke(
-        isTileLive: Bool,
-        isDisplayConnected: Bool,
-        isRemoteOperator: Bool = false
-    ) -> Bool {
-        isTileLive && !isDisplayConnected && !isRemoteOperator
     }
 
     /// Screensaver is the live grid item when a destination is up and nothing else is.
@@ -155,19 +143,10 @@ enum LiveOutputRouting {
     @MainActor
     static func showsHeroLiveBadge() -> Bool {
         showsHeroLiveBadge(
-            airPlayConnected: ExternalDisplayManager.shared.isConnected,
+            airPlayConnected: ExternalDisplayManager.shared.isAirPlayAvailable,
             eclipseTVOnline: TVLibraryStore.shared.isOnline,
             isRemoteOperator: ShowLiveSession.shared.isRemoteOperator
         )
-    }
-}
-
-/// Portrait live preview occludes the grid from the page top through the card.
-enum LiveHeroBackdrop {
-    /// Shown only for the stacked (portrait) live hero — landscape already
-    /// puts the grid in a separate column.
-    static func isVisible(showsLiveHero: Bool, isSideBySideChrome: Bool) -> Bool {
-        showsLiveHero && !isSideBySideChrome
     }
 }
 
@@ -348,6 +327,13 @@ extension LibraryGridViewController {
             equalTo: safe.topAnchor, constant: headerInset
         )
         heroTopConstraint = heroTop
+        // The note card is the bottom-most piece of live chrome. Parked, it
+        // collapses onto the ribbon's bottom edge, so this one pin serves both.
+        let backdropBottom = heroSpacer.bottomAnchor.constraint(
+            equalTo: liveNoteCard.bottomAnchor,
+            constant: liveChromeBottomPadding
+        )
+        heroBackdropBottomConstraint = backdropBottom
         let ribbonTop = slideshowRibbonView.topAnchor.constraint(
             equalTo: liveHeader.bottomAnchor
         )
@@ -360,6 +346,21 @@ extension LibraryGridViewController {
         dockedRibbonTopConstraint = ribbonTop
         dockedRibbonHeightConstraint = ribbonHeight
         dockedRibbonWidthConstraint = ribbonWidth
+
+        // Note card tracks the preview's width in both axes and hangs off the
+        // ribbon, so it lands under the strip whenever one is docked.
+        let noteTop = liveNoteCard.topAnchor.constraint(
+            equalTo: slideshowRibbonView.bottomAnchor
+        )
+        let noteHeight = liveNoteCard.heightAnchor.constraint(equalToConstant: 0)
+        liveNoteTopConstraint = noteTop
+        liveNoteHeightConstraint = noteHeight
+        NSLayoutConstraint.activate([
+            liveNoteCard.leadingAnchor.constraint(equalTo: liveHeader.leadingAnchor),
+            liveNoteCard.trailingAnchor.constraint(equalTo: liveHeader.trailingAnchor),
+            noteTop,
+            noteHeight
+        ])
 
         let gridLeadingFromHero = gridHost.leadingAnchor.constraint(
             equalTo: liveHeader.trailingAnchor, constant: gutter
@@ -408,14 +409,14 @@ extension LibraryGridViewController {
             gridHost.leadingAnchor.constraint(equalTo: safe.leadingAnchor),
             gridHost.trailingAnchor.constraint(equalTo: safe.trailingAnchor),
             gridHost.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            // Opaque plate from the page top through hero + ribbon so tiles
+            // Opaque plate from the page top through hero + ribbon, so tiles
             // scrolling under the preview can't show between chrome and content.
+            // How far it runs past the bottom edge follows the grid's own resting
+            // gap — see `liveChromeBottomPadding`.
             heroSpacer.topAnchor.constraint(equalTo: view.topAnchor),
             heroSpacer.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             heroSpacer.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            heroSpacer.bottomAnchor.constraint(
-                equalTo: slideshowRibbonView.bottomAnchor
-            )
+            backdropBottom
         ] + horizontalDockedRibbonConstraints
 
         // Landscape: live preview leading (top-aligned), grid in the trailing column.
@@ -431,6 +432,10 @@ extension LibraryGridViewController {
             lessThanOrEqualTo: safe.bottomAnchor, constant: -8
         )
         ribbonBottomLimit.priority = .defaultHigh
+        let noteBottomLimit = liveNoteCard.bottomAnchor.constraint(
+            lessThanOrEqualTo: safe.bottomAnchor, constant: -8
+        )
+        noteBottomLimit.priority = .defaultHigh
         landscapeChromeConstraints = [
             gridHost.topAnchor.constraint(equalTo: safe.topAnchor),
             gridHost.trailingAnchor.constraint(equalTo: safe.trailingAnchor),
@@ -443,6 +448,7 @@ extension LibraryGridViewController {
             ),
             heroBottomLimit,
             ribbonBottomLimit,
+            noteBottomLimit,
             heroSpacer.topAnchor.constraint(equalTo: view.topAnchor),
             heroSpacer.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             heroSpacer.widthAnchor.constraint(equalToConstant: 0),
@@ -523,8 +529,11 @@ extension LibraryGridViewController {
         }
     }
 
-    /// Sizes the live hero for the active chrome axis and Display Mode.
-    func applyHeroChrome() {
+    /// Sizes the live hero for the active chrome axis and Display Mode, instantly.
+    ///
+    /// Callers should use `applyHeroChrome()`, which animates the pass when the
+    /// docked ribbon is appearing or disappearing under an on-screen hero.
+    func applyHeroChromeNow() {
         // Home keeps the marketing carousel only — never size/front the live preview.
         guard showsLiveHero else {
             liveHeader.isHidden = true
@@ -535,6 +544,7 @@ extension LibraryGridViewController {
             syncHeroOverlayInsets(preservingProgress: currentHeroScrollProgress())
             updateHeroCollapse()
             layoutDockedSlideshowRibbon()
+            layoutLiveNoteCard()
             return
         }
         // Use the applied axis (`isSideBySideChrome`), not traits alone — traits can
@@ -548,6 +558,7 @@ extension LibraryGridViewController {
         syncHeroOverlayInsets(preservingProgress: currentHeroScrollProgress())
         updateHeroCollapse()
         layoutDockedSlideshowRibbon()
+        layoutLiveNoteCard()
     }
 
     /// How far the grid has scrolled into content (0 = top).
@@ -605,11 +616,40 @@ extension LibraryGridViewController {
         }
     }
 
+    /// Black band the plate and the grid's resting inset add below the
+    /// bottom-most piece of live chrome.
+    ///
+    /// Under the hero card that is `heroBottomPadding`. A docked ribbon already
+    /// carries `slideshowRibbonBottomPadding` inside its own height, so the plate
+    /// stops at the strip's edge instead — stacking both left a dead black band
+    /// under the thumbs taller than the thumbs' own breathing room.
+    var liveChromeBottomPadding: CGFloat {
+        Self.liveChromeBottomPadding(
+            heroBottomPadding: heroBottomPadding,
+            ribbonDocked: docksLiveSlideshowRibbon,
+            noteDocked: showsLiveNote
+        )
+    }
+
+    /// Black band under the hero card, or 0 when a padded ribbon is docked.
+    ///
+    /// The note card sits below both and carries no padding of its own, so it
+    /// restores the band whenever it is showing.
+    static func liveChromeBottomPadding(
+        heroBottomPadding: CGFloat,
+        ribbonDocked: Bool,
+        noteDocked: Bool = false
+    ) -> CGFloat {
+        if noteDocked { return heroBottomPadding }
+        return ribbonDocked ? 0 : heroBottomPadding
+    }
+
     /// Expanded hero height + docked ribbon + breathing room under them.
     /// Derived from geometry rather than measured bounds so a Display Mode
     /// change can't leave a stale inset.
     func expandedHeroOverlayInset() -> CGFloat {
-        var inset = headerInset + estimatedExpandedHeroHeight() + heroBottomPadding
+        var inset = headerInset + estimatedExpandedHeroHeight()
+            + liveChromeBottomPadding
         if docksLiveSlideshowRibbon {
             let thumb = Self.slideshowRibbonThumbSize(
                 containerWidth: ribbonThumbContainerWidth(),
@@ -618,6 +658,10 @@ extension LibraryGridViewController {
             )
             inset += Self.sideBySideGutter
                 + Self.dockedSlideshowRibbonHeight(thumbHeight: thumb.height)
+        }
+        if showsLiveNote {
+            inset += Self.liveNoteTopGap(ribbonDocked: docksLiveSlideshowRibbon)
+                + measuredLiveNoteHeight()
         }
         return inset
     }
@@ -818,6 +862,25 @@ extension LibraryGridViewController {
                     0,
                     availableHeight - Self.sideBySideGutter
                         - Self.dockedSlideshowRibbonHeight(thumbHeight: thumb.height)
+                )
+                hero = sideBySideHeroSize(
+                    availableWidth: availableWidth,
+                    availableHeight: availableHeight,
+                    aspect: aspect,
+                    horizontalSizeClass: sizeClass
+                )
+            }
+        }
+        if showsLiveNote {
+            // Measure against the hero width this pass just settled on; the
+            // card spans the preview, so its height follows that column.
+            let noteHeight = measuredLiveNoteHeight(width: hero.width)
+            if noteHeight > 0 {
+                availableHeight = max(
+                    0,
+                    availableHeight
+                        - Self.liveNoteTopGap(ribbonDocked: docksLiveSlideshowRibbon)
+                        - noteHeight
                 )
                 hero = sideBySideHeroSize(
                     availableWidth: availableWidth,
