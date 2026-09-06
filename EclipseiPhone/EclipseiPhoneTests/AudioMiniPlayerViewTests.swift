@@ -12,46 +12,35 @@ import UIKit
 @MainActor
 struct AudioMiniPlayerViewTests {
 
-    @Test func compactCardOnIPadAndPhoneLandscape() {
+    /// Landscape has room for the full card; portrait squeezes it to fit beside
+    /// the Music circle rather than falling back to a full-width footer.
+    @Test func cardWidthLeavesRoomForTheMusicCircle() {
+        let reserved = AudioMiniPlayerView.compactTrailingInset * 2
+            + AudioMiniPlayerBubbleView.side
+            + AudioMiniPlayerView.circleFooterGap
+
         #expect(
-            AudioMiniPlayerView.usesCompactCard(
-                verticalSizeClass: .regular,
-                horizontalSizeClass: .regular
-            )
+            AudioMiniPlayerView.cardWidth(containerWidth: 852, horizontalSafeArea: 118)
+                == AudioMiniPlayerView.compactWidth
         )
-        #expect(
-            AudioMiniPlayerView.usesCompactCard(
-                verticalSizeClass: .compact,
-                horizontalSizeClass: .compact
-            )
+
+        let portrait = AudioMiniPlayerView.cardWidth(
+            containerWidth: 393, horizontalSafeArea: 0
         )
-        #expect(
-            AudioMiniPlayerView.usesCompactCard(
-                verticalSizeClass: .compact,
-                horizontalSizeClass: .regular
-            )
-        )
-        #expect(
-            AudioMiniPlayerView.usesCompactCard(
-                verticalSizeClass: .regular,
-                horizontalSizeClass: .compact
-            ) == false
-        )
+        #expect(portrait == 393 - reserved)
+        #expect(portrait < AudioMiniPlayerView.compactWidth)
     }
 
-    @Test func portraitBarCoversHomeIndicator() {
-        let homeIndicator: CGFloat = 34
+    /// Auto Layout reports a zero-width container during early layout, and
+    /// `NSLayoutConstraint` needs a positive width.
+    @Test func cardWidthFloorsAtTheMinimum() {
         #expect(
-            AudioMiniPlayerView.barHeight(floating: false, safeAreaBottom: homeIndicator)
-                == AudioMiniPlayerView.preferredHeight + homeIndicator
+            AudioMiniPlayerView.cardWidth(containerWidth: 0, horizontalSafeArea: 0)
+                == AudioMiniPlayerView.minimumCompactWidth
         )
         #expect(
-            AudioMiniPlayerView.barHeight(floating: true, safeAreaBottom: homeIndicator)
-                == AudioMiniPlayerView.preferredHeight
-        )
-        #expect(
-            AudioMiniPlayerView.barHeight(floating: false, safeAreaBottom: 0)
-                == AudioMiniPlayerView.preferredHeight
+            AudioMiniPlayerView.cardWidth(containerWidth: 320, horizontalSafeArea: 0)
+                >= AudioMiniPlayerView.minimumCompactWidth
         )
     }
 
@@ -114,17 +103,15 @@ struct AudioMiniPlayerViewTests {
         #expect(control.isReadoutVisible == false)
     }
 
-    @Test func portraitReservesTrailingSpaceForCircle() {
-        #expect(
-            AudioMiniPlayerView.minimizeTrailingInset(floating: false)
-                == AudioMiniPlayerBubbleView.side
-                + AudioMiniPlayerView.circleFooterGap
-                + AudioMiniPlayerView.compactTrailingInset
+    @Test func cardChromeIsRoundedAndShadowed() {
+        let bar = AudioMiniPlayerView(
+            frame: CGRect(x: 0, y: 0, width: 360, height: AudioMiniPlayerView.preferredHeight)
         )
-        #expect(
-            AudioMiniPlayerView.minimizeTrailingInset(floating: true)
-                == AudioMiniPlayerView.controlTrailingInset
-        )
+        bar.layoutIfNeeded()
+        #expect(bar.layer.cornerRadius == AudioMiniPlayerView.compactCornerRadius)
+        #expect(bar.layer.shadowOpacity > 0)
+        // Volume slider opens above the card, so it must not be clipped.
+        #expect(bar.clipsToBounds == false)
     }
 
     @Test func chromeControlsFillBarHeight() {

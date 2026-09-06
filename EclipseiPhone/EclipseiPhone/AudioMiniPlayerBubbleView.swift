@@ -8,7 +8,7 @@
 import UIKit
 
 /// Persistent Music control. Compact: idle opens a picker; session expands the
-/// footer; expanded becomes Stop. Regular: always toggles the Music drawer.
+/// card; expanded becomes Stop. Regular: always toggles the Music drawer.
 final class AudioMiniPlayerBubbleView: UIView {
 
     static let side: CGFloat = 72
@@ -33,8 +33,8 @@ final class AudioMiniPlayerBubbleView: UIView {
     }
 
     /// Updates chrome from the shared player.
-    /// - Parameter barExpanded: Footer is showing; this circle is Stop.
-    /// - Parameter togglesMusicPane: Regular-width drawer mode (no footer).
+    /// - Parameter barExpanded: Card is showing; this circle is Stop.
+    /// - Parameter togglesMusicPane: Regular-width drawer mode (no card).
     func reload(barExpanded: Bool = false, togglesMusicPane: Bool = false) {
         let player = AudioPlayerController.shared
         applySessionChrome(

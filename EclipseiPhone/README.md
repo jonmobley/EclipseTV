@@ -36,7 +36,7 @@ Built around a Shows-first home (Recent Shows → open Show grid with live hero)
 - In-app captures stay phone-local (CloudKit may sync; Multipeer never)
 
 ### Ambient music
-- Local tracks / playlists; mini player bubble ↔ footer bar
+- Local tracks / playlists; mini player bubble ↔ floating card
 - Yields with **pause** (not stop) when unmuted video / web media plays
 
 ## Video tile options (⋯)

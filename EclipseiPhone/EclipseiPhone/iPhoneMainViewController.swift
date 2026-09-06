@@ -136,27 +136,21 @@ class iPhoneMainViewController: UIViewController {
         case audio
     }
 
-    /// Footer mini player for ambient music.
+    /// Floating mini player card for ambient music.
     let audioMiniPlayer = AudioMiniPlayerView()
     /// Persistent Music control. Regular: toggles the drawer. Compact: picker /
-    /// expand footer / stop.
+    /// expand card / stop.
     let audioMiniBubble = AudioMiniPlayerBubbleView()
     /// When true, the bar is hidden; the Music circle stays visible.
     /// Ambient control prefers the floating bubble; expand is temporary.
     var audioMiniCollapsed = true
     /// Tracks session edge so the Music picker dismisses only when playback starts.
     var hadActiveAudioSession = false
-    /// True while the bubble ↔ footer morph is in flight.
+    /// True while the bubble ↔ card morph is in flight.
     var isAudioMiniChromeAnimating = false
     var audioMiniHeightConstraint: NSLayoutConstraint?
-    /// Full-width footer pin (phone portrait).
-    var audioMiniPortraitConstraints: [NSLayoutConstraint] = []
-    /// Compact trailing card (phone landscape / iPad), planted beside the Music bubble.
-    var audioMiniLandscapeConstraints: [NSLayoutConstraint] = []
-    /// Width of the compact card (`compactWidth`, squeezed on short phones).
-    var audioMiniLandscapeWidthConstraint: NSLayoutConstraint?
-    /// True while the mini bar is the compact card, not the footer.
-    var isAudioMiniLandscapeCompact = false
+    /// Width of the floating card (`compactWidth`, squeezed on narrow phones).
+    var audioMiniCardWidthConstraint: NSLayoutConstraint?
     var audioPlayerObserver: NSObjectProtocol?
     
     // MARK: - Lifecycle
@@ -166,6 +160,9 @@ class iPhoneMainViewController: UIViewController {
         setupUI()
         setupConnectionManager()
         setupNotificationObservers()
+        // iOS 27+: external display scenes only connect after a scene accessory is
+        // registered on a presented main-interface VC. No-op on iOS 18–26.
+        ExternalDisplaySceneAccessory.register(on: self)
         registerForTraitChanges(
             [UITraitHorizontalSizeClass.self]
         ) { (self: Self, _: UITraitCollection) in
@@ -176,8 +173,7 @@ class iPhoneMainViewController: UIViewController {
         registerForTraitChanges(
             [UITraitVerticalSizeClass.self]
         ) { (self: Self, _: UITraitCollection) in
-            // Phone landscape disables Library↔Music paging (grid|preview split)
-            // and switches the mini player to a compact trailing card.
+            // Phone landscape disables Library↔Music paging (grid|preview split).
             self.setHomePagingEnabled(true)
             self.syncAudioMiniLayoutIfNeeded()
         }

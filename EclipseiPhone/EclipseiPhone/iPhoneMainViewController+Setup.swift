@@ -172,8 +172,8 @@ extension iPhoneMainViewController {
 
     /// Pins the ambient music mini player / bubble to the home bottom.
     ///
-    /// Portrait is a full-width footer through the home indicator so tiles cannot
-    /// show under the bar. Landscape is a compact card beside the Music bubble.
+    /// Every orientation uses the same compact card floating beside the Music
+    /// bubble; only its width changes with the available room.
     private func setupAudioMiniPlayer() {
         audioMiniPlayer.translatesAutoresizingMaskIntoConstraints = false
         audioMiniPlayer.isHidden = true
@@ -194,27 +194,22 @@ extension iPhoneMainViewController {
 
         let height = audioMiniPlayer.heightAnchor.constraint(equalToConstant: 0)
         audioMiniHeightConstraint = height
-        audioMiniPortraitConstraints = [
-            audioMiniPlayer.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            audioMiniPlayer.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            audioMiniPlayer.bottomAnchor.constraint(equalTo: view.bottomAnchor)
-        ]
-        // Compact card sits beside the Music bubble in the same corner.
-        let landTrailing = audioMiniPlayer.trailingAnchor.constraint(
-            equalTo: audioMiniBubble.leadingAnchor,
-            constant: -AudioMiniPlayerView.circleFooterGap
-        )
-        let landBottom = audioMiniPlayer.bottomAnchor.constraint(
-            equalTo: view.bottomAnchor,
-            constant: -AudioMiniPlayerView.compactBottomInset
-        )
-        let landWidth = audioMiniPlayer.widthAnchor.constraint(
+        let cardWidth = audioMiniPlayer.widthAnchor.constraint(
             equalToConstant: AudioMiniPlayerView.compactWidth
         )
-        audioMiniLandscapeWidthConstraint = landWidth
-        audioMiniLandscapeConstraints = [landTrailing, landBottom, landWidth]
-        NSLayoutConstraint.activate(audioMiniPortraitConstraints + [
+        audioMiniCardWidthConstraint = cardWidth
+        NSLayoutConstraint.activate([
             height,
+            cardWidth,
+            // Card sits beside the Music bubble in the same corner.
+            audioMiniPlayer.trailingAnchor.constraint(
+                equalTo: audioMiniBubble.leadingAnchor,
+                constant: -AudioMiniPlayerView.circleFooterGap
+            ),
+            audioMiniPlayer.bottomAnchor.constraint(
+                equalTo: view.bottomAnchor,
+                constant: -AudioMiniPlayerView.compactBottomInset
+            ),
             audioMiniBubble.trailingAnchor.constraint(
                 equalTo: view.safeAreaLayoutGuide.trailingAnchor,
                 constant: -AudioMiniPlayerView.compactTrailingInset
@@ -224,7 +219,6 @@ extension iPhoneMainViewController {
                 constant: -AudioMiniPlayerView.compactBottomInset
             )
         ])
-        isAudioMiniLandscapeCompact = false
 
         hadActiveAudioSession = AudioPlayerController.shared.hasActiveSession
         audioPlayerObserver = NotificationCenter.default.addObserver(

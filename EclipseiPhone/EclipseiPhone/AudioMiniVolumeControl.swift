@@ -7,7 +7,7 @@
 
 import UIKit
 
-/// Speaker button that reveals a vertical volume slider above the footer.
+/// Speaker button that reveals a vertical volume slider above the card.
 final class AudioMiniVolumeControl: UIView {
 
     static let buttonSide: CGFloat = AudioMiniPlayerView.controlSide
@@ -37,6 +37,7 @@ final class AudioMiniVolumeControl: UIView {
         view.alpha = 0
         view.transform = CGAffineTransform(translationX: 0, y: 8)
         view.translatesAutoresizingMaskIntoConstraints = false
+        view.applyReduceTransparencyFallback(opaqueFill: .secondarySystemBackground)
         return view
     }()
 
@@ -53,6 +54,7 @@ final class AudioMiniVolumeControl: UIView {
         view.accessibilityElementsHidden = true
         view.transform = CGAffineTransform(translationX: 0, y: 6)
         view.translatesAutoresizingMaskIntoConstraints = false
+        view.applyReduceTransparencyFallback(opaqueFill: .secondarySystemBackground)
         return view
     }()
 

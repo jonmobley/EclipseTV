@@ -7,16 +7,18 @@
 
 import UIKit
 
-/// Compact footer chrome for ambient music on the home screen.
+/// Floating card chrome for ambient music on the home screen.
 /// Stop lives on the Music circle, not this bar.
 final class AudioMiniPlayerView: UIView, UIGestureRecognizerDelegate {
 
     /// Preferred height when visible.
     static let preferredHeight: CGFloat = 64
-    /// Solid fill under the chrome, including the home-indicator band in portrait.
+    /// Solid fill under the chrome.
     static let barBackgroundColor: UIColor = .secondarySystemBackground
     /// Floating card width — title, speaker, and collapse control.
     static let compactWidth: CGFloat = 360
+    /// Narrowest the card squeezes to before it would clip its own controls.
+    static let minimumCompactWidth: CGFloat = 200
     static let compactCornerRadius: CGFloat = 20
     /// Matches the Music bubble so the bar grows from the same corner.
     static let compactTrailingInset: CGFloat = 16
@@ -54,25 +56,20 @@ final class AudioMiniPlayerView: UIView, UIGestureRecognizerDelegate {
         return config
     }
 
-    /// Compact trailing card in phone landscape and on regular-width layouts (iPad).
-    /// Phone portrait stays a full-width footer.
-    static func usesCompactCard(
-        verticalSizeClass: UIUserInterfaceSizeClass,
-        horizontalSizeClass: UIUserInterfaceSizeClass
-    ) -> Bool {
-        verticalSizeClass == .compact || horizontalSizeClass == .regular
-    }
-
-    /// Full-width footer height. Portrait adds the home-indicator inset so tiles
-    /// cannot show under the bar; the compact card stays `preferredHeight`.
-    static func barHeight(floating: Bool, safeAreaBottom: CGFloat) -> CGFloat {
-        preferredHeight + (floating ? 0 : max(0, safeAreaBottom))
-    }
-
-    /// Portrait overlays the circle; the compact card sits beside it.
-    static func minimizeTrailingInset(floating: Bool) -> CGFloat {
-        if floating { return controlTrailingInset }
-        return AudioMiniPlayerBubbleView.side + circleFooterGap + compactTrailingInset
+    /// Card width for a host of `containerWidth`, leaving room for the Music
+    /// circle beside it and a matching gap on the leading edge.
+    ///
+    /// The floor keeps the card usable on the narrowest phones and guards the
+    /// zero-width container that Auto Layout reports during early layout.
+    static func cardWidth(
+        containerWidth: CGFloat,
+        horizontalSafeArea: CGFloat
+    ) -> CGFloat {
+        let available = containerWidth - horizontalSafeArea
+            - compactTrailingInset * 2
+            - AudioMiniPlayerBubbleView.side
+            - circleFooterGap
+        return max(minimumCompactWidth, min(compactWidth, available))
     }
 
     var onOpenLibrary: (() -> Void)?
@@ -109,8 +106,6 @@ final class AudioMiniPlayerView: UIView, UIGestureRecognizerDelegate {
         return button
     }()
 
-    private var minimizeTrailingConstraint: NSLayoutConstraint?
-
     override init(frame: CGRect) {
         super.init(frame: frame)
         setup()
@@ -120,21 +115,13 @@ final class AudioMiniPlayerView: UIView, UIGestureRecognizerDelegate {
         fatalError("init(coder:) has not been implemented")
     }
 
-    /// Footer edge-shadow vs. a floating card.
-    func applyFloatingChrome(_ floating: Bool) {
+    /// Rounded corners and a drop shadow matching the Music circle.
+    func applyFloatingChrome() {
         layer.cornerCurve = .continuous
-        if floating {
-            layer.shadowOpacity = 0.28
-            layer.shadowRadius = 12
-            layer.shadowOffset = CGSize(width: 0, height: 4)
-        } else {
-            layer.shadowOpacity = 0.12
-            layer.shadowRadius = 4
-            layer.shadowOffset = CGSize(width: 0, height: -1)
-        }
-        minimizeTrailingConstraint?.constant = -Self.minimizeTrailingInset(
-            floating: floating
-        )
+        layer.cornerRadius = Self.compactCornerRadius
+        layer.shadowOpacity = 0.28
+        layer.shadowRadius = 12
+        layer.shadowOffset = CGSize(width: 0, height: 4)
     }
 
     /// Refreshes labels/controls from `AudioPlayerController`.
@@ -186,7 +173,7 @@ final class AudioMiniPlayerView: UIView, UIGestureRecognizerDelegate {
         addSubview(volumeControl)
         addSubview(minimizeButton)
         pinChrome(textStack: textStack)
-        applyFloatingChrome(false)
+        applyFloatingChrome()
 
         accessibilityLabel = "Now Playing"
         accessibilityHint = "Double tap to open Now Playing"
@@ -201,12 +188,9 @@ final class AudioMiniPlayerView: UIView, UIGestureRecognizerDelegate {
         let minimizeTrailing = minimizeButton.trailingAnchor.constraint(
             equalTo: trailingAnchor, constant: -Self.controlTrailingInset
         )
-        minimizeTrailingConstraint = minimizeTrailing
         NSLayoutConstraint.activate([
             textStack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
-            textStack.centerYAnchor.constraint(
-                equalTo: safeAreaLayoutGuide.centerYAnchor
-            ),
+            textStack.centerYAnchor.constraint(equalTo: centerYAnchor),
             textStack.trailingAnchor.constraint(
                 lessThanOrEqualTo: volumeControl.leadingAnchor, constant: -8
             ),
