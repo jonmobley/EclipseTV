@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		E2F51CF32F1FDBB500B87D90 /* EclipsePhoneCameraClient in Frameworks */ = {isa = PBXBuildFile; productRef = E2F51CF42F1FDBB500B87D90 /* EclipsePhoneCameraClient */; };
+		LP0000000000000000000B2 /* LivePollKit in Frameworks */ = {isa = PBXBuildFile; productRef = LP0000000000000000000B1 /* LivePollKit */; };
+		LP0000000000000000000B3 /* LivePollKit in Frameworks */ = {isa = PBXBuildFile; productRef = LP0000000000000000000B4 /* LivePollKit */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -70,6 +72,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				E2F51CF32F1FDBB500B87D90 /* EclipsePhoneCameraClient in Frameworks */,
+				LP0000000000000000000B2 /* LivePollKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -77,6 +80,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				LP0000000000000000000B3 /* LivePollKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -132,6 +136,7 @@
 			name = EclipseiPhone;
 			packageProductDependencies = (
 				E2F51CF42F1FDBB500B87D90 /* EclipsePhoneCameraClient */,
+				LP0000000000000000000B1 /* LivePollKit */,
 			);
 			productName = EclipseiPhone;
 			productReference = E24EA38F2D8A64E7002DB63F /* EclipseiPhone.app */;
@@ -155,6 +160,7 @@
 			);
 			name = EclipseiPhoneTests;
 			packageProductDependencies = (
+				LP0000000000000000000B4 /* LivePollKit */,
 			);
 			productName = EclipseiPhoneTests;
 			productReference = E24EA3A52D8A64E9002DB63F /* EclipseiPhoneTests.xctest */;
@@ -218,6 +224,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				E2F51CF52F1FDBB500B87D90 /* XCLocalSwiftPackageReference "../../eclipsepro/Packages/EclipsePhoneCameraClient" */,
+				LP0000000000000000000B0 /* XCLocalSwiftPackageReference "../../eclipsepro/Packages/LivePollKit" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = E24EA3902D8A64E7002DB63F /* Products */;
@@ -623,6 +630,10 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../../eclipsepro/Packages/EclipsePhoneCameraClient;
 		};
+		LP0000000000000000000B0 /* XCLocalSwiftPackageReference "../../eclipsepro/Packages/LivePollKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../../eclipsepro/Packages/LivePollKit;
+		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -630,6 +641,16 @@
 			isa = XCSwiftPackageProductDependency;
 			package = E2F51CF52F1FDBB500B87D90 /* XCLocalSwiftPackageReference "../../eclipsepro/Packages/EclipsePhoneCameraClient" */;
 			productName = EclipsePhoneCameraClient;
+		};
+		LP0000000000000000000B1 /* LivePollKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = LP0000000000000000000B0 /* XCLocalSwiftPackageReference "../../eclipsepro/Packages/LivePollKit" */;
+			productName = LivePollKit;
+		};
+		LP0000000000000000000B4 /* LivePollKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = LP0000000000000000000B0 /* XCLocalSwiftPackageReference "../../eclipsepro/Packages/LivePollKit" */;
+			productName = LivePollKit;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

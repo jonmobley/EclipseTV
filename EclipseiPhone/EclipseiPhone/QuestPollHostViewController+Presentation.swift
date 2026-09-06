@@ -5,6 +5,7 @@
 //  Copyright © 2026 Moxie LLC. All rights reserved.
 //
 
+import LivePollKit
 import UIKit
 
 extension QuestPollHostViewController {
@@ -20,10 +21,10 @@ extension QuestPollHostViewController {
     /// `WKWebView`, so a second preview would pull it out of the hero.
     ///
     /// - Parameters:
-    ///   - onAdvance: Host control action to send (start / results / next).
+    ///   - onAdvance: Host control command to send.
     ///   - onEnd: Runs after the sheet dismisses, so End can confirm from the Show.
     static func makeNavigation(
-        onAdvance: ((String) -> Void)?,
+        onAdvance: ((LivePollHostCommand) -> Void)?,
         onEnd: (() -> Void)?
     ) -> UINavigationController {
         let host = QuestPollHostViewController()

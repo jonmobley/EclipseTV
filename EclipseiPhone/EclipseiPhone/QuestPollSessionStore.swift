@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import LivePollKit
 
 /// In-memory host session for a Live Poll card (not persisted across launch).
 @MainActor
@@ -16,12 +17,12 @@ final class QuestPollSessionStore {
         "QuestPollSessionStore.didChange"
     )
 
-    private(set) var session: QuestPollSession?
+    private(set) var session: LivePollSession?
     /// ShowLivePoll.id owning the live room, when started from a card.
     private(set) var membershipId: UUID?
     /// Deck length from the card, picker, or session payload.
     private(set) var questionCount = 1
-    /// True while a ribbon cue is sending start / results / next / prev / end.
+    /// True while a ribbon cue is sending host commands.
     private(set) var isControlInFlight = false
     /// Membership whose Practice preview is in the hero (no room).
     private(set) var practiceMembershipId: UUID?
@@ -31,7 +32,7 @@ final class QuestPollSessionStore {
     /// Replaces the active room after create or control.
     @discardableResult
     func adopt(
-        _ session: QuestPollSession,
+        _ session: LivePollSession,
         questionCount: Int? = nil,
         membershipId: UUID? = nil
     ) -> QuestPollSessionChange {
@@ -43,13 +44,13 @@ final class QuestPollSessionStore {
         practiceMembershipId = nil
         if let questionCount {
             self.questionCount = max(questionCount, 1)
-        } else if let resolved = session.resolvedQuestionCount {
-            self.questionCount = max(resolved, 1)
+        } else if session.questionCount > 0 {
+            self.questionCount = max(session.questionCount, 1)
         }
         return commitChange(from: before)
     }
 
-    /// Marks a card as practicing in the hero without a QuestPoll room.
+    /// Marks a card as practicing in the hero without a Live Poll room.
     @discardableResult
     func setPracticeMembershipId(_ id: UUID?) -> QuestPollSessionChange {
         let before = snapshot
@@ -57,7 +58,7 @@ final class QuestPollSessionStore {
         return commitChange(from: before)
     }
 
-    /// Clears the room when the operator unlinks, ends, or removes the card.
+    /// Clears the room when the operator signs out, ends, or removes the card.
     @discardableResult
     func clear() -> QuestPollSessionChange {
         let before = snapshot
@@ -78,7 +79,7 @@ final class QuestPollSessionStore {
     var ribbonIndex: Int {
         guard let session else { return 0 }
         return QuestPollRibbon.currentIndex(
-            status: session.status,
+            phase: session.phase,
             questionIndex: session.questionIndex,
             questionCount: questionCount
         )
@@ -89,12 +90,12 @@ final class QuestPollSessionStore {
         QuestPollRibbon.items(questionCount: questionCount)
     }
 
-    /// Tile secondary line: join code and live vote count.
+    /// Tile secondary line: join code and live response count.
     var tileSubtitle: String? {
         guard let session else { return nil }
-        let votes = session.voteCount
+        let votes = session.answeredCount
         if votes > 0 {
-            return "\(session.code) · \(votes) vote\(votes == 1 ? "" : "s")"
+            return "\(session.code) · \(votes) response\(votes == 1 ? "" : "s")"
         }
         return session.code
     }

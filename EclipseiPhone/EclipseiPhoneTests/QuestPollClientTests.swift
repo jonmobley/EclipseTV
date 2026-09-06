@@ -6,78 +6,19 @@
 //
 
 import Foundation
+import LivePollKit
 import Testing
 @testable import EclipseiPhone
 
 struct QuestPollClientTests {
 
-    @Test func decodesPollList() throws {
-        let data = Data("""
-            {"polls":[{"id":"poll-1","title":"Session 1","questionCount":6}]}
-            """.utf8)
-        let list = try JSONDecoder().decode(QuestPollListResponse.self, from: data)
-        #expect(list.polls == [
-            QuestPollSummary(id: "poll-1", title: "Session 1", questionCount: 6)
-        ])
-    }
-
-    @Test func decodesSessionEnvelope() throws {
-        let data = Data("""
-            {"session":{"id":"abc","code":"E2LG","pollId":"poll-1","pollTitle":"Session 1","mode":"live","status":"lobby","questionIndex":0,"voteCount":0,"isHost":true,"isController":true}}
-            """.utf8)
-        let envelope = try JSONDecoder().decode(
-            QuestPollSessionEnvelope.self, from: data
-        )
-        let session = try #require(envelope.session)
-        #expect(session.code == "E2LG")
-        #expect(session.status == "lobby")
-        #expect(session.isHost)
-        #expect(session.question == nil)
-        #expect(session.joinQrVisible == nil)
-        #expect(!session.showsJoinQR)
-    }
-
-    @Test func decodesJoinQRVisible() throws {
-        let data = Data("""
-            {"session":{"id":"abc","code":"E2LG","pollId":"poll-1","pollTitle":"Session 1","mode":"live","status":"voting","questionIndex":0,"voteCount":0,"isHost":true,"isController":true,"joinQrVisible":true}}
-            """.utf8)
-        let envelope = try JSONDecoder().decode(
-            QuestPollSessionEnvelope.self, from: data
-        )
-        let session = try #require(envelope.session)
-        #expect(session.showsJoinQR)
-    }
-
-    @Test func decodesSessionWithQuestionPrompt() throws {
-        let data = Data("""
-            {"session":{"id":"abc","code":"E2LG","pollId":"poll-1","pollTitle":"Session 1","mode":"live","status":"question","questionIndex":0,"voteCount":3,"isHost":true,"isController":true,"question":{"id":"q1","text":"How long?","index":0,"totalQuestions":6}}}
-            """.utf8)
-        let envelope = try JSONDecoder().decode(
-            QuestPollSessionEnvelope.self, from: data
-        )
-        let session = try #require(envelope.session)
-        #expect(session.questionPrompt == "How long?")
-        #expect(session.resolvedQuestionCount == 6)
-        #expect(session.voteCount == 3)
-    }
-
-    @Test func decodesNullQuestion() throws {
-        let data = Data("""
-            {"session":{"id":"abc","code":"E2LG","pollId":"poll-1","pollTitle":"Session 1","mode":"live","status":"lobby","questionIndex":0,"voteCount":0,"isHost":true,"isController":true,"question":null}}
-            """.utf8)
-        let envelope = try JSONDecoder().decode(
-            QuestPollSessionEnvelope.self, from: data
-        )
-        #expect(envelope.session?.question == nil)
-    }
-
     @Test func presentURLMatchesProjectorPath() throws {
-        let url = try #require(URL(string: "https://questpoll.live/present"))
+        let url = try #require(URL(string: "https://quest.eclipseapp.com/present"))
         #expect(QuestPollConfig.isPresentURL(url))
-        let nested = try #require(URL(string: "https://questpoll.live/present/"))
+        let nested = try #require(URL(string: "https://quest.eclipseapp.com/present/"))
         #expect(QuestPollConfig.isPresentURL(nested))
         let withCode = try #require(
-            URL(string: "https://questpoll.live/present?code=VR2V")
+            URL(string: "https://quest.eclipseapp.com/present?code=VR2V")
         )
         #expect(QuestPollConfig.isPresentURL(withCode))
         let other = try #require(URL(string: "https://example.com/present"))
@@ -121,47 +62,34 @@ struct QuestPollClientTests {
         #expect(QuestPollConfig.previewPage(pollId: "poll-1").url == preview)
     }
 
-    @Test func accountLinkRoundTripMigratesKeychain() {
-        let suite = "QuestPollAccountTests.\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suite)!
-        defaults.removePersistentDomain(forName: suite)
+    @Test func accountTokenRoundTrip() {
         var keychain: [String: String] = [:]
-        let account = QuestPollAccount(
-            defaults: defaults,
+        let account = LivePollAccount(
             keychainGet: { keychain[$0] },
             keychainSet: { value, key in keychain[key] = value },
             keychainRemove: { keychain.removeValue(forKey: $0) }
         )
-        #expect(!account.isLinked)
-        account.link(pin: "4242")
-        #expect(account.isLinked)
-        #expect(account.hostPIN == "4242")
-        #expect(keychain["Eclipse.questpoll.hostPin"] == "4242")
-        #expect(defaults.string(forKey: "Eclipse.questpoll.hostPin") == nil)
-        let hostId = account.hostId
-        #expect(!hostId.isEmpty)
-        #expect(account.hostId == hostId)
-        account.unlink()
-        #expect(!account.isLinked)
-        #expect(keychain["Eclipse.questpoll.hostPin"] == nil)
-        #expect(account.hostId == hostId)
+        #expect(!account.isSignedIn)
+        account.signIn(token: "tok-abc")
+        #expect(account.isSignedIn)
+        #expect(account.accountToken == "tok-abc")
+        #expect(keychain["Eclipse.livepoll.accountToken"] == "tok-abc")
+        account.signOut()
+        #expect(!account.isSignedIn)
+        #expect(keychain["Eclipse.livepoll.accountToken"] == nil)
     }
 
-    @Test func accountMigratesLegacyUserDefaultsPIN() {
-        let suite = "QuestPollAccountMigrate.\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suite)!
-        defaults.removePersistentDomain(forName: suite)
-        defaults.set("9999", forKey: "Eclipse.questpoll.hostPin")
-        var keychain: [String: String] = [:]
-        let account = QuestPollAccount(
-            defaults: defaults,
-            keychainGet: { keychain[$0] },
-            keychainSet: { value, key in keychain[key] = value },
-            keychainRemove: { keychain.removeValue(forKey: $0) }
-        )
-        #expect(account.hostPIN == "9999")
-        #expect(keychain["Eclipse.questpoll.hostPin"] == "9999")
-        #expect(defaults.string(forKey: "Eclipse.questpoll.hostPin") == nil)
+    @Test func prepareEmailSignInClearsLegacyPIN() {
+        let pinKey = "Eclipse.questpoll.hostPin"
+        let promptedKey = "Eclipse.livepoll.didPromptPINMigration"
+        KeychainStore.set("4242", forKey: pinKey)
+        UserDefaults.standard.removeObject(forKey: promptedKey)
+        defer {
+            KeychainStore.removeValue(forKey: pinKey)
+            UserDefaults.standard.removeObject(forKey: promptedKey)
+        }
+        _ = LivePollAccountStore.prepareEmailSignInPrompt()
+        #expect(KeychainStore.string(forKey: pinKey) == nil)
     }
 
     @Test func previewPageUsesPresentURL() {
@@ -188,6 +116,13 @@ struct QuestPollClientTests {
 
     @Test func hostURLPointsAtHostConsole() {
         #expect(QuestPollConfig.hostURL.absoluteString.hasSuffix("/host"))
+        #expect(QuestPollConfig.origin.host == "quest.eclipseapp.com")
+    }
+
+    @Test func joinURLUsesUnifiedOrigin() {
+        let url = QuestPollConfig.joinURL(code: "VR2V")
+        #expect(url.host == "quest.eclipseapp.com")
+        #expect(url.path.hasSuffix("/join/VR2V"))
     }
 
     private func queryItems(_ url: URL) -> [URLQueryItem] {
