@@ -28,8 +28,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         window?.rootViewController = UINavigationController(rootViewController: mainViewController)
         window?.makeKeyAndVisible()
 
-        // Set app to dark mode
-        window?.overrideUserInterfaceStyle = .dark
+        // Dark appearance is declared via UIUserInterfaceStyle in Info.plist.
 
         // Bridge the static launch storyboard into the live UI with a short fade.
         if let window {
