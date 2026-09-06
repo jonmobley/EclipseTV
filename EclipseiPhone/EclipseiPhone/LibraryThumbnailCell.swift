@@ -113,7 +113,7 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         countdownTimeLabel.textColor = .white
         countdownTimeLabel.textAlignment = .center
         countdownTimeLabel.adjustsFontSizeToFitWidth = true
-        countdownTimeLabel.minimumScaleFactor = 0.45
+        countdownTimeLabel.minimumScaleFactor = 0.6
         countdownTimeLabel.numberOfLines = 1
         countdownTimeLabel.isHidden = true
         countdownTimeLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -247,12 +247,22 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         cardView.backgroundColor = item.isVideo
             ? .black
             : .secondarySystemBackground
-        imageView.contentMode = thumbnailContentMode
+
+        let fallback = thumbnailContentMode
             ?? MediaFitSettings.thumbnailContentMode(for: item)
+        if item.isVideo {
+            imageView.contentMode = fallback
+            imageView.image = image
+        } else {
+            let framed = MediaFramingStore.framedStill(
+                image, forId: item.id, fallback: fallback
+            )
+            imageView.contentMode = framed.contentMode
+            imageView.image = framed.image
+        }
 
         let isUnavailable = (item.isAvailable == false)
 
-        imageView.image = image
         imageView.alpha = isUnavailable ? 0.35 : 1.0
         placeholderIcon.isHidden = image != nil
         placeholderIcon.image = UIImage(systemName: item.isVideo ? "film" : "photo")
@@ -377,7 +387,7 @@ final class LibraryThumbnailCell: UICollectionViewCell {
             placeholderIcon.image = UIImage(systemName: systemImage)
             placeholderIcon.tintColor = UIColor.white.withAlphaComponent(0.85)
             placeholderIcon.isHidden = thumbnail != nil
-                || typeIcon?.showsWithoutThumbnail == true
+                || typeIcon?.hidesCenterPlaceholder == true
         } else {
             placeholderIcon.isHidden = true
         }
@@ -470,11 +480,9 @@ final class LibraryThumbnailCell: UICollectionViewCell {
     }
 
     /// - Parameter isLocked: When live is locked, the stroke uses amber.
-    /// - Parameter isPreview: Phone preview (not on AirPlay). Blue instead of red.
-    func setLive(_ isLive: Bool, isLocked: Bool = false, isPreview: Bool = false) {
+    func setLive(_ isLive: Bool, isLocked: Bool = false) {
         cardView.layer.borderWidth = isLive ? 3 : 0
-        let accent: UIColor = isPreview ? .systemBlue
-            : (isLocked ? .systemOrange : .systemRed)
+        let accent: UIColor = isLocked ? .systemOrange : .systemRed
         cardView.layer.borderColor = isLive ? accent.cgColor : UIColor.clear.cgColor
     }
 

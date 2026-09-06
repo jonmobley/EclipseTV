@@ -110,21 +110,36 @@ extension CameraManager: AVCaptureVideoDataOutputSampleBufferDelegate {
     /// Rebuilds the capture-angle coordinator when the active lens changes.
     func refreshCaptureRotationCoordinator() {
         guard let device = videoDevice else {
+            captureRotationObservation?.invalidate()
+            captureRotationObservation = nil
             captureRotationCoordinator = nil
             return
         }
         if captureRotationCoordinator?.device === device { return }
-        captureRotationCoordinator = AVCaptureDevice.RotationCoordinator(
+        let coordinator = AVCaptureDevice.RotationCoordinator(
             device: device,
             previewLayer: nil
         )
+        captureRotationObservation?.invalidate()
+        captureRotationCoordinator = coordinator
+        captureRotationObservation = coordinator.observe(
+            \.videoRotationAngleForHorizonLevelCapture,
+            options: [.new]
+        ) { _, _ in
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(
+                    name: CameraManager.captureRotationAngleDidChangeNotification,
+                    object: nil
+                )
+            }
+        }
     }
 
     /// Horizon-level angle for stills and movie output (matches live preview uprightness).
     func horizonLevelCaptureRotationAngle() -> CGFloat {
         refreshCaptureRotationCoordinator()
         return captureRotationCoordinator?.videoRotationAngleForHorizonLevelCapture
-            ?? CameraPreviewView.displayModePreviewRotationAngle
+            ?? CameraPreviewView.programFallbackRotationAngle
     }
 
     /// Applies the active lens’s horizon capture angle to a sensor-space still.

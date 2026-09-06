@@ -395,9 +395,16 @@ extension CameraLiveViewController {
             return attrs
         }
         tapToGoLiveHintView.configuration = config
-        tapToGoLiveHintView.isUserInteractionEnabled = false
-        tapToGoLiveHintView.accessibilityLabel = "Tap screen to go LIVE"
+        tapToGoLiveHintView.isUserInteractionEnabled = true
+        tapToGoLiveHintView.accessibilityLabel = String(localized: "Go LIVE")
+        tapToGoLiveHintView.accessibilityHint = "Starts live camera on AirPlay"
+        tapToGoLiveHintView.accessibilityTraits = .button
         tapToGoLiveHintView.translatesAutoresizingMaskIntoConstraints = true
+        tapToGoLiveHintView.addTarget(
+            self,
+            action: #selector(tapToGoLiveHintTapped),
+            for: .touchUpInside
+        )
     }
 
     /// Capsule elapsed-time pill, centered in the camera preview panel.

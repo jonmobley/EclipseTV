@@ -57,7 +57,10 @@ extension LiveHeaderView {
         setStaticPreviewHidden(false)
     }
 
-    /// Rotates sensor frames to match Display Mode after layout / lens flip.
+    /// Rotates sensor frames upright after layout, a lens flip, or a phone turn.
+    ///
+    /// Uses the lens horizon capture angle like the fullscreen panel's mirror: the hero
+    /// keeps its Display Mode shape, and a cross-axis hold becomes an upright crop.
     func layoutCameraPreviewIfNeeded() {
         guard let host = cameraPreviewHost, let preview = cameraPreview,
               !host.isHidden
@@ -66,7 +69,7 @@ extension LiveHeaderView {
         }
         let degrees = Double(
             CameraManager.shared.quantizedRotationAngle(
-                CameraPreviewView.displayModePreviewRotationAngle
+                CameraManager.shared.horizonLevelCaptureRotationAngle()
             )
         )
         PresentationViewController.applyRotatedLayout(
@@ -108,5 +111,6 @@ extension LiveHeaderView {
             insertSubview(host, at: 0)
         }
         bringWebPreviewChromeToFront()
+        bringCameraFlipChromeToFront()
     }
 }

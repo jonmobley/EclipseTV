@@ -42,7 +42,9 @@ struct CameraLiveChromeTests {
 
         #expect(vc.goLiveButton.isHidden)
         #expect(vc.tapToGoLiveHintView.isHidden == false)
-        #expect(vc.tapToGoLiveHintView.accessibilityLabel == "Tap screen to go LIVE")
+        #expect(
+            vc.tapToGoLiveHintView.accessibilityLabel == String(localized: "Go LIVE")
+        )
         let panel = vc.panelView.convert(vc.panelView.bounds, to: vc.view)
         #expect(panel.width > 1)
         #expect(vc.tapToGoLiveHintView.bounds.width > 1)

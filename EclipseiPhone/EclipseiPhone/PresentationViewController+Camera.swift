@@ -53,7 +53,7 @@ extension PresentationViewController {
         cameraContainer.bringSubviewToFront(cameraFrameOverlayView)
     }
 
-    /// Re-applies Display Mode camera rotation (does not follow the iPad hold).
+    /// Re-applies camera rotation after a turn; the panel shape stays on Display Mode.
     func syncCameraToDisplayModeOrientation() {
         guard !cameraContainer.isHidden else { return }
         cameraPreviewView.syncDisplayModeOrientation()

@@ -40,10 +40,10 @@ final class CameraPreviewView: UIView {
     }
 
     private var rotationCoordinator: AVCaptureDevice.RotationCoordinator?
-    private var rotationObservation: NSKeyValueObservation?
+    private var rotationObservations: [NSKeyValueObservation] = []
 
     deinit {
-        rotationObservation?.invalidate()
+        invalidateRotationObservations()
     }
 
     /// Binds this view to `session` and sets video gravity.
@@ -63,18 +63,18 @@ final class CameraPreviewView: UIView {
 
     /// Detaches from any capture session.
     func detach() {
-        rotationObservation?.invalidate()
-        rotationObservation = nil
+        invalidateRotationObservations()
         rotationCoordinator = nil
         videoPreviewLayer.session = nil
     }
 
-    /// Syncs rotation from Display Mode. Program does not follow how the iPad is held.
+    /// Syncs program rotation so subjects stay upright however the phone is held.
     ///
-    /// Landscape Left vs Right (same axis as Landscape mode) still need 0° vs 180°
-    /// so AirPlay is not upside-down when the camera UI lands on the other side.
+    /// The panel *shape* is pinned to Display Mode by `applyRotatedLayout`; only the
+    /// sensor angle follows the hold. A portrait phone on a Landscape Show is an upright
+    /// 16:9 crop (same framing as the phone panel) rather than a sideways full frame.
     func syncDisplayModeOrientation() {
-        preferredVideoRotationAngle = Self.displayModePreviewRotationAngle
+        preferredVideoRotationAngle = Self.programFallbackRotationAngle
         refreshRotationCoordinator()
         applyPreviewOrientation()
     }
@@ -111,33 +111,21 @@ final class CameraPreviewView: UIView {
 
     // MARK: - Rotation
 
-    /// Angle for the AirPlay / Display Mode panel — pinned to Vertical or Landscape.
+    /// Program sensor angle when no lens coordinator is available yet.
     ///
-    /// Thumbnail-page live camera leaves the iPad free to rotate; program stays in
-    /// the configured output mode so a Vertical stage does not become Landscape
-    /// (and vice versa) when the operator turns the tablet.
-    static var displayModePreviewRotationAngle: CGFloat {
-        programRotationAngle(
-            isVerticalMode: ExternalOutputSettings.isVerticalMode,
-            phoneOrientation: phoneApplicationOrientation
-        )
+    /// Derived from how the phone app is held. The live path prefers the coordinator's
+    /// horizon-level capture angle, which also knows about portrait-mounted sensors.
+    static var programFallbackRotationAngle: CGFloat {
+        programRotationAngle(phoneOrientation: phoneApplicationOrientation)
     }
 
-    /// Program sensor angle for Display Mode, ignoring a mismatched phone hold.
-    static func programRotationAngle(
-        isVerticalMode: Bool,
-        phoneOrientation: UIInterfaceOrientation
-    ) -> CGFloat {
-        if isVerticalMode {
-            if phoneOrientation.isPortrait {
-                return phoneOrientation.cameraPreviewRotationAngle
-            }
-            return UIInterfaceOrientation.portrait.cameraPreviewRotationAngle
-        }
-        if phoneOrientation.isLandscape {
-            return phoneOrientation.cameraPreviewRotationAngle
-        }
-        return UIInterfaceOrientation.landscapeRight.cameraPreviewRotationAngle
+    /// Sensor angle that stands subjects upright for `phoneOrientation`.
+    ///
+    /// Display Mode does not enter into it: the panel shape is pinned separately, and
+    /// fill gravity turns a cross-axis hold into an upright crop. Pinning the angle to
+    /// the mode instead left program sideways whenever the hold did not match.
+    static func programRotationAngle(phoneOrientation: UIInterfaceOrientation) -> CGFloat {
+        phoneOrientation.cameraPreviewRotationAngle
     }
 
     /// Interface orientation of the phone app window (camera body), not the TV.
@@ -154,24 +142,39 @@ final class CameraPreviewView: UIView {
 
     private func refreshRotationCoordinator() {
         guard let device = activeVideoDevice else {
-            rotationObservation?.invalidate()
-            rotationObservation = nil
+            invalidateRotationObservations()
             rotationCoordinator = nil
             return
         }
         if rotationCoordinator?.device === device { return }
-        rotationObservation?.invalidate()
+        invalidateRotationObservations()
         let coordinator = AVCaptureDevice.RotationCoordinator(
             device: device,
             previewLayer: videoPreviewLayer
         )
         rotationCoordinator = coordinator
-        rotationObservation = coordinator.observe(
-            \.videoRotationAngleForHorizonLevelPreview,
-            options: [.new]
-        ) { [weak self] _, _ in
-            self?.applyPreviewOrientation()
-        }
+        // Both angles: the phone reads the preview angle, program reads the capture
+        // angle, and the TV must re-rotate when the phone turns even though its own
+        // window never does.
+        rotationObservations = [
+            coordinator.observe(
+                \.videoRotationAngleForHorizonLevelPreview,
+                options: [.new]
+            ) { [weak self] _, _ in
+                self?.applyPreviewOrientation()
+            },
+            coordinator.observe(
+                \.videoRotationAngleForHorizonLevelCapture,
+                options: [.new]
+            ) { [weak self] _, _ in
+                self?.applyPreviewOrientation()
+            }
+        ]
+    }
+
+    private func invalidateRotationObservations() {
+        rotationObservations.forEach { $0.invalidate() }
+        rotationObservations.removeAll()
     }
 
     private var activeVideoDevice: AVCaptureDevice? {
@@ -216,11 +219,13 @@ final class CameraPreviewView: UIView {
         connection.isVideoMirrored = mirror
     }
 
-    /// AirPlay stays on Display Mode. The preview-layer coordinator follows gravity
-    /// and would reorient program when the iPad turns on the thumbnail page.
+    /// Phone layers rotate relative to their own window; the TV layer's window never
+    /// turns, so program uses the gravity-based capture angle instead — the same one
+    /// stills, recordings, and the phone-side frame mirror already use.
     private var programPreviewRotationAngle: CGFloat {
         if isHostedOnExternalDisplay {
-            return preferredVideoRotationAngle
+            return rotationCoordinator?.videoRotationAngleForHorizonLevelCapture
+                ?? preferredVideoRotationAngle
         }
         return rotationCoordinator?.videoRotationAngleForHorizonLevelPreview
             ?? preferredVideoRotationAngle

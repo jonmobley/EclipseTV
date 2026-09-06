@@ -35,6 +35,14 @@ final class CameraManager: NSObject {
         "CameraManager.cameraPositionDidChange"
     )
 
+    /// Posted on the main queue when the lens horizon capture angle changes (phone turned).
+    ///
+    /// Frame-tap mirrors rotate their view by hand, so they need this even when the UI
+    /// they sit in is orientation-locked and never lays out for the turn.
+    static let captureRotationAngleDidChangeNotification = Notification.Name(
+        "CameraManager.captureRotationAngleDidChange"
+    )
+
     /// Whether the capture session is currently running.
     private(set) var isSessionRunning = false
 
@@ -81,6 +89,8 @@ final class CameraManager: NSObject {
     var videoDevice: AVCaptureDevice?
     /// Per-lens horizon angles for stills / movies (front sensors are often portrait-native).
     var captureRotationCoordinator: AVCaptureDevice.RotationCoordinator?
+    /// KVO on the coordinator's capture angle, feeding `captureRotationAngleDidChangeNotification`.
+    var captureRotationObservation: NSKeyValueObservation?
     let logger = Logger(subsystem: "com.eclipseapp.ios", category: "Camera")
     /// Soft cap so digital zoom stays usable (device max can be extreme).
     let preferredMaxZoom: CGFloat = 6

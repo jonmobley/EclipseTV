@@ -34,11 +34,16 @@ extension CameraLiveViewController {
         toggleAirPlayLive()
     }
 
+    /// Activates the same go-live path as a stage tap (VoiceOver / direct tap).
+    @objc func tapToGoLiveHintTapped() {
+        toggleAirPlayLive()
+    }
+
     /// True when the tap landed on a chrome control that owns the gesture.
     private func hitTestBlocksStageLiveToggle(at location: CGPoint) -> Bool {
         let blockers: [UIView] = [
             backButton, settingsButton, shutterButton, photoButton, flipButton,
-            frameButton, stillRibbonView, frameRibbonView
+            frameButton, stillRibbonView, frameRibbonView, tapToGoLiveHintView
         ]
         return blockers.contains { $0.frame.contains(location) && !$0.isHidden }
     }

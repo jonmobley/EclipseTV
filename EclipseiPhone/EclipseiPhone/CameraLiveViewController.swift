@@ -255,6 +255,12 @@ final class CameraLiveViewController: UIViewController {
             name: CameraManager.cameraPositionDidChangeNotification,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(captureRotationAngleDidChange),
+            name: CameraManager.captureRotationAngleDidChangeNotification,
+            object: nil
+        )
         refreshLiveChrome()
     }
 
@@ -327,6 +333,12 @@ final class CameraLiveViewController: UIViewController {
     /// Flip rebuilds the preview connection — re-apply rotation on phone + mirror.
     @objc private func cameraPositionDidChange() {
         layoutPhoneCameraViewport()
+    }
+
+    /// Phone turned while the UI stayed put (Vertical Show pins portrait) — only the
+    /// frame-tap mirror needs re-rotating; the hardware layer follows its coordinator.
+    @objc private func captureRotationAngleDidChange() {
+        layoutMirrorView()
     }
 
     deinit {

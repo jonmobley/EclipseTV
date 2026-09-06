@@ -317,14 +317,12 @@ extension LibraryGridViewController: UICollectionViewDataSource,
                 typeIcon: .media(isVideo: ScreensaverStore.isVideo)
             )
         case .camera:
-            let live = ExternalDisplayManager.shared.isCameraTileLive
             cell.configureCamera(
-                isLive: live,
+                isLive: ExternalDisplayManager.shared.isCameraTileLive,
                 lastFrame: CameraManager.shared.lastFrame,
                 parkedStill: ExternalDisplayManager.shared.cameraTileParkedStillImage,
                 warmPreview: !isCameraControlPresented && !homeCameraWarmPreviewSuspended,
-                isLocked: isLiveOutputLocked,
-                isPreview: cameraTileIsPreview(live)
+                isLocked: isLiveOutputLocked
             )
         case .createShow:
             cell.configureActionTile(title: "New Show", systemImage: "plus")
@@ -492,7 +490,13 @@ extension LibraryGridViewController: UICollectionViewDataSource,
     /// A second browser must never open on top of the first — that left the loser with
     /// an empty stage and leaked the warm web view. If one is already up, navigate it
     /// like a normal browser load so Back still works and AirPlay follows.
+    ///
+    /// Video links skip the desktop browser and go live as fullscreen video instead.
     func presentWebPage(_ page: WebPage) {
+        if page.videoLink != nil {
+            presentWebPageLive(page)
+            return
+        }
         let markLive = hasLiveOutputDestination && !isLiveOutputLocked
         if let open = openController(ofType: WebRemoteViewController.self) {
             if markLive {
@@ -574,6 +578,11 @@ extension LibraryGridViewController: UICollectionViewDataSource,
 
         if item.isVideo {
             AudioPlayerController.shared.stop()
+            if let localURL = LocalMediaStore.shared.localURL(forId: item.id) {
+                PresentationPrewarmer.shared.prewarm(url: localURL)
+            }
+        } else {
+            PresentationPrewarmer.shared.clear()
         }
 
         let startAt = item.isVideo ? (VideoResumeStore.shared.position(for: item.id) ?? 0) : 0
@@ -613,29 +622,25 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             return
         }
 
-        let hud = UIAlertController(
-            title: "Downloading…",
-            message: "Getting this item from iCloud.",
-            preferredStyle: .alert
-        )
-        present(hud, animated: true)
+        showPresentationToast(String(localized: "Downloading from iCloud…"), duration: 8)
         EclipseSyncController.shared.backend.downloadAsset(id: capture.id, progress: nil) {
             [weak self] result in
-            hud.dismiss(animated: true) {
-                switch result {
-                case .success:
-                    var available = libraryItem
-                    available.isAvailable = true
-                    finish(available)
-                case .failure(let error):
-                    let alert = UIAlertController(
-                        title: "Download Failed",
-                        message: error.localizedDescription,
-                        preferredStyle: .alert
-                    )
-                    alert.addAction(UIAlertAction(title: "OK", style: .default))
-                    self?.present(alert, animated: true)
-                }
+            guard let self else { return }
+            self.removePresentationToastIfPresent()
+            switch result {
+            case .success:
+                var available = libraryItem
+                available.isAvailable = true
+                finish(available)
+            case .failure(let error):
+                Haptics.error()
+                let alert = UIAlertController(
+                    title: "Download Failed",
+                    message: error.localizedDescription,
+                    preferredStyle: .alert
+                )
+                alert.addAction(UIAlertAction(title: "OK", style: .default))
+                self.present(alert, animated: true)
             }
         }
     }

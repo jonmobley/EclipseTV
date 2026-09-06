@@ -12,60 +12,32 @@ import UIKit
 
 struct CameraPreviewRotationTests {
 
-    @Test func landscapeOutputIgnoresPortraitHold() {
+    /// A portrait phone on a Landscape Show must rotate the sensor 90°, not 0°:
+    /// the 16:9 panel is pinned separately, and fill gravity makes this an upright crop.
+    /// Pinning the angle to the mode put program on its side.
+    @Test func portraitHoldStaysUprightOnLandscapeOutput() {
         #expect(
-            CameraPreviewView.programRotationAngle(
-                isVerticalMode: false,
-                phoneOrientation: .portrait
-            ) == 0
+            CameraPreviewView.programRotationAngle(phoneOrientation: .portrait) == 90
         )
         #expect(
             CameraPreviewView.programRotationAngle(
-                isVerticalMode: false,
-                phoneOrientation: .portraitUpsideDown
-            ) == 0
-        )
-    }
-
-    @Test func verticalOutputIgnoresLandscapeHold() {
-        #expect(
-            CameraPreviewView.programRotationAngle(
-                isVerticalMode: true,
-                phoneOrientation: .landscapeRight
-            ) == 90
-        )
-        #expect(
-            CameraPreviewView.programRotationAngle(
-                isVerticalMode: true,
-                phoneOrientation: .landscapeLeft
-            ) == 90
-        )
-    }
-
-    @Test func sameAxisFlipStaysInDisplayMode() {
-        #expect(
-            CameraPreviewView.programRotationAngle(
-                isVerticalMode: false,
-                phoneOrientation: .landscapeRight
-            ) == 0
-        )
-        #expect(
-            CameraPreviewView.programRotationAngle(
-                isVerticalMode: false,
-                phoneOrientation: .landscapeLeft
-            ) == 180
-        )
-        #expect(
-            CameraPreviewView.programRotationAngle(
-                isVerticalMode: true,
-                phoneOrientation: .portrait
-            ) == 90
-        )
-        #expect(
-            CameraPreviewView.programRotationAngle(
-                isVerticalMode: true,
                 phoneOrientation: .portraitUpsideDown
             ) == 270
+        )
+    }
+
+    @Test func landscapeHoldStaysUprightOnVerticalOutput() {
+        #expect(
+            CameraPreviewView.programRotationAngle(phoneOrientation: .landscapeRight) == 0
+        )
+        #expect(
+            CameraPreviewView.programRotationAngle(phoneOrientation: .landscapeLeft) == 180
+        )
+    }
+
+    @Test func unknownHoldFallsBackToPortrait() {
+        #expect(
+            CameraPreviewView.programRotationAngle(phoneOrientation: .unknown) == 90
         )
     }
 

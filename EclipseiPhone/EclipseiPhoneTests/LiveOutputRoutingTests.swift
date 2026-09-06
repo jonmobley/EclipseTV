@@ -291,32 +291,4 @@ struct LiveOutputRoutingTests {
             )
         )
     }
-
-    @Test func cameraTilePreviewStrokeWhenNotOnDisplay() {
-        #expect(
-            LiveOutputRouting.cameraTileUsesPreviewStroke(
-                isTileLive: true,
-                isDisplayConnected: false
-            )
-        )
-        #expect(
-            LiveOutputRouting.cameraTileUsesPreviewStroke(
-                isTileLive: true,
-                isDisplayConnected: true
-            ) == false
-        )
-        #expect(
-            LiveOutputRouting.cameraTileUsesPreviewStroke(
-                isTileLive: false,
-                isDisplayConnected: false
-            ) == false
-        )
-        #expect(
-            LiveOutputRouting.cameraTileUsesPreviewStroke(
-                isTileLive: true,
-                isDisplayConnected: false,
-                isRemoteOperator: true
-            ) == false
-        )
-    }
 }

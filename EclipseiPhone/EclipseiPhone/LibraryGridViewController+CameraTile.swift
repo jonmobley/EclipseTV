@@ -42,14 +42,12 @@ extension LibraryGridViewController {
         homeCameraWarmPreviewSuspended = true
         if let cell = visibleCameraCell() {
             CameraManager.shared.captureLastFrame(from: cell.cameraPreview)
-            let live = ExternalDisplayManager.shared.isCameraTileLive
             cell.configureCamera(
-                isLive: live,
+                isLive: ExternalDisplayManager.shared.isCameraTileLive,
                 lastFrame: CameraManager.shared.lastFrame,
                 parkedStill: ExternalDisplayManager.shared.cameraTileParkedStillImage,
                 warmPreview: false,
-                isLocked: isLiveOutputLocked,
-                isPreview: cameraTileIsPreview(live)
+                isLocked: isLiveOutputLocked
             )
         } else {
             CameraManager.shared.captureLastFrame(from: nil)
@@ -79,14 +77,12 @@ extension LibraryGridViewController {
         else {
             return
         }
-        let live = ExternalDisplayManager.shared.isCameraTileLive
         cell.configureCamera(
-            isLive: live,
+            isLive: ExternalDisplayManager.shared.isCameraTileLive,
             lastFrame: CameraManager.shared.lastFrame,
             parkedStill: ExternalDisplayManager.shared.cameraTileParkedStillImage,
             warmPreview: true,
-            isLocked: isLiveOutputLocked,
-            isPreview: cameraTileIsPreview(live)
+            isLocked: isLiveOutputLocked
         )
         cell.refreshLiveCameraPreview()
     }
@@ -113,6 +109,16 @@ extension LibraryGridViewController {
             self.refreshVisibleCameraTilePreview()
         }
         observe(CameraManager.cameraPositionDidChangeNotification) { [weak self] _ in
+            self?.liveHeader.layoutCameraPreviewIfNeeded()
+            self?.syncLiveCameraFlipChrome()
+        }
+        // Flipping is blocked mid-movie — keep the hero control's state honest
+        // however the recording was started or stopped.
+        observe(CameraManager.recordingDidChangeNotification) { [weak self] _ in
+            self?.syncLiveCameraFlipChrome()
+        }
+        // The grid is portrait-locked on iPhone, so a turn never reaches layout.
+        observe(CameraManager.captureRotationAngleDidChangeNotification) { [weak self] _ in
             self?.liveHeader.layoutCameraPreviewIfNeeded()
         }
     }
@@ -167,14 +173,5 @@ extension LibraryGridViewController {
               let item = cameraShowItemIndex else { return nil }
         let indexPath = IndexPath(item: item, section: showsSection)
         return collectionView.cellForItem(at: indexPath) as? LibraryThumbnailCell
-    }
-
-    /// Blue stroke when Camera is in the phone hero, not on AirPlay / HDMI.
-    func cameraTileIsPreview(_ isLive: Bool) -> Bool {
-        LiveOutputRouting.cameraTileUsesPreviewStroke(
-            isTileLive: isLive,
-            isDisplayConnected: ExternalDisplayManager.shared.isConnected,
-            isRemoteOperator: ShowLiveSession.shared.isRemoteOperator
-        )
     }
 }

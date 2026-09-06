@@ -28,7 +28,7 @@ struct CameraTileLivePlaceholderTests {
         endCameraIfNeeded(mgr)
     }
 
-    @Test func previewCameraTileUsesBlueStroke() {
+    @Test func lockedCameraTileUsesAmberStroke() {
         let cell = LibraryThumbnailCell(
             frame: CGRect(x: 0, y: 0, width: 160, height: 90)
         )
@@ -36,11 +36,11 @@ struct CameraTileLivePlaceholderTests {
             isLive: true,
             lastFrame: nil,
             warmPreview: false,
-            isPreview: true
+            isLocked: true
         )
         #expect(cell.cardView.layer.borderWidth == 3)
-        #expect(cell.cardView.layer.borderColor == UIColor.systemBlue.cgColor)
-        #expect(cell.accessibilityLabel == "Camera, preview")
+        #expect(cell.cardView.layer.borderColor == UIColor.systemOrange.cgColor)
+        #expect(cell.accessibilityLabel == "Camera, live, locked")
     }
 
     @Test func liveCameraTileUsesRedStroke() {
