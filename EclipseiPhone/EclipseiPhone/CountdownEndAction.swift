@@ -40,6 +40,19 @@ enum CountdownEndAction: String, CaseIterable, Codable, Equatable, Hashable {
         }
     }
 
+    /// Second caption line on the Show-grid tile. Nil when nothing will happen.
+    ///
+    /// An armed countdown otherwise looks identical to one that holds, which on a
+    /// stage is the difference between "the timer ran out" and "the projector
+    /// changed by itself and nobody knows why".
+    var tileHint: String? {
+        switch self {
+        case .hold: return nil
+        case .black: return "Then black"
+        case .next: return "Then next"
+        }
+    }
+
     /// ⋯ menu glyph.
     var systemImage: String {
         switch self {

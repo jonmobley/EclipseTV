@@ -109,7 +109,8 @@ extension LibraryGridViewController {
             seconds: seconds,
             isLive: isLive,
             isLocked: isLiveOutputLocked,
-            isExpired: isExpired
+            isExpired: isExpired,
+            endHint: item.endAction.tileHint
         )
     }
 
@@ -300,7 +301,10 @@ extension LibraryGridViewController {
             if isLive {
                 cell.applyCountdownTime(seconds, isExpired: isExpired)
             }
-            let spoken = "\(item.name), \(CountdownController.displayString(seconds: seconds))"
+            var spoken = "\(item.name), \(CountdownController.displayString(seconds: seconds))"
+            if let hint = item.endAction.tileHint {
+                spoken += ", \(hint.lowercased())"
+            }
             cell.accessibilityLabel = isLive
                 ? (isLiveOutputLocked
                     ? "\(spoken), live, locked, countdown"

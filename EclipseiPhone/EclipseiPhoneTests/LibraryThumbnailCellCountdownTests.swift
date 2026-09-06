@@ -49,6 +49,45 @@ struct LibraryThumbnailCellCountdownTests {
         #expect(cell.typeIconOverlay.appliedIcon == .countdown)
     }
 
+    @Test func armedEndingAddsASecondCaptionLineAndSpeaksIt() {
+        let cell = makeCell()
+        cell.configureCountdown(
+            name: "Pre-Service",
+            seconds: 300,
+            isLive: false,
+            endHint: CountdownEndAction.next.tileHint
+        )
+        #expect(cell.captionLabel.text == "Pre-Service\nThen next")
+        #expect(cell.captionLabel.numberOfLines == 2)
+        #expect(cell.accessibilityLabel == "Pre-Service, 5:00, countdown, then next")
+    }
+
+    @Test func holdingEndingLooksLikeItAlwaysDid() {
+        let cell = makeCell()
+        cell.configureCountdown(
+            name: "Pre-Service",
+            seconds: 300,
+            isLive: false,
+            endHint: CountdownEndAction.hold.tileHint
+        )
+        #expect(cell.captionLabel.text == "Pre-Service")
+        #expect(cell.captionLabel.numberOfLines == 1)
+        #expect(cell.accessibilityLabel == "Pre-Service, 5:00, countdown")
+    }
+
+    @Test func liveTicksKeepTheArmedHint() {
+        let cell = makeCell()
+        cell.configureCountdown(
+            name: "Pre-Service",
+            seconds: 300,
+            isLive: true,
+            endHint: CountdownEndAction.black.tileHint
+        )
+        cell.applyCountdownTime(12, isExpired: false)
+        #expect(cell.countdownTimeLabel.text == "0:12")
+        #expect(cell.captionLabel.text == "Pre-Service\nThen black")
+    }
+
     @Test func resetChromeHidesCountdownClock() {
         let cell = makeCell()
         cell.configureCountdown(name: "Break", seconds: 120, isLive: false)

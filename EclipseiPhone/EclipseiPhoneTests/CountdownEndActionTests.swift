@@ -26,6 +26,12 @@ struct CountdownEndActionTests {
         #expect(CountdownEndAction.fallback == .hold)
     }
 
+    @Test func onlyArmedEndingsShowATileHint() {
+        #expect(CountdownEndAction.hold.tileHint == nil)
+        #expect(CountdownEndAction.black.tileHint == "Then black")
+        #expect(CountdownEndAction.next.tileHint == "Then next")
+    }
+
     // MARK: - Persistence
 
     @Test func countdownSavedBeforeEndActionsExistedDecodesAsHold() throws {
