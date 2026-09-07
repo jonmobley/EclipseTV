@@ -291,4 +291,44 @@ struct LiveOutputRoutingTests {
             )
         )
     }
+
+    /// An available projector has to mean the same thing to every gate.
+    ///
+    /// The Live Poll gate read `ExternalDisplayManager.isConnected` while its
+    /// siblings read `isAirPlayAvailable`. On iOS 27+ the accessory reports a
+    /// display before its scene attaches, so in that window the Show marked taps
+    /// live and let websites go live while Live Poll refused the same deck with
+    /// "Live Poll needs AirPlay, HDMI, or Practice Mode."
+    @Test func projectorAvailabilityAgreesAcrossGates() {
+        for eclipseTVOnline in [false, true] {
+            for practiceMode in [false, true] {
+                #expect(
+                    LiveOutputRouting.canMarkLive(
+                        airPlayConnected: true,
+                        eclipseTVOnline: eclipseTVOnline,
+                        practiceMode: practiceMode
+                    )
+                )
+                #expect(
+                    LiveOutputRouting.canPresentWebOverlay(
+                        airPlayConnected: true,
+                        practiceMode: practiceMode
+                    )
+                )
+                #expect(
+                    LiveOutputRouting.canHostLivePoll(
+                        airPlayConnected: true,
+                        eclipseTVOnline: eclipseTVOnline,
+                        practiceMode: practiceMode
+                    )
+                )
+                #expect(
+                    LiveOutputRouting.showsHeroLiveBadge(
+                        airPlayConnected: true,
+                        eclipseTVOnline: eclipseTVOnline
+                    )
+                )
+            }
+        }
+    }
 }

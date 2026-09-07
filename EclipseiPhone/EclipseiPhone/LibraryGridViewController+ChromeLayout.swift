@@ -9,6 +9,25 @@ import UIKit
 
 /// Tap goes live (red) with AirPlay, EclipseTV, Practice Mode, or a remote director.
 enum LiveOutputRouting {
+
+    /// The one projector signal every routing decision here reads.
+    ///
+    /// `isAirPlayAvailable` is deliberately wider than `isConnected`: on iOS 27+
+    /// the scene accessory reports a display before its scene attaches, and
+    /// `present(_:)` attaches on demand. Mixing the two made the same question
+    /// disagree with itself — the Show marked taps live and let websites go live
+    /// off `isAirPlayAvailable` while Live Poll refused with "needs AirPlay or
+    /// HDMI" off `isConnected`.
+    ///
+    /// Affordances (badges, gates, what a tap means) belong here. Side effects
+    /// that drive real hardware — parking EclipseTV, director election, mirroring
+    /// the camera — must keep reading `isConnected`, since an unattached scene
+    /// cannot render and parking the TV for it just blanks the room.
+    @MainActor
+    static var projectorAvailable: Bool {
+        ExternalDisplayManager.shared.isAirPlayAvailable
+    }
+
     /// Live when a display, EclipseTV, Practice Mode, or a remote director is available.
     static func canMarkLive(
         airPlayConnected: Bool,
@@ -23,7 +42,7 @@ enum LiveOutputRouting {
     @MainActor
     static func canMarkLive(practiceMode: Bool) -> Bool {
         canMarkLive(
-            airPlayConnected: ExternalDisplayManager.shared.isAirPlayAvailable,
+            airPlayConnected: projectorAvailable,
             eclipseTVOnline: TVLibraryStore.shared.isOnline,
             practiceMode: practiceMode,
             isRemoteOperator: ShowLiveSession.shared.isRemoteOperator
@@ -63,7 +82,7 @@ enum LiveOutputRouting {
     @MainActor
     static func canPresentWebOverlay(practiceMode: Bool) -> Bool {
         canPresentWebOverlay(
-            airPlayConnected: ExternalDisplayManager.shared.isAirPlayAvailable,
+            airPlayConnected: projectorAvailable,
             practiceMode: practiceMode
         )
     }
@@ -80,9 +99,25 @@ enum LiveOutputRouting {
         return !eclipseTVOnline
     }
 
+    /// Live Poll hosting using the current projector / EclipseTV state.
+    @MainActor
+    static func canHostLivePoll(practiceMode: Bool) -> Bool {
+        canHostLivePoll(
+            airPlayConnected: projectorAvailable,
+            eclipseTVOnline: TVLibraryStore.shared.isOnline,
+            practiceMode: practiceMode
+        )
+    }
+
     /// Red LIVE chip on the Live Poll hero only when an external display owns it.
     static func showsLivePollLiveBadge(externalDisplayConnected: Bool) -> Bool {
         externalDisplayConnected
+    }
+
+    /// Live Poll LIVE chip using the current projector state.
+    @MainActor
+    static func showsLivePollLiveBadge() -> Bool {
+        showsLivePollLiveBadge(externalDisplayConnected: projectorAvailable)
     }
 
     /// Screensaver is the live grid item when a destination is up and nothing else is.
@@ -143,7 +178,7 @@ enum LiveOutputRouting {
     @MainActor
     static func showsHeroLiveBadge() -> Bool {
         showsHeroLiveBadge(
-            airPlayConnected: ExternalDisplayManager.shared.isAirPlayAvailable,
+            airPlayConnected: projectorAvailable,
             eclipseTVOnline: TVLibraryStore.shared.isOnline,
             isRemoteOperator: ShowLiveSession.shared.isRemoteOperator
         )
