@@ -302,6 +302,9 @@ final class LibraryGridViewController: UIViewController {
     var onBlackLiveChanged: ((Bool) -> Void)?
     /// Fired when live-output lock toggles (header amber chrome).
     var onLiveOutputLockChanged: ((Bool) -> Void)?
+    /// Fired when a phone-hosted Live Poll takes or releases the hero, so the
+    /// header can offer Lock / Blackout for it even with Practice Mode off.
+    var onLivePollPhoneHeroChanged: ((Bool) -> Void)?
 
     /// Extra bottom inset reserved for the home mini player.
     var miniPlayerBottomInset: CGFloat = 0 {
@@ -892,6 +895,7 @@ final class LibraryGridViewController: UIViewController {
         let blackLive = isBlackSelected && !mgr.isOverlayLive
         onBlackLiveChanged?(blackLive)
         onLiveOutputLockChanged?(isLiveOutputLocked)
+        onLivePollPhoneHeroChanged?(isLivePollPhoneHeroActive)
         liveHeader.setOutputLocked(isLiveOutputLocked)
         guard showsLiveHero else {
             // Never leave a Show-mode live preview over the Home marketing carousel.

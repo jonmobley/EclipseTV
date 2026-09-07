@@ -64,6 +64,7 @@ final class HomeHeaderBar: UIView {
     private var isBlackLive = false
     private var showsShowChrome = false
     private var previewsWhenDisconnected = false
+    private var livePollOwnsPhoneHero = false
     private var isArranging = false
     private var isSelecting = false
     private var menuPillLeadingToBack: NSLayoutConstraint?
@@ -173,7 +174,9 @@ final class HomeHeaderBar: UIView {
 
         blackButton.translatesAutoresizingMaskIntoConstraints = false
         blackButton.accessibilityLabel = "Blackout"
-        blackButton.accessibilityHint = "Toggles a black screen on AirPlay"
+        blackButton.accessibilityHint =
+            "Toggles a black screen on the live output — AirPlay, EclipseTV, "
+            + "or the Practice Mode preview"
         blackButton.addTarget(self, action: #selector(blackTapped), for: .touchUpInside)
         applyBlackButtonAppearance()
 
@@ -394,12 +397,24 @@ final class HomeHeaderBar: UIView {
         applyTrailingChrome()
     }
 
-    /// Lock + Blackout: Show mode with a display, EclipseTV, or Practice Mode.
+    /// A Live Poll gate, Practice deck, or room is hosted on the phone hero.
+    ///
+    /// That hero appears even with Practice Mode off, and it is the output, so
+    /// Lock / Blackout have to come with it.
+    func setLivePollOwnsPhoneHero(_ active: Bool) {
+        guard livePollOwnsPhoneHero != active else { return }
+        livePollOwnsPhoneHero = active
+        applyTrailingChrome()
+    }
+
+    /// Lock + Blackout: Show mode with a display, EclipseTV, Practice Mode, or a
+    /// phone-hosted Live Poll — anything that makes the hero the live output.
     var showsLiveOutputChrome: Bool {
         showsShowChrome && (
             isAirPlayConnected
             || connectionState == .connected
             || previewsWhenDisconnected
+            || livePollOwnsPhoneHero
         )
     }
 
