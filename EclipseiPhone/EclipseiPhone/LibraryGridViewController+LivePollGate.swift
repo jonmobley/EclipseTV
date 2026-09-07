@@ -9,34 +9,78 @@ import UIKit
 
 /// Whether the phone hero may show Live Poll Practice / Start chrome.
 ///
-/// That chrome is phone-only: a live website, countdown, camera, or PDF keeps
-/// the projector until the host taps Start, so a live overlay is deliberately
-/// not an input here. Program picks that the phone itself owns — a photo, a
-/// Show tool, or a running slideshow — do take the hero back.
+/// With a projector attached that chrome is phone-only: a live website,
+/// countdown, camera, or PDF keeps its own screen until the host taps Start, so
+/// it does not block the gate. Anything the phone hero itself is showing —
+/// a photo, a Show tool, a running slideshow, or an overlay in Practice Mode —
+/// does take the hero back.
 enum LivePollIdleChrome {
 
     /// - Parameters:
     ///   - photoLive: A library still or video is the live item.
     ///   - toolSelected: Blackout, Logo, or Screensaver is selected.
     ///   - slideshowActive: A slideshow is playing.
+    ///   - overlayOwnsPhoneHero: A live overlay (countdown, website, camera, PDF)
+    ///     has no display to sit on, so the phone hero is the only place it
+    ///     exists. Painting the gate over it retired the overlay from the sole
+    ///     output while its tile still read live.
     static func isAvailable(
         photoLive: Bool,
         toolSelected: Bool,
-        slideshowActive: Bool
+        slideshowActive: Bool,
+        overlayOwnsPhoneHero: Bool
     ) -> Bool {
-        !photoLive && !toolSelected && !slideshowActive
+        !photoLive && !toolSelected && !slideshowActive && !overlayOwnsPhoneHero
+    }
+
+    /// Which Live Poll card owns idle chrome: an active Practice wins over a
+    /// pending gate, and either only counts inside the Show it belongs to.
+    ///
+    /// The Show scoping is load-bearing. Practice outlives closing a Show, so
+    /// without it another Show's deck painted into this Show's hero — the same
+    /// scoping `isLivePollPhoneHeroActive` and the cue ribbon already apply.
+    ///
+    /// - Parameters:
+    ///   - practiceShowId: Show owning the Practice card, if any.
+    ///   - gateShowId: Show owning the card waiting on Practice / Start, if any.
+    static func idleMembership(
+        practiceMembershipId: UUID?,
+        practiceShowId: UUID?,
+        gateMembershipId: UUID?,
+        gateShowId: UUID?,
+        openShowId: UUID?
+    ) -> (membershipId: UUID, isPracticing: Bool)? {
+        guard let openShowId else { return nil }
+        if let id = practiceMembershipId, practiceShowId == openShowId {
+            return (id, true)
+        }
+        if let id = gateMembershipId, gateShowId == openShowId {
+            return (id, false)
+        }
+        return nil
     }
 }
 
 extension LibraryGridViewController {
 
-    /// True when no photo, Show tool, or slideshow has taken program.
+    /// True when no photo, Show tool, slideshow, or phone-hero overlay has program.
     var canShowLivePollIdleChrome: Bool {
         LivePollIdleChrome.isAvailable(
             photoLive: store.currentId != nil,
             toolSelected: isLogoSelected || isScreensaverSelected || isBlackSelected,
-            slideshowActive: SlideshowPlaybackController.shared.activeSlideshowId != nil
+            slideshowActive: SlideshowPlaybackController.shared.activeSlideshowId != nil,
+            overlayOwnsPhoneHero: livePollGateBlockedByPhoneHeroOverlay
         )
+    }
+
+    /// A countdown, website, camera, or PDF is live with no display to sit on, so
+    /// the phone hero is its only output and the gate must not take it.
+    ///
+    /// The poll's own room is excluded — that overlay *is* the poll, and the
+    /// callers that matter already return early on `isQuestPollLive`.
+    var livePollGateBlockedByPhoneHeroOverlay: Bool {
+        let mgr = ExternalDisplayManager.shared
+        return mgr.isOverlayLive && !mgr.isConnected && !mgr.isQuestPollLive
     }
 
     /// True while the hero shows Practice / Start or the Practice deck instead of
@@ -79,17 +123,19 @@ extension LibraryGridViewController {
 
     // MARK: - Private
 
-    /// Card driving idle chrome: an active Practice wins over a pending gate.
+    /// Card driving idle chrome, scoped to the open Show — see `idleMembership`.
     private var livePollIdleCard: (item: ShowLivePoll, isPracticing: Bool)? {
-        if let membershipId = QuestPollSessionStore.shared.practiceMembershipId,
-           let item = LivePollStore.shared.poll(id: membershipId) {
-            return (item, true)
-        }
-        if let membershipId = livePollGateMembershipId,
-           let item = LivePollStore.shared.poll(id: membershipId) {
-            return (item, false)
-        }
-        return nil
+        let polls = LivePollStore.shared
+        let practiceId = QuestPollSessionStore.shared.practiceMembershipId
+        let gateId = livePollGateMembershipId
+        guard let idle = LivePollIdleChrome.idleMembership(
+            practiceMembershipId: practiceId,
+            practiceShowId: practiceId.flatMap { polls.poll(id: $0)?.showId },
+            gateMembershipId: gateId,
+            gateShowId: gateId.flatMap { polls.poll(id: $0)?.showId },
+            openShowId: openShowId
+        ), let item = polls.poll(id: idle.membershipId) else { return nil }
+        return (item, idle.isPracticing)
     }
 
     /// Phone-hero deck preview, labelled Practice and without the LIVE chip.

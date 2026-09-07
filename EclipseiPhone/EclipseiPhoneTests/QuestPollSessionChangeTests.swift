@@ -101,6 +101,47 @@ struct QuestPollSessionChangeTests {
         #expect(QuestPollSessionChange.classify(from: old, to: new) == .session)
     }
 
+    // MARK: - Practice
+
+    /// Entering and leaving Practice swaps the whole hero, so both directions
+    /// have to be `.session` — `.cue` or `.tile` would leave the Practice / Start
+    /// gate on screen with the deck behind it.
+    @Test @MainActor
+    func enteringAndLeavingPracticeAreBothSessionChanges() {
+        let store = QuestPollSessionStore()
+        #expect(store.setPracticeMembershipId(UUID()) == .session)
+        #expect(store.setPracticeMembershipId(nil) == .session)
+    }
+
+    @Test @MainActor
+    func practiceSwitchingCardsIsASessionChange() {
+        let store = QuestPollSessionStore()
+        store.setPracticeMembershipId(UUID())
+        #expect(store.setPracticeMembershipId(UUID()) == .session)
+    }
+
+    @Test @MainActor
+    func repracticingTheSameCardPostsNothing() {
+        let store = QuestPollSessionStore()
+        let card = UUID()
+        store.setPracticeMembershipId(card)
+        #expect(store.setPracticeMembershipId(card) == .none)
+    }
+
+    /// Start hands the deck to a real room, so Practice must not survive it —
+    /// otherwise idle chrome outranks the live poll and hides the host controls.
+    @Test @MainActor
+    func startingARoomClearsPractice() {
+        let store = QuestPollSessionStore()
+        store.setPracticeMembershipId(UUID())
+        store.adopt(
+            makeSession(phase: .lobby, questionIndex: 0, answeredCount: 0),
+            questionCount: 3,
+            membershipId: UUID()
+        )
+        #expect(store.practiceMembershipId == nil)
+    }
+
     @Test @MainActor
     func adoptSkipsNotifyWhenUnchanged() {
         let store = QuestPollSessionStore()
