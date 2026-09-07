@@ -53,6 +53,26 @@ enum ShowLiveRouting {
         isRemoteOperator
     }
 
+    /// Whether a director can actually act on an operator's `select`.
+    ///
+    /// `ShowLiveSession.applyReceived` posts `incomingSelectNotification`, but no
+    /// view layer observes it, so a director receives commands and drops them.
+    /// Flip this to true in the same change that registers that observer.
+    static let directorAppliesSelects = false
+
+    /// Whether a peer that just connected to a director becomes its operator.
+    ///
+    /// Taking the role costs this device its own output: `shouldCommandDirector`
+    /// then suppresses the local present on every tap. That trade is only honest
+    /// when the director acts on what it is sent — otherwise the tap disappears
+    /// on both devices and the tile never reaches a screen.
+    static func shouldBecomeRemoteOperator(
+        foundDirector: Bool,
+        directorAppliesSelects: Bool = ShowLiveRouting.directorAppliesSelects
+    ) -> Bool {
+        foundDirector && directorAppliesSelects
+    }
+
     /// Short hash for discovery info (Multipeer discoveryInfo is tiny).
     static func hashedUserId(_ recordName: String) -> String {
         let digest = SHA256.hash(data: Data(recordName.utf8))

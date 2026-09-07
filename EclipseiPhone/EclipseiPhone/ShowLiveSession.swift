@@ -250,8 +250,14 @@ final class ShowLiveSession: NSObject {
         switch state {
         case .connected:
             if role == .none, foundDirector {
-                role = .remote
-                directorDeviceName = peer.displayName
+                // Connecting always ends discovery; taking the operator role is
+                // the separate question of whether the director will act.
+                if ShowLiveRouting.shouldBecomeRemoteOperator(
+                    foundDirector: foundDirector
+                ) {
+                    role = .remote
+                    directorDeviceName = peer.displayName
+                }
                 stopBrowsing()
                 stopElection()
                 notifyChanged()
