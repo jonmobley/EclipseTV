@@ -10,8 +10,10 @@ import AVFoundation
 import UIKit
 
 /// Large hero banner pinned to the top of the Library screen showing whatever is
-/// currently live on the Apple TV / AirPlay. Hidden when no external display or
-/// Eclipse TV is connected. When nothing is live it falls back to a neutral
+/// currently live on the Apple TV / AirPlay. Practice Mode and a phone-hosted
+/// Live Poll also own it with no display attached, in which case it carries no
+/// LIVE badge — see `LiveOutputRouting.showsHeroLiveBadge`. Hidden on Home and
+/// on a Show with no destination. When nothing is live it falls back to a neutral
 /// placeholder so the layout stays fixed while the grid scrolls beneath it.
 final class LiveHeaderView: UIView {
 
@@ -399,11 +401,15 @@ final class LiveHeaderView: UIView {
             self.subtitleLabel.isHidden = true
             self.controls.isHidden = !showControls
             self.applyCollapseChrome()
+            // Without the badge this hero is Practice Mode, not program output.
+            // Announcing "Live" there told VoiceOver users an audience was
+            // watching a rehearsal.
+            let state = showLiveBadge ? "Live" : "Practice"
             self.accessibilityLabel = self.isCompactPresentation
-                ? "Live, \(item.name), tap to expand"
+                ? "\(state), \(item.name), tap to expand"
                 : allowsStillFullscreenTap
-                    ? "Live, \(item.name), tap for full screen"
-                    : "Live, \(item.name)"
+                    ? "\(state), \(item.name), tap for full screen"
+                    : "\(state), \(item.name)"
             if showsLocalTransport && !usesRemoteVideoMonitor {
                 self.setStaticPreviewHidden(true)
             }

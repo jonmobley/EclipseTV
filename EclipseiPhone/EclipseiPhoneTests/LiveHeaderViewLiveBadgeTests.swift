@@ -56,6 +56,30 @@ struct LiveHeaderViewLiveBadgeTests {
         #expect(header.liveBadge.isHidden == false)
     }
 
+    /// No badge means Practice Mode, not program output. VoiceOver used to
+    /// announce "Live" there, telling the user an audience saw the rehearsal.
+    @Test func mediaAnnouncesPracticeWhenThereIsNoLiveBadge() {
+        let header = makeHeader()
+        header.configure(
+            with: makeStillItem(),
+            thumbnail: nil,
+            isOnline: false,
+            showsLiveBadge: false
+        )
+        #expect(header.accessibilityLabel == "Practice, Photo")
+    }
+
+    @Test func mediaAnnouncesLiveWhenTheBadgeIsShowing() {
+        let header = makeHeader()
+        header.configure(
+            with: makeStillItem(),
+            thumbnail: nil,
+            isOnline: true,
+            showsLiveBadge: true
+        )
+        #expect(header.accessibilityLabel == "Live, Photo")
+    }
+
     @Test func lockModeChangesLiveBadgeTextToLiveLocked() {
         let header = makeHeader()
         header.configure(

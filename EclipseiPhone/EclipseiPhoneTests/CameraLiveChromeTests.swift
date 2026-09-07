@@ -18,6 +18,37 @@ struct CameraLiveChromeTests {
         #expect(CameraLiveViewController.showsLiveBadge(isCameraLive: false) == false)
     }
 
+    /// The feed can be the output with nobody watching it, so Practice Mode gets
+    /// its own pill rather than claiming an audience with red LIVE.
+    @Test func practiceFeedGetsAPracticePillNotLive() {
+        #expect(
+            CameraLiveBadgeState.resolve(
+                isCameraLive: true, hasProgramOutput: false
+            ) == .practice
+        )
+    }
+
+    @Test func aWatchedFeedGetsTheLivePill() {
+        #expect(
+            CameraLiveBadgeState.resolve(
+                isCameraLive: true, hasProgramOutput: true
+            ) == .live
+        )
+    }
+
+    @Test func aParkedCutawayHasNoPillEitherWay() {
+        #expect(
+            CameraLiveBadgeState.resolve(
+                isCameraLive: false, hasProgramOutput: true
+            ) == .hidden
+        )
+        #expect(
+            CameraLiveBadgeState.resolve(
+                isCameraLive: false, hasProgramOutput: false
+            ) == .hidden
+        )
+    }
+
     @Test func tapHintShowsWhenCameraIsNotLive() {
         #expect(CameraLiveViewController.showsTapToGoLiveHint(isCameraLive: false))
         #expect(CameraLiveViewController.showsTapToGoLiveHint(isCameraLive: true) == false)
