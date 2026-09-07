@@ -146,6 +146,28 @@ struct LocalAlbumStoreNameTests {
         #expect(album.deletedSurfaceIds.contains(ShowLivePollToken.legacyTool))
     }
 
+    @Test func replaceLegacyCountdownToolSwapsSingletonInPlace() throws {
+        let store = makeStore()
+        let show = try store.create(name: "Legacy Clock", orientation: .landscape)
+        store.hideTool(ShowToolToken.camera, albumId: show.id)
+        var album = try #require(store.album(id: show.id))
+        var surface = try #require(album.surfaceIds)
+        surface.append(ShowCountdownToken.legacyTool)
+        store.reorderSurface(surface, albumId: show.id)
+        album = try #require(store.album(id: show.id))
+        #expect(album.surfaceIds?.contains(ShowCountdownToken.legacyTool) == true)
+
+        let countdownId = UUID()
+        store.replaceLegacyCountdownTool(with: countdownId, albumId: show.id)
+        album = try #require(store.album(id: show.id))
+        let token = ShowCountdownToken.token(for: countdownId)
+        #expect(album.surfaceIds?.contains(ShowCountdownToken.legacyTool) != true)
+        #expect(album.surfaceIds?.filter { $0 == token }.count == 1)
+        // The retired token must not linger in the tombstone list, or the swap
+        // would be undone the next time the surface is sanitized.
+        #expect(!album.deletedSurfaceIds.contains(token))
+    }
+
     @Test func addCountdownAppendsWhenSurfaceMaterialized() throws {
         let store = makeStore()
         let show = try store.create(name: "Timers", orientation: .landscape)

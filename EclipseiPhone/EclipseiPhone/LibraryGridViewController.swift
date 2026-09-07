@@ -195,8 +195,11 @@ final class LibraryGridViewController: UIViewController {
     /// Ordered Show-grid surface ids (tools, members, slideshows, Live Polls).
     /// Add is not included.
     var openShowSurfaceIds: [String] {
-        guard let album = openShow else { return [] }
+        // Both migrations rewrite the album's surface, so read `openShow` after
+        // them or the first build renders the pre-migration snapshot.
         LivePollStore.shared.dropLegacyToolTokensIfNeeded()
+        CountdownStore.shared.migrateLegacyToolTokensIfNeeded()
+        guard let album = openShow else { return [] }
         let slideshows = openShowSlideshows.map { ShowSlideshowToken.token(for: $0.id) }
         let livePolls = openShowLivePolls.map { ShowLivePollToken.token(for: $0.id) }
         return album.resolvedSurfaceIds(slideshowIds: slideshows, livePollIds: livePolls)
@@ -466,6 +469,7 @@ final class LibraryGridViewController: UIViewController {
             self?.refreshLiveHeader()
         }
         LivePollStore.shared.dropLegacyToolTokensIfNeeded()
+        CountdownStore.shared.migrateLegacyToolTokensIfNeeded()
         registerForTraitChanges(
             [UITraitVerticalSizeClass.self, UITraitHorizontalSizeClass.self]
         ) { (self: Self, _: UITraitCollection) in
