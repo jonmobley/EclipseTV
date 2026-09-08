@@ -131,6 +131,26 @@ struct AspectCropGeometryTests {
         #expect(abs(scroll.minimumZoomScale - floor) < 0.001)
     }
 
+    /// A taller view keeps the crop window's size but moves it, so the insets must
+    /// follow the window even though the zoom floor does not change.
+    @Test func windowMoveWithoutResizeRefreshesInsets() throws {
+        let initial = CGRect(x: 200, y: 300, width: 800, height: 450)
+        let (controller, window) = makeLaidOutCropper(initialCropRect: initial)
+        defer { window.isHidden = true }
+        let scroll = controller.scrollView
+        let insetsBefore = scroll.contentInset
+
+        window.frame = CGRect(x: 0, y: 0, width: 390, height: 932)
+        controller.view.frame = window.bounds
+        controller.view.layoutIfNeeded()
+
+        let windowTop = controller.cropFrameView.frame.minY - scroll.frame.minY
+        #expect(abs(scroll.contentInset.top - windowTop) < 0.5)
+        #expect(abs(scroll.contentInset.top - insetsBefore.top) > 10)
+        let saved = try #require(controller.visibleCropRectInImage())
+        expectClose(saved, initial)
+    }
+
     // MARK: - Helpers
 
     private func makeLaidOutCropper(

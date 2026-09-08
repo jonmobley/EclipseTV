@@ -53,8 +53,13 @@ final class AspectCropViewController: UIViewController, UIScrollViewDelegate {
 
     var cropFrameConstraints: [NSLayoutConstraint] = []
     var didConfigureScroll = false
-    /// Crop window size the zoom floor and insets were derived for.
-    var configuredCropSize: CGSize = .zero
+    /// Crop window (in scroll-frame space) the zoom floor and insets were derived for.
+    var configuredWindow: CGRect = .null
+    /// Scroll view size the current metrics were derived for.
+    var configuredScrollSize: CGSize = .zero
+    /// Region in the window as of the last layout pass that started from a consistent
+    /// state; what a resize carries over.
+    var framingBeforeLayout: CGRect?
 
     // MARK: - Initialization
 
@@ -87,6 +92,11 @@ final class AspectCropViewController: UIViewController, UIScrollViewDelegate {
         setupScrollView()
         setupCropFrame()
         setupButtons()
+    }
+
+    override func viewWillLayoutSubviews() {
+        super.viewWillLayoutSubviews()
+        captureFramingBeforeLayout()
     }
 
     override func viewDidLayoutSubviews() {
