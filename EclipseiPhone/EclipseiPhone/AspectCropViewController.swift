@@ -112,6 +112,8 @@ final class AspectCropViewController: UIViewController, UIScrollViewDelegate {
         scrollView.showsVerticalScrollIndicator = false
         scrollView.bouncesZoom = true
         scrollView.decelerationRate = .fast
+        // Insets are the crop window's margins; safe-area adjustment would skew them.
+        scrollView.contentInsetAdjustmentBehavior = .never
         scrollView.backgroundColor = .black
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(scrollView)
