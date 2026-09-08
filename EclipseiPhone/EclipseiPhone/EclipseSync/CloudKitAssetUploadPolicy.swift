@@ -24,4 +24,12 @@ enum CloudKitAssetUploadPolicy {
     static func assetURL(_ url: URL, state: CaptureSyncState) -> URL? {
         state == .pendingUpload ? url : nil
     }
+
+    /// The PDF's URL until the server has acknowledged it, otherwise nil.
+    ///
+    /// Saved PDFs only re-save after a rename, and a rename is a few bytes of title.
+    /// Re-attaching the `CKAsset` there would push the whole document again.
+    static func pdfAssetURL(_ url: URL, isSynced: Bool) -> URL? {
+        isSynced ? nil : url
+    }
 }
