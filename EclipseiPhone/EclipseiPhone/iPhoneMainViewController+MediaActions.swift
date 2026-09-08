@@ -667,7 +667,7 @@ extension iPhoneMainViewController {
 
     private func showTransferUI() {
         // Show initial status
-        statusLabel.text = "Preparing to send..."
+        statusLabel.text = "Preparing to send…"
         UIView.animate(withDuration: 0.3) {
             self.statusLabel.alpha = 1.0
             self.cancelButton.alpha = 1.0

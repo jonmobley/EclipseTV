@@ -132,7 +132,7 @@ final class QuestPollHostViewController: UIViewController {
         }, for: .touchUpInside)
         stack.addArrangedSubview(joinQRButton)
 
-        styleSecondary(projectorButton, title: "Projector", systemImage: "display")
+        styleSecondary(projectorButton, title: "Audience Page", systemImage: "display")
         projectorButton.addAction(UIAction { [weak self] _ in
             self?.openProjector()
         }, for: .touchUpInside)
@@ -144,7 +144,7 @@ final class QuestPollHostViewController: UIViewController {
         }, for: .touchUpInside)
         stack.addArrangedSubview(endButton)
 
-        styleTextLink(copyLinkButton, title: "Copy join link", systemImage: "link")
+        styleTextLink(copyLinkButton, title: "Copy Join Link", systemImage: "link")
         copyLinkButton.addAction(UIAction { [weak self] _ in
             self?.copyJoinLink()
         }, for: .touchUpInside)
@@ -394,7 +394,7 @@ final class QuestPollHostViewController: UIViewController {
         copyLinkButton.configuration = config
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
             var restored = self?.copyLinkButton.configuration
-            restored?.title = "Copy join link"
+            restored?.title = "Copy Join Link"
             self?.copyLinkButton.configuration = restored
         }
     }
