@@ -53,6 +53,9 @@ final class AspectCropViewController: UIViewController, UIScrollViewDelegate {
 
     var cropFrameConstraints: [NSLayoutConstraint] = []
     var didConfigureScroll = false
+    /// Crop window (scroll-frame space) the current insets and zoom limits were
+    /// derived from. A later layout that moves the window re-derives them.
+    var configuredCropWindow: CGRect = .null
 
     // MARK: - Initialization
 
@@ -90,6 +93,7 @@ final class AspectCropViewController: UIViewController, UIScrollViewDelegate {
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         layoutCropFrame()
+        reconfigureScrollIfWindowMoved()
         updateScrollMetricsIfNeeded()
         updateDimMask()
     }

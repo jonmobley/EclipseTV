@@ -51,6 +51,37 @@ struct AspectCropGeometryTests {
         expectClose(saved, expected)
     }
 
+    @Test func lateLayoutThatMovesTheWindowKeepsTheFramedRegion() throws {
+        // A second layout pass (safe area landing, rotation) moves the crop window.
+        // The region under it must not change, and the pan limits must follow the
+        // window so the user can't drag past the photo and save a clamped strip.
+        let initial = CGRect(x: 200, y: 300, width: 800, height: 450)
+        let (controller, window) = makeLaidOutCropper(initialCropRect: initial)
+        defer { window.isHidden = true }
+
+        let before = try #require(controller.visibleCropRectInImage())
+        expectClose(before, initial)
+
+        window.frame = CGRect(x: 0, y: 0, width: 390, height: 700)
+        controller.view.frame = window.bounds
+        controller.view.setNeedsLayout()
+        controller.view.layoutIfNeeded()
+
+        let after = try #require(controller.visibleCropRectInImage())
+        expectClose(after, initial)
+
+        let scroll = controller.scrollView
+        let cropInScroll = controller.cropFrameView.frame.offsetBy(
+            dx: -scroll.frame.minX, dy: -scroll.frame.minY
+        )
+        #expect(abs(scroll.contentInset.top - cropInScroll.minY) <= 0.5)
+        #expect(abs(scroll.contentInset.left - cropInScroll.minX) <= 0.5)
+        #expect(
+            abs(scroll.contentInset.bottom - (scroll.bounds.height - cropInScroll.maxY))
+                <= 0.5
+        )
+    }
+
     // MARK: - Helpers
 
     private func makeLaidOutCropper(

@@ -79,6 +79,22 @@ struct MediaFramingStoreTests {
         #expect(framed.image === source || framed.image?.size == source.size)
     }
 
+    @Test func previewStillIsCroppedToSavedFraming() throws {
+        // Phone Preview shows the same region as the tile and the screen.
+        let framing = MediaFraming(x: 0.25, y: 0, width: 0.5, height: 1)
+        let source = swatch(size: CGSize(width: 200, height: 100), scale: 1)
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("framing-preview-\(UUID().uuidString).png")
+        try #require(source.pngData()).write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let framed = try #require(
+            LocalMediaPreviewPageViewController.framedStill(at: url, framing: framing)
+        )
+        #expect(abs(framed.size.width - 100) < 1)
+        #expect(abs(framed.size.height - 100) < 1)
+    }
+
     @Test func envelopeEncodesAndDecodesFraming() throws {
         let dto = MediaFramingDTO(x: 0.1, y: 0.2, width: 0.3, height: 0.4)
         let envelope = EclipseShareEnvelope.setImageFit(
@@ -117,8 +133,10 @@ struct MediaFramingStoreTests {
         "framing-test-\(UUID().uuidString)"
     }
 
-    private func swatch(size: CGSize) -> UIImage {
-        UIGraphicsImageRenderer(size: size).image { ctx in
+    private func swatch(size: CGSize, scale: CGFloat? = nil) -> UIImage {
+        let format = UIGraphicsImageRendererFormat.default()
+        if let scale { format.scale = scale }
+        return UIGraphicsImageRenderer(size: size, format: format).image { ctx in
             UIColor.gray.setFill()
             ctx.fill(CGRect(origin: .zero, size: size))
         }

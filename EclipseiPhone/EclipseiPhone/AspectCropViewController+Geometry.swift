@@ -43,6 +43,11 @@ extension AspectCropViewController {
         didConfigureScroll = true
 
         let imageSize = sourceImage.size
+        // `frame` is undefined on a transformed view, so drop any zoom before
+        // re-framing at natural size (a no-op on the first pass).
+        scrollView.minimumZoomScale = 1
+        scrollView.maximumZoomScale = 1
+        scrollView.zoomScale = 1
         imageView.frame = CGRect(origin: .zero, size: imageSize)
         scrollView.contentSize = imageSize
 
@@ -53,6 +58,7 @@ extension AspectCropViewController {
         scrollView.maximumZoomScale = max(minZoom * 4, minZoom + 0.01)
 
         let window = cropWindowInScrollFrame()
+        configuredCropWindow = window
         scrollView.contentInset = UIEdgeInsets(
             top: window.minY,
             left: window.minX,
@@ -78,6 +84,22 @@ extension AspectCropViewController {
         )
     }
 
+    /// Re-derives insets and zoom limits when a later layout moved the crop window.
+    ///
+    /// The first layout pass can run before the safe area settles, and rotation moves
+    /// the window too. Insets are what let the image's edges reach the window's edges,
+    /// so stale ones let the user pan past the photo — and the saved rect then gets
+    /// clamped to a region that doesn't match what the window showed. Carry the region
+    /// on screen through the new geometry instead.
+    func reconfigureScrollIfWindowMoved() {
+        guard didConfigureScroll else { return }
+        let window = cropWindowInScrollFrame()
+        guard window.width > 0, window.height > 0,
+              !window.isClose(to: configuredCropWindow) else { return }
+        initialCropRect = visibleCropRect(window: configuredCropWindow)
+        didConfigureScroll = false
+    }
+
     /// Dims everything outside the crop window.
     func updateDimMask() {
         let crop = cropFrameView.frame
@@ -98,7 +120,14 @@ extension AspectCropViewController {
     /// through `scrollView.convert(_:from:)` here — a scroll view's bounds origin *is*
     /// its `contentOffset`, so that result already includes the offset.
     func visibleCropRectInImage() -> CGRect? {
-        let window = cropWindowInScrollFrame()
+        visibleCropRect(window: cropWindowInScrollFrame())
+    }
+
+    // MARK: - Private
+
+    /// Image-space region under `window` (scroll-frame space) at the current scroll
+    /// zoom and offset.
+    private func visibleCropRect(window: CGRect) -> CGRect? {
         let scale = scrollView.zoomScale
         guard scale > 0 else { return nil }
         let imageRect = CGRect(
@@ -112,8 +141,6 @@ extension AspectCropViewController {
         guard clamped.width > 1, clamped.height > 1 else { return nil }
         return clamped
     }
-
-    // MARK: - Private
 
     /// Crop window relative to the scroll view's frame, independent of scroll position.
     ///
@@ -148,5 +175,17 @@ extension AspectCropViewController {
             y: clamped.origin.y * clampedZoom - scrollView.contentInset.top
         )
         return true
+    }
+}
+
+private extension CGRect {
+    /// True when every edge is within `tolerance` points — Auto Layout can re-derive a
+    /// frame that differs from the last pass only by float noise.
+    func isClose(to other: CGRect, tolerance: CGFloat = 0.5) -> Bool {
+        guard !isNull, !other.isNull else { return isNull && other.isNull }
+        return abs(minX - other.minX) <= tolerance
+            && abs(minY - other.minY) <= tolerance
+            && abs(width - other.width) <= tolerance
+            && abs(height - other.height) <= tolerance
     }
 }
