@@ -79,17 +79,16 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         _ windowScene: UIWindowScene,
         userDidAcceptCloudKitShareWith cloudKitShareMetadata: CKShare.Metadata
     ) {
-        let container = CKContainer(identifier: CloudKitSchema.containerIdentifier)
+        guard let container = CloudKitAvailability.container() else { return }
         let op = CKAcceptSharesOperation(shareMetadatas: [cloudKitShareMetadata])
         op.acceptSharesResultBlock = { result in
             DispatchQueue.main.async {
                 switch result {
                 case .success:
-                    // Shared CKSyncEngine will fetch the zone contents.
-                    NotificationCenter.default.post(
-                        name: LocalAlbumStore.didChangeNotification,
-                        object: nil
-                    )
+                    // Ask the shared engine for the new zone directly. Posting a
+                    // store notification instead only made the private engine
+                    // re-save every Show the user already owned.
+                    EclipseSyncController.shared.fetchAcceptedShares()
                 case .failure(let error):
                     let alert = UIAlertController(
                         title: "Unable to Accept Share",

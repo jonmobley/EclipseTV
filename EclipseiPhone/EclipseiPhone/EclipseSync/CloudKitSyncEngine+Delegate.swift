@@ -30,13 +30,14 @@ extension CloudKitSyncEngine: CKSyncEngineDelegate {
 
         case .fetchedRecordZoneChanges(let changes):
             await applyFetchedModifications(changes.modifications.map(\.record))
+            let wasApplying = isApplyingRemote
             isApplyingRemote = true
+            defer { isApplyingRemote = wasApplying }
             for deletion in changes.deletions {
                 EclipseSyncController.shared.applyRemoteDeletion(
                     recordName: deletion.recordID.recordName
                 )
             }
-            isApplyingRemote = false
 
         case .sentRecordZoneChanges(let sent):
             await handleSent(sent)
@@ -113,19 +114,31 @@ extension CloudKitSyncEngine: CKSyncEngineDelegate {
         }
         for id in sent.deletedRecordIDs {
             forgetLastKnown(id)
+            pendingDeletes.clear(id.recordName)
             CaptureStore.shared.purge(id: id.recordName)
             ImportedMediaStore.shared.purge(id: id.recordName)
+        }
+        for (recordID, error) in sent.failedRecordDeletes {
+            // `unknownItem` means the server no longer has it, which is the outcome
+            // we wanted. Anything else stays queued for the next attempt.
+            guard error.code == .unknownItem else {
+                logger.error(
+                    "Delete failed \(recordID.recordName, privacy: .public): \(error.localizedDescription)"
+                )
+                continue
+            }
+            forgetLastKnown(recordID)
+            pendingDeletes.clear(recordID.recordName)
         }
     }
 
     private func handleAccountChange(_ change: CKSyncEngine.Event.AccountChange) async {
         switch change.changeType {
         case .signOut, .switchAccounts:
-            engine = nil
-            lastKnownRecords.removeAll()
+            resetForAccountChange()
             await account.refresh()
         case .signIn:
-            await bootstrapEngineIfPossiblePublic()
+            await bootstrapEngineIfPossible()
         @unknown default:
             await account.refresh()
         }

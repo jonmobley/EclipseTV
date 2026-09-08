@@ -48,6 +48,13 @@ final class CloudKitShareRootStore {
         return true
     }
 
+    /// Forgets every share root (account switch — shares belong to the old account).
+    func removeAll() {
+        guard !ids.isEmpty else { return }
+        ids.removeAll()
+        persist()
+    }
+
     /// Membership field and whether CloudKit `parent` should be set.
     func resolve(
         preferredShowId: UUID?,

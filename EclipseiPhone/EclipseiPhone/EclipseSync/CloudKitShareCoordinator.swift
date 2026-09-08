@@ -51,8 +51,10 @@ final class CloudKitShareCoordinator: NSObject {
         let root: CKRecord
         do {
             root = try await database.record(for: recordID)
-        } catch {
-            // Ensure the Show exists in CloudKit before sharing.
+        } catch let error as CKError where error.code == .unknownItem {
+            // Only a genuinely absent record justifies creating one. Treating every
+            // failure as "missing" turned a transient network error into an insert
+            // over an existing record, which then failed for a second, confusing reason.
             let created = CloudKitRecordMapper.makeShowRecord(from: album)
             root = try await database.save(created)
         }
@@ -74,7 +76,10 @@ final class CloudKitShareCoordinator: NSObject {
     ) {
         let share = CKShare(rootRecord: root)
         share[CKShare.SystemFieldKey.title] = album.name as CKRecordValue
-        share.publicPermission = .readOnly
+        // Invite-only. `availablePermissions` below never offers `.allowPublic`, so a
+        // readable public permission just meant anyone holding the link could read
+        // the user's Show and its media without ever being added as a participant.
+        share.publicPermission = .none
 
         let op = CKModifyRecordsOperation(recordsToSave: [root, share], recordIDsToDelete: nil)
         op.modifyRecordsResultBlock = { result in

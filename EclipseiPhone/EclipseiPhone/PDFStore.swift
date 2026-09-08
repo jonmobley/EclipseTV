@@ -145,6 +145,16 @@ final class PDFStore {
         persistSyncedIds()
     }
 
+    /// Forgets every upload acknowledgement (zone loss, iCloud account switch).
+    ///
+    /// A new account's zone holds none of this content, so the old "already
+    /// synced" marks would strand the whole library locally.
+    func markAllNeedsUpload() {
+        guard !syncedIds.isEmpty else { return }
+        syncedIds.removeAll()
+        persistSyncedIds()
+    }
+
     /// Enqueues an upload unless we are mid-apply of a remote change.
     private func scheduleSaveIfNeeded(id: UUID) {
         guard !EclipseSyncController.shared.isApplyingRemote else { return }

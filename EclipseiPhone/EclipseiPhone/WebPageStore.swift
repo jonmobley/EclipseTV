@@ -230,6 +230,13 @@ final class WebPageStore {
         persistSyncedIds()
     }
 
+    /// Forgets every upload acknowledgement (zone loss, iCloud account switch).
+    func markAllNeedsUpload() {
+        guard !syncedIds.isEmpty else { return }
+        syncedIds.removeAll()
+        persistSyncedIds()
+    }
+
     /// Pages the server has not acknowledged yet.
     var idsNeedingUpload: [UUID] {
         let all = pages + retainedPages.filter { retained in

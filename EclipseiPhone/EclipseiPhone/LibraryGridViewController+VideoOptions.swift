@@ -53,6 +53,7 @@ extension LibraryGridViewController {
     /// Persists loop/mute locally, syncs to EclipseTV when linked, refreshes AirPlay if live.
     func applyVideoSetting(id: String, isLooping: Bool?, isMuted: Bool?) {
         store.updateVideoSetting(id: id, isLooping: isLooping, isMuted: isMuted)
+        EclipseSyncController.shared.backend.scheduleMediaPrefsSave(libraryId: id)
         UISelectionFeedbackGenerator().selectionChanged()
         _ = connectionManager.sendVideoSetting(
             id: id, isLooping: isLooping, isMuted: isMuted

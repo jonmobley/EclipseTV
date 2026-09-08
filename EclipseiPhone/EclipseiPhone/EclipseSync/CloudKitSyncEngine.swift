@@ -17,8 +17,21 @@ final class CloudKitSyncEngine: NSObject, SyncBackend {
     let container: CKContainer
     let account: CloudKitAccountMonitor
     var engine: CKSyncEngine?
-    private lazy var downloader = CloudKitAssetDownloader(container: container)
     let shareRoots = CloudKitShareRootStore()
+    /// Deletes that must outlive a nil engine (signed out / pre-bootstrap).
+    let pendingDeletes = CloudKitPendingDeleteStore()
+    /// Shows with unsent local edits, so foregrounding doesn't re-push the lot.
+    let showDirty = CloudKitShowDirtyStore()
+    /// MediaItems with unsent preference edits, for the same reason.
+    let mediaDirty = CloudKitMediaDirtyStore()
+    /// MediaItems whose local copy the user removed, so arriving bytes aren't kept.
+    let evictedMedia = CloudKitEvictedMediaStore()
+    /// Zones of records owned by other users, learned from the shared database.
+    let sharedZones = CloudKitSharedZoneIndex()
+    private lazy var downloader = CloudKitAssetDownloader(
+        container: container,
+        sharedZones: sharedZones
+    )
     private lazy var shareCoordinator: CloudKitShareCoordinator = {
         let coordinator = CloudKitShareCoordinator(
             container: container,
@@ -32,26 +45,33 @@ final class CloudKitSyncEngine: NSObject, SyncBackend {
         }
         return coordinator
     }()
-    private lazy var sharedEngineHost = CloudKitSharedSyncHost(container: container)
+    lazy var sharedEngineHost = CloudKitSharedSyncHost(
+        container: container,
+        sharedZones: sharedZones
+    )
 
-    private let stateKey = "EclipseTV.cloudKit.syncEngineState"
-    private let showModifiedKey = "EclipseTV.cloudKit.showModified."
+    let stateKey = "EclipseTV.cloudKit.syncEngineState"
     let logger = Logger(subsystem: "com.eclipseapp.ios", category: "CloudKitSync")
     private var didStart = false
-    private var storeObservers: [NSObjectProtocol] = []
+    var storeObservers: [NSObjectProtocol] = []
     /// When true, local store notifications do not schedule uploads (remote apply).
     var isApplyingRemote = false
 
     /// Pending record IDs that hit quotaExceeded and need re-queue after space frees.
     var quotaHeldRecordIDs: [CKRecord.ID] = []
 
-    /// Last server (or successfully saved) `CKRecord`s, so retries keep a change tag.
+    /// Server (or last saved) `CKRecord` system fields, so saves keep a change tag.
     ///
     /// Building a fresh `CKRecord` for an id that already exists is an insert, and
-    /// CloudKit rejects it with "record to insert already exists".
-    var lastKnownRecords: [CKRecord.ID: CKRecord] = [:]
+    /// CloudKit rejects it with "record to insert already exists". This is persisted
+    /// because an in-memory cache makes the *first* save of every record after a cold
+    /// launch exactly that rejected insert.
+    let lastKnownRecords = CloudKitRecordSystemFieldsStore()
 
-    init(container: CKContainer = CKContainer(identifier: CloudKitSchema.containerIdentifier)) {
+    /// - Parameter container: Obtain it from `CloudKitAvailability.container()`.
+    ///   There is deliberately no default: building one inline traps in an
+    ///   unentitled build, and a default argument hides that from the caller.
+    init(container: CKContainer) {
         self.container = container
         self.account = CloudKitAccountMonitor(container: container)
         super.init()
@@ -83,46 +103,30 @@ final class CloudKitSyncEngine: NSObject, SyncBackend {
 
     func scheduleShowSave(id: UUID) {
         rememberShowModified(id: id)
-        guard let engine else { return }
-        engine.state.add(pendingRecordZoneChanges: [
-            .saveRecord(CloudKitSchema.showRecordID(for: id))
-        ])
+        showDirty.markDirty(id)
+        scheduleSave(CloudKitSchema.showRecordID(for: id))
     }
 
     func scheduleShowDelete(id: UUID) {
-        guard let engine else { return }
-        engine.state.add(pendingRecordZoneChanges: [
-            .deleteRecord(CloudKitSchema.showRecordID(for: id))
-        ])
+        showDirty.markClean(id)
+        scheduleDelete(CloudKitSchema.showRecordID(for: id))
     }
 
     func scheduleCaptureSave(id: String) {
-        guard let engine else { return }
         CaptureStore.shared.setSyncState(id: id, .pendingUpload)
-        engine.state.add(pendingRecordZoneChanges: [
-            .saveRecord(CloudKitSchema.mediaRecordID(for: id))
-        ])
+        scheduleSave(CloudKitSchema.mediaRecordID(for: id))
     }
 
     func scheduleCaptureDelete(id: String) {
-        guard let engine else { return }
-        engine.state.add(pendingRecordZoneChanges: [
-            .deleteRecord(CloudKitSchema.mediaRecordID(for: id))
-        ])
+        scheduleDelete(CloudKitSchema.mediaRecordID(for: id))
     }
 
     func schedulePDFSave(id: UUID) {
-        guard let engine else { return }
-        engine.state.add(pendingRecordZoneChanges: [
-            .saveRecord(CloudKitSchema.pdfRecordID(for: id))
-        ])
+        scheduleSave(CloudKitSchema.pdfRecordID(for: id))
     }
 
     func schedulePDFDelete(id: UUID) {
-        guard let engine else { return }
-        engine.state.add(pendingRecordZoneChanges: [
-            .deleteRecord(CloudKitSchema.pdfRecordID(for: id))
-        ])
+        scheduleDelete(CloudKitSchema.pdfRecordID(for: id))
     }
 
     func downloadAsset(
@@ -134,10 +138,20 @@ final class CloudKitSyncEngine: NSObject, SyncBackend {
             completion(.failure(SyncLocalError.noAccount))
             return
         }
+        // Asking for the file again withdraws any earlier "remove download", so
+        // future fetches are free to keep the bytes they arrive with.
+        if let recordName = mediaRecordName(forAnyId: id) {
+            evictedMedia.clear(recordName)
+        }
         downloader.download(id: id, progress: progress, completion: completion)
     }
 
     func removeLocalDownload(id: String) {
+        // Remembered so a later edit to this item on any device does not quietly
+        // restore the download from the asset that rides along with the record.
+        if let recordName = mediaRecordName(forAnyId: id) {
+            evictedMedia.note(recordName)
+        }
         if CaptureStore.shared.record(id: id) != nil {
             CaptureStore.shared.removeLocalDownload(id: id)
             return
@@ -160,140 +174,31 @@ final class CloudKitSyncEngine: NSObject, SyncBackend {
         shareCoordinator.presentShareUI(forShowId: id, from: vc)
     }
 
-    // MARK: - Bootstrap
-
-    private func bootstrapEngineIfPossible() async {
-        await account.refresh()
-        guard account.isAccountAvailable else {
-            engine = nil
-            return
-        }
-        guard engine == nil else { return }
-
-        var serialization: CKSyncEngine.State.Serialization?
-        if let data = UserDefaults.standard.data(forKey: stateKey) {
-            serialization = try? JSONDecoder().decode(
-                CKSyncEngine.State.Serialization.self,
-                from: data
-            )
-        }
-
-        let configuration = CKSyncEngine.Configuration(
-            database: container.privateCloudDatabase,
-            stateSerialization: serialization,
-            delegate: self
-        )
-        let syncEngine = CKSyncEngine(configuration)
-        engine = syncEngine
-        syncEngine.state.add(pendingDatabaseChanges: [
-            .saveZone(CKRecordZone(zoneID: CloudKitSchema.zoneID))
-        ])
-        enqueueAllLocal()
-        sharedEngineHost.start()
-        logger.info("CKSyncEngine started")
-    }
-
-    /// Pushes every local Show and pending capture/PDF once after engine start.
-    ///
-    /// Does **not** stamp Show `modifiedAt` — inventing “now” on bootstrap/foreground
-    /// would let an idle device win LWW over real offline edits on another phone.
-    func enqueueAllLocal() {
-        guard let engine else { return }
-        var changes: [CKSyncEngine.PendingRecordZoneChange] = []
-        for album in LocalAlbumStore.shared.albums {
-            changes.append(.saveRecord(CloudKitSchema.showRecordID(for: album.id)))
-        }
-        // Mirror PDF filtering: `.localOnly` captures must never upload on bootstrap.
-        for id in CaptureStore.shared.idsNeedingUpload {
-            changes.append(.saveRecord(CloudKitSchema.mediaRecordID(for: id)))
-        }
-        // Only PDFs the server hasn't acknowledged — a blanket re-enqueue would
-        // re-upload every document's bytes on each launch.
-        for id in PDFStore.shared.idsNeedingUpload {
-            changes.append(.saveRecord(CloudKitSchema.pdfRecordID(for: id)))
-        }
-        enqueueExpandedLocalContent(into: &changes)
-        if !changes.isEmpty {
-            engine.state.add(pendingRecordZoneChanges: changes)
-        }
-    }
-
-    /// Recreates the private library zone and re-enqueues local content.
-    ///
-    /// Used when the zone is deleted server-side or a save fails with `zoneNotFound`.
-    /// Never deletes local data in response to that signal.
-    func recoverFromZoneLoss() {
-        guard let engine else { return }
-        lastKnownRecords.removeAll()
-        CameraFrameStore.shared.markAllNeedsUpload()
-        CameraAlternateStillStore.shared.markAllNeedsUpload()
-        engine.state.add(pendingDatabaseChanges: [
-            .saveZone(CKRecordZone(zoneID: CloudKitSchema.zoneID))
-        ])
-        enqueueAllLocal()
-    }
-
-    /// Re-enqueues pending uploads after foregrounding (or a transient failure).
-    func retryPendingWork() {
-        guard engine != nil, account.isAccountAvailable else { return }
-        retryQuotaHeldIfNeeded()
-        enqueueAllLocal()
-    }
-
-    private func observeLocalStores() {
-        let center = NotificationCenter.default
-        storeObservers.append(center.addObserver(
-            forName: LocalAlbumStore.didChangeNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] notification in
-            Task { @MainActor in self?.reconcileShowsWithEngine(notification) }
-        })
-    }
-
-    /// Schedules saves for the Show that changed, or every Show when unspecified.
-    private func reconcileShowsWithEngine(_ notification: Notification) {
-        // Shared-DB apply only sets the controller flag — check both so accepted
-        // Shares don't fork into the private zone.
-        guard engine != nil,
-              !isApplyingRemote,
-              !EclipseSyncController.shared.isApplyingRemote else { return }
-        if let id = notification.userInfo?[LocalAlbumStore.changedAlbumIdKey] as? UUID {
-            scheduleShowSave(id: id)
-            return
-        }
-        for album in LocalAlbumStore.shared.albums {
-            scheduleShowSave(id: album.id)
-        }
-    }
-
-    func persistEngineState(_ serialization: CKSyncEngine.State.Serialization) {
-        if let data = try? JSONEncoder().encode(serialization) {
-            UserDefaults.standard.set(data, forKey: stateKey)
-        }
-    }
-
-    func bootstrapEngineIfPossiblePublic() async {
-        await bootstrapEngineIfPossible()
-    }
+    // MARK: - Show LWW clock
 
     /// Records a Show LWW clock. Local edits pass `Date()`; remote apply passes the
     /// winning merged timestamp (never invent a newer stamp on bootstrap).
     func rememberShowModified(id: UUID, at date: Date = Date()) {
         UserDefaults.standard.set(
             date.timeIntervalSince1970,
-            forKey: showModifiedKey + id.uuidString
+            forKey: CloudKitSchema.showModifiedKey(for: id)
         )
     }
 
     func showModified(id: UUID) -> Date {
-        let raw = UserDefaults.standard.double(forKey: showModifiedKey + id.uuidString)
+        let raw = UserDefaults.standard.double(
+            forKey: CloudKitSchema.showModifiedKey(for: id)
+        )
         return raw > 0 ? Date(timeIntervalSince1970: raw) : Date.distantPast
     }
 
-    private func retryQuotaHeldIfNeeded() {
-        guard account.pauseReason != .quotaExceeded,
-              account.isAccountAvailable,
+    /// Re-queues records parked by `holdForQuota` once the account can write again.
+    ///
+    /// The gate is account availability alone. Testing `pauseReason != .quotaExceeded`
+    /// could never pass: only `holdForQuota` fills this list, and it sets that very
+    /// reason, so held records were stranded and the list never drained.
+    func retryQuotaHeldIfNeeded() {
+        guard account.isAccountAvailable,
               let engine,
               !quotaHeldRecordIDs.isEmpty else { return }
         let held = quotaHeldRecordIDs

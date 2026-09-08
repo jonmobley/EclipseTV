@@ -16,7 +16,12 @@ extension CloudKitSyncEngine {
     func markLocalRecordSynced(_ record: CKRecord) {
         let name = record.recordID.recordName
         switch record.recordType {
+        case CloudKitSchema.RecordType.show:
+            if let uuid = UUID(uuidString: name) {
+                showDirty.markClean(uuid)
+            }
         case CloudKitSchema.RecordType.mediaItem:
+            mediaDirty.markClean(name)
             if CloudKitRecordMapper.isImportedMedia(record) {
                 ImportedMediaStore.shared.setSyncState(id: name, .synced)
             } else {
@@ -70,11 +75,13 @@ extension CloudKitSyncEngine {
             return
         }
         rememberLastKnown(server)
+        let wasApplying = isApplyingRemote
+        let controllerWasApplying = EclipseSyncController.shared.isApplyingRemote
         isApplyingRemote = true
         EclipseSyncController.shared.isApplyingRemote = true
         defer {
-            isApplyingRemote = false
-            EclipseSyncController.shared.isApplyingRemote = false
+            isApplyingRemote = wasApplying
+            EclipseSyncController.shared.isApplyingRemote = controllerWasApplying
         }
         scheduleSaveAfterConflict(server)
     }

@@ -98,9 +98,6 @@ extension CloudKitSyncEngine {
                 .saveRecord(CloudKitSchema.livePollRecordID(for: id))
             )
         }
-        for id in ImportedMediaStore.shared.idsNeedingUpload {
-            changes.append(.saveRecord(CloudKitSchema.mediaRecordID(for: id)))
-        }
         if LogoStore.shared.hasCustomImage {
             changes.append(.saveRecord(CloudKitSchema.backgroundRecordID))
         }
@@ -166,7 +163,7 @@ extension CloudKitSyncEngine {
         return CloudKitRecordMapper.makeMediaRecord(
             from: capture,
             existing: existing,
-            assetURL: url,
+            assetURL: CloudKitAssetUploadPolicy.assetURL(url, state: capture.syncState),
             showId: resolved.showId,
             attachAsShareChild: resolved.attachAsShareChild
         )
@@ -192,7 +189,9 @@ extension CloudKitSyncEngine {
         return CloudKitRecordMapper.makeImportedMediaRecord(
             from: imported,
             existing: existing,
-            assetURL: url,
+            assetURL: CloudKitAssetUploadPolicy.assetURL(
+                url, state: imported.syncState
+            ),
             showId: resolved.showId,
             attachAsShareChild: resolved.attachAsShareChild
         )

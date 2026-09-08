@@ -164,6 +164,14 @@ enum CloudKitSchema {
         static let modifiedAt = "modifiedAt"
     }
 
+    /// `UserDefaults` key holding a Show's last-modified LWW clock.
+    ///
+    /// Both the sync engine and `LocalAlbumStore` read and write this, so the prefix
+    /// lives here rather than being spelled out in each.
+    static func showModifiedKey(for id: UUID) -> String {
+        "EclipseTV.cloudKit.showModified." + id.uuidString
+    }
+
     /// Singleton Background record in the library zone.
     static let backgroundRecordName = "eclipse.background"
     /// Singleton Screensaver record in the library zone.

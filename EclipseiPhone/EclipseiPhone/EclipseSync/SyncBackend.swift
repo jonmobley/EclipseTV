@@ -43,6 +43,10 @@ protocol SyncBackend: AnyObject {
     /// Schedules deletion of an imported-media record and its cloud asset.
     func scheduleMediaDelete(cloudId: String)
 
+    /// Schedules a metadata-only save for `libraryId` after a Fit / framing /
+    /// loop / mute edit. Does not re-upload the asset.
+    func scheduleMediaPrefsSave(libraryId: String)
+
     /// Schedules a saved-PDF upload (title + the `.pdf` file itself).
     func schedulePDFSave(id: UUID)
 

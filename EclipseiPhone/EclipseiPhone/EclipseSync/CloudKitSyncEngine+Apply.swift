@@ -14,11 +14,13 @@ extension CloudKitSyncEngine {
 
     /// Applies fetched records. Children (media / pages / slideshows) first, then Shows.
     func applyFetchedModifications(_ records: [CKRecord]) async {
+        let wasApplying = isApplyingRemote
+        let controllerWasApplying = EclipseSyncController.shared.isApplyingRemote
         isApplyingRemote = true
         EclipseSyncController.shared.isApplyingRemote = true
         defer {
-            isApplyingRemote = false
-            EclipseSyncController.shared.isApplyingRemote = false
+            isApplyingRemote = wasApplying
+            EclipseSyncController.shared.isApplyingRemote = controllerWasApplying
         }
         let shows = records.filter { $0.recordType == CloudKitSchema.RecordType.show }
         let children = records.filter { $0.recordType != CloudKitSchema.RecordType.show }
@@ -109,6 +111,15 @@ extension CloudKitSyncEngine {
                 from: record, libraryId: imported.libraryId
             )
             TVLibraryStore.shared.refreshMergedImports()
+            adoptFetchedAsset(
+                from: record,
+                libraryId: imported.libraryId,
+                mode: imported.orientation.libraryMode,
+                provenance: .imported
+            ) {
+                ImportedMediaStore.shared.setSyncState(id: imported.cloudId, .synced)
+                TVLibraryStore.shared.refreshMergedImports()
+            }
             return
         }
         if let capture = CloudKitRecordMapper.capture(from: record) {
@@ -117,6 +128,46 @@ extension CloudKitSyncEngine {
                 from: record, libraryId: capture.libraryFileName
             )
             TVLibraryStore.shared.refreshMergedCaptures()
+            adoptFetchedAsset(
+                from: record,
+                libraryId: capture.libraryFileName,
+                mode: capture.orientation.libraryMode,
+                provenance: .captured
+            ) {
+                CaptureStore.shared.setSyncState(id: capture.id, .synced)
+                TVLibraryStore.shared.refreshMergedCaptures()
+            }
+        }
+    }
+
+    /// Keeps the asset bytes that arrived with `record`, when policy allows.
+    ///
+    /// The copy runs off the main thread because a full-resolution video can be
+    /// hundreds of megabytes. The `CKAsset` is held across it so CloudKit's staged
+    /// file — which the system purges on its own schedule — outlives the copy.
+    private func adoptFetchedAsset(
+        from record: CKRecord,
+        libraryId: String,
+        mode: EclipseShareProtocol.LibraryMode,
+        provenance: MediaProvenance,
+        onStored: @escaping () -> Void
+    ) {
+        let asset = record[CloudKitSchema.MediaKey.asset] as? CKAsset
+        guard let assetURL = CloudKitAssetAdoptionPolicy.adoptableURL(
+            asset?.fileURL,
+            hasLocalBytes: LocalMediaStore.shared.hasMedia(forId: libraryId, mode: mode),
+            wasEvictedByUser: evictedMedia.contains(record.recordID.recordName)
+        ) else { return }
+        LocalMediaStore.shared.store(
+            fileURL: assetURL,
+            forId: libraryId,
+            mode: mode,
+            provenance: provenance
+        ) { stored in
+            withExtendedLifetime(asset) {
+                guard stored else { return }
+                onStored()
+            }
         }
     }
 
