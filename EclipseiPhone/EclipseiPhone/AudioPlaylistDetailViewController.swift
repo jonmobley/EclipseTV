@@ -246,32 +246,18 @@ final class AudioPlaylistDetailViewController: UITableViewController {
         guard !tracks.isEmpty, !isEditing else { return nil }
         let track = tracks[indexPath.row]
         if playlist?.isProtected == true, track.isProtected { return nil }
+        // Remove only unlinks; the track stays in Music. Like removing a Show member,
+        // the swipe is the confirmation.
         let remove = UIContextualAction(style: .destructive, title: "Remove") {
             [weak self] _, _, done in
             guard let self else {
                 done(false)
                 return
             }
-            let alert = UIAlertController(
-                title: String(localized: "Remove Track?"),
-                message: "“\(track.title)” will be removed from this playlist.",
-                preferredStyle: .actionSheet
+            AudioPlaylistStore.shared.remove(
+                trackId: track.id, fromPlaylistId: self.playlistId
             )
-            alert.addAction(UIAlertAction(title: "Remove", style: .destructive) { _ in
-                AudioPlaylistStore.shared.remove(
-                    trackId: track.id, fromPlaylistId: self.playlistId
-                )
-                done(true)
-            })
-            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in
-                done(false)
-            })
-            if let pop = alert.popoverPresentationController,
-               let cell = tableView.cellForRow(at: indexPath) {
-                pop.sourceView = cell
-                pop.sourceRect = cell.bounds
-            }
-            self.present(alert, animated: true)
+            done(true)
         }
         return UISwipeActionsConfiguration(actions: [remove])
     }
