@@ -534,12 +534,15 @@ extension LibraryGridViewController: UICollectionViewDataSource,
 
     /// Opens the phone PDF reader (⋯ Preview).
     ///
+    /// Marks it live under the same gate as websites: a destination exists and output
+    /// is unlocked. Otherwise this is on-device Preview without a red live stroke.
+    ///
     /// One viewer at a time, checked before the side effects: a second open would
     /// restart the AirPlay overlay for a viewer UIKit then refuses to present.
     func presentPDF(_ doc: SavedPDF) {
         guard !isAlreadyOpen(PDFRemoteViewController.self) else { return }
         guard let url = resolvedPDFFileURL(for: doc) else { return }
-        let markLive = !isLiveOutputLocked
+        let markLive = hasLiveOutputDestination && !isLiveOutputLocked
         if markLive {
             SlideshowPlaybackController.shared.stop()
             ExternalDisplayManager.shared.presentPDF(url, documentId: doc.id)
