@@ -211,6 +211,8 @@ extension PresentationViewController {
             NotificationCenter.default.removeObserver(loop)
             incomingLoopObserver = nil
         }
+        incomingPlayerLooper?.disableLooping()
+        incomingPlayerLooper = nil
         incomingPlayer?.pause()
         incomingPlayer = nil
         incomingPlayerLayer?.removeFromSuperlayer()
