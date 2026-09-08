@@ -45,7 +45,7 @@ extension iPhoneMainViewController {
         TVLibraryStore.shared.setThumbnail(thumbnail, forId: id)
         saveCustomThumbnail(thumbnail, for: videoURL)
         _ = connectionManager.sendCustomVideoThumbnail(thumbnail, videoFileName: videoURL.lastPathComponent)
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptics.impactLight()
     }
 
     /// Opens the aspect cropper so the user can re-frame an existing library item.

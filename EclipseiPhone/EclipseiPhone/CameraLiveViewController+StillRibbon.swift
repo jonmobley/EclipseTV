@@ -119,7 +119,7 @@ extension CameraLiveViewController {
         let mgr = ExternalDisplayManager.shared
         if mgr.parkedCameraStill == kind {
             mgr.resumeCameraFromStillPark()
-            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            Haptics.impactMedium()
             refreshLiveChrome()
             startAlwaysLiveRecordingIfNeeded()
             return
@@ -154,7 +154,7 @@ extension CameraLiveViewController {
 
     func parkStill(_ source: PresentationSource, kind: CameraParkedStill) {
         ExternalDisplayManager.shared.parkCameraOnStill(source, kind: kind)
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        Haptics.impactMedium()
         refreshLiveChrome()
     }
 }
@@ -187,7 +187,7 @@ extension CameraLiveViewController {
     }
 
     func presentCutawayActions(id: UUID, at indexPath: IndexPath) {
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        Haptics.impactMedium()
         let sheet = UIAlertController(
             title: "Quick Change", message: nil, preferredStyle: .actionSheet
         )

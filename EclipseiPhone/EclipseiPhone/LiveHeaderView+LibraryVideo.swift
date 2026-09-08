@@ -303,6 +303,6 @@ extension LiveHeaderView {
     @objc fileprivate func handleLibraryVideoTap() {
         guard !isCompactPresentation else { return }
         _ = toggleLibraryVideoPlayback()
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptics.impactLight()
     }
 }

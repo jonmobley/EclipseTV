@@ -80,7 +80,7 @@ extension LibraryGridViewController {
         QuestPollSessionStore.shared.setPracticeMembershipId(item.id)
         let page = QuestPollConfig.previewPage(pollId: item.pollId)
         WarmWebSessionPool.shared.warmIfNeeded(for: page)
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptics.impactLight()
         refreshLivePollPresentation()
     }
 
@@ -112,7 +112,7 @@ extension LibraryGridViewController {
         WarmWebSessionPool.shared.warmIfNeeded(for: page)
         ExternalDisplayManager.shared.presentWeb(page.url, pageId: page.id)
         announceAirPlayOverlayIfLinked()
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptics.impactLight()
         refreshLivePollPresentation()
         scrollLiveSlideshowRibbonToCurrentSlide()
         startQuestPollStatusPolling()
@@ -213,7 +213,7 @@ extension LibraryGridViewController {
     func handleLivePollRibbonTap(at indexPath: IndexPath) {
         guard QuestPollSessionStore.shared.session != nil else { return }
         cueQuestPollStage(at: indexPath.item)
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptics.impactLight()
     }
 
     /// Red stroke on the current cue only while this poll is on program or Practice.

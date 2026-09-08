@@ -198,7 +198,7 @@ extension LibraryGridViewController {
 
     @objc private func handleForeignLiveTap() {
         guard let id = liveOwningShowId else { return }
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptics.impactLight()
         openLocalAlbum(id: id)
     }
 }

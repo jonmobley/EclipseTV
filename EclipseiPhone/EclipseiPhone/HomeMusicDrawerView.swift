@@ -340,7 +340,7 @@ final class HomeMusicDrawerView: UIView, UIGestureRecognizerDelegate {
         guard open != settledOpen else { return }
         settledOpen = open
         if animated {
-            UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+            Haptics.impactSoft()
         }
     }
 

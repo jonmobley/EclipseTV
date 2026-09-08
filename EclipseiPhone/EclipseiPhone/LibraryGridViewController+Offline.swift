@@ -46,7 +46,7 @@ extension LibraryGridViewController {
             MediaFramingStore.clear(forId: id)
             MediaNoteStore.clear(forId: id)
             MediaTitleStore.clear(forId: id)
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            Haptics.impactLight()
         } else {
             presentNotConnectedAlert()
         }
@@ -85,7 +85,7 @@ extension LibraryGridViewController {
         )
         store.updateCurrentId(item.id)
         ExternalDisplayManager.shared.present(source)
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptics.impactLight()
     }
 
     /// Fullscreen Preview of a local full-res copy (⋯ Preview, or tap when locked
@@ -150,7 +150,7 @@ extension LibraryGridViewController {
             return
         }
 
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptics.impactLight()
         let preview = LocalMediaPreviewViewController(items: previewable, startIndex: index)
         preview.onDismiss = { [weak self] id in
             self?.revealShowMember(id: id)
@@ -173,7 +173,7 @@ extension LibraryGridViewController {
         AudioAmbientPolicy.applyYieldIfNeeded(
             for: PresentationSource.video(fileURL, isLooping: isLooping, isMuted: isMuted)
         )
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptics.impactLight()
         let preview = LocalVideoPreviewViewController(
             fileURL: fileURL,
             isMuted: isMuted,
@@ -224,7 +224,7 @@ extension LibraryGridViewController {
     /// 9:16 panel (cropped) instead of letterboxing on the phone.
     func presentPhonePreview(id: String, fileURL: URL, isVideo: Bool) {
         guard !isPreviewAlreadyOpen else { return }
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptics.impactLight()
         let preview = DisplayModeMediaPreviewViewController(
             fileURL: fileURL,
             isVideo: isVideo,

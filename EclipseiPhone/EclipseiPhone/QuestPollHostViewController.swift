@@ -387,8 +387,7 @@ final class QuestPollHostViewController: UIViewController {
     private func copyJoinLink() {
         guard let code = QuestPollSessionStore.shared.session?.code else { return }
         UIPasteboard.general.string = QuestPollConfig.joinURL(code: code).absoluteString
-        let generator = UINotificationFeedbackGenerator()
-        generator.notificationOccurred(.success)
+        Haptics.success()
         var config = copyLinkButton.configuration
         config?.title = "Copied"
         copyLinkButton.configuration = config

@@ -226,7 +226,7 @@ final class AudioMiniPlayerBubbleView: UIView {
     @objc private func musicTapped() {
         let style: UIImpactFeedbackGenerator.FeedbackStyle =
             AudioPlayerController.shared.hasActiveSession ? .medium : .light
-        UIImpactFeedbackGenerator(style: style).impactOccurred()
+        Haptics.impact(style)
         onToggle?()
     }
 }

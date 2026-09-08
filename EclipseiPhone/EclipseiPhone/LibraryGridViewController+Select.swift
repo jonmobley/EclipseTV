@@ -25,7 +25,7 @@ extension LibraryGridViewController {
         }
         reloadForSelectChange()
         notifySelectChrome()
-        UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+        Haptics.impactRigid()
         showPresentationToast("Select items, then use Actions")
     }
 
@@ -75,7 +75,7 @@ extension LibraryGridViewController {
             applySelectAppearance(to: cell, at: indexPath)
         }
         notifySelectChrome()
-        UISelectionFeedbackGenerator().selectionChanged()
+        Haptics.selection()
         return true
     }
 
@@ -107,7 +107,7 @@ extension LibraryGridViewController {
                     LocalAlbumStore.shared.remove(itemId: id, fromAlbumId: showId)
                 }
             }
-            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            Haptics.success()
         })
         present(alert, animated: true)
     }
@@ -285,7 +285,7 @@ extension LibraryGridViewController {
         }
         let name = LocalAlbumStore.shared.album(id: albumId)?.name ?? "Show"
         showPresentationToast("Copied to \(name)")
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        Haptics.success()
     }
 
     /// Leaves select mode after a bulk action applies.

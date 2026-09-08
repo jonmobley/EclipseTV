@@ -502,7 +502,7 @@ final class LibraryGridViewController: UIViewController {
         }
         liveHeader.onSlideshowSwipe = { delta in
             SlideshowPlaybackController.shared.goToAdjacentSlide(delta: delta)
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            Haptics.impactLight()
         }
         liveHeader.onLibraryBrowse = { [weak self] delta in
             self?.browseLiveHero(delta: delta)
@@ -1315,7 +1315,7 @@ final class LibraryGridViewController: UIViewController {
     /// Runs a command closure; if it fails (not connected), surfaces a friendly alert.
     func runCommand(_ command: () -> Bool) {
         if command() {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            Haptics.impactLight()
         } else {
             presentNotConnectedAlert()
         }

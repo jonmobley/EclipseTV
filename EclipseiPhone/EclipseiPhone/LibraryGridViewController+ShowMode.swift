@@ -498,7 +498,7 @@ extension LibraryGridViewController {
         }
         guard !blockLiveChangeIfLocked() else { return }
         if sendShowLiveSelectIfOperator(.slideshow, itemId: slideshow.id.uuidString) {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            Haptics.impactLight()
             return
         }
         guard hasLiveOutputDestination else {
@@ -541,7 +541,7 @@ extension LibraryGridViewController {
     }
 
     private func startSlideshow(_ slideshow: Slideshow, startingAt: Int) {
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptics.impactLight()
         SlideshowPlaybackController.shared.play(
             slideshow,
             connectionManager: connectionManager,
@@ -852,7 +852,7 @@ extension LibraryGridViewController {
         let itemId = item.id
         cell.setRewindHandler { [weak self] in
             VideoResumeStore.shared.clear(for: itemId)
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            Haptics.impactLight()
             self?.reloadGridIfSafe()
         }
     }

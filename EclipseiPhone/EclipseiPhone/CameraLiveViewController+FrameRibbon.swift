@@ -123,7 +123,7 @@ extension CameraLiveViewController: UICollectionViewDataSource, UICollectionView
         guard frames.indices.contains(indexPath.item) else { return }
         let id = frames[indexPath.item].id
         store.select(store.selectedId == id ? nil : id)
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptics.impactLight()
     }
 
     /// Configures a Background / quick-change / add cell for the stills ribbon.

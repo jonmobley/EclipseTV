@@ -160,7 +160,7 @@ final class PlaybackControlsView: UIView {
     // MARK: - Actions
 
     @objc private func playPauseTapped() {
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptics.impactLight()
         onTogglePlayPause?()
     }
 

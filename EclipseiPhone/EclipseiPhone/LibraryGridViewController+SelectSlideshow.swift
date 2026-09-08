@@ -75,7 +75,7 @@ extension LibraryGridViewController {
             endSelectMode()
             revealAddedShowMember(id: ShowSlideshowToken.token(for: created.id))
             showPresentationToast("Slideshow created")
-            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            Haptics.success()
         } catch {
             showPresentationToast(error.localizedDescription)
         }

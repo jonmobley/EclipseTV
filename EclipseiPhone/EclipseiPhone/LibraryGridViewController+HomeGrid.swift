@@ -417,7 +417,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             isBlackSelected = true
             announceAirPlayOverlayIfLinked()
         }
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptics.impactLight()
         refreshLiveHeader()
         let visible = collectionView.indexPathsForVisibleItems
         if !visible.isEmpty {
@@ -429,7 +429,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
     func presentLogoLive() {
         guard !blockLiveChangeIfLocked() else { return }
         if sendShowLiveSelectIfOperator(.logo, itemId: nil) {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            Haptics.impactLight()
             return
         }
         guard let source = LogoStore.shared.presentationSource else {
@@ -443,7 +443,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         store.updateCurrentId(nil)
         ExternalDisplayManager.shared.present(source)
         announceAirPlayOverlayIfLinked()
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptics.impactLight()
         reloadLibraryGrid()
         refreshLiveHeader()
     }
@@ -452,7 +452,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
     func presentScreensaverLive() {
         guard !blockLiveChangeIfLocked() else { return }
         if sendShowLiveSelectIfOperator(.screensaver, itemId: nil) {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            Haptics.impactLight()
             return
         }
         guard let source = ScreensaverStore.presentationSource else { return }
@@ -463,7 +463,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         store.updateCurrentId(nil)
         ExternalDisplayManager.shared.present(source)
         announceAirPlayOverlayIfLinked()
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptics.impactLight()
         reloadLibraryGrid()
         refreshLiveHeader()
     }
@@ -566,7 +566,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             return
         }
         if sendShowLiveSelectIfOperator(.media, itemId: item.id) {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            Haptics.impactLight()
             return
         }
 
@@ -591,7 +591,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
 
         let startAt = item.isVideo ? (VideoResumeStore.shared.position(for: item.id) ?? 0) : 0
         if connectionManager.sendPlayRequest(id: item.id, startAt: startAt) {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            Haptics.impactLight()
             if item.isVideo { VideoResumeStore.shared.clear(for: item.id) }
             store.updateCurrentId(item.id)
             ExternalDisplayManager.shared.present(

@@ -54,7 +54,7 @@ extension LibraryGridViewController {
     func applyVideoSetting(id: String, isLooping: Bool?, isMuted: Bool?) {
         store.updateVideoSetting(id: id, isLooping: isLooping, isMuted: isMuted)
         EclipseSyncController.shared.backend.scheduleMediaPrefsSave(libraryId: id)
-        UISelectionFeedbackGenerator().selectionChanged()
+        Haptics.selection()
         _ = connectionManager.sendVideoSetting(
             id: id, isLooping: isLooping, isMuted: isMuted
         )
