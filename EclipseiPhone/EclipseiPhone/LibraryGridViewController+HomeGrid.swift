@@ -576,8 +576,9 @@ extension LibraryGridViewController: UICollectionViewDataSource,
 
         SlideshowPlaybackController.shared.stop()
 
+        // Ambient music yields (pauses) inside `ExternalDisplayManager.present` via
+        // `AudioAmbientPolicy`; stopping it here would discard the user's queue.
         if item.isVideo {
-            AudioPlayerController.shared.stop()
             if let localURL = LocalMediaStore.shared.localURL(forId: item.id) {
                 PresentationPrewarmer.shared.prewarm(url: localURL)
             }
@@ -606,9 +607,6 @@ extension LibraryGridViewController: UICollectionViewDataSource,
     /// Downloads (if needed) then presents a capture via phone AirPlay.
     private func presentCapture(_ capture: CaptureRecord, libraryItem: LibraryItemDTO) {
         SlideshowPlaybackController.shared.stop()
-        if capture.isVideo {
-            AudioPlayerController.shared.stop()
-        }
 
         let finish: (LibraryItemDTO) -> Void = { [weak self] item in
             guard let self else { return }

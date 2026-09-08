@@ -299,9 +299,6 @@ extension AlbumsViewController: UICollectionViewDataSource, UICollectionViewDele
             let source: PresentationSource = item.isVideo
                 ? .video(url, isLooping: false, isMuted: false)
                 : .image(url)
-            if item.isVideo {
-                AudioPlayerController.shared.stop()
-            }
             ExternalDisplayManager.shared.presentJoined(source)
             onBecameLive?()
         }
