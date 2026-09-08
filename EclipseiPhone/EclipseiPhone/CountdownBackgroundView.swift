@@ -155,11 +155,14 @@ final class CountdownBackgroundView: UIView {
 
     /// Decodes off the main thread at panel size — a full-res still would hitch the
     /// AirPlay encode at the exact moment the clock appears.
+    ///
+    /// The picture aspect-fills this view, so the decode is budgeted for Fill against
+    /// these bounds (hero, editor canvas, or rotated output surface), not the screen.
     private func loadStill(at url: URL, generation: Int) {
-        let maxEdge = PresentationImageDecoder.maxPixelEdge(for: window?.screen)
+        let panel = fillPanelPixelSize()
         DispatchQueue.global(qos: .userInitiated).async {
             let image = PresentationImageDecoder.decode(
-                fileURL: url, maxPixelEdge: maxEdge
+                fileURL: url, panelPixelSize: panel, placement: .fill
             )
             DispatchQueue.main.async { [weak self] in
                 guard let self, self.decodeGeneration == generation else { return }
@@ -167,5 +170,15 @@ final class CountdownBackgroundView: UIView {
                 self.signalReady()
             }
         }
+    }
+
+    /// These bounds in pixels; the screen's media panel before the first layout pass.
+    private func fillPanelPixelSize() -> CGSize {
+        let screen = window?.screen
+        let scale = screen?.nativeScale ?? traitCollection.displayScale
+        if bounds.width > 0, bounds.height > 0, scale > 0 {
+            return CGSize(width: bounds.width * scale, height: bounds.height * scale)
+        }
+        return PresentationImageDecoder.panelPixelSize(for: screen)
     }
 }
