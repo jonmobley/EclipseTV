@@ -175,8 +175,7 @@ class VideoCacheManager {
     }
     
     private func isVideoFile(_ path: String) -> Bool {
-        let ext = URL(fileURLWithPath: path).pathExtension.lowercased()
-        return ["mp4", "mov", "m4v"].contains(ext)
+        MediaItem.isVideoPath(path)
     }
     
     // MARK: - Memory Pressure Monitoring
