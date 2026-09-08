@@ -52,12 +52,12 @@ extension AspectCropViewController {
         scrollView.minimumZoomScale = minZoom
         scrollView.maximumZoomScale = max(minZoom * 4, minZoom + 0.01)
 
-        let cropInScroll = scrollView.convert(crop, from: view)
+        let window = cropWindowInScrollFrame()
         scrollView.contentInset = UIEdgeInsets(
-            top: cropInScroll.minY,
-            left: cropInScroll.minX,
-            bottom: scrollView.bounds.height - cropInScroll.maxY,
-            right: scrollView.bounds.width - cropInScroll.maxX
+            top: window.minY,
+            left: window.minX,
+            bottom: scrollView.bounds.height - window.maxY,
+            right: scrollView.bounds.width - window.maxX
         )
 
         if let initial = initialCropRect, applyInitialCrop(initial, cropFrame: crop) {
@@ -92,15 +92,20 @@ extension AspectCropViewController {
     }
 
     /// Visible crop frame mapped into source-image point space.
+    ///
+    /// Inverse of `applyInitialCrop`: the window's frame-space origin plus
+    /// `contentOffset` is its position in zoomed content space. Do not route the window
+    /// through `scrollView.convert(_:from:)` here — a scroll view's bounds origin *is*
+    /// its `contentOffset`, so that result already includes the offset.
     func visibleCropRectInImage() -> CGRect? {
-        let cropInScroll = scrollView.convert(cropFrameView.frame, from: view)
+        let window = cropWindowInScrollFrame()
         let scale = scrollView.zoomScale
         guard scale > 0 else { return nil }
         let imageRect = CGRect(
-            x: (cropInScroll.origin.x + scrollView.contentOffset.x) / scale,
-            y: (cropInScroll.origin.y + scrollView.contentOffset.y) / scale,
-            width: cropInScroll.width / scale,
-            height: cropInScroll.height / scale
+            x: (window.minX + scrollView.contentOffset.x) / scale,
+            y: (window.minY + scrollView.contentOffset.y) / scale,
+            width: window.width / scale,
+            height: window.height / scale
         )
         let bounds = CGRect(origin: .zero, size: sourceImage.size)
         let clamped = imageRect.intersection(bounds)
@@ -109,6 +114,17 @@ extension AspectCropViewController {
     }
 
     // MARK: - Private
+
+    /// Crop window relative to the scroll view's frame, independent of scroll position.
+    ///
+    /// `cropFrameView` and `scrollView` are siblings in `view`, so their frames share a
+    /// coordinate space and the offset is a plain subtraction.
+    private func cropWindowInScrollFrame() -> CGRect {
+        cropFrameView.frame.offsetBy(
+            dx: -scrollView.frame.minX,
+            dy: -scrollView.frame.minY
+        )
+    }
 
     /// Restores scroll zoom/offset so `rect` fills the crop window. Returns false when
     /// the rect is unusable and the caller should fall back to centering.
