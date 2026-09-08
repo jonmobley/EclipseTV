@@ -53,6 +53,8 @@ final class AspectCropViewController: UIViewController, UIScrollViewDelegate {
 
     var cropFrameConstraints: [NSLayoutConstraint] = []
     var didConfigureScroll = false
+    /// Crop window size the zoom floor and insets were derived for.
+    var configuredCropSize: CGSize = .zero
 
     // MARK: - Initialization
 
