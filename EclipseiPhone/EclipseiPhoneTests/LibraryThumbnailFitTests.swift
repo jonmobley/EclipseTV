@@ -76,6 +76,69 @@ struct LibraryThumbnailFitTests {
         #expect(cell.imageView.contentMode == .scaleAspectFit)
     }
 
+    /// Cold launch: the tile is configured before its thumbnail is decoded, then the
+    /// bitmap arrives through `applyLoadedThumbnail`. It must still be cropped.
+    @Test func lateThumbnailAppliesCustomFraming() {
+        let id = uniqueId()
+        defer { MediaFramingStore.clear(forId: id) }
+        MediaFramingStore.set(
+            MediaFraming(x: 0.25, y: 0.25, width: 0.5, height: 0.5),
+            forId: id
+        )
+
+        let cell = makeCell()
+        cell.configure(with: makeStill(id: id), thumbnail: nil, isLive: false)
+        #expect(cell.isShowingPlaceholder)
+
+        cell.applyLoadedThumbnail(swatch(side: 100))
+        #expect(cell.imageView.contentMode == .scaleAspectFit)
+        #expect(approximately(cell.imageView.image?.size, side: 50))
+    }
+
+    @Test func lateThumbnailKeepsFillForFillStill() {
+        let id = uniqueId()
+        defer { MediaFitSettings.clear(forId: id) }
+        MediaFitSettings.setMode(.fill, forId: id)
+
+        let cell = makeCell()
+        cell.configure(with: makeStill(id: id), thumbnail: nil, isLive: false)
+        cell.applyLoadedThumbnail(swatch(side: 100))
+        #expect(cell.imageView.contentMode == .scaleAspectFill)
+        #expect(approximately(cell.imageView.image?.size, side: 100))
+    }
+
+    @Test func lateThumbnailLetterboxesVideo() {
+        let id = uniqueId()
+        defer { MediaFitSettings.clear(forId: id) }
+        MediaFitSettings.setMode(.fill, forId: id)
+
+        let cell = makeCell()
+        cell.configure(with: makeVideo(id: id), thumbnail: nil, isLive: false)
+        cell.applyLoadedThumbnail(swatch(side: 100))
+        #expect(cell.imageView.contentMode == .scaleAspectFit)
+        #expect(approximately(cell.imageView.image?.size, side: 100))
+    }
+
+    /// A reload that misses the thumbnail cache keeps the previous art. It must be
+    /// re-framed from the original, not cropped a second time.
+    @Test func cacheMissReconfigureDoesNotCropTwice() {
+        let id = uniqueId()
+        defer { MediaFramingStore.clear(forId: id) }
+        MediaFramingStore.set(
+            MediaFraming(x: 0.25, y: 0.25, width: 0.5, height: 0.5),
+            forId: id
+        )
+
+        let cell = makeCell()
+        let still = makeStill(id: id)
+        cell.configure(with: still, thumbnail: swatch(side: 100), isLive: false)
+        #expect(approximately(cell.imageView.image?.size, side: 50))
+
+        cell.configure(with: still, thumbnail: nil, isLive: false)
+        #expect(!cell.isShowingPlaceholder)
+        #expect(approximately(cell.imageView.image?.size, side: 50))
+    }
+
     @Test func thumbnailContentModeMatchesScreenFit() {
         let stillId = uniqueId()
         let videoId = uniqueId()
@@ -126,10 +189,18 @@ struct LibraryThumbnailFitTests {
         "fit-test-\(UUID().uuidString)"
     }
 
-    private func swatch() -> UIImage {
-        UIGraphicsImageRenderer(size: CGSize(width: 8, height: 8)).image { ctx in
+    private func swatch(side: CGFloat = 8) -> UIImage {
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        let size = CGSize(width: side, height: side)
+        return UIGraphicsImageRenderer(size: size, format: format).image { ctx in
             UIColor.gray.setFill()
-            ctx.fill(CGRect(x: 0, y: 0, width: 8, height: 8))
+            ctx.fill(CGRect(origin: .zero, size: size))
         }
+    }
+
+    private func approximately(_ size: CGSize?, side: CGFloat) -> Bool {
+        guard let size else { return false }
+        return abs(size.width - side) < 1 && abs(size.height - side) < 1
     }
 }

@@ -55,6 +55,20 @@ final class LibraryThumbnailCell: UICollectionViewCell {
     var captionCenterYToRewind: NSLayoutConstraint!
     /// Last media id painted; keeps art when a reload hits a transient cache miss.
     private var configuredMediaId: String?
+    /// Uncropped thumbnail behind `imageView.image`. A cache-miss reconfigure re-frames
+    /// from this; re-framing the already-cropped bitmap cropped it twice.
+    private var sourceThumbnail: UIImage?
+    /// How `configure(with:)` framed the media, so a thumbnail that lands after the
+    /// cell was configured (cold launch, memory purge) gets the same Screen Fit /
+    /// custom crop instead of the raw bitmap.
+    private var thumbnailFraming: ThumbnailFraming?
+
+    /// Screen Fit inputs captured at configure time for late-arriving thumbnails.
+    private struct ThumbnailFraming {
+        let itemId: String
+        let isVideo: Bool
+        let fallback: UIView.ContentMode
+    }
 
     // MARK: - Init
 
@@ -238,7 +252,7 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         // reload — keep the previous bitmap for the same item instead of flashing
         // the mountain / film placeholder.
         let retained = (configuredMediaId == item.id && thumbnail == nil)
-            ? imageView.image
+            ? sourceThumbnail
             : nil
         let image = thumbnail ?? retained
 
@@ -248,18 +262,14 @@ final class LibraryThumbnailCell: UICollectionViewCell {
             ? .black
             : .secondarySystemBackground
 
-        let fallback = thumbnailContentMode
-            ?? MediaFitSettings.thumbnailContentMode(for: item)
-        if item.isVideo {
-            imageView.contentMode = fallback
-            imageView.image = image
-        } else {
-            let framed = MediaFramingStore.framedStill(
-                image, forId: item.id, fallback: fallback
-            )
-            imageView.contentMode = framed.contentMode
-            imageView.image = framed.image
-        }
+        let framing = ThumbnailFraming(
+            itemId: item.id,
+            isVideo: item.isVideo,
+            fallback: thumbnailContentMode
+                ?? MediaFitSettings.thumbnailContentMode(for: item)
+        )
+        thumbnailFraming = framing
+        paintThumbnail(image, framing: framing)
 
         let isUnavailable = (item.isAvailable == false)
 
@@ -309,12 +319,34 @@ final class LibraryThumbnailCell: UICollectionViewCell {
     var isShowingPlaceholder: Bool { imageView.image == nil }
 
     /// Paints a late-arriving preview without resetting ⋯ / type-icon chrome.
+    ///
+    /// Applies the same Screen Fit / custom framing `configure(with:)` would have, so
+    /// a tile filled after a cold launch matches one configured with a warm cache.
     func applyLoadedThumbnail(_ image: UIImage) {
         guard imageView.image == nil else { return }
-        imageView.image = image
+        if let thumbnailFraming {
+            paintThumbnail(image, framing: thumbnailFraming)
+        } else {
+            imageView.image = image
+        }
         if imageView.alpha == 0 { imageView.alpha = 1 }
         placeholderIcon.isHidden = true
         refreshTypeIconVisibility()
+    }
+
+    /// Videos always letterbox; stills crop to a saved custom position or use Fit / Fill.
+    private func paintThumbnail(_ image: UIImage?, framing: ThumbnailFraming) {
+        sourceThumbnail = image
+        if framing.isVideo {
+            imageView.contentMode = framing.fallback
+            imageView.image = image
+            return
+        }
+        let framed = MediaFramingStore.framedStill(
+            image, forId: framing.itemId, fallback: framing.fallback
+        )
+        imageView.contentMode = framed.contentMode
+        imageView.image = framed.image
     }
 
     /// Soft “add” tile (New Show / Add media) — quiet fill, blue glyph.
@@ -442,6 +474,8 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         recycleCameraPreview()
         stopArrangeWiggle()
         configuredMediaId = nil
+        sourceThumbnail = nil
+        thumbnailFraming = nil
     }
 
     /// Visible duration pill text, or nil when the overlay is hidden.
