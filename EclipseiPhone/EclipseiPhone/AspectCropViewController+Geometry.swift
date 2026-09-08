@@ -35,14 +35,44 @@ extension AspectCropViewController {
         view.layoutIfNeeded()
     }
 
+    /// Records the region in the window before subviews move.
+    ///
+    /// Only trusts the state when the scroll view and window still match the metrics
+    /// derived for them: mid-resize passes (scroll view resized, window not yet) would
+    /// otherwise read a region the user never saw.
+    func captureFramingBeforeLayout() {
+        guard didConfigureScroll,
+              sizesMatch(scrollView.bounds.size, configuredScrollSize),
+              rectsMatch(cropWindowInScrollFrame(), configuredWindow),
+              let framing = visibleCropRectInImage() else { return }
+        framingBeforeLayout = framing
+    }
+
     /// Configures zoom limits and restores `initialCropRect` or centers the image.
+    ///
+    /// Runs again if the crop window moves or changes size after the first pass (safe
+    /// area or size class settling during presentation), carrying the framing the user
+    /// had over so the zoom floor and insets always belong to the window they see.
     func updateScrollMetricsIfNeeded() {
-        guard !didConfigureScroll, scrollView.bounds.width > 0 else { return }
+        guard scrollView.bounds.width > 0 else { return }
         let crop = cropFrameView.frame
         guard crop.width > 0, crop.height > 0 else { return }
+        let window = cropWindowInScrollFrame()
+        if didConfigureScroll {
+            guard !rectsMatch(window, configuredWindow)
+                || !sizesMatch(scrollView.bounds.size, configuredScrollSize) else { return }
+            initialCropRect = framingBeforeLayout ?? visibleCropRectInImage() ?? initialCropRect
+        }
         didConfigureScroll = true
+        configuredWindow = window
+        configuredScrollSize = scrollView.bounds.size
 
+        // `frame` is undefined on a transformed view, so drop to identity before
+        // re-framing (see ZoomableImageView for the rotation bug this avoids).
         let imageSize = sourceImage.size
+        scrollView.minimumZoomScale = 1
+        scrollView.maximumZoomScale = 1
+        scrollView.zoomScale = 1
         imageView.frame = CGRect(origin: .zero, size: imageSize)
         scrollView.contentSize = imageSize
 
@@ -52,7 +82,6 @@ extension AspectCropViewController {
         scrollView.minimumZoomScale = minZoom
         scrollView.maximumZoomScale = max(minZoom * 4, minZoom + 0.01)
 
-        let window = cropWindowInScrollFrame()
         scrollView.contentInset = UIEdgeInsets(
             top: window.minY,
             left: window.minX,
@@ -64,17 +93,16 @@ extension AspectCropViewController {
             return
         }
 
-        // Center the image in the crop window.
-        scrollView.zoomScale = minZoom
-        let scaled = CGSize(
-            width: imageSize.width * minZoom,
-            height: imageSize.height * minZoom
-        )
-        let offsetX = max((scaled.width - crop.width) / 2, 0)
-        let offsetY = max((scaled.height - crop.height) / 2, 0)
-        scrollView.contentOffset = CGPoint(
-            x: offsetX - scrollView.contentInset.left,
-            y: offsetY - scrollView.contentInset.top
+        // Center the image in the crop window at the zoom floor.
+        let visible = CGSize(width: crop.width / minZoom, height: crop.height / minZoom)
+        show(
+            CGRect(
+                x: (imageSize.width - visible.width) / 2,
+                y: (imageSize.height - visible.height) / 2,
+                width: visible.width,
+                height: visible.height
+            ),
+            zoom: minZoom
         )
     }
 
@@ -91,26 +119,22 @@ extension AspectCropViewController {
         dimView.layer.mask = mask
     }
 
-    /// Visible crop frame mapped into source-image point space.
-    ///
-    /// Inverse of `applyInitialCrop`: the window's frame-space origin plus
-    /// `contentOffset` is its position in zoomed content space. Do not route the window
-    /// through `scrollView.convert(_:from:)` here — a scroll view's bounds origin *is*
-    /// its `contentOffset`, so that result already includes the offset.
+    /// Visible crop frame mapped into source-image point space, clamped to the image.
     func visibleCropRectInImage() -> CGRect? {
-        let window = cropWindowInScrollFrame()
-        let scale = scrollView.zoomScale
-        guard scale > 0 else { return nil }
-        let imageRect = CGRect(
-            x: (window.minX + scrollView.contentOffset.x) / scale,
-            y: (window.minY + scrollView.contentOffset.y) / scale,
-            width: window.width / scale,
-            height: window.height / scale
-        )
         let bounds = CGRect(origin: .zero, size: sourceImage.size)
-        let clamped = imageRect.intersection(bounds)
+        let clamped = cropWindowInImageSpace().intersection(bounds)
         guard clamped.width > 1, clamped.height > 1 else { return nil }
         return clamped
+    }
+
+    /// The crop window in `imageView`'s bounds space — unscaled image points.
+    ///
+    /// Asks UIKit rather than recomputing from `contentOffset` and `zoomScale`: the
+    /// conversion walks the scroll view's bounds origin and the zoom transform on
+    /// `imageView`, so it is by construction the region shown through the window and
+    /// cannot drift from it the way a separate formula can.
+    func cropWindowInImageSpace() -> CGRect {
+        imageView.convert(cropFrameView.bounds, from: cropFrameView)
     }
 
     // MARK: - Private
@@ -124,6 +148,16 @@ extension AspectCropViewController {
             dx: -scrollView.frame.minX,
             dy: -scrollView.frame.minY
         )
+    }
+
+    /// Auto Layout rounds to the pixel grid, so compare with a sub-point tolerance.
+    private func sizesMatch(_ a: CGSize, _ b: CGSize) -> Bool {
+        abs(a.width - b.width) <= 0.5 && abs(a.height - b.height) <= 0.5
+    }
+
+    private func rectsMatch(_ a: CGRect, _ b: CGRect) -> Bool {
+        abs(a.minX - b.minX) <= 0.5 && abs(a.minY - b.minY) <= 0.5
+            && sizesMatch(a.size, b.size)
     }
 
     /// Restores scroll zoom/offset so `rect` fills the crop window. Returns false when
@@ -142,11 +176,29 @@ extension AspectCropViewController {
             max(zoom, scrollView.minimumZoomScale),
             scrollView.maximumZoomScale
         )
-        scrollView.zoomScale = clampedZoom
-        scrollView.contentOffset = CGPoint(
-            x: clamped.origin.x * clampedZoom - scrollView.contentInset.left,
-            y: clamped.origin.y * clampedZoom - scrollView.contentInset.top
-        )
+        show(clamped, zoom: clampedZoom)
         return true
+    }
+
+    /// Zooms to `zoom` and scrolls so `rect`'s origin sits at the window's top-left.
+    ///
+    /// The analytic offset is then corrected against `cropWindowInImageSpace()`, so
+    /// the restore is exact even where the offset math and UIKit's layout disagree.
+    private func show(_ rect: CGRect, zoom: CGFloat) {
+        scrollView.zoomScale = zoom
+        scrollView.contentOffset = CGPoint(
+            x: rect.minX * zoom - scrollView.contentInset.left,
+            y: rect.minY * zoom - scrollView.contentInset.top
+        )
+        let actual = cropWindowInImageSpace()
+        let correction = CGPoint(
+            x: (rect.minX - actual.minX) * zoom,
+            y: (rect.minY - actual.minY) * zoom
+        )
+        guard abs(correction.x) > 0.01 || abs(correction.y) > 0.01 else { return }
+        scrollView.contentOffset = CGPoint(
+            x: scrollView.contentOffset.x + correction.x,
+            y: scrollView.contentOffset.y + correction.y
+        )
     }
 }

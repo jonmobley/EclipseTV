@@ -96,24 +96,29 @@ struct CountdownControllerTests {
         #expect(clock.syncRemainingFromDeadline() == false)
     }
 
-    @Test func clockCrossesZeroOnceAndKeepsTheTrueZeroMoment() async throws {
-        let clock = makeClock()
+    @Test func clockCrossesZeroOnceAndKeepsTheTrueZeroMoment() throws {
+        let time = FakeClock()
+        let clock = makeClock(now: { time.now })
         clock.setDuration(1)
-        let startedAt = Date()
+        let startedAt = time.now
         clock.start()
-        try await Task.sleep(for: .milliseconds(1400))
-        // No-op when the timer already crossed zero during the sleep.
-        clock.syncRemainingFromDeadline()
 
+        time.advance(by: 0.5)
+        #expect(clock.syncRemainingFromDeadline() == false)
+        #expect(clock.running)
+        #expect(clock.remaining == 1)
+
+        // A tick that lands late still crosses zero once.
+        time.advance(by: 0.9)
+        #expect(clock.syncRemainingFromDeadline() == true)
         #expect(clock.running == false)
         #expect(clock.remaining == 0)
         #expect(clock.displayString == "0:00")
         // Zero is one second after start, whichever tick happened to notice.
         let expiredAt = try #require(clock.expiredAt)
-        #expect(abs(expiredAt.timeIntervalSince(startedAt) - 1) < 0.3)
+        #expect(expiredAt == startedAt.addingTimeInterval(1))
         let age = try #require(clock.secondsSinceExpiry)
-        #expect(age >= 0)
-        #expect(age < CountdownEndAction.maximumLateness)
+        #expect(abs(age - 0.4) < 0.001)
         // The end action must run once, so nothing may cross zero twice.
         #expect(clock.syncRemainingFromDeadline() == false)
 
@@ -146,13 +151,24 @@ struct CountdownControllerTests {
 
     // MARK: - Helpers
 
-    private func makeClock() -> CountdownController {
+    private func makeClock(
+        now: @escaping () -> Date = { Date() }
+    ) -> CountdownController {
         let defaults = isolatedDefaults()
         defaults.removePersistentDomain(forName: Self.suiteName)
-        return CountdownController(defaults: defaults)
+        return CountdownController(defaults: defaults, now: now)
     }
 
     private func isolatedDefaults() -> UserDefaults {
         UserDefaults(suiteName: Self.suiteName) ?? .standard
+    }
+
+    /// Wall clock the test advances by hand.
+    private final class FakeClock {
+        private(set) var now = Date(timeIntervalSinceReferenceDate: 1_000_000)
+
+        func advance(by seconds: TimeInterval) {
+            now = now.addingTimeInterval(seconds)
+        }
     }
 }
