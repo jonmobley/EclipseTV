@@ -52,6 +52,53 @@ actor AsyncImageLoader {
         ongoingOperations[cacheKey] = task
         return await task.value
     }
+
+    /// Loads a fullscreen still sized for how it will be framed in `panelSize`.
+    ///
+    /// `loadImage(from:targetSize:)` caps the decode at the panel's longest edge, which
+    /// is right for the grid and for Fit but leaves Fill and custom crops magnifying an
+    /// undersized bitmap. This routes the ceiling through `StillDecodeBudget` so the
+    /// pixels that end up on screen are decoded at screen density.
+    ///
+    /// - Parameters:
+    ///   - path: Image file on disk.
+    ///   - panelSize: Size of the surface the still is shown in, in points.
+    ///   - placement: Fit, Fill, or a unit-space custom crop.
+    func loadStill(
+        from path: String,
+        panelSize: CGSize,
+        placement: StillDecodeBudget.Placement
+    ) async -> UIImage? {
+        let cacheKey = makeCacheKey(path: path, targetSize: panelSize)
+            + "_" + placement.cacheKey
+
+        if let cached = cache.object(forKey: NSString(string: cacheKey)) {
+            return cached
+        }
+        if let ongoingTask = ongoingOperations[cacheKey] {
+            return await ongoingTask.value
+        }
+
+        let task = Task<UIImage?, Never> {
+            defer {
+                Task { self.removeOngoingOperation(for: cacheKey) }
+            }
+            let scale = await self.displayScale()
+            let panelPixels = CGSize(
+                width: panelSize.width * scale, height: panelSize.height * scale
+            )
+            return await self.loadImageFromDisk(path: path, cacheKey: cacheKey) { source in
+                CGFloat(StillDecodeBudget.maxPixelEdge(
+                    sourcePixelSize: source,
+                    panelPixelSize: panelPixels,
+                    placement: placement
+                ))
+            }
+        }
+
+        ongoingOperations[cacheKey] = task
+        return await task.value
+    }
     
     func preloadImages(at paths: [String], targetSize: CGSize) async {
         await withTaskGroup(of: Void.self) { group in
@@ -78,16 +125,28 @@ actor AsyncImageLoader {
     /// Loads and optionally downsamples via ImageIO so large photos never decode at
     /// full resolution into RAM before being resized for the grid.
     private func loadImageFromDisk(path: String, targetSize: CGSize?, cacheKey: String) async -> UIImage? {
+        let scale = await displayScale()
+        return await loadImageFromDisk(path: path, cacheKey: cacheKey) { _ in
+            Self.longestEdgeCeiling(targetSize: targetSize, scale: scale)
+        }
+    }
+
+    /// Decodes `path` with a longest-edge ceiling chosen from the encoded image's size.
+    ///
+    /// - Parameter maxPixel: Receives the upright pixel size from the file header
+    ///   (`.zero` when unavailable) and returns the ceiling in pixels.
+    private func loadImageFromDisk(
+        path: String,
+        cacheKey: String,
+        maxPixel: (CGSize) -> CGFloat
+    ) async -> UIImage? {
         guard fileManager.fileExists(atPath: path) else {
             logger.warning("Image file not found: \(path, privacy: .public)")
             return nil
         }
 
         let url = URL(fileURLWithPath: path)
-        let scale = await displayScale()
-        guard let image = Self.downsampledImage(
-            at: url, targetSize: targetSize, scale: scale
-        ) else {
+        guard let image = Self.downsampledImage(at: url, maxPixel: maxPixel) else {
             logger.error("Failed to decode image: \(path, privacy: .public)")
             return nil
         }
@@ -111,20 +170,21 @@ actor AsyncImageLoader {
         return scale
     }
 
-    /// Creates a thumbnail-sized `UIImage` using `CGImageSourceCreateThumbnailAtIndex`.
-    /// When `targetSize` is nil, still caps at 3840px on the long edge to bound memory.
+    /// Grid / Fit ceiling: the target's longest edge in pixels, or 3840px when no
+    /// target is given, to bound memory.
+    private static func longestEdgeCeiling(targetSize: CGSize?, scale: CGFloat) -> CGFloat {
+        guard let targetSize else { return 3840 }
+        return max(targetSize.width, targetSize.height) * scale
+    }
+
+    /// Creates a downsampled `UIImage` using `CGImageSourceCreateThumbnailAtIndex`.
+    ///
+    /// - Parameter maxPixel: Receives the upright pixel size read from the header
+    ///   (`.zero` when unavailable) and returns the longest-edge ceiling in pixels.
     private static func downsampledImage(
         at url: URL,
-        targetSize: CGSize?,
-        scale: CGFloat
+        maxPixel: (CGSize) -> CGFloat
     ) -> UIImage? {
-        let maxPixel: CGFloat
-        if let targetSize {
-            maxPixel = max(targetSize.width, targetSize.height) * scale
-        } else {
-            maxPixel = 3840
-        }
-
         let options: [CFString: Any] = [
             kCGImageSourceShouldCache: false
         ]
@@ -132,16 +192,35 @@ actor AsyncImageLoader {
             return nil
         }
 
+        let ceiling = max(1, maxPixel(uprightPixelSize(of: source) ?? .zero))
         let thumbOptions: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceThumbnailMaxPixelSize: maxPixel,
+            kCGImageSourceThumbnailMaxPixelSize: ceiling,
             kCGImageSourceShouldCacheImmediately: true
         ]
         guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbOptions as CFDictionary) else {
             return nil
         }
         return UIImage(cgImage: cgImage)
+    }
+
+    /// Pixel size of the first image once EXIF orientation is applied; header only.
+    ///
+    /// Orientations 5–8 are the rotated ones, so their stored width and height swap.
+    static func uprightPixelSize(of source: CGImageSource) -> CGSize? {
+        guard let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil)
+                as? [CFString: Any],
+              let width = properties[kCGImagePropertyPixelWidth] as? NSNumber,
+              let height = properties[kCGImagePropertyPixelHeight] as? NSNumber else {
+            return nil
+        }
+        let orientation = (properties[kCGImagePropertyOrientation] as? NSNumber)?.intValue ?? 1
+        let size = CGSize(width: width.doubleValue, height: height.doubleValue)
+        guard size.width > 0, size.height > 0 else { return nil }
+        return orientation >= 5
+            ? CGSize(width: size.height, height: size.width)
+            : size
     }
     
     private func makeCacheKey(path: String, targetSize: CGSize?) -> String {
