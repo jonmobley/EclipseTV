@@ -678,7 +678,7 @@ final class LiveHeaderView: UIView {
 
         // Brief hold so thumbnail/layout can settle under the snapshot.
         UIView.animate(
-            withDuration: 0.35,
+            withDuration: ContentTransitionStyle.crossfadeDuration,
             delay: 0.08,
             options: [.curveEaseInOut, .allowUserInteraction]
         ) {

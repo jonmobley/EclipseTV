@@ -121,6 +121,11 @@ enum WebTextSize: String, CaseIterable {
 enum ContentTransitionStyle: String, CaseIterable {
     case crossfade = "Crossfade"
     case cut = "Cut"
+
+    /// Dissolve length for Crossfade on AirPlay and in the phone hero mirror.
+    /// EclipseTV's `ContentTransitionSettings.crossfadeDuration` must match so a
+    /// Show feels the same on either output.
+    static let crossfadeDuration: TimeInterval = 0.35
 }
 
 /// Persisted external-display preferences shared by camera and web presentation.

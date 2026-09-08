@@ -135,7 +135,7 @@ extension ImageViewController {
                 self.view.addSubview(tempImageView)
                 
                 // Dissolve transition
-                UIView.animate(withDuration: 0.4, animations: {
+                UIView.animate(withDuration: ContentTransitionSettings.crossfadeDuration, animations: {
                     // Fade out current content
                     self.imageView.alpha = 0
                     self.playerView.view.alpha = 0
