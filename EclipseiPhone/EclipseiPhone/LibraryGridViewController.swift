@@ -70,6 +70,12 @@ final class LibraryGridViewController: UIViewController {
     var lastLayoutWidth: CGFloat = 0
     /// Last height used for side-by-side chrome; avoids redundant layout work.
     var lastLayoutHeight: CGFloat = 0
+    /// `gridHost` size at the last layout pass; a change is what re-applies the
+    /// pending scroll anchor. See `LibraryGridViewController+ScrollAnchor`.
+    var lastGridLayoutSize: CGSize = .zero
+    /// Where `page` was scrolled before its geometry changed, waiting for the page
+    /// to lay out at its new size so the same share of the range can be restored.
+    var pendingGridScrollAnchor: (page: UICollectionView, anchor: GridScrollAnchor)?
     /// True while grid|preview are side-by-side (phone / iPad landscape).
     var isSideBySideChrome = false
 
@@ -716,6 +722,8 @@ final class LibraryGridViewController: UIViewController {
         with coordinator: UIViewControllerTransitionCoordinator
     ) {
         super.viewWillTransition(to: size, with: coordinator)
+        // Before anything reflows: the offset is still the user's, not a clamp.
+        captureGridScrollAnchor()
         lastLayoutWidth = 0
         lastLayoutHeight = 0
         coordinator.animate(alongsideTransition: { [weak self] _ in
@@ -739,6 +747,8 @@ final class LibraryGridViewController: UIViewController {
         liveHeader.layoutCameraPreviewIfNeeded()
         // Content size is final here — pin leftover offset if the grid no longer overflows.
         updateHomeVerticalScrollPolicy()
+        // Last: a turn or a covered-then-uncovered reflow puts the user back where they were.
+        restoreGridScrollAnchorIfNeeded()
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -787,6 +797,9 @@ final class LibraryGridViewController: UIViewController {
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        // A fullscreen screen (website, camera) may turn the phone while this view is
+        // off the window; the grid only meets the new size when it comes back.
+        captureGridScrollAnchor()
         if store.delegate === self {
             store.delegate = nil
         }
@@ -862,7 +875,7 @@ final class LibraryGridViewController: UIViewController {
         collectionView.isScrollEnabled = true
         // Don't yank the offset while the user is mid-bounce.
         guard !collectionView.isDragging, !collectionView.isDecelerating else { return }
-        if maxVerticalScroll() <= 8 {
+        if maxVerticalScroll() <= Self.negligibleVerticalScroll {
             pinCollectionViewToTop()
         }
     }
