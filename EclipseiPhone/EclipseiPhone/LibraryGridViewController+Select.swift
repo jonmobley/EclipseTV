@@ -156,63 +156,21 @@ extension LibraryGridViewController {
         return !isShowGridItemLive(item)
     }
 
-    /// Same live predicates used when configuring Show tiles.
+    /// Live stroke for Show tiles: the director snapshot for operators, otherwise the
+    /// same `currentLiveProgram()` that snapshot is built from.
     func isShowGridItemLive(_ item: ShowGridItem) -> Bool {
         if ShowLiveSession.shared.isRemoteOperator {
             return isShowGridItemLiveRemotely(item)
         }
-        switch item {
-        case .slideshow(let show):
-            return SlideshowPlaybackController.shared.isLive(slideshowId: show.id)
-                && !isBlackSelected
-                && !isLogoSelected
-                && !isScreensaverSelected
-        case .screensaver:
-            return isScreensaverSelected
-                && !ExternalDisplayManager.shared.isOverlayLive
-        case .logo:
-            return isLogoSelected && !ExternalDisplayManager.shared.isOverlayLive
-        case .camera:
-            return ExternalDisplayManager.shared.isCameraTileLive
-        case .countdown(let item):
-            return ExternalDisplayManager.shared.isCountdownLive
-                && CountdownController.shared.liveCountdownId == item.id
-                && !isBlackSelected
-                && !isLogoSelected
-                && !isScreensaverSelected
-        case .media(let media):
-            return media.id == store.currentId
-                && SlideshowPlaybackController.shared.activeSlideshowId == nil
-                && !isBlackSelected
-                && !isLogoSelected
-                && !isScreensaverSelected
-                && !ExternalDisplayManager.shared.isOverlayLive
-        case .website(let page):
-            let mgr = ExternalDisplayManager.shared
-            let webLive = mgr.isWebLive && mgr.liveWebPageId == page.id
-            let videoLive = mgr.isWebVideoLive && mgr.liveWebVideoPageId == page.id
-            return (webLive || videoLive)
-                && !isBlackSelected
-                && !isLogoSelected
-                && !isScreensaverSelected
-        case .pdf(let doc):
-            let mgr = ExternalDisplayManager.shared
-            return mgr.isPDFLive && mgr.livePDFDocumentId == doc.id
-                && !isBlackSelected
-                && !isLogoSelected
-                && !isScreensaverSelected
-        case .livePoll(let item):
-            if QuestPollSessionStore.shared.practiceMembershipId == item.id {
-                return true
-            }
-            return ExternalDisplayManager.shared.isQuestPollLive
-                && QuestPollSessionStore.shared.membershipId == item.id
-                && !isBlackSelected
-                && !isLogoSelected
-                && !isScreensaverSelected
-        case .unresolved, .add:
+        // Practice lights the poll card without anything on program output.
+        if case .livePoll(let poll) = item,
+           QuestPollSessionStore.shared.practiceMembershipId == poll.id {
+            return true
+        }
+        guard let program = currentLiveProgram(), !program.isBlackout else {
             return false
         }
+        return item.matches(program)
     }
 
     // MARK: - Private

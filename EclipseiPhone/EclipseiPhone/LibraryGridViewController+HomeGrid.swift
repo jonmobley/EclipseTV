@@ -247,22 +247,12 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             return WebThumbnailStore.shared.image(for: uuid)
                 ?? PDFThumbnailStore.shared.image(for: uuid)
         }
-        let mgr = ExternalDisplayManager.shared
-        let isLiveShow = (
-            show.itemIds.contains(where: { $0 == store.currentId })
-                && !mgr.isOverlayLive
-        ) || (
-            mgr.isWebLive
-                && mgr.liveWebPageId.map { show.itemIds.contains($0.uuidString) } == true
-        ) || isLivePollLive(inShow: show.id)
-        let live = isLiveShow && !isBlackSelected && !isLogoSelected
-            && !isScreensaverSelected
         cell.configureShow(
             showId: show.id,
             title: show.name,
             subtitle: show.homeRecentSubtitle,
             thumbnail: thumb,
-            isLive: live,
+            isLive: showOwnsLiveProgram(show),
             moreMenu: contextMenu(for: .show(show))
         )
         return cell
@@ -339,22 +329,12 @@ extension LibraryGridViewController: UICollectionViewDataSource,
                 guard let uuid = UUID(uuidString: id) else { return nil }
                 return WebThumbnailStore.shared.image(for: uuid)
             }
-            let mgr = ExternalDisplayManager.shared
-            let isLiveShow = (
-                show.itemIds.contains(where: { $0 == store.currentId })
-                    && !mgr.isOverlayLive
-            ) || (
-                mgr.isWebLive
-                    && mgr.liveWebPageId.map { show.itemIds.contains($0.uuidString) } == true
-            ) || isLivePollLive(inShow: show.id)
-            let live = isLiveShow && !isBlackSelected && !isLogoSelected
-                && !isScreensaverSelected
             cell.configureSpecial(
                 title: show.name,
                 systemImage: "rectangle.stack.fill",
                 thumbnail: thumb,
                 fillColor: .specialTile,
-                isLive: live
+                isLive: showOwnsLiveProgram(show)
             )
         }
     }
