@@ -63,11 +63,24 @@ final class CaptureStore {
         Set(records.filter { !$0.isDeleted }.flatMap { [$0.id, $0.libraryFileName] })
     }
 
-    /// Captures the CloudKit engine should enqueue — never `.localOnly`.
+    /// Captures whose asset CloudKit has not accepted yet.
     ///
-    /// New local captures start as `.pendingUpload`. `.localOnly` remains for rare
-    /// opt-out / legacy rows that must stay off iCloud.
+    /// New local captures start as `.pendingUpload`. `.localOnly` is for rare opt-out
+    /// / legacy rows that must stay off iCloud.
+    ///
+    /// `.synced` rows are deliberately excluded. They used to ride along so that Fit /
+    /// framing / loop / mute edits reached other devices, but `makeMediaRecord` stamps
+    /// a fresh `modifiedAt`, so that rewrote every record on every foreground and made
+    /// every other device re-fetch them — assets included — for nothing. Those edits
+    /// now travel through `CloudKitMediaDirtyStore`.
     var idsNeedingUpload: [String] {
+        records
+            .filter { !$0.isDeleted && $0.syncState == .pendingUpload }
+            .map(\.id)
+    }
+
+    /// Record names for dirty-tracking seeds — every capture that can reach iCloud.
+    var syncableIds: [String] {
         records
             .filter { !$0.isDeleted && $0.syncState != .localOnly }
             .map(\.id)
@@ -175,6 +188,21 @@ final class CaptureStore {
         } else {
             records.insert(copy, at: 0)
         }
+        persist()
+    }
+
+    /// Re-queues every capture that has local bytes (zone loss, account switch).
+    ///
+    /// Only `.synced` rows are flipped: those are the ones whose file is on disk and
+    /// whose upload acknowledgement no longer applies. `.remoteOnly` bytes lived only
+    /// in the previous account and cannot be re-uploaded from here.
+    func markAllNeedsUpload() {
+        var changed = false
+        for index in records.indices where records[index].syncState == .synced {
+            records[index].syncState = .pendingUpload
+            changed = true
+        }
+        guard changed else { return }
         persist()
     }
 

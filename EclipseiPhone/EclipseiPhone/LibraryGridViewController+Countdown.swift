@@ -56,12 +56,32 @@ extension LibraryGridViewController {
             text: clock.displayString,
             isExpired: clock.remaining == 0
         )
-        liveHeader.updatePlayback(PlaybackState())
     }
 
     /// Whether the live ribbon is showing duration presets.
     var showsCountdownRibbon: Bool {
-        isShowMode && ExternalDisplayManager.shared.isCountdownLive
+        CountdownRibbon.shouldShow(
+            isShowMode: isShowMode,
+            isCountdownLive: ExternalDisplayManager.shared.isCountdownLive,
+            belongsToOpenShow: liveCountdownBelongsToOpenShow
+        )
+    }
+
+    /// Ribbon index of the live clock's current length (Custom chip when custom).
+    func countdownRibbonSelectedIndex() -> Int {
+        CountdownRibbon.selectedIndex(
+            duration: CountdownController.shared.duration,
+            presets: CountdownController.durationPresets
+        )
+    }
+
+    /// True when the live clock is a countdown card in the open Show.
+    var liveCountdownBelongsToOpenShow: Bool {
+        guard let id = CountdownController.shared.liveCountdownId,
+              let item = CountdownStore.shared.countdown(id: id),
+              let openShowId
+        else { return false }
+        return item.showId == openShowId
     }
 
     /// Duration-preset count plus Custom for the live ribbon.
@@ -122,7 +142,14 @@ extension LibraryGridViewController {
             return
         }
         guard presets.indices.contains(indexPath.item) else { return }
-        applyCountdownDuration(presets[indexPath.item], to: clockTargetId())
+        let seconds = presets[indexPath.item]
+        // Re-applying the live length restarts the clock from full, and this chip is
+        // the highlighted one — the operator reads it as inert, not as a reset.
+        guard seconds != CountdownController.shared.duration else {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            return
+        }
+        applyCountdownDuration(seconds, to: clockTargetId())
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         refreshCountdownChrome()
         refreshSlideshowRibbonPresentation()

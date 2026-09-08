@@ -34,14 +34,16 @@ final class CloudKitAssetDownloader {
     }
 
     private let container: CKContainer
+    private let sharedZones: CloudKitSharedZoneIndex
     private let logger = Logger(
         subsystem: "com.eclipseapp.ios",
         category: "CloudKitAssetDownloader"
     )
     private var waiters: [String: [Waiter]] = [:]
 
-    init(container: CKContainer) {
+    init(container: CKContainer, sharedZones: CloudKitSharedZoneIndex) {
         self.container = container
+        self.sharedZones = sharedZones
     }
 
     /// Fetches the MediaItem record and copies its asset into local storage.
@@ -156,9 +158,24 @@ final class CloudKitAssetDownloader {
                         markRemoteOnly: markRemoteOnly,
                         markSynced: markSynced
                     )
-                case .failure:
+                case .failure(let privateError):
+                    // A shared record lives in the *owner's* zone, so it can only be
+                    // addressed with the zone id learned when it was fetched. Rebuilding
+                    // one from `CloudKitSchema` names our own zone and never resolves.
+                    guard let sharedID = self.sharedZones.recordID(
+                        forRecordName: cloudId
+                    ) else {
+                        // Nothing shared to fall back to, so report why the private
+                        // fetch actually failed rather than a generic "not found".
+                        markRemoteOnly()
+                        self.logger.error(
+                            "Fetch failed: \(privateError.localizedDescription)"
+                        )
+                        self.finish(cloudId, .failure(privateError))
+                        return
+                    }
                     self.fetchRecord(
-                        recordID,
+                        sharedID,
                         from: self.container.sharedCloudDatabase
                     ) { [weak self] shared in
                         Task { @MainActor in
@@ -202,38 +219,42 @@ final class CloudKitAssetDownloader {
         }
     }
 
+    /// Copies the downloaded asset into local storage off the main thread.
+    ///
+    /// A full-resolution video can be hundreds of megabytes; copying it
+    /// synchronously here froze the UI for the length of the copy.
     private func storeAsset(
         from record: CKRecord,
         cloudId: String,
         libraryId: String,
         mode: EclipseShareProtocol.LibraryMode,
         provenance: MediaProvenance,
-        markRemoteOnly: () -> Void,
-        markSynced: () -> Void
+        markRemoteOnly: @escaping () -> Void,
+        markSynced: @escaping () -> Void
     ) {
         guard let assetURL = CloudKitRecordMapper.mediaAssetURL(from: record) else {
             markRemoteOnly()
             finish(cloudId, .failure(DownloadError.noAsset))
             return
         }
-        do {
-            report(0.5, for: cloudId)
-            try LocalMediaStore.shared.storeSynchronously(
-                fileURL: assetURL,
-                forId: libraryId,
-                mode: mode,
-                provenance: provenance
-            )
-            report(1, for: cloudId)
-            markSynced()
-            if let url = LocalMediaStore.shared.localURL(forId: libraryId, mode: mode) {
-                finish(cloudId, .success(url))
-            } else {
-                finish(cloudId, .failure(DownloadError.noAsset))
+        report(0.5, for: cloudId)
+        LocalMediaStore.shared.store(
+            fileURL: assetURL,
+            forId: libraryId,
+            mode: mode,
+            provenance: provenance
+        ) { [weak self] stored in
+            guard let self else { return }
+            guard stored,
+                  let url = LocalMediaStore.shared.localURL(forId: libraryId, mode: mode)
+            else {
+                markRemoteOnly()
+                self.finish(cloudId, .failure(DownloadError.noAsset))
+                return
             }
-        } catch {
-            markRemoteOnly()
-            finish(cloudId, .failure(error))
+            self.report(1, for: cloudId)
+            markSynced()
+            self.finish(cloudId, .success(url))
         }
     }
 

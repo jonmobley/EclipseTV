@@ -143,6 +143,64 @@ struct CountdownBackgroundStoreTests {
         #expect(header.countdownBackground == nil)
     }
 
+    // MARK: - Hero Hold
+
+    /// Output holds the outgoing frame until the countdown is composed; the hero
+    /// has to make the same call so the phone and the TV agree.
+    @Test func heroWaitsForABackgroundBeforeShowingTheClock() {
+        #expect(
+            !LiveHeaderView.canCommitCountdownChrome(
+                hasMedia: true, isBackgroundReady: false, isOverdue: false
+            )
+        )
+        #expect(
+            LiveHeaderView.canCommitCountdownChrome(
+                hasMedia: true, isBackgroundReady: true, isOverdue: false
+            )
+        )
+    }
+
+    /// Without this arm an undecodable file parks the hero on stale content and the
+    /// operator never sees the clock at all.
+    @Test func heroStopsWaitingOnceTheHoldExpires() {
+        #expect(
+            LiveHeaderView.canCommitCountdownChrome(
+                hasMedia: true, isBackgroundReady: false, isOverdue: true
+            )
+        )
+    }
+
+    @Test func heroWithNoBackgroundNeverWaits() {
+        #expect(
+            LiveHeaderView.canCommitCountdownChrome(
+                hasMedia: false, isBackgroundReady: false, isOverdue: false
+            )
+        )
+    }
+
+    /// A plain countdown must reach the hero on the first pass — the gate cannot
+    /// hold a clock that has nothing to compose.
+    @Test func heroShowsAPlainCountdownImmediately() {
+        let header = LiveHeaderView(frame: CGRect(x: 0, y: 0, width: 320, height: 180))
+        header.configureCountdownClock(text: "5:00", isExpired: false)
+        #expect(!header.countdownClockLabel.isHidden)
+        #expect(header.countdownClockLabel.text == "5:00")
+        #expect(header.countdownBackgroundDeadline == nil)
+    }
+
+    @Test func clearingTheHeroBackgroundEndsTheHold() {
+        let header = LiveHeaderView(frame: CGRect(x: 0, y: 0, width: 320, height: 180))
+        let background = CountdownBackgroundView()
+        header.addSubview(background)
+        header.countdownBackground = background
+        header.countdownBackgroundDeadline = Date().addingTimeInterval(60)
+
+        header.clearCountdownBackground()
+        #expect(header.countdownBackground == nil)
+        #expect(header.countdownBackgroundDeadline == nil)
+        #expect(background.onReady == nil)
+    }
+
     @Test func viewSkipsRebuildForUnchangedMedia() {
         let view = CountdownBackgroundView()
         #expect(view.media == nil)

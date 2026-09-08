@@ -52,6 +52,8 @@ final class DisabledSyncBackend: SyncBackend {
 
     func scheduleMediaDelete(cloudId: String) {}
 
+    func scheduleMediaPrefsSave(libraryId: String) {}
+
     func schedulePDFSave(id: UUID) {}
 
     func schedulePDFDelete(id: UUID) {}

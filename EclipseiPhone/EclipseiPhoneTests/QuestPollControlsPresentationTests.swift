@@ -5,6 +5,7 @@
 //  Copyright © 2026 Moxie LLC. All rights reserved.
 //
 
+import LivePollKit
 import Testing
 import UIKit
 @testable import EclipseiPhone
@@ -49,15 +50,15 @@ struct QuestPollControlsPresentationTests {
         #expect(makeControls().viewControllers.first is QuestPollHostViewController)
     }
 
-    @Test func advanceActionsReachTheRoom() {
-        var sent: [String] = []
+    @Test func advanceCommandsReachTheRoom() {
+        var sent: [LivePollHostCommand] = []
         let nav = QuestPollHostViewController.makeNavigation(
             onAdvance: { sent.append($0) },
             onEnd: nil
         )
 
-        (nav.viewControllers.first as? QuestPollHostViewController)?.onAdvance?("next")
-        #expect(sent == ["next"])
+        (nav.viewControllers.first as? QuestPollHostViewController)?.onAdvance?(.next)
+        #expect(sent == [.next])
     }
 
     // MARK: - Helpers

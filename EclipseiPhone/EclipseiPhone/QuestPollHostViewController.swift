@@ -5,22 +5,27 @@
 //  Copyright © 2026 Moxie LLC. All rights reserved.
 //
 
+import LivePollKit
 import SafariServices
 import UIKit
 
-/// Native host CONTROLS sheet mirroring questpoll.live `/host/controller`.
+/// Native host CONTROLS sheet for the Live Poll room.
 final class QuestPollHostViewController: UIViewController {
 
-    /// One-step advance (start / results / next).
-    var onAdvance: ((String) -> Void)?
+    /// One-step advance / QR / extend / skip command.
+    var onAdvance: ((LivePollHostCommand) -> Void)?
     /// Ends the room after the host confirms.
     var onEnd: (() -> Void)?
 
     private let scroll = UIScrollView()
     private let stack = UIStackView()
     private let responsesValue = UILabel()
+    private let countdownLabel = UILabel()
     private let progressLabel = UILabel()
+    private let resultsStack = UIStackView()
     private let primaryButton = UIButton(type: .system)
+    private let extendButton = UIButton(type: .system)
+    private let skipButton = UIButton(type: .system)
     private let projectorQRButton = UIButton(type: .system)
     private let joinQRButton = UIButton(type: .system)
     private let projectorButton = UIButton(type: .system)
@@ -76,16 +81,42 @@ final class QuestPollHostViewController: UIViewController {
 
         stack.addArrangedSubview(heading)
         stack.addArrangedSubview(makeResponsesCard())
+
+        countdownLabel.font = .monospacedDigitSystemFont(ofSize: 15, weight: .semibold)
+        countdownLabel.textColor = UIColor.white.withAlphaComponent(0.7)
+        countdownLabel.textAlignment = .center
+        countdownLabel.isHidden = true
+        stack.addArrangedSubview(countdownLabel)
+
         progressLabel.font = .systemFont(ofSize: 14, weight: .medium)
         progressLabel.textColor = UIColor.white.withAlphaComponent(0.55)
         progressLabel.textAlignment = .center
         stack.addArrangedSubview(progressLabel)
+
+        resultsStack.axis = .vertical
+        resultsStack.spacing = 8
+        resultsStack.isHidden = true
+        stack.addArrangedSubview(resultsStack)
 
         stylePrimary(primaryButton)
         primaryButton.addAction(UIAction { [weak self] _ in
             self?.handleAdvance()
         }, for: .touchUpInside)
         stack.addArrangedSubview(primaryButton)
+
+        let row = UIStackView(arrangedSubviews: [extendButton, skipButton])
+        row.axis = .horizontal
+        row.spacing = 10
+        row.distribution = .fillEqually
+        styleSecondary(extendButton, title: "Extend +15s", systemImage: "plus.circle")
+        extendButton.addAction(UIAction { [weak self] _ in
+            self?.onAdvance?(.extend)
+        }, for: .touchUpInside)
+        styleSecondary(skipButton, title: "Skip", systemImage: "forward.end")
+        skipButton.addAction(UIAction { [weak self] _ in
+            self?.onAdvance?(.skip)
+        }, for: .touchUpInside)
+        stack.addArrangedSubview(row)
 
         styleSecondary(
             projectorQRButton, title: "Show QR", systemImage: "qrcode.viewfinder"
@@ -132,6 +163,8 @@ final class QuestPollHostViewController: UIViewController {
             stack.bottomAnchor.constraint(equalTo: guide.bottomAnchor, constant: -28),
             stack.widthAnchor.constraint(equalTo: frame.widthAnchor, constant: -40),
             primaryButton.heightAnchor.constraint(equalToConstant: 52),
+            extendButton.heightAnchor.constraint(equalToConstant: 48),
+            skipButton.heightAnchor.constraint(equalToConstant: 48),
             projectorQRButton.heightAnchor.constraint(equalToConstant: 48),
             joinQRButton.heightAnchor.constraint(equalToConstant: 48),
             projectorButton.heightAnchor.constraint(equalToConstant: 48)
@@ -231,23 +264,30 @@ final class QuestPollHostViewController: UIViewController {
             dismiss(animated: true)
             return
         }
-        responsesValue.text = "\(session.voteCount)"
-        progressLabel.text = QuestPollHostAdvance.progressLabel(
+        responsesValue.text = "\(session.answeredCount)"
+        progressLabel.text = LivePollAdvance.progressLabel(
             questionIndex: session.questionIndex,
             questionCount: store.questionCount
         )
-        let advance = QuestPollHostAdvance.primary(
-            status: session.status,
+        let mode = session.mode ?? .quiz
+        let advance = LivePollAdvance.primary(
+            phase: session.phase,
             questionIndex: session.questionIndex,
-            questionCount: store.questionCount
+            questionCount: store.questionCount,
+            mode: mode
         )
         primaryButton.isHidden = advance == nil
         if var config = primaryButton.configuration {
             config.title = advance?.title ?? ""
             primaryButton.configuration = config
         }
-        let qrToggle = QuestPollHostAdvance.joinQRToggle(
-            status: session.status,
+        let showTimerControls = session.phase == .questionOpen
+            || session.phase == .locked
+        extendButton.superview?.isHidden = !showTimerControls
+        refreshCountdown(session)
+        refreshResults(session)
+        let qrToggle = LivePollAdvance.joinQRToggle(
+            phase: session.phase,
             isVisible: session.showsJoinQR
         )
         projectorQRButton.isHidden = qrToggle == nil
@@ -260,8 +300,44 @@ final class QuestPollHostViewController: UIViewController {
         }
         let busy = store.isControlInFlight
         primaryButton.isEnabled = !busy && advance != nil
+        extendButton.isEnabled = !busy && showTimerControls
+        skipButton.isEnabled = !busy && showTimerControls
         projectorQRButton.isEnabled = !busy && qrToggle != nil
         endButton.isEnabled = !busy
+    }
+
+    private func refreshCountdown(_ session: LivePollSession) {
+        guard session.phase == .questionOpen || session.phase == .locked,
+              let remaining = session.remainingMs, remaining > 0
+        else {
+            countdownLabel.isHidden = true
+            return
+        }
+        let seconds = Int(ceil(remaining / 1000))
+        countdownLabel.text = "\(seconds)s remaining"
+        countdownLabel.isHidden = false
+    }
+
+    private func refreshResults(_ session: LivePollSession) {
+        resultsStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        guard let results = session.results, !results.options.isEmpty else {
+            resultsStack.isHidden = true
+            return
+        }
+        resultsStack.isHidden = false
+        let heading = UILabel()
+        heading.text = "Results · \(results.total) total"
+        heading.font = .systemFont(ofSize: 13, weight: .semibold)
+        heading.textColor = UIColor.white.withAlphaComponent(0.55)
+        resultsStack.addArrangedSubview(heading)
+        for option in results.options {
+            let row = UILabel()
+            row.text = "\(option.text)  \(option.percent)% · \(option.count)"
+            row.font = .systemFont(ofSize: 15, weight: .medium)
+            row.textColor = .white
+            row.numberOfLines = 0
+            resultsStack.addArrangedSubview(row)
+        }
     }
 
     // MARK: - Actions
@@ -269,23 +345,24 @@ final class QuestPollHostViewController: UIViewController {
     private func handleAdvance() {
         let store = QuestPollSessionStore.shared
         guard let session = store.session,
-              let advance = QuestPollHostAdvance.primary(
-                status: session.status,
+              let advance = LivePollAdvance.primary(
+                phase: session.phase,
                 questionIndex: session.questionIndex,
-                questionCount: store.questionCount
+                questionCount: store.questionCount,
+                mode: session.mode ?? .quiz
               )
         else { return }
-        onAdvance?(advance.action)
+        onAdvance?(advance.command)
     }
 
     private func handleProjectorQR() {
         guard let session = QuestPollSessionStore.shared.session,
-              let toggle = QuestPollHostAdvance.joinQRToggle(
-                status: session.status,
+              let toggle = LivePollAdvance.joinQRToggle(
+                phase: session.phase,
                 isVisible: session.showsJoinQR
               )
         else { return }
-        onAdvance?(toggle.action)
+        onAdvance?(toggle.command)
     }
 
     private func presentJoinQR() {

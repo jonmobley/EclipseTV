@@ -104,8 +104,12 @@ extension LiveHeaderView {
         caption.spacing = 8
 
         let practice = gateButton(title: "Practice", primary: false)
+        practice.accessibilityHint =
+            "Previews the deck on this iPhone without opening a room"
         practice.addAction(UIAction { _ in onPractice() }, for: .touchUpInside)
         let start = gateButton(title: "Start", primary: true)
+        start.accessibilityHint =
+            "Opens the room so the audience can join and answer"
         start.addAction(UIAction { _ in onStart() }, for: .touchUpInside)
         let buttons = UIStackView(arrangedSubviews: [practice, start])
         buttons.axis = .horizontal
@@ -117,8 +121,9 @@ extension LiveHeaderView {
         stack.alignment = .fill
         stack.spacing = 16
         stack.translatesAutoresizingMaskIntoConstraints = false
+        // 44pt tap target that can still grow for accessibility text sizes.
         NSLayoutConstraint.activate([
-            practice.heightAnchor.constraint(equalToConstant: 44)
+            practice.heightAnchor.constraint(greaterThanOrEqualToConstant: 44)
         ])
         return stack
     }
@@ -141,10 +146,18 @@ extension LiveHeaderView {
         let label = UILabel()
         label.text = title
         label.textColor = UIColor.white.withAlphaComponent(0.9)
-        label.font = .systemFont(ofSize: 18, weight: .semibold)
+        // Capped scaling: the hero is a fixed 16:9 card, so the deck name has to
+        // grow with Dynamic Type without crowding out Practice / Start.
+        label.font = UIFontMetrics(forTextStyle: .headline).scaledFont(
+            for: .systemFont(ofSize: 18, weight: .semibold),
+            maximumPointSize: 26
+        )
+        label.adjustsFontForContentSizeCategory = true
         label.textAlignment = .center
         label.numberOfLines = 2
         label.lineBreakMode = .byWordWrapping
+        label.adjustsFontSizeToFitWidth = true
+        label.minimumScaleFactor = 0.7
         return label
     }
 

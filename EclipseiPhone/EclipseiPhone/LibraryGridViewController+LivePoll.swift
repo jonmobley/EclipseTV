@@ -13,8 +13,6 @@ extension LibraryGridViewController {
     /// EclipseTV-only still cannot render a WKWebView.
     var canPresentQuestPollOverlay: Bool {
         LiveOutputRouting.canHostLivePoll(
-            airPlayConnected: ExternalDisplayManager.shared.isConnected,
-            eclipseTVOnline: TVLibraryStore.shared.isOnline,
             practiceMode: prefersDisconnectedLivePreview
         )
     }
@@ -52,6 +50,12 @@ extension LibraryGridViewController {
         if QuestPollSessionStore.shared.practiceMembershipId == item.id {
             livePollGateMembershipId = nil
             practiceLivePoll(item)
+            return
+        }
+        // A photo or Show tool is cleared below, but an overlay owning the phone
+        // hero is not — say so rather than arm a gate that cannot paint.
+        guard !livePollGateBlockedByPhoneHeroOverlay else {
+            onStatusMessage?("Stop what's live on this iPhone to use this poll.")
             return
         }
         livePollGateMembershipId = item.id
@@ -128,22 +132,19 @@ extension LibraryGridViewController {
         liveHeader.hideLivePollGate()
         let code = QuestPollSessionStore.shared.session?.code
         let page = QuestPollConfig.previewPage(code: code)
-        let title = QuestPollSessionStore.shared.session?.pollTitle ?? "Live Poll"
+        let title = QuestPollSessionStore.shared.session?.deckTitle ?? "Live Poll"
         let canShow = !WarmWebSessionPool.shared.isAdopted(pageId: page.id)
         if canShow {
             WarmWebSessionPool.shared.warmIfNeeded(for: page)
         }
         // LIVE means an external display owns the output. Phone-only / Practice
         // preview shows the projector page without the red chip.
-        let onExternal = ExternalDisplayManager.shared.isConnected
         liveHeader.configureOverlay(
             title: title,
             systemImage: "chart.bar.fill",
             fillColor: UIColor(white: 0.12, alpha: 1),
             keepWebPreview: canShow,
-            showsLiveBadge: LiveOutputRouting.showsLivePollLiveBadge(
-                externalDisplayConnected: onExternal
-            )
+            showsLiveBadge: LiveOutputRouting.showsLivePollLiveBadge()
         )
         if canShow {
             liveHeader.showWebPreview(pageId: page.id)
@@ -352,8 +353,8 @@ extension LibraryGridViewController {
             return
         }
         let nav = QuestPollHostViewController.makeNavigation(
-            onAdvance: { [weak self] action in
-                self?.sendQuestPollActions([action])
+            onAdvance: { [weak self] command in
+                self?.sendQuestPollCommands([command])
             },
             onEnd: { [weak self] in
                 self?.confirmEndQuestPoll()
@@ -435,7 +436,9 @@ extension LibraryGridViewController {
         if TVLibraryStore.shared.isOnline {
             message = "Live Poll needs AirPlay or HDMI. EclipseTV stays on the library."
         } else {
-            message = "Live Poll needs AirPlay, HDMI, or the phone preview."
+            // Name the Settings switch, not "the phone preview" — the user has to
+            // find "Practice Mode" to act on this.
+            message = "Live Poll needs AirPlay, HDMI, or Practice Mode."
         }
         let alert = UIAlertController(
             title: "Live Poll", message: message, preferredStyle: .alert

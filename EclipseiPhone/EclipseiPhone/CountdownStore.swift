@@ -175,6 +175,13 @@ final class CountdownStore {
         persist()
     }
 
+    /// Forgets every upload acknowledgement (zone loss, iCloud account switch).
+    func markAllNeedsUpload() {
+        guard !syncedIds.isEmpty else { return }
+        syncedIds.removeAll()
+        defaults.set(Array(syncedIds), forKey: syncedIdsKey)
+    }
+
     /// Records that the backend accepted this countdown's upload.
     func markSynced(id: UUID) {
         guard !syncedIds.contains(id.uuidString) else { return }

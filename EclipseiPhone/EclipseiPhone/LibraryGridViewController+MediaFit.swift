@@ -53,6 +53,7 @@ extension LibraryGridViewController {
         guard modeChanged || hadFraming else { return }
         MediaFramingStore.clear(forId: item.id)
         MediaFitSettings.setMode(mode, forId: item.id)
+        EclipseSyncController.shared.backend.scheduleMediaPrefsSave(libraryId: item.id)
         UISelectionFeedbackGenerator().selectionChanged()
         connectionManager.sendImageFit(id: item.id, isFill: mode == .fill)
         reloadLibraryGrid()
@@ -63,6 +64,7 @@ extension LibraryGridViewController {
     /// Saves a custom crop position, tells the Apple TV, and re-pushes when live.
     func applyFraming(_ framing: MediaFraming, to item: LibraryItemDTO) {
         MediaFramingStore.set(framing, forId: item.id)
+        EclipseSyncController.shared.backend.scheduleMediaPrefsSave(libraryId: item.id)
         UISelectionFeedbackGenerator().selectionChanged()
         connectionManager.sendImageFit(
             id: item.id,
@@ -78,6 +80,7 @@ extension LibraryGridViewController {
     func clearFraming(for item: LibraryItemDTO) {
         guard MediaFramingStore.hasFraming(forId: item.id) else { return }
         MediaFramingStore.clear(forId: item.id)
+        EclipseSyncController.shared.backend.scheduleMediaPrefsSave(libraryId: item.id)
         UISelectionFeedbackGenerator().selectionChanged()
         let isFill = MediaFitSettings.isFill(forId: item.id)
         connectionManager.sendImageFit(id: item.id, isFill: isFill)

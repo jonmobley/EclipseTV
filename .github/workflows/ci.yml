@@ -14,6 +14,10 @@ concurrency:
 defaults:
   run:
     shell: bash
+    # EclipseiPhone resolves local SPM packages via
+    # ../../eclipsepro/Packages/… — keep both repos as siblings under the
+    # workspace root.
+    working-directory: EclipseTV
 
 jobs:
   # The wire protocol is a verbatim copy in each project because the two apps don't
@@ -21,8 +25,15 @@ jobs:
   shared-sources:
     name: Shared sources in sync
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: EclipseTV
     steps:
-      - uses: actions/checkout@v7
+      - name: Checkout EclipseTV
+        uses: actions/checkout@v7
+        with:
+          path: EclipseTV
       - name: Verify duplicated sources match across targets
         run: Scripts/verify_shared_sources.sh
 
@@ -43,6 +54,7 @@ jobs:
             device_platform: iOS
             simulator_platform: iOS Simulator
             simulator_prefix: iPhone
+            needs_eclipsepro: true
           - name: Apple TV
             slug: appletv
             project: EclipseAppleTV/EclipseAppleTV.xcodeproj
@@ -51,9 +63,26 @@ jobs:
             device_platform: tvOS
             simulator_platform: tvOS Simulator
             simulator_prefix: Apple TV
+            needs_eclipsepro: false
 
     steps:
-      - uses: actions/checkout@v7
+      - name: Checkout EclipseTV
+        uses: actions/checkout@v7
+        with:
+          path: EclipseTV
+
+      # Private sibling packages (LivePollKit, EclipsePhoneCameraClient).
+      # Requires a classic/fine-grained PAT with Contents:read on eclipsepro,
+      # stored as repo secret ECLIPSEPRO_CHECKOUT_TOKEN.
+      - name: Checkout eclipsepro packages
+        if: matrix.needs_eclipsepro
+        uses: actions/checkout@v7
+        with:
+          repository: jonmobley/eclipsepro
+          # Until Live Poll merges to eclipsepro main, use the feature branch.
+          ref: feature/live-poll-merge
+          path: eclipsepro
+          token: ${{ secrets.ECLIPSEPRO_CHECKOUT_TOKEN }}
 
       - name: Select Xcode
         run: |
@@ -68,7 +97,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/Library/Caches/org.swift.swiftpm
-          key: spm-${{ hashFiles('**/Package.resolved') }}
+          key: spm-${{ hashFiles('EclipseTV/**/Package.resolved') }}
           restore-keys: spm-
 
       # Catches anything that compiles for the simulator but not for real hardware.
@@ -113,5 +142,5 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: test-results-${{ matrix.slug }}
-          path: TestResults-${{ matrix.slug }}.xcresult
+          path: EclipseTV/TestResults-${{ matrix.slug }}.xcresult
           retention-days: 7

@@ -36,10 +36,16 @@ extension LibraryGridViewController {
         return show
     }
 
-    /// Slide or Live Poll count for the live ribbon section.
+    /// Slide, Live Poll cue, or countdown-preset count for the live ribbon section.
+    ///
+    /// Live Poll is checked first throughout: its Practice / Start chrome owns the
+    /// hero even while a countdown clock keeps running on the projector.
     func liveSlideshowRibbonItemCount() -> Int {
         if showsLivePollRibbon {
             return livePollRibbonItemCount()
+        }
+        if showsCountdownRibbon {
+            return countdownRibbonItemCount()
         }
         guard showsLiveSlideshowRibbon else { return 0 }
         return SlideshowPlaybackController.shared.activeSlideIds.count
@@ -52,6 +58,10 @@ extension LibraryGridViewController {
     ) {
         if showsLivePollRibbon {
             configureLivePollRibbonCell(cell, at: indexPath)
+            return
+        }
+        if showsCountdownRibbon {
+            configureCountdownRibbonCell(cell, at: indexPath)
             return
         }
         let playback = SlideshowPlaybackController.shared
@@ -76,6 +86,10 @@ extension LibraryGridViewController {
     func handleLiveSlideshowRibbonTap(at indexPath: IndexPath) {
         if showsLivePollRibbon {
             handleLivePollRibbonTap(at: indexPath)
+            return
+        }
+        if showsCountdownRibbon {
+            handleCountdownRibbonTap(at: indexPath)
             return
         }
         SlideshowPlaybackController.shared.goToSlide(at: indexPath.item)
@@ -177,6 +191,9 @@ extension LibraryGridViewController {
         if showsLivePollRibbon {
             index = livePollRibbonIndex
             count = livePollRibbonItems.count
+        } else if showsCountdownRibbon {
+            index = countdownRibbonSelectedIndex()
+            count = countdownRibbonItemCount()
         } else {
             index = SlideshowPlaybackController.shared.currentSlideIndex
             count = SlideshowPlaybackController.shared.activeSlideIds.count
@@ -284,7 +301,7 @@ extension LibraryGridViewController {
         }
         guard showsInGridSlideshowRibbon, !rebuiltShowGrid else { return }
         guard let section = sectionIndex(for: .slideshowRibbon) else { return }
-        let expected = SlideshowPlaybackController.shared.activeSlideIds.count
+        let expected = liveSlideshowRibbonItemCount()
         let actual = showCollectionView.numberOfItems(inSection: section)
         if expected != actual {
             showCollectionView.reloadSections(IndexSet(integer: section))

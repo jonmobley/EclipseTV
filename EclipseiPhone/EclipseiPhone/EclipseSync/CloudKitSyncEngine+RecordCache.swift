@@ -14,16 +14,16 @@ extension CloudKitSyncEngine {
 
     /// Stores `record` so the next save of this id is an update, not an insert.
     func rememberLastKnown(_ record: CKRecord) {
-        lastKnownRecords[record.recordID] = record
+        lastKnownRecords.remember(record)
     }
 
     /// Drops a cached record after a confirmed delete.
     func forgetLastKnown(_ recordID: CKRecord.ID) {
-        lastKnownRecords[recordID] = nil
+        lastKnownRecords.forget(recordID)
     }
 
-    /// Server (or last saved) record for `recordID`, if this session has seen it.
+    /// Server (or last saved) record for `recordID`, if one is cached.
     func existingRecord(for recordID: CKRecord.ID) -> CKRecord? {
-        lastKnownRecords[recordID]
+        lastKnownRecords.record(for: recordID)
     }
 }

@@ -59,6 +59,13 @@ final class ImportedMediaStore {
             .map(\.cloudId)
     }
 
+    /// Record names for dirty-tracking seeds — every import that can reach iCloud.
+    var syncableIds: [String] {
+        records
+            .filter { !$0.isDeleted && $0.syncState != .localOnly }
+            .map(\.cloudId)
+    }
+
     // MARK: - Mutations
 
     /// Registers a local import for CloudKit upload.
@@ -111,6 +118,20 @@ final class ImportedMediaStore {
         } else {
             records.append(remote)
         }
+        persist()
+    }
+
+    /// Re-queues every import that has local bytes (zone loss, account switch).
+    ///
+    /// Only `.synced` rows are flipped; `.remoteOnly` bytes lived solely in the
+    /// previous account and cannot be re-uploaded from this device.
+    func markAllNeedsUpload() {
+        var changed = false
+        for index in records.indices where records[index].syncState == .synced {
+            records[index].syncState = .pendingUpload
+            changed = true
+        }
+        guard changed else { return }
         persist()
     }
 

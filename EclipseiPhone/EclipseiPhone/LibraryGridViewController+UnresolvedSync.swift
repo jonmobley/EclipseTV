@@ -11,14 +11,9 @@ extension LibraryGridViewController {
 
     /// Starts an on-demand CloudKit download when the user taps a placeholder tile.
     func requestUnresolvedDownloadIfNeeded(id: String) {
+        // A placeholder's id is either a cloud id or a library filename, and both
+        // stores already match on either, so one lookup each covers both forms.
         let downloadId: String? = {
-            if let imported = ImportedMediaStore.shared.record(id: id) {
-                return imported.cloudId
-            }
-            if let capture = CaptureStore.shared.record(id: id) {
-                return capture.id
-            }
-            // Library filename that maps to an import/capture cloud id.
             if let imported = ImportedMediaStore.shared.record(id: id) {
                 return imported.cloudId
             }

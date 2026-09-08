@@ -137,16 +137,22 @@ final class ShowLiveSession: NSObject {
 
     // MARK: - CloudKit identity
 
+    /// Resolves the iCloud user hash that scopes peers to one account.
+    ///
+    /// Leaves `userHash` nil where CloudKit is unreachable — advertising,
+    /// browsing, and invitations all already require it, so Show Live simply
+    /// stays off rather than trapping on an unentitled container.
     func refreshCloudKitUser(then completion: (() -> Void)? = nil) {
         if userHash != nil {
             completion?()
             return
         }
+        guard let container = CloudKitAvailability.container() else {
+            completion?()
+            return
+        }
         Task { @MainActor in
             do {
-                let container = CKContainer(
-                    identifier: CloudKitSchema.containerIdentifier
-                )
                 let recordID = try await container.userRecordID()
                 self.userHash = ShowLiveRouting.hashedUserId(recordID.recordName)
             } catch {
@@ -250,8 +256,14 @@ final class ShowLiveSession: NSObject {
         switch state {
         case .connected:
             if role == .none, foundDirector {
-                role = .remote
-                directorDeviceName = peer.displayName
+                // Connecting always ends discovery; taking the operator role is
+                // the separate question of whether the director will act.
+                if ShowLiveRouting.shouldBecomeRemoteOperator(
+                    foundDirector: foundDirector
+                ) {
+                    role = .remote
+                    directorDeviceName = peer.displayName
+                }
                 stopBrowsing()
                 stopElection()
                 notifyChanged()

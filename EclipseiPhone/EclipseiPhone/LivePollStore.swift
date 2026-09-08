@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import LivePollKit
 import os.log
 
 /// Persists per-Show Live Poll cards as JSON metadata in UserDefaults.
@@ -71,8 +72,8 @@ final class LivePollStore {
         return item
     }
 
-    /// Rebinds an existing card to another QuestPoll deck.
-    func replace(id: UUID, with summary: QuestPollSummary) {
+    /// Rebinds an existing card to another account deck.
+    func replace(id: UUID, with summary: LivePollDeckSummary) {
         guard let index = polls.firstIndex(where: { $0.id == id }) else { return }
         let trimmed = summary.title.trimmingCharacters(in: .whitespacesAndNewlines)
         polls[index].pollId = summary.id
@@ -113,6 +114,13 @@ final class LivePollStore {
     }
 
     /// Records that the backend accepted this card's upload.
+    /// Forgets every upload acknowledgement (zone loss, iCloud account switch).
+    func markAllNeedsUpload() {
+        guard !syncedIds.isEmpty else { return }
+        syncedIds.removeAll()
+        defaults.set(Array(syncedIds), forKey: syncedIdsKey)
+    }
+
     func markSynced(id: UUID) {
         guard !syncedIds.contains(id.uuidString) else { return }
         syncedIds.insert(id.uuidString)

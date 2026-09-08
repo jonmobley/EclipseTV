@@ -125,4 +125,33 @@ struct ShowLiveRoutingTests {
             ShowLiveRouting.shouldCommandDirector(isRemoteOperator: false) == false
         )
     }
+
+    @Test func operatorRoleWaitsForADirectorThatActsOnCommands() {
+        #expect(
+            ShowLiveRouting.shouldBecomeRemoteOperator(
+                foundDirector: true,
+                directorAppliesSelects: true
+            )
+        )
+        // Giving up local output to a director that drops commands loses the tap
+        // on both devices, so the peer stays a plain device instead.
+        #expect(
+            ShowLiveRouting.shouldBecomeRemoteOperator(
+                foundDirector: true,
+                directorAppliesSelects: false
+            ) == false
+        )
+        #expect(
+            ShowLiveRouting.shouldBecomeRemoteOperator(
+                foundDirector: false,
+                directorAppliesSelects: true
+            ) == false
+        )
+    }
+
+    @Test func operatorRoleIsOffUntilTheDirectorObservesSelects() {
+        // Paired with the missing `incomingSelectNotification` observer: both
+        // must change together, so this fails the moment one moves alone.
+        #expect(ShowLiveRouting.directorAppliesSelects == false)
+    }
 }

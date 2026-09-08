@@ -140,6 +140,11 @@ final class LocalAlbumStore {
         albums.removeAll { $0.id == id }
         guard albums.count != before else { return }
         persist()
+        // Prune the LWW clock here so both local deletes and remote tombstones drop
+        // it; otherwise every Show ever deleted leaves a key behind forever.
+        UserDefaults.standard.removeObject(
+            forKey: CloudKitSchema.showModifiedKey(for: id)
+        )
         if !EclipseSyncController.shared.isApplyingRemote {
             EclipseSyncController.shared.backend.scheduleShowDelete(id: id)
         }
@@ -535,7 +540,7 @@ final class LocalAlbumStore {
         if modifiedAt > .distantPast {
             UserDefaults.standard.set(
                 modifiedAt.timeIntervalSince1970,
-                forKey: "EclipseTV.cloudKit.showModified." + incoming.id.uuidString
+                forKey: CloudKitSchema.showModifiedKey(for: incoming.id)
             )
         }
         persist(changedAlbumId: incoming.id)

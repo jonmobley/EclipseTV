@@ -56,6 +56,39 @@ struct HomeHeaderBarPracticeChromeTests {
         bar.setConnectionState(.paused)
         #expect(bar.showsLiveOutputChrome == false)
     }
+
+    /// The Live Poll gate, Practice deck, and room all take the hero with
+    /// Practice Mode off, and that hero is the output — so it needs the controls.
+    @Test func lockAndBlackoutShowForAPhoneHostedLivePoll() {
+        let bar = HomeHeaderBar(frame: CGRect(x: 0, y: 0, width: 390, height: 52))
+        bar.setPreviewsWhenDisconnected(false)
+        bar.setShowModeChrome(true)
+        bar.setPresenting(false)
+        bar.setConnectionState(.paused)
+        bar.setLivePollOwnsPhoneHero(true)
+        #expect(bar.showsLiveOutputChrome == true)
+    }
+
+    @Test func lockAndBlackoutGoAwayWhenTheLivePollReleasesTheHero() {
+        let bar = HomeHeaderBar(frame: CGRect(x: 0, y: 0, width: 390, height: 52))
+        bar.setPreviewsWhenDisconnected(false)
+        bar.setShowModeChrome(true)
+        bar.setPresenting(false)
+        bar.setConnectionState(.paused)
+        bar.setLivePollOwnsPhoneHero(true)
+        bar.setLivePollOwnsPhoneHero(false)
+        #expect(bar.showsLiveOutputChrome == false)
+    }
+
+    @Test func aPhoneHostedLivePollStillAddsNoChromeOnHome() {
+        let bar = HomeHeaderBar(frame: CGRect(x: 0, y: 0, width: 390, height: 52))
+        bar.setPreviewsWhenDisconnected(false)
+        bar.setShowModeChrome(false)
+        bar.setPresenting(false)
+        bar.setConnectionState(.paused)
+        bar.setLivePollOwnsPhoneHero(true)
+        #expect(bar.showsLiveOutputChrome == false)
+    }
 }
 
 @MainActor

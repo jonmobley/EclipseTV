@@ -343,12 +343,13 @@ extension CameraLiveViewController {
     // MARK: - Private
 
     private func applyLiveBadgeAppearance() {
-        let live = Self.showsLiveBadge(
-            isCameraLive: ExternalDisplayManager.shared.isCameraLive
+        let state = CameraLiveBadgeState.resolve(
+            isCameraLive: ExternalDisplayManager.shared.isCameraLive,
+            hasProgramOutput: LiveOutputRouting.showsHeroLiveBadge()
         )
-        goLiveButton.isHidden = !live
+        goLiveButton.isHidden = state == .hidden
         goLiveButton.isUserInteractionEnabled = false
-        guard live else {
+        guard state != .hidden else {
             goLiveButton.configuration = nil
             return
         }
@@ -363,17 +364,22 @@ extension CameraLiveViewController {
             return attrs
         }
         config.baseForegroundColor = .white
-        let dot = UIImage.SymbolConfiguration(pointSize: 5, weight: .bold)
-        config.title = "LIVE"
-        config.image = UIImage(systemName: "circle.fill", withConfiguration: dot)
-        config.imagePadding = 4
-        config.baseBackgroundColor = .systemRed
-        goLiveButton.accessibilityLabel = "Live"
+        let practice = state == .practice
+        config.title = practice ? "PRACTICE" : "LIVE"
+        config.baseBackgroundColor = practice ? .systemGray : .systemRed
+        if !practice {
+            // The pulsing red dot is the on-air tell; rehearsal does not earn it.
+            let dot = UIImage.SymbolConfiguration(pointSize: 5, weight: .bold)
+            config.image = UIImage(systemName: "circle.fill", withConfiguration: dot)
+            config.imagePadding = 4
+        }
+        goLiveButton.accessibilityLabel = practice ? "Practice" : "Live"
         goLiveButton.accessibilityHint = nil
         goLiveButton.configuration = config
     }
 
-    /// LIVE pill is only for the live camera feed, not a parked cutaway still.
+    /// A pill shows only for the live camera feed, not a parked cutaway still.
+    /// Which pill — LIVE or PRACTICE — is `CameraLiveBadgeState`.
     static func showsLiveBadge(isCameraLive: Bool) -> Bool { isCameraLive }
 
     /// Hint is shown on open (preview) and while a cutaway still is on program.

@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import LivePollKit
 
 /// How a Live Poll session update should refresh the Show UI.
 enum QuestPollSessionChange: Equatable {
@@ -21,7 +22,7 @@ enum QuestPollSessionChange: Equatable {
 
 /// Fields that decide Live Poll chrome vs ribbon vs tile updates.
 struct QuestPollSessionSnapshot: Equatable {
-    var session: QuestPollSession?
+    var session: LivePollSession?
     var membershipId: UUID?
     var questionCount: Int
     var practiceMembershipId: UUID?
@@ -43,8 +44,8 @@ extension QuestPollSessionChange {
         }
         if isSessionChromeChange(from: old, to: new) { return .session }
         if cue(of: old) != cue(of: new) { return .cue }
-        if voteCount(of: old) != voteCount(of: new) { return .tile }
-        // Question payload / host flags can change every 2s status poll
+        if answeredCount(of: old) != answeredCount(of: new) { return .tile }
+        // Question payload / remainingMs can change every 2s status poll
         // without a visible tile or ribbon change.
         return .none
     }
@@ -58,9 +59,8 @@ extension QuestPollSessionChange {
         (old.session == nil) != (new.session == nil)
             || old.membershipId != new.membershipId
             || old.practiceMembershipId != new.practiceMembershipId
-            || old.session?.id != new.session?.id
-            || old.session?.code != new.session?.code
-            || old.session?.pollId != new.session?.pollId
+            || old.session?.joinCode != new.session?.joinCode
+            || old.session?.deckTitle != new.session?.deckTitle
     }
 
     private static func cue(
@@ -69,14 +69,14 @@ extension QuestPollSessionChange {
         let count = QuestPollRibbon.items(questionCount: snap.questionCount).count
         guard let session = snap.session else { return (0, count) }
         let index = QuestPollRibbon.currentIndex(
-            status: session.status,
+            phase: session.phase,
             questionIndex: session.questionIndex,
             questionCount: snap.questionCount
         )
         return (index, count)
     }
 
-    private static func voteCount(of snap: QuestPollSessionSnapshot) -> Int {
-        snap.session?.voteCount ?? 0
+    private static func answeredCount(of snap: QuestPollSessionSnapshot) -> Int {
+        snap.session?.answeredCount ?? 0
     }
 }

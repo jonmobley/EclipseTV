@@ -142,7 +142,7 @@ struct WebVideoLinkTests {
             "https://www.youtube.com/feed",
             "https://vimeo.com/watch",
             "https://vimeo.com/channels/staffpicks",
-            "https://questpoll.live/present?code=ABCD"
+            "https://quest.eclipseapp.com/present?code=ABCD"
         ]
         for raw in samples {
             #expect(WebVideoLink(url: url(raw)) == nil, "Unexpected parse of \(raw)")

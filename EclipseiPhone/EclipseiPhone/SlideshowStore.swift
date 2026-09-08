@@ -137,6 +137,13 @@ final class SlideshowStore {
     }
 
     /// Records that the backend accepted this slideshow's upload.
+    /// Forgets every upload acknowledgement (zone loss, iCloud account switch).
+    func markAllNeedsUpload() {
+        guard !syncedIds.isEmpty else { return }
+        syncedIds.removeAll()
+        defaults.set(Array(syncedIds), forKey: syncedIdsKey)
+    }
+
     func markSynced(id: UUID) {
         guard !syncedIds.contains(id.uuidString) else { return }
         syncedIds.insert(id.uuidString)

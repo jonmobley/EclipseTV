@@ -195,8 +195,11 @@ final class LibraryGridViewController: UIViewController {
     /// Ordered Show-grid surface ids (tools, members, slideshows, Live Polls).
     /// Add is not included.
     var openShowSurfaceIds: [String] {
-        guard let album = openShow else { return [] }
+        // Both migrations rewrite the album's surface, so read `openShow` after
+        // them or the first build renders the pre-migration snapshot.
         LivePollStore.shared.dropLegacyToolTokensIfNeeded()
+        CountdownStore.shared.migrateLegacyToolTokensIfNeeded()
+        guard let album = openShow else { return [] }
         let slideshows = openShowSlideshows.map { ShowSlideshowToken.token(for: $0.id) }
         let livePolls = openShowLivePolls.map { ShowLivePollToken.token(for: $0.id) }
         return album.resolvedSurfaceIds(slideshowIds: slideshows, livePollIds: livePolls)
@@ -229,9 +232,10 @@ final class LibraryGridViewController: UIViewController {
             && !isSelecting
     }
 
-    /// Live slideshow or Live Poll ribbon is on for the open Show.
+    /// Live slideshow, Live Poll, or countdown ribbon is on for the open Show.
     var showsLiveSlideshowRibbon: Bool {
         if showsLivePollRibbon { return true }
+        if showsCountdownRibbon { return true }
         guard isShowMode,
               let id = SlideshowPlaybackController.shared.activeSlideshowId,
               let show = SlideshowStore.shared.slideshow(id: id),
@@ -298,6 +302,9 @@ final class LibraryGridViewController: UIViewController {
     var onBlackLiveChanged: ((Bool) -> Void)?
     /// Fired when live-output lock toggles (header amber chrome).
     var onLiveOutputLockChanged: ((Bool) -> Void)?
+    /// Fired when a phone-hosted Live Poll takes or releases the hero, so the
+    /// header can offer Lock / Blackout for it even with Practice Mode off.
+    var onLivePollPhoneHeroChanged: ((Bool) -> Void)?
 
     /// Extra bottom inset reserved for the home mini player.
     var miniPlayerBottomInset: CGFloat = 0 {
@@ -465,6 +472,7 @@ final class LibraryGridViewController: UIViewController {
             self?.refreshLiveHeader()
         }
         LivePollStore.shared.dropLegacyToolTokensIfNeeded()
+        CountdownStore.shared.migrateLegacyToolTokensIfNeeded()
         registerForTraitChanges(
             [UITraitVerticalSizeClass.self, UITraitHorizontalSizeClass.self]
         ) { (self: Self, _: UITraitCollection) in
@@ -887,6 +895,7 @@ final class LibraryGridViewController: UIViewController {
         let blackLive = isBlackSelected && !mgr.isOverlayLive
         onBlackLiveChanged?(blackLive)
         onLiveOutputLockChanged?(isLiveOutputLocked)
+        onLivePollPhoneHeroChanged?(isLivePollPhoneHeroActive)
         liveHeader.setOutputLocked(isLiveOutputLocked)
         guard showsLiveHero else {
             // Never leave a Show-mode live preview over the Home marketing carousel.

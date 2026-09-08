@@ -9,6 +9,18 @@ import Testing
 import Foundation
 @testable import EclipseAppleTV
 
+/// Main actor because `replaceAll` posts `didChangeNotification`, and the live
+/// `ImageViewController` in the test host observes it and calls `reloadData()`.
+/// On tvOS that reaches the focus engine, which aborts the process off the main
+/// thread — Swift Testing runs bodies on background tasks, so these two tests
+/// crashed the host whenever the app had already reached grid mode. That made it
+/// look like a flake: the surviving simulator clone's pass is what the result
+/// bundle recorded, while `xcodebuild` still failed the run.
+///
+/// This mirrors production rather than working around it. `ConnectionManager`
+/// hops to `DispatchQueue.main` before `didReceiveLibraryAlbums`, so `replaceAll`
+/// is only ever called on the main thread outside of tests.
+@MainActor
 struct CompanionAlbumStoreTests {
 
     @Test func displayAlbumsFilterByModeAndLiveIds() {

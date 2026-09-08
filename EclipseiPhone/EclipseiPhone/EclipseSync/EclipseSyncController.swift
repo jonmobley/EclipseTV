@@ -32,21 +32,15 @@ final class EclipseSyncController {
 
     /// CloudKit where it can run, a disabled stand-in where it can't.
     ///
-    /// The XCTest host is signed without the iCloud capability, and
-    /// `CKContainer(identifier:)` traps on an identifier that isn't in the app's
-    /// entitlements — so building the CloudKit backend there killed the process
-    /// before any test could run.
+    /// See `CloudKitAvailability` for why an unentitled build must not build the
+    /// CloudKit backend at all.
     private static func makeDefaultBackend() -> SyncBackend {
-        guard !isRunningUnitTests else {
+        guard let container = CloudKitAvailability.container() else {
             return DisabledSyncBackend(
                 reason: "Eclipse Sync is off in the test host."
             )
         }
-        return CloudKitSyncEngine()
-    }
-
-    private static var isRunningUnitTests: Bool {
-        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+        return CloudKitSyncEngine(container: container)
     }
 
     /// Boots the sync backend. Call once from `AppDelegate`.
@@ -81,6 +75,11 @@ final class EclipseSyncController {
         if let engine = backend as? CloudKitSyncEngine {
             await engine.account.refresh()
         }
+    }
+
+    /// Pulls the contents of a Show the user just accepted a `CKShare` for.
+    func fetchAcceptedShares() {
+        (backend as? CloudKitSyncEngine)?.sharedEngineHost.fetchChangesNow()
     }
 
     /// Injects a backend (unit tests / future SaaS).

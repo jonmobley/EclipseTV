@@ -34,7 +34,11 @@ struct CaptureStoreUploadFilterTests {
         #expect(!store.idsNeedingUpload.contains("local-1"))
     }
 
-    @Test func pendingAndSyncedCapturesAreIncluded() throws {
+    /// A `.synced` capture must not be re-enqueued: `makeMediaRecord` stamps a fresh
+    /// `modifiedAt`, so doing so rewrote every record on each foreground and made
+    /// other devices re-fetch them with their assets. Preference edits reach CloudKit
+    /// through `CloudKitMediaDirtyStore` instead.
+    @Test func onlyPendingCapturesAreEnqueued() throws {
         let store = try makeStore()
         store.upsert(CaptureRecord(
             id: "pending-1",
@@ -53,6 +57,27 @@ struct CaptureStoreUploadFilterTests {
 
         let ids = Set(store.idsNeedingUpload)
         #expect(ids.contains("pending-1"))
-        #expect(ids.contains("synced-1"))
+        #expect(!ids.contains("synced-1"))
+    }
+
+    @Test func syncableIdsCoverEverythingExceptLocalOnly() throws {
+        let store = try makeStore()
+        for (id, state) in [
+            ("pending-1", CaptureSyncState.pendingUpload),
+            ("synced-1", .synced),
+            ("remote-1", .remoteOnly),
+            ("local-1", .localOnly)
+        ] {
+            store.upsert(CaptureRecord(
+                id: id,
+                isVideo: false,
+                fileExtension: "jpg",
+                syncState: state
+            ))
+            store.setSyncState(id: id, state)
+        }
+
+        let ids = Set(store.syncableIds)
+        #expect(ids == ["pending-1", "synced-1", "remote-1"])
     }
 }

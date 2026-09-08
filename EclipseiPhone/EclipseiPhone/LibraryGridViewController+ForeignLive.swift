@@ -137,7 +137,7 @@ extension LibraryGridViewController {
     private func configureForeignLiveContent() {
         let mgr = ExternalDisplayManager.shared
         if mgr.isQuestPollLive {
-            let title = QuestPollSessionStore.shared.session?.pollTitle ?? "Live Poll"
+            let title = QuestPollSessionStore.shared.session?.deckTitle ?? "Live Poll"
             foreignLiveHeader.configureOverlay(
                 title: title,
                 systemImage: "chart.bar.fill",

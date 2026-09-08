@@ -18,6 +18,7 @@ import os.log
 final class CloudKitSharedSyncHost: NSObject, CKSyncEngineDelegate {
 
     private let container: CKContainer
+    private let sharedZones: CloudKitSharedZoneIndex
     private var engine: CKSyncEngine?
     private let stateKey = "EclipseTV.cloudKit.sharedSyncEngineState"
     private let logger = Logger(
@@ -26,8 +27,19 @@ final class CloudKitSharedSyncHost: NSObject, CKSyncEngineDelegate {
     )
     private var didStart = false
 
-    init(container: CKContainer) {
+    init(container: CKContainer, sharedZones: CloudKitSharedZoneIndex) {
         self.container = container
+        self.sharedZones = sharedZones
+    }
+
+    /// Tears the engine down and discards its change tokens.
+    ///
+    /// Without clearing `didStart`, a sign-in after an account switch left the old
+    /// account's engine in place and `start()` did nothing.
+    func reset() {
+        engine = nil
+        didStart = false
+        UserDefaults.standard.removeObject(forKey: stateKey)
     }
 
     /// Starts the shared-database engine when an iCloud account is available.
@@ -50,6 +62,20 @@ final class CloudKitSharedSyncHost: NSObject, CKSyncEngineDelegate {
         logger.info("Shared CKSyncEngine started")
     }
 
+    /// Pulls newly accepted shared zones without waiting for the next scheduled sync.
+    func fetchChangesNow() {
+        guard let engine else { return }
+        Task { [weak self] in
+            do {
+                try await engine.fetchChanges()
+            } catch {
+                self?.logger.error(
+                    "Shared fetch failed: \(error.localizedDescription)"
+                )
+            }
+        }
+    }
+
     func handleEvent(_ event: CKSyncEngine.Event, syncEngine: CKSyncEngine) async {
         switch event {
         case .stateUpdate(let update):
@@ -64,6 +90,9 @@ final class CloudKitSharedSyncHost: NSObject, CKSyncEngineDelegate {
             defer { EclipseSyncController.shared.isApplyingRemote = false }
             for modification in changes.modifications {
                 let record = modification.record
+                // Remember the owner's zone: it is the only way to address this
+                // record again, and it marks the Show as one we must not re-upload.
+                sharedZones.note(record)
                 switch record.recordType {
                 case CloudKitSchema.RecordType.show:
                     if let album = CloudKitRecordMapper.album(from: record) {
