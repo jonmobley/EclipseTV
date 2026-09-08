@@ -39,6 +39,9 @@ final class LiveHeaderView: UIView {
     var screensaverPreview: SeamlessLoopPlayerView?
     /// In-hero still or muted loop behind the countdown clock.
     var countdownBackground: CountdownBackgroundView?
+    /// When the hero stops waiting on a countdown background and shows the clock
+    /// anyway. Nil once the background is on screen or gone.
+    var countdownBackgroundDeadline: Date?
     /// In-hero library video (phone-only live; cleared when AirPlay owns playback).
     var libraryVideoHost: UIView?
     var libraryVideoPlayer: AVPlayer?
