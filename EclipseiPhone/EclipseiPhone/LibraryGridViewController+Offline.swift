@@ -68,7 +68,7 @@ extension LibraryGridViewController {
         refreshLiveHeader()
     }
 
-    /// Selects an item as live without the Eclipse TV app (AirPlay remember / push).
+    /// Selects an item as live without the EclipseTV app (AirPlay remember / push).
     func presentOfflineLive(for item: LibraryItemDTO) {
         if item.isVideo {
             if let localURL = LocalMediaStore.shared.localURL(forId: item.id) {
@@ -236,7 +236,7 @@ extension LibraryGridViewController {
     func presentNotConnectedAlert() {
         let alert = UIAlertController(
             title: "EclipseTV Not Linked",
-            message: "This action needs a link to the Eclipse TV app (pairing code). "
+            message: "This action needs a link to the EclipseTV app (Pairing Code). "
                 + "AirPlay alone is enough to present, but not for this.",
             preferredStyle: .alert
         )

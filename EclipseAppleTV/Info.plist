@@ -37,7 +37,7 @@
     <key>LSApplicationCategoryType</key>
     <string>public.app-category.entertainment</string>
     <key>NSLocalNetworkUsageDescription</key>
-    <string>Eclipse TV needs access to the local network to receive images from your iPhone</string>
+    <string>EclipseTV needs access to the local network to receive images from your iPhone</string>
     <key>NSBonjourServices</key>
     <array>
         <string>_eclipse-share._tcp</string>
