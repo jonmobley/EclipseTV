@@ -316,7 +316,7 @@ extension iPhoneMainViewController: AspectCropDelegate {
                                          croppedStill: UIImage,
                                          replacingItemId: String?) {
         guard previewSize.width > 0, previewSize.height > 0 else {
-            showTemporaryStatus("Couldn't crop that video. Try another.")
+            showPresentationToast("Couldn't crop that video. Try another.")
             if replacingItemId == nil { cleanupTempFile(at: sourceURL) }
             pendingEditItemId = nil
             return
@@ -324,7 +324,7 @@ extension iPhoneMainViewController: AspectCropDelegate {
 
         Task { @MainActor in
             guard let videoSize = await MediaAspect.videoDisplaySize(at: sourceURL) else {
-                self.showTemporaryStatus("Couldn't crop that video. Try another.")
+                self.showPresentationToast("Couldn't crop that video. Try another.")
                 if replacingItemId == nil { self.cleanupTempFile(at: sourceURL) }
                 self.pendingEditItemId = nil
                 return
@@ -355,7 +355,7 @@ extension iPhoneMainViewController: AspectCropDelegate {
 
                 if let editId = replacingItemId {
                     self.pendingEditItemId = nil
-                    self.statusLabel.alpha = 0
+                    self.removePresentationToastIfPresent()
                     self.replaceEditedVideo(
                         at: croppedURL, itemId: editId, thumbnail: croppedThumb
                     )
@@ -369,7 +369,7 @@ extension iPhoneMainViewController: AspectCropDelegate {
                     )
                 }
             } catch {
-                self.showTemporaryStatus("Couldn't crop that video. Try another.")
+                self.showPresentationToast("Couldn't crop that video. Try another.")
                 if replacingItemId == nil { self.cleanupTempFile(at: sourceURL) }
                 self.pendingEditItemId = nil
             }
@@ -484,7 +484,10 @@ extension iPhoneMainViewController: VideoThumbnailPreviewDelegate {
         do {
             try thumbnailData.write(to: thumbnailURL)
             // Store the thumbnail path associated with the video
-            UserDefaults.standard.set(thumbnailURL.path, forKey: "customThumbnail_\(videoURL.lastPathComponent)")
+            UserDefaults.standard.set(
+                thumbnailURL.path,
+                forKey: DefaultsKeys.customThumbnail(fileName: videoURL.lastPathComponent)
+            )
         } catch {
             logger.error("Failed to save custom thumbnail: \(error.localizedDescription)")
         }

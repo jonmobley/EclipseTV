@@ -13,14 +13,14 @@ extension LibraryGridViewController {
     func beginCountdown(_ item: ShowCountdown) {
         guard ensureCountdownDestination() else { return }
         if sendShowLiveSelectIfOperator(.countdown, itemId: item.id.uuidString) {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            Haptics.impactLight()
             return
         }
         let clock = CountdownController.shared
         if ExternalDisplayManager.shared.isCountdownLive,
            clock.liveCountdownId == item.id {
             clock.toggleRunning()
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            Haptics.impactLight()
             return
         }
         presentCountdownLive(item)
@@ -31,7 +31,7 @@ extension LibraryGridViewController {
         guard ensureCountdownDestination() else { return }
         guard !blockLiveChangeIfLocked() else { return }
         if sendShowLiveSelectIfOperator(.countdown, itemId: item.id.uuidString) {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            Haptics.impactLight()
             return
         }
         isBlackSelected = false
@@ -42,7 +42,7 @@ extension LibraryGridViewController {
         CountdownController.shared.present(item)
         ExternalDisplayManager.shared.presentCountdown()
         announceAirPlayOverlayIfLinked()
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptics.impactLight()
         reloadLibraryGrid()
         refreshLiveHeader()
         refreshSlideshowRibbonPresentation()
@@ -107,7 +107,7 @@ extension LibraryGridViewController {
             title: CountdownController.displayString(seconds: seconds),
             systemImage: "timer",
             thumbnail: nil,
-            fillColor: UIColor(white: 0.16, alpha: 1),
+            fillColor: .specialTile,
             isLive: selected,
             outlined: !selected,
             typeIcon: .countdown
@@ -146,11 +146,11 @@ extension LibraryGridViewController {
         // Re-applying the live length restarts the clock from full, and this chip is
         // the highlighted one — the operator reads it as inert, not as a reset.
         guard seconds != CountdownController.shared.duration else {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            Haptics.impactLight()
             return
         }
         applyCountdownDuration(seconds, to: clockTargetId())
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptics.impactLight()
         refreshCountdownChrome()
         refreshSlideshowRibbonPresentation()
     }
@@ -304,7 +304,7 @@ extension LibraryGridViewController {
             title: title,
             systemImage: "pencil",
             thumbnail: nil,
-            fillColor: UIColor(white: 0.16, alpha: 1),
+            fillColor: .specialTile,
             isLive: selected,
             outlined: !selected,
             typeIcon: .countdown
@@ -384,7 +384,7 @@ extension LibraryGridViewController {
             return
         }
         applyCountdownDuration(seconds, to: itemId)
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptics.impactLight()
         refreshCountdownChrome()
         refreshSlideshowRibbonPresentation()
     }

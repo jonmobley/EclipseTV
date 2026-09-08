@@ -1,9 +1,8 @@
 //
 //  RemoteThumbnailStore.swift
-//  EclipseRemote
+//  Eclipse
 //
-//  Description: Fetches and caches media PNG thumbnails from the Mac remote.
-//  Thread Safety: Main actor — UI-facing ObservableObject.
+//  Copyright © 2026 Moxie LLC. All rights reserved.
 //
 
 import Foundation

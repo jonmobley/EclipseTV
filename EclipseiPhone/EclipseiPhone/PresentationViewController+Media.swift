@@ -119,7 +119,7 @@ extension PresentationViewController {
         }
 
         videoReadyObservation = nil
-        let player = makePresentationPlayer(
+        let (player, looper) = makePresentationPlayer(
             url: url, isMuted: isMuted, isLooping: isLooping
         )
         let layer = AVPlayerLayer(player: player)
@@ -127,19 +127,13 @@ extension PresentationViewController {
         mediaContentView.layer.insertSublayer(layer, at: 0)
 
         self.player = player
+        self.playerLooper = looper
         self.playerLayer = layer
         applyMediaLayout()
         installVideoTransportObserver()
 
-        if isLooping {
-            loopObserver = NotificationCenter.default.addObserver(
-                forName: .AVPlayerItemDidPlayToEndTime,
-                object: player.currentItem,
-                queue: .main
-            ) { [weak player] _ in
-                player?.seek(to: .zero)
-                player?.play()
-            }
+        if isLooping, looper == nil {
+            loopObserver = makeSeekToZeroLoopObserver(for: player)
         }
 
         AirPlayVideoTransport.start(
@@ -147,23 +141,53 @@ extension PresentationViewController {
         )
     }
 
-    /// Builds an `AVPlayer` from a prewarmed item when available, else from `url`.
+    /// Builds the AirPlay player from a prewarmed item when available, else from `url`.
+    ///
+    /// Looping uses `AVQueuePlayer` + `AVPlayerLooper`, the same gapless mechanism
+    /// EclipseTV uses, so a looped video has no visible seam on either output. The
+    /// looper is returned so the caller can retain it; a plain `AVPlayer` with a
+    /// seek-to-zero observer is the fallback only when no looper could be built.
     func makePresentationPlayer(
         url: URL,
         isMuted: Bool,
         isLooping: Bool
-    ) -> AVPlayer {
+    ) -> (player: AVPlayer, looper: AVPlayerLooper?) {
+        let item = PresentationPrewarmer.shared.takeItem(matching: url)
+            ?? AVPlayerItem(url: url)
         let player: AVPlayer
-        if let item = PresentationPrewarmer.shared.takeItem(matching: url) {
-            player = AVPlayer(playerItem: item)
+        var looper: AVPlayerLooper?
+        if isLooping {
+            let queue = AVQueuePlayer()
+            queue.actionAtItemEnd = .advance
+            let candidate = AVPlayerLooper(player: queue, templateItem: item)
+            if candidate.status == .failed {
+                queue.removeAllItems()
+                queue.insert(item, after: nil)
+                queue.actionAtItemEnd = .none
+            } else {
+                looper = candidate
+            }
+            player = queue
         } else {
-            player = AVPlayer(url: url)
+            player = AVPlayer(playerItem: item)
+            player.actionAtItemEnd = .pause
         }
         player.isMuted = isMuted
-        player.actionAtItemEnd = isLooping ? .none : .pause
         AirPlayVideoTransport.configureLayerOnlyPlayback(on: player)
         AirPlayVideoTransport.configurePlaybackTiming(on: player, url: url)
-        return player
+        return (player, looper)
+    }
+
+    /// Seek-to-zero loop used only when `AVPlayerLooper` is unavailable.
+    func makeSeekToZeroLoopObserver(for player: AVPlayer) -> NSObjectProtocol {
+        NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemDidPlayToEndTime,
+            object: player.currentItem,
+            queue: .main
+        ) { [weak player] _ in
+            player?.seek(to: .zero)
+            player?.play()
+        }
     }
 
     /// Moves the incoming overlay player onto the primary surface without rebuilding.
@@ -180,6 +204,8 @@ extension PresentationViewController {
             loopObserver = loop
             incomingLoopObserver = nil
         }
+        playerLooper = incomingPlayerLooper
+        incomingPlayerLooper = nil
         incomingPlayer = nil
         incomingPlayerLayer = nil
         layer.removeFromSuperlayer()
@@ -239,6 +265,8 @@ extension PresentationViewController {
             NotificationCenter.default.removeObserver(loopObserver)
             self.loopObserver = nil
         }
+        playerLooper?.disableLooping()
+        playerLooper = nil
         player?.pause()
         player = nil
         playerLayer?.removeFromSuperlayer()

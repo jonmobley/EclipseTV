@@ -290,7 +290,7 @@ extension LibraryGridViewController {
                 title: "Screensaver",
                 systemImage: ScreensaverStore.isVideo ? "play.fill" : "photo.fill",
                 thumbnail: ScreensaverStore.poster,
-                fillColor: UIColor(white: 0.16, alpha: 1),
+                fillColor: .specialTile,
                 isLive: live,
                 isLocked: isLiveOutputLocked,
                 thumbnailContentMode: .scaleAspectFill,
@@ -306,7 +306,7 @@ extension LibraryGridViewController {
                 title: "Background",
                 systemImage: "photo.fill",
                 thumbnail: LogoStore.shared.image,
-                fillColor: UIColor(white: 0.16, alpha: 1),
+                fillColor: .specialTile,
                 isLive: live,
                 isLocked: isLiveOutputLocked,
                 thumbnailContentMode: .scaleAspectFill,
@@ -368,7 +368,7 @@ extension LibraryGridViewController {
                 title: page.title,
                 systemImage: isVideoLink ? "play.rectangle.fill" : "safari",
                 thumbnail: WebThumbnailStore.shared.image(for: page.id),
-                fillColor: UIColor(white: 0.16, alpha: 1),
+                fillColor: .specialTile,
                 isLive: live,
                 isLocked: isLiveOutputLocked,
                 typeIcon: isVideoLink ? .webVideo : .website
@@ -383,7 +383,7 @@ extension LibraryGridViewController {
                 title: doc.title,
                 systemImage: "doc.richtext",
                 thumbnail: PDFThumbnailStore.shared.image(for: doc.id),
-                fillColor: UIColor(white: 0.16, alpha: 1),
+                fillColor: .specialTile,
                 isLive: live,
                 isLocked: isLiveOutputLocked,
                 titleNumberOfLines: 1,
@@ -399,7 +399,7 @@ extension LibraryGridViewController {
                 title: "Syncing…",
                 systemImage: "icloud.and.arrow.down",
                 thumbnail: nil,
-                fillColor: UIColor(white: 0.16, alpha: 1),
+                fillColor: .specialTile,
                 isLive: false,
                 outlined: true,
                 typeIcon: nil
@@ -498,7 +498,7 @@ extension LibraryGridViewController {
         }
         guard !blockLiveChangeIfLocked() else { return }
         if sendShowLiveSelectIfOperator(.slideshow, itemId: slideshow.id.uuidString) {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            Haptics.impactLight()
             return
         }
         guard hasLiveOutputDestination else {
@@ -541,7 +541,7 @@ extension LibraryGridViewController {
     }
 
     private func startSlideshow(_ slideshow: Slideshow, startingAt: Int) {
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptics.impactLight()
         SlideshowPlaybackController.shared.play(
             slideshow,
             connectionManager: connectionManager,
@@ -852,7 +852,7 @@ extension LibraryGridViewController {
         let itemId = item.id
         cell.setRewindHandler { [weak self] in
             VideoResumeStore.shared.clear(for: itemId)
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            Haptics.impactLight()
             self?.reloadGridIfSafe()
         }
     }

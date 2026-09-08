@@ -25,7 +25,7 @@ final class CameraFramePickerCell: UICollectionViewCell {
     override init(frame: CGRect) {
         super.init(frame: frame)
         imageView.contentMode = .scaleAspectFit
-        imageView.backgroundColor = UIColor(white: 0.12, alpha: 1)
+        imageView.backgroundColor = .mediaPlaceholder
         imageView.layer.cornerRadius = 10
         imageView.clipsToBounds = true
         imageView.translatesAutoresizingMaskIntoConstraints = false
@@ -74,7 +74,7 @@ final class CameraFramePickerCell: UICollectionViewCell {
         accessibilityHint = nil
         titleLabel.textColor = .label
         iconView.tintColor = .white
-        imageView.backgroundColor = UIColor(white: 0.12, alpha: 1)
+        imageView.backgroundColor = .mediaPlaceholder
     }
 
     // MARK: - Configure
@@ -86,11 +86,11 @@ final class CameraFramePickerCell: UICollectionViewCell {
         titleLabel.textColor = .label
         imageView.image = image
         imageView.contentMode = .scaleAspectFit
-        imageView.backgroundColor = UIColor(white: 0.12, alpha: 1)
+        imageView.backgroundColor = .mediaPlaceholder
         iconView.image = nil
         iconView.isHidden = true
         imageView.layer.borderWidth = selected ? 3 : 0
-        imageView.layer.borderColor = UIColor.systemBlue.cgColor
+        imageView.layer.borderColor = UIColor.accent.cgColor
         setPrimaryMenu(nil)
         setMoreMenu(moreMenu)
         accessibilityLabel = selected ? "Frame, on ribbon" : "Frame"
@@ -102,14 +102,14 @@ final class CameraFramePickerCell: UICollectionViewCell {
     func configureAdd(menu: UIMenu?) {
         titleLabel.text = "Add"
         titleLabel.isHidden = false
-        titleLabel.textColor = .systemBlue
+        titleLabel.textColor = .accent
         imageView.image = nil
         imageView.contentMode = .scaleAspectFit
         imageView.backgroundColor = .tertiarySystemFill
         imageView.layer.borderWidth = 0
         let symbol = UIImage.SymbolConfiguration(pointSize: 28, weight: .medium)
         iconView.image = UIImage(systemName: "photo.badge.plus", withConfiguration: symbol)
-        iconView.tintColor = .systemBlue
+        iconView.tintColor = .accent
         iconView.isHidden = false
         setMoreMenu(nil)
         setPrimaryMenu(menu, accessibilityLabel: "Add")

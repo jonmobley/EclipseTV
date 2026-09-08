@@ -119,7 +119,7 @@ extension CameraLiveViewController {
         let mgr = ExternalDisplayManager.shared
         if mgr.parkedCameraStill == kind {
             mgr.resumeCameraFromStillPark()
-            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            Haptics.impactMedium()
             refreshLiveChrome()
             startAlwaysLiveRecordingIfNeeded()
             return
@@ -154,7 +154,7 @@ extension CameraLiveViewController {
 
     func parkStill(_ source: PresentationSource, kind: CameraParkedStill) {
         ExternalDisplayManager.shared.parkCameraOnStill(source, kind: kind)
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        Haptics.impactMedium()
         refreshLiveChrome()
     }
 }
@@ -187,15 +187,15 @@ extension CameraLiveViewController {
     }
 
     func presentCutawayActions(id: UUID, at indexPath: IndexPath) {
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        Haptics.impactMedium()
         let sheet = UIAlertController(
             title: "Quick Change", message: nil, preferredStyle: .actionSheet
         )
         sheet.addAction(UIAlertAction(title: "Replace…", style: .default) { [weak self] _ in
             self?.presentStillPicker(replacing: id)
         })
-        sheet.addAction(UIAlertAction(title: "Remove", style: .destructive) { [weak self] _ in
-            self?.removeCutaway(id)
+        sheet.addAction(UIAlertAction(title: "Delete", style: .destructive) { [weak self] _ in
+            self?.confirmDeleteCutaway(id)
         })
         sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         if let pop = sheet.popoverPresentationController,
@@ -204,6 +204,21 @@ extension CameraLiveViewController {
             pop.sourceRect = cell.bounds
         }
         present(sheet, animated: true)
+    }
+
+    /// The still is a stored copy, not a link to library media, so deleting it
+    /// confirms like Camera Frames does.
+    private func confirmDeleteCutaway(_ id: UUID) {
+        let alert = UIAlertController(
+            title: "Delete Quick Change?",
+            message: "This removes the still from the camera ribbon.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Delete", style: .destructive) { [weak self] _ in
+            self?.removeCutaway(id)
+        })
+        present(alert, animated: true)
     }
 
     func removeCutaway(_ id: UUID) {

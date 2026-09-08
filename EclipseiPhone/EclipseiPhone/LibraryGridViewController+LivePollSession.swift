@@ -59,7 +59,7 @@ extension LibraryGridViewController {
         guard QuestPollSessionStore.shared.session != nil else { return }
         let alert = UIAlertController(
             title: "End Poll?",
-            message: "Closes the room for everyone and leaves the projector.",
+            message: "Closes the room for everyone and takes the poll off the screen.",
             preferredStyle: .alert
         )
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))

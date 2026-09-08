@@ -1,10 +1,8 @@
 //
 //  RemoteAPIClient.swift
-//  EclipseRemoteProtocol
+//  Eclipse
 //
-//  Description: HTTP + SSE client for the Eclipse LAN phone-remote protocol.
-//               Uses Bearer auth on every request (no cookie jar required).
-//  Thread Safety: Actor-isolated; safe to call from UI or background tasks.
+//  Copyright © 2026 Moxie LLC. All rights reserved.
 //
 
 import Foundation

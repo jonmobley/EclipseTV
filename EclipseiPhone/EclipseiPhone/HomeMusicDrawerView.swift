@@ -157,7 +157,7 @@ final class HomeMusicDrawerView: UIView, UIGestureRecognizerDelegate {
     private func setupTab() {
         tab.translatesAutoresizingMaskIntoConstraints = false
         tab.backgroundColor = .secondarySystemBackground
-        tab.layer.cornerRadius = 16
+        tab.layer.cornerRadius = CornerRadii.card
         tab.layer.cornerCurve = .continuous
         tab.layer.maskedCorners = [.layerMinXMinYCorner, .layerMinXMaxYCorner]
         tab.clipsToBounds = true
@@ -340,7 +340,7 @@ final class HomeMusicDrawerView: UIView, UIGestureRecognizerDelegate {
         guard open != settledOpen else { return }
         settledOpen = open
         if animated {
-            UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+            Haptics.impactSoft()
         }
     }
 

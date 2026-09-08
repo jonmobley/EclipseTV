@@ -54,7 +54,7 @@ extension LibraryGridViewController {
     func applyVideoSetting(id: String, isLooping: Bool?, isMuted: Bool?) {
         store.updateVideoSetting(id: id, isLooping: isLooping, isMuted: isMuted)
         EclipseSyncController.shared.backend.scheduleMediaPrefsSave(libraryId: id)
-        UISelectionFeedbackGenerator().selectionChanged()
+        Haptics.selection()
         _ = connectionManager.sendVideoSetting(
             id: id, isLooping: isLooping, isMuted: isMuted
         )
@@ -73,7 +73,8 @@ extension LibraryGridViewController {
             return
         }
         let manager = ExternalDisplayManager.shared
-        guard manager.isConnected,
+        // Same projector signal as the go-live tap; `present` attaches on demand.
+        guard LiveOutputRouting.projectorAvailable,
               !manager.isOverlayLive,
               !manager.isJoinedLive else { return }
         let startAt = manager.currentVideoPlaybackTime(forItemId: id) ?? 0

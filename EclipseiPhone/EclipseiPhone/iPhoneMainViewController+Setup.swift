@@ -65,7 +65,7 @@ extension iPhoneMainViewController {
     }
 
     @objc private func handleJoinedAccountConflict() {
-        showTemporaryStatus(
+        showPresentationToast(
             "Join codes differ — this phone and Apple TV are on different albums."
         )
     }
@@ -260,21 +260,13 @@ extension iPhoneMainViewController {
         presentationAnchor.present(nav, animated: true)
     }
 
-    /// Adds the transfer status overlay (message + cancel) above the library content.
+    /// Adds the transfer Cancel control above the library content. Transfer status
+    /// itself is the shared presentation toast, centered so it clears this button.
     private func setupTransferOverlay() {
-        statusLabel.translatesAutoresizingMaskIntoConstraints = false
         cancelButton.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(statusLabel)
         view.addSubview(cancelButton)
 
         NSLayoutConstraint.activate([
-            statusLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            statusLabel.centerYAnchor.constraint(equalTo: view.centerYAnchor),
-            statusLabel.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor, constant: 40),
-            statusLabel.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -40),
-            statusLabel.heightAnchor.constraint(greaterThanOrEqualToConstant: 44),
-            statusLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 220),
-
             cancelButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             cancelButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -24),
             cancelButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 40),
@@ -317,7 +309,7 @@ extension iPhoneMainViewController {
         cameraVC.modalPresentationStyle = .fullScreen
         present(cameraVC, animated: true)
         if TVLibraryStore.shared.isOnline, ExternalDisplayManager.shared.isConnected {
-            showTemporaryStatus("Showing on AirPlay. EclipseTV is parked.")
+            showPresentationToast("Showing on AirPlay. EclipseTV is parked.")
         }
     }
 

@@ -16,7 +16,7 @@ extension LibraryGridViewController {
     func toggleLiveOutputLock() {
         isLiveOutputLocked.toggle()
         applyLiveOutputLockChrome()
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        Haptics.impactMedium()
     }
 
     /// Updates header, hero stroke, and visible tile accents for the lock state.
@@ -33,7 +33,7 @@ extension LibraryGridViewController {
     @discardableResult
     func blockLiveChangeIfLocked() -> Bool {
         guard isLiveOutputLocked else { return false }
-        UINotificationFeedbackGenerator().notificationOccurred(.warning)
+        Haptics.warning()
         showPresentationToast("Live output is locked")
         return true
     }

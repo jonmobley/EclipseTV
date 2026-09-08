@@ -1,9 +1,8 @@
 //
 //  QRScannerView.swift
-//  EclipseRemote
+//  Eclipse
 //
-//  Description: Camera-based QR scanner for Eclipse connect URLs.
-//  Thread Safety: Main thread for UI; capture callbacks hop to main.
+//  Copyright © 2026 Moxie LLC. All rights reserved.
 //
 
 import AVFoundation

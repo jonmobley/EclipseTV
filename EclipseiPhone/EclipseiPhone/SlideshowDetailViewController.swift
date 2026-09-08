@@ -243,32 +243,18 @@ final class SlideshowDetailViewController: UITableViewController {
             return nil
         }
         let item = slides[indexPath.row]
+        // Remove only unlinks; the media stays in Library. Like removing a Show
+        // member, the swipe is the confirmation.
         let remove = UIContextualAction(style: .destructive, title: "Remove") {
             [weak self] _, _, done in
             guard let self else {
                 done(false)
                 return
             }
-            let alert = UIAlertController(
-                title: String(localized: "Remove Slide?"),
-                message: "This slide will be removed from the slideshow.",
-                preferredStyle: .actionSheet
+            SlideshowStore.shared.remove(
+                itemId: item.id, fromSlideshowId: self.slideshowId
             )
-            alert.addAction(UIAlertAction(title: "Remove", style: .destructive) { _ in
-                SlideshowStore.shared.remove(
-                    itemId: item.id, fromSlideshowId: self.slideshowId
-                )
-                done(true)
-            })
-            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in
-                done(false)
-            })
-            if let pop = alert.popoverPresentationController,
-               let cell = tableView.cellForRow(at: indexPath) {
-                pop.sourceView = cell
-                pop.sourceRect = cell.bounds
-            }
-            self.present(alert, animated: true)
+            done(true)
         }
         return UISwipeActionsConfiguration(actions: [remove])
     }

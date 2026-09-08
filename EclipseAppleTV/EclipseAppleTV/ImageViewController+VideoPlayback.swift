@@ -486,7 +486,7 @@ extension ImageViewController {
                 // Dissolve the overlay only once the first frame is ready, which both
                 // hides the spinner and avoids a black flash during the transition.
                 self.startWhenReady(player) {
-                    UIView.animate(withDuration: 0.4, animations: {
+                    UIView.animate(withDuration: ContentTransitionSettings.crossfadeDuration, animations: {
                         tempOverlay.alpha = 0
                     }) { _ in
                         // Clean up

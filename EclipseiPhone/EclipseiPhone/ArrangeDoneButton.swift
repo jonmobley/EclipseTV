@@ -20,7 +20,7 @@ final class ArrangeDoneButton: UIButton {
         super.init(frame: .zero)
         var config = UIButton.Configuration.filled()
         config.title = "Done"
-        config.baseBackgroundColor = .systemBlue
+        config.baseBackgroundColor = .accent
         config.baseForegroundColor = .white
         config.background.cornerRadius = 18
         config.contentInsets = NSDirectionalEdgeInsets(

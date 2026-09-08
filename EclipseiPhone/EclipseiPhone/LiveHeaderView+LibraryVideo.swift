@@ -241,7 +241,7 @@ extension LiveHeaderView {
         )
         let button = UIButton(configuration: config)
         button.backgroundColor = UIColor.black.withAlphaComponent(0.45)
-        button.layer.cornerRadius = 8
+        button.layer.cornerRadius = CornerRadii.compact
         button.clipsToBounds = true
         button.accessibilityLabel = "Full Screen"
         button.translatesAutoresizingMaskIntoConstraints = false
@@ -303,6 +303,6 @@ extension LiveHeaderView {
     @objc fileprivate func handleLibraryVideoTap() {
         guard !isCompactPresentation else { return }
         _ = toggleLibraryVideoPlayback()
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptics.impactLight()
     }
 }

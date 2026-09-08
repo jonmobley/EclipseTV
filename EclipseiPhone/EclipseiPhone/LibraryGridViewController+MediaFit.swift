@@ -54,7 +54,7 @@ extension LibraryGridViewController {
         MediaFramingStore.clear(forId: item.id)
         MediaFitSettings.setMode(mode, forId: item.id)
         EclipseSyncController.shared.backend.scheduleMediaPrefsSave(libraryId: item.id)
-        UISelectionFeedbackGenerator().selectionChanged()
+        Haptics.selection()
         connectionManager.sendImageFit(id: item.id, isFill: mode == .fill)
         reloadLibraryGrid()
         refreshLiveHeader()
@@ -65,7 +65,7 @@ extension LibraryGridViewController {
     func applyFraming(_ framing: MediaFraming, to item: LibraryItemDTO) {
         MediaFramingStore.set(framing, forId: item.id)
         EclipseSyncController.shared.backend.scheduleMediaPrefsSave(libraryId: item.id)
-        UISelectionFeedbackGenerator().selectionChanged()
+        Haptics.selection()
         connectionManager.sendImageFit(
             id: item.id,
             isFill: true,
@@ -81,7 +81,7 @@ extension LibraryGridViewController {
         guard MediaFramingStore.hasFraming(forId: item.id) else { return }
         MediaFramingStore.clear(forId: item.id)
         EclipseSyncController.shared.backend.scheduleMediaPrefsSave(libraryId: item.id)
-        UISelectionFeedbackGenerator().selectionChanged()
+        Haptics.selection()
         let isFill = MediaFitSettings.isFill(forId: item.id)
         connectionManager.sendImageFit(id: item.id, isFill: isFill)
         reloadLibraryGrid()
@@ -124,7 +124,7 @@ extension LibraryGridViewController {
         let isFill = mode == .fill
         guard slideshow.isFill != isFill else { return }
         SlideshowStore.shared.updatePreferences(id: slideshow.id, isFill: isFill)
-        UISelectionFeedbackGenerator().selectionChanged()
+        Haptics.selection()
         SlideshowPlaybackController.shared.refreshPresentationIfLive(
             slideshowId: slideshow.id
         )

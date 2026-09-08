@@ -80,7 +80,7 @@ extension LibraryGridViewController {
         QuestPollSessionStore.shared.setPracticeMembershipId(item.id)
         let page = QuestPollConfig.previewPage(pollId: item.pollId)
         WarmWebSessionPool.shared.warmIfNeeded(for: page)
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptics.impactLight()
         refreshLivePollPresentation()
     }
 
@@ -112,7 +112,7 @@ extension LibraryGridViewController {
         WarmWebSessionPool.shared.warmIfNeeded(for: page)
         ExternalDisplayManager.shared.presentWeb(page.url, pageId: page.id)
         announceAirPlayOverlayIfLinked()
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptics.impactLight()
         refreshLivePollPresentation()
         scrollLiveSlideshowRibbonToCurrentSlide()
         startQuestPollStatusPolling()
@@ -142,7 +142,7 @@ extension LibraryGridViewController {
         liveHeader.configureOverlay(
             title: title,
             systemImage: "chart.bar.fill",
-            fillColor: UIColor(white: 0.12, alpha: 1),
+            fillColor: .mediaPlaceholder,
             keepWebPreview: canShow,
             showsLiveBadge: LiveOutputRouting.showsLivePollLiveBadge()
         )
@@ -203,7 +203,7 @@ extension LibraryGridViewController {
             title: item.title,
             systemImage: item.systemImage,
             thumbnail: nil,
-            fillColor: UIColor(white: 0.16, alpha: 1),
+            fillColor: .specialTile,
             isLive: livePollRibbonCueIsLive(at: indexPath.item),
             outlined: true
         )
@@ -213,7 +213,7 @@ extension LibraryGridViewController {
     func handleLivePollRibbonTap(at indexPath: IndexPath) {
         guard QuestPollSessionStore.shared.session != nil else { return }
         cueQuestPollStage(at: indexPath.item)
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptics.impactLight()
     }
 
     /// Red stroke on the current cue only while this poll is on program or Practice.
@@ -240,7 +240,7 @@ extension LibraryGridViewController {
             title: item.tileTitle(subtitle: subtitle),
             systemImage: "chart.bar.fill",
             thumbnail: nil,
-            fillColor: UIColor(white: 0.12, alpha: 1),
+            fillColor: .specialTile,
             isLive: isLive,
             isLocked: isLiveOutputLocked,
             typeIcon: .livePoll
@@ -276,8 +276,8 @@ extension LibraryGridViewController {
         children.append(arrangeAction())
         children.append(selectAction(seedId: ShowLivePollToken.token(for: item.id)))
         children.append(UIAction(
-            title: "Remove",
-            image: UIImage(systemName: "folder.badge.minus"),
+            title: "Delete Live Poll",
+            image: UIImage(systemName: "trash"),
             attributes: .destructive
         ) { [weak self] _ in
             self?.confirmDeleteLivePoll(item)
@@ -297,14 +297,16 @@ extension LibraryGridViewController {
         }
     }
 
+    /// Deleting drops the card itself (it lives in one Show), so it confirms like
+    /// Countdown and PDF rather than removing silently like a Show member.
     private func confirmDeleteLivePoll(_ item: ShowLivePoll) {
         let alert = UIAlertController(
-            title: "Remove Live Poll?",
-            message: "Removes “\(item.title)” from this Show.",
+            title: "Delete Live Poll?",
+            message: "“\(item.title)” is removed from this Show.",
             preferredStyle: .alert
         )
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        alert.addAction(UIAlertAction(title: "Remove", style: .destructive) {
+        alert.addAction(UIAlertAction(title: "Delete", style: .destructive) {
             [weak self] _ in
             self?.endQuestPollIfRemovingMembership(item.id)
             LivePollStore.shared.delete(id: item.id)

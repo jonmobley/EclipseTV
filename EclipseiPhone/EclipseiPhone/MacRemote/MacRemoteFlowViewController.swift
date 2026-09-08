@@ -2,8 +2,7 @@
 //  MacRemoteFlowViewController.swift
 //  Eclipse
 //
-//  Description: UIKit host for the SwiftUI EclipsePro Mac remote flow.
-//  Thread Safety: Main thread only.
+//  Copyright © 2026 Moxie LLC. All rights reserved.
 //
 
 import SwiftUI

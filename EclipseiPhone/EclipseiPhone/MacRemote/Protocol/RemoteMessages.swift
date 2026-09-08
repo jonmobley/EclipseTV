@@ -1,15 +1,14 @@
 //
 //  RemoteMessages.swift
-//  EclipseRemoteProtocol
+//  Eclipse
 //
-//  Description: Codable wire contracts for the Eclipse LAN phone remote.
-//               Used by the iOS EclipseRemote client. Kept in sync with the Mac
-//               app's RemoteControlMessages.swift via the golden-JSON contract
-//               check (Scripts/check_remote_protocol_contract.sh).
-//  Thread Safety: Value types — no shared mutable state.
+//  Copyright © 2026 Moxie LLC. All rights reserved.
 //
 
 import Foundation
+
+// Codable wire contracts for the Eclipse LAN phone remote. Must stay in sync with the
+// Mac app's RemoteControlMessages.swift, which owns the golden-JSON contract check.
 
 // MARK: - Remote Command
 

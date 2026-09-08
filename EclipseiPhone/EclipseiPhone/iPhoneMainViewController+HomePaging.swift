@@ -307,7 +307,7 @@ extension iPhoneMainViewController: UIScrollViewDelegate {
             self?.headerBar.setLivePollOwnsPhoneHero(active)
         }
         libraryViewController.onStatusMessage = { [weak self] message in
-            self?.showTemporaryStatus(message)
+            self?.showPresentationToast(message)
         }
 
         addChild(libraryViewController)

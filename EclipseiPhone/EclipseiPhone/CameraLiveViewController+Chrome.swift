@@ -322,7 +322,7 @@ extension CameraLiveViewController {
             )
             return
         }
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        Haptics.impactMedium()
         flipButton.isEnabled = false
         CameraManager.shared.flipCamera { [weak self] in
             self?.refreshFlipButtonEnabled()

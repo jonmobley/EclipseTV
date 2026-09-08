@@ -24,7 +24,7 @@ final class DisplayModeMediaPreviewPageViewController: UIViewController {
         let view = UIView()
         view.backgroundColor = .black
         view.clipsToBounds = true
-        view.layer.cornerRadius = 16
+        view.layer.cornerRadius = CornerRadii.card
         return view
     }()
 

@@ -40,7 +40,7 @@ extension LiveHeaderView {
         )
         let button = UIButton(configuration: config)
         button.backgroundColor = UIColor.black.withAlphaComponent(0.45)
-        button.layer.cornerRadius = 8
+        button.layer.cornerRadius = CornerRadii.compact
         button.clipsToBounds = true
         button.translatesAutoresizingMaskIntoConstraints = false
         button.addAction(UIAction { [weak self] _ in

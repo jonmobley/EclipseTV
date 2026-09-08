@@ -78,7 +78,7 @@ extension PresentationViewController {
 
         if ExternalOutputSettings.contentTransition == .crossfade {
             UIView.animate(
-                withDuration: 0.35,
+                withDuration: ContentTransitionStyle.crossfadeDuration,
                 delay: 0,
                 options: [.curveEaseInOut, .beginFromCurrentState]
             ) {
@@ -211,6 +211,8 @@ extension PresentationViewController {
             NotificationCenter.default.removeObserver(loop)
             incomingLoopObserver = nil
         }
+        incomingPlayerLooper?.disableLooping()
+        incomingPlayerLooper = nil
         incomingPlayer?.pause()
         incomingPlayer = nil
         incomingPlayerLayer?.removeFromSuperlayer()

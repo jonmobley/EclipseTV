@@ -127,7 +127,8 @@ final class AlbumsViewController: UIViewController {
         emptyLabel.numberOfLines = 0
         emptyLabel.textAlignment = .center
         emptyLabel.textColor = .secondaryLabel
-        emptyLabel.font = .systemFont(ofSize: 16)
+        emptyLabel.font = .preferredFont(forTextStyle: .callout)
+        emptyLabel.adjustsFontForContentSizeCategory = true
         emptyLabel.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(emptyLabel)
         NSLayoutConstraint.activate([
@@ -299,9 +300,6 @@ extension AlbumsViewController: UICollectionViewDataSource, UICollectionViewDele
             let source: PresentationSource = item.isVideo
                 ? .video(url, isLooping: false, isMuted: false)
                 : .image(url)
-            if item.isVideo {
-                AudioPlayerController.shared.stop()
-            }
             ExternalDisplayManager.shared.presentJoined(source)
             onBecameLive?()
         }
@@ -317,7 +315,8 @@ final class AlbumSectionHeaderView: UICollectionReusableView {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        titleLabel.font = .systemFont(ofSize: 20, weight: .bold)
+        titleLabel.font = .scaled(20, weight: .bold, relativeTo: .title3)
+        titleLabel.adjustsFontForContentSizeCategory = true
         titleLabel.textColor = .label
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         addSubview(titleLabel)
