@@ -31,6 +31,9 @@ extension LibraryGridViewController {
     func performDelete(id: String) {
         let wasPending = PendingUploadStore.shared.contains(id: id)
         let sent = connectionManager.sendDeleteRequest(id: id)
+        if sent || wasPending {
+            endLiveIfDeleting(mediaId: id)
+        }
         if wasPending {
             store.removeLocalItem(id: id)
         } else if sent {
@@ -47,6 +50,22 @@ extension LibraryGridViewController {
         } else {
             presentNotConnectedAlert()
         }
+    }
+
+    /// Ends program output for a library item that is about to be deleted.
+    ///
+    /// PDF delete already stops its overlay before removing the document; media deleted
+    /// while live left the audience on a file the phone no longer had. Clearing the
+    /// selection first lets `currentSourceProvider` fall back to Screensaver instead of
+    /// handing the deleted item back. Must run before `removeLocalItem`, which drops
+    /// `currentId` without notifying.
+    func endLiveIfDeleting(mediaId id: String) {
+        guard store.currentId == id else { return }
+        store.updateCurrentId(nil)
+        ExternalDisplayManager.shared.endDeletedLibraryItem()
+        syncScreensaverFallbackLiveSelection()
+        reloadGridIfSafe()
+        refreshLiveHeader()
     }
 
     /// Selects an item as live without the Eclipse TV app (AirPlay remember / push).
