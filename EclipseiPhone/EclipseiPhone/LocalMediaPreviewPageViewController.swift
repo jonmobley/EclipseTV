@@ -61,9 +61,8 @@ final class LocalMediaPreviewPageViewController: UIViewController {
     // MARK: - Setup
 
     private func setupImage() {
-        // Preview inspects the still like Photos (fit), not the TV Fit/Fill framing.
         zoomView.translatesAutoresizingMaskIntoConstraints = false
-        zoomView.image = UIImage(contentsOfFile: item.fileURL.path)
+        loadStill()
         zoomView.onZoomedChanged = { [weak self] zoomed in
             guard let self else { return }
             self.isZoomed = zoomed
@@ -77,6 +76,33 @@ final class LocalMediaPreviewPageViewController: UIViewController {
             zoomView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             zoomView.trailingAnchor.constraint(equalTo: view.trailingAnchor)
         ])
+    }
+
+    /// Shows the still the way it goes to the screen: cropped to a saved custom
+    /// framing, then fitted Photos-style. Fit / Fill without framing shows the whole
+    /// file. Uncropped stills paint synchronously; the crop runs off the main thread
+    /// because it may redraw a full-resolution photo.
+    private func loadStill() {
+        let fileURL = item.fileURL
+        guard let framing = MediaFramingStore.framing(forId: item.id) else {
+            zoomView.image = UIImage(contentsOfFile: fileURL.path)
+            return
+        }
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let image = Self.framedStill(at: fileURL, framing: framing)
+            DispatchQueue.main.async {
+                self?.zoomView.image = image
+            }
+        }
+    }
+
+    /// Decodes `fileURL` and crops it to `framing`; falls back to the full still when
+    /// the crop can't be produced.
+    nonisolated static func framedStill(at fileURL: URL, framing: MediaFraming) -> UIImage? {
+        guard let image = UIImage(contentsOfFile: fileURL.path) else { return nil }
+        let normalized = MediaAspect.normalized(image)
+        let crop = framing.rect(in: normalized.size)
+        return MediaAspect.crop(normalized, to: crop) ?? normalized
     }
 
     private func setupNoteOverlay() {
