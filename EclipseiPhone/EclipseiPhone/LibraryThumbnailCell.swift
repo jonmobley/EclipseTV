@@ -55,6 +55,12 @@ final class LibraryThumbnailCell: UICollectionViewCell {
     var captionCenterYToRewind: NSLayoutConstraint!
     /// Last media id painted; keeps art when a reload hits a transient cache miss.
     private var configuredMediaId: String?
+    /// Uncropped thumbnail behind the current paint. Framing is applied on top of
+    /// this, never on `imageView.image`, which may already be the cropped result.
+    private var configuredThumbnail: UIImage?
+    private var configuredIsVideo = false
+    /// Fit / Fill to use when the item has no custom framing.
+    private var configuredFallbackContentMode: UIView.ContentMode = .scaleAspectFill
 
     // MARK: - Init
 
@@ -238,28 +244,22 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         // reload — keep the previous bitmap for the same item instead of flashing
         // the mountain / film placeholder.
         let retained = (configuredMediaId == item.id && thumbnail == nil)
-            ? imageView.image
+            ? configuredThumbnail
             : nil
         let image = thumbnail ?? retained
 
         resetChrome()
         configuredMediaId = item.id
+        configuredThumbnail = image
+        configuredIsVideo = item.isVideo
+        configuredFallbackContentMode = thumbnailContentMode
+            ?? MediaFitSettings.thumbnailContentMode(for: item)
         cardView.backgroundColor = item.isVideo
             ? .black
             : .secondarySystemBackground
 
-        let fallback = thumbnailContentMode
-            ?? MediaFitSettings.thumbnailContentMode(for: item)
-        if item.isVideo {
-            imageView.contentMode = fallback
-            imageView.image = image
-        } else {
-            let framed = MediaFramingStore.framedStill(
-                image, forId: item.id, fallback: fallback
-            )
-            imageView.contentMode = framed.contentMode
-            imageView.image = framed.image
-        }
+        imageView.contentMode = configuredFallbackContentMode
+        paintMediaArt(image)
 
         let isUnavailable = (item.isAvailable == false)
 
@@ -309,12 +309,33 @@ final class LibraryThumbnailCell: UICollectionViewCell {
     var isShowingPlaceholder: Bool { imageView.image == nil }
 
     /// Paints a late-arriving preview without resetting ⋯ / type-icon chrome.
+    ///
+    /// Runs the same Fit / Fill / custom-framing path as `configure`, so a thumb that
+    /// arrives from disk after the cell was built (cold launch, cache purge) shows the
+    /// user's framing instead of the raw file.
     func applyLoadedThumbnail(_ image: UIImage) {
         guard imageView.image == nil else { return }
-        imageView.image = image
+        configuredThumbnail = image
+        paintMediaArt(image)
         if imageView.alpha == 0 { imageView.alpha = 1 }
         placeholderIcon.isHidden = true
         refreshTypeIconVisibility()
+    }
+
+    /// Applies the configured still's custom framing to `image`.
+    ///
+    /// Videos and non-media tiles (`configureSpecial`) keep whatever content mode
+    /// their configure call chose and just take the bitmap.
+    private func paintMediaArt(_ image: UIImage?) {
+        guard let id = configuredMediaId, !configuredIsVideo else {
+            imageView.image = image
+            return
+        }
+        let framed = MediaFramingStore.framedStill(
+            image, forId: id, fallback: configuredFallbackContentMode
+        )
+        imageView.contentMode = framed.contentMode
+        imageView.image = framed.image
     }
 
     /// Soft “add” tile (New Show / Add media) — quiet fill, blue glyph.
@@ -442,6 +463,9 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         recycleCameraPreview()
         stopArrangeWiggle()
         configuredMediaId = nil
+        configuredThumbnail = nil
+        configuredIsVideo = false
+        configuredFallbackContentMode = .scaleAspectFill
     }
 
     /// Visible duration pill text, or nil when the overlay is hidden.
