@@ -1,9 +1,8 @@
 //
 //  SessionCookieParser.swift
-//  EclipseRemoteProtocol
+//  Eclipse
 //
-//  Description: Extracts the Eclipse remote session token from Set-Cookie.
-//  Thread Safety: Pure helpers — safe from any isolation domain.
+//  Copyright © 2026 Moxie LLC. All rights reserved.
 //
 
 import Foundation

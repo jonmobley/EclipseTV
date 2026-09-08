@@ -2,8 +2,7 @@
 //  PhoneCameraSendLauncher.swift
 //  Eclipse
 //
-//  Description: Presents Send Camera to Mac from Settings or a deep link.
-//  Thread Safety: Main thread only.
+//  Copyright © 2026 Moxie LLC. All rights reserved.
 //
 
 import SwiftUI

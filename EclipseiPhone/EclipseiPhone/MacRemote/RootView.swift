@@ -2,8 +2,7 @@
 //  RootView.swift
 //  Eclipse
 //
-//  Description: Router between Mac connect and lean live-control screens.
-//  Thread Safety: Main thread only — SwiftUI view.
+//  Copyright © 2026 Moxie LLC. All rights reserved.
 //
 
 import SwiftUI
