@@ -11,7 +11,7 @@ import UIKit
 final class SettingsEclipseTVViewController: UITableViewController {
 
     /// Multipeer link state; host updates via `setConnectionState(_:)`.
-    var connectionState: SettingsViewController.ConnectionDisplayState = .paused
+    var connectionState: ConnectionDisplayState = .paused
 
     /// Invoked when the known-TV list changes so the host can refresh the grid/title.
     var onLibrariesChanged: (() -> Void)?
@@ -55,7 +55,7 @@ final class SettingsEclipseTVViewController: UITableViewController {
     }
 
     /// Refreshes connection rows for the current Multipeer link state.
-    func setConnectionState(_ state: SettingsViewController.ConnectionDisplayState) {
+    func setConnectionState(_ state: ConnectionDisplayState) {
         connectionState = state
         guard isViewLoaded else { return }
         tableView.reloadSections(IndexSet(integer: Section.connection.rawValue), with: .none)

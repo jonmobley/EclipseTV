@@ -16,13 +16,6 @@ import UIKit
 /// iCloud Sync status surfaces via `EclipseSyncStatusBanner`, not the header.
 final class HomeHeaderBar: UIView {
 
-    /// Multipeer EclipseTV link state. `.paused` is the AirPlay-first default.
-    enum ConnectionDisplayState {
-        case connected
-        case disconnected
-        case paused
-    }
-
     // MARK: - Subviews
 
     private let backButton = MinimumHitTargetButton(type: .system)
