@@ -30,7 +30,7 @@ final class ImagePreviewViewController: UIViewController {
     private let containerView: UIView = {
         let view = UIView()
         view.backgroundColor = .black
-        view.layer.cornerRadius = 12
+        view.layer.cornerRadius = CornerRadii.standard
         view.clipsToBounds = true
         return view
     }()
@@ -39,7 +39,7 @@ final class ImagePreviewViewController: UIViewController {
         let imageView = UIImageView()
         imageView.contentMode = .scaleAspectFit
         imageView.backgroundColor = .black
-        imageView.layer.cornerRadius = 8
+        imageView.layer.cornerRadius = CornerRadii.compact
         imageView.clipsToBounds = true
         return imageView
     }()
@@ -78,7 +78,7 @@ final class ImagePreviewViewController: UIViewController {
         button.titleLabel?.font = .scaled(18, weight: .medium, maximumPointSize: 26)
         button.titleLabel?.adjustsFontForContentSizeCategory = true
         button.setTitleColor(.white, for: .normal)
-        button.backgroundColor = .systemBlue
+        button.backgroundColor = .accent
         button.layer.applyContinuousCorner(radius: CornerRadii.large)
         return button
     }()

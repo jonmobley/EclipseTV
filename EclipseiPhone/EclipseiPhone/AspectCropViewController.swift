@@ -157,7 +157,7 @@ final class AspectCropViewController: UIViewController, UIScrollViewDelegate {
             confirmButton,
             title: confirmTitle,
             titleColor: .white,
-            background: .systemBlue
+            background: .accent
         )
         confirmButton.addTarget(self, action: #selector(confirmTapped), for: .touchUpInside)
 

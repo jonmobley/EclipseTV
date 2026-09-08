@@ -141,7 +141,7 @@ extension LibraryGridViewController {
             foreignLiveHeader.configureOverlay(
                 title: title,
                 systemImage: "chart.bar.fill",
-                fillColor: UIColor(white: 0.12, alpha: 1)
+                fillColor: .mediaPlaceholder
             )
             pinForeignLiveChrome()
             return
@@ -153,7 +153,7 @@ extension LibraryGridViewController {
             foreignLiveHeader.configureOverlay(
                 title: page?.title ?? "Website",
                 systemImage: "safari",
-                fillColor: UIColor(white: 0.12, alpha: 1),
+                fillColor: .mediaPlaceholder,
                 thumbnail: thumb
             )
             pinForeignLiveChrome()
@@ -166,7 +166,7 @@ extension LibraryGridViewController {
             foreignLiveHeader.configureOverlay(
                 title: doc?.title ?? "PDF",
                 systemImage: "doc.richtext",
-                fillColor: UIColor(white: 0.12, alpha: 1),
+                fillColor: .mediaPlaceholder,
                 thumbnail: thumb
             )
             pinForeignLiveChrome()

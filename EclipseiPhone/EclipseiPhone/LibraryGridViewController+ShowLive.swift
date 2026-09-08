@@ -312,7 +312,7 @@ extension LibraryGridViewController {
         liveHeader.configureOverlay(
             title: title,
             systemImage: systemImage,
-            fillColor: UIColor(white: 0.12, alpha: 1),
+            fillColor: .mediaPlaceholder,
             thumbnail: thumbnail,
             showsLiveBadge: true
         )

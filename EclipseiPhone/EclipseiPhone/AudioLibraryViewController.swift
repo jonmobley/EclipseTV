@@ -86,7 +86,7 @@ final class AudioLibraryViewController: UITableViewController {
         tableView.reloadData()
     }
 
-    /// Configures Done (modal) or Library back (embedded pager) / none (split or drawer).
+    /// Configures Close (modal) or Library back (embedded pager) / none (split or drawer).
     private func updateLeftBarButton() {
         if isEmbedded {
             guard showsEmbeddedBackButton else {
@@ -386,7 +386,7 @@ final class AudioLibraryViewController: UITableViewController {
                 self?.promptAddToPlaylist(trackId: track.id)
                 done(true)
             }
-            add.backgroundColor = .systemBlue
+            add.backgroundColor = .accent
             actions.append(add)
             return UISwipeActionsConfiguration(actions: actions)
         }
@@ -587,10 +587,10 @@ final class AudioLibraryViewController: UITableViewController {
     ) {
         let body = UIFont.preferredFont(forTextStyle: .body)
         if isCurrent {
-            config.textProperties.color = .systemBlue
+            config.textProperties.color = .accent
             config.textProperties.font = .systemFont(ofSize: body.pointSize, weight: .semibold)
-            config.secondaryTextProperties.color = UIColor.systemBlue.withAlphaComponent(0.7)
-            config.imageProperties.tintColor = .systemBlue
+            config.secondaryTextProperties.color = UIColor.accent.withAlphaComponent(0.7)
+            config.imageProperties.tintColor = .accent
         } else {
             config.textProperties.color = .label
             config.textProperties.font = body

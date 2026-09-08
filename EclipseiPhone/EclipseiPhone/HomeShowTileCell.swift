@@ -110,7 +110,7 @@ final class HomeShowTileCell: UICollectionViewCell {
         contentView.backgroundColor = .clear
 
         cardView.backgroundColor = .secondarySystemBackground
-        cardView.layer.cornerRadius = 16
+        cardView.layer.cornerRadius = CornerRadii.card
         cardView.layer.cornerCurve = .continuous
         cardView.clipsToBounds = true
         cardView.translatesAutoresizingMaskIntoConstraints = false

@@ -149,7 +149,7 @@ extension LibraryGridViewController {
         liveHeader.configureOverlay(
             title: "\(item.title) · Practice",
             systemImage: "chart.bar.fill",
-            fillColor: UIColor(white: 0.12, alpha: 1),
+            fillColor: .mediaPlaceholder,
             keepWebPreview: canShow,
             showsLiveBadge: false
         )

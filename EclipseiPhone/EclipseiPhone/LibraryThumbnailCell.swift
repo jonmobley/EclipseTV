@@ -74,8 +74,8 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         contentView.clipsToBounds = false
 
         cardView.backgroundColor = .secondarySystemBackground
-        cardView.layer.cornerRadius = 14
-        cardView.layer.cornerCurve = .continuous
+        // Same radius as HomeShowTileCell so the two grid tiles read as one family.
+        cardView.layer.applyContinuousCorner(radius: CornerRadii.card)
         cardView.clipsToBounds = true
         cardView.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(cardView)
@@ -132,7 +132,7 @@ final class LibraryThumbnailCell: UICollectionViewCell {
             systemName: "checkmark.circle.fill",
             withConfiguration: UIImage.SymbolConfiguration(pointSize: 22, weight: .bold)
         )
-        selectionBadge.tintColor = .systemBlue
+        selectionBadge.tintColor = .accent
         // White inner disc so the tick reads over any thumbnail.
         selectionBadge.backgroundColor = .white
         selectionBadge.layer.cornerRadius = 11
@@ -333,13 +333,13 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         cardView.layer.borderWidth = 0
         let symbol = UIImage.SymbolConfiguration(pointSize: 28, weight: .medium)
         placeholderIcon.image = UIImage(systemName: systemImage, withConfiguration: symbol)
-        placeholderIcon.tintColor = .systemBlue
+        placeholderIcon.tintColor = .accent
         placeholderIcon.isHidden = false
         // + alone is dead-center; titled tiles (New Show) keep the caption offset.
         placeholderCenterY.constant = title.isEmpty ? 0 : -10
         let voice = accessibilityLabel ?? (title.isEmpty ? "Add" : title)
         captionLabel.text = title
-        captionLabel.textColor = .systemBlue
+        captionLabel.textColor = .accent
         captionLabel.isHidden = title.isEmpty
         // Keep the title readable on the light fill without a dark scrim.
         captionScrimView.isHidden = true
@@ -470,12 +470,12 @@ final class LibraryThumbnailCell: UICollectionViewCell {
             systemName: "checkmark.circle.fill",
             withConfiguration: UIImage.SymbolConfiguration(pointSize: 22, weight: .bold)
         )
-        selectionBadge.tintColor = .systemBlue
+        selectionBadge.tintColor = .accent
         selectionBadge.backgroundColor = .white
         selectionBadge.isHidden = !isSelected
         cardView.layer.borderWidth = isSelected ? 3 : 0
         cardView.layer.borderColor = isSelected
-            ? UIColor.systemBlue.cgColor
+            ? UIColor.accent.cgColor
             : UIColor.clear.cgColor
     }
 

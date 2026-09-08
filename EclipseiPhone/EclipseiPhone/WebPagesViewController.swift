@@ -44,7 +44,8 @@ final class WebPagesViewController: UITableViewController {
         super.viewDidLoad()
         title = "History"
         if isNavRoot {
-            let leftSystemItem: UIBarButtonItem.SystemItem = isAddToShowMode ? .cancel : .done
+            // Browsing sheets close; only the add-to-Show picker has something to cancel.
+            let leftSystemItem: UIBarButtonItem.SystemItem = isAddToShowMode ? .cancel : .close
             navigationItem.leftBarButtonItem = UIBarButtonItem(
                 barButtonSystemItem: leftSystemItem,
                 target: self,

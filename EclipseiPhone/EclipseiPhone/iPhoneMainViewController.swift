@@ -75,7 +75,7 @@ class iPhoneMainViewController: UIViewController {
         button.titleLabel?.font = UIFont.systemFont(ofSize: 18, weight: .medium)
         button.backgroundColor = .systemRed
         button.setTitleColor(.white, for: .normal)
-        button.layer.cornerRadius = 12
+        button.layer.cornerRadius = CornerRadii.standard
         button.alpha = 0
         button.isHidden = true
         return button

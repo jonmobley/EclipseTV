@@ -68,7 +68,7 @@ extension CameraLiveViewController {
 
     /// Still / icon for a presentation source, preferring cached library thumbs.
     private func liveOutputArt(for source: PresentationSource) -> LiveOutputArt {
-        let dim = UIColor(white: 0.12, alpha: 1)
+        let dim = UIColor.mediaPlaceholder
         switch source.content {
         case .camera:
             return LiveOutputArt(
@@ -221,7 +221,7 @@ final class CameraLiveOutputThumbView: UIView {
         layer.cornerRadius = 10
         layer.borderWidth = 2
         layer.borderColor = UIColor.systemRed.cgColor
-        backgroundColor = UIColor(white: 0.12, alpha: 1)
+        backgroundColor = .mediaPlaceholder
         isUserInteractionEnabled = false
         isHidden = true
         translatesAutoresizingMaskIntoConstraints = true

@@ -142,7 +142,7 @@ extension LibraryGridViewController {
         liveHeader.configureOverlay(
             title: title,
             systemImage: "chart.bar.fill",
-            fillColor: UIColor(white: 0.12, alpha: 1),
+            fillColor: .mediaPlaceholder,
             keepWebPreview: canShow,
             showsLiveBadge: LiveOutputRouting.showsLivePollLiveBadge()
         )
@@ -203,7 +203,7 @@ extension LibraryGridViewController {
             title: item.title,
             systemImage: item.systemImage,
             thumbnail: nil,
-            fillColor: UIColor(white: 0.16, alpha: 1),
+            fillColor: .specialTile,
             isLive: livePollRibbonCueIsLive(at: indexPath.item),
             outlined: true
         )
@@ -240,7 +240,7 @@ extension LibraryGridViewController {
             title: item.tileTitle(subtitle: subtitle),
             systemImage: "chart.bar.fill",
             thumbnail: nil,
-            fillColor: UIColor(white: 0.12, alpha: 1),
+            fillColor: .specialTile,
             isLive: isLive,
             isLocked: isLiveOutputLocked,
             typeIcon: .livePoll

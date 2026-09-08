@@ -177,7 +177,7 @@ final class QuestPollHostViewController: UIViewController {
     private func makeResponsesCard() -> UIView {
         let card = UIView()
         card.backgroundColor = UIColor(white: 0.14, alpha: 1)
-        card.layer.cornerRadius = 16
+        card.layer.cornerRadius = CornerRadii.card
         card.layer.masksToBounds = true
 
         let caption = UILabel()
@@ -209,7 +209,7 @@ final class QuestPollHostViewController: UIViewController {
 
     private func stylePrimary(_ button: UIButton) {
         var config = UIButton.Configuration.filled()
-        config.baseBackgroundColor = .systemBlue
+        config.baseBackgroundColor = .accent
         config.baseForegroundColor = .white
         config.cornerStyle = .large
         config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer {

@@ -107,7 +107,7 @@ extension LibraryGridViewController {
             title: CountdownController.displayString(seconds: seconds),
             systemImage: "timer",
             thumbnail: nil,
-            fillColor: UIColor(white: 0.16, alpha: 1),
+            fillColor: .specialTile,
             isLive: selected,
             outlined: !selected,
             typeIcon: .countdown
@@ -304,7 +304,7 @@ extension LibraryGridViewController {
             title: title,
             systemImage: "pencil",
             thumbnail: nil,
-            fillColor: UIColor(white: 0.16, alpha: 1),
+            fillColor: .specialTile,
             isLive: selected,
             outlined: !selected,
             typeIcon: .countdown

@@ -958,7 +958,7 @@ final class LibraryGridViewController: UIViewController {
             liveHeader.configureOverlay(
                 title: title,
                 systemImage: "safari",
-                fillColor: UIColor(white: 0.12, alpha: 1),
+                fillColor: .mediaPlaceholder,
                 thumbnail: thumb,
                 keepWebPreview: canShowLivePreview
             )
@@ -977,7 +977,7 @@ final class LibraryGridViewController: UIViewController {
             liveHeader.configureOverlay(
                 title: title,
                 systemImage: "play.rectangle.fill",
-                fillColor: UIColor(white: 0.12, alpha: 1),
+                fillColor: .mediaPlaceholder,
                 thumbnail: thumb,
                 showsTransport: true
             )
@@ -992,7 +992,7 @@ final class LibraryGridViewController: UIViewController {
             liveHeader.configureOverlay(
                 title: title,
                 systemImage: "doc.richtext",
-                fillColor: UIColor(white: 0.12, alpha: 1),
+                fillColor: .mediaPlaceholder,
                 thumbnail: thumb
             )
             liveHeader.updatePlayback(PlaybackState())
@@ -1006,7 +1006,7 @@ final class LibraryGridViewController: UIViewController {
             liveHeader.configureOverlay(
                 title: "Camera",
                 systemImage: "camera.fill",
-                fillColor: UIColor(white: 0.12, alpha: 1),
+                fillColor: .mediaPlaceholder,
                 thumbnail: mgr.cameraTileParkedStillImage
             )
             liveHeader.allowsCameraControllerTap = true
@@ -1030,7 +1030,7 @@ final class LibraryGridViewController: UIViewController {
             liveHeader.configureOverlay(
                 title: "Background",
                 systemImage: "seal.fill",
-                fillColor: UIColor(white: 0.12, alpha: 1),
+                fillColor: .mediaPlaceholder,
                 thumbnail: LogoStore.shared.image
             )
             liveHeader.updatePlayback(PlaybackState())
@@ -1102,7 +1102,7 @@ final class LibraryGridViewController: UIViewController {
         liveHeader.configureOverlay(
             title: "Camera",
             systemImage: "camera.fill",
-            fillColor: UIColor(white: 0.12, alpha: 1),
+            fillColor: .mediaPlaceholder,
             thumbnail: thumb,
             keepCameraPreview: liveHeader.isCameraPreviewActive
         )
@@ -1116,7 +1116,7 @@ final class LibraryGridViewController: UIViewController {
         liveHeader.configureOverlay(
             title: "Screensaver",
             systemImage: "sparkles.tv",
-            fillColor: UIColor(white: 0.12, alpha: 1),
+            fillColor: .mediaPlaceholder,
             thumbnail: ScreensaverStore.poster,
             keepScreensaverPreview: liveHeader.screensaverPreview != nil
         )

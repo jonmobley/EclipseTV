@@ -161,7 +161,7 @@ final class LiveHeaderView: UIView {
 
     private func setupViews() {
         backgroundColor = .secondarySystemBackground
-        layer.cornerRadius = 16
+        layer.cornerRadius = CornerRadii.card
         layer.masksToBounds = true
         // Thin outline so Black / dark live content doesn't blend into the screen.
         applyOutputLockChrome()

@@ -35,7 +35,7 @@ class VideoThumbnailPreviewViewController: UIViewController {
     private let containerView: UIView = {
         let view = UIView()
         view.backgroundColor = .black
-        view.layer.cornerRadius = 12
+        view.layer.cornerRadius = CornerRadii.standard
         view.clipsToBounds = true
         return view
     }()
@@ -44,7 +44,7 @@ class VideoThumbnailPreviewViewController: UIViewController {
         let imageView = UIImageView()
         imageView.contentMode = .scaleAspectFit
         imageView.backgroundColor = .black
-        imageView.layer.cornerRadius = 8
+        imageView.layer.cornerRadius = CornerRadii.compact
         imageView.clipsToBounds = true
         return imageView
     }()
@@ -54,7 +54,7 @@ class VideoThumbnailPreviewViewController: UIViewController {
         slider.minimumValue = 0
         slider.maximumValue = 1
         slider.value = 0
-        slider.minimumTrackTintColor = .systemBlue
+        slider.minimumTrackTintColor = .accent
         slider.maximumTrackTintColor = .systemGray4
         slider.thumbTintColor = .white
         return slider
@@ -106,7 +106,7 @@ class VideoThumbnailPreviewViewController: UIViewController {
         button.titleLabel?.font = .scaled(18, weight: .medium, maximumPointSize: 26)
         button.titleLabel?.adjustsFontForContentSizeCategory = true
         button.setTitleColor(.white, for: .normal)
-        button.backgroundColor = .systemBlue
+        button.backgroundColor = .accent
         button.layer.cornerRadius = 25
         return button
     }()

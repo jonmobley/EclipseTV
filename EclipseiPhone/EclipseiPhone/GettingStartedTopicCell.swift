@@ -55,7 +55,7 @@ final class GettingStartedTopicCell: UITableViewCell {
         selectionStyle = .none
         backgroundColor = .secondarySystemGroupedBackground
 
-        iconBackground.layer.cornerRadius = 12
+        iconBackground.layer.cornerRadius = CornerRadii.standard
         iconBackground.layer.cornerCurve = .continuous
         iconBackground.translatesAutoresizingMaskIntoConstraints = false
 

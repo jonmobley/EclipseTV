@@ -26,7 +26,7 @@ final class GettingStartedViewController: UITableViewController {
             want media sync with the TV app.
             """,
             systemImage: "sparkles",
-            tint: .systemBlue
+            tint: .accent
         ),
         Topic(
             title: "Shows",
