@@ -459,9 +459,10 @@ extension ImageViewController {
                         tempOverlay.addSubview(snapshot)
                     }
                 } else if !self.imageView.isHidden, let currentImage = self.imageView.image {
-                    // If transitioning from an image, use that as overlay
+                    // If transitioning from an image, use that as overlay, framed the
+                    // way it is showing so a Fit still does not jump to Fill mid-fade.
                     let imageView = UIImageView(image: currentImage)
-                    imageView.contentMode = .scaleAspectFill
+                    imageView.contentMode = self.imageView.contentMode
                     imageView.clipsToBounds = true
                     imageView.frame = self.view.bounds
                     tempOverlay.addSubview(imageView)

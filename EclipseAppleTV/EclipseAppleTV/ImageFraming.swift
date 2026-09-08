@@ -54,6 +54,21 @@ enum ImageFraming {
         }
     }
 
+    /// Decode placement matching `apply(_:framing:fill:)`: a valid crop wins over
+    /// Fit / Fill, so the decode is budgeted for the same region that ends up on screen.
+    static func placement(
+        framing: MediaFramingDTO?,
+        fill: Bool
+    ) -> StillDecodeBudget.Placement {
+        if let framing, framing.width > 0, framing.height > 0 {
+            return .crop(CGRect(
+                x: framing.x, y: framing.y,
+                width: framing.width, height: framing.height
+            ))
+        }
+        return fill ? .fill : .fit
+    }
+
     /// Applies a wire framing DTO: crop then aspect-fit, or Fit / Fill contentMode.
     static func apply(
         _ image: UIImage,
