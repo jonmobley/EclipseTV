@@ -28,6 +28,15 @@ final class ShowLiveSession: NSObject {
     static let selectKindKey = "kind"
     /// Optional item id on `incomingSelectNotification`.
     static let selectItemIdKey = "itemId"
+    /// Posted on the director when an operator sends a `command`.
+    static let incomingCommandNotification = Notification.Name(
+        "ShowLiveSession.incomingCommand"
+    )
+    /// `ShowLiveCommand` on `incomingCommandNotification`.
+    static let commandKey = "command"
+    /// `Bool` on `didChangeNotification`: false when only a video / clock tick
+    /// changed, so observers can skip the grid rebuild.
+    static let programChangedKey = "programChanged"
 
     /// Director (owns HDMI), remote operator (commands director), or neither.
     enum Role: Equatable {
@@ -105,6 +114,16 @@ final class ShowLiveSession: NSObject {
         return send(envelope)
     }
 
+    /// Sends a transport / countdown / lock command to the director. Returns false
+    /// when this device is not an operator or the send failed.
+    @discardableResult
+    func sendCommand(_ verb: ShowLiveCommandVerb, value: Double? = nil) -> Bool {
+        guard role == .remote else { return false }
+        return send(ShowLiveEnvelope(
+            kind: .command, command: ShowLiveCommand(verb: verb, value: value)
+        ))
+    }
+
     /// Pushes current program to connected operators. No-op when not director.
     func broadcastSnapshot(_ snap: ShowLiveSnapshot) {
         guard role == .director else { return }
@@ -131,8 +150,12 @@ final class ShowLiveSession: NSObject {
         tearDownSession()
     }
 
-    func notifyChanged() {
-        NotificationCenter.default.post(name: Self.didChangeNotification, object: self)
+    func notifyChanged(programChanged: Bool = true) {
+        NotificationCenter.default.post(
+            name: Self.didChangeNotification,
+            object: self,
+            userInfo: [Self.programChangedKey: programChanged]
+        )
     }
 
     // MARK: - CloudKit identity
@@ -239,9 +262,17 @@ final class ShowLiveSession: NSObject {
             )
         case .state:
             guard role == .remote, let snap = envelope.snapshot else { return }
+            let programChanged = !snap.isSameProgram(as: snapshot)
             snapshot = snap
             directorDeviceName = snap.directorName
-            notifyChanged()
+            notifyChanged(programChanged: programChanged)
+        case .command:
+            guard role == .director, let command = envelope.command else { return }
+            NotificationCenter.default.post(
+                name: Self.incomingCommandNotification,
+                object: self,
+                userInfo: [Self.commandKey: command]
+            )
         }
         _ = peer
     }
