@@ -77,6 +77,63 @@ must not also call `mediaDataDidChange()`; pairing a batch update with a full
 `reloadData()` stomps the animation and can crash. Selection is re-validated in the
 batch-update completion instead.
 
+## Synced media is never re-enqueued to carry preferences
+
+`CaptureStore.idsNeedingUpload` returns `.pendingUpload` rows only. Including `.synced`
+rows looks like the cheap way to propagate Fit mode, framing, loop, and mute, since
+those live on the MediaItem record but are written by plain settings helpers. It is
+not: `makeMediaRecord` stamps a fresh `modifiedAt`, so every foreground rewrote every
+capture record, and every *other* device then re-fetched those records — asset bytes
+included — and discarded them. It also silently clobbered preferences, because
+`applyRemoteMediaPrefs` has no clock, so an idle phone foregrounding overwrote edits
+made elsewhere. Preference edits travel through `CloudKitMediaDirtyStore`, flagged by
+`scheduleMediaPrefsSave(libraryId:)`, which deliberately leaves `syncState` alone so
+the asset is not re-attached.
+
+## Fetched MediaItem assets are kept, and evictions are remembered
+
+`CKSyncEngine` fetches records with their assets and has no field-level `desiredKeys`
+equivalent — `nextFetchChangesOptions` narrows by zone only, and assets cannot move to
+an excluded zone because a `CKShare` root and its children must share one. The bytes
+have already crossed the network when a record arrives, and CloudKit purges its staging
+copy, so `applyRemoteMedia` copies them into `LocalMediaStore` instead of discarding
+them and paying for a second download on tap.
+
+`CloudKitEvictedMediaStore` is what keeps that honest. `.remoteOnly` means both "never
+had it" and "user reclaimed the space", so without a separate eviction index any later
+edit to an item, on any device, would restore a download the user just deleted.
+
+## Every `CKContainer` comes from `CloudKitAvailability`
+
+`CKContainer(identifier:)` *traps* rather than failing when the identifier is missing
+from the app's entitlements. CI builds with `CODE_SIGNING_ALLOWED=NO`, so the XCTest
+host runs unentitled and a single unguarded container takes the process down at launch —
+before one test can report. The environment check in `CloudKitAvailability` looks like
+test-awareness leaking into production code, which is why it keeps getting deleted; it
+is the only thing keeping the suite runnable.
+
+So `CloudKitSyncEngine.init` takes a required container with no default argument, and
+`ShowLiveSession.refreshCloudKitUser` leaves `userHash` nil instead of trapping. A
+default argument that builds a container inline is the trap wearing a disguise: it
+moves the crash to whichever caller omits the parameter. Callers degrade — sync reports
+itself paused via `DisabledSyncBackend`, and a nil `userHash` already disables director
+advertising, operator browsing, and invitations.
+
+## One projector signal drives affordances, another drives hardware
+
+`LiveOutputRouting.projectorAvailable` reads `ExternalDisplayManager.isAirPlayAvailable`,
+which is deliberately wider than `isConnected`: on iOS 27+ the scene accessory reports a
+display before its scene attaches, and `present(_:)` attaches on demand. Every badge,
+gate, and "what does this tap mean" decision has to read the same one. Mixing them made
+the app disagree with itself — the Show marked taps live and let websites go live off
+`isAirPlayAvailable` while Live Poll refused the same deck with "Live Poll needs AirPlay,
+HDMI, or Practice Mode."
+
+Side effects that drive real hardware are the exception and keep reading `isConnected`:
+parking EclipseTV (`AirPlayOverlayPark`), director election in `ShowLiveSession`, and
+camera mirroring. An unattached scene cannot render, so parking the TV for one just
+blanks the room.
+
 ---
 
 If one of these genuinely needs to change, STOP and ask the user first, naming the item.
