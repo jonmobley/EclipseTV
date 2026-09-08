@@ -166,7 +166,9 @@ extension iPhoneConnectionManager {
 
         // Check if there's a custom thumbnail to send first
         let fileName = videoURL.lastPathComponent
-        if let customThumbnailPath = UserDefaults.standard.string(forKey: "customThumbnail_\(fileName)"),
+        if let customThumbnailPath = UserDefaults.standard.string(
+            forKey: DefaultsKeys.customThumbnail(fileName: fileName)
+           ),
            FileManager.default.fileExists(atPath: customThumbnailPath) {
             
             // Send custom thumbnail first, then send the video only once the thumbnail
@@ -184,7 +186,9 @@ extension iPhoneConnectionManager {
                 }
                 // Clean up the temporary thumbnail file
                 try? FileManager.default.removeItem(at: thumbnailURL)
-                UserDefaults.standard.removeObject(forKey: "customThumbnail_\(fileName)")
+                UserDefaults.standard.removeObject(
+                    forKey: DefaultsKeys.customThumbnail(fileName: fileName)
+                )
                 
                 // Now send the video itself — only if this transfer is still current.
                 DispatchQueue.main.async {

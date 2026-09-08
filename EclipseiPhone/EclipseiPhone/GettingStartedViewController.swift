@@ -148,7 +148,7 @@ final class GettingStartedViewController: UITableViewController {
         // the back button returns to Settings.
         if navigationController?.viewControllers.first === self {
             navigationItem.rightBarButtonItem = UIBarButtonItem(
-                barButtonSystemItem: .done, target: self, action: #selector(doneTapped)
+                barButtonSystemItem: .close, target: self, action: #selector(doneTapped)
             )
         }
         tableView.register(

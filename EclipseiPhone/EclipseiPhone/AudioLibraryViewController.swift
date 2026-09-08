@@ -103,7 +103,7 @@ final class AudioLibraryViewController: UITableViewController {
             navigationItem.leftBarButtonItem = back
         } else {
             navigationItem.leftBarButtonItem = UIBarButtonItem(
-                barButtonSystemItem: .done, target: self, action: #selector(doneTapped)
+                barButtonSystemItem: .close, target: self, action: #selector(doneTapped)
             )
         }
     }

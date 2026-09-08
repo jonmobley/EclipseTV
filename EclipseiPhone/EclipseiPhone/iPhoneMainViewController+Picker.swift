@@ -484,7 +484,10 @@ extension iPhoneMainViewController: VideoThumbnailPreviewDelegate {
         do {
             try thumbnailData.write(to: thumbnailURL)
             // Store the thumbnail path associated with the video
-            UserDefaults.standard.set(thumbnailURL.path, forKey: "customThumbnail_\(videoURL.lastPathComponent)")
+            UserDefaults.standard.set(
+                thumbnailURL.path,
+                forKey: DefaultsKeys.customThumbnail(fileName: videoURL.lastPathComponent)
+            )
         } catch {
             logger.error("Failed to save custom thumbnail: \(error.localizedDescription)")
         }
