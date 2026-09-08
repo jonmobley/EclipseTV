@@ -42,10 +42,14 @@ extension LibraryGridViewController {
     }
 
     /// Practice Mode plays in the hero; AirPlay / EclipseTV uses a black monitor.
+    ///
+    /// Reads `projectorAvailable`, like every other affordance: a display the scene
+    /// accessory has reported but not yet attached is still program output, so the
+    /// hero must show the monitor rather than play a second copy on the phone.
     func applyLibraryVideoLiveHeader(item: LibraryItemDTO) {
         let mgr = ExternalDisplayManager.shared
         let phonePlays = LiveOutputRouting.phoneHeroPlaysLibraryVideo(
-            airPlayConnected: mgr.isConnected,
+            airPlayConnected: LiveOutputRouting.projectorAvailable,
             eclipseTVOnline: store.isOnline,
             practiceMode: prefersDisconnectedLivePreview,
             isRemoteOperator: ShowLiveSession.shared.isRemoteOperator

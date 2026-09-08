@@ -73,7 +73,8 @@ extension LibraryGridViewController {
             return
         }
         let manager = ExternalDisplayManager.shared
-        guard manager.isConnected,
+        // Same projector signal as the go-live tap; `present` attaches on demand.
+        guard LiveOutputRouting.projectorAvailable,
               !manager.isOverlayLive,
               !manager.isJoinedLive else { return }
         let startAt = manager.currentVideoPlaybackTime(forItemId: id) ?? 0
