@@ -70,6 +70,54 @@ struct LivePollIdleChromeTests {
         )
     }
 
+    // MARK: - Which overlays a card tap retires
+
+    /// Practice Mode, website live, no display: the hero is the only output, so
+    /// tapping the poll has to end the website — otherwise its tile kept the red
+    /// stroke while the tap was refused.
+    @Test func websiteOnThePhoneHeroIsRetiredByAPollTap() {
+        #expect(
+            LivePollIdleChrome.overlayOwnsPhoneHero(
+                isOverlayLive: true,
+                displayConnected: false,
+                isQuestPollLive: false
+            )
+        )
+    }
+
+    /// On AirPlay / HDMI the website keeps the projector until Start; the gate
+    /// is phone-only and must not tear the overlay down.
+    @Test func websiteOnAProjectorIsLeftAlone() {
+        #expect(
+            LivePollIdleChrome.overlayOwnsPhoneHero(
+                isOverlayLive: true,
+                displayConnected: true,
+                isQuestPollLive: false
+            ) == false
+        )
+    }
+
+    /// The poll's own projector page is handled by the room branch, not retired.
+    @Test func thePollsOwnRoomIsNotRetired() {
+        #expect(
+            LivePollIdleChrome.overlayOwnsPhoneHero(
+                isOverlayLive: true,
+                displayConnected: false,
+                isQuestPollLive: true
+            ) == false
+        )
+    }
+
+    @Test func nothingToRetireWithoutAnOverlay() {
+        #expect(
+            LivePollIdleChrome.overlayOwnsPhoneHero(
+                isOverlayLive: false,
+                displayConnected: false,
+                isQuestPollLive: false
+            ) == false
+        )
+    }
+
     // MARK: - Which card owns idle chrome
 
     @Test func practiceWinsOverAPendingGate() {

@@ -23,7 +23,8 @@ enum LivePollIdleChrome {
     ///   - overlayOwnsPhoneHero: A live overlay (countdown, website, camera, PDF)
     ///     has no display to sit on, so the phone hero is the only place it
     ///     exists. Painting the gate over it retired the overlay from the sole
-    ///     output while its tile still read live.
+    ///     output while its tile still read live; a card tap ends the overlay
+    ///     first (`overlayOwnsPhoneHero(...)`) so this only guards repaints.
     static func isAvailable(
         photoLive: Bool,
         toolSelected: Bool,
@@ -31,6 +32,27 @@ enum LivePollIdleChrome {
         overlayOwnsPhoneHero: Bool
     ) -> Bool {
         !photoLive && !toolSelected && !slideshowActive && !overlayOwnsPhoneHero
+    }
+
+    /// Whether a live overlay exists only on the phone hero.
+    ///
+    /// A Live Poll card taking that hero has to end the overlay, the same
+    /// hand-off a photo tap makes through `present`; otherwise the website
+    /// (or countdown, camera, PDF) tile keeps its red stroke with nothing
+    /// showing it. On a projector the overlay keeps its own screen and the
+    /// Practice / Start chrome is phone-only, so nothing is retired.
+    ///
+    /// - Parameters:
+    ///   - isOverlayLive: Any overlay is the presentation source.
+    ///   - displayConnected: AirPlay / HDMI has an attached scene to render it.
+    ///   - isQuestPollLive: The overlay is the poll's own projector page, which
+    ///     the room branch of `selectLivePoll` already owns.
+    static func overlayOwnsPhoneHero(
+        isOverlayLive: Bool,
+        displayConnected: Bool,
+        isQuestPollLive: Bool
+    ) -> Bool {
+        isOverlayLive && !displayConnected && !isQuestPollLive
     }
 
     /// Which Live Poll card owns idle chrome: an active Practice wins over a
@@ -74,13 +96,36 @@ extension LibraryGridViewController {
     }
 
     /// A countdown, website, camera, or PDF is live with no display to sit on, so
-    /// the phone hero is its only output and the gate must not take it.
+    /// the phone hero is its only output and the gate must not paint over it.
     ///
     /// The poll's own room is excluded — that overlay *is* the poll, and the
     /// callers that matter already return early on `isQuestPollLive`.
+    ///
+    /// Reads `isConnected`, not `projectorAvailable`: ending the overlay is a
+    /// side effect on real output, and an unattached scene is not showing it.
     var livePollGateBlockedByPhoneHeroOverlay: Bool {
         let mgr = ExternalDisplayManager.shared
-        return mgr.isOverlayLive && !mgr.isConnected && !mgr.isQuestPollLive
+        return LivePollIdleChrome.overlayOwnsPhoneHero(
+            isOverlayLive: mgr.isOverlayLive,
+            displayConnected: mgr.isConnected,
+            isQuestPollLive: mgr.isQuestPollLive
+        )
+    }
+
+    /// Ends the overlay that owns the phone hero so a Live Poll card can take it.
+    ///
+    /// Photo, PDF, camera, and countdown taps all reach `present`, which ends
+    /// the web overlay and drops the website tile's stroke. Arming the gate or
+    /// Practice never presented anything, so in Practice Mode the website stayed
+    /// live under the poll — red stroke and all. `clear()` notifies like
+    /// `present` does, so the grid, hero, and phone browser see the same end.
+    ///
+    /// Call this before resetting the tool flags: the overlay-end notification
+    /// re-derives the Screensaver fallback selection, which would otherwise sit
+    /// under the gate as a selected tool and hide it.
+    func retirePhoneHeroOverlayForLivePoll() {
+        guard livePollGateBlockedByPhoneHeroOverlay else { return }
+        ExternalDisplayManager.shared.clear()
     }
 
     /// True while the hero shows Practice / Start or the Practice deck instead of
