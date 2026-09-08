@@ -233,6 +233,13 @@ final class PDFRemoteViewController: UIViewController {
         ExternalDisplayManager.shared.reloadPDFLayout()
     }
 
+    /// Keeps the navigation title current after a rename (local or synced in).
+    @objc private func pdfStoreChanged() {
+        guard let latest = PDFStore.shared.documents.first(where: { $0.id == document.id })
+        else { return }
+        title = latest.title
+    }
+
     // MARK: - Observers
 
     private func observePresentationChanges() {
@@ -246,6 +253,12 @@ final class PDFRemoteViewController: UIViewController {
             self,
             selector: #selector(outputSettingsChanged),
             name: ExternalOutputSettings.didChangeNotification,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(pdfStoreChanged),
+            name: PDFStore.didChangeNotification,
             object: nil
         )
     }
