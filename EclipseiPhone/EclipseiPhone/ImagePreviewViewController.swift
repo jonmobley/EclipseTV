@@ -47,7 +47,8 @@ final class ImagePreviewViewController: UIViewController {
     private let instructionLabel: UILabel = {
         let label = UILabel()
         label.textColor = .lightGray
-        label.font = UIFont.systemFont(ofSize: 16)
+        label.font = .preferredFont(forTextStyle: .callout)
+        label.adjustsFontForContentSizeCategory = true
         label.textAlignment = .center
         label.numberOfLines = 0
         return label
@@ -64,7 +65,8 @@ final class ImagePreviewViewController: UIViewController {
     private let cancelButton: UIButton = {
         let button = UIButton(type: .system)
         button.setTitle("Cancel", for: .normal)
-        button.titleLabel?.font = UIFont.systemFont(ofSize: 18, weight: .medium)
+        button.titleLabel?.font = .scaled(18, weight: .medium, maximumPointSize: 26)
+        button.titleLabel?.adjustsFontForContentSizeCategory = true
         button.setTitleColor(.systemRed, for: .normal)
         button.backgroundColor = UIColor.systemRed.withAlphaComponent(0.1)
         button.layer.applyContinuousCorner(radius: CornerRadii.large)
@@ -73,7 +75,8 @@ final class ImagePreviewViewController: UIViewController {
 
     private let confirmButton: UIButton = {
         let button = UIButton(type: .system)
-        button.titleLabel?.font = UIFont.systemFont(ofSize: 18, weight: .medium)
+        button.titleLabel?.font = .scaled(18, weight: .medium, maximumPointSize: 26)
+        button.titleLabel?.adjustsFontForContentSizeCategory = true
         button.setTitleColor(.white, for: .normal)
         button.backgroundColor = .systemBlue
         button.layer.applyContinuousCorner(radius: CornerRadii.large)
