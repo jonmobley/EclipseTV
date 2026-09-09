@@ -213,9 +213,6 @@ extension AspectCropViewController {
 
     /// Zooms and scrolls so `rect` fills the crop window. Returns false when the rect
     /// is unusable and the caller should fall back to a centered crop.
-    ///
-    /// The first offset assumes the zoom view sits at the content origin; the second
-    /// corrects for wherever it actually landed, measured through `rawCropRectInImage`.
     private func applyCropRect(_ rect: CGRect, cropFrame: CGRect) -> Bool {
         guard let clamped = clampedToImage(rect) else { return false }
         let fitting = max(
@@ -232,12 +229,19 @@ extension AspectCropViewController {
             x: clamped.minX * zoom - inset.left,
             y: clamped.minY * zoom - inset.top
         )
-        scrollView.layoutIfNeeded()
-        guard let shown = rawCropRectInImage() else { return true }
-        scrollView.contentOffset = CGPoint(
-            x: scrollView.contentOffset.x + (clamped.midX - shown.midX) * zoom,
-            y: scrollView.contentOffset.y + (clamped.midY - shown.midY) * zoom
-        )
+        // Measured rather than trusted: the offset above assumes the zoom view sits at
+        // the content origin, and the scroll view may clamp what it is given.
+        for _ in 0..<2 {
+            scrollView.layoutIfNeeded()
+            guard let shown = rawCropRectInImage() else { break }
+            let dx = (clamped.midX - shown.midX) * zoom
+            let dy = (clamped.midY - shown.midY) * zoom
+            guard abs(dx) > 0.5 || abs(dy) > 0.5 else { break }
+            scrollView.contentOffset = CGPoint(
+                x: scrollView.contentOffset.x + dx,
+                y: scrollView.contentOffset.y + dy
+            )
+        }
         return true
     }
 }

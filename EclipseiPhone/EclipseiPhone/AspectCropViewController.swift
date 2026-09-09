@@ -124,7 +124,14 @@ final class AspectCropViewController: UIViewController, UIScrollViewDelegate {
         scrollView.delegate = self
         scrollView.showsHorizontalScrollIndicator = false
         scrollView.showsVerticalScrollIndicator = false
-        scrollView.bouncesZoom = true
+        // The insets below make the scrollable range exactly "the photo may not leave
+        // the crop window", and the minimum zoom keeps the photo at least window-sized.
+        // Rubber-banding breaks that promise: a Save taken while the content is bounced
+        // past its limit describes a region the photo does not cover.
+        scrollView.bounces = false
+        scrollView.bouncesZoom = false
+        scrollView.alwaysBounceVertical = false
+        scrollView.alwaysBounceHorizontal = false
         scrollView.decelerationRate = .fast
         // Insets are the crop window's margins; safe-area adjustment would skew them.
         scrollView.contentInsetAdjustmentBehavior = .never
