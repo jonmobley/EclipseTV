@@ -51,7 +51,85 @@ struct AspectCropGeometryTests {
         expectClose(saved, expected)
     }
 
+    @Test func framingSurvivesSafeAreaInsetsSettling() throws {
+        // The cropper is presented over full screen, so its safe-area insets arrive
+        // after the first layout pass and the crop window moves on the way in.
+        let initial = CGRect(x: 0, y: 900, width: 1200, height: 675)
+        let (controller, window) = makeLaidOutCropper(initialCropRect: initial)
+        defer { window.isHidden = true }
+
+        controller.additionalSafeAreaInsets = UIEdgeInsets(
+            top: 59, left: 0, bottom: 34, right: 0
+        )
+        controller.view.layoutIfNeeded()
+
+        let saved = try #require(controller.visibleCropRectInImage())
+        expectClose(saved, initial, tolerance: 2)
+    }
+
+    @Test func zoomedFramingMatchesWhatIsBehindTheWindow() throws {
+        let (controller, window) = makeLaidOutCropper(initialCropRect: nil)
+        defer { window.isHidden = true }
+
+        let scrollView = controller.scrollView
+        scrollView.zoomScale = scrollView.minimumZoomScale * 2.5
+        scrollView.contentOffset = CGPoint(x: 40, y: 260)
+        controller.view.layoutIfNeeded()
+
+        let saved = try #require(controller.visibleCropRectInImage())
+        expectClose(saved, onScreenCropRect(in: controller), tolerance: 4)
+    }
+
+    @Test func framingScrolledPastTheEdgeKeepsTheTargetAspect() throws {
+        let (controller, window) = makeLaidOutCropper(initialCropRect: nil)
+        defer { window.isHidden = true }
+
+        // Shove the content well past its limit: the window can hang off the photo,
+        // and trimming the overhang instead of moving it back saves a thin strip.
+        let scrollView = controller.scrollView
+        scrollView.contentOffset = CGPoint(x: 4000, y: 4000)
+        controller.view.layoutIfNeeded()
+
+        let saved = try #require(controller.visibleCropRectInImage())
+        let imageSize = controller.sourceImage.size
+        #expect(abs(saved.width / saved.height - MediaAspect.landscape) < 0.02)
+        #expect(saved.minX >= -0.5)
+        #expect(saved.minY >= -0.5)
+        #expect(saved.maxX <= imageSize.width + 0.5)
+        #expect(saved.maxY <= imageSize.height + 0.5)
+    }
+
+    @Test func strayStoredFramingReopensAtTheTargetAspect() throws {
+        // A framing saved before this geometry was correct (or under the other Display
+        // Mode) is not the window's shape; it should reopen around what it showed.
+        let strip = CGRect(x: 0, y: 700, width: 1200, height: 200)
+        let (controller, window) = makeLaidOutCropper(initialCropRect: strip)
+        defer { window.isHidden = true }
+
+        let saved = try #require(controller.visibleCropRectInImage())
+        #expect(abs(saved.width / saved.height - MediaAspect.landscape) < 0.02)
+        #expect(abs(saved.midY - strip.midY) <= 2)
+    }
+
     // MARK: - Helpers
+
+    /// Crop window mapped into image space from on-screen frames alone, independent of
+    /// the controller's own scroll math.
+    private func onScreenCropRect(in controller: AspectCropViewController) -> CGRect {
+        let imageOnScreen = controller.view.convert(
+            controller.imageView.bounds, from: controller.imageView
+        )
+        let crop = controller.cropFrameView.frame
+        let imageSize = controller.sourceImage.size
+        let scaleX = imageSize.width / imageOnScreen.width
+        let scaleY = imageSize.height / imageOnScreen.height
+        return CGRect(
+            x: (crop.minX - imageOnScreen.minX) * scaleX,
+            y: (crop.minY - imageOnScreen.minY) * scaleY,
+            width: crop.width * scaleX,
+            height: crop.height * scaleY
+        )
+    }
 
     private func makeLaidOutCropper(
         initialCropRect: CGRect?

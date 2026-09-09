@@ -52,7 +52,9 @@ final class AspectCropViewController: UIViewController, UIScrollViewDelegate {
     private let confirmButton = UIButton(type: .system)
 
     var cropFrameConstraints: [NSLayoutConstraint] = []
-    var didConfigureScroll = false
+
+    /// Layout the scroll metrics currently describe; nil until the first pass.
+    var configuredGeometry: AspectCropScrollGeometry?
 
     // MARK: - Initialization
 
@@ -89,8 +91,12 @@ final class AspectCropViewController: UIViewController, UIScrollViewDelegate {
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
+        // Read the framed region before the crop window moves, so a resize (safe-area
+        // insets settling after presentation, rotation) carries the user's position
+        // over instead of leaving stale insets and zoom limits behind.
+        let framed = configuredGeometry == nil ? nil : visibleCropRectInImage()
         layoutCropFrame()
-        updateScrollMetricsIfNeeded()
+        updateScrollMetrics(restoring: framed)
         updateDimMask()
     }
 
