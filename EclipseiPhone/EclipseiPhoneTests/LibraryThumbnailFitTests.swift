@@ -30,6 +30,47 @@ struct LibraryThumbnailFitTests {
         #expect(cell.imageView.contentMode == .scaleAspectFit)
     }
 
+    @Test func cacheMissReloadKeepsTheFramedCrop() throws {
+        let id = uniqueId()
+        defer { MediaFramingStore.clear(forId: id) }
+        MediaFramingStore.set(
+            MediaFraming(x: 0, y: 0.25, width: 1, height: 0.5),
+            forId: id
+        )
+        let item = makeStill(id: id)
+        let cell = makeCell()
+        cell.configure(
+            with: item,
+            thumbnail: swatch(size: CGSize(width: 160, height: 160)),
+            isLive: false
+        )
+        let framed = try #require(cell.imageView.image?.size)
+
+        // The reload right after a reframe Save can land while the thumbnail cache is
+        // cold. Re-framing the tile it kept would crop the crop.
+        cell.configure(with: item, thumbnail: nil, isLive: false)
+
+        #expect(cell.imageView.image?.size == framed, "kept \(framed)")
+    }
+
+    @Test func lateThumbnailIsFramedLikeConfigure() throws {
+        let id = uniqueId()
+        defer { MediaFramingStore.clear(forId: id) }
+        MediaFramingStore.set(
+            MediaFraming(x: 0, y: 0.25, width: 1, height: 0.5),
+            forId: id
+        )
+        let cell = makeCell()
+        cell.configure(with: makeStill(id: id), thumbnail: nil, isLive: false)
+        #expect(cell.isShowingPlaceholder)
+
+        cell.applyLoadedThumbnail(swatch(size: CGSize(width: 160, height: 160)))
+
+        let painted = try #require(cell.imageView.image?.size)
+        #expect(painted == CGSize(width: 160, height: 80), "painted \(painted)")
+        #expect(cell.imageView.contentMode == .scaleAspectFit)
+    }
+
     @Test func stillThumbnailLetterboxesWhenFit() {
         let id = uniqueId()
         defer { MediaFitSettings.clear(forId: id) }
@@ -126,10 +167,10 @@ struct LibraryThumbnailFitTests {
         "fit-test-\(UUID().uuidString)"
     }
 
-    private func swatch() -> UIImage {
-        UIGraphicsImageRenderer(size: CGSize(width: 8, height: 8)).image { ctx in
+    private func swatch(size: CGSize = CGSize(width: 8, height: 8)) -> UIImage {
+        UIGraphicsImageRenderer(size: size).image { ctx in
             UIColor.gray.setFill()
-            ctx.fill(CGRect(x: 0, y: 0, width: 8, height: 8))
+            ctx.fill(CGRect(origin: .zero, size: size))
         }
     }
 }

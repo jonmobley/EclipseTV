@@ -56,6 +56,13 @@ final class LibraryThumbnailCell: UICollectionViewCell {
     /// Last media id painted; keeps art when a reload hits a transient cache miss.
     private var configuredMediaId: String?
 
+    /// Last bitmap painted, before framing was applied to it.
+    ///
+    /// A cache-miss reload re-frames whatever it kept, so keeping the *framed* tile
+    /// cropped an already-cropped bitmap a second time — the reload right after a
+    /// reframe Save is exactly when the cache misses.
+    private var configuredSourceImage: UIImage?
+
     // MARK: - Init
 
     override init(frame: CGRect) {
@@ -238,12 +245,13 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         // reload — keep the previous bitmap for the same item instead of flashing
         // the mountain / film placeholder.
         let retained = (configuredMediaId == item.id && thumbnail == nil)
-            ? imageView.image
+            ? configuredSourceImage
             : nil
         let image = thumbnail ?? retained
 
         resetChrome()
         configuredMediaId = item.id
+        configuredSourceImage = image
         cardView.backgroundColor = item.isVideo
             ? .black
             : .secondarySystemBackground
@@ -309,9 +317,21 @@ final class LibraryThumbnailCell: UICollectionViewCell {
     var isShowingPlaceholder: Bool { imageView.image == nil }
 
     /// Paints a late-arriving preview without resetting ⋯ / type-icon chrome.
+    ///
+    /// Framed the same way `configure` frames it: a still with a custom crop must not
+    /// end up full-frame just because its thumbnail decoded after the first paint.
     func applyLoadedThumbnail(_ image: UIImage) {
         guard imageView.image == nil else { return }
-        imageView.image = image
+        configuredSourceImage = image
+        if let id = configuredMediaId {
+            let framed = MediaFramingStore.framedStill(
+                image, forId: id, fallback: imageView.contentMode
+            )
+            imageView.contentMode = framed.contentMode
+            imageView.image = framed.image
+        } else {
+            imageView.image = image
+        }
         if imageView.alpha == 0 { imageView.alpha = 1 }
         placeholderIcon.isHidden = true
         refreshTypeIconVisibility()
@@ -442,6 +462,7 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         recycleCameraPreview()
         stopArrangeWiggle()
         configuredMediaId = nil
+        configuredSourceImage = nil
     }
 
     /// Visible duration pill text, or nil when the overlay is hidden.
