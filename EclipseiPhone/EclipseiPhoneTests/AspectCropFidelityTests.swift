@@ -62,6 +62,45 @@ struct AspectCropFidelityTests {
         try expectSavedFramingMatchesWindow(in: controller)
     }
 
+    @Test func savedFramingShowsTheSameRegionOnATile() throws {
+        // The seam the user actually sees: the editor saves a rect against the full
+        // photo, and the grid applies it to a tile-sized copy of the same photo.
+        let id = "framing-fidelity-\(UUID().uuidString)"
+        defer { MediaFramingStore.clear(forId: id) }
+        let (controller, window) = makeCropper(
+            initialCropRect: CGRect(x: 200, y: 700, width: 900, height: 506)
+        )
+        defer { window.isHidden = true }
+
+        let saved = try #require(controller.visibleCropRectInImage())
+        MediaFramingStore.set(
+            MediaFraming(rect: saved, in: controller.sourceImage.size), forId: id
+        )
+        let framed = MediaFramingStore.framedStill(
+            ThumbnailDecoder.downsample(controller.sourceImage),
+            forId: id,
+            fallback: .scaleAspectFill
+        )
+        let tile = try #require(framed.image)
+        #expect(framed.contentMode == .scaleAspectFit)
+        #expect(
+            abs(tile.size.width / tile.size.height - MediaAspect.landscape) < 0.05,
+            "tile \(tile.size)"
+        )
+
+        let shown = renderCropWindow(in: controller)
+        for fx in [0.25, 0.75] {
+            for fy in [0.25, 0.75] {
+                let onTile = try #require(sample(tile, fx, fy))
+                let inEditor = try #require(sample(shown, fx, fy))
+                #expect(
+                    close(onTile, inEditor),
+                    "at (\(fx), \(fy)) tile \(onTile) vs editor \(inEditor)"
+                )
+            }
+        }
+    }
+
     // MARK: - Helpers
 
     private func expectSavedFramingMatchesWindow(
