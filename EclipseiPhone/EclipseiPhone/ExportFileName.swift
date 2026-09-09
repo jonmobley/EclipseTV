@@ -46,12 +46,17 @@ enum ExportFileName {
         }
 
         var cleaned = scaled.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Forbidden edge chars become `_`; strip those and leftover dots so
+        // `"A/B?"` → `A_B`, not `A_B_`.
+        let edgeJunk = CharacterSet(charactersIn: "._")
+            .union(.whitespacesAndNewlines)
+        cleaned = cleaned.trimmingCharacters(in: edgeJunk)
         while cleaned.hasPrefix(".") {
             cleaned.removeFirst()
         }
         while cleaned.hasSuffix(".") {
             cleaned.removeLast()
-            cleaned = cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+            cleaned = cleaned.trimmingCharacters(in: edgeJunk)
         }
         if cleaned.isEmpty { return "Untitled" }
         if cleaned.count > maxBaseLength {
