@@ -51,10 +51,11 @@ final class AspectCropViewController: UIViewController, UIScrollViewDelegate {
     private let resetButton = UIButton(type: .system)
     private let confirmButton = UIButton(type: .system)
 
-    var cropFrameConstraints: [NSLayoutConstraint] = []
-
     /// Layout the scroll metrics currently describe; nil until the first pass.
     var configuredGeometry: AspectCropScrollGeometry?
+
+    /// Region behind the crop window as of the last `viewWillLayoutSubviews`.
+    var framedBeforeLayout: CGRect?
 
     // MARK: - Initialization
 
@@ -89,12 +90,19 @@ final class AspectCropViewController: UIViewController, UIScrollViewDelegate {
         setupButtons()
     }
 
+    override func viewWillLayoutSubviews() {
+        super.viewWillLayoutSubviews()
+        // Last chance to read what the user is looking at: this pass can move the crop
+        // window (safe-area insets settling after presentation, rotation), and the
+        // region behind it moves with it.
+        guard configuredGeometry != nil else { return }
+        framedBeforeLayout = visibleCropRectInImage()
+    }
+
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        // Read the framed region before the crop window moves, so a resize (safe-area
-        // insets settling after presentation, rotation) carries the user's position
-        // over instead of leaving stale insets and zoom limits behind.
-        let framed = configuredGeometry == nil ? nil : visibleCropRectInImage()
+        let framed = framedBeforeLayout
+        framedBeforeLayout = nil
         layoutCropFrame()
         updateScrollMetrics(restoring: framed)
         updateDimMask()
@@ -139,7 +147,7 @@ final class AspectCropViewController: UIViewController, UIScrollViewDelegate {
         cropFrameView.isUserInteractionEnabled = false
         cropFrameView.layer.borderColor = UIColor.white.cgColor
         cropFrameView.layer.borderWidth = 2
-        cropFrameView.translatesAutoresizingMaskIntoConstraints = false
+        // Positioned by frame in `layoutCropFrame`, not by constraints.
         view.addSubview(cropFrameView)
     }
 

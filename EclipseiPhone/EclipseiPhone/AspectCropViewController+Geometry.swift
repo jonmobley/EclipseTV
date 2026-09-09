@@ -22,9 +22,12 @@ struct AspectCropScrollGeometry: Equatable {
 
 extension AspectCropViewController {
 
-    /// Sizes the white crop window to `targetAspect` inside the scroll view.
+    /// Centers the white crop window in the scroll view at `targetAspect`.
+    ///
+    /// Set as a frame rather than through constraints: the metrics below read the
+    /// window straight back, and re-activating constraints only takes effect after
+    /// another layout pass — one that would re-enter this update halfway through it.
     func layoutCropFrame() {
-        NSLayoutConstraint.deactivate(cropFrameConstraints)
         let maxW = scrollView.bounds.width - 32
         let maxH = scrollView.bounds.height - 32
         guard maxW > 0, maxH > 0 else { return }
@@ -36,14 +39,12 @@ extension AspectCropViewController {
             cropW = cropH * targetAspect
         }
 
-        cropFrameConstraints = [
-            cropFrameView.centerXAnchor.constraint(equalTo: scrollView.centerXAnchor),
-            cropFrameView.centerYAnchor.constraint(equalTo: scrollView.centerYAnchor),
-            cropFrameView.widthAnchor.constraint(equalToConstant: cropW),
-            cropFrameView.heightAnchor.constraint(equalToConstant: cropH)
-        ]
-        NSLayoutConstraint.activate(cropFrameConstraints)
-        view.layoutIfNeeded()
+        cropFrameView.frame = CGRect(
+            x: scrollView.frame.midX - cropW / 2,
+            y: scrollView.frame.midY - cropH / 2,
+            width: cropW,
+            height: cropH
+        )
     }
 
     /// Re-applies zoom limits, insets, and position for the current layout.
