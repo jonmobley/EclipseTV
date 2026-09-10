@@ -88,7 +88,7 @@ enum MediaCropGeometry {
 
     /// The region to actually show: `aspect`-shaped, centred on `rect`, placed.
     static func resolved(_ rect: CGRect, in size: CGSize, aspect: CGFloat) -> CGRect? {
-        placed(atAspect(rect, aspect), size)
+        placed(atAspect(rect, aspect), in: size)
     }
 
     /// Whether `rect` runs past `size` and so shows bars when displayed.
