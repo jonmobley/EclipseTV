@@ -45,8 +45,8 @@ extension LibraryGridViewController {
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         reloadLibraryGrid()
         refreshLiveHeader()
+        // The slideshow just stopped, so its ribbon has to leave with it.
         refreshSlideshowRibbonPresentation()
-        scrollLiveSlideshowRibbonToCurrentSlide()
     }
 
     /// Live hero for the countdown clock.
@@ -55,62 +55,6 @@ extension LibraryGridViewController {
         liveHeader.configureCountdownClock(
             text: clock.displayString,
             isExpired: clock.remaining == 0
-        )
-    }
-
-    /// Whether the live ribbon is showing duration presets.
-    var showsCountdownRibbon: Bool {
-        CountdownRibbon.shouldShow(
-            isShowMode: isShowMode,
-            isCountdownLive: ExternalDisplayManager.shared.isCountdownLive,
-            belongsToOpenShow: liveCountdownBelongsToOpenShow
-        )
-    }
-
-    /// Ribbon index of the live clock's current length (Custom chip when custom).
-    func countdownRibbonSelectedIndex() -> Int {
-        CountdownRibbon.selectedIndex(
-            duration: CountdownController.shared.duration,
-            presets: CountdownController.durationPresets
-        )
-    }
-
-    /// True when the live clock is a countdown card in the open Show.
-    var liveCountdownBelongsToOpenShow: Bool {
-        guard let id = CountdownController.shared.liveCountdownId,
-              let item = CountdownStore.shared.countdown(id: id),
-              let openShowId
-        else { return false }
-        return item.showId == openShowId
-    }
-
-    /// Duration-preset count plus Custom for the live ribbon.
-    func countdownRibbonItemCount() -> Int {
-        guard showsCountdownRibbon else { return 0 }
-        return CountdownController.durationPresets.count + 1
-    }
-
-    /// Configures a ribbon cell for a duration preset or Custom.
-    func configureCountdownRibbonCell(
-        _ cell: LibraryThumbnailCell,
-        at indexPath: IndexPath
-    ) {
-        let presets = CountdownController.durationPresets
-        if indexPath.item == presets.count {
-            configureCustomCountdownRibbonCell(cell)
-            return
-        }
-        guard presets.indices.contains(indexPath.item) else { return }
-        let seconds = presets[indexPath.item]
-        let selected = seconds == CountdownController.shared.duration
-        cell.configureSpecial(
-            title: CountdownController.displayString(seconds: seconds),
-            systemImage: "timer",
-            thumbnail: nil,
-            fillColor: UIColor(white: 0.16, alpha: 1),
-            isLive: selected,
-            outlined: !selected,
-            typeIcon: .countdown
         )
     }
 
@@ -132,27 +76,6 @@ extension LibraryGridViewController {
             isExpired: isExpired,
             endHint: item.endAction.tileHint
         )
-    }
-
-    /// Applies the tapped duration preset, or opens Custom Time.
-    func handleCountdownRibbonTap(at indexPath: IndexPath) {
-        let presets = CountdownController.durationPresets
-        if indexPath.item == presets.count {
-            promptCustomCountdownDuration(for: CountdownController.shared.liveCountdownId)
-            return
-        }
-        guard presets.indices.contains(indexPath.item) else { return }
-        let seconds = presets[indexPath.item]
-        // Re-applying the live length restarts the clock from full, and this chip is
-        // the highlighted one — the operator reads it as inert, not as a reset.
-        guard seconds != CountdownController.shared.duration else {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            return
-        }
-        applyCountdownDuration(seconds, to: clockTargetId())
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        refreshCountdownChrome()
-        refreshSlideshowRibbonPresentation()
     }
 
     /// Pauses and drops the clock when this countdown is deleted while live.
@@ -252,7 +175,6 @@ extension LibraryGridViewController {
                 state: selected ? .on : .off
             ) { [weak self] _ in
                 self?.applyCountdownDuration(seconds, to: item.id)
-                self?.refreshSlideshowRibbonPresentation()
             }
         }
         let isPreset = CountdownController.durationPresets.contains(selectedDuration)
@@ -294,23 +216,6 @@ extension LibraryGridViewController {
 
     // MARK: - Private
 
-    private func configureCustomCountdownRibbonCell(_ cell: LibraryThumbnailCell) {
-        let clock = CountdownController.shared
-        let selected = !clock.isPresetDuration
-        let title = selected
-            ? CountdownController.displayString(seconds: clock.duration)
-            : "Custom"
-        cell.configureSpecial(
-            title: title,
-            systemImage: "pencil",
-            thumbnail: nil,
-            fillColor: UIColor(white: 0.16, alpha: 1),
-            isLive: selected,
-            outlined: !selected,
-            typeIcon: .countdown
-        )
-    }
-
     private func updateVisibleCountdownTiles() {
         guard let showsSection = sectionIndex(for: .shows) else { return }
         let liveId = CountdownController.shared.liveCountdownId
@@ -338,10 +243,6 @@ extension LibraryGridViewController {
                     : "\(spoken), live, countdown")
                 : "\(spoken), countdown"
         }
-    }
-
-    private func clockTargetId() -> UUID? {
-        CountdownController.shared.liveCountdownId
     }
 
     func promptCustomCountdownDuration(for itemId: UUID?) {
@@ -386,7 +287,6 @@ extension LibraryGridViewController {
         applyCountdownDuration(seconds, to: itemId)
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         refreshCountdownChrome()
-        refreshSlideshowRibbonPresentation()
     }
 
     private func applyCountdownDuration(_ seconds: Int, to itemId: UUID?) {
