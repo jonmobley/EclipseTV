@@ -125,6 +125,11 @@ extension iPhoneMainViewController {
         }
 
         let normalized = MediaAspect.normalized(image)
+        ReframeDebug.logOpening(
+            itemId: item.id,
+            full: normalized,
+            thumbnail: TVLibraryStore.shared.thumbnail(for: item.id)
+        )
         let cropper = AspectCropViewController(
             image: normalized,
             targetAspect: target,

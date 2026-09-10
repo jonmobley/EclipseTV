@@ -46,7 +46,7 @@ final class AspectCropViewController: UIViewController, UIScrollViewDelegate {
     let imageView = UIImageView()
     let cropFrameView = UIView()
     let dimView = UIView()
-    private let instructionLabel = UILabel()
+    let instructionLabel = UILabel()
     private let cancelButton = UIButton(type: .system)
     private let resetButton = UIButton(type: .system)
     private let confirmButton = UIButton(type: .system)
@@ -106,17 +106,24 @@ final class AspectCropViewController: UIViewController, UIScrollViewDelegate {
         layoutCropFrame()
         updateScrollMetrics(restoring: framed)
         updateDimMask()
+        updateReframeDebugHUD()
     }
 
     // MARK: - Setup
 
     private func setupChrome() {
         instructionLabel.text = instruction
-        instructionLabel.textColor = .lightGray
-        instructionLabel.font = .systemFont(ofSize: 15)
-        instructionLabel.textAlignment = .center
         instructionLabel.numberOfLines = 0
         instructionLabel.translatesAutoresizingMaskIntoConstraints = false
+        if ReframeDebug.isEnabled {
+            instructionLabel.font = .monospacedSystemFont(ofSize: 10, weight: .medium)
+            instructionLabel.textColor = .green
+            instructionLabel.textAlignment = .left
+        } else {
+            instructionLabel.textColor = .lightGray
+            instructionLabel.font = .systemFont(ofSize: 15)
+            instructionLabel.textAlignment = .center
+        }
         view.addSubview(instructionLabel)
     }
 
@@ -226,6 +233,10 @@ final class AspectCropViewController: UIViewController, UIScrollViewDelegate {
             dimView.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor),
             dimView.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor)
         ])
+        if ReframeDebug.isEnabled {
+            instructionLabel.heightAnchor.constraint(greaterThanOrEqualToConstant: 88)
+                .isActive = true
+        }
     }
 
     private func styleChromeButton(
@@ -245,8 +256,12 @@ final class AspectCropViewController: UIViewController, UIScrollViewDelegate {
 
     func viewForZooming(in scrollView: UIScrollView) -> UIView? { imageView }
 
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        updateReframeDebugHUD()
+    }
+
     func scrollViewDidZoom(_ scrollView: UIScrollView) {
-        // Keep content fillable within crop via insets; no extra centering needed.
+        updateReframeDebugHUD()
     }
 
     // MARK: - Actions
@@ -260,18 +275,14 @@ final class AspectCropViewController: UIViewController, UIScrollViewDelegate {
     }
 
     @objc private func confirmTapped() {
+        if ReframeDebug.isEnabled {
+            confirmWithDebugDump()
+            return
+        }
         guard let rect = visibleCropRectInImage() else {
             delegate?.aspectCropDidCancel(self)
             return
         }
-        if let onFramingChosen {
-            onFramingChosen(rect)
-            return
-        }
-        guard let image = MediaAspect.crop(sourceImage, to: rect) else {
-            delegate?.aspectCropDidCancel(self)
-            return
-        }
-        delegate?.aspectCrop(self, didFinishWith: image, cropRectInSource: rect)
+        finishConfirm(with: rect)
     }
 }

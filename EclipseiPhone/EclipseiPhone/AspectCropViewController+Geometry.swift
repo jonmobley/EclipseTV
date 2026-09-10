@@ -130,7 +130,7 @@ extension AspectCropViewController {
     /// from `contentOffset` is what let the saved rect drift off the framed region: a
     /// scroll view re-centers zoomed content that is smaller than its bounds, so the
     /// zoom view does not always sit at the content origin.
-    private func rawCropRectInImage() -> CGRect? {
+    func rawCropRectInImage() -> CGRect? {
         let bounds = imageView.bounds
         let size = sourceImage.size
         guard bounds.width > 0, bounds.height > 0,
@@ -151,7 +151,7 @@ extension AspectCropViewController {
     /// Trimming the overhanging edge instead — what `intersection(_:)` does — turns a
     /// crop window that hangs off the photo into a thin strip, and that strip is what
     /// gets saved as the framing.
-    private func clampedToImage(_ rect: CGRect) -> CGRect? {
+    func clampedToImage(_ rect: CGRect) -> CGRect? {
         let size = sourceImage.size
         guard size.width > 1, size.height > 1,
               rect.width > 1, rect.height > 1 else { return nil }

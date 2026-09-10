@@ -117,6 +117,13 @@ enum MediaFramingStore {
         }
         let crop = framing.rect(in: image.size)
         let cropped = MediaAspect.crop(image, to: crop) ?? image
+        ReframeDebug.logFramedStill(
+            id: id,
+            source: image,
+            framing: framing,
+            crop: crop,
+            result: cropped
+        )
         return (cropped, .scaleAspectFit)
     }
 

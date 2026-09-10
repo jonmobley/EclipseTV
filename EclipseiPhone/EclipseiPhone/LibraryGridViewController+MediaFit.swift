@@ -64,6 +64,11 @@ extension LibraryGridViewController {
     /// Saves a custom crop position, tells the Apple TV, and re-pushes when live.
     func applyFraming(_ framing: MediaFraming, to item: LibraryItemDTO) {
         MediaFramingStore.set(framing, forId: item.id)
+        ReframeDebug.logApplied(
+            framing: framing,
+            itemId: item.id,
+            thumbnail: store.thumbnail(for: item.id)
+        )
         EclipseSyncController.shared.backend.scheduleMediaPrefsSave(libraryId: item.id)
         UISelectionFeedbackGenerator().selectionChanged()
         connectionManager.sendImageFit(
