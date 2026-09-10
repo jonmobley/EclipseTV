@@ -104,11 +104,16 @@ extension CloudKitSyncEngine {
     }
 
     func applyRemoteMedia(_ record: CKRecord) {
+        // Preferences the user changed here have not reached the server yet, so the
+        // record being applied is the older one — see `applyRemoteMediaPrefs`.
+        let hasPendingPrefs = mediaDirty.contains(record.recordID.recordName)
         if CloudKitRecordMapper.isImportedMedia(record),
            let imported = CloudKitRecordMapper.importedMedia(from: record) {
             ImportedMediaStore.shared.applyRemote(imported)
             CloudKitRecordMapper.applyRemoteMediaPrefs(
-                from: record, libraryId: imported.libraryId
+                from: record,
+                libraryId: imported.libraryId,
+                hasPendingLocalEdits: hasPendingPrefs
             )
             TVLibraryStore.shared.refreshMergedImports()
             adoptFetchedAsset(
@@ -125,7 +130,9 @@ extension CloudKitSyncEngine {
         if let capture = CloudKitRecordMapper.capture(from: record) {
             CaptureStore.shared.applyRemote(capture)
             CloudKitRecordMapper.applyRemoteMediaPrefs(
-                from: record, libraryId: capture.libraryFileName
+                from: record,
+                libraryId: capture.libraryFileName,
+                hasPendingLocalEdits: hasPendingPrefs
             )
             TVLibraryStore.shared.refreshMergedCaptures()
             adoptFetchedAsset(

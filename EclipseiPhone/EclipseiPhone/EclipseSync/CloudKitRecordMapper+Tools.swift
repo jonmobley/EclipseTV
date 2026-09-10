@@ -129,8 +129,11 @@ extension CloudKitRecordMapper {
         )
         record[CloudKitSchema.CameraSettingsKey.orientation] =
             orientation.rawValue as CKRecordValue
-        record[CloudKitSchema.CameraSettingsKey.enabledIds] =
-            enabledIds.map(\.uuidString) as CKRecordValue
+        setStringList(
+            enabledIds.map(\.uuidString),
+            forKey: CloudKitSchema.CameraSettingsKey.enabledIds,
+            on: record
+        )
         if let selectedId {
             record[CloudKitSchema.CameraSettingsKey.selectedId] =
                 selectedId.uuidString as CKRecordValue

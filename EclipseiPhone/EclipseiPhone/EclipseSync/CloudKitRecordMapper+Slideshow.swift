@@ -24,7 +24,9 @@ extension CloudKitRecordMapper {
             recordID: CloudKitSchema.slideshowRecordID(for: show.id)
         )
         record[CloudKitSchema.SlideshowKey.name] = show.name as CKRecordValue
-        record[CloudKitSchema.SlideshowKey.itemIds] = show.itemIds as CKRecordValue
+        setStringList(
+            show.itemIds, forKey: CloudKitSchema.SlideshowKey.itemIds, on: record
+        )
         if let cover = show.coverId {
             record[CloudKitSchema.SlideshowKey.coverId] = cover as CKRecordValue
         } else {

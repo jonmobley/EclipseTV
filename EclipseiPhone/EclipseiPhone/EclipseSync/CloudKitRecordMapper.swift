@@ -25,7 +25,9 @@ enum CloudKitRecordMapper {
         )
         record[CloudKitSchema.ShowKey.name] = album.name as CKRecordValue
         record[CloudKitSchema.ShowKey.orientation] = album.orientation.rawValue as CKRecordValue
-        record[CloudKitSchema.ShowKey.itemIds] = album.itemIds as CKRecordValue
+        setStringList(album.itemIds, forKey: CloudKitSchema.ShowKey.itemIds, on: record)
+        // Not routed through `setStringList`: nil and empty mean different things here
+        // (`resolvedSurfaceIds` falls back to tools-then-members only for nil).
         if let surface = album.surfaceIds {
             record[CloudKitSchema.ShowKey.surfaceIds] = surface as CKRecordValue
         } else {
@@ -40,11 +42,39 @@ enum CloudKitRecordMapper {
         record[CloudKitSchema.ShowKey.modifiedAt] = modifiedAt as CKRecordValue
         record[CloudKitSchema.ShowKey.previewsWhenDisconnected] =
             album.previewsWhenDisconnected as CKRecordValue
-        record[CloudKitSchema.ShowKey.deletedItemIds] =
-            album.deletedItemIds as CKRecordValue
-        record[CloudKitSchema.ShowKey.deletedSurfaceIds] =
-            album.deletedSurfaceIds as CKRecordValue
+        setStringList(
+            album.deletedItemIds,
+            forKey: CloudKitSchema.ShowKey.deletedItemIds,
+            on: record
+        )
+        setStringList(
+            album.deletedSurfaceIds,
+            forKey: CloudKitSchema.ShowKey.deletedSurfaceIds,
+            on: record
+        )
         return record
+    }
+
+    /// Writes a string list, clearing the field rather than writing an empty one.
+    ///
+    /// CloudKit infers a field's type from the first value it ever sees, and an empty
+    /// list carries no element type, so the save is rejected outright: *"cannot use an
+    /// empty list to initialize a new field"*. That bites every newly added list field
+    /// until some device happens to write a non-empty value, and the rejection fails
+    /// the record — so a Show with nothing deleted yet could never sync at all, taking
+    /// media preferences (custom framing included) down with it.
+    ///
+    /// Only safe for fields whose reader defaults a missing value to `[]`.
+    static func setStringList(
+        _ values: [String],
+        forKey key: String,
+        on record: CKRecord
+    ) {
+        if values.isEmpty {
+            record[key] = nil
+        } else {
+            record[key] = values as CKRecordValue
+        }
     }
 
     /// Local album from a Show record.
@@ -285,8 +315,20 @@ enum CloudKitRecordMapper {
     }
 
     /// Applies Fit / framing / loop / mute from a MediaItem onto local prefs.
+    ///
+    /// - Parameter hasPendingLocalEdits: True when this record's preferences are still
+    ///   waiting to upload. Preference fields carry no timestamp of their own, so there
+    ///   is no clock to merge on: the record on the server is simply older than what
+    ///   the user just chose here, and applying it would silently revert a custom crop
+    ///   the moment anything triggered a fetch. The pending save is the newer truth, so
+    ///   leave local prefs alone and let it win.
     @MainActor
-    static func applyRemoteMediaPrefs(from record: CKRecord, libraryId: String) {
+    static func applyRemoteMediaPrefs(
+        from record: CKRecord,
+        libraryId: String,
+        hasPendingLocalEdits: Bool = false
+    ) {
+        guard !hasPendingLocalEdits else { return }
         if let raw = record[CloudKitSchema.MediaKey.fitMode] as? String,
            let mode = MediaFitMode(rawValue: raw) {
             MediaFitSettings.setMode(mode, forId: libraryId)
