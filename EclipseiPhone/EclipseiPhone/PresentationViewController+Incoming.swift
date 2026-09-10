@@ -81,7 +81,7 @@ extension PresentationViewController {
                 let image: UIImage?
                 if let framing, let decoded, !isLogo,
                    let crop = framing.resolvedRect(in: decoded.size) {
-                    image = MediaAspect.crop(decoded, to: crop) ?? decoded
+                    image = MediaAspect.framed(decoded, to: crop) ?? decoded
                 } else {
                     image = decoded
                 }
@@ -96,7 +96,7 @@ extension PresentationViewController {
                 guard let self, generation == self.transitionGeneration else { return }
                 if let framing, let image, !isLogo,
                    let crop = framing.resolvedRect(in: image.size) {
-                    imageView.image = MediaAspect.crop(image, to: crop) ?? image
+                    imageView.image = MediaAspect.framed(image, to: crop) ?? image
                 } else {
                     imageView.image = image
                 }

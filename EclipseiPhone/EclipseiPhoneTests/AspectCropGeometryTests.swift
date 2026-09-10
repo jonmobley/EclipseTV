@@ -51,30 +51,67 @@ struct AspectCropGeometryTests {
         expectClose(saved, expected)
     }
 
-    @Test func resetReturnsToTheDefaultFramingWithoutClosing() throws {
-        // Reset is an in-editor action: it puts the photo back where it opened (fitted
-        // and centered) and leaves the user in the editor to adjust or Save.
+    @Test func resetReturnsToFitWithoutClosing() throws {
+        // Reset is an in-editor action: it shows the whole photo centered in the window
+        // (Fit, bars at the sides) and leaves the user in the editor to adjust or Save.
         let initial = CGRect(x: 200, y: 300, width: 800, height: 450)
         let (controller, window) = makeLaidOutCropper(initialCropRect: initial)
         defer { window.isHidden = true }
         let scrollView = controller.scrollView
-        scrollView.zoomScale = scrollView.minimumZoomScale * 3
+        scrollView.zoomScale = fillZoom(of: controller) * 3
         scrollView.contentOffset = CGPoint(x: 900, y: 1400)
         controller.view.layoutIfNeeded()
 
-        controller.resetToDefaultFraming(animated: false)
+        controller.resetToFitFraming(animated: false)
 
         let saved = try #require(controller.visibleCropRectInImage())
         let imageSize = controller.sourceImage.size
-        let expectedHeight = imageSize.width / MediaAspect.landscape
-        let expected = CGRect(
-            x: 0,
-            y: (imageSize.height - expectedHeight) / 2,
-            width: imageSize.width,
-            height: expectedHeight
-        )
-        expectClose(saved, expected)
+        let expected = MediaCropGeometry.fitRect(in: imageSize, aspect: MediaAspect.landscape)
+        expectClose(saved, expected, tolerance: 8)
         #expect(controller.view.window != nil)
+    }
+
+    @Test func zoomingOutStopsAtFit() throws {
+        // Framing mode may zoom out until the whole photo is inside the window, and no
+        // further: the minimum zoom is Fit, so a save there is the Fit rect.
+        let (controller, window) = makeLaidOutCropper(initialCropRect: nil)
+        defer { window.isHidden = true }
+        let scrollView = controller.scrollView
+        let imageSize = controller.sourceImage.size
+        let crop = controller.cropFrameView.frame
+        let fitZoom = min(crop.width / imageSize.width, crop.height / imageSize.height)
+        #expect(abs(scrollView.minimumZoomScale - fitZoom) < 0.0001)
+
+        scrollView.zoomScale = scrollView.minimumZoomScale / 2
+        controller.view.layoutIfNeeded()
+        #expect(abs(scrollView.zoomScale - fitZoom) < 0.0001)
+
+        let saved = try #require(controller.visibleCropRectInImage())
+        let fit = MediaCropGeometry.fitRect(in: imageSize, aspect: MediaAspect.landscape)
+        #expect(abs(saved.width - fit.width) <= 8)
+        #expect(abs(saved.height - fit.height) <= 8)
+        #expect(saved.minX <= 0.5)
+        #expect(saved.maxX >= imageSize.width - 0.5)
+    }
+
+    @Test func betweenFillAndFitThePhotoSlidesButCannotLeaveTheWindow() throws {
+        let (controller, window) = makeLaidOutCropper(initialCropRect: nil)
+        defer { window.isHidden = true }
+        let scrollView = controller.scrollView
+        let imageSize = controller.sourceImage.size
+        scrollView.zoomScale = (scrollView.minimumZoomScale + fillZoom(of: controller)) / 2
+        controller.view.layoutIfNeeded()
+
+        // Scroll far past the limit so the window sits entirely right of the photo. The
+        // photo is kept inside the window rather than lost: it ends up against the
+        // window's left edge with the bar on the right only.
+        scrollView.contentOffset = CGPoint(x: 4000, y: scrollView.contentOffset.y)
+        controller.view.layoutIfNeeded()
+        let saved = try #require(controller.visibleCropRectInImage())
+        #expect(abs(saved.width / saved.height - MediaAspect.landscape) < 0.02)
+        #expect(saved.width > imageSize.width + 1, "rect is wider than the photo")
+        #expect(abs(saved.minX) <= 8, "photo's left edge on the window's left edge")
+        #expect(saved.maxX > imageSize.width + 1, "bar on the right")
     }
 
     @Test func framingSurvivesSafeAreaInsetsSettling() throws {
@@ -98,7 +135,7 @@ struct AspectCropGeometryTests {
         defer { window.isHidden = true }
 
         let scrollView = controller.scrollView
-        scrollView.zoomScale = scrollView.minimumZoomScale * 2.5
+        scrollView.zoomScale = fillZoom(of: controller) * 2.5
         scrollView.contentOffset = CGPoint(x: 40, y: 260)
         controller.view.layoutIfNeeded()
 
@@ -139,6 +176,13 @@ struct AspectCropGeometryTests {
     }
 
     // MARK: - Helpers
+
+    /// Zoom at which the photo exactly covers the crop window (Fill).
+    private func fillZoom(of controller: AspectCropViewController) -> CGFloat {
+        let crop = controller.cropFrameView.frame
+        let imageSize = controller.sourceImage.size
+        return max(crop.width / imageSize.width, crop.height / imageSize.height)
+    }
 
     /// Crop window mapped into image space from scroll frames, not UIView.convert.
     private func onScreenCropRect(in controller: AspectCropViewController) -> CGRect {

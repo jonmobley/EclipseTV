@@ -21,8 +21,8 @@ protocol AspectCropDelegate: AnyObject {
 ///
 /// Destructive mode (default): Save returns a cropped bitmap via `AspectCropDelegate`.
 /// Framing mode (`onFramingChosen` set): Save reports the crop rect only — the original
-/// file is left alone — and a Reset button returns the editor to the default framing
-/// (photo fitted and centered) without closing, so the user can adjust or Save from there.
+/// file is left alone — the photo may zoom out as far as Fit, and a Reset button returns
+/// the editor to Fit without closing, so the user can adjust or Save from there.
 final class AspectCropViewController: UIViewController, UIScrollViewDelegate {
 
     // MARK: - Properties
@@ -31,6 +31,12 @@ final class AspectCropViewController: UIViewController, UIScrollViewDelegate {
 
     /// When set, Save reports the crop rect without producing a bitmap, and Reset is shown.
     var onFramingChosen: ((CGRect) -> Void)?
+
+    /// Whether the photo may zoom out past Fill, as far as Fit (bars on two sides).
+    ///
+    /// Only framing mode: a framing is rendered on black by every surface, whereas the
+    /// destructive cropper hands back a bitmap and stays at Fill or closer.
+    var allowsFitZoom: Bool { onFramingChosen != nil }
 
     /// Point-space crop to restore on open (from a previously saved framing).
     var initialCropRect: CGRect?
@@ -243,6 +249,10 @@ final class AspectCropViewController: UIViewController, UIScrollViewDelegate {
 
     func viewForZooming(in scrollView: UIScrollView) -> UIView? { imageView }
 
+    func scrollViewDidZoom(_ scrollView: UIScrollView) {
+        updateContentInsets()
+    }
+
     // MARK: - Actions
 
     @objc private func cancelTapped() {
@@ -250,7 +260,7 @@ final class AspectCropViewController: UIViewController, UIScrollViewDelegate {
     }
 
     @objc private func resetTapped() {
-        resetToDefaultFraming(animated: true)
+        resetToFitFraming(animated: true)
     }
 
     @objc private func confirmTapped() {

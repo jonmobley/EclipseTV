@@ -7,11 +7,11 @@
 
 import UIKit
 
-/// Normalized crop rectangle for a still (unit space, origin top-left).
+/// Normalized framing rectangle for a still (unit space, origin top-left).
 ///
-/// Saved when the user drags/pinches in the framing editor. Applied by cropping the
-/// bitmap to this region and showing the result aspect-fit, so the original file is
-/// never rewritten.
+/// Saved when the user drags/pinches in the framing editor. Applied by rendering the
+/// bitmap at this region — cropped, or on black where the region runs past the photo —
+/// and showing the result aspect-fit, so the original file is never rewritten.
 struct MediaFraming: Codable, Equatable {
     var x: Double
     var y: Double
@@ -31,7 +31,8 @@ struct MediaFraming: Codable, Equatable {
         )
     }
 
-    /// Point-space crop for *display*: exactly `aspect`, and inside the bitmap.
+    /// Point-space region for *display*: exactly `aspect`, between Fill and Fit, and
+    /// fully overlapping the bitmap.
     ///
     /// A unit rectangle only describes the display aspect on a bitmap shaped like the
     /// one it was measured against, and only in the Display Mode it was measured for.
@@ -118,10 +119,10 @@ enum MediaFramingStore {
         UserDefaults.standard.set(map, forKey: key)
     }
 
-    /// Crops `image` to the saved framing when present; otherwise returns it unchanged.
+    /// Renders `image` at the saved framing when present; otherwise returns it unchanged.
     ///
-    /// Custom framing always pairs with `.scaleAspectFit` because the crop is already
-    /// locked to the display aspect. Without framing, `fallback` (Fit / Fill) is used.
+    /// Custom framing always pairs with `.scaleAspectFit` because the result is already
+    /// the display aspect, bars included. Without framing, `fallback` (Fit / Fill) is used.
     static func framedStill(
         _ image: UIImage?,
         forId id: String,
@@ -132,9 +133,9 @@ enum MediaFramingStore {
               let crop = framing.resolvedRect(in: image.size) else {
             return (image, fallback)
         }
-        let cropped = MediaAspect.crop(image, to: crop)
-        ReframeLog.logFramedStill(id: id, source: image, crop: crop, result: cropped)
-        return (cropped ?? image, .scaleAspectFit)
+        let framed = MediaAspect.framed(image, to: crop)
+        ReframeLog.logFramedStill(id: id, source: image, crop: crop, result: framed)
+        return (framed ?? image, .scaleAspectFit)
     }
 
     private static func stored() -> [String: [Double]] {

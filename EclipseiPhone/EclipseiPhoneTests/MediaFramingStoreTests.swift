@@ -121,6 +121,25 @@ struct MediaFramingStoreTests {
         )
     }
 
+    @Test func framedStillRendersAFitFramingWithBarsNotACrop() throws {
+        // A framing zoomed out to Fit is wider than the photo. The tile gets the photo on
+        // black at the display aspect, no larger than the photo's own longest edge.
+        let id = uniqueId()
+        defer { MediaFramingStore.clear(forId: id) }
+        let source = swatch(size: CGSize(width: 1200, height: 1600))
+        let fit = MediaCropGeometry.fitRect(in: source.size, aspect: MediaAspect.landscape)
+        MediaFramingStore.set(MediaFraming(rect: fit, in: source.size), forId: id)
+
+        let framed = ExternalOutputOrientationFixture.with(.landscape) {
+            MediaFramingStore.framedStill(source, forId: id, fallback: .scaleAspectFill)
+        }
+        let image = try #require(framed.image)
+        #expect(framed.contentMode == .scaleAspectFit)
+        #expect(abs(image.size.width / image.size.height - MediaAspect.landscape) < 0.01)
+        #expect(image.size.width <= 1600.5, "capped to the photo's longest edge")
+        #expect(image.size.height < source.size.height, "shrunk with the canvas")
+    }
+
     @Test func resolvedRectStaysInsideTheImageForAnOutOfBoundsFraming() throws {
         // A framing that arrived from another device (or an older build) can describe a
         // region that runs off this bitmap. `CGImage.cropping` would quietly hand back

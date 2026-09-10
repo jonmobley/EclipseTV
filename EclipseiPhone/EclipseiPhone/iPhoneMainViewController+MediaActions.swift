@@ -108,7 +108,10 @@ extension iPhoneMainViewController {
     }
 
     /// Non-destructive still framing: Save stores a normalized rect. Reset lives inside
-    /// the editor and only re-centers the view; Fit / Fill in the menu drop a framing.
+    /// the editor and only returns the view to Fit; Fit / Fill in the menu drop a framing.
+    ///
+    /// Without a saved framing the editor opens showing what the tile shows now — Fit
+    /// or Fill — so the first drag or pinch starts from the current look.
     private func beginStillFramingEdit(
         item: LibraryItemDTO,
         target: CGFloat,
@@ -135,13 +138,17 @@ extension iPhoneMainViewController {
         let stored = MediaFramingStore.framing(forId: item.id)
         if let stored {
             cropper.initialCropRect = stored.rect(in: normalized.size)
+        } else if !MediaFitSettings.isFill(forId: item.id) {
+            cropper.initialCropRect = MediaCropGeometry.fitRect(
+                in: normalized.size, aspect: target
+            )
         }
         ReframeLog.emit("""
         [Reframe] OPEN id=\(item.id) target=\(ReframeLog.fmt(target))
           file \(ReframeLog.image(image)) normalized \(ReframeLog.image(normalized))
           thumb \(ReframeLog.image(TVLibraryStore.shared.thumbnail(for: item.id)))
           stored \(ReframeLog.framing(stored)) \
-        initial \(cropper.initialCropRect.map(ReframeLog.rect) ?? "centered")
+        initial \(cropper.initialCropRect.map(ReframeLog.rect) ?? "fill")
         """)
         cropper.onFramingChosen = { [weak self, weak cropper] rect in
             guard let self, let cropper else { return }

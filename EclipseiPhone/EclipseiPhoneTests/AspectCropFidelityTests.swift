@@ -25,7 +25,7 @@ struct AspectCropFidelityTests {
         defer { window.isHidden = true }
 
         let scrollView = controller.scrollView
-        scrollView.zoomScale = scrollView.minimumZoomScale * 2.2
+        scrollView.zoomScale = fillZoom(of: controller) * 2.2
         scrollView.contentOffset = CGPoint(x: 150, y: 500)
 
         try expectSavedFramingMatchesWindow(in: controller)
@@ -71,7 +71,7 @@ struct AspectCropFidelityTests {
 
         let scrollView = controller.scrollView
         controller.imageView.bounds = CGRect(x: 0, y: 0, width: 1200, height: 2200)
-        scrollView.zoomScale = scrollView.minimumZoomScale * 2
+        scrollView.zoomScale = fillZoom(of: controller) * 2
         let cropWindow = controller.cropWindowInScrollFrame()
         let content = controller.imageView.frame
         scrollView.contentOffset = CGPoint(
@@ -80,6 +80,36 @@ struct AspectCropFidelityTests {
         )
 
         try expectSavedFramingMatchesWindow(in: controller)
+    }
+
+    @Test func fitFramingSlidAsideSavesThePhotoAndTheBarWhereTheyShow() throws {
+        // Zoomed out to Fit and nudged to one side: the saved bitmap has the photo where
+        // the window shows it and black where the window shows the scroll view behind.
+        let (controller, window) = makeCropper(initialCropRect: nil)
+        defer { window.isHidden = true }
+
+        let scrollView = controller.scrollView
+        scrollView.zoomScale = scrollView.minimumZoomScale
+        controller.view.layoutIfNeeded()
+        let cropWindow = controller.cropWindowInScrollFrame()
+        let content = scrollView.contentSize
+        let slack = cropWindow.width - content.width
+        #expect(slack > 20, "portrait photo at Fit leaves room at the sides")
+        // Centered, then nudged a third of the slack: still inside the allowed travel.
+        scrollView.contentOffset = CGPoint(
+            x: content.width / 2 - cropWindow.midX + slack / 3,
+            y: content.height / 2 - cropWindow.midY
+        )
+        controller.view.layoutIfNeeded()
+
+        let saved = try #require(controller.visibleCropRectInImage())
+        #expect(saved.minX < -1)
+        #expect(saved.maxX > controller.sourceImage.size.width + 1)
+        try expectSavedFramingMatchesWindow(in: controller)
+
+        let framed = try #require(MediaAspect.framed(controller.sourceImage, to: saved))
+        let leftBar = try #require(sample(framed, 0.02, 0.5))
+        #expect(leftBar.allSatisfy { $0 <= 10 }, "left edge is a bar: \(leftBar)")
     }
 
     @Test func savedFramingShowsTheSameRegionOnATile() throws {
@@ -127,12 +157,19 @@ struct AspectCropFidelityTests {
 
     // MARK: - Helpers
 
+    /// Zoom at which the photo exactly covers the crop window (Fill).
+    private func fillZoom(of controller: AspectCropViewController) -> CGFloat {
+        let crop = controller.cropFrameView.frame
+        let imageSize = controller.sourceImage.size
+        return max(crop.width / imageSize.width, crop.height / imageSize.height)
+    }
+
     private func expectSavedFramingMatchesWindow(
         in controller: AspectCropViewController,
         sourceLocation: SourceLocation = #_sourceLocation
     ) throws {
         let saved = try #require(controller.visibleCropRectInImage())
-        let cropped = try #require(MediaAspect.crop(controller.sourceImage, to: saved))
+        let cropped = try #require(MediaAspect.framed(controller.sourceImage, to: saved))
         let shown = renderCropWindow(in: controller)
 
         for fx in [0.15, 0.5, 0.85] {

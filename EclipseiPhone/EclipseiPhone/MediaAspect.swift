@@ -100,6 +100,41 @@ enum MediaAspect {
         return UIImage(cgImage: cropped, scale: scale, orientation: .up)
     }
 
+    /// The bitmap a display shows for `frameRect`: `image` cropped to it, or — where the
+    /// rect runs past the photo (a framing between Fill and Fit) — the photo drawn on
+    /// black at its position inside the rect, so the bars are part of the result.
+    ///
+    /// The result's longest edge never exceeds the photo's, so a Fit framing of a
+    /// screen-sized decode does not allocate a bitmap wider than the screen.
+    static func framed(_ image: UIImage, to frameRect: CGRect) -> UIImage? {
+        let normalized = normalized(image)
+        let size = normalized.size
+        guard frameRect.width > 0, frameRect.height > 0,
+              size.width > 0, size.height > 0 else { return nil }
+        guard MediaCropGeometry.showsBars(frameRect, in: size) else {
+            return crop(normalized, to: frameRect)
+        }
+        let longest = max(size.width, size.height)
+        let shrink = min(1, longest / max(frameRect.width, frameRect.height))
+        let canvas = CGSize(
+            width: (frameRect.width * shrink).rounded(),
+            height: (frameRect.height * shrink).rounded()
+        )
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = normalized.scale
+        format.opaque = true
+        return UIGraphicsImageRenderer(size: canvas, format: format).image { ctx in
+            UIColor.black.setFill()
+            ctx.fill(CGRect(origin: .zero, size: canvas))
+            normalized.draw(in: CGRect(
+                x: -frameRect.minX * shrink,
+                y: -frameRect.minY * shrink,
+                width: size.width * shrink,
+                height: size.height * shrink
+            ))
+        }
+    }
+
     /// Center-crops to 1:1 so landscape (or tall) covers fill Home’s square Recent tiles.
     static func centerCroppedToSquare(_ image: UIImage) -> UIImage {
         let normalized = normalized(image)

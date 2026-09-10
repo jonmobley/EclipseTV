@@ -50,14 +50,28 @@ struct MediaCropGeometryTests {
         #expect(abs(corrected.minX - rect.minX) < 0.01)
     }
 
-    // MARK: - containedIn
+    // MARK: - fillRect / fitRect
 
-    @Test func containedInSlidesAnOverhangingRectInsteadOfTrimmingIt() throws {
+    @Test func fillAndFitBracketThePhoto() {
+        let size = CGSize(width: 1200, height: 1600)
+        let fill = MediaCropGeometry.fillRect(in: size, aspect: landscape)
+        let fit = MediaCropGeometry.fitRect(in: size, aspect: landscape)
+        #expect(abs(fill.width - 1200) < 0.01)
+        #expect(abs(fill.height - 675) < 0.01)
+        #expect(abs(fill.midY - 800) < 0.01)
+        #expect(abs(fit.height - 1600) < 0.01)
+        #expect(abs(fit.width - 2844.44) < 0.01)
+        #expect(abs(fit.midX - 600) < 0.01)
+    }
+
+    // MARK: - placed
+
+    @Test func placedSlidesAnOverhangingRectInsteadOfTrimmingIt() throws {
         // Trimming is what produced the thin strip: the shape must survive.
         let size = CGSize(width: 1000, height: 800)
         let moved = try #require(
-            MediaCropGeometry.containedIn(
-                CGRect(x: 900, y: 700, width: 400, height: 225), size
+            MediaCropGeometry.placed(
+                CGRect(x: 900, y: 700, width: 400, height: 225), in: size
             )
         )
         #expect(abs(moved.width - 400) < 0.01)
@@ -66,25 +80,43 @@ struct MediaCropGeometryTests {
         #expect(abs(moved.maxY - 800) < 0.01)
     }
 
-    @Test func containedInShrinksOnlyWhenTheRectCannotFit() throws {
+    @Test func placedKeepsThePhotoInsideARectWiderThanIt() throws {
+        // Between Fill and Fit: the rect is wider than the photo, so the photo may
+        // slide within it but not leave it — no bar wider than the slack on either side.
         let size = CGSize(width: 400, height: 400)
-        let fitted = try #require(
-            MediaCropGeometry.containedIn(
-                CGRect(x: -100, y: 0, width: 800, height: 450), size
+        let placed = try #require(
+            MediaCropGeometry.placed(
+                CGRect(x: -300, y: 50, width: 600, height: 337.5), in: size
             )
         )
-        #expect(fitted.width <= size.width + 0.01)
-        #expect(fitted.height <= size.height + 0.01)
-        #expect(abs(fitted.width / fitted.height - 800.0 / 450.0) < 0.001)
+        #expect(abs(placed.width - 600) < 0.01)
+        #expect(abs(placed.minX - (-200)) < 0.01, "photo's right edge stays on screen")
+        #expect(abs(placed.minY - 50) < 0.01)
     }
 
-    @Test func containedInRejectsADegenerateRect() {
+    @Test func placedShrinksARectLargerThanFitToFit() throws {
+        let size = CGSize(width: 400, height: 400)
+        let placed = try #require(
+            MediaCropGeometry.placed(
+                CGRect(x: -400, y: -200, width: 1600, height: 900), in: size
+            )
+        )
+        let fit = MediaCropGeometry.fitRect(in: size, aspect: 1600.0 / 900.0)
+        #expect(abs(placed.width - fit.width) < 0.01)
+        #expect(abs(placed.height - fit.height) < 0.01)
+        // At Fit the photo may still sit anywhere along the slack axis, but not leave.
+        #expect(placed.minX <= 0.01)
+        #expect(placed.maxX >= size.width - 0.01)
+        #expect(abs(placed.minY) < 0.01)
+    }
+
+    @Test func placedRejectsADegenerateRect() {
         let size = CGSize(width: 100, height: 100)
-        #expect(MediaCropGeometry.containedIn(.zero, size) == nil)
+        #expect(MediaCropGeometry.placed(.zero, in: size) == nil)
         #expect(
-            MediaCropGeometry.containedIn(
+            MediaCropGeometry.placed(
                 CGRect(x: 0, y: 0, width: 10, height: 10),
-                CGSize(width: 0, height: 0)
+                in: CGSize(width: 0, height: 0)
             ) == nil
         )
     }
@@ -105,6 +137,8 @@ struct MediaCropGeometryTests {
     }
 
     @Test func resolvedHandlesTheVerticalTarget() throws {
+        // A full-width strip reshaped to 9:16 is taller than the photo: that is Fit for
+        // this photo, with bars above and below, not a crop squeezed inside it.
         let size = CGSize(width: 1200, height: 1600)
         let crop = try #require(
             MediaCropGeometry.resolved(
@@ -114,6 +148,14 @@ struct MediaCropGeometryTests {
             )
         )
         #expect(abs(crop.width / crop.height - MediaAspect.vertical) < 0.001)
-        #expect(crop.maxY <= size.height + 0.01)
+        #expect(abs(crop.width - 1200) < 0.01)
+        #expect(crop.minY <= 0.01)
+        #expect(crop.maxY >= size.height - 0.01)
+    }
+
+    @Test func showsBarsOnlyWhenTheRectLeavesThePhoto() {
+        let size = CGSize(width: 1000, height: 1000)
+        #expect(!MediaCropGeometry.showsBars(CGRect(x: 0, y: 200, width: 1000, height: 562), in: size))
+        #expect(MediaCropGeometry.showsBars(CGRect(x: -100, y: 200, width: 1200, height: 675), in: size))
     }
 }
