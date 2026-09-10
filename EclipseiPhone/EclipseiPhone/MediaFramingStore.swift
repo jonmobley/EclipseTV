@@ -19,6 +19,9 @@ struct MediaFraming: Codable, Equatable {
     var height: Double
 
     /// Point-space crop inside an image of `imageSize` (top-left origin).
+    ///
+    /// Raw denormalization, with no promise about the result's shape. Displaying media
+    /// wants `resolvedRect(in:aspect:)` instead.
     func rect(in imageSize: CGSize) -> CGRect {
         CGRect(
             x: x * imageSize.width,
@@ -26,6 +29,19 @@ struct MediaFraming: Codable, Equatable {
             width: width * imageSize.width,
             height: height * imageSize.height
         )
+    }
+
+    /// Point-space crop for *display*: exactly `aspect`, and inside the bitmap.
+    ///
+    /// A unit rectangle only describes the display aspect on a bitmap shaped like the
+    /// one it was measured against, and only in the Display Mode it was measured for.
+    /// Applying it raw to a differently shaped bitmap is what showed the user a thin
+    /// band instead of the region they framed — see `MediaCropGeometry`.
+    func resolvedRect(
+        in imageSize: CGSize,
+        aspect: CGFloat = MediaAspect.activeTarget
+    ) -> CGRect? {
+        MediaCropGeometry.resolved(rect(in: imageSize), in: imageSize, aspect: aspect)
     }
 
     /// Builds unit-space framing from a point-space crop in an image of `imageSize`.
@@ -112,10 +128,10 @@ enum MediaFramingStore {
         fallback: UIView.ContentMode
     ) -> (image: UIImage?, contentMode: UIView.ContentMode) {
         guard let image,
-              let framing = framing(forId: id) else {
+              let framing = framing(forId: id),
+              let crop = framing.resolvedRect(in: image.size) else {
             return (image, fallback)
         }
-        let crop = framing.rect(in: image.size)
         let cropped = MediaAspect.crop(image, to: crop) ?? image
         ReframeDebug.logFramedStill(
             id: id,

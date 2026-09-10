@@ -163,24 +163,7 @@ extension AspectCropViewController {
     /// crop window that hangs off the photo into a thin strip, and that strip is what
     /// gets saved as the framing.
     func clampedToImage(_ rect: CGRect) -> CGRect? {
-        let size = sourceImage.size
-        guard size.width > 1, size.height > 1,
-              rect.width > 1, rect.height > 1 else { return nil }
-        let aspect = rect.width / rect.height
-        var width = min(rect.width, size.width)
-        var height = min(rect.height, size.height)
-        if width / height > aspect {
-            width = height * aspect
-        } else {
-            height = width / aspect
-        }
-        guard width > 1, height > 1 else { return nil }
-        return CGRect(
-            x: min(max(rect.midX - width / 2, 0), size.width - width),
-            y: min(max(rect.midY - height / 2, 0), size.height - height),
-            width: width,
-            height: height
-        )
+        MediaCropGeometry.containedIn(rect, sourceImage.size)
     }
 
     /// Grows `rect` about its center to `targetAspect`.
@@ -189,20 +172,7 @@ extension AspectCropViewController {
     /// (an older save, or a Display Mode change since) reopens as the region around
     /// what it used to show instead of as its own odd shape.
     private func atTargetAspect(_ rect: CGRect) -> CGRect {
-        guard rect.width > 0, rect.height > 0 else { return rect }
-        var width = rect.width
-        var height = rect.height
-        if width / height > targetAspect {
-            height = width / targetAspect
-        } else {
-            width = height * targetAspect
-        }
-        return CGRect(
-            x: rect.midX - width / 2,
-            y: rect.midY - height / 2,
-            width: width,
-            height: height
-        )
+        MediaCropGeometry.atAspect(rect, targetAspect)
     }
 
     /// Largest `targetAspect` rect that fits the image, centered — the opening framing.

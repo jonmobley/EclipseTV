@@ -50,22 +50,91 @@ struct MediaFramingStoreTests {
         #expect(abs(rebuilt.height - framing.height) < 0.0001)
     }
 
-    @Test func framedStillCropsAndLetterboxesWhenPresent() {
+    @Test func framedStillCropsToTheDisplayAspectAndLetterboxes() {
         let id = uniqueId()
         defer { MediaFramingStore.clear(forId: id) }
-        // Solid 100×100; crop the center 50×50.
+        // A square unit rect on a square bitmap. The crop still comes out 16:9,
+        // because that is the shape the tile and the panel are.
         MediaFramingStore.set(
             MediaFraming(x: 0.25, y: 0.25, width: 0.5, height: 0.5),
             forId: id
         )
         let source = swatch(size: CGSize(width: 100, height: 100))
-        let framed = MediaFramingStore.framedStill(
-            source, forId: id, fallback: .scaleAspectFill
-        )
+        let framed = ExternalOutputOrientationFixture.with(.landscape) {
+            MediaFramingStore.framedStill(
+                source, forId: id, fallback: .scaleAspectFill
+            )
+        }
         #expect(framed.contentMode == .scaleAspectFit)
-        #expect(framed.image != nil)
-        #expect(abs((framed.image?.size.width ?? 0) - 50) < 1)
-        #expect(abs((framed.image?.size.height ?? 0) - 50) < 1)
+        let size = framed.image?.size ?? .zero
+        #expect(abs(size.height - 50) < 1, "height \(size)")
+        #expect(
+            abs(size.width / size.height - MediaAspect.landscape) < 0.05,
+            "size \(size)"
+        )
+    }
+
+    @Test func framedStillKeepsTheDisplayAspectOnADifferentlyShapedBitmap() {
+        // The seam that showed the user a thin band: the editor measures against the
+        // full photo, and a consumer applies the unit rect to whatever bitmap it holds.
+        // A 4:3 framing landing on a 16:9 bitmap must not come out 2.4:1.
+        let id = uniqueId()
+        defer { MediaFramingStore.clear(forId: id) }
+        MediaFramingStore.set(
+            MediaFraming(x: 0.1, y: 0.1, width: 0.6, height: 0.45),
+            forId: id
+        )
+        let framed = ExternalOutputOrientationFixture.with(.landscape) {
+            MediaFramingStore.framedStill(
+                swatch(size: CGSize(width: 1600, height: 900)),
+                forId: id,
+                fallback: .scaleAspectFill
+            )
+        }
+        let size = framed.image?.size ?? .zero
+        #expect(
+            abs(size.width / size.height - MediaAspect.landscape) < 0.05,
+            "size \(size)"
+        )
+    }
+
+    @Test func framedStillReshapesAFramingSavedInTheOtherDisplayMode() {
+        // Switching Landscape → Vertical must not letterbox a 16:9 crop into a 9:16
+        // tile as a thin band; the saved region is re-shaped to the active mode.
+        let id = uniqueId()
+        defer { MediaFramingStore.clear(forId: id) }
+        MediaFramingStore.set(
+            MediaFraming(x: 0.0, y: 0.4, width: 1.0, height: 0.28),
+            forId: id
+        )
+        let framed = ExternalOutputOrientationFixture.with(.portrait) {
+            MediaFramingStore.framedStill(
+                swatch(size: CGSize(width: 1200, height: 1600)),
+                forId: id,
+                fallback: .scaleAspectFill
+            )
+        }
+        let size = framed.image?.size ?? .zero
+        #expect(
+            abs(size.width / size.height - MediaAspect.vertical) < 0.05,
+            "size \(size)"
+        )
+    }
+
+    @Test func resolvedRectStaysInsideTheImageForAnOutOfBoundsFraming() throws {
+        // A framing that arrived from another device (or an older build) can describe a
+        // region that runs off this bitmap. `CGImage.cropping` would quietly hand back
+        // the intersection — a strip — so the rect is moved inside first.
+        let framing = MediaFraming(x: 0.8, y: 0.9, width: 0.5, height: 0.3)
+        let size = CGSize(width: 1000, height: 1000)
+        let crop = try #require(
+            framing.resolvedRect(in: size, aspect: MediaAspect.landscape)
+        )
+        #expect(crop.minX >= -0.01)
+        #expect(crop.minY >= -0.01)
+        #expect(crop.maxX <= size.width + 0.01)
+        #expect(crop.maxY <= size.height + 0.01)
+        #expect(abs(crop.width / crop.height - MediaAspect.landscape) < 0.001)
     }
 
     @Test func framedStillPassesThroughWithoutFraming() {

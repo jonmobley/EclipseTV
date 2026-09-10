@@ -76,11 +76,15 @@ struct AspectCropFidelityTests {
         MediaFramingStore.set(
             MediaFraming(rect: saved, in: controller.sourceImage.size), forId: id
         )
-        let framed = MediaFramingStore.framedStill(
-            ThumbnailDecoder.downsample(controller.sourceImage),
-            forId: id,
-            fallback: .scaleAspectFill
-        )
+        // The tile resolves the framing against the *active* Display Mode, so pin it to
+        // the mode this cropper was built for.
+        let framed = ExternalOutputOrientationFixture.with(.landscape) {
+            MediaFramingStore.framedStill(
+                ThumbnailDecoder.downsample(controller.sourceImage),
+                forId: id,
+                fallback: .scaleAspectFill
+            )
+        }
         let tile = try #require(framed.image)
         #expect(framed.contentMode == .scaleAspectFit)
         #expect(

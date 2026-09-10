@@ -64,10 +64,13 @@ struct LibraryThumbnailFitTests {
         cell.configure(with: makeStill(id: id), thumbnail: nil, isLive: false)
         #expect(cell.isShowingPlaceholder)
 
-        cell.applyLoadedThumbnail(swatch(size: CGSize(width: 160, height: 160)))
+        ExternalOutputOrientationFixture.with(.landscape) {
+            cell.applyLoadedThumbnail(swatch(size: CGSize(width: 160, height: 160)))
+        }
 
+        // 2:1 as stored, painted at the 16:9 the tile and the panel actually are.
         let painted = try #require(cell.imageView.image?.size)
-        #expect(painted == CGSize(width: 160, height: 80), "painted \(painted)")
+        #expect(painted == CGSize(width: 160, height: 90), "painted \(painted)")
         #expect(cell.imageView.contentMode == .scaleAspectFit)
     }
 

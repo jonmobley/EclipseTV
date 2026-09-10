@@ -79,8 +79,8 @@ extension PresentationViewController {
                     maxPixelEdge: maxEdge
                 )
                 let image: UIImage?
-                if let framing, let decoded, !isLogo {
-                    let crop = framing.rect(in: decoded.size)
+                if let framing, let decoded, !isLogo,
+                   let crop = framing.resolvedRect(in: decoded.size) {
                     image = MediaAspect.crop(decoded, to: crop) ?? decoded
                 } else {
                     image = decoded
@@ -94,8 +94,8 @@ extension PresentationViewController {
         } else {
             incomingImageRequest = RemoteImageLoader.shared.loadImage(from: url) { [weak self] image in
                 guard let self, generation == self.transitionGeneration else { return }
-                if let framing, let image, !isLogo {
-                    let crop = framing.rect(in: image.size)
+                if let framing, let image, !isLogo,
+                   let crop = framing.resolvedRect(in: image.size) {
                     imageView.image = MediaAspect.crop(image, to: crop) ?? image
                 } else {
                     imageView.image = image

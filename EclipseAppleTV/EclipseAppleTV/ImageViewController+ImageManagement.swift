@@ -388,14 +388,19 @@ extension ImageViewController {
     }
 
     /// Crops to a saved custom position when present; otherwise Fit / Fill.
+    ///
+    /// The display aspect comes from the media's own library bucket rather than the
+    /// screen: a Vertical still is framed 9:16 even though the panel is 16:9.
     private static func framedStill(
         _ image: UIImage,
         forPath path: String
     ) -> (image: UIImage, contentMode: UIView.ContentMode) {
-        ImageFraming.apply(
+        let mode = EclipseShareProtocol.libraryMode(inferredFromPath: path)
+        return ImageFraming.apply(
             image,
             framing: ImageFramingSettings.framing(forPath: path),
-            fill: ImageFitSettings.mode(forPath: path) == .fill
+            fill: ImageFitSettings.mode(forPath: path) == .fill,
+            targetAspect: mode == .vertical ? 9.0 / 16.0 : 16.0 / 9.0
         )
     }
 
