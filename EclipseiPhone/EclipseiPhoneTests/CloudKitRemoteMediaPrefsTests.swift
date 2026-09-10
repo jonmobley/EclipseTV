@@ -43,6 +43,7 @@ struct CloudKitRemoteMediaPrefsTests {
         MediaFramingStore.set(
             MediaFraming(x: 0.2, y: 0.3, width: 0.4, height: 0.225), forId: id
         )
+        MediaFitSettings.setMode(.fill, forId: id)
         let theirs = MediaFraming(x: 0, y: 0, width: 1, height: 0.5625)
 
         CloudKitRecordMapper.applyRemoteMediaPrefs(
@@ -65,7 +66,8 @@ struct CloudKitRemoteMediaPrefsTests {
 
         // Present but unusable is the "no custom position" wire shape.
         let record = mediaRecord(framing: nil, fitMode: .fit)
-        record[CloudKitSchema.MediaKey.framing] = [0.5, 0.5] as CKRecordValue
+        let unusable: [Double] = [0.5, 0.5]
+        record[CloudKitSchema.MediaKey.framing] = unusable as CKRecordValue
 
         CloudKitRecordMapper.applyRemoteMediaPrefs(
             from: record, libraryId: id, hasPendingLocalEdits: true
