@@ -50,8 +50,8 @@ extension iPhoneMainViewController {
 
     /// Opens the aspect cropper so the user can re-frame an existing library item.
     ///
-    /// Stills use non-destructive framing (the original file is left alone). Videos
-    /// still permanently crop via `VideoCropExporter`.
+    /// Stills arrive from Screen Fit → Custom (the original file is left alone).
+    /// Videos still permanently crop via `VideoCropExporter`.
     func beginEditCrop(forItemId id: String) {
         guard let item = TVLibraryStore.shared.items.first(where: { $0.id == id }) else { return }
         let target = MediaAspect.activeTarget

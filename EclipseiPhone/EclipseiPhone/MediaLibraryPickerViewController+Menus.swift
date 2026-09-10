@@ -27,7 +27,7 @@ extension MediaLibraryPickerViewController {
         }
     }
 
-    /// Preview, title, notes / video options, Edit, Add to Show, Delete.
+    /// Preview, title, notes / Screen Fit, Add to Show, Delete.
     func mediaLibraryMenu(for item: LibraryItemDTO) -> UIMenu {
         if item.isAvailable == false {
             return unavailableMediaMenu(for: item)
@@ -38,10 +38,11 @@ extension MediaLibraryPickerViewController {
         ]
         if item.isVideo {
             children.append(contentsOf: videoLibraryActions(for: item))
+            children.append(editAction(forId: item.id))
         } else {
             children.append(noteAction(forId: item.id))
+            children.append(screenFitMenu(for: item))
         }
-        children.append(editAction(forId: item.id))
         children.append(addToShowMenu(membershipId: item.id))
         children.append(deleteMediaAction(item))
         return UIMenu(children: children)
@@ -105,6 +106,18 @@ extension MediaLibraryPickerViewController {
         ) { [weak self] _ in
             self?.onRequestEdit?(id)
         }
+    }
+
+    private func screenFitMenu(for item: LibraryItemDTO) -> UIMenu {
+        MediaFitMenu.make(
+            forId: item.id,
+            onSelectFit: { [weak self] mode in
+                self?.onApplyScreenFit?(item, mode)
+            },
+            onCustom: { [weak self] in
+                self?.onRequestEdit?(item.id)
+            }
+        )
     }
 
     func videoLibraryActions(for item: LibraryItemDTO) -> [UIMenuElement] {

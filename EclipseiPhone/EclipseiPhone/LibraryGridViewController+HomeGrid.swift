@@ -755,12 +755,6 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             return UIMenu(children: [resend, remove])
         }
 
-        let edit = UIAction(
-            title: "Edit",
-            image: UIImage(systemName: "crop")
-        ) { [weak self] _ in
-            self?.onRequestEdit?(id)
-        }
         let delete = UIAction(
             title: "Delete",
             image: UIImage(systemName: "trash"),
@@ -780,10 +774,12 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         ]
         if item.isVideo {
             children.append(contentsOf: videoOptionActions(for: item))
+            children.append(editAction(for: item))
         } else {
             children.append(noteAction(for: item))
+            children.append(screenFitMenu(for: item))
         }
-        children.append(contentsOf: [edit, delete])
+        children.append(delete)
         return UIMenu(children: children)
     }
 }

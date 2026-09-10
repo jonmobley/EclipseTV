@@ -591,11 +591,8 @@ extension LibraryGridViewController {
         return UIMenu(children: [edit, screenFitMenu(for: show), rename, arrangeAction(), delete])
     }
 
-    /// Opens the pan/zoom cropper so the user can re-frame the stored file.
-    ///
-    /// Sits beside Screen Fit because both decide what the audience sees, but this
-    /// one rewrites the media instead of choosing Fit vs Fill at display time.
-    private func editAction(for item: LibraryItemDTO) -> UIAction {
+    /// Opens the pan/zoom cropper for a video. Stills use Screen Fit → Custom.
+    func editAction(for item: LibraryItemDTO) -> UIAction {
         UIAction(
             title: "Edit",
             image: UIImage(systemName: "crop")
@@ -639,7 +636,7 @@ extension LibraryGridViewController {
             children.append(noteAction(for: item))
             children.append(screenFitMenu(for: item))
         }
-        if item.isAvailable != false {
+        if item.isAvailable != false, item.isVideo {
             children.append(editAction(for: item))
         }
         if let capture = CaptureStore.shared.record(id: item.id),

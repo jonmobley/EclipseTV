@@ -17,31 +17,14 @@ extension LibraryGridViewController {
     /// aspect fit. Custom opens the pan/zoom editor; Fit and Fill discard any
     /// saved position. The hero circle is a Fit / Fill shortcut.
     func screenFitMenu(for item: LibraryItemDTO) -> UIMenu {
-        let hasCustom = MediaFramingStore.hasFraming(forId: item.id)
-        let current = MediaFitSettings.mode(forId: item.id)
-        // Checkmark rides in the trailing image slot rather than `state:` so the
-        // selected row keeps the same title inset as the others. See
-        // `videoOptionActions` for the UIKit behaviour behind this.
-        var actions: [UIMenuElement] = MediaFitMode.allCases.map { mode in
-            let isCurrent = !hasCustom && mode == current
-            return UIAction(
-                title: mode.rawValue,
-                image: UIImage(systemName: isCurrent ? "checkmark" : mode.iconName)
-            ) { [weak self] _ in
+        MediaFitMenu.make(
+            forId: item.id,
+            onSelectFit: { [weak self] mode in
                 self?.applyScreenFit(mode, to: item)
+            },
+            onCustom: { [weak self] in
+                self?.onRequestEdit?(item.id)
             }
-        }
-        let custom = UIAction(
-            title: "Custom",
-            image: UIImage(systemName: hasCustom ? "checkmark" : "crop")
-        ) { [weak self] _ in
-            self?.onRequestEdit?(item.id)
-        }
-        actions.append(custom)
-        return UIMenu(
-            title: "Screen Fit",
-            image: UIImage(systemName: "aspectratio"),
-            children: actions
         )
     }
 

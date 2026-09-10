@@ -45,10 +45,12 @@ final class MediaLibraryPickerViewController: UIViewController {
     var targetShowId: UUID?
     /// Called when the user confirms Add in Show mode.
     var onAddToShow: (([String], [UUID]) -> Void)?
-    /// Crop an existing still or video (same flow as Show ⋯ Edit).
+    /// Crop a video, or Custom framing for a still (same flow as Screen Fit).
     var onRequestEdit: ((String) -> Void)?
     /// Replace a video’s poster frame.
     var onRequestVideoThumbnail: ((String) -> Void)?
+    /// Persist Fit / Fill and sync to EclipseTV when linked.
+    var onApplyScreenFit: ((LibraryItemDTO, MediaFitMode) -> Void)?
     /// Persist loop / mute and sync to EclipseTV when linked.
     var onApplyVideoSetting: ((String, Bool?, Bool?) -> Void)?
     /// Deletes after the picker’s confirmation. Grid owns TV + local teardown.

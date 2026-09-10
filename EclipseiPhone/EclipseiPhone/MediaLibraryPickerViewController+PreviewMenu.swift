@@ -14,8 +14,8 @@ extension MediaLibraryPickerViewController {
     /// ⋯ menu for the fullscreen Preview header.
     ///
     /// Mirrors `mediaLibraryMenu` without its own Preview entry. Prompts present
-    /// from Preview rather than this picker, which Preview covers; Edit and Delete
-    /// wait for it to close, since both invalidate the page on screen.
+    /// from Preview rather than this picker, which Preview covers; Delete waits
+    /// for it to close, since it invalidates the page on screen.
     ///
     /// Stills only — videos open the system player, which carries no header.
     func previewOptionsMenu(_ context: PreviewMenuContext) -> UIMenu? {
@@ -27,7 +27,7 @@ extension MediaLibraryPickerViewController {
             // The footer card already offers this whenever it is on screen.
             children.append(previewNoteAction(for: item, context))
         }
-        children.append(previewEditAction(for: item, context))
+        children.append(screenFitMenu(for: item, closing: context))
         children.append(addToShowMenu(membershipId: item.id, presenter: context.presenter))
         children.append(previewDeleteAction(for: item, context))
         return UIMenu(children: children)
@@ -59,18 +59,21 @@ extension MediaLibraryPickerViewController {
         }
     }
 
-    private func previewEditAction(
+    private func screenFitMenu(
         for item: LibraryItemDTO,
-        _ context: PreviewMenuContext
-    ) -> UIAction {
-        UIAction(
-            title: "Edit",
-            image: UIImage(systemName: "crop")
-        ) { [weak self] _ in
-            context.afterClosing {
-                self?.onRequestEdit?(item.id)
+        closing context: PreviewMenuContext
+    ) -> UIMenu {
+        MediaFitMenu.make(
+            forId: item.id,
+            onSelectFit: { [weak self] mode in
+                self?.onApplyScreenFit?(item, mode)
+            },
+            onCustom: { [weak self] in
+                context.afterClosing {
+                    self?.onRequestEdit?(item.id)
+                }
             }
-        }
+        )
     }
 
     private func previewDeleteAction(

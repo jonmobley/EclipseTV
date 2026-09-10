@@ -66,27 +66,7 @@ extension LibraryGridViewController {
         }
     }
 
-    /// Opens the pan/zoom cropper so the user can re-frame the stored file.
-    ///
-    /// Sits beside Screen Fit because both decide what the audience sees, but this
-    /// one rewrites the image instead of choosing Fit vs Fill at display time.
-    /// Deferred until Preview is off screen — it replaces the file the page on
-    /// screen was built from.
-    private func previewEditAction(
-        for item: LibraryItemDTO,
-        _ context: PreviewMenuContext
-    ) -> UIAction {
-        UIAction(
-            title: "Edit",
-            image: UIImage(systemName: "crop")
-        ) { [weak self] _ in
-            context.afterClosing {
-                self?.onRequestEdit?(item.id)
-            }
-        }
-    }
-
-    /// Edit, Set as Show Cover and Remove, for Preview opened from an open Show.
+    /// Set as Show Cover and Remove, for Preview opened from an open Show.
     private func showMemberActions(
         for item: LibraryItemDTO,
         in album: LocalAlbum,
@@ -111,10 +91,10 @@ extension LibraryGridViewController {
                 LocalAlbumStore.shared.remove(itemId: item.id, fromAlbumId: id)
             }
         }
-        return [previewEditAction(for: item, context), cover, remove]
+        return [cover, remove]
     }
 
-    /// Edit and Delete, for Preview opened from the Home grid.
+    /// Delete, for Preview opened from the Home grid.
     private func libraryActions(
         for item: LibraryItemDTO,
         _ context: PreviewMenuContext
@@ -128,6 +108,6 @@ extension LibraryGridViewController {
                 self?.confirmDelete(id: item.id, name: item.name)
             }
         }
-        return [previewEditAction(for: item, context), delete]
+        return [delete]
     }
 }
