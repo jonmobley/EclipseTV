@@ -65,7 +65,7 @@ struct CountdownControllerTests {
         #expect(clock.remaining == 30)
     }
 
-    @Test func durationPresetsMatchRibbon() {
+    @Test func durationPresetsMatchMenu() {
         #expect(CountdownController.durationPresets == [30, 60, 120, 300, 600])
     }
 
