@@ -107,7 +107,8 @@ extension iPhoneMainViewController {
         }
     }
 
-    /// Non-destructive still framing: Save stores a normalized rect, Reset clears it.
+    /// Non-destructive still framing: Save stores a normalized rect. Reset lives inside
+    /// the editor and only re-centers the view; Fit / Fill in the menu drop a framing.
     private func beginStillFramingEdit(
         item: LibraryItemDTO,
         target: CGFloat,
@@ -147,10 +148,6 @@ extension iPhoneMainViewController {
             let framing = MediaFraming(rect: rect, in: cropper.sourceImage.size)
             self.libraryViewController.applyFraming(framing, to: item)
             cropper.dismiss(animated: true)
-        }
-        cropper.onFramingReset = { [weak self, weak cropper] in
-            self?.libraryViewController.clearFraming(for: item)
-            cropper?.dismiss(animated: true)
         }
         cropper.delegate = self
         cropper.modalPresentationStyle = .overFullScreen

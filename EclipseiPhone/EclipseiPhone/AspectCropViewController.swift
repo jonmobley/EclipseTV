@@ -21,18 +21,16 @@ protocol AspectCropDelegate: AnyObject {
 ///
 /// Destructive mode (default): Save returns a cropped bitmap via `AspectCropDelegate`.
 /// Framing mode (`onFramingChosen` set): Save reports the crop rect only — the original
-/// file is left alone — and Reset clears a saved position.
+/// file is left alone — and a Reset button returns the editor to the default framing
+/// (photo fitted and centered) without closing, so the user can adjust or Save from there.
 final class AspectCropViewController: UIViewController, UIScrollViewDelegate {
 
     // MARK: - Properties
 
     weak var delegate: AspectCropDelegate?
 
-    /// When set, Save reports the crop rect without producing a bitmap.
+    /// When set, Save reports the crop rect without producing a bitmap, and Reset is shown.
     var onFramingChosen: ((CGRect) -> Void)?
-
-    /// When set, shows Reset; tapped clears framing and notifies the host.
-    var onFramingReset: (() -> Void)?
 
     /// Point-space crop to restore on open (from a previously saved framing).
     var initialCropRect: CGRect?
@@ -174,7 +172,7 @@ final class AspectCropViewController: UIViewController, UIScrollViewDelegate {
             background: UIColor.white.withAlphaComponent(0.15)
         )
         resetButton.addTarget(self, action: #selector(resetTapped), for: .touchUpInside)
-        resetButton.isHidden = onFramingReset == nil
+        resetButton.isHidden = onFramingChosen == nil
 
         styleChromeButton(
             confirmButton,
@@ -185,7 +183,7 @@ final class AspectCropViewController: UIViewController, UIScrollViewDelegate {
         confirmButton.addTarget(self, action: #selector(confirmTapped), for: .touchUpInside)
 
         var buttons: [UIView] = [cancelButton]
-        if onFramingReset != nil {
+        if onFramingChosen != nil {
             buttons.append(resetButton)
         }
         buttons.append(confirmButton)
@@ -252,7 +250,7 @@ final class AspectCropViewController: UIViewController, UIScrollViewDelegate {
     }
 
     @objc private func resetTapped() {
-        onFramingReset?()
+        resetToDefaultFraming(animated: true)
     }
 
     @objc private func confirmTapped() {

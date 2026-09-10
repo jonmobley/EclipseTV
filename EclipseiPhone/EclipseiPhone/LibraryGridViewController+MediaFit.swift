@@ -79,19 +79,6 @@ extension LibraryGridViewController {
         """)
     }
 
-    /// Drops a custom position so Fit / Fill take over again.
-    func clearFraming(for item: LibraryItemDTO) {
-        guard MediaFramingStore.hasFraming(forId: item.id) else { return }
-        MediaFramingStore.clear(forId: item.id)
-        EclipseSyncController.shared.backend.scheduleMediaPrefsSave(libraryId: item.id)
-        UISelectionFeedbackGenerator().selectionChanged()
-        let isFill = MediaFitSettings.isFill(forId: item.id)
-        connectionManager.sendImageFit(id: item.id, isFill: isFill)
-        reloadLibraryGrid()
-        refreshLiveHeader()
-        refreshLivePresentationIfNeeded(for: item)
-    }
-
     /// Re-presents the live still when `item` is currently on the external panel.
     private func refreshLivePresentationIfNeeded(for item: LibraryItemDTO) {
         let manager = ExternalDisplayManager.shared

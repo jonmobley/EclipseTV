@@ -89,6 +89,20 @@ extension AspectCropViewController {
         }
     }
 
+    /// Returns the editor to the opening framing — the photo fitted and centered in the
+    /// crop window — without leaving the editor or touching what is stored. Nothing is
+    /// saved until the user taps Save, so Cancel after a Reset still keeps the old framing.
+    func resetToDefaultFraming(animated: Bool) {
+        let crop = cropFrameView.frame
+        guard configuredGeometry != nil, crop.width > 1, crop.height > 1 else { return }
+        let apply = { _ = self.applyCropRect(self.centeredCropRect(), cropFrame: crop) }
+        guard animated else {
+            apply()
+            return
+        }
+        UIView.animate(withDuration: 0.3, delay: 0, options: .curveEaseInOut, animations: apply)
+    }
+
     /// Dims everything outside the crop window.
     func updateDimMask() {
         let crop = cropFrameView.frame

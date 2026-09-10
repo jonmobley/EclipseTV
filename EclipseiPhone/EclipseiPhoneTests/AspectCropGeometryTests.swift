@@ -51,6 +51,32 @@ struct AspectCropGeometryTests {
         expectClose(saved, expected)
     }
 
+    @Test func resetReturnsToTheDefaultFramingWithoutClosing() throws {
+        // Reset is an in-editor action: it puts the photo back where it opened (fitted
+        // and centered) and leaves the user in the editor to adjust or Save.
+        let initial = CGRect(x: 200, y: 300, width: 800, height: 450)
+        let (controller, window) = makeLaidOutCropper(initialCropRect: initial)
+        defer { window.isHidden = true }
+        let scrollView = controller.scrollView
+        scrollView.zoomScale = scrollView.minimumZoomScale * 3
+        scrollView.contentOffset = CGPoint(x: 900, y: 1400)
+        controller.view.layoutIfNeeded()
+
+        controller.resetToDefaultFraming(animated: false)
+
+        let saved = try #require(controller.visibleCropRectInImage())
+        let imageSize = controller.sourceImage.size
+        let expectedHeight = imageSize.width / MediaAspect.landscape
+        let expected = CGRect(
+            x: 0,
+            y: (imageSize.height - expectedHeight) / 2,
+            width: imageSize.width,
+            height: expectedHeight
+        )
+        expectClose(saved, expected)
+        #expect(controller.view.window != nil)
+    }
+
     @Test func framingSurvivesSafeAreaInsetsSettling() throws {
         // The cropper is presented over full screen, so its safe-area insets arrive
         // after the first layout pass and the crop window moves on the way in.
