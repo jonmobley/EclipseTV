@@ -62,6 +62,26 @@ struct AspectCropFidelityTests {
         try expectSavedFramingMatchesWindow(in: controller)
     }
 
+    @Test func zoomViewOfTheWrongShapeStillSavesWhatTheWindowShows() throws {
+        // The mapping used to assume the zoom view's bounds *are* the photo. If anything
+        // ever gives the zoom view a different shape, `.scaleAspectFit` letterboxes the
+        // photo inside it, and a mapping through the bounds reads the wrong region.
+        let (controller, window) = makeCropper(initialCropRect: nil)
+        defer { window.isHidden = true }
+
+        let scrollView = controller.scrollView
+        controller.imageView.bounds = CGRect(x: 0, y: 0, width: 1200, height: 2200)
+        scrollView.zoomScale = scrollView.minimumZoomScale * 2
+        let cropWindow = controller.cropWindowInScrollFrame()
+        let content = controller.imageView.frame
+        scrollView.contentOffset = CGPoint(
+            x: content.midX - cropWindow.midX,
+            y: content.midY - cropWindow.midY
+        )
+
+        try expectSavedFramingMatchesWindow(in: controller)
+    }
+
     @Test func savedFramingShowsTheSameRegionOnATile() throws {
         // The seam the user actually sees: the editor saves a rect against the full
         // photo, and the grid applies it to a tile-sized copy of the same photo.

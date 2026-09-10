@@ -111,13 +111,13 @@ extension AspectCropViewController {
         return clampedToImage(atTargetAspect(raw))
     }
 
-    // MARK: - Private
+    // MARK: - Mapping
 
     /// Crop window relative to the scroll view's frame, independent of scroll position.
     ///
     /// `cropFrameView` and `scrollView` are siblings in `view`, so their frames share a
     /// coordinate space and the offset is a plain subtraction.
-    private func cropWindowInScrollFrame() -> CGRect {
+    func cropWindowInScrollFrame() -> CGRect {
         cropFrameView.frame.offsetBy(
             dx: -scrollView.frame.minX,
             dy: -scrollView.frame.minY
@@ -126,34 +126,53 @@ extension AspectCropViewController {
 
     /// Crop window in source-image point space, before it is kept in bounds.
     ///
-    /// Built from `contentOffset` and the zoom view's frame. `UIView.convert` through a
-    /// zooming `UIScrollView` is not trustworthy on a real phone: it can report a
-    /// rectangle of the wrong shape, and that strip is what got saved. The zoom view's
-    /// frame already includes re-centering, so subtracting it is enough.
-    private func rawCropRectInImage() -> CGRect? {
-        let zoom = scrollView.zoomScale
+    /// Built from `contentOffset` and the zoom view's frame rather than `UIView.convert`.
+    /// Two things are measured instead of assumed: the zoom is the ratio of the zoom
+    /// view's frame to its bounds (what is actually rendered, whatever `zoomScale` says),
+    /// and the photo is mapped through the rectangle `.scaleAspectFit` draws it in, so a
+    /// zoom view whose bounds are not exactly the image's shape still maps correctly.
+    func rawCropRectInImage() -> CGRect? {
         let bounds = imageView.bounds
-        let size = sourceImage.size
         let frame = imageView.frame
-        guard zoom > 0, bounds.width > 0, bounds.height > 0,
-              frame.width > 0, frame.height > 0,
-              size.width > 0, size.height > 0 else { return nil }
+        guard bounds.width > 0, bounds.height > 0,
+              frame.width > 0, frame.height > 0 else { return nil }
+        let zoom = frame.width / bounds.width
+        guard let drawn = drawnImageRectInBounds(), zoom > 0 else { return nil }
+        let size = sourceImage.size
         let window = cropWindowInScrollFrame()
         let origin = CGPoint(
             x: scrollView.contentOffset.x + window.minX,
             y: scrollView.contentOffset.y + window.minY
         )
         let inBounds = CGRect(
-            x: (origin.x - frame.minX) / zoom,
-            y: (origin.y - frame.minY) / zoom,
+            x: bounds.minX + (origin.x - frame.minX) / zoom,
+            y: bounds.minY + (origin.y - frame.minY) / zoom,
             width: window.width / zoom,
             height: window.height / zoom
         )
         return CGRect(
-            x: (inBounds.minX - bounds.minX) * size.width / bounds.width,
-            y: (inBounds.minY - bounds.minY) * size.height / bounds.height,
-            width: inBounds.width * size.width / bounds.width,
-            height: inBounds.height * size.height / bounds.height
+            x: (inBounds.minX - drawn.minX) * size.width / drawn.width,
+            y: (inBounds.minY - drawn.minY) * size.height / drawn.height,
+            width: inBounds.width * size.width / drawn.width,
+            height: inBounds.height * size.height / drawn.height
+        )
+    }
+
+    /// Where `.scaleAspectFit` draws the photo inside the zoom view's bounds.
+    ///
+    /// Equal to the bounds when they are the image's shape (the normal case).
+    func drawnImageRectInBounds() -> CGRect? {
+        let bounds = imageView.bounds
+        let size = sourceImage.size
+        guard bounds.width > 0, bounds.height > 0,
+              size.width > 0, size.height > 0 else { return nil }
+        let scale = min(bounds.width / size.width, bounds.height / size.height)
+        let drawnSize = CGSize(width: size.width * scale, height: size.height * scale)
+        return CGRect(
+            x: bounds.midX - drawnSize.width / 2,
+            y: bounds.midY - drawnSize.height / 2,
+            width: drawnSize.width,
+            height: drawnSize.height
         )
     }
 
