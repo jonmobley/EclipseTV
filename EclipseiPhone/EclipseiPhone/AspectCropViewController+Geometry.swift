@@ -103,9 +103,12 @@ extension AspectCropViewController {
     }
 
     /// Visible crop frame mapped into source-image point space, kept in bounds.
+    ///
+    /// Always the display aspect: the white box is `targetAspect`, so a save must be
+    /// too. A thin strip cannot be stored even if the raw mapping is slightly off.
     func visibleCropRectInImage() -> CGRect? {
         guard let raw = rawCropRectInImage() else { return nil }
-        return clampedToImage(raw)
+        return clampedToImage(atTargetAspect(raw))
     }
 
     // MARK: - Private
@@ -123,26 +126,34 @@ extension AspectCropViewController {
 
     /// Crop window in source-image point space, before it is kept in bounds.
     ///
-    /// Read out of the view hierarchy: `imageView` is the scroll view's zoom view, so
-    /// converting into its coordinate space answers "what is behind the white box" no
-    /// matter where the scroll view put the zoom view, and no matter what its
-    /// `contentOffset` and `contentInset` are. Rebuilding that position arithmetically
-    /// from `contentOffset` is what let the saved rect drift off the framed region: a
-    /// scroll view re-centers zoomed content that is smaller than its bounds, so the
-    /// zoom view does not always sit at the content origin.
+    /// Built from `contentOffset` and the zoom view's frame. `UIView.convert` through a
+    /// zooming `UIScrollView` is not trustworthy on a real phone: it can report a
+    /// rectangle of the wrong shape, and that strip is what got saved. The zoom view's
+    /// frame already includes re-centering, so subtracting it is enough.
     func rawCropRectInImage() -> CGRect? {
+        let zoom = scrollView.zoomScale
         let bounds = imageView.bounds
         let size = sourceImage.size
-        guard bounds.width > 0, bounds.height > 0,
+        let frame = imageView.frame
+        guard zoom > 0, bounds.width > 0, bounds.height > 0,
+              frame.width > 0, frame.height > 0,
               size.width > 0, size.height > 0 else { return nil }
-        let inImage = imageView.convert(cropFrameView.bounds, from: cropFrameView)
-        let scaleX = size.width / bounds.width
-        let scaleY = size.height / bounds.height
+        let window = cropWindowInScrollFrame()
+        let origin = CGPoint(
+            x: scrollView.contentOffset.x + window.minX,
+            y: scrollView.contentOffset.y + window.minY
+        )
+        let inBounds = CGRect(
+            x: (origin.x - frame.minX) / zoom,
+            y: (origin.y - frame.minY) / zoom,
+            width: window.width / zoom,
+            height: window.height / zoom
+        )
         return CGRect(
-            x: (inImage.minX - bounds.minX) * scaleX,
-            y: (inImage.minY - bounds.minY) * scaleY,
-            width: inImage.width * scaleX,
-            height: inImage.height * scaleY
+            x: (inBounds.minX - bounds.minX) * size.width / bounds.width,
+            y: (inBounds.minY - bounds.minY) * size.height / bounds.height,
+            width: inBounds.width * size.width / bounds.width,
+            height: inBounds.height * size.height / bounds.height
         )
     }
 

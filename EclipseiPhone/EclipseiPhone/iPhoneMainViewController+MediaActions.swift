@@ -125,11 +125,6 @@ extension iPhoneMainViewController {
         }
 
         let normalized = MediaAspect.normalized(image)
-        ReframeDebug.logOpening(
-            itemId: item.id,
-            full: normalized,
-            thumbnail: TVLibraryStore.shared.thumbnail(for: item.id)
-        )
         let cropper = AspectCropViewController(
             image: normalized,
             targetAspect: target,
@@ -142,15 +137,8 @@ extension iPhoneMainViewController {
         cropper.onFramingChosen = { [weak self, weak cropper] rect in
             guard let self, let cropper else { return }
             let framing = MediaFraming(rect: rect, in: cropper.sourceImage.size)
-            let dump = ReframeDebug.applyDump(
-                framing: framing,
-                itemId: item.id,
-                thumbnail: TVLibraryStore.shared.thumbnail(for: item.id)
-            )
             self.libraryViewController.applyFraming(framing, to: item)
-            cropper.dismiss(animated: true) {
-                ReframeDebug.presentDump(dump, from: self)
-            }
+            cropper.dismiss(animated: true)
         }
         cropper.onFramingReset = { [weak self, weak cropper] in
             self?.libraryViewController.clearFraming(for: item)

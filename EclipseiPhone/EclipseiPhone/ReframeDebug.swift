@@ -11,7 +11,7 @@ import UIKit
 /// Temporary instrumentation for the thin-crop bug. Leave on until the mapping
 /// that matches the white box is identified, then delete this file.
 enum ReframeDebug {
-    static let isEnabled = true
+    static let isEnabled = false
     static let logger = Logger(subsystem: "com.eclipseapp.ios", category: "Reframe")
     /// Item the user is editing; `framedStill` logs when it matches.
     static var watchedId: String?

@@ -77,6 +77,7 @@ struct AspectCropGeometryTests {
         controller.view.layoutIfNeeded()
 
         let saved = try #require(controller.visibleCropRectInImage())
+        #expect(abs(saved.width / saved.height - MediaAspect.landscape) < 0.02)
         expectClose(saved, onScreenCropRect(in: controller), tolerance: 4)
     }
 
@@ -113,21 +114,20 @@ struct AspectCropGeometryTests {
 
     // MARK: - Helpers
 
-    /// Crop window mapped into image space from on-screen frames alone, independent of
-    /// the controller's own scroll math.
+    /// Crop window mapped into image space from scroll frames, not UIView.convert.
     private func onScreenCropRect(in controller: AspectCropViewController) -> CGRect {
-        let imageOnScreen = controller.view.convert(
-            controller.imageView.bounds, from: controller.imageView
+        let scroll = controller.scrollView
+        let imageFrame = controller.imageView.frame.offsetBy(
+            dx: -scroll.contentOffset.x + scroll.frame.minX,
+            dy: -scroll.contentOffset.y + scroll.frame.minY
         )
         let crop = controller.cropFrameView.frame
         let imageSize = controller.sourceImage.size
-        let scaleX = imageSize.width / imageOnScreen.width
-        let scaleY = imageSize.height / imageOnScreen.height
         return CGRect(
-            x: (crop.minX - imageOnScreen.minX) * scaleX,
-            y: (crop.minY - imageOnScreen.minY) * scaleY,
-            width: crop.width * scaleX,
-            height: crop.height * scaleY
+            x: (crop.minX - imageFrame.minX) * imageSize.width / imageFrame.width,
+            y: (crop.minY - imageFrame.minY) * imageSize.height / imageFrame.height,
+            width: crop.width * imageSize.width / imageFrame.width,
+            height: crop.height * imageSize.height / imageFrame.height
         )
     }
 
