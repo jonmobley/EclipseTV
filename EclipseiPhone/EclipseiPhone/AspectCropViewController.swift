@@ -46,7 +46,7 @@ final class AspectCropViewController: UIViewController, UIScrollViewDelegate {
     let imageView = UIImageView()
     let cropFrameView = UIView()
     let dimView = UIView()
-    let instructionLabel = UILabel()
+    private let instructionLabel = UILabel()
     private let cancelButton = UIButton(type: .system)
     private let resetButton = UIButton(type: .system)
     private let confirmButton = UIButton(type: .system)
@@ -106,7 +106,6 @@ final class AspectCropViewController: UIViewController, UIScrollViewDelegate {
         layoutCropFrame()
         updateScrollMetrics(restoring: framed)
         updateDimMask()
-        updateReframeDebugHUD()
     }
 
     // MARK: - Setup
@@ -115,15 +114,9 @@ final class AspectCropViewController: UIViewController, UIScrollViewDelegate {
         instructionLabel.text = instruction
         instructionLabel.numberOfLines = 0
         instructionLabel.translatesAutoresizingMaskIntoConstraints = false
-        if ReframeDebug.isEnabled {
-            instructionLabel.font = .monospacedSystemFont(ofSize: 10, weight: .medium)
-            instructionLabel.textColor = .green
-            instructionLabel.textAlignment = .left
-        } else {
-            instructionLabel.textColor = .lightGray
-            instructionLabel.font = .systemFont(ofSize: 15)
-            instructionLabel.textAlignment = .center
-        }
+        instructionLabel.textColor = .lightGray
+        instructionLabel.font = .systemFont(ofSize: 15)
+        instructionLabel.textAlignment = .center
         view.addSubview(instructionLabel)
     }
 
@@ -233,10 +226,6 @@ final class AspectCropViewController: UIViewController, UIScrollViewDelegate {
             dimView.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor),
             dimView.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor)
         ])
-        if ReframeDebug.isEnabled {
-            instructionLabel.heightAnchor.constraint(greaterThanOrEqualToConstant: 88)
-                .isActive = true
-        }
     }
 
     private func styleChromeButton(
@@ -256,14 +245,6 @@ final class AspectCropViewController: UIViewController, UIScrollViewDelegate {
 
     func viewForZooming(in scrollView: UIScrollView) -> UIView? { imageView }
 
-    func scrollViewDidScroll(_ scrollView: UIScrollView) {
-        updateReframeDebugHUD()
-    }
-
-    func scrollViewDidZoom(_ scrollView: UIScrollView) {
-        updateReframeDebugHUD()
-    }
-
     // MARK: - Actions
 
     @objc private func cancelTapped() {
@@ -275,14 +256,23 @@ final class AspectCropViewController: UIViewController, UIScrollViewDelegate {
     }
 
     @objc private func confirmTapped() {
-        if ReframeDebug.isEnabled {
-            confirmWithDebugDump()
-            return
-        }
         guard let rect = visibleCropRectInImage() else {
             delegate?.aspectCropDidCancel(self)
             return
         }
         finishConfirm(with: rect)
+    }
+
+    /// Reports the framing, or hands back a cropped bitmap for the destructive path.
+    private func finishConfirm(with rect: CGRect) {
+        if let onFramingChosen {
+            onFramingChosen(rect)
+            return
+        }
+        guard let image = MediaAspect.crop(sourceImage, to: rect) else {
+            delegate?.aspectCropDidCancel(self)
+            return
+        }
+        delegate?.aspectCrop(self, didFinishWith: image, cropRectInSource: rect)
     }
 }

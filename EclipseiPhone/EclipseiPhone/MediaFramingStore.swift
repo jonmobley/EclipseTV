@@ -133,13 +133,6 @@ enum MediaFramingStore {
             return (image, fallback)
         }
         let cropped = MediaAspect.crop(image, to: crop) ?? image
-        ReframeDebug.logFramedStill(
-            id: id,
-            source: image,
-            framing: framing,
-            crop: crop,
-            result: cropped
-        )
         return (cropped, .scaleAspectFit)
     }
 

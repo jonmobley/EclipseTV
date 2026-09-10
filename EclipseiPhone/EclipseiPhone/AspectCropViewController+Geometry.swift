@@ -130,7 +130,7 @@ extension AspectCropViewController {
     /// zooming `UIScrollView` is not trustworthy on a real phone: it can report a
     /// rectangle of the wrong shape, and that strip is what got saved. The zoom view's
     /// frame already includes re-centering, so subtracting it is enough.
-    func rawCropRectInImage() -> CGRect? {
+    private func rawCropRectInImage() -> CGRect? {
         let zoom = scrollView.zoomScale
         let bounds = imageView.bounds
         let size = sourceImage.size
@@ -162,7 +162,7 @@ extension AspectCropViewController {
     /// Trimming the overhanging edge instead — what `intersection(_:)` does — turns a
     /// crop window that hangs off the photo into a thin strip, and that strip is what
     /// gets saved as the framing.
-    func clampedToImage(_ rect: CGRect) -> CGRect? {
+    private func clampedToImage(_ rect: CGRect) -> CGRect? {
         MediaCropGeometry.containedIn(rect, sourceImage.size)
     }
 

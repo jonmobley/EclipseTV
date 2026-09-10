@@ -14,7 +14,6 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // Boots CloudKit private + shared sync engines when an iCloud account exists.
         EclipseSyncController.shared.start()
         DefaultBackgroundMusic.armOnFirstLaunchIfNeeded()
-        ReframeDebug.replayLastDump()
         return true
     }
 
