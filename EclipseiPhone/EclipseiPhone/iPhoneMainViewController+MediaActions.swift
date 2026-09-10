@@ -131,9 +131,17 @@ extension iPhoneMainViewController {
             instruction: instruction,
             confirmTitle: "Save"
         )
-        if let framing = MediaFramingStore.framing(forId: item.id) {
-            cropper.initialCropRect = framing.rect(in: normalized.size)
+        let stored = MediaFramingStore.framing(forId: item.id)
+        if let stored {
+            cropper.initialCropRect = stored.rect(in: normalized.size)
         }
+        ReframeLog.emit("""
+        [Reframe] OPEN id=\(item.id) target=\(ReframeLog.fmt(target))
+          file \(ReframeLog.image(image)) normalized \(ReframeLog.image(normalized))
+          thumb \(ReframeLog.image(TVLibraryStore.shared.thumbnail(for: item.id)))
+          stored \(ReframeLog.framing(stored)) \
+        initial \(cropper.initialCropRect.map(ReframeLog.rect) ?? "centered")
+        """)
         cropper.onFramingChosen = { [weak self, weak cropper] rect in
             guard let self, let cropper else { return }
             let framing = MediaFraming(rect: rect, in: cropper.sourceImage.size)

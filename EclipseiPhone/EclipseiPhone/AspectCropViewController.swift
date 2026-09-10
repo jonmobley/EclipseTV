@@ -256,7 +256,9 @@ final class AspectCropViewController: UIViewController, UIScrollViewDelegate {
     }
 
     @objc private func confirmTapped() {
-        guard let rect = visibleCropRectInImage() else {
+        let rect = visibleCropRectInImage()
+        logSave(saved: rect)
+        guard let rect else {
             delegate?.aspectCropDidCancel(self)
             return
         }

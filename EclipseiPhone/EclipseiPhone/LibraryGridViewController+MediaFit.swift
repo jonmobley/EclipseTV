@@ -47,6 +47,8 @@ extension LibraryGridViewController {
     /// Saves a custom crop position, tells the Apple TV, and re-pushes when live.
     func applyFraming(_ framing: MediaFraming, to item: LibraryItemDTO) {
         MediaFramingStore.set(framing, forId: item.id)
+        logAppliedFraming(framing, to: item)
+        ReframeLog.watchedId = item.id
         EclipseSyncController.shared.backend.scheduleMediaPrefsSave(libraryId: item.id)
         UISelectionFeedbackGenerator().selectionChanged()
         connectionManager.sendImageFit(
@@ -57,6 +59,24 @@ extension LibraryGridViewController {
         reloadLibraryGrid()
         refreshLiveHeader()
         refreshLivePresentationIfNeeded(for: item)
+    }
+
+    /// Traces what the grid will derive from the framing just written, so the console
+    /// shows the stored unit rect, what came back from the store, and the tile crop.
+    private func logAppliedFraming(_ framing: MediaFraming, to item: LibraryItemDTO) {
+        let thumb = store.thumbnail(for: item.id)
+        let readBack = MediaFramingStore.framing(forId: item.id)
+        let resolved = thumb.flatMap { framing.resolvedRect(in: $0.size) }
+        let framed = MediaFramingStore.framedStill(
+            thumb, forId: item.id, fallback: .scaleAspectFill
+        )
+        ReframeLog.emit("""
+        [Reframe] APPLY id=\(item.id) target=\(ReframeLog.fmt(MediaAspect.activeTarget))
+          written \(ReframeLog.framing(framing)) readBack \(ReframeLog.framing(readBack))
+          thumb \(ReframeLog.image(thumb))
+          crop \(resolved.map(ReframeLog.rect) ?? "nil")
+          tile \(ReframeLog.image(framed.image)) mode \(framed.contentMode.rawValue)
+        """)
     }
 
     /// Drops a custom position so Fit / Fill take over again.
