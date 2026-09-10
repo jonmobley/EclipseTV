@@ -26,8 +26,7 @@ extension AspectCropViewController {
         }
         let dump = ReframeDebug.dump(on: self, saved: rect)
         UIPasteboard.general.string = dump
-        print(dump)
-        ReframeDebug.logger.error("\(dump, privacy: .public)")
+        ReframeDebug.emit(dump)
         presentDebugAlert(saved: rect)
     }
 
