@@ -21,14 +21,18 @@ extension CameraLiveViewController {
         applyLiveBadgeAppearance()
     }
 
-    /// Places Back · centered LIVE · Settings over the panel (safe-area aware).
+    /// Places Back · centered LIVE · Settings (safe-area aware).
+    ///
+    /// Stacked: the row sits in the band above the panel. Otherwise it overlays
+    /// the panel's top edge.
     func layoutTopChromeInPanel() {
         let panel = panelView.convert(panelView.bounds, to: view)
         guard panel.width > 1, panel.height > 1 else { return }
 
         let inset: CGFloat = 18
         let controlSize = Self.chromeControlSize
-        let rowY = max(panel.minY + inset, view.safeAreaInsets.top + 8)
+        let rowY = stackedLayout?.header.minY
+            ?? max(panel.minY + inset, view.safeAreaInsets.top + 8)
         let leading = max(panel.minX + inset, view.safeAreaInsets.left + 12)
         let trailing = min(
             panel.maxX - inset - controlSize,
@@ -131,24 +135,25 @@ extension CameraLiveViewController {
 
     /// Places Frame · photo · record · Flip in the outside dock (not over the preview).
     ///
-    /// Portrait hold: bottom dock under the panel. Landscape hold: trailing dock.
+    /// Portrait hold: bottom dock under the panel. Landscape hold: the same row
+    /// turned with the phone, on whichever side the portrait bottom edge landed.
     func layoutBottomChromeInPanel() {
         let panel = panelView.convert(panelView.bounds, to: view)
         guard panel.width > 1, panel.height > 1 else { return }
 
-        if isPhoneCameraPortraitLayout {
+        let edge = captureDockEdge
+        switch edge {
+        case .bottom:
             layoutVerticalCaptureChrome(panel: panel)
-        } else {
-            layoutLandscapeCaptureChrome(panel: panel)
+        case .left, .right:
+            layoutLandscapeCaptureChrome(panel: panel, edge: edge)
         }
 
         view.bringSubviewToFront(frameButton)
         view.bringSubviewToFront(photoButton)
         view.bringSubviewToFront(shutterButton)
         view.bringSubviewToFront(flipButton)
-        layoutLiveOutputThumb(panel: panel)
-        layoutStillRibbon(panel: panel)
-        layoutFrameRibbon(panel: panel)
+        layoutThumbnails(panel: panel)
 
         updateShutterAccessibilityHint()
     }
@@ -169,7 +174,7 @@ extension CameraLiveViewController {
         )
         photoButton.frame = Self.photoButtonFrame(
             shutterFrame: shutterButton.frame,
-            isVertical: true
+            dockEdge: .bottom
         )
         frameButton.frame = CGRect(
             x: panel.minX + inset,
@@ -186,13 +191,24 @@ extension CameraLiveViewController {
         flipButton.transform = .identity
     }
 
-    /// Same chrome as the bottom dock, in the trailing column beside the panel.
-    private func layoutLandscapeCaptureChrome(panel: CGRect) {
+    /// The bottom row turned with the phone, in a column beside the panel.
+    ///
+    /// Frame leads and Flip trails the portrait row. Turned counterclockwise
+    /// (`.right`), the row's leading end lands at the bottom, so Frame is lowest
+    /// and Flip highest; turned clockwise (`.left`) it is the reverse. Photo stays
+    /// on Frame's side of record either way.
+    private func layoutLandscapeCaptureChrome(panel: CGRect, edge: CaptureDockEdge) {
         let inset: CGFloat = 20
         let controlSize = Self.chromeControlSize
-        let trailingPad = max(8, view.safeAreaInsets.right)
-        let colX = view.bounds.maxX - trailingPad - Self.shutterSize
+        let pad = max(8, captureDockSafePad(for: edge))
+        let colX = edge == .left
+            ? view.bounds.minX + pad
+            : view.bounds.maxX - pad - Self.shutterSize
         let sideX = colX + (Self.shutterSize - controlSize) / 2
+        let topY = panel.minY + inset
+        let bottomY = panel.maxY - inset - controlSize
+        let frameY = edge == .left ? topY : bottomY
+        let flipY = edge == .left ? bottomY : topY
 
         shutterButton.frame = CGRect(
             x: colX,
@@ -202,41 +218,51 @@ extension CameraLiveViewController {
         )
         photoButton.frame = Self.photoButtonFrame(
             shutterFrame: shutterButton.frame,
-            isVertical: false
+            dockEdge: edge
         )
         frameButton.frame = CGRect(
             x: sideX,
-            y: panel.minY + inset,
+            y: frameY,
             width: controlSize,
             height: controlSize
         )
         flipButton.frame = CGRect(
             x: sideX,
-            y: panel.maxY - inset - controlSize,
+            y: flipY,
             width: controlSize,
             height: controlSize
         )
         flipButton.transform = .identity
     }
 
-    /// Photo shutter sits beside record: leading in Vertical, above in Landscape.
-    static func photoButtonFrame(shutterFrame: CGRect, isVertical: Bool) -> CGRect {
+    /// Photo shutter sits beside record on Frame's side: left of it in the bottom
+    /// row, above it in a left column, below it in a right column.
+    static func photoButtonFrame(shutterFrame: CGRect, dockEdge: CaptureDockEdge) -> CGRect {
         let size = photoSize
         let gap = shutterPairGap
-        if isVertical {
+        switch dockEdge {
+        case .bottom:
             return CGRect(
                 x: shutterFrame.minX - gap - size,
                 y: shutterFrame.midY - size / 2,
                 width: size,
                 height: size
             )
+        case .left:
+            return CGRect(
+                x: shutterFrame.midX - size / 2,
+                y: shutterFrame.minY - gap - size,
+                width: size,
+                height: size
+            )
+        case .right:
+            return CGRect(
+                x: shutterFrame.midX - size / 2,
+                y: shutterFrame.maxY + gap,
+                width: size,
+                height: size
+            )
         }
-        return CGRect(
-            x: shutterFrame.midX - size / 2,
-            y: shutterFrame.minY - gap - size,
-            width: size,
-            height: size
-        )
     }
 
     /// Updates LIVE badge and shutter for preview vs AirPlay-live.
@@ -251,6 +277,7 @@ extension CameraLiveViewController {
         layoutTopChromeInPanel()
         layoutBottomChromeInPanel()
         stillRibbonView.reloadData()
+        thumbGridView.reloadData()
     }
 
     /// Whether AirPlay currently owns the camera overlay (including still park).
@@ -413,7 +440,10 @@ extension CameraLiveViewController {
         )
     }
 
-    /// Capsule elapsed-time pill, centered in the camera preview panel.
+    /// Capsule elapsed-time pill, centered under the LIVE pill.
+    ///
+    /// Stacked keeps it inside the header band (`stackedTimerAllowance` reserves
+    /// the room), so it tucks closer to LIVE than it does over the panel.
     private func layoutRecordingTimerPill(in panel: CGRect) {
         guard !recordingTimerPillView.isHidden else { return }
         let textSize = recordingTimerLabel.sizeThatFits(CGSize(width: 120, height: 36))
@@ -427,7 +457,7 @@ extension CameraLiveViewController {
         if goLiveButton.isHidden {
             y = goLiveButton.frame.minY
         } else {
-            y = goLiveButton.frame.maxY + 8
+            y = goLiveButton.frame.maxY + (stackedLayout == nil ? 8 : 4)
         }
         recordingTimerPillView.frame = CGRect(
             x: panel.midX - width / 2,

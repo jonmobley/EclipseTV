@@ -75,10 +75,11 @@ extension CameraLiveViewController {
         view.bringSubviewToFront(stillRibbonView)
     }
 
-    /// Reloads ribbon thumbs after the library or parked still changes.
+    /// Reloads still thumbs (ribbon and grid) after the library or parked still changes.
     func reloadStillRibbon() {
         stillRibbonView.reloadData()
-        layoutStillRibbon(panel: panelView.convert(panelView.bounds, to: view))
+        thumbGridView.reloadData()
+        layoutThumbnails(panel: panelView.convert(panelView.bounds, to: view))
     }
 
     /// 14pt in-panel pad, plus any home-indicator overlap (Landscape panel).
@@ -98,7 +99,12 @@ extension CameraLiveViewController {
     func handleStillRibbonTap(at indexPath: IndexPath) {
         let items = stillRibbonItems
         guard items.indices.contains(indexPath.item) else { return }
-        switch items[indexPath.item] {
+        handleStillRibbonItemTap(items[indexPath.item])
+    }
+
+    /// Shared by the ribbon and the stacked grid.
+    func handleStillRibbonItemTap(_ item: CameraStillRibbonItem) {
+        switch item {
         case .add:
             presentStillPicker(replacing: nil)
         case .background:
@@ -183,10 +189,11 @@ extension CameraLiveViewController {
         guard items.indices.contains(indexPath.item),
               case .cutaway(let id) = items[indexPath.item]
         else { return }
-        presentCutawayActions(id: id, at: indexPath)
+        presentCutawayActions(id: id, anchor: stillRibbonView.cellForItem(at: indexPath))
     }
 
-    func presentCutawayActions(id: UUID, at indexPath: IndexPath) {
+    /// Replace / Remove sheet for a quick-change still, anchored to its tile on iPad.
+    func presentCutawayActions(id: UUID, anchor: UIView?) {
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         let sheet = UIAlertController(
             title: "Quick Change", message: nil, preferredStyle: .actionSheet
@@ -198,10 +205,9 @@ extension CameraLiveViewController {
             self?.removeCutaway(id)
         })
         sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        if let pop = sheet.popoverPresentationController,
-           let cell = stillRibbonView.cellForItem(at: indexPath) {
-            pop.sourceView = cell
-            pop.sourceRect = cell.bounds
+        if let pop = sheet.popoverPresentationController, let anchor {
+            pop.sourceView = anchor
+            pop.sourceRect = anchor.bounds
         }
         present(sheet, animated: true)
     }
