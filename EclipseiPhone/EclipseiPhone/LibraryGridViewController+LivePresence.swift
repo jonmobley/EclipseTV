@@ -42,11 +42,10 @@ extension LibraryGridViewController {
         )
     }
 
-    /// Gate, Practice preview, or this Show's active room — show the hero so
-    /// the host can run the poll on the phone when AirPlay / HDMI are down.
+    /// Practice preview or this Show's active room — show the hero so the host
+    /// can run the poll on the phone when AirPlay / HDMI are down.
     var isLivePollPhoneHeroActive: Bool {
         guard isShowMode, let openShowId else { return false }
-        if livePollGateMembershipId != nil { return true }
         let store = QuestPollSessionStore.shared
         if let practiceId = store.practiceMembershipId,
            LivePollStore.shared.poll(id: practiceId)?.showId == openShowId {

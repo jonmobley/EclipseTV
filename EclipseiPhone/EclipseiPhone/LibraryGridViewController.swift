@@ -125,8 +125,6 @@ final class LibraryGridViewController: UIViewController {
     var selectedShowItemIds = Set<String>()
     /// Cancels Live Poll status polling when the ribbon hides or the Show closes.
     var questPollStatusPollTask: Task<Void, Never>?
-    /// Idle Live Poll card waiting for Practice / Start in the hero.
-    var livePollGateMembershipId: UUID?
     /// Working copy of the library order used while arranging and until the Apple TV
     /// confirms the saved order with a fresh manifest. `nil` means show `store.items`.
     var arrangeItems: [LibraryItemDTO]?

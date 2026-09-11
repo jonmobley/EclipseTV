@@ -38,7 +38,7 @@ extension LibraryGridViewController {
 
     /// Slide or Live Poll cue count for the live ribbon section.
     ///
-    /// Live Poll is checked first throughout: its Practice / Start chrome owns the
+    /// Live Poll is checked first throughout: its Practice preview owns the
     /// hero even while a countdown clock keeps running on the projector.
     func liveSlideshowRibbonItemCount() -> Int {
         if showsLivePollRibbon {
@@ -134,7 +134,7 @@ extension LibraryGridViewController {
     }
 
     /// Hero ribbon toggle + swipe browse while this Show’s slideshow is live.
-    /// Live Poll shows its ribbon on program / Practice / Start gate (no toggle).
+    /// Live Poll shows its ribbon on program or in Practice (no toggle).
     func syncLiveSlideshowRibbonChrome() {
         if showsLivePollRibbon {
             liveHeader.setSlideshowRibbonToggleVisible(false, isOn: false)

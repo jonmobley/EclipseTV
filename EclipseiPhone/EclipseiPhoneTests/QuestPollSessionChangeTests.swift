@@ -104,8 +104,8 @@ struct QuestPollSessionChangeTests {
     // MARK: - Practice
 
     /// Entering and leaving Practice swaps the whole hero, so both directions
-    /// have to be `.session` — `.cue` or `.tile` would leave the Practice / Start
-    /// gate on screen with the deck behind it.
+    /// have to be `.session` — `.cue` or `.tile` would leave the rehearsing
+    /// deck on screen after Stop Practice.
     @Test @MainActor
     func enteringAndLeavingPracticeAreBothSessionChanges() {
         let store = QuestPollSessionStore()

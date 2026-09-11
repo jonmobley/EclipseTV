@@ -40,7 +40,6 @@ extension LibraryGridViewController {
         }
         stopHomeCameraPreviewIfNeeded()
         stopQuestPollStatusPolling()
-        livePollGateMembershipId = nil
         openShowId = nil
         onOpenShowChanged?(nil)
         enforceHomeLiveHeroTeardownIfNeeded()
@@ -64,7 +63,6 @@ extension LibraryGridViewController {
         // Freeze the tile on a still while it's still on screen to grab from.
         stopHomeCameraPreviewIfNeeded()
         stopQuestPollStatusPolling()
-        livePollGateMembershipId = nil
         openShowId = nil
         // Header first — otherwise Home chrome lags and the grid can briefly keep
         // Show tool cells (Screensaver / Background) after the title already says Home.
@@ -422,7 +420,6 @@ extension LibraryGridViewController {
         let items = openShowGridItems
         guard items.indices.contains(indexPath.item) else { return }
         let tapped = items[indexPath.item]
-        dismissLivePollGateIfNeeded(for: tapped)
         switch tapped {
         case .slideshow(let show):
             isBlackSelected = false
@@ -448,8 +445,6 @@ extension LibraryGridViewController {
         case .camera:
             presentCameraLiveOnOutput()
         case .livePoll(let item):
-            isLogoSelected = false
-            isScreensaverSelected = false
             selectLivePoll(item)
         case .countdown(let item):
             isLogoSelected = false

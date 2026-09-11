@@ -73,14 +73,8 @@ extension LibraryGridViewController {
         case .livePoll:
             guard let itemId, let uuid = UUID(uuidString: itemId),
                   let item = LivePollStore.shared.poll(id: uuid) else { return }
-            if QuestPollSessionStore.shared.membershipId == item.id,
-               QuestPollSessionStore.shared.session != nil {
-                selectLivePoll(item)
-            } else {
-                // No local tap to answer the hero gate, so skip straight to Start.
-                // Replacing a live room still confirms on the director.
-                startLivePoll(item)
-            }
+            // Same one-tap rule as the director's own tile tap.
+            selectLivePoll(item)
         case .black:
             // Toggle, not set: the wire has no "un-black", and the operator's moon
             // already shows the director's state from the snapshot.
@@ -104,7 +98,6 @@ extension LibraryGridViewController {
         liveHeader.clearScreensaverPreview()
         liveHeader.clearCameraPreview()
         liveHeader.clearLibraryVideoPreview()
-        liveHeader.hideLivePollGate()
         liveHeader.setSlideshowRibbonToggleVisible(false, isOn: false)
         liveHeader.setScreenFitToggleVisible(false, mode: .fit)
         liveHeader.allowsSlideshowBrowse = false

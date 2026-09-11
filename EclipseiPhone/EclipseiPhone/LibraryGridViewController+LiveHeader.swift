@@ -34,7 +34,6 @@ extension LibraryGridViewController {
             liveHeader.clearScreensaverPreview()
             liveHeader.clearLibraryVideoPreview()
             liveHeader.clearCameraPreview()
-            liveHeader.hideLivePollGate()
             liveHeader.setSlideshowRibbonToggleVisible(false, isOn: false)
             liveHeader.setScreenFitToggleVisible(false, mode: .fit)
             liveHeader.setCameraFlipVisible(false)
@@ -78,7 +77,7 @@ extension LibraryGridViewController {
         }
         refreshForeignLivePreview()
 
-        if applyLivePollIdleHeaderIfNeeded() {
+        if applyLivePollPracticeHeaderIfNeeded() {
             return
         }
         if mgr.isWebLive {

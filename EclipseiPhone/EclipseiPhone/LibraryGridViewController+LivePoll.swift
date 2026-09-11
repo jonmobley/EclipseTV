@@ -30,64 +30,56 @@ extension LibraryGridViewController {
         presentQuestPollPickerOrLink(mode: .add(showId: showId))
     }
 
-    /// Tile tap: live card refreshes projector; otherwise show Practice / Start.
+    /// Tile tap: opens the room and goes live, or re-syncs a card already live.
+    ///
+    /// One tap, like every other card in a Show — see `LivePollTap`. Blackout,
+    /// Background, and Screensaver selection is dropped by whichever branch
+    /// takes program, so a refused tap leaves the live item alone.
     func selectLivePoll(_ item: ShowLivePoll) {
         // Operator: the director owns the QuestPoll room, so it starts / shows it.
         if sendShowLiveSelectIfOperator(.livePoll, itemId: item.id.uuidString) {
             Haptics.impactLight()
             return
         }
-        if QuestPollSessionStore.shared.membershipId == item.id,
-           QuestPollSessionStore.shared.session != nil {
-            isBlackSelected = false
-            isLogoSelected = false
-            isScreensaverSelected = false
-            livePollGateMembershipId = nil
-            if ExternalDisplayManager.shared.isQuestPollLive {
-                refreshLivePollPresentation()
-                scrollLiveSlideshowRibbonToCurrentSlide()
-                startQuestPollStatusPolling()
-            } else {
-                presentQuestPollLive()
-            }
+        let poll = QuestPollSessionStore.shared
+        switch LivePollTap.action(
+            ownsRoom: poll.membershipId == item.id && poll.session != nil,
+            roomIsOnProgram: ExternalDisplayManager.shared.isQuestPollLive
+        ) {
+        case .refreshProjector:
+            refreshLivePollPresentation()
+            scrollLiveSlideshowRibbonToCurrentSlide()
+            startQuestPollStatusPolling()
+        case .presentRoom:
+            presentQuestPollLive()
+        case .start:
+            startLivePoll(item)
+        }
+    }
+
+    /// ⋯ menu Practice: phone-hero deck preview without creating a room.
+    func practiceLivePoll(_ item: ShowLivePoll) {
+        guard !blockLiveChangeIfLocked() else { return }
+        // A photo or Show tool is cleared below, but an overlay with no display
+        // to sit on cannot be: the phone hero is its only output, so taking it
+        // for a rehearsal retired it while its tile still read live.
+        guard !livePollPracticeBlockedByPhoneHeroOverlay else {
+            onStatusMessage?("Stop what's live on this iPhone to practice this poll.")
             return
         }
-        if QuestPollSessionStore.shared.practiceMembershipId == item.id {
-            livePollGateMembershipId = nil
-            practiceLivePoll(item)
+        // The rehearsal preview replaces the QuestPoll stage, and the room it
+        // belongs to stays open — so an audience would lose the stage with the
+        // room still running. End the room instead; the ⋯ menu offers that.
+        guard !ExternalDisplayManager.shared.isQuestPollLive else {
+            onStatusMessage?("End the live poll before practicing a deck.")
             return
         }
-        // Taking the hero from a website / countdown / camera / PDF in Practice
-        // Mode ends that overlay, like a photo tap does — so it is a live change.
-        if livePollGateBlockedByPhoneHeroOverlay, blockLiveChangeIfLocked() {
-            return
-        }
-        store.updateCurrentId(nil)
-        retirePhoneHeroOverlayForLivePoll()
         isBlackSelected = false
         isLogoSelected = false
         isScreensaverSelected = false
-        livePollGateMembershipId = item.id
-        QuestPollSessionStore.shared.setPracticeMembershipId(nil)
-        refreshLivePollPresentation()
-    }
-
-    /// Phone-hero deck preview without creating a QuestPoll room.
-    func practiceLivePoll(_ item: ShowLivePoll) {
-        guard !blockLiveChangeIfLocked() else { return }
-        livePollGateMembershipId = nil
         SlideshowPlaybackController.shared.stop()
         store.updateCurrentId(nil)
         stopQuestPollStatusPolling()
-        if ExternalDisplayManager.shared.isQuestPollLive {
-            ExternalDisplayManager.shared.stopWebAndRestoreLibrary()
-        } else {
-            retirePhoneHeroOverlayForLivePoll()
-        }
-        // After the overlay ends — see `retirePhoneHeroOverlayForLivePoll`.
-        isBlackSelected = false
-        isLogoSelected = false
-        isScreensaverSelected = false
         QuestPollSessionStore.shared.setPracticeMembershipId(item.id)
         let page = QuestPollConfig.previewPage(pollId: item.pollId)
         WarmWebSessionPool.shared.warmIfNeeded(for: page)
@@ -95,12 +87,18 @@ extension LibraryGridViewController {
         refreshLivePollPresentation()
     }
 
+    /// Leaves Practice, returning the hero to whatever is on program.
+    func stopPracticingLivePoll() {
+        QuestPollSessionStore.shared.setPracticeMembershipId(nil)
+        refreshLivePollPresentation()
+    }
+
     /// Creates/replaces the global room and goes live for this card.
+    ///
+    /// Lock and destination are checked before the room exists: refusing after
+    /// `startSession` leaves a room open with nothing on the projector.
     func startLivePoll(_ item: ShowLivePoll) {
-        livePollGateMembershipId = nil
-        guard ensureQuestPollDestination() else {
-            livePollGateMembershipId = item.id
-            refreshLivePollPresentation()
+        guard !blockLiveChangeIfLocked(), ensureQuestPollDestination() else {
             return
         }
         confirmStartOrReplaceQuestPoll(item)
@@ -111,7 +109,6 @@ extension LibraryGridViewController {
         guard QuestPollSessionStore.shared.session != nil else { return }
         guard ensureQuestPollDestination() else { return }
         guard !blockLiveChangeIfLocked() else { return }
-        livePollGateMembershipId = nil
         QuestPollSessionStore.shared.setPracticeMembershipId(nil)
         isBlackSelected = false
         isLogoSelected = false
@@ -140,7 +137,6 @@ extension LibraryGridViewController {
 
     /// Live hero for the QuestPoll projector (not a generic Website overlay).
     func applyQuestPollLiveHeader() {
-        liveHeader.hideLivePollGate()
         let code = QuestPollSessionStore.shared.session?.code
         let page = QuestPollConfig.previewPage(code: code)
         let title = QuestPollSessionStore.shared.session?.deckTitle ?? "Live Poll"
@@ -164,19 +160,17 @@ extension LibraryGridViewController {
         liveHeader.updatePlayback(PlaybackState())
     }
 
-    /// Join / Question / Results strip while this Show's poll is on program,
-    /// in Practice, or on the Start gate. A leftover room after switching
-    /// to a photo does not keep the ribbon (or its red live stroke).
+    /// Join / Question / Results strip while this Show's poll is on program or
+    /// in Practice. A leftover room after switching to a photo does not keep
+    /// the ribbon (or its red live stroke).
     var showsLivePollRibbon: Bool {
         QuestPollRibbon.shouldShow(
             isShowMode: isShowMode,
             liveRoomActive: openShowId.map { isLivePollLive(inShow: $0) } ?? false,
-            isPracticing: canShowLivePollIdleChrome
+            isPracticing: canShowLivePollPracticeChrome
                 && livePollBelongsToOpenShow(
                     QuestPollSessionStore.shared.practiceMembershipId
-                ),
-            isGated: canShowLivePollIdleChrome
-                && livePollBelongsToOpenShow(livePollGateMembershipId)
+                )
         )
     }
 
@@ -192,12 +186,12 @@ extension LibraryGridViewController {
         return livePollRibbonItems.count
     }
 
-    /// Cues for the live room, or the card's deck while gated / practicing.
+    /// Cues for the live room, or the card's deck while practicing.
     var livePollRibbonItems: [QuestPollRibbonItem] {
         livePollRibbonPresentation.items
     }
 
-    /// Highlighted cue; Join while waiting to Start or Practice.
+    /// Highlighted cue; Join while practicing or in the room's lobby.
     var livePollRibbonIndex: Int {
         livePollRibbonPresentation.index
     }
@@ -258,9 +252,19 @@ extension LibraryGridViewController {
         )
     }
 
-    /// Card ⋯ menu: Replace Poll, Edit, End, Remove.
+    /// Card ⋯ menu: Practice, Replace Poll, Edit, End, Remove.
+    ///
+    /// Practice is here because the tile tap goes live. It is offered only
+    /// while no room is open: a rehearsal replaces the QuestPoll stage without
+    /// closing the room behind it, so the choice with a room up is End Poll.
     func livePollContextMenu(_ item: ShowLivePoll) -> UIMenu {
-        var children: [UIMenuElement] = [
+        let poll = QuestPollSessionStore.shared
+        let ownsRoom = poll.membershipId == item.id && poll.session != nil
+        var children: [UIMenuElement] = []
+        if let practice = livePollPracticeAction(item) {
+            children.append(practice)
+        }
+        children.append(contentsOf: [
             UIAction(
                 title: "Replace Poll…",
                 image: UIImage(systemName: "list.bullet")
@@ -273,9 +277,8 @@ extension LibraryGridViewController {
             ) { [weak self] _ in
                 self?.presentQuestPollHostEditor()
             }
-        ]
-        if QuestPollSessionStore.shared.membershipId == item.id,
-           QuestPollSessionStore.shared.session != nil {
+        ])
+        if ownsRoom {
             children.append(UIAction(
                 title: "End Poll",
                 image: UIImage(systemName: "stop.circle"),
@@ -296,13 +299,31 @@ extension LibraryGridViewController {
         return UIMenu(children: children)
     }
 
+    /// Practice / Stop Practice for the ⋯ menu, or nil while a room is open.
+    private func livePollPracticeAction(_ item: ShowLivePoll) -> UIAction? {
+        let poll = QuestPollSessionStore.shared
+        if poll.practiceMembershipId == item.id {
+            return UIAction(
+                title: "Stop Practice",
+                image: UIImage(systemName: "eye.slash")
+            ) { [weak self] _ in
+                self?.stopPracticingLivePoll()
+            }
+        }
+        guard poll.session == nil else { return nil }
+        return UIAction(
+            title: "Practice",
+            image: UIImage(systemName: "eye")
+        ) { [weak self] _ in
+            self?.practiceLivePoll(item)
+        }
+    }
+
     /// Ends the room when removing the membership that owns it.
     func endQuestPollIfRemovingMembership(_ membershipId: UUID) {
         guard QuestPollSessionStore.shared.membershipId == membershipId
                 || QuestPollSessionStore.shared.practiceMembershipId == membershipId
-                || livePollGateMembershipId == membershipId
         else { return }
-        livePollGateMembershipId = nil
         Task { @MainActor [weak self] in
             await self?.endQuestPollSession(clearAccount: false)
         }
@@ -327,16 +348,13 @@ extension LibraryGridViewController {
 
     // MARK: - Ribbon source
 
-    /// Deck driving the ribbon: live room, Practice, or the Start / Practice gate.
+    /// Deck driving the ribbon: the live room, or the card in Practice.
     private var livePollRibbonCard: ShowLivePoll? {
         let store = QuestPollSessionStore.shared
         if let id = store.membershipId, store.session != nil {
             return LivePollStore.shared.poll(id: id)
         }
         if let id = store.practiceMembershipId {
-            return LivePollStore.shared.poll(id: id)
-        }
-        if let id = livePollGateMembershipId {
             return LivePollStore.shared.poll(id: id)
         }
         return nil

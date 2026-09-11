@@ -32,7 +32,6 @@ extension LibraryGridViewController {
     /// Ends the active room (best-effort), clears local state, drops the overlay.
     func endQuestPollSession(clearAccount: Bool) async {
         stopQuestPollStatusPolling()
-        livePollGateMembershipId = nil
         if let session = QuestPollSessionStore.shared.session,
            LivePollAccountStore.isSignedIn {
             do {

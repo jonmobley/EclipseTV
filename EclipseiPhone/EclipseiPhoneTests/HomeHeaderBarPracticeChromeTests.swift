@@ -57,7 +57,7 @@ struct HomeHeaderBarPracticeChromeTests {
         #expect(bar.showsLiveOutputChrome == false)
     }
 
-    /// The Live Poll gate, Practice deck, and room all take the hero with
+    /// Both the Live Poll Practice deck and its room take the hero with
     /// Practice Mode off, and that hero is the output — so it needs the controls.
     @Test func lockAndBlackoutShowForAPhoneHostedLivePoll() {
         let bar = HomeHeaderBar(frame: CGRect(x: 0, y: 0, width: 390, height: 52))

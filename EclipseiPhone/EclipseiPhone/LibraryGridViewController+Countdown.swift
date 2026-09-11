@@ -112,9 +112,9 @@ extension LibraryGridViewController {
             refreshLiveHeader()
             return
         }
-        // Live Poll Practice / Start chrome owns the hero while the clock keeps
+        // A Live Poll Practice preview owns the hero while the clock keeps
         // running on the projector; a tick must not paint the clock back over it.
-        guard !showsLivePollIdleHeader else {
+        guard !showsLivePollPracticeHeader else {
             updateVisibleCountdownTiles()
             return
         }
