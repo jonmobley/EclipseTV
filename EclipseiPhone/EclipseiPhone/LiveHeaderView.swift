@@ -94,8 +94,9 @@ final class LiveHeaderView: UIView {
     var onRequestHostController: (() -> Void)?
     /// Opens the Camera live controller from the expanded hero.
     var onRequestCameraController: (() -> Void)?
-    /// Opens the phone browser for the live website from the expanded hero.
-    var onRequestWebController: (() -> Void)?
+    /// Opens the phone browser / PDF reader for the live website or PDF from the
+    /// expanded hero.
+    var onRequestOverlayController: (() -> Void)?
     /// Swipe on the hero while a Slideshow is live: `+1` next, `-1` previous.
     var onSlideshowSwipe: ((Int) -> Void)?
     /// Swipe on the hero while a Show still is live: `+1` next, `-1` previous.
@@ -143,11 +144,11 @@ final class LiveHeaderView: UIView {
             applyInteractionForPresentation()
         }
     }
-    /// When true, tapping the expanded website hero opens the phone browser that
-    /// drives the live page.
-    var allowsWebControllerTap = false {
+    /// When true, tapping the expanded website / PDF hero opens the phone controller
+    /// (browser or reader) that drives the live page.
+    var allowsOverlayControllerTap = false {
         didSet {
-            guard allowsWebControllerTap != oldValue else { return }
+            guard allowsOverlayControllerTap != oldValue else { return }
             applyInteractionForPresentation()
         }
     }
@@ -158,7 +159,7 @@ final class LiveHeaderView: UIView {
         allowsFullscreenTap = false
         allowsHostControllerTap = false
         allowsCameraControllerTap = false
-        allowsWebControllerTap = false
+        allowsOverlayControllerTap = false
     }
 
     // MARK: - Init
@@ -608,7 +609,7 @@ final class LiveHeaderView: UIView {
             || allowsFullscreenTap
             || allowsHostControllerTap
             || allowsCameraControllerTap
-            || allowsWebControllerTap
+            || allowsOverlayControllerTap
             || slideshowRibbonButton != nil
             || screenFitButton != nil
             || cameraFlipButton != nil
@@ -617,7 +618,7 @@ final class LiveHeaderView: UIView {
 
     /// Expanded phone-live still: open fullscreen Preview.
     /// Live Poll room: open host CONTROLS. Camera: open the camera controller.
-    /// Website: open the phone browser that drives the live page.
+    /// Website / PDF: open the phone browser or reader that drives the live page.
     @objc func handleFullscreenContentTap() {
         guard !isCompactPresentation else { return }
         if allowsHostControllerTap {
@@ -630,9 +631,9 @@ final class LiveHeaderView: UIView {
             onRequestCameraController?()
             return
         }
-        if allowsWebControllerTap {
+        if allowsOverlayControllerTap {
             Haptics.impactLight()
-            onRequestWebController?()
+            onRequestOverlayController?()
             return
         }
         guard allowsFullscreenTap else { return }

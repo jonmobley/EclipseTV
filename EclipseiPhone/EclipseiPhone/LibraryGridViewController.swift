@@ -500,8 +500,8 @@ final class LibraryGridViewController: UIViewController {
         liveHeader.onRequestCameraController = { [weak self] in
             self?.onPresentCamera?()
         }
-        liveHeader.onRequestWebController = { [weak self] in
-            self?.presentWebControllerForLivePage()
+        liveHeader.onRequestOverlayController = { [weak self] in
+            self?.presentControllerForLiveOverlay()
         }
         liveHeader.onSlideshowSwipe = { delta in
             SlideshowPlaybackController.shared.goToAdjacentSlide(delta: delta)
@@ -970,7 +970,7 @@ final class LibraryGridViewController: UIViewController {
                 liveHeader.showWebPreview(pageId: pageId)
             }
             // Only a saved bookmark can be handed to the phone browser.
-            liveHeader.allowsWebControllerTap = page != nil
+            liveHeader.allowsOverlayControllerTap = page != nil
             liveHeader.updatePlayback(PlaybackState())
             return
         }
@@ -1000,6 +1000,8 @@ final class LibraryGridViewController: UIViewController {
                 fillColor: UIColor(white: 0.12, alpha: 1),
                 thumbnail: thumb
             )
+            // Only a saved document can be handed to the phone reader.
+            liveHeader.allowsOverlayControllerTap = doc != nil
             liveHeader.updatePlayback(PlaybackState())
             return
         }

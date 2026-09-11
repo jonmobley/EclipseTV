@@ -464,23 +464,34 @@ extension LibraryGridViewController {
             SlideshowPlaybackController.shared.stop()
             presentMedia(item)
         case .website(let page):
+            // The browser is how the page is driven, so a tap opens it while
+            // marking the page live. Operators only send the selection.
             if prefersPhonePreviewOnTap {
                 presentWebPage(page)
+                return
+            }
+            if page.videoLink == nil,
+               sendShowLiveSelectIfOperator(.web, itemId: page.id.uuidString) {
+                Haptics.impactLight()
                 return
             }
             isBlackSelected = false
             isLogoSelected = false
             isScreensaverSelected = false
-            presentWebPageLive(page)
+            presentWebPage(page)
         case .pdf(let doc):
             if prefersPhonePreviewOnTap {
                 presentPDF(doc)
                 return
             }
+            if sendShowLiveSelectIfOperator(.pdf, itemId: doc.id.uuidString) {
+                Haptics.impactLight()
+                return
+            }
             isBlackSelected = false
             isLogoSelected = false
             isScreensaverSelected = false
-            presentPDFLive(doc)
+            presentPDF(doc)
         case .unresolved(let id):
             requestUnresolvedDownloadIfNeeded(id: id)
         case .add:

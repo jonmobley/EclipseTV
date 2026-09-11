@@ -33,37 +33,40 @@ extension LibraryGridViewController {
         }
     }
 
-    /// Opens the phone browser for the website that is currently live.
+    /// Opens the phone browser or PDF reader for the website / PDF currently live.
     ///
     /// Reached from the live preview tap. The browser adopts the warm page, so the
     /// hero falls back to a static thumbnail while it is up.
-    func presentWebControllerForLivePage() {
+    func presentControllerForLiveOverlay() {
         let mgr = ExternalDisplayManager.shared
-        guard mgr.isWebLive,
-              let pageId = mgr.liveWebPageId,
-              let page = WebPageStore.shared.page(id: pageId) else { return }
-        presentWebPage(page)
+        if mgr.isWebLive,
+           let pageId = mgr.liveWebPageId,
+           let page = WebPageStore.shared.page(id: pageId) {
+            presentWebPage(page)
+            return
+        }
+        if mgr.isPDFLive,
+           let doc = PDFStore.shared.documents.first(where: { $0.id == mgr.livePDFDocumentId }) {
+            presentPDF(doc)
+        }
     }
 
     /// Marks a saved website live without opening the phone browser.
     ///
-    /// Tapping the card of the page that is already live opens the browser instead,
-    /// matching the live preview tap.
+    /// Used where phone UI must not appear: an operator's tap applied on the
+    /// director, Countdown reaching 0:00, and video links. A card tap opens the
+    /// browser via `presentWebPage` instead.
     ///
     /// YouTube / Vimeo / direct-file URLs play edge-to-edge instead of loading
     /// the desktop watch page.
     func presentWebPageLive(_ page: WebPage) {
-        let mgr = ExternalDisplayManager.shared
-        if page.videoLink == nil, mgr.isWebLive, mgr.liveWebPageId == page.id {
-            presentWebPage(page)
-            return
-        }
         guard !blockLiveChangeIfLocked() else { return }
         guard hasLiveOutputDestination else { return }
         if sendShowLiveSelectIfOperator(.web, itemId: page.id.uuidString) {
             Haptics.impactLight()
             return
         }
+        let mgr = ExternalDisplayManager.shared
         if let link = page.videoLink {
             if mgr.isWebVideoLive, mgr.liveWebVideoPageId == page.id {
                 return
@@ -76,6 +79,9 @@ extension LibraryGridViewController {
             refreshLiveHeader()
             return
         }
+        if mgr.isWebLive, mgr.liveWebPageId == page.id {
+            return
+        }
         SlideshowPlaybackController.shared.stop()
         WarmWebSessionPool.shared.warmIfNeeded(for: page)
         mgr.presentWeb(page.url, pageId: page.id)
@@ -86,6 +92,10 @@ extension LibraryGridViewController {
     }
 
     /// Marks a saved PDF live without opening the phone reader.
+    ///
+    /// Used where phone UI must not appear: an operator's tap applied on the
+    /// director and Countdown reaching 0:00. A card tap opens the reader via
+    /// `presentPDF` instead.
     func presentPDFLive(_ doc: SavedPDF) {
         guard !blockLiveChangeIfLocked() else { return }
         guard hasLiveOutputDestination else { return }

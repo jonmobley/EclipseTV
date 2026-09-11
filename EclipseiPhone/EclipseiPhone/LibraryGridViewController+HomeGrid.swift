@@ -482,7 +482,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         )
     }
 
-    /// Opens the phone browser for a saved website (⋯ Preview).
+    /// Opens the phone browser for a saved website (card tap, ⋯ Preview, live hero tap).
     ///
     /// Marks it live when a destination exists and output is unlocked; otherwise this
     /// is on-device Preview without a red live stroke.
@@ -538,14 +538,19 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         refreshLiveHeader()
     }
 
-    /// Opens the phone PDF reader (⋯ Preview).
+    /// Opens the phone PDF reader (card tap, ⋯ Preview, live hero tap).
     ///
     /// One viewer at a time, checked before the side effects: a second open would
     /// restart the AirPlay overlay for a viewer UIKit then refuses to present.
+    ///
+    /// When `doc` is already live the TV is left alone; the reader pushes its page
+    /// and scroll on layout, so AirPlay follows without a second transition.
     func presentPDF(_ doc: SavedPDF) {
         guard !isAlreadyOpen(PDFRemoteViewController.self) else { return }
         guard let url = resolvedPDFFileURL(for: doc) else { return }
-        let markLive = !isLiveOutputLocked
+        let mgr = ExternalDisplayManager.shared
+        let alreadyLive = mgr.isPDFLive && mgr.livePDFDocumentId == doc.id
+        let markLive = !isLiveOutputLocked && !alreadyLive
         if markLive {
             SlideshowPlaybackController.shared.stop()
             ExternalDisplayManager.shared.presentPDF(url, documentId: doc.id)
