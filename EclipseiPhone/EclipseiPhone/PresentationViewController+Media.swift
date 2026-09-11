@@ -41,7 +41,6 @@ extension PresentationViewController {
     func showImage(at url: URL, fill: Bool, framing: MediaFraming? = nil) {
         messageLabel.text = nil
         imageView.isHidden = false
-        imageView.image = nil
         imageView.alpha = 1.0
         let isLogo = LogoStore.shared.isLogoFileURL(url)
         if framing != nil, !isLogo {
@@ -53,6 +52,13 @@ extension PresentationViewController {
         }
         teardownScreensaver()
         showMediaContainer()
+
+        // Keep the already-decoded incoming still — clearing and re-decoding blinks.
+        if adoptIncomingImageIfAvailable() {
+            return
+        }
+
+        imageView.image = nil
         activityIndicator.startAnimating()
 
         if url.isFileURL {
@@ -91,6 +97,22 @@ extension PresentationViewController {
                 }
             }
         }
+    }
+
+    /// Copies the incoming overlay's decoded still onto the primary surface.
+    ///
+    /// The transition already waited for this decode before revealing. Clearing the
+    /// primary and decoding the same file again is what showed a black frame and
+    /// the spinner for a beat after every Crossfade, because images drop the overlay
+    /// as soon as the commit runs rather than waiting for the primary to be ready.
+    func adoptIncomingImageIfAvailable() -> Bool {
+        guard isCommittingTransition, let image = incomingImageView?.image else {
+            return false
+        }
+        imageLoadGeneration += 1
+        activityIndicator.stopAnimating()
+        imageView.image = image
+        return true
     }
 
     /// Plays a video on the primary media surface (layer only — no TV transport chrome).
