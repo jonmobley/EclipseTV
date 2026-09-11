@@ -32,11 +32,11 @@ extension LibraryGridViewController {
 
     /// Tile tap: live card refreshes projector; otherwise show Practice / Start.
     func selectLivePoll(_ item: ShowLivePoll) {
-        isBlackSelected = false
-        isLogoSelected = false
-        isScreensaverSelected = false
         if QuestPollSessionStore.shared.membershipId == item.id,
            QuestPollSessionStore.shared.session != nil {
+            isBlackSelected = false
+            isLogoSelected = false
+            isScreensaverSelected = false
             livePollGateMembershipId = nil
             if ExternalDisplayManager.shared.isQuestPollLive {
                 refreshLivePollPresentation()
@@ -52,15 +52,18 @@ extension LibraryGridViewController {
             practiceLivePoll(item)
             return
         }
-        // A photo or Show tool is cleared below, but an overlay owning the phone
-        // hero is not — say so rather than arm a gate that cannot paint.
-        guard !livePollGateBlockedByPhoneHeroOverlay else {
-            onStatusMessage?("Stop what's live on this iPhone to use this poll.")
+        // Taking the hero from a website / countdown / camera / PDF in Practice
+        // Mode ends that overlay, like a photo tap does — so it is a live change.
+        if livePollGateBlockedByPhoneHeroOverlay, blockLiveChangeIfLocked() {
             return
         }
+        store.updateCurrentId(nil)
+        retirePhoneHeroOverlayForLivePoll()
+        isBlackSelected = false
+        isLogoSelected = false
+        isScreensaverSelected = false
         livePollGateMembershipId = item.id
         QuestPollSessionStore.shared.setPracticeMembershipId(nil)
-        store.updateCurrentId(nil)
         refreshLivePollPresentation()
     }
 
@@ -68,15 +71,18 @@ extension LibraryGridViewController {
     func practiceLivePoll(_ item: ShowLivePoll) {
         guard !blockLiveChangeIfLocked() else { return }
         livePollGateMembershipId = nil
-        isBlackSelected = false
-        isLogoSelected = false
-        isScreensaverSelected = false
         SlideshowPlaybackController.shared.stop()
         store.updateCurrentId(nil)
         stopQuestPollStatusPolling()
         if ExternalDisplayManager.shared.isQuestPollLive {
             ExternalDisplayManager.shared.stopWebAndRestoreLibrary()
+        } else {
+            retirePhoneHeroOverlayForLivePoll()
         }
+        // After the overlay ends — see `retirePhoneHeroOverlayForLivePoll`.
+        isBlackSelected = false
+        isLogoSelected = false
+        isScreensaverSelected = false
         QuestPollSessionStore.shared.setPracticeMembershipId(item.id)
         let page = QuestPollConfig.previewPage(pollId: item.pollId)
         WarmWebSessionPool.shared.warmIfNeeded(for: page)
