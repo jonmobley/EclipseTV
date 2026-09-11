@@ -1085,7 +1085,8 @@ final class LibraryGridViewController: UIViewController {
                 fileURL: url,
                 isMuted: item.isMuted ?? false,
                 isLooping: item.isLooping ?? false,
-                startAt: startAt
+                startAt: startAt,
+                overlayTitle: MediaTitleStore.displayTitle(for: item)
             ) { [weak self] position in
                 self?.liveHeader.resumeLibraryVideoPreview(at: position)
             }

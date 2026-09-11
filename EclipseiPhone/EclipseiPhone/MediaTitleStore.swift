@@ -28,6 +28,14 @@ enum MediaTitleStore {
         title(forId: id) != nil
     }
 
+    /// Overlay title if the user set one, else the item's own name.
+    ///
+    /// For chrome that always needs something to show, such as the video Preview
+    /// title. Matches the precedence VoiceOver reads on library tiles.
+    static func displayTitle(for item: LibraryItemDTO) -> String {
+        title(forId: item.id) ?? item.name
+    }
+
     /// Menu title for the Add / Edit title action.
     static func menuTitle(forId id: String) -> String {
         hasTitle(forId: id) ? "Edit title" : "Add title"
