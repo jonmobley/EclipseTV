@@ -77,7 +77,7 @@ extension CameraLiveViewController: UICollectionViewDataSource, UICollectionView
     func toggleFrameOverlay(_ id: UUID) {
         let store = CameraFrameStore.shared
         store.select(store.selectedId == id ? nil : id)
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptics.impactLight()
     }
 
     func collectionView(
@@ -202,7 +202,7 @@ final class CameraFrameRibbonCell: UICollectionViewCell {
     private let imageView: UIImageView = {
         let view = UIImageView()
         view.contentMode = .scaleAspectFit
-        view.backgroundColor = UIColor(white: 0.12, alpha: 1)
+        view.backgroundColor = .mediaPlaceholder
         view.clipsToBounds = true
         view.layer.cornerRadius = 10
         view.translatesAutoresizingMaskIntoConstraints = false
@@ -234,7 +234,7 @@ final class CameraFrameRibbonCell: UICollectionViewCell {
         imageView.image = image
         imageView.layer.borderWidth = isLive ? 3 : 1
         imageView.layer.borderColor = isLive
-            ? UIColor.systemBlue.cgColor
+            ? UIColor.accent.cgColor
             : UIColor.white.withAlphaComponent(0.35).cgColor
         accessibilityLabel = "Frame overlay"
         accessibilityValue = isLive ? "On camera" : "Off"

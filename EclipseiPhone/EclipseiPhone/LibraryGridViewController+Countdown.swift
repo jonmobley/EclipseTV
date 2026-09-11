@@ -13,14 +13,14 @@ extension LibraryGridViewController {
     func beginCountdown(_ item: ShowCountdown) {
         guard ensureCountdownDestination() else { return }
         if sendShowLiveSelectIfOperator(.countdown, itemId: item.id.uuidString) {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            Haptics.impactLight()
             return
         }
         let clock = CountdownController.shared
         if ExternalDisplayManager.shared.isCountdownLive,
            clock.liveCountdownId == item.id {
             clock.toggleRunning()
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            Haptics.impactLight()
             return
         }
         presentCountdownLive(item)
@@ -31,7 +31,7 @@ extension LibraryGridViewController {
         guard ensureCountdownDestination() else { return }
         guard !blockLiveChangeIfLocked() else { return }
         if sendShowLiveSelectIfOperator(.countdown, itemId: item.id.uuidString) {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            Haptics.impactLight()
             return
         }
         isBlackSelected = false
@@ -42,7 +42,7 @@ extension LibraryGridViewController {
         CountdownController.shared.present(item)
         ExternalDisplayManager.shared.presentCountdown()
         announceAirPlayOverlayIfLinked()
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptics.impactLight()
         reloadLibraryGrid()
         refreshLiveHeader()
         // Hides a slideshow strip the clock just replaced; the clock has no ribbon.

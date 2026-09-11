@@ -21,7 +21,7 @@ extension iPhoneMainViewController {
     /// connection.
     func beginResend(forItemId id: String) {
         guard let selectedPeer = selectedPeer, connectionManager.isConnectedToPeer(selectedPeer) else {
-            showTemporaryStatus("Connect EclipseTV in Settings first")
+            showPresentationToast("Connect EclipseTV in Settings first")
             return
         }
         connectionManager.pendingRestoreId = id
@@ -33,7 +33,7 @@ extension iPhoneMainViewController {
         guard let item = TVLibraryStore.shared.items.first(where: { $0.id == id }),
               item.isVideo,
               let url = LocalMediaStore.shared.localURL(forId: id) else {
-            showTemporaryStatus("Couldn't open that video.")
+            showPresentationToast("Couldn't open that video.")
             return
         }
         pendingThumbnailEditItemId = id
@@ -45,7 +45,7 @@ extension iPhoneMainViewController {
         TVLibraryStore.shared.setThumbnail(thumbnail, forId: id)
         saveCustomThumbnail(thumbnail, for: videoURL)
         _ = connectionManager.sendCustomVideoThumbnail(thumbnail, videoFileName: videoURL.lastPathComponent)
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptics.impactLight()
     }
 
     /// Opens the aspect cropper so the user can re-frame an existing library item.
@@ -81,16 +81,16 @@ extension iPhoneMainViewController {
         instruction: String
     ) {
         guard let url = LocalMediaStore.shared.localURL(forId: id) else {
-            showTemporaryStatus("Couldn't edit that video.")
+            showPresentationToast("Couldn't edit that video.")
             return
         }
-        showTemporaryStatus("Preparing crop…", duration: 30)
+        showPresentationToast("Preparing crop…", duration: 30)
         Task { @MainActor in
             guard let frame = await VideoCropExporter.previewFrame(at: url) else {
-                self.showTemporaryStatus("Couldn't edit that video.")
+                self.showPresentationToast("Couldn't edit that video.")
                 return
             }
-            self.statusLabel.alpha = 0
+            self.removePresentationToastIfPresent()
             self.pendingEditItemId = id
             self.pendingVideoCropURL = url
             self.pendingVideoThumbnail = TVLibraryStore.shared.thumbnail(for: id) ?? frame
@@ -124,7 +124,7 @@ extension iPhoneMainViewController {
             image = TVLibraryStore.shared.thumbnail(for: item.id)
         }
         guard let image else {
-            showTemporaryStatus("Couldn't edit that image.")
+            showPresentationToast("Couldn't edit that image.")
             return
         }
 
@@ -167,7 +167,7 @@ extension iPhoneMainViewController {
     func replaceEditedImage(_ image: UIImage, itemId: String) {
         let optimized = MediaValidator.downscaleImage(image)
         guard let data = optimized.jpegData(compressionQuality: 0.85) else {
-            showTemporaryStatus("Couldn't save the cropped image.")
+            showPresentationToast("Couldn't save the cropped image.")
             return
         }
 
@@ -175,7 +175,7 @@ extension iPhoneMainViewController {
         do {
             try data.write(to: tempURL, options: .atomic)
         } catch {
-            showTemporaryStatus("Couldn't save the cropped image.")
+            showPresentationToast("Couldn't save the cropped image.")
             return
         }
 
@@ -192,8 +192,8 @@ extension iPhoneMainViewController {
         currentTempFileURL = tempURL
         showTransferUI()
         if !connectionManager.sendImage(at: tempURL) {
-            showTemporaryStatus("Failed to update image on Apple TV.")
             hideTransferUI()
+            showPresentationToast("Failed to update image on Apple TV.")
             cleanupTempFile(at: tempURL)
             currentTempFileURL = nil
             connectionManager.pendingRestoreId = nil
@@ -207,7 +207,7 @@ extension iPhoneMainViewController {
         do {
             try FileManager.default.copyItem(at: croppedURL, to: namedURL)
         } catch {
-            showTemporaryStatus("Couldn't save the cropped video.")
+            showPresentationToast("Couldn't save the cropped video.")
             cleanupTempFile(at: croppedURL)
             return
         }
@@ -659,26 +659,12 @@ extension iPhoneMainViewController {
 
         // Reset UI
         hideTransferUI()
-
-        // Show cancellation message
-        statusLabel.text = "Transfer cancelled"
-        UIView.animate(withDuration: 0.3) {
-            self.statusLabel.alpha = 1.0
-        } completion: { _ in
-            // Fade out the message after a delay
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
-                UIView.animate(withDuration: 0.3) {
-                    self.statusLabel.alpha = 0
-                }
-            }
-        }
+        showPresentationToast("Transfer cancelled", duration: 3.0)
     }
 
     private func showTransferUI() {
-        // Show initial status
-        statusLabel.text = "Preparing to send..."
+        showTransferStatus("Preparing to send…")
         UIView.animate(withDuration: 0.3) {
-            self.statusLabel.alpha = 1.0
             self.cancelButton.alpha = 1.0
         }
         cancelButton.isHidden = false
@@ -687,9 +673,16 @@ extension iPhoneMainViewController {
         headerBar.setAddEnabled(false)
     }
 
+    /// Held toast for an in-flight transfer, centered so it clears the Cancel button.
+    /// Updates in place as progress arrives; ends with `hideTransferUI()`.
+    func showTransferStatus(_ message: String) {
+        showPresentationToast(message, duration: nil, centeredIn: view)
+    }
+
+    /// Clears transfer chrome. Call before the outcome toast so that toast survives.
     func hideTransferUI() {
+        removePresentationToastIfPresent()
         UIView.animate(withDuration: 0.3) {
-            self.statusLabel.alpha = 0
             self.cancelButton.alpha = 0
         } completion: { _ in
             self.cancelButton.isHidden = true
@@ -778,8 +771,8 @@ extension iPhoneMainViewController {
             currentTempFileURL = namedURL
             showTransferUI()
             if !connectionManager.sendImage(at: namedURL) {
-                showTemporaryStatus("Failed to send image. Please try again.")
                 hideTransferUI()
+                showPresentationToast("Failed to send image. Please try again.")
                 cleanupTempFile(at: namedURL)
                 currentTempFileURL = nil
             }
@@ -794,9 +787,8 @@ extension iPhoneMainViewController {
         // Send the media
         let success = connectionManager.sendVideoData(mediaURL)
         if !success {
-            // Handle failure
-            statusLabel.text = "Failed to send media"
             hideTransferUI()
+            showPresentationToast("Failed to send media")
         }
     }
 
@@ -814,8 +806,8 @@ extension iPhoneMainViewController {
 
             guard let imageData = image.jpegData(compressionQuality: 0.7) else {
                 DispatchQueue.main.async {
-                    self.showTemporaryStatus("Failed to prepare image for sending")
                     self.hideTransferUI()
+                    self.showPresentationToast("Failed to prepare image for sending")
                 }
                 return
             }
@@ -824,8 +816,8 @@ extension iPhoneMainViewController {
                 try imageData.write(to: fileURL)
             } catch {
                 DispatchQueue.main.async {
-                    self.showTemporaryStatus("Failed to save image for sending")
                     self.hideTransferUI()
+                    self.showPresentationToast("Failed to save image for sending")
                 }
                 return
             }

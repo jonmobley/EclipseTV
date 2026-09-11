@@ -53,9 +53,9 @@ struct ShowFormatFilterBarTests {
         #expect(bar.selected == .all)
         let all = chip(titled: "All", in: bar)
         let horizontal = chip(titled: "Horizontal", in: bar)
-        #expect(all?.configuration?.baseBackgroundColor == UIColor.systemBlue)
+        #expect(all?.configuration?.baseBackgroundColor == UIColor.accent)
         #expect(all?.configuration?.baseForegroundColor == UIColor.white)
-        #expect(horizontal?.configuration?.baseBackgroundColor != UIColor.systemBlue)
+        #expect(horizontal?.configuration?.baseBackgroundColor != UIColor.accent)
         #expect(all?.accessibilityTraits.contains(.selected) == true)
     }
 
@@ -68,8 +68,8 @@ struct ShowFormatFilterBarTests {
         #expect(reported == .vertical)
         let vertical = chip(titled: "Vertical", in: bar)
         let all = chip(titled: "All", in: bar)
-        #expect(vertical?.configuration?.baseBackgroundColor == UIColor.systemBlue)
-        #expect(all?.configuration?.baseBackgroundColor != UIColor.systemBlue)
+        #expect(vertical?.configuration?.baseBackgroundColor == UIColor.accent)
+        #expect(all?.configuration?.baseBackgroundColor != UIColor.accent)
     }
 }
 
@@ -90,9 +90,9 @@ struct HomeSectionHeaderFilterChipTests {
         )
         let all = chip(titled: "All", in: header)
         let horizontal = chip(titled: "Horizontal", in: header)
-        #expect(all?.configuration?.baseBackgroundColor == UIColor.systemBlue)
+        #expect(all?.configuration?.baseBackgroundColor == UIColor.accent)
         #expect(all?.configuration?.baseForegroundColor == UIColor.white)
-        #expect(horizontal?.configuration?.baseBackgroundColor != UIColor.systemBlue)
+        #expect(horizontal?.configuration?.baseBackgroundColor != UIColor.accent)
     }
 }
 

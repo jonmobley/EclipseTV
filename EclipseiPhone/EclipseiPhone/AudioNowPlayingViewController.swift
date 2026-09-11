@@ -17,7 +17,7 @@ final class AudioNowPlayingViewController: UIViewController {
         let view = UIImageView()
         view.contentMode = .scaleAspectFill
         view.clipsToBounds = true
-        view.layer.cornerRadius = 8
+        view.layer.cornerRadius = CornerRadii.compact
         view.backgroundColor = .tertiarySystemFill
         view.translatesAutoresizingMaskIntoConstraints = false
         return view
@@ -318,7 +318,7 @@ final class AudioNowPlayingViewController: UIViewController {
             artworkView.image = UIImage(systemName: "music.note")
             artworkView.contentMode = .center
             artworkView.tintColor = .white
-            artworkView.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.45)
+            artworkView.backgroundColor = UIColor.accent.withAlphaComponent(0.45)
         }
 
         let duration = max(player.duration, 0.1)
@@ -398,7 +398,7 @@ extension AudioNowPlayingViewController: UITableViewDataSource, UITableViewDeleg
         config.textProperties.font = .systemFont(
             ofSize: 16, weight: isCurrent ? .semibold : .regular
         )
-        config.textProperties.color = isCurrent ? .systemBlue : .label
+        config.textProperties.color = isCurrent ? .accent : .label
         cell.contentConfiguration = config
         cell.accessoryType = isCurrent ? .checkmark : .none
         cell.selectionStyle = .default

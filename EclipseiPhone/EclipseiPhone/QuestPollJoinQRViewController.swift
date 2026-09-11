@@ -37,7 +37,7 @@ final class QuestPollJoinQRViewController: UIViewController {
         let imageView = UIImageView(image: Self.qrImage(for: joinURL.absoluteString))
         imageView.contentMode = .scaleAspectFit
         imageView.backgroundColor = .white
-        imageView.layer.cornerRadius = 16
+        imageView.layer.cornerRadius = CornerRadii.card
         imageView.layer.masksToBounds = true
         imageView.translatesAutoresizingMaskIntoConstraints = false
 

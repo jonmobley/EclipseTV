@@ -74,7 +74,7 @@ extension CameraLiveViewController {
         let mgr = ExternalDisplayManager.shared
         if mgr.isCameraParkedOnStill {
             mgr.resumeCameraFromStillPark()
-            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            Haptics.impactMedium()
             refreshLiveChrome()
             startAlwaysLiveRecordingIfNeeded()
             return
@@ -93,7 +93,7 @@ extension CameraLiveViewController {
             prepareLivePreviewHandoffToAirPlay()
         }
         mgr.presentCamera()
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        Haptics.impactMedium()
         refreshLiveChrome()
         startAlwaysLiveRecordingIfNeeded()
     }
@@ -107,13 +107,13 @@ extension CameraLiveViewController {
             refreshLiveChrome()
         }
         playShutterBlink()
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptics.impactLight()
         CameraManager.shared.capturePhotoToLibrary { [weak self] result in
             guard let self else { return }
             switch result {
             case .success(let image):
                 self.fileStillInLibrary(image)
-                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                Haptics.success()
             case .failure(let error):
                 self.showCaptureError(error)
             }
@@ -144,7 +144,7 @@ extension CameraLiveViewController {
     func startRecordingFromRecordButton() {
         resumeCameraIfParkedOnStill()
         refreshLiveChrome()
-        UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+        Haptics.impactHeavy()
         startRecordingFromShutter()
     }
 
@@ -205,7 +205,7 @@ extension CameraLiveViewController {
                 if let previewURL {
                     self.fileMovieInLibrary(at: previewURL, duration: elapsed)
                 }
-                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                Haptics.success()
             case .failure(let error):
                 self.showCaptureError(error)
             }

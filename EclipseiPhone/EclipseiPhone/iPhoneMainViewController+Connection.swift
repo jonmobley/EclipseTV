@@ -66,7 +66,7 @@ extension iPhoneMainViewController {
         stopSearching()
         headerBar.setConnectionState(.paused)
         if announce {
-            showTemporaryStatus("Stopped EclipseTV link. AirPlay is unchanged.")
+            showPresentationToast("Stopped EclipseTV link. AirPlay is unchanged.")
         }
     }
 

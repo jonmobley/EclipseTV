@@ -85,34 +85,12 @@ extension LibraryGridViewController {
 
     /// Live stroke from the director snapshot instead of local program state.
     func isShowGridItemLiveRemotely(_ item: ShowGridItem) -> Bool {
-        guard let snap = ShowLiveSession.shared.snapshot, !snap.isBlackout else {
+        guard let snap = ShowLiveSession.shared.snapshot,
+              !snap.isBlackout,
+              let kind = snap.liveKind else {
             return false
         }
-        switch item {
-        case .slideshow(let show):
-            return snap.liveKind == .slideshow
-                && snap.liveItemId == show.id.uuidString
-        case .screensaver:
-            return snap.liveKind == .screensaver
-        case .logo:
-            return snap.liveKind == .logo
-        case .camera:
-            return snap.liveKind == .camera
-        case .livePoll(let poll):
-            return snap.liveKind == .livePoll
-                && snap.liveItemId == poll.id.uuidString
-        case .countdown(let countdown):
-            return snap.liveKind == .countdown
-                && snap.liveItemId == countdown.id.uuidString
-        case .media(let media):
-            return snap.liveKind == .media && snap.liveItemId == media.id
-        case .website(let page):
-            return snap.liveKind == .web && snap.liveItemId == page.id.uuidString
-        case .pdf(let doc):
-            return snap.liveKind == .pdf && snap.liveItemId == doc.id.uuidString
-        case .unresolved, .add:
-            return false
-        }
+        return item.matches(LiveProgram(kind: kind, itemId: snap.liveItemId))
     }
 
     /// Follow-monitor hero for an operator (no local camera / web / video player).
@@ -169,79 +147,16 @@ extension LibraryGridViewController {
 // MARK: - Snapshot
 
 extension LibraryGridViewController {
+    /// Director wire snapshot: `currentLiveProgram()` plus lock state and identity.
     func makeShowLiveSnapshot(showId: UUID) -> ShowLiveSnapshot {
-        let mgr = ExternalDisplayManager.shared
-        let name = UIDevice.current.name
-        if isBlackSelected && !mgr.isOverlayLive {
-            return ShowLiveSnapshot(
-                showId: showId, liveItemId: nil, liveKind: .black,
-                isBlackout: true, isLocked: isLiveOutputLocked, directorName: name
-            )
-        }
-        if mgr.isCameraTileLive {
-            return ShowLiveSnapshot(
-                showId: showId, liveItemId: nil, liveKind: .camera,
-                isBlackout: false, isLocked: isLiveOutputLocked, directorName: name
-            )
-        }
-        if mgr.isCountdownLive, let id = CountdownController.shared.liveCountdownId {
-            return ShowLiveSnapshot(
-                showId: showId, liveItemId: id.uuidString, liveKind: .countdown,
-                isBlackout: false, isLocked: isLiveOutputLocked, directorName: name
-            )
-        }
-        if mgr.isQuestPollLive, let id = QuestPollSessionStore.shared.membershipId {
-            return ShowLiveSnapshot(
-                showId: showId, liveItemId: id.uuidString, liveKind: .livePoll,
-                isBlackout: false, isLocked: isLiveOutputLocked, directorName: name
-            )
-        }
-        if mgr.isWebLive, let pageId = mgr.liveWebPageId {
-            return ShowLiveSnapshot(
-                showId: showId, liveItemId: pageId.uuidString, liveKind: .web,
-                isBlackout: false, isLocked: isLiveOutputLocked, directorName: name
-            )
-        }
-        if mgr.isWebVideoLive, let pageId = mgr.liveWebVideoPageId {
-            return ShowLiveSnapshot(
-                showId: showId, liveItemId: pageId.uuidString, liveKind: .web,
-                isBlackout: false, isLocked: isLiveOutputLocked, directorName: name
-            )
-        }
-        if mgr.isPDFLive, let docId = mgr.livePDFDocumentId {
-            return ShowLiveSnapshot(
-                showId: showId, liveItemId: docId.uuidString, liveKind: .pdf,
-                isBlackout: false, isLocked: isLiveOutputLocked, directorName: name
-            )
-        }
-        if let slideshowId = SlideshowPlaybackController.shared.activeSlideshowId {
-            return ShowLiveSnapshot(
-                showId: showId, liveItemId: slideshowId.uuidString,
-                liveKind: .slideshow,
-                isBlackout: false, isLocked: isLiveOutputLocked, directorName: name
-            )
-        }
-        if isLogoSelected {
-            return ShowLiveSnapshot(
-                showId: showId, liveItemId: nil, liveKind: .logo,
-                isBlackout: false, isLocked: isLiveOutputLocked, directorName: name
-            )
-        }
-        if isScreensaverSelected {
-            return ShowLiveSnapshot(
-                showId: showId, liveItemId: nil, liveKind: .screensaver,
-                isBlackout: false, isLocked: isLiveOutputLocked, directorName: name
-            )
-        }
-        if let id = store.currentId {
-            return ShowLiveSnapshot(
-                showId: showId, liveItemId: id, liveKind: .media,
-                isBlackout: false, isLocked: isLiveOutputLocked, directorName: name
-            )
-        }
+        let program = currentLiveProgram()
         return ShowLiveSnapshot(
-            showId: showId, liveItemId: nil, liveKind: nil,
-            isBlackout: false, isLocked: isLiveOutputLocked, directorName: name
+            showId: showId,
+            liveItemId: program?.itemId,
+            liveKind: program?.kind,
+            isBlackout: program?.isBlackout ?? false,
+            isLocked: isLiveOutputLocked,
+            directorName: UIDevice.current.name
         )
     }
 
@@ -312,7 +227,7 @@ extension LibraryGridViewController {
         liveHeader.configureOverlay(
             title: title,
             systemImage: systemImage,
-            fillColor: UIColor(white: 0.12, alpha: 1),
+            fillColor: .mediaPlaceholder,
             thumbnail: thumbnail,
             showsLiveBadge: true
         )

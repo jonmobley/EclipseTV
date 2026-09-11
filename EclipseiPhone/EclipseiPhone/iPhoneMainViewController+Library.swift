@@ -160,7 +160,7 @@ extension iPhoneMainViewController {
     }
 
     /// Current Multipeer link state for Settings / header.
-    func currentConnectionDisplayState() -> HomeHeaderBar.ConnectionDisplayState {
+    func currentConnectionDisplayState() -> ConnectionDisplayState {
         if isConnected() { return .connected }
         if isConnectionPaused { return .paused }
         return .disconnected
@@ -171,7 +171,7 @@ extension iPhoneMainViewController {
     /// When `focusEclipseTV` is true, opens the EclipseTV detail page.
     func presentSettings(focusEclipseTV: Bool = false) {
         let settings = SettingsViewController()
-        settings.setConnectionState(settingsConnectionState())
+        settings.setConnectionState(currentConnectionDisplayState())
         configureOpenShowEditing(on: settings)
         settings.onLibrariesChanged = { [weak self] in
             self?.refreshLibraryMenu()
@@ -186,11 +186,11 @@ extension iPhoneMainViewController {
         }
         settings.onConnect = { [weak self, weak settings] in
             self?.resumeConnection()
-            settings?.setConnectionState(self?.settingsConnectionState() ?? .paused)
+            settings?.setConnectionState(self?.currentConnectionDisplayState() ?? .paused)
         }
         settings.onStopConnecting = { [weak self, weak settings] in
             self?.pauseConnection()
-            settings?.setConnectionState(self?.settingsConnectionState() ?? .paused)
+            settings?.setConnectionState(self?.currentConnectionDisplayState() ?? .paused)
         }
         settings.onSelectTV = { [weak self] name in
             self?.selectLibrary(named: name)
@@ -245,18 +245,10 @@ extension iPhoneMainViewController {
         }
     }
 
-    private func settingsConnectionState() -> SettingsViewController.ConnectionDisplayState {
-        switch currentConnectionDisplayState() {
-        case .connected: return .connected
-        case .disconnected: return .disconnected
-        case .paused: return .paused
-        }
-    }
-
     /// Keeps an open Settings screen in sync with Multipeer link changes.
     private func refreshPresentedSettingsConnectionState() {
         guard let nav = presentedViewController as? UINavigationController,
               let settings = nav.viewControllers.first as? SettingsViewController else { return }
-        settings.setConnectionState(settingsConnectionState())
+        settings.setConnectionState(currentConnectionDisplayState())
     }
 }

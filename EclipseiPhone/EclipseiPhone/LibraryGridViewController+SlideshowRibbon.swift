@@ -82,7 +82,7 @@ extension LibraryGridViewController {
             return
         }
         SlideshowPlaybackController.shared.goToSlide(at: indexPath.item)
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptics.impactLight()
     }
 
     /// Reapplies layout when the live ribbon appears, hides, or moves.
@@ -160,7 +160,7 @@ extension LibraryGridViewController {
             id: slideshow.id,
             showRibbonWhenLive: !slideshow.showRibbonWhenLive
         )
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptics.impactLight()
     }
 
     /// Cue-only Live Poll refresh: update highlights; nudge the strip only if needed.

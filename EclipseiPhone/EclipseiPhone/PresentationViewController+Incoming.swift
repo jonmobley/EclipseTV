@@ -143,7 +143,7 @@ extension PresentationViewController {
         let host = makeIncomingMediaHost()
         configureAudioSession(muted: isMuted)
 
-        let player = makePresentationPlayer(
+        let (player, looper) = makePresentationPlayer(
             url: url, isMuted: isMuted, isLooping: isLooping
         )
         let layer = AVPlayerLayer(player: player)
@@ -151,18 +151,12 @@ extension PresentationViewController {
         host.layer.insertSublayer(layer, at: 0)
 
         incomingPlayer = player
+        incomingPlayerLooper = looper
         incomingPlayerLayer = layer
         layoutIncomingMediaHost()
 
-        if isLooping {
-            incomingLoopObserver = NotificationCenter.default.addObserver(
-                forName: .AVPlayerItemDidPlayToEndTime,
-                object: player.currentItem,
-                queue: .main
-            ) { [weak player] _ in
-                player?.seek(to: .zero)
-                player?.play()
-            }
+        if isLooping, looper == nil {
+            incomingLoopObserver = makeSeekToZeroLoopObserver(for: player)
         }
 
         let beginPlayback = { [weak self, weak player] in

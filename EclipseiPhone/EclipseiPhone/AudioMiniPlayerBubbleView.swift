@@ -154,7 +154,7 @@ final class AudioMiniPlayerBubbleView: UIView {
             )
         }
         config.baseForegroundColor = .white
-        config.baseBackgroundColor = .systemBlue
+        config.baseBackgroundColor = .accent
         config.cornerStyle = .capsule
         return config
     }
@@ -211,7 +211,7 @@ final class AudioMiniPlayerBubbleView: UIView {
     private func applyShadow(playing: Bool) {
         let layer = musicButton.layer
         if playing {
-            layer.shadowColor = UIColor.systemBlue.cgColor
+            layer.shadowColor = UIColor.accent.cgColor
             layer.shadowOpacity = 0.4
             layer.shadowRadius = 12
             layer.shadowOffset = .zero
@@ -226,7 +226,7 @@ final class AudioMiniPlayerBubbleView: UIView {
     @objc private func musicTapped() {
         let style: UIImpactFeedbackGenerator.FeedbackStyle =
             AudioPlayerController.shared.hasActiveSession ? .medium : .light
-        UIImpactFeedbackGenerator(style: style).impactOccurred()
+        Haptics.impact(style)
         onToggle?()
     }
 }

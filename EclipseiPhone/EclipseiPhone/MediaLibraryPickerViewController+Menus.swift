@@ -296,7 +296,7 @@ extension MediaLibraryPickerViewController {
     private func presentNotConnectedAlert() {
         let alert = UIAlertController(
             title: "EclipseTV Not Linked",
-            message: "This action needs a link to the Eclipse TV app (pairing code). "
+            message: "This action needs a link to the EclipseTV app (Pairing Code). "
                 + "AirPlay alone is enough to present, but not for this.",
             preferredStyle: .alert
         )

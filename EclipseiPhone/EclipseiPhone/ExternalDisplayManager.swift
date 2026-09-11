@@ -833,6 +833,27 @@ final class ExternalDisplayManager {
         restoreLibraryOrIdle()
     }
 
+    /// Ends web output owned by a bookmark that is being deleted, so the audience is
+    /// not left on a website or video link the phone no longer has. Covers the web
+    /// overlay, YouTube / Vimeo embeds, and direct-file playback. No-op otherwise.
+    func stopWebIfLive(pageId: UUID) {
+        let ownsOverlay = isWebLive && liveWebPageId == pageId
+        let ownsVideo = isWebVideoLive && liveWebVideoPageId == pageId
+        guard ownsOverlay || ownsVideo else { return }
+        stopWebAndRestoreLibrary()
+    }
+
+    /// Ends the library item on screen after the phone deleted it.
+    ///
+    /// `currentSourceProvider` must already have dropped the item so the fallback
+    /// cannot hand it back. No-op while an overlay or a joined album item owns the
+    /// screen: the deleted item is not what the audience sees, and the remembered
+    /// source is that overlay, not the item.
+    func endDeletedLibraryItem() {
+        guard !isOverlayLive, !isJoinedLive else { return }
+        restoreLibraryOrIdle()
+    }
+
     /// Clears overlays and falls back to Screensaver (never a grey idle while connected).
     func clear() {
         if overlaySource != nil {

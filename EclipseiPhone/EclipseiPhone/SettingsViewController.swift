@@ -13,13 +13,6 @@ import UIKit
 /// row) plus a Practice Mode toggle.
 final class SettingsViewController: UITableViewController, UITextFieldDelegate {
 
-    /// Multipeer link state for the Eclipse TV App section.
-    enum ConnectionDisplayState {
-        case connected
-        case disconnected
-        case paused
-    }
-
     /// Invoked when the known-TV list changes so the host can refresh the grid/title.
     var onLibrariesChanged: (() -> Void)?
     /// Invoked when the sync-all preference changes.

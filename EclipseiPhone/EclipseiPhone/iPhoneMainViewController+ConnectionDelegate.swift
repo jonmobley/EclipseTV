@@ -66,7 +66,7 @@ extension iPhoneMainViewController: iPhoneConnectionManagerDelegate {
         )
         let pendingCount = PendingUploadStore.shared.uploads(for: mode).count
         if pendingCount > 0 {
-            showTemporaryStatus(
+            showPresentationToast(
                 "Syncing \(pendingCount) item\(pendingCount == 1 ? "" : "s") to Apple TV…"
             )
         }
@@ -86,44 +86,32 @@ extension iPhoneMainViewController: iPhoneConnectionManagerDelegate {
 
     func connectionManager(_ manager: iPhoneConnectionManager, didReceiveConfirmationFromPeer peer: MCPeerID) {
         DispatchQueue.main.async {
-            self.showTemporaryStatus("Sent successfully!", duration: 3.0)
             self.hideTransferUI() // This will now clean up temp files
+            self.showPresentationToast("Sent successfully!", duration: 3.0)
         }
     }
 
     func connectionManager(_ manager: iPhoneConnectionManager, didUpdateVideoTransferProgress progress: Double) {
-        // Update status label with progress
-        statusLabel.text = String(format: "Sending video: %.1f%%", progress)
-        statusLabel.alpha = 1.0
-
-        // If transfer is complete, show completion message and hide transfer UI
-        if progress >= 100.0 {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-                guard let self = self else { return }
-                self.statusLabel.text = "Video sent successfully"
-                self.hideTransferUI()
-
-                // Fade out status after 3 seconds
-                UIView.animate(withDuration: 0.5, delay: 3.0, options: [], animations: {
-                    self.statusLabel.alpha = 0
-                })
-            }
-        }
+        showTransferProgress(String(format: "Sending video: %.1f%%", progress),
+                             progress: progress,
+                             completion: "Video sent successfully")
     }
 
     // Add delegate method for image progress
     func connectionManager(_ manager: iPhoneConnectionManager, didUpdateImageTransferProgress progress: Double) {
-        statusLabel.text = String(format: "Sending image: %.1f%%", progress)
-        statusLabel.alpha = 1.0
-        if progress >= 100.0 {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-                guard let self = self else { return }
-                self.statusLabel.text = "Image sent successfully"
-                self.hideTransferUI()
-                UIView.animate(withDuration: 0.5, delay: 3.0, options: [], animations: {
-                    self.statusLabel.alpha = 0
-                })
-            }
+        showTransferProgress(String(format: "Sending image: %.1f%%", progress),
+                             progress: progress,
+                             completion: "Image sent successfully")
+    }
+
+    /// Updates the held transfer toast in place; at 100% swaps to the outcome toast.
+    private func showTransferProgress(_ message: String, progress: Double, completion: String) {
+        showTransferStatus(message)
+        guard progress >= 100.0 else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            guard let self else { return }
+            self.hideTransferUI()
+            self.showPresentationToast(completion, duration: 3.0)
         }
     }
 
@@ -142,9 +130,9 @@ extension iPhoneMainViewController: iPhoneConnectionManagerDelegate {
     func connectionManager(_ manager: iPhoneConnectionManager, didReceiveMoveModeState enabled: Bool) {
         DispatchQueue.main.async {
             if enabled {
-                self.showTemporaryStatus("AppleTV is organizing content. Your media will be added when complete.", duration: 5.0)
+                self.showPresentationToast("AppleTV is organizing content. Your media will be added when complete.", duration: 5.0)
             } else {
-                self.showTemporaryStatus("AppleTV is ready to receive media again", duration: 3.0)
+                self.showPresentationToast("AppleTV is ready to receive media again", duration: 3.0)
             }
         }
     }

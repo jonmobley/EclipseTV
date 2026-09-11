@@ -20,8 +20,8 @@ enum ReceivedMediaValidator {
     private static let logger = Logger(subsystem: "com.eclipsetv.app",
                                        category: "ReceivedMediaValidator")
 
-    private static let imageExtensions: Set<String> = ["jpg", "jpeg", "png", "heic"]
-    private static let videoExtensions: Set<String> = ["mp4", "mov", "m4v"]
+    private static let imageExtensions = MediaItem.imageExtensions
+    private static let videoExtensions = MediaItem.videoExtensions
 
     enum Kind {
         case image

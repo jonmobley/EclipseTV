@@ -33,7 +33,7 @@ extension LiveHeaderView {
         configureOverlay(
             title: title,
             systemImage: "chart.bar.fill",
-            fillColor: UIColor(white: 0.12, alpha: 1),
+            fillColor: .mediaPlaceholder,
             keepWebPreview: false
         )
         liveBadge.isHidden = true
@@ -166,7 +166,7 @@ extension LiveHeaderView {
         config.title = title
         config.cornerStyle = .medium
         if primary {
-            config.baseBackgroundColor = .systemBlue
+            config.baseBackgroundColor = .accent
             config.baseForegroundColor = .white
         } else {
             config.baseBackgroundColor = UIColor.white.withAlphaComponent(0.18)

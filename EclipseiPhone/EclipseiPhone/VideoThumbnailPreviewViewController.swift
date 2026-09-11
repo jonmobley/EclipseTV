@@ -35,7 +35,7 @@ class VideoThumbnailPreviewViewController: UIViewController {
     private let containerView: UIView = {
         let view = UIView()
         view.backgroundColor = .black
-        view.layer.cornerRadius = 12
+        view.layer.cornerRadius = CornerRadii.standard
         view.clipsToBounds = true
         return view
     }()
@@ -44,7 +44,7 @@ class VideoThumbnailPreviewViewController: UIViewController {
         let imageView = UIImageView()
         imageView.contentMode = .scaleAspectFit
         imageView.backgroundColor = .black
-        imageView.layer.cornerRadius = 8
+        imageView.layer.cornerRadius = CornerRadii.compact
         imageView.clipsToBounds = true
         return imageView
     }()
@@ -54,7 +54,7 @@ class VideoThumbnailPreviewViewController: UIViewController {
         slider.minimumValue = 0
         slider.maximumValue = 1
         slider.value = 0
-        slider.minimumTrackTintColor = .systemBlue
+        slider.minimumTrackTintColor = .accent
         slider.maximumTrackTintColor = .systemGray4
         slider.thumbTintColor = .white
         return slider
@@ -63,7 +63,8 @@ class VideoThumbnailPreviewViewController: UIViewController {
     private let timeLabel: UILabel = {
         let label = UILabel()
         label.textColor = .white
-        label.font = UIFont.systemFont(ofSize: 14, weight: .medium)
+        label.font = .scaledMonospacedDigit(14, weight: .medium, relativeTo: .footnote)
+        label.adjustsFontForContentSizeCategory = true
         label.textAlignment = .center
         label.text = "00:00 / 00:00"
         return label
@@ -72,7 +73,8 @@ class VideoThumbnailPreviewViewController: UIViewController {
     private let instructionLabel: UILabel = {
         let label = UILabel()
         label.textColor = .lightGray
-        label.font = UIFont.systemFont(ofSize: 16)
+        label.font = .preferredFont(forTextStyle: .callout)
+        label.adjustsFontForContentSizeCategory = true
         label.textAlignment = .center
         label.numberOfLines = 0
         label.text = "Drag the slider to choose a thumbnail frame for your video"
@@ -90,7 +92,8 @@ class VideoThumbnailPreviewViewController: UIViewController {
     private let cancelButton: UIButton = {
         let button = UIButton(type: .system)
         button.setTitle("Cancel", for: .normal)
-        button.titleLabel?.font = UIFont.systemFont(ofSize: 18, weight: .medium)
+        button.titleLabel?.font = .scaled(18, weight: .medium, maximumPointSize: 26)
+        button.titleLabel?.adjustsFontForContentSizeCategory = true
         button.setTitleColor(.systemRed, for: .normal)
         button.backgroundColor = UIColor.systemRed.withAlphaComponent(0.1)
         button.layer.cornerRadius = 25
@@ -100,9 +103,10 @@ class VideoThumbnailPreviewViewController: UIViewController {
     private let useButton: UIButton = {
         let button = UIButton(type: .system)
         button.setTitle("Use This Frame", for: .normal)
-        button.titleLabel?.font = UIFont.systemFont(ofSize: 18, weight: .medium)
+        button.titleLabel?.font = .scaled(18, weight: .medium, maximumPointSize: 26)
+        button.titleLabel?.adjustsFontForContentSizeCategory = true
         button.setTitleColor(.white, for: .normal)
-        button.backgroundColor = .systemBlue
+        button.backgroundColor = .accent
         button.layer.cornerRadius = 25
         return button
     }()

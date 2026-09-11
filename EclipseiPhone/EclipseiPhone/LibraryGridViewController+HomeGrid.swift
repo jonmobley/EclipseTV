@@ -247,22 +247,12 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             return WebThumbnailStore.shared.image(for: uuid)
                 ?? PDFThumbnailStore.shared.image(for: uuid)
         }
-        let mgr = ExternalDisplayManager.shared
-        let isLiveShow = (
-            show.itemIds.contains(where: { $0 == store.currentId })
-                && !mgr.isOverlayLive
-        ) || (
-            mgr.isWebLive
-                && mgr.liveWebPageId.map { show.itemIds.contains($0.uuidString) } == true
-        ) || isLivePollLive(inShow: show.id)
-        let live = isLiveShow && !isBlackSelected && !isLogoSelected
-            && !isScreensaverSelected
         cell.configureShow(
             showId: show.id,
             title: show.name,
             subtitle: show.homeRecentSubtitle,
             thumbnail: thumb,
-            isLive: live,
+            isLive: showOwnsLiveProgram(show),
             moreMenu: contextMenu(for: .show(show))
         )
         return cell
@@ -297,7 +287,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
                 title: "Background",
                 systemImage: "photo.fill",
                 thumbnail: LogoStore.shared.image,
-                fillColor: UIColor(white: 0.16, alpha: 1),
+                fillColor: .specialTile,
                 isLive: isLogoSelected && !ExternalDisplayManager.shared.isOverlayLive,
                 isLocked: isLiveOutputLocked,
                 thumbnailContentMode: .scaleAspectFill,
@@ -309,7 +299,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
                 title: "Screensaver",
                 systemImage: ScreensaverStore.isVideo ? "play.fill" : "photo.fill",
                 thumbnail: ScreensaverStore.poster,
-                fillColor: UIColor(white: 0.16, alpha: 1),
+                fillColor: .specialTile,
                 isLive: isScreensaverSelected
                     && !ExternalDisplayManager.shared.isOverlayLive,
                 isLocked: isLiveOutputLocked,
@@ -339,22 +329,12 @@ extension LibraryGridViewController: UICollectionViewDataSource,
                 guard let uuid = UUID(uuidString: id) else { return nil }
                 return WebThumbnailStore.shared.image(for: uuid)
             }
-            let mgr = ExternalDisplayManager.shared
-            let isLiveShow = (
-                show.itemIds.contains(where: { $0 == store.currentId })
-                    && !mgr.isOverlayLive
-            ) || (
-                mgr.isWebLive
-                    && mgr.liveWebPageId.map { show.itemIds.contains($0.uuidString) } == true
-            ) || isLivePollLive(inShow: show.id)
-            let live = isLiveShow && !isBlackSelected && !isLogoSelected
-                && !isScreensaverSelected
             cell.configureSpecial(
                 title: show.name,
                 systemImage: "rectangle.stack.fill",
                 thumbnail: thumb,
-                fillColor: UIColor(white: 0.16, alpha: 1),
-                isLive: live
+                fillColor: .specialTile,
+                isLive: showOwnsLiveProgram(show)
             )
         }
     }
@@ -417,7 +397,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             isBlackSelected = true
             announceAirPlayOverlayIfLinked()
         }
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptics.impactLight()
         refreshLiveHeader()
         let visible = collectionView.indexPathsForVisibleItems
         if !visible.isEmpty {
@@ -429,7 +409,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
     func presentLogoLive() {
         guard !blockLiveChangeIfLocked() else { return }
         if sendShowLiveSelectIfOperator(.logo, itemId: nil) {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            Haptics.impactLight()
             return
         }
         guard let source = LogoStore.shared.presentationSource else {
@@ -443,7 +423,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         store.updateCurrentId(nil)
         ExternalDisplayManager.shared.present(source)
         announceAirPlayOverlayIfLinked()
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptics.impactLight()
         reloadLibraryGrid()
         refreshLiveHeader()
     }
@@ -452,7 +432,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
     func presentScreensaverLive() {
         guard !blockLiveChangeIfLocked() else { return }
         if sendShowLiveSelectIfOperator(.screensaver, itemId: nil) {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            Haptics.impactLight()
             return
         }
         guard let source = ScreensaverStore.presentationSource else { return }
@@ -463,7 +443,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         store.updateCurrentId(nil)
         ExternalDisplayManager.shared.present(source)
         announceAirPlayOverlayIfLinked()
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptics.impactLight()
         reloadLibraryGrid()
         refreshLiveHeader()
     }
@@ -540,6 +520,9 @@ extension LibraryGridViewController: UICollectionViewDataSource,
 
     /// Opens the phone PDF reader (card tap, ⋯ Preview, live hero tap).
     ///
+    /// Marks it live under the same gate as websites: a destination exists and output
+    /// is unlocked. Otherwise this is on-device Preview without a red live stroke.
+    ///
     /// One viewer at a time, checked before the side effects: a second open would
     /// restart the AirPlay overlay for a viewer UIKit then refuses to present.
     ///
@@ -550,7 +533,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         guard let url = resolvedPDFFileURL(for: doc) else { return }
         let mgr = ExternalDisplayManager.shared
         let alreadyLive = mgr.isPDFLive && mgr.livePDFDocumentId == doc.id
-        let markLive = !isLiveOutputLocked && !alreadyLive
+        let markLive = hasLiveOutputDestination && !isLiveOutputLocked && !alreadyLive
         if markLive {
             SlideshowPlaybackController.shared.stop()
             ExternalDisplayManager.shared.presentPDF(url, documentId: doc.id)
@@ -574,7 +557,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             return
         }
         if sendShowLiveSelectIfOperator(.media, itemId: item.id) {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            Haptics.impactLight()
             return
         }
 
@@ -587,8 +570,9 @@ extension LibraryGridViewController: UICollectionViewDataSource,
 
         SlideshowPlaybackController.shared.stop()
 
+        // Ambient music yields (pauses) inside `ExternalDisplayManager.present` via
+        // `AudioAmbientPolicy`; stopping it here would discard the user's queue.
         if item.isVideo {
-            AudioPlayerController.shared.stop()
             if let localURL = LocalMediaStore.shared.localURL(forId: item.id) {
                 PresentationPrewarmer.shared.prewarm(url: localURL)
             }
@@ -598,7 +582,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
 
         let startAt = item.isVideo ? (VideoResumeStore.shared.position(for: item.id) ?? 0) : 0
         if connectionManager.sendPlayRequest(id: item.id, startAt: startAt) {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            Haptics.impactLight()
             if item.isVideo { VideoResumeStore.shared.clear(for: item.id) }
             store.updateCurrentId(item.id)
             ExternalDisplayManager.shared.present(
@@ -617,9 +601,6 @@ extension LibraryGridViewController: UICollectionViewDataSource,
     /// Downloads (if needed) then presents a capture via phone AirPlay.
     private func presentCapture(_ capture: CaptureRecord, libraryItem: LibraryItemDTO) {
         SlideshowPlaybackController.shared.stop()
-        if capture.isVideo {
-            AudioPlayerController.shared.stop()
-        }
 
         let finish: (LibraryItemDTO) -> Void = { [weak self] item in
             guard let self else { return }

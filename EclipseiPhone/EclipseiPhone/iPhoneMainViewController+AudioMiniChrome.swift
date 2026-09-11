@@ -191,7 +191,7 @@ extension iPhoneMainViewController {
 
     private func animateExpandToBar() {
         isAudioMiniChromeAnimating = true
-        UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+        Haptics.impactSoft()
 
         let bar = audioMiniPlayer
         let bubble = audioMiniBubble
@@ -223,7 +223,7 @@ extension iPhoneMainViewController {
 
     private func animateCollapseToBubble() {
         isAudioMiniChromeAnimating = true
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptics.impactLight()
 
         let bar = audioMiniPlayer
         let bubble = audioMiniBubble

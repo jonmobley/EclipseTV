@@ -37,7 +37,7 @@ final class AlbumThumbnailCell: UICollectionViewCell {
 
     private func setupViews() {
         contentView.backgroundColor = .secondarySystemBackground
-        contentView.layer.cornerRadius = 12
+        contentView.layer.cornerRadius = CornerRadii.standard
         contentView.layer.masksToBounds = true
 
         imageView.contentMode = .scaleAspectFill

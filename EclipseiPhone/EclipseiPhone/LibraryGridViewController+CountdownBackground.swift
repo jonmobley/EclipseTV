@@ -53,7 +53,7 @@ extension LibraryGridViewController {
             state: option.background == current ? .on : .off
         ) { [weak self] _ in
             CountdownStore.shared.setBackground(id: item.id, option.background)
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            Haptics.impactLight()
             // Ticks only repaint digits, so the hero needs an explicit nudge to
             // pick up a background chosen while this countdown is already live.
             self?.liveHeader.refreshCountdownBackground()

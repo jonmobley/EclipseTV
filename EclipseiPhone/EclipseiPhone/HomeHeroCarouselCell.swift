@@ -99,14 +99,13 @@ final class HomeHeroCarouselCell: UICollectionViewCell, UIScrollViewDelegate {
         scrollView.showsHorizontalScrollIndicator = false
         scrollView.delegate = self
         scrollView.clipsToBounds = true
-        scrollView.layer.cornerRadius = 20
-        scrollView.layer.cornerCurve = .continuous
+        scrollView.layer.applyContinuousCorner(radius: CornerRadii.large)
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(scrollView)
 
         pageControl.numberOfPages = HomeHeroSlide.all.count
         pageControl.currentPage = 0
-        pageControl.currentPageIndicatorTintColor = .systemBlue
+        pageControl.currentPageIndicatorTintColor = .accent
         pageControl.pageIndicatorTintColor = UIColor.tertiaryLabel
         pageControl.isUserInteractionEnabled = false
         pageControl.translatesAutoresizingMaskIntoConstraints = false

@@ -38,7 +38,7 @@ extension LibraryGridViewController {
             }
         }
         onArrangingChanged?(true)
-        UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+        Haptics.impactRigid()
         showPresentationToast("Drag to reorder, then tap Done")
     }
 
@@ -52,7 +52,7 @@ extension LibraryGridViewController {
     func commitArranging() -> Bool {
         guard isArranging else { return true }
         endArrangeMode()
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        Haptics.success()
         return true
     }
 
@@ -87,7 +87,7 @@ extension LibraryGridViewController {
                   homeSection(at: indexPath.section) == .shows,
                   canMoveItemAtShowIndex(indexPath.item) else { return }
             collectionView.beginInteractiveMovementForItem(at: indexPath)
-            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            Haptics.impactMedium()
 
         case .changed:
             guard isArranging else { return }

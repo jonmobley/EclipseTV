@@ -14,32 +14,28 @@ import UIKit
 /// art; tap returns to A. Going live from B replaces ownership and hides the mini.
 extension LibraryGridViewController {
 
-    /// Show that owns the current live media / website / PDF / slideshow, if any.
-    /// Camera, Background, Screensaver, and Blackout are global tools (no owner).
+    /// Show that owns the live program item, if any — the same resolution the
+    /// director snapshot and Home Show cards use. Camera, Background, Screensaver,
+    /// and Blackout are global tools (no owner).
     var liveOwningShowId: UUID? {
-        let mgr = ExternalDisplayManager.shared
-        if mgr.isCameraTileLive || isBlackSelected || isLogoSelected || isScreensaverSelected {
+        guard let program = currentLiveProgram(), let itemId = program.itemId else {
             return nil
         }
-        if mgr.isQuestPollLive,
-           let membershipId = QuestPollSessionStore.shared.membershipId,
-           let poll = LivePollStore.shared.poll(id: membershipId) {
-            return poll.showId
+        switch program.kind {
+        case .media, .web, .pdf:
+            return showIdOwning(memberId: itemId)
+        case .slideshow:
+            return UUID(uuidString: itemId)
+                .flatMap { SlideshowStore.shared.slideshow(id: $0) }?.showId
+        case .countdown:
+            return UUID(uuidString: itemId)
+                .flatMap { CountdownStore.shared.countdown(id: $0) }?.showId
+        case .livePoll:
+            return UUID(uuidString: itemId)
+                .flatMap { LivePollStore.shared.poll(id: $0) }?.showId
+        case .camera, .logo, .screensaver, .black:
+            return nil
         }
-        if mgr.isWebLive, let pageId = mgr.liveWebPageId {
-            return showIdOwning(memberId: pageId.uuidString)
-        }
-        if mgr.isPDFLive, let docId = mgr.livePDFDocumentId {
-            return showIdOwning(memberId: docId.uuidString)
-        }
-        if let slideshowId = SlideshowPlaybackController.shared.activeSlideshowId,
-           let show = SlideshowStore.shared.slideshow(id: slideshowId) {
-            return show.showId
-        }
-        if let currentId = store.currentId, !mgr.isOverlayLive {
-            return showIdOwning(memberId: currentId)
-        }
-        return nil
     }
 
     /// True when an open Show is viewing while live output still belongs to another.
@@ -136,12 +132,23 @@ extension LibraryGridViewController {
 
     private func configureForeignLiveContent() {
         let mgr = ExternalDisplayManager.shared
+        if mgr.isCountdownLive {
+            let countdown = CountdownController.shared.liveCountdownId
+                .flatMap { CountdownStore.shared.countdown(id: $0) }
+            foreignLiveHeader.configureOverlay(
+                title: countdown?.name ?? "Countdown",
+                systemImage: "timer",
+                fillColor: .mediaPlaceholder
+            )
+            pinForeignLiveChrome()
+            return
+        }
         if mgr.isQuestPollLive {
             let title = QuestPollSessionStore.shared.session?.deckTitle ?? "Live Poll"
             foreignLiveHeader.configureOverlay(
                 title: title,
                 systemImage: "chart.bar.fill",
-                fillColor: UIColor(white: 0.12, alpha: 1)
+                fillColor: .mediaPlaceholder
             )
             pinForeignLiveChrome()
             return
@@ -153,7 +160,7 @@ extension LibraryGridViewController {
             foreignLiveHeader.configureOverlay(
                 title: page?.title ?? "Website",
                 systemImage: "safari",
-                fillColor: UIColor(white: 0.12, alpha: 1),
+                fillColor: .mediaPlaceholder,
                 thumbnail: thumb
             )
             pinForeignLiveChrome()
@@ -166,7 +173,7 @@ extension LibraryGridViewController {
             foreignLiveHeader.configureOverlay(
                 title: doc?.title ?? "PDF",
                 systemImage: "doc.richtext",
-                fillColor: UIColor(white: 0.12, alpha: 1),
+                fillColor: .mediaPlaceholder,
                 thumbnail: thumb
             )
             pinForeignLiveChrome()
@@ -198,7 +205,7 @@ extension LibraryGridViewController {
 
     @objc private func handleForeignLiveTap() {
         guard let id = liveOwningShowId else { return }
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptics.impactLight()
         openLocalAlbum(id: id)
     }
 }

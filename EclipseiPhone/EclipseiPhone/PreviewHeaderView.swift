@@ -125,7 +125,8 @@ final class PreviewHeaderView: UIView {
     }
 
     private func setupTitle() {
-        titleLabel.font = .systemFont(ofSize: 17, weight: .semibold)
+        titleLabel.font = .scaled(17, weight: .semibold, relativeTo: .headline, maximumPointSize: 24)
+        titleLabel.adjustsFontForContentSizeCategory = true
         titleLabel.textColor = .white
         titleLabel.textAlignment = .center
         titleLabel.numberOfLines = 1

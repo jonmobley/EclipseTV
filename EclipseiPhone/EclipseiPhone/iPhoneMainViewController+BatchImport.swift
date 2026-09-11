@@ -26,7 +26,7 @@ extension iPhoneMainViewController {
         connectionManager.pendingRestoreId = nil
 
         let makingSlideshow = slideshowShowId != nil && slideshowName != nil
-        showTemporaryStatus("Importing \(results.count)…", duration: 120)
+        showPresentationToast("Importing \(results.count)…", duration: 120)
 
         Task { @MainActor in
             var addedIds: [String] = []
@@ -72,11 +72,11 @@ extension iPhoneMainViewController {
 
             let added = addedIds.count
             if added == 0 {
-                showTemporaryStatus("Couldn't import selection")
+                showPresentationToast("Couldn't import selection")
             } else if failed == 0 {
-                showTemporaryStatus("Added \(added)")
+                showPresentationToast("Added \(added)")
             } else {
-                showTemporaryStatus("Added \(added), \(failed) skipped")
+                showPresentationToast("Added \(added), \(failed) skipped")
             }
         }
     }
@@ -90,7 +90,7 @@ extension iPhoneMainViewController {
         failed: Int
     ) {
         guard !itemIds.isEmpty else {
-            showTemporaryStatus("Couldn't create Slideshow")
+            showPresentationToast("Couldn't create Slideshow")
             return
         }
         let orientation = LocalAlbumStore.shared.album(id: showId)?.orientation
@@ -106,12 +106,12 @@ extension iPhoneMainViewController {
                 id: ShowSlideshowToken.token(for: created.id)
             )
             if failed == 0 {
-                showTemporaryStatus("Slideshow created")
+                showPresentationToast("Slideshow created")
             } else {
-                showTemporaryStatus("Slideshow created, \(failed) skipped")
+                showPresentationToast("Slideshow created, \(failed) skipped")
             }
         } catch {
-            showTemporaryStatus(error.localizedDescription)
+            showPresentationToast(error.localizedDescription)
         }
     }
 
