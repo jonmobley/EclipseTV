@@ -14,9 +14,16 @@ extension LibraryGridViewController {
     /// Toggles lock: live output stays put; media / Screensaver / Background
     /// taps open phone Preview instead.
     func toggleLiveOutputLock() {
+        // The director owns Lock; an operator asks and the snapshot echoes it back.
+        if sendShowLiveCommandIfOperator(.lockToggle) {
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            return
+        }
         isLiveOutputLocked.toggle()
         applyLiveOutputLockChrome()
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        // Operators mirror the director's lock, so they must hear about it.
+        broadcastShowLiveSnapshotIfNeeded()
+        Haptics.impactMedium()
     }
 
     /// Updates header, hero stroke, and visible tile accents for the lock state.
@@ -33,7 +40,7 @@ extension LibraryGridViewController {
     @discardableResult
     func blockLiveChangeIfLocked() -> Bool {
         guard isLiveOutputLocked else { return false }
-        UINotificationFeedbackGenerator().notificationOccurred(.warning)
+        Haptics.warning()
         showPresentationToast("Live output is locked")
         return true
     }

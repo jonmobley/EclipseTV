@@ -70,13 +70,17 @@ extension PresentationViewController {
         }
 
         if url.isFileURL {
-            let maxEdge = PresentationImageDecoder.maxPixelEdge(
+            let panel = PresentationImageDecoder.panelPixelSize(
                 for: view.window?.windowScene?.screen
+            )
+            let placement = PresentationImageDecoder.placement(
+                fill: fill || isLogo, framing: isLogo ? nil : framing
             )
             DispatchQueue.global(qos: .userInitiated).async { [weak self] in
                 let decoded = PresentationImageDecoder.decode(
                     fileURL: url,
-                    maxPixelEdge: maxEdge
+                    panelPixelSize: panel,
+                    placement: placement
                 )
                 let image: UIImage?
                 if let framing, let decoded, !isLogo,
@@ -143,7 +147,7 @@ extension PresentationViewController {
         let host = makeIncomingMediaHost()
         configureAudioSession(muted: isMuted)
 
-        let player = makePresentationPlayer(
+        let (player, looper) = makePresentationPlayer(
             url: url, isMuted: isMuted, isLooping: isLooping
         )
         let layer = AVPlayerLayer(player: player)
@@ -151,18 +155,12 @@ extension PresentationViewController {
         host.layer.insertSublayer(layer, at: 0)
 
         incomingPlayer = player
+        incomingPlayerLooper = looper
         incomingPlayerLayer = layer
         layoutIncomingMediaHost()
 
-        if isLooping {
-            incomingLoopObserver = NotificationCenter.default.addObserver(
-                forName: .AVPlayerItemDidPlayToEndTime,
-                object: player.currentItem,
-                queue: .main
-            ) { [weak player] _ in
-                player?.seek(to: .zero)
-                player?.play()
-            }
+        if isLooping, looper == nil {
+            incomingLoopObserver = makeSeekToZeroLoopObserver(for: player)
         }
 
         let beginPlayback = { [weak self, weak player] in

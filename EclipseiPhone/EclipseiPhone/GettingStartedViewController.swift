@@ -26,7 +26,7 @@ final class GettingStartedViewController: UITableViewController {
             want media sync with the TV app.
             """,
             systemImage: "sparkles",
-            tint: .systemBlue
+            tint: .accent
         ),
         Topic(
             title: "Shows",
@@ -67,7 +67,7 @@ final class GettingStartedViewController: UITableViewController {
             no room) or Start (creates the room on AirPlay, HDMI, or Practice Mode). \
             EclipseTV alone cannot show the poll. Starting another poll ends the \
             current room. The ribbon under the live preview cues Join, each question, \
-            and results; audience phones scan the QR on the projector. Use ⋯ Edit on \
+            and results; audience phones scan the QR on screen. Use ⋯ Edit on \
             QuestPoll to manage decks in the browser.
             """,
             systemImage: "chart.bar.fill",
@@ -148,7 +148,7 @@ final class GettingStartedViewController: UITableViewController {
         // the back button returns to Settings.
         if navigationController?.viewControllers.first === self {
             navigationItem.rightBarButtonItem = UIBarButtonItem(
-                barButtonSystemItem: .done, target: self, action: #selector(doneTapped)
+                barButtonSystemItem: .close, target: self, action: #selector(doneTapped)
             )
         }
         tableView.register(

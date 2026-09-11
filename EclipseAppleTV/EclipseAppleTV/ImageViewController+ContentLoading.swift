@@ -290,13 +290,10 @@ extension ImageViewController {
         // Load videos from main Videos folder
         logger.debug("Looking for videos in: \(videosURL.path, privacy: .public)")
         if let files = try? fileManager.contentsOfDirectory(at: videosURL, includingPropertiesForKeys: nil) {
-            for file in files {
-                let ext = file.pathExtension.lowercased()
-                if ext == "mp4" || ext == "mov" {
-                    let path = file.path
-                    logger.debug("Adding video to dataSource: \(path, privacy: .public)")
-                    dataSource.addMedia(at: path)
-                }
+            for file in files where MediaItem.isVideoPath(file.path) {
+                let path = file.path
+                logger.debug("Adding video to dataSource: \(path, privacy: .public)")
+                dataSource.addMedia(at: path)
             }
         } else {
             logger.debug("No files found in Videos folder")
@@ -306,13 +303,10 @@ extension ImageViewController {
         let loopURL = videosURL.appendingPathComponent("Loop")
         logger.debug("Looking for videos in Loop folder: \(loopURL.path, privacy: .public)")
         if let loopFiles = try? fileManager.contentsOfDirectory(at: loopURL, includingPropertiesForKeys: nil) {
-            for file in loopFiles {
-                let ext = file.pathExtension.lowercased()
-                if ext == "mp4" || ext == "mov" {
-                    let path = file.path
-                    logger.debug("Adding loop video to dataSource: \(path, privacy: .public)")
-                    dataSource.addMedia(at: path)
-                }
+            for file in loopFiles where MediaItem.isVideoPath(file.path) {
+                let path = file.path
+                logger.debug("Adding loop video to dataSource: \(path, privacy: .public)")
+                dataSource.addMedia(at: path)
             }
         } else {
             logger.debug("No files found in Videos/Loop folder")

@@ -125,6 +125,7 @@
 				E24EA38B2D8A64E7002DB63F /* Sources */,
 				E24EA38C2D8A64E7002DB63F /* Frameworks */,
 				E24EA38D2D8A64E7002DB63F /* Resources */,
+				E2C0DE112E57600000000202 /* Generate WebRTC dSYM */,
 			);
 			buildRules = (
 			);
@@ -281,6 +282,8 @@
 				"$(SRCROOT)/../EclipseiPhone/EclipseiPhone/AlbumConfig.swift",
 				"$(SRCROOT)/../EclipseAppleTV/EclipseAppleTV/RemoteAlbum/AlbumManifest.swift",
 				"$(SRCROOT)/../EclipseiPhone/EclipseiPhone/AlbumManifest.swift",
+				"$(SRCROOT)/../EclipseAppleTV/EclipseAppleTV/StillDecodeBudget.swift",
+				"$(SRCROOT)/../EclipseiPhone/EclipseiPhone/StillDecodeBudget.swift",
 			);
 			name = "Verify Shared Sources";
 			outputFileListPaths = (
@@ -290,6 +293,27 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/bash;
 			shellScript = "\"${SRCROOT}/../Scripts/verify_shared_sources.sh\"\n";
+		};
+		E2C0DE112E57600000000202 /* Generate WebRTC dSYM */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/../Scripts/generate_webrtc_dsym.sh",
+				"$(BUILT_PRODUCTS_DIR)/$(FRAMEWORKS_FOLDER_PATH)/WebRTC.framework/WebRTC",
+			);
+			name = "Generate WebRTC dSYM";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(BUILT_PRODUCTS_DIR)/WebRTC.framework.dSYM",
+			);
+			runOnlyForDeploymentPostprocessing = 1;
+			shellPath = /bin/bash;
+			shellScript = "\"${SRCROOT}/../Scripts/generate_webrtc_dsym.sh\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 

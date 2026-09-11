@@ -68,7 +68,7 @@ class EmptyStateView: UIView {
 
     private let pairingTitleLabel: UILabel = {
         let label = UILabel()
-        label.text = "Pairing code"
+        label.text = "Pairing Code"
         label.font = UIFont.systemFont(ofSize: 28, weight: .medium)
         label.textColor = .lightGray
         label.textAlignment = .center
@@ -274,12 +274,12 @@ class EmptyStateView: UIView {
         let normalized = PeerPairing.normalizePIN(pin)
         guard PeerPairing.isValidPIN(normalized) else {
             pairingCodeLabel.text = "------"
-            pairingCodeLabel.accessibilityLabel = "Pairing code unavailable"
+            pairingCodeLabel.accessibilityLabel = "Pairing Code unavailable"
             return
         }
         let mid = normalized.index(normalized.startIndex, offsetBy: 3)
         pairingCodeLabel.text = "\(normalized[..<mid]) \(normalized[mid...])"
-        pairingCodeLabel.accessibilityLabel = "Pairing code \(normalized)"
+        pairingCodeLabel.accessibilityLabel = "Pairing Code \(normalized)"
     }
 
     // MARK: - Actions

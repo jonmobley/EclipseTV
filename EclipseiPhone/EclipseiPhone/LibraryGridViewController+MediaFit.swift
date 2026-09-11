@@ -37,7 +37,7 @@ extension LibraryGridViewController {
         MediaFramingStore.clear(forId: item.id)
         MediaFitSettings.setMode(mode, forId: item.id)
         EclipseSyncController.shared.backend.scheduleMediaPrefsSave(libraryId: item.id)
-        UISelectionFeedbackGenerator().selectionChanged()
+        Haptics.selection()
         connectionManager.sendImageFit(id: item.id, isFill: mode == .fill)
         reloadLibraryGrid()
         refreshLiveHeader()
@@ -50,7 +50,7 @@ extension LibraryGridViewController {
         logAppliedFraming(framing, to: item)
         ReframeLog.watchedId = item.id
         EclipseSyncController.shared.backend.scheduleMediaPrefsSave(libraryId: item.id)
-        UISelectionFeedbackGenerator().selectionChanged()
+        Haptics.selection()
         connectionManager.sendImageFit(
             id: item.id,
             isFill: true,
@@ -77,6 +77,19 @@ extension LibraryGridViewController {
           crop \(resolved.map(ReframeLog.rect) ?? "nil")
           tile \(ReframeLog.image(framed.image)) mode \(framed.contentMode.rawValue)
         """)
+    }
+
+    /// Drops a custom position so Fit / Fill take over again.
+    func clearFraming(for item: LibraryItemDTO) {
+        guard MediaFramingStore.hasFraming(forId: item.id) else { return }
+        MediaFramingStore.clear(forId: item.id)
+        EclipseSyncController.shared.backend.scheduleMediaPrefsSave(libraryId: item.id)
+        Haptics.selection()
+        let isFill = MediaFitSettings.isFill(forId: item.id)
+        connectionManager.sendImageFit(id: item.id, isFill: isFill)
+        reloadLibraryGrid()
+        refreshLiveHeader()
+        refreshLivePresentationIfNeeded(for: item)
     }
 
     /// Re-presents the live still when `item` is currently on the external panel.
@@ -114,7 +127,7 @@ extension LibraryGridViewController {
         let isFill = mode == .fill
         guard slideshow.isFill != isFill else { return }
         SlideshowStore.shared.updatePreferences(id: slideshow.id, isFill: isFill)
-        UISelectionFeedbackGenerator().selectionChanged()
+        Haptics.selection()
         SlideshowPlaybackController.shared.refreshPresentationIfLive(
             slideshowId: slideshow.id
         )

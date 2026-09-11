@@ -208,6 +208,9 @@ final class PresentationViewController: UIViewController {
     var incomingImageRequest: RemoteImageRequest?
     var incomingPlayer: AVPlayer?
     var incomingPlayerLayer: AVPlayerLayer?
+    /// Gapless loop for the incoming video; nil when not looping.
+    var incomingPlayerLooper: AVPlayerLooper?
+    /// Seek-to-zero fallback, installed only when no looper could be built.
     var incomingLoopObserver: NSObjectProtocol?
     var incomingVideoReadyObservation: NSKeyValueObservation?
     /// Overlay video layer has a decoded frame (`isReadyForDisplay`).
@@ -219,8 +222,12 @@ final class PresentationViewController: UIViewController {
 
     var playerLayer: AVPlayerLayer?
     var player: AVPlayer?
+    /// Gapless loop for the live library video, matching EclipseTV's looper.
+    /// Must be retained: a released looper stops looping without a callback.
+    var playerLooper: AVPlayerLooper?
     /// Periodic time observer for the phone video remote (not shown on TV).
     var videoTransportTimeObserver: Any?
+    /// Seek-to-zero fallback, installed only when no looper could be built.
     var loopObserver: NSObjectProtocol?
     /// Seamless looping Screensaver (dual-player crossfade).
     var screensaverView: SeamlessLoopPlayerView?

@@ -181,7 +181,7 @@ final class LiveHeaderView: UIView {
 
     private func setupViews() {
         backgroundColor = .secondarySystemBackground
-        layer.cornerRadius = 16
+        layer.cornerRadius = CornerRadii.card
         layer.masksToBounds = true
         // Thin outline so Black / dark live content doesn't blend into the screen.
         applyOutputLockChrome()
@@ -599,7 +599,7 @@ final class LiveHeaderView: UIView {
 
     /// Compact mini: tap to return. Expanded: transport / slideshow / still Preview.
     /// The slide-ribbon, Screen Fit, and Flip Camera buttons must stay tappable
-    /// when shown. Practice / Start on the Live Poll gate must stay tappable too.
+    /// when shown.
     func applyInteractionForPresentation() {
         isUserInteractionEnabled =
             isCompactPresentation
@@ -613,7 +613,6 @@ final class LiveHeaderView: UIView {
             || slideshowRibbonButton != nil
             || screenFitButton != nil
             || cameraFlipButton != nil
-            || isShowingLivePollGate
     }
 
     /// Expanded phone-live still: open fullscreen Preview.
@@ -704,7 +703,7 @@ final class LiveHeaderView: UIView {
 
         // Brief hold so thumbnail/layout can settle under the snapshot.
         UIView.animate(
-            withDuration: 0.35,
+            withDuration: ContentTransitionStyle.crossfadeDuration,
             delay: 0.08,
             options: [.curveEaseInOut, .allowUserInteraction]
         ) {

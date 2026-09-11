@@ -56,14 +56,14 @@ Eclipse is a companion pair:
 ## 📋 Requirements
 
 ### Apple TV App
-- **tvOS 17.0+**
+- **tvOS 18.2+**
 - **Apple TV HD or Apple TV 4K**
-- **Xcode 15.0+** (for development)
+- **Xcode 16.2+** (for development)
 
 ### iPhone App
-- **iOS 16.0+** 
+- **iOS 18.2+** 
 - **iPhone or iPad** with Wi-Fi connectivity
-- **Xcode 15.0+** (for development)
+- **Xcode 16.2+** (for development)
 
 ## 🛠 Installation & Setup
 
@@ -219,7 +219,7 @@ See [LICENSE](LICENSE) for full terms.
 **Eclipse** - Advanced media viewing and wireless connectivity for Apple TV
 - **Architecture**: `MediaDataSource`-centered single source of truth (UIKit, not full MVVM)
 - **Frameworks**: UIKit, AVKit, MultipeerConnectivity, Combine
-- **Platform**: tvOS 17.0+ / iOS 16.0+
+- **Platform**: tvOS 18.2+ / iOS 18.2+
 
 ---
 

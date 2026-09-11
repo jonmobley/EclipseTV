@@ -70,6 +70,12 @@ final class LibraryGridViewController: UIViewController {
     var lastLayoutWidth: CGFloat = 0
     /// Last height used for side-by-side chrome; avoids redundant layout work.
     var lastLayoutHeight: CGFloat = 0
+    /// `gridHost` size at the last layout pass; a change is what re-applies the
+    /// pending scroll anchor. See `LibraryGridViewController+ScrollAnchor`.
+    var lastGridLayoutSize: CGSize = .zero
+    /// Where `page` was scrolled before its geometry changed, waiting for the page
+    /// to lay out at its new size so the same share of the range can be restored.
+    var pendingGridScrollAnchor: (page: UICollectionView, anchor: GridScrollAnchor)?
     /// True while grid|preview are side-by-side (phone / iPad landscape).
     var isSideBySideChrome = false
 
@@ -119,8 +125,6 @@ final class LibraryGridViewController: UIViewController {
     var selectedShowItemIds = Set<String>()
     /// Cancels Live Poll status polling when the ribbon hides or the Show closes.
     var questPollStatusPollTask: Task<Void, Never>?
-    /// Idle Live Poll card waiting for Practice / Start in the hero.
-    var livePollGateMembershipId: UUID?
     /// Working copy of the library order used while arranging and until the Apple TV
     /// confirms the saved order with a fresh manifest. `nil` means show `store.items`.
     var arrangeItems: [LibraryItemDTO]?
@@ -232,10 +236,11 @@ final class LibraryGridViewController: UIViewController {
             && !isSelecting
     }
 
-    /// Live slideshow, Live Poll, or countdown ribbon is on for the open Show.
+    /// Live slideshow or Live Poll ribbon is on for the open Show.
+    ///
+    /// A live countdown has no ribbon: its duration lives in the tile's ⋯ menu.
     var showsLiveSlideshowRibbon: Bool {
         if showsLivePollRibbon { return true }
-        if showsCountdownRibbon { return true }
         guard isShowMode,
               let id = SlideshowPlaybackController.shared.activeSlideshowId,
               let show = SlideshowStore.shared.slideshow(id: id),
@@ -505,7 +510,7 @@ final class LibraryGridViewController: UIViewController {
         }
         liveHeader.onSlideshowSwipe = { delta in
             SlideshowPlaybackController.shared.goToAdjacentSlide(delta: delta)
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            Haptics.impactLight()
         }
         liveHeader.onLibraryBrowse = { [weak self] delta in
             self?.browseLiveHero(delta: delta)
@@ -674,10 +679,21 @@ final class LibraryGridViewController: UIViewController {
                 // AirPlay / HDMI dropped — keep phone camera / web / PDF open; tip the user.
                 self.showPresentationToast("External display disconnected")
             }
+            // HDMI gained → this device can become director; lost → it steps down.
+            self.syncShowLiveSession()
             // Hero follows a real destination or Practice Mode.
             self.updateHeroVisibility()
             self.applyHeroChrome()
             overlayReload(note)
+        }
+        observe(ShowLiveSession.didChangeNotification) { [weak self] note in
+            self?.handleShowLiveSessionChanged(note)
+        }
+        observe(ShowLiveSession.incomingSelectNotification) { [weak self] note in
+            self?.handleIncomingShowLiveSelect(note)
+        }
+        observe(ShowLiveSession.incomingCommandNotification) { [weak self] note in
+            self?.handleIncomingShowLiveCommand(note)
         }
         observe(ExternalDisplayManager.webDidEndNotification, using: overlayReload)
         observe(ExternalDisplayManager.pdfDidEndNotification, using: overlayReload)
@@ -719,6 +735,8 @@ final class LibraryGridViewController: UIViewController {
         with coordinator: UIViewControllerTransitionCoordinator
     ) {
         super.viewWillTransition(to: size, with: coordinator)
+        // Before anything reflows: the offset is still the user's, not a clamp.
+        captureGridScrollAnchor()
         lastLayoutWidth = 0
         lastLayoutHeight = 0
         coordinator.animate(alongsideTransition: { [weak self] _ in
@@ -742,6 +760,8 @@ final class LibraryGridViewController: UIViewController {
         liveHeader.layoutCameraPreviewIfNeeded()
         // Content size is final here — pin leftover offset if the grid no longer overflows.
         updateHomeVerticalScrollPolicy()
+        // Last: a turn or a covered-then-uncovered reflow puts the user back where they were.
+        restoreGridScrollAnchorIfNeeded()
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -790,636 +810,13 @@ final class LibraryGridViewController: UIViewController {
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        // A fullscreen screen (website, camera) may turn the phone while this view is
+        // off the window; the grid only meets the new size when it comes back.
+        captureGridScrollAnchor()
         if store.delegate === self {
             store.delegate = nil
         }
         ExternalDisplayManager.shared.currentSourceProvider = nil
         stopHomeCameraPreviewIfNeeded()
-    }
-
-    // MARK: - Helpers
-
-    func updateEmptyState() {
-        // Show mode owns its empty Add tile; Home shows Recent from both modes.
-        refreshMusicSwipeHintVisibility()
-        guard !isShowMode else {
-            emptyLabel.isHidden = true
-            return
-        }
-        let hasShows = !LocalAlbumStore.shared.albums.isEmpty
-        if !hasShows {
-            emptyLabel.text = String(localized: "Create a Show to get started.")
-            emptyLabel.isHidden = false
-            // Sit just below the lone New Show tile rather than over it.
-            let tile = Self.homeRecentTileSize(
-                containerWidth: collectionView.bounds.width,
-                sectionInset: sectionInset,
-                spacing: interitemSpacing
-            )
-            emptyTopConstraint?.constant = collectionView.contentInset.top
-                + Self.heroBandHeight(
-                    containerWidth: collectionView.bounds.width,
-                    containerHeight: collectionView.bounds.height,
-                    sectionInset: sectionInset,
-                    horizontalSizeClass: traitCollection.horizontalSizeClass
-                )
-                + Self.showsGridTopInset
-                + Self.sectionHeaderEstimatedHeight
-                + tile.height
-                + sectionInset * 2
-        } else {
-            emptyLabel.isHidden = true
-        }
-    }
-
-    /// Compact paging can swipe to Music; side-by-side layout cannot.
-    func setMusicPagingAvailable(_ available: Bool) {
-        musicSwipeHint.setMusicPagingAvailable(available)
-        refreshMusicSwipeHintVisibility()
-    }
-
-    /// Music swipe tip is Home-only — never Show mode or any other surface.
-    func refreshMusicSwipeHintVisibility() {
-        guard !isShowMode else {
-            musicSwipeHint.isHidden = true
-            return
-        }
-        musicSwipeHint.reload()
-    }
-
-    /// Permanently hides the Home Music swipe hint after dismiss or first visit.
-    func dismissMusicSwipeHint() {
-        musicSwipeHint.dismissPermanently()
-        refreshMusicSwipeHintVisibility()
-    }
-
-    /// Rebuilds the Show page layout. Home keeps its own layout.
-    func applyCollectionLayout() {
-        applyShowPageLayout()
-    }
-
-    /// Keeps Home and Show pages rubber-bandable even when the grid fits on screen.
-    func updateHomeVerticalScrollPolicy() {
-        collectionView.alwaysBounceVertical = true
-        collectionView.bounces = true
-        collectionView.isScrollEnabled = true
-        // Don't yank the offset while the user is mid-bounce.
-        guard !collectionView.isDragging, !collectionView.isDecelerating else { return }
-        if maxVerticalScroll() <= 8 {
-            pinCollectionViewToTop()
-        }
-    }
-
-    /// Pins the grid to its top inset (no residual overscroll under the header).
-    func pinCollectionViewToTop() {
-        let top = -collectionView.adjustedContentInset.top
-        if abs(collectionView.contentOffset.y - top) > 0.5 {
-            collectionView.setContentOffset(CGPoint(x: 0, y: top), animated: false)
-        }
-    }
-
-    /// Reloads only the Camera tile (live preview / last-frame updates).
-    func reloadCameraTile() {
-        guard let showsSection = sectionIndex(for: .shows),
-              let item = cameraShowItemIndex else { return }
-        let indexPath = IndexPath(item: item, section: showsSection)
-        guard collectionView.indexPathsForVisibleItems.contains(indexPath) else {
-            return
-        }
-        collectionView.reloadItems(at: [indexPath])
-    }
-
-    /// Updates the fixed hero banner to reflect the currently live item (or a placeholder).
-    ///
-    /// Home uses the marketing carousel only — the live preview must stay hidden
-    /// there. Blackout chrome still updates so the header moon reflects live state.
-    func refreshLiveHeader() {
-        let mgr = ExternalDisplayManager.shared
-        let blackLive = isBlackSelected && !mgr.isOverlayLive
-        onBlackLiveChanged?(blackLive)
-        onLiveOutputLockChanged?(isLiveOutputLocked)
-        onLivePollPhoneHeroChanged?(isLivePollPhoneHeroActive)
-        liveHeader.setOutputLocked(isLiveOutputLocked)
-        guard showsLiveHero else {
-            // Never leave a Show-mode live preview over the Home marketing carousel.
-            liveHeader.clearWebPreview(parking: true)
-            liveHeader.clearScreensaverPreview()
-            liveHeader.clearLibraryVideoPreview()
-            liveHeader.clearCameraPreview()
-            liveHeader.hideLivePollGate()
-            liveHeader.setSlideshowRibbonToggleVisible(false, isOn: false)
-            liveHeader.setScreenFitToggleVisible(false, mode: .fit)
-            liveHeader.setCameraFlipVisible(false)
-            liveHeader.allowsSlideshowBrowse = false
-            liveHeader.allowsLibraryBrowse = false
-            liveHeader.isHidden = true
-            liveHeader.isUserInteractionEnabled = false
-            refreshForeignLivePreview()
-            syncSlideshowRibbonIfChromeChanged()
-            syncLiveNoteChrome()
-            return
-        }
-        liveHeader.isHidden = false
-        liveHeader.isUserInteractionEnabled = true
-        // Ribbon, Screen Fit, Flip Camera, swipe browse, and the note follow the
-        // active still / slideshow / camera. Browse runs last: it defers to the
-        // ribbon's `allowsSlideshowBrowse` when a slideshow owns the gesture.
-        defer {
-            syncSlideshowRibbonIfChromeChanged()
-            syncLiveScreenFitChrome()
-            syncLiveCameraFlipChrome()
-            syncLiveHeroBrowseChrome()
-            syncLiveNoteChrome()
-        }
-
-        // Another Show still owns live output — keep AirPlay as-is, show an empty
-        // hero here, and park the live art in the tucked mini preview.
-        if isLiveFromOtherShow {
-            liveHeader.configureSelectToGoLive()
-            liveHeader.updatePlayback(PlaybackState())
-            refreshForeignLivePreview()
-            updateHeroCollapse()
-            return
-        }
-        refreshForeignLivePreview()
-
-        if applyLivePollIdleHeaderIfNeeded() {
-            return
-        }
-        if mgr.isWebLive {
-            if mgr.isQuestPollLive {
-                applyQuestPollLiveHeader()
-                return
-            }
-            let pageId = mgr.liveWebPageId
-            let page = pageId.flatMap { WebPageStore.shared.page(id: $0) }
-            let title = page?.title ?? "Website"
-            let thumb = pageId.flatMap { WebThumbnailStore.shared.image(for: $0) }
-            let canShowLivePreview = pageId.map {
-                !WarmWebSessionPool.shared.isAdopted(pageId: $0)
-            } ?? false
-            liveHeader.configureOverlay(
-                title: title,
-                systemImage: "safari",
-                fillColor: UIColor(white: 0.12, alpha: 1),
-                thumbnail: thumb,
-                keepWebPreview: canShowLivePreview
-            )
-            if let pageId, canShowLivePreview {
-                // In-app hero shows the warm page even with no AirPlay display.
-                liveHeader.showWebPreview(pageId: pageId)
-            }
-            // Only a saved bookmark can be handed to the phone browser.
-            liveHeader.allowsOverlayControllerTap = page != nil
-            liveHeader.updatePlayback(PlaybackState())
-            return
-        }
-        if mgr.isWebVideoLive {
-            let pageId = mgr.liveWebVideoPageId
-            let page = pageId.flatMap { WebPageStore.shared.page(id: $0) }
-            let title = page?.title ?? page?.videoLink?.providerName ?? "Video"
-            let thumb = pageId.flatMap { WebThumbnailStore.shared.image(for: $0) }
-            liveHeader.configureOverlay(
-                title: title,
-                systemImage: "play.rectangle.fill",
-                fillColor: UIColor(white: 0.12, alpha: 1),
-                thumbnail: thumb,
-                showsTransport: true
-            )
-            liveHeader.updatePlayback(mgr.libraryVideoPlaybackState)
-            return
-        }
-        if mgr.isPDFLive {
-            let doc = PDFStore.shared.documents
-                .first(where: { $0.id == mgr.livePDFDocumentId })
-            let title = doc?.title ?? "PDF"
-            let thumb = doc.flatMap { PDFThumbnailStore.shared.image(for: $0.id) }
-            liveHeader.configureOverlay(
-                title: title,
-                systemImage: "doc.richtext",
-                fillColor: UIColor(white: 0.12, alpha: 1),
-                thumbnail: thumb
-            )
-            // Only a saved document can be handed to the phone reader.
-            liveHeader.allowsOverlayControllerTap = doc != nil
-            liveHeader.updatePlayback(PlaybackState())
-            return
-        }
-        if mgr.isCameraLive {
-            presentCameraInLiveHeader()
-            return
-        }
-        if mgr.isParkedOnQuickChangeStill {
-            liveHeader.configureOverlay(
-                title: "Camera",
-                systemImage: "camera.fill",
-                fillColor: UIColor(white: 0.12, alpha: 1),
-                thumbnail: mgr.cameraTileParkedStillImage
-            )
-            liveHeader.allowsCameraControllerTap = true
-            liveHeader.updatePlayback(PlaybackState())
-            return
-        }
-        if mgr.isCountdownLive {
-            applyCountdownLiveHeader()
-            return
-        }
-        if isBlackSelected {
-            liveHeader.configureOverlay(
-                title: "Blackout",
-                systemImage: "moon.fill",
-                fillColor: .black
-            )
-            liveHeader.updatePlayback(PlaybackState())
-            return
-        }
-        if isLogoSelected {
-            liveHeader.configureOverlay(
-                title: "Background",
-                systemImage: "seal.fill",
-                fillColor: UIColor(white: 0.12, alpha: 1),
-                thumbnail: LogoStore.shared.image
-            )
-            liveHeader.updatePlayback(PlaybackState())
-            return
-        }
-        if isScreensaverSelected {
-            presentScreensaverInLiveHeader()
-            return
-        }
-
-        let liveItem = store.currentId.flatMap { id in
-            store.items.first(where: { $0.id == id })
-        }
-        // AirPlay with nothing selected: preview the passive Screensaver filling
-        // the external display. Practice Mode uses the same fallback.
-        // EclipseTV-only still shows the connect prompt.
-        if liveItem == nil, mgr.isConnected
-            || (prefersDisconnectedLivePreview && !store.isOnline) {
-            presentScreensaverInLiveHeader()
-            return
-        }
-        if let liveItem, liveItem.isVideo {
-            applyLibraryVideoLiveHeader(item: liveItem)
-            return
-        }
-        let thumbnail = liveItem.flatMap { store.thumbnail(for: $0.id) }
-        liveHeader.configure(
-            with: liveItem,
-            thumbnail: thumbnail,
-            isOnline: store.isOnline
-        )
-        liveHeader.clearLibraryVideoPreview()
-        liveHeader.updatePlayback(store.playback)
-    }
-
-    /// Opens fullscreen Preview for phone-local live media.
-    func presentFullscreenForLiveMedia() {
-        guard let id = store.currentId,
-              let item = store.items.first(where: { $0.id == id }),
-              let url = LocalMediaStore.shared.localURL(forId: id) else { return }
-        if item.isVideo {
-            let startAt = liveHeader.libraryVideoPlaybackState.currentTime
-            liveHeader.pauseLibraryVideoPreview()
-            presentLocalVideoPreview(
-                fileURL: url,
-                isMuted: item.isMuted ?? false,
-                isLooping: item.isLooping ?? false,
-                startAt: startAt
-            ) { [weak self] position in
-                self?.liveHeader.resumeLibraryVideoPreview(at: position)
-            }
-            return
-        }
-        presentLocalPreview(
-            for: item,
-            in: openShowItems.isEmpty ? displayItems : openShowItems
-        )
-    }
-
-    /// Live camera feed in the hero; the Camera tile shows the icon instead.
-    ///
-    /// Practice Mode has no AirPlay `AVCaptureVideoPreviewLayer`, so the hero
-    /// mirrors the same frame tap the TV uses. A freeze still covers the glyph
-    /// until the first sample arrives.
-    private func presentCameraInLiveHeader() {
-        let freeze = CameraManager.shared.latestSampleImage
-            ?? CameraManager.shared.lastFrame
-        let thumb = freeze.flatMap { CameraManager.isNearlyBlack($0) ? nil : $0 }
-        liveHeader.configureOverlay(
-            title: "Camera",
-            systemImage: "camera.fill",
-            fillColor: UIColor(white: 0.12, alpha: 1),
-            thumbnail: thumb,
-            keepCameraPreview: liveHeader.isCameraPreviewActive
-        )
-        liveHeader.showCameraPreview()
-        liveHeader.allowsCameraControllerTap = true
-        liveHeader.updatePlayback(PlaybackState())
-    }
-
-    /// Static poster chrome + muted looping video in the phone preview.
-    private func presentScreensaverInLiveHeader() {
-        liveHeader.configureOverlay(
-            title: "Screensaver",
-            systemImage: "sparkles.tv",
-            fillColor: UIColor(white: 0.12, alpha: 1),
-            thumbnail: ScreensaverStore.poster,
-            keepScreensaverPreview: liveHeader.screensaverPreview != nil
-        )
-        liveHeader.showScreensaverPreview()
-        liveHeader.updatePlayback(PlaybackState())
-    }
-
-    // MARK: - External Display
-
-    /// The presentation source for the currently live item.
-    ///
-    /// Used by `ExternalDisplayManager` when a display connects mid-session.
-    /// Falls back to the bundled Screensaver so AirPlay never shows a grey idle.
-    /// Connection observers mark that fallback as the live Screensaver tile.
-    func currentPresentationSource() -> PresentationSource? {
-        switch ExternalDisplayManager.shared.overlaySource {
-        case .camera:
-            if let parked = ExternalDisplayManager.shared.parkedStillPresentationSource {
-                return parked
-            }
-            return .camera
-        case .web(let url):
-            return .web(url)
-        case .webVideo(let link):
-            return .webVideo(link)
-        case .pdf(let url):
-            return .pdf(url)
-        case .countdown:
-            return .countdown
-        case .none:
-            break
-        }
-        if isBlackSelected {
-            return .black
-        }
-        if isScreensaverSelected {
-            return ScreensaverStore.presentationSource
-        }
-        if isLogoSelected {
-            return LogoStore.shared.presentationSource
-        }
-        if let id = store.currentId,
-           let item = store.items.first(where: { $0.id == id }) {
-            let startAt: TimeInterval
-            if item.isVideo {
-                startAt = ExternalDisplayManager.shared
-                    .currentVideoPlaybackTime(forItemId: id)
-                    ?? VideoResumeStore.shared.position(for: id)
-                    ?? 0
-            } else {
-                startAt = 0
-            }
-            return .forLibraryItem(
-                item, thumbnail: store.thumbnail(for: id), startAt: startAt
-            )
-        }
-        return ScreensaverStore.presentationSource
-    }
-
-    /// Pushes the currently live item to the external display (if one is connected).
-    /// Does not interrupt an active camera/web overlay or a sticky joined presentation.
-    private func pushCurrentToExternalDisplay() {
-        guard ExternalDisplayManager.shared.isConnected else { return }
-        guard !ExternalDisplayManager.shared.isOverlayLive else { return }
-        guard !ExternalDisplayManager.shared.isJoinedLive else { return }
-        if let source = currentPresentationSource() {
-            ExternalDisplayManager.shared.present(source)
-        }
-    }
-
-    /// Reloads the grid unless an interactive reorder is in flight.
-    ///
-    /// Background stores (thumbnails, slideshows, albums, PDFs, overlay state) post changes
-    /// at any time. A `reloadData()` in the middle of `UICollectionView`'s interactive move
-    /// invalidates the drag's index paths, which drops the drag and can throw outright.
-    /// The order reconciles from the Apple TV's next manifest once arranging finishes.
-    func reloadGridIfSafe() {
-        guard !isArranging else { return }
-        pruneShowSelection()
-        reloadLibraryGrid()
-    }
-
-    /// Reloads the collection view while keeping on-screen thumbnail pins warm.
-    ///
-    /// Prefer this over bare `reloadData()` on go-live / live-chrome paths: video decode
-    /// often purges `NSCache`, and an unpinned reload paints blank placeholders.
-    func reloadLibraryGrid() {
-        refreshVisibleThumbnailPins()
-        homeCollectionView.reloadData()
-        showCollectionView.reloadData()
-        slideshowRibbonView.reloadData()
-        collectionView.layoutIfNeeded()
-        refreshVisibleThumbnailPins()
-    }
-
-    /// Clears home-grid live selection when a joined album item becomes the live output.
-    func clearLiveSelectionForJoinedPresent() {
-        isBlackSelected = false
-        isLogoSelected = false
-        isScreensaverSelected = false
-        store.updateCurrentId(nil)
-        reloadLibraryGrid()
-        refreshLiveHeader()
-    }
-
-    // MARK: - Per-item Options
-
-    func presentOptions(forItemId id: String) {
-        guard let index = store.items.firstIndex(where: { $0.id == id }) else { return }
-        let item = store.items[index]
-
-        let sheet = UIAlertController(title: nil, message: nil, preferredStyle: .actionSheet)
-
-        // Purged items can't play; only offer to re-send from Photos or remove them.
-        if item.isAvailable == false {
-            sheet.title = item.name
-            sheet.message = "This item's file is no longer on the Apple TV."
-            sheet.addAction(UIAlertAction(title: "Re-send from Photos", style: .default) { [weak self] _ in
-                self?.onRequestResend?(id)
-            })
-            sheet.addAction(UIAlertAction(title: "Remove from Apple TV", style: .destructive) { [weak self] _ in
-                self?.runCommand { self?.connectionManager.sendDeleteRequest(id: id) ?? false }
-            })
-            sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-            if let popover = sheet.popoverPresentationController {
-                let anchor = cellForShowMedia(id: id) ?? view
-                popover.sourceView = anchor
-                popover.sourceRect = anchor?.bounds ?? view.bounds
-            }
-            present(sheet, animated: true)
-            return
-        }
-
-        sheet.addAction(UIAlertAction(title: "Make Live", style: .default) { [weak self] _ in
-            guard let self,
-                  let item = self.store.items.first(where: { $0.id == id }) else { return }
-            self.presentMedia(item)
-        })
-
-        if item.isVideo {
-            let loopOn = item.isLooping ?? false
-            sheet.addAction(UIAlertAction(
-                title: loopOn ? "Loop ✓" : "Loop",
-                style: .default
-            ) { [weak self] _ in
-                self?.applyVideoSetting(id: id, isLooping: !loopOn, isMuted: nil)
-            })
-
-            let muted = item.isMuted ?? false
-            sheet.addAction(UIAlertAction(
-                title: muted ? "Mute ✓" : "Mute",
-                style: .default
-            ) { [weak self] _ in
-                self?.applyVideoSetting(id: id, isLooping: nil, isMuted: !muted)
-            })
-
-            if LocalMediaStore.shared.localURL(forId: id) != nil {
-                sheet.addAction(UIAlertAction(
-                    title: "Choose Thumbnail…",
-                    style: .default
-                ) { [weak self] _ in
-                    self?.onRequestVideoThumbnail?(id)
-                })
-            }
-        }
-
-        sheet.addAction(UIAlertAction(title: "Delete", style: .destructive) { [weak self] _ in
-            self?.confirmDelete(id: id, name: item.name)
-        })
-
-        sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-
-        // iPad requires a popover anchor.
-        if let popover = sheet.popoverPresentationController {
-            let anchor = cellForShowMedia(id: id) ?? view
-            popover.sourceView = anchor
-            popover.sourceRect = anchor?.bounds ?? view.bounds
-        }
-
-        present(sheet, animated: true)
-    }
-
-    /// Visible Show-grid cell for a media id, used as a popover source.
-    private func cellForShowMedia(id: String) -> UIView? {
-        guard let showsSection = sectionIndex(for: .shows),
-              let item = openShowGridItems.firstIndex(where: {
-                  if case .media(let media) = $0 { return media.id == id }
-                  return false
-              })
-        else { return nil }
-        return collectionView.cellForItem(
-            at: IndexPath(item: item, section: showsSection)
-        )
-    }
-
-    /// Runs a command closure; if it fails (not connected), surfaces a friendly alert.
-    func runCommand(_ command: () -> Bool) {
-        if command() {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        } else {
-            presentNotConnectedAlert()
-        }
-    }
-
-    func itemSize(for width: CGFloat) -> CGSize {
-        let orientation = ExternalOutputSettings.orientation
-        let columns = CGFloat(orientation.gridColumnCount(
-            forWidth: width, sectionInset: sectionInset, spacing: interitemSpacing
-        ))
-        let totalSpacing = sectionInset * 2 + interitemSpacing * (columns - 1)
-        let itemWidth = ((width - totalSpacing) / columns).rounded(.down)
-        let itemHeight = (itemWidth * orientation.gridCellHeightOverWidth).rounded(.down)
-        return CGSize(width: itemWidth, height: itemHeight)
-    }
-
-}
-
-// MARK: - TVLibraryStoreDelegate
-
-extension LibraryGridViewController: TVLibraryStoreDelegate {
-    func libraryStoreDidUpdateItems(_ store: TVLibraryStore) {
-        // While actively dragging, keep the working order; it reconciles on finish.
-        guard !isArranging else { return }
-        // A fresh manifest from the TV confirms any just-saved arrangement.
-        arrangeItems = nil
-        reloadLibraryGrid()
-        updateEmptyState()
-        refreshLiveHeader()
-    }
-
-    func libraryStoreDidUpdateCurrent(_ store: TVLibraryStore) {
-        if store.currentId != nil {
-            isBlackSelected = false
-            isLogoSelected = false
-            isScreensaverSelected = false
-        }
-        refreshLiveHeader()
-        pushCurrentToExternalDisplay()
-        guard !isArranging else { return }
-        pruneShowSelection()
-        // Prefer visible-only reload: go-live often coincides with video memory
-        // pressure that empties NSCache; a full reloadData blanked the whole Show.
-        // Fall back when Display Mode just swapped buckets — visible paths can
-        // outlive the new data-source counts and crash reloadItems.
-        reloadVisibleItemsOrGrid()
-    }
-
-    /// Reloads on-screen cells, or the whole grid when any path is out of bounds.
-    ///
-    /// Bounds come from the data source (not `collectionView.numberOfSections`) so a
-    /// layout that still reflects the previous Home/Show shape cannot green-light a
-    /// `reloadItems` against a shorter bucket.
-    private func reloadVisibleItemsOrGrid() {
-        refreshVisibleThumbnailPins()
-        let visible = collectionView.indexPathsForVisibleItems
-        guard !visible.isEmpty else {
-            reloadLibraryGrid()
-            return
-        }
-        let sectionCount = numberOfSections(in: collectionView)
-        let safe = visible.filter { path in
-            guard path.section >= 0, path.section < sectionCount else { return false }
-            let count = self.collectionView(
-                collectionView, numberOfItemsInSection: path.section
-            )
-            return path.item >= 0 && path.item < count
-        }
-        if safe.count != visible.count || safe.isEmpty {
-            reloadLibraryGrid()
-            return
-        }
-        collectionView.reloadItems(at: safe)
-        refreshVisibleThumbnailPins()
-    }
-
-    func libraryStore(_ store: TVLibraryStore, didUpdateThumbnailFor id: String) {
-        if id == store.currentId {
-            refreshLiveHeader()
-        }
-        // Paint in place — `reloadItems` mid-fling rebuilds cells (and ⋯ menus)
-        // and hitches scrolling. `cellForItemAt` picks up the cache for tiles that
-        // have not appeared yet.
-        paintArrivedThumbnail(id)
-    }
-
-    func libraryStoreDidChangeConnection(_ store: TVLibraryStore) {
-        updateEmptyState()
-        // Eclipse TV link also gates the disconnected live hero.
-        updateHeroVisibility()
-        applyHeroChrome()
-        refreshLiveHeader()
-        reloadLibraryGrid()
-    }
-
-    func libraryStoreDidUpdatePlayback(_ store: TVLibraryStore) {
-        if ExternalDisplayManager.shared.isLibraryVideoLive { return }
-        liveHeader.updatePlayback(store.playback)
     }
 }

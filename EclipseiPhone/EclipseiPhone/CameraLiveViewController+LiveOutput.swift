@@ -42,14 +42,20 @@ extension CameraLiveViewController {
         view.bringSubviewToFront(liveOutputThumbView)
     }
 
-    /// Loads art for the current AirPlay source into the program thumb.
+    /// Loads art for the current AirPlay source into the in-panel program thumb.
     func refreshLiveOutputAppearance() {
+        configureLiveOutputThumb(liveOutputThumbView)
+    }
+
+    /// Loads art for the current AirPlay source into any program thumb
+    /// (the in-panel monitor or a stacked-grid tile).
+    func configureLiveOutputThumb(_ thumb: CameraLiveOutputThumbView) {
         guard let source = ExternalDisplayManager.shared.presentedSource else {
-            liveOutputThumbView.configure(image: nil, symbol: nil, fill: .black)
+            thumb.configure(image: nil, symbol: nil, fill: .black)
             return
         }
         let art = liveOutputArt(for: source)
-        liveOutputThumbView.configure(
+        thumb.configure(
             image: art.image,
             symbol: art.symbol,
             fill: art.fill,
@@ -68,7 +74,7 @@ extension CameraLiveViewController {
 
     /// Still / icon for a presentation source, preferring cached library thumbs.
     private func liveOutputArt(for source: PresentationSource) -> LiveOutputArt {
-        let dim = UIColor(white: 0.12, alpha: 1)
+        let dim = UIColor.mediaPlaceholder
         switch source.content {
         case .camera:
             return LiveOutputArt(
@@ -221,7 +227,7 @@ final class CameraLiveOutputThumbView: UIView {
         layer.cornerRadius = 10
         layer.borderWidth = 2
         layer.borderColor = UIColor.systemRed.cgColor
-        backgroundColor = UIColor(white: 0.12, alpha: 1)
+        backgroundColor = .mediaPlaceholder
         isUserInteractionEnabled = false
         isHidden = true
         translatesAutoresizingMaskIntoConstraints = true

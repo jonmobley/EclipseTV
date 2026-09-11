@@ -22,6 +22,19 @@ struct MediaItem: Identifiable, Equatable, Codable {
     static func == (lhs: MediaItem, rhs: MediaItem) -> Bool {
         return lhs.path == rhs.path
     }
+
+    /// Video containers the TV plays. The one list every loader, validator, and
+    /// cache consults, so an `.m4v` the validator accepted is never treated as a
+    /// still by a thumbnail or bundle path.
+    static let videoExtensions: Set<String> = ["mp4", "mov", "m4v"]
+
+    /// Still formats the TV decodes.
+    static let imageExtensions: Set<String> = ["jpg", "jpeg", "png", "heic"]
+
+    /// Whether `path` names a playable video by extension alone.
+    static func isVideoPath(_ path: String) -> Bool {
+        videoExtensions.contains(URL(fileURLWithPath: path).pathExtension.lowercased())
+    }
     
     /// Full initializer with all parameters
     init(path: String, type: MediaType, dateAdded: Date, fileSize: Int64) {
@@ -36,14 +49,13 @@ struct MediaItem: Identifiable, Equatable, Codable {
     init(path: String) {
         let url = URL(fileURLWithPath: path)
         let ext = url.pathExtension.lowercased()
-        let isVideo = ["mp4", "mov", "m4v"].contains(ext)
         
         let type: MediaType
-        if isVideo {
+        if Self.videoExtensions.contains(ext) {
             type = .video(duration: 0)
         } else {
             // Default to JPEG for images, or determine from extension
-            let format = MediaType.ImageFormat(rawValue: ext) ?? .jpeg
+            let format = MediaType.ImageFormat(extension: ext) ?? .jpeg
             type = .image(format: format)
         }
         
@@ -61,6 +73,12 @@ struct MediaItem: Identifiable, Equatable, Codable {
             case jpeg = "jpg"
             case png = "png" 
             case heic = "heic"
+
+            /// Maps a file extension to a format, folding the `jpeg` spelling the
+            /// validator accepts into `.jpeg`.
+            init?(extension ext: String) {
+                self.init(rawValue: ext == "jpeg" ? Self.jpeg.rawValue : ext)
+            }
             
             var displayName: String {
                 switch self {
@@ -103,13 +121,16 @@ struct MediaItem: Identifiable, Equatable, Codable {
         let ext = url.pathExtension.lowercased()
         let type: MediaType
         
-        if ["mp4", "mov", "m4v"].contains(ext) {
+        if videoExtensions.contains(ext) {
             let duration = try await getVideoDuration(for: url)
             type = .video(duration: duration)
-        } else if let format = MediaType.ImageFormat(rawValue: ext) {
+        } else if let format = MediaType.ImageFormat(extension: ext) {
             type = .image(format: format)
         } else {
-            throw MediaError.unsupportedFormat(extension: ext, supportedFormats: ["jpg", "png", "heic", "mp4", "mov", "m4v"])
+            throw MediaError.unsupportedFormat(
+                extension: ext,
+                supportedFormats: imageExtensions.sorted() + videoExtensions.sorted()
+            )
         }
         
         return MediaItem(path: path, type: type, dateAdded: dateAdded, fileSize: fileSize)

@@ -11,7 +11,7 @@ import UIKit
 final class SettingsEclipseTVViewController: UITableViewController {
 
     /// Multipeer link state; host updates via `setConnectionState(_:)`.
-    var connectionState: SettingsViewController.ConnectionDisplayState = .paused
+    var connectionState: ConnectionDisplayState = .paused
 
     /// Invoked when the known-TV list changes so the host can refresh the grid/title.
     var onLibrariesChanged: (() -> Void)?
@@ -55,7 +55,7 @@ final class SettingsEclipseTVViewController: UITableViewController {
     }
 
     /// Refreshes connection rows for the current Multipeer link state.
-    func setConnectionState(_ state: SettingsViewController.ConnectionDisplayState) {
+    func setConnectionState(_ state: ConnectionDisplayState) {
         connectionState = state
         guard isViewLoaded else { return }
         tableView.reloadSections(IndexSet(integer: Section.connection.rawValue), with: .none)
@@ -236,7 +236,9 @@ final class SettingsEclipseTVViewController: UITableViewController {
         guard Section(rawValue: indexPath.section) == .appleTVs, !knownTVs.isEmpty else {
             return nil
         }
-        let action = UIContextualAction(style: .destructive, title: "Remove") {
+        // "Forget" rather than "Remove": this drops the TV's cached media, not just
+        // a list entry, so it confirms like every other destructive action.
+        let action = UIContextualAction(style: .destructive, title: "Forget") {
             [weak self] _, _, done in
             self?.confirmForgetTV(at: indexPath, completion: done)
         }
@@ -246,7 +248,7 @@ final class SettingsEclipseTVViewController: UITableViewController {
     private func confirmForgetTV(at indexPath: IndexPath, completion: @escaping (Bool) -> Void) {
         let tv = knownTVs[indexPath.row]
         let alert = UIAlertController(
-            title: "Remove \(tv.name)?",
+            title: "Forget \(tv.name)?",
             message: "Clears this Apple TV from the list and removes its cached "
                 + "media on this iPhone.",
             preferredStyle: .alert
@@ -254,7 +256,7 @@ final class SettingsEclipseTVViewController: UITableViewController {
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in
             completion(false)
         })
-        alert.addAction(UIAlertAction(title: "Remove", style: .destructive) {
+        alert.addAction(UIAlertAction(title: "Forget", style: .destructive) {
             [weak self] _ in
             self?.forgetTV(named: tv.name)
             completion(true)

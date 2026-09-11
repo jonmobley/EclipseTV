@@ -41,7 +41,6 @@ extension PresentationViewController {
     func showImage(at url: URL, fill: Bool, framing: MediaFraming? = nil) {
         messageLabel.text = nil
         imageView.isHidden = false
-        imageView.image = nil
         imageView.alpha = 1.0
         let isLogo = LogoStore.shared.isLogoFileURL(url)
         if framing != nil, !isLogo {
@@ -53,18 +52,29 @@ extension PresentationViewController {
         }
         teardownScreensaver()
         showMediaContainer()
+
+        // Keep the already-decoded incoming still — clearing and re-decoding blinks.
+        if adoptIncomingImageIfAvailable() {
+            return
+        }
+
+        imageView.image = nil
         activityIndicator.startAnimating()
 
         if url.isFileURL {
             imageLoadGeneration += 1
             let generation = imageLoadGeneration
-            let maxEdge = PresentationImageDecoder.maxPixelEdge(
+            let panel = PresentationImageDecoder.panelPixelSize(
                 for: view.window?.windowScene?.screen
+            )
+            let placement = PresentationImageDecoder.placement(
+                fill: fill || isLogo, framing: isLogo ? nil : framing
             )
             DispatchQueue.global(qos: .userInitiated).async { [weak self] in
                 let decoded = PresentationImageDecoder.decode(
                     fileURL: url,
-                    maxPixelEdge: maxEdge
+                    panelPixelSize: panel,
+                    placement: placement
                 )
                 let image: UIImage?
                 if let framing, let decoded, !isLogo,
@@ -93,6 +103,22 @@ extension PresentationViewController {
         }
     }
 
+    /// Copies the incoming overlay's decoded still onto the primary surface.
+    ///
+    /// The transition already waited for this decode before revealing. Clearing the
+    /// primary and decoding the same file again is what showed a black frame and
+    /// the spinner for a beat after every Crossfade, because images drop the overlay
+    /// as soon as the commit runs rather than waiting for the primary to be ready.
+    func adoptIncomingImageIfAvailable() -> Bool {
+        guard isCommittingTransition, let image = incomingImageView?.image else {
+            return false
+        }
+        imageLoadGeneration += 1
+        activityIndicator.stopAnimating()
+        imageView.image = image
+        return true
+    }
+
     /// Plays a video on the primary media surface (layer only — no TV transport chrome).
     /// - Parameter startAt: Absolute seconds to seek before the first `play()`.
     /// - Parameter autoplay: When false, parks on a decoded frame instead of playing.
@@ -119,7 +145,7 @@ extension PresentationViewController {
         }
 
         videoReadyObservation = nil
-        let player = makePresentationPlayer(
+        let (player, looper) = makePresentationPlayer(
             url: url, isMuted: isMuted, isLooping: isLooping
         )
         let layer = AVPlayerLayer(player: player)
@@ -127,19 +153,13 @@ extension PresentationViewController {
         mediaContentView.layer.insertSublayer(layer, at: 0)
 
         self.player = player
+        self.playerLooper = looper
         self.playerLayer = layer
         applyMediaLayout()
         installVideoTransportObserver()
 
-        if isLooping {
-            loopObserver = NotificationCenter.default.addObserver(
-                forName: .AVPlayerItemDidPlayToEndTime,
-                object: player.currentItem,
-                queue: .main
-            ) { [weak player] _ in
-                player?.seek(to: .zero)
-                player?.play()
-            }
+        if isLooping, looper == nil {
+            loopObserver = makeSeekToZeroLoopObserver(for: player)
         }
 
         AirPlayVideoTransport.start(
@@ -147,23 +167,53 @@ extension PresentationViewController {
         )
     }
 
-    /// Builds an `AVPlayer` from a prewarmed item when available, else from `url`.
+    /// Builds the AirPlay player from a prewarmed item when available, else from `url`.
+    ///
+    /// Looping uses `AVQueuePlayer` + `AVPlayerLooper`, the same gapless mechanism
+    /// EclipseTV uses, so a looped video has no visible seam on either output. The
+    /// looper is returned so the caller can retain it; a plain `AVPlayer` with a
+    /// seek-to-zero observer is the fallback only when no looper could be built.
     func makePresentationPlayer(
         url: URL,
         isMuted: Bool,
         isLooping: Bool
-    ) -> AVPlayer {
+    ) -> (player: AVPlayer, looper: AVPlayerLooper?) {
+        let item = PresentationPrewarmer.shared.takeItem(matching: url)
+            ?? AVPlayerItem(url: url)
         let player: AVPlayer
-        if let item = PresentationPrewarmer.shared.takeItem(matching: url) {
-            player = AVPlayer(playerItem: item)
+        var looper: AVPlayerLooper?
+        if isLooping {
+            let queue = AVQueuePlayer()
+            queue.actionAtItemEnd = .advance
+            let candidate = AVPlayerLooper(player: queue, templateItem: item)
+            if candidate.status == .failed {
+                queue.removeAllItems()
+                queue.insert(item, after: nil)
+                queue.actionAtItemEnd = .none
+            } else {
+                looper = candidate
+            }
+            player = queue
         } else {
-            player = AVPlayer(url: url)
+            player = AVPlayer(playerItem: item)
+            player.actionAtItemEnd = .pause
         }
         player.isMuted = isMuted
-        player.actionAtItemEnd = isLooping ? .none : .pause
         AirPlayVideoTransport.configureLayerOnlyPlayback(on: player)
         AirPlayVideoTransport.configurePlaybackTiming(on: player, url: url)
-        return player
+        return (player, looper)
+    }
+
+    /// Seek-to-zero loop used only when `AVPlayerLooper` is unavailable.
+    func makeSeekToZeroLoopObserver(for player: AVPlayer) -> NSObjectProtocol {
+        NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemDidPlayToEndTime,
+            object: player.currentItem,
+            queue: .main
+        ) { [weak player] _ in
+            player?.seek(to: .zero)
+            player?.play()
+        }
     }
 
     /// Moves the incoming overlay player onto the primary surface without rebuilding.
@@ -180,6 +230,8 @@ extension PresentationViewController {
             loopObserver = loop
             incomingLoopObserver = nil
         }
+        playerLooper = incomingPlayerLooper
+        incomingPlayerLooper = nil
         incomingPlayer = nil
         incomingPlayerLayer = nil
         layer.removeFromSuperlayer()
@@ -239,6 +291,8 @@ extension PresentationViewController {
             NotificationCenter.default.removeObserver(loopObserver)
             self.loopObserver = nil
         }
+        playerLooper?.disableLooping()
+        playerLooper = nil
         player?.pause()
         player = nil
         playerLayer?.removeFromSuperlayer()

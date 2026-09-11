@@ -459,9 +459,10 @@ extension ImageViewController {
                         tempOverlay.addSubview(snapshot)
                     }
                 } else if !self.imageView.isHidden, let currentImage = self.imageView.image {
-                    // If transitioning from an image, use that as overlay
+                    // If transitioning from an image, use that as overlay, framed the
+                    // way it is showing so a Fit still does not jump to Fill mid-fade.
                     let imageView = UIImageView(image: currentImage)
-                    imageView.contentMode = .scaleAspectFill
+                    imageView.contentMode = self.imageView.contentMode
                     imageView.clipsToBounds = true
                     imageView.frame = self.view.bounds
                     tempOverlay.addSubview(imageView)
@@ -486,7 +487,7 @@ extension ImageViewController {
                 // Dissolve the overlay only once the first frame is ready, which both
                 // hides the spinner and avoids a black flash during the transition.
                 self.startWhenReady(player) {
-                    UIView.animate(withDuration: 0.4, animations: {
+                    UIView.animate(withDuration: ContentTransitionSettings.crossfadeDuration, animations: {
                         tempOverlay.alpha = 0
                     }) { _ in
                         // Clean up

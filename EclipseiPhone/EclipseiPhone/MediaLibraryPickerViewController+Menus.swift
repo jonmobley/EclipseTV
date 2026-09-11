@@ -48,10 +48,11 @@ extension MediaLibraryPickerViewController {
         return UIMenu(children: children)
     }
 
-    /// Preview, Add to Show, Delete. Library is the only place orphan PDFs can go.
+    /// Preview, Rename, Add to Show, Delete. Library is the only place orphan PDFs can go.
     func pdfLibraryMenu(for doc: SavedPDF) -> UIMenu {
         UIMenu(children: [
             previewAction { [weak self] in self?.previewPDF(doc) },
+            renamePDFAction(doc),
             addToShowMenu(membershipId: doc.id.uuidString),
             deletePDFAction(doc)
         ])
@@ -86,6 +87,15 @@ extension MediaLibraryPickerViewController {
             image: UIImage(systemName: "textformat")
         ) { [weak self] _ in
             self?.presentMediaTitlePrompt(forId: id)
+        }
+    }
+
+    private func renamePDFAction(_ doc: SavedPDF) -> UIAction {
+        UIAction(
+            title: "Rename",
+            image: UIImage(systemName: "pencil")
+        ) { [weak self] _ in
+            self?.presentRenamePDFPrompt(doc)
         }
     }
 
@@ -286,7 +296,7 @@ extension MediaLibraryPickerViewController {
     private func presentNotConnectedAlert() {
         let alert = UIAlertController(
             title: "EclipseTV Not Linked",
-            message: "This action needs a link to the Eclipse TV app (pairing code). "
+            message: "This action needs a link to the EclipseTV app (Pairing Code). "
                 + "AirPlay alone is enough to present, but not for this.",
             preferredStyle: .alert
         )

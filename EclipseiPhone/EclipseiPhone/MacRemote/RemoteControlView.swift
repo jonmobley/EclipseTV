@@ -1,9 +1,8 @@
 //
 //  RemoteControlView.swift
-//  EclipseRemote
+//  Eclipse
 //
-//  Description: Live control surface — preview, blackout, media grid, transport.
-//  Thread Safety: Main thread only — SwiftUI view.
+//  Copyright © 2026 Moxie LLC. All rights reserved.
 //
 
 import SwiftUI

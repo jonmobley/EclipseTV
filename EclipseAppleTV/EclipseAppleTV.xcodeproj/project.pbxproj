@@ -289,6 +289,8 @@
 				"$(SRCROOT)/../EclipseiPhone/EclipseiPhone/AlbumConfig.swift",
 				"$(SRCROOT)/../EclipseAppleTV/EclipseAppleTV/RemoteAlbum/AlbumManifest.swift",
 				"$(SRCROOT)/../EclipseiPhone/EclipseiPhone/AlbumManifest.swift",
+				"$(SRCROOT)/../EclipseAppleTV/EclipseAppleTV/StillDecodeBudget.swift",
+				"$(SRCROOT)/../EclipseiPhone/EclipseiPhone/StillDecodeBudget.swift",
 			);
 			name = "Verify Shared Sources";
 			outputFileListPaths = (

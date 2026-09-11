@@ -49,7 +49,7 @@ extension ImageViewController {
             }
             
             let url = URL(fileURLWithPath: imagePath)
-            let isVideo = url.pathExtension.lowercased() == "mp4" || url.pathExtension.lowercased() == "mov"
+            let isVideo = MediaItem.isVideoPath(imagePath)
             
             logger.debug("🔵 Long press on \(isVideo ? "video" : "image"): \(url.lastPathComponent)")
             

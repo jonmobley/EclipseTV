@@ -36,16 +36,13 @@ extension LibraryGridViewController {
         return show
     }
 
-    /// Slide, Live Poll cue, or countdown-preset count for the live ribbon section.
+    /// Slide or Live Poll cue count for the live ribbon section.
     ///
-    /// Live Poll is checked first throughout: its Practice / Start chrome owns the
+    /// Live Poll is checked first throughout: its Practice preview owns the
     /// hero even while a countdown clock keeps running on the projector.
     func liveSlideshowRibbonItemCount() -> Int {
         if showsLivePollRibbon {
             return livePollRibbonItemCount()
-        }
-        if showsCountdownRibbon {
-            return countdownRibbonItemCount()
         }
         guard showsLiveSlideshowRibbon else { return 0 }
         return SlideshowPlaybackController.shared.activeSlideIds.count
@@ -58,10 +55,6 @@ extension LibraryGridViewController {
     ) {
         if showsLivePollRibbon {
             configureLivePollRibbonCell(cell, at: indexPath)
-            return
-        }
-        if showsCountdownRibbon {
-            configureCountdownRibbonCell(cell, at: indexPath)
             return
         }
         let playback = SlideshowPlaybackController.shared
@@ -88,12 +81,8 @@ extension LibraryGridViewController {
             handleLivePollRibbonTap(at: indexPath)
             return
         }
-        if showsCountdownRibbon {
-            handleCountdownRibbonTap(at: indexPath)
-            return
-        }
         SlideshowPlaybackController.shared.goToSlide(at: indexPath.item)
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptics.impactLight()
     }
 
     /// Reapplies layout when the live ribbon appears, hides, or moves.
@@ -145,7 +134,7 @@ extension LibraryGridViewController {
     }
 
     /// Hero ribbon toggle + swipe browse while this Show’s slideshow is live.
-    /// Live Poll shows its ribbon on program / Practice / Start gate (no toggle).
+    /// Live Poll shows its ribbon on program or in Practice (no toggle).
     func syncLiveSlideshowRibbonChrome() {
         if showsLivePollRibbon {
             liveHeader.setSlideshowRibbonToggleVisible(false, isOn: false)
@@ -171,7 +160,7 @@ extension LibraryGridViewController {
             id: slideshow.id,
             showRibbonWhenLive: !slideshow.showRibbonWhenLive
         )
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptics.impactLight()
     }
 
     /// Cue-only Live Poll refresh: update highlights; nudge the strip only if needed.
@@ -191,9 +180,6 @@ extension LibraryGridViewController {
         if showsLivePollRibbon {
             index = livePollRibbonIndex
             count = livePollRibbonItems.count
-        } else if showsCountdownRibbon {
-            index = countdownRibbonSelectedIndex()
-            count = countdownRibbonItemCount()
         } else {
             index = SlideshowPlaybackController.shared.currentSlideIndex
             count = SlideshowPlaybackController.shared.activeSlideIds.count

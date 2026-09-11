@@ -2,9 +2,7 @@
 //  ConnectURLParser.swift
 //  Eclipse
 //
-//  Description: Parses Eclipse remote connect URLs, including QR `#t=` tokens
-//               and the `eclipse://mac-remote` app deep link.
-//  Thread Safety: Pure helpers — safe from any isolation domain.
+//  Copyright © 2026 Moxie LLC. All rights reserved.
 //
 
 import Foundation

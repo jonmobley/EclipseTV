@@ -20,11 +20,13 @@ final class PDFStore {
     enum StoreError: LocalizedError {
         case copyFailed
         case invalidFile
+        case emptyTitle
 
         var errorDescription: String? {
             switch self {
             case .copyFailed: return "Couldn't save that PDF. Please try again."
             case .invalidFile: return "That doesn't look like a readable PDF."
+            case .emptyTitle: return "Enter a title for this PDF."
             }
         }
     }
@@ -39,16 +41,19 @@ final class PDFStore {
     private let rootDirectory: URL
     private let logger = Logger(subsystem: "com.eclipseapp.ios", category: "PDFStore")
 
-    init(defaults: UserDefaults = .standard) {
+    /// - Parameter rootDirectory: Where `.pdf` files live. Defaults to
+    ///   `Application Support/PDFs`; tests pass a scratch directory.
+    init(defaults: UserDefaults = .standard, rootDirectory: URL? = nil) {
         self.defaults = defaults
         let base = FileManager.default.urls(
             for: .applicationSupportDirectory, in: .userDomainMask
         )[0]
-        rootDirectory = base.appendingPathComponent("PDFs", isDirectory: true)
+        self.rootDirectory = rootDirectory
+            ?? base.appendingPathComponent("PDFs", isDirectory: true)
         try? FileManager.default.createDirectory(
-            at: rootDirectory, withIntermediateDirectories: true
+            at: self.rootDirectory, withIntermediateDirectories: true
         )
-        excludeFromBackup(rootDirectory)
+        excludeFromBackup(self.rootDirectory)
         load()
     }
 
@@ -75,15 +80,19 @@ final class PDFStore {
 
     var hasPendingSync: Bool { !idsNeedingUpload.isEmpty }
 
+    /// True once the server holds this document's file, so later saves (a rename)
+    /// can carry metadata alone instead of re-uploading the PDF.
+    func isSynced(id: UUID) -> Bool {
+        syncedIds.contains(id.uuidString)
+    }
+
     // MARK: - Mutations
 
     /// Copies `sourceURL` into the store and returns the new bookmark.
     @discardableResult
     func add(from sourceURL: URL, title: String?) throws -> SavedPDF {
-        let trimmed = title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let resolvedTitle = trimmed.isEmpty
-            ? sourceURL.deletingPathExtension().lastPathComponent
-            : trimmed
+        let resolvedTitle = UserDisplayName.normalized(title ?? "")
+            ?? UserDisplayName.clamp(sourceURL.deletingPathExtension().lastPathComponent)
         guard !resolvedTitle.isEmpty else { throw StoreError.invalidFile }
 
         let id = UUID()
@@ -136,6 +145,21 @@ final class PDFStore {
         if PDFThumbnailStore.shared.image(for: doc.id) == nil {
             PDFThumbnailStore.shared.generate(from: destination, for: doc.id)
         }
+    }
+
+    /// Renames the document with `id` when present. Blank titles are rejected.
+    ///
+    /// The file on disk is untouched; only the bookmark changes, and the sync save
+    /// it schedules is metadata-only once the server already has the asset.
+    func rename(id: UUID, to title: String) throws {
+        guard let trimmed = UserDisplayName.normalized(title) else {
+            throw StoreError.emptyTitle
+        }
+        guard let index = documents.firstIndex(where: { $0.id == id }) else { return }
+        guard documents[index].title != trimmed else { return }
+        documents[index].title = trimmed
+        persist()
+        scheduleSaveIfNeeded(id: id)
     }
 
     /// Records that the backend accepted this document's upload.

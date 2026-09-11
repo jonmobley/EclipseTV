@@ -13,6 +13,7 @@ extension LibraryGridViewController {
 
     /// Play/pause: in-hero phone player, else AirPlay, and EclipseTV when linked.
     func handleLiveVideoPlayPause() {
+        if sendShowLiveCommandIfOperator(.videoToggle) { return }
         if liveHeader.toggleLibraryVideoPlayback() { return }
         let airPlay = ExternalDisplayManager.shared.toggleLibraryVideoPlayback()
         if store.isOnline {
@@ -23,6 +24,7 @@ extension LibraryGridViewController {
 
     /// Skip: in-hero phone player, else AirPlay, and EclipseTV when linked.
     func handleLiveVideoSkip(by delta: TimeInterval) {
+        if sendShowLiveCommandIfOperator(.videoSkip, value: delta) { return }
         if liveHeader.skipLibraryVideo(by: delta) { return }
         let airPlay = ExternalDisplayManager.shared.skipLibraryVideo(by: delta)
         if store.isOnline {
@@ -33,6 +35,7 @@ extension LibraryGridViewController {
 
     /// Seek: in-hero phone player, else AirPlay, and EclipseTV when linked.
     func handleLiveVideoSeek(to position: TimeInterval) {
+        if sendShowLiveCommandIfOperator(.videoSeek, value: position) { return }
         if liveHeader.seekLibraryVideo(to: position) { return }
         let airPlay = ExternalDisplayManager.shared.seekLibraryVideo(to: position)
         if store.isOnline {
@@ -42,10 +45,14 @@ extension LibraryGridViewController {
     }
 
     /// Practice Mode plays in the hero; AirPlay / EclipseTV uses a black monitor.
+    ///
+    /// Reads `projectorAvailable`, like every other affordance: a display the scene
+    /// accessory has reported but not yet attached is still program output, so the
+    /// hero must show the monitor rather than play a second copy on the phone.
     func applyLibraryVideoLiveHeader(item: LibraryItemDTO) {
         let mgr = ExternalDisplayManager.shared
         let phonePlays = LiveOutputRouting.phoneHeroPlaysLibraryVideo(
-            airPlayConnected: mgr.isConnected,
+            airPlayConnected: LiveOutputRouting.projectorAvailable,
             eclipseTVOnline: store.isOnline,
             practiceMode: prefersDisconnectedLivePreview,
             isRemoteOperator: ShowLiveSession.shared.isRemoteOperator
@@ -89,6 +96,8 @@ extension LibraryGridViewController {
     func applyAirPlayVideoPlaybackToHero() {
         let mgr = ExternalDisplayManager.shared
         guard mgr.isLibraryVideoLive else { return }
+        // Operators scrub against this; whole-second state dedupes to ~1 Hz.
+        broadcastShowLiveSnapshotIfNeeded()
         if !liveHeader.wantsPlaybackControls {
             refreshLiveHeader()
             return
