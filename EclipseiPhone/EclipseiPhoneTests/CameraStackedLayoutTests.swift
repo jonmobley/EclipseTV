@@ -17,6 +17,7 @@ struct CameraStackedLayoutTests {
 
     private let phone = CGRect(x: 0, y: 0, width: 390, height: 844)
     private let landscape: CGFloat = 16.0 / 9.0
+    private let safeTop: CGFloat = 59
 
     private var dock: CGFloat {
         CameraLiveViewController.captureDockSpan(safeEdge: 34)
@@ -44,13 +45,13 @@ struct CameraStackedLayoutTests {
         let layout = try #require(
             CameraLiveViewController.stackedLayout(
                 in: phone,
-                safeTop: 59,
+                safeTop: safeTop,
                 aspect: landscape,
                 dockSpan: dock,
                 tileHeight: tile.height
             )
         )
-        #expect(layout.header.minY == 59 + 8)
+        #expect(layout.header.minY == safeTop + 8)
         #expect(
             layout.header.height
                 == CameraLiveViewController.chromeControlSize
@@ -69,7 +70,7 @@ struct CameraStackedLayoutTests {
         let layout = try #require(
             CameraLiveViewController.stackedLayout(
                 in: phone,
-                safeTop: 59,
+                safeTop: safeTop,
                 aspect: landscape,
                 dockSpan: dock,
                 tileHeight: tile.height
@@ -84,7 +85,7 @@ struct CameraStackedLayoutTests {
         #expect(
             CameraLiveViewController.stackedLayout(
                 in: phone,
-                safeTop: 59,
+                safeTop: safeTop,
                 aspect: 9.0 / 16.0,
                 dockSpan: dock,
                 tileHeight: tile.height
@@ -98,7 +99,7 @@ struct CameraStackedLayoutTests {
         #expect(
             CameraLiveViewController.stackedLayout(
                 in: short,
-                safeTop: 59,
+                safeTop: safeTop,
                 aspect: landscape,
                 dockSpan: dock,
                 tileHeight: tile.height
