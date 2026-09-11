@@ -21,6 +21,7 @@ final class CameraCapturePreviewViewController: UIViewController {
     private let item: Item
     private let imageView = UIImageView()
     private var playerController: AVPlayerViewController?
+    private var focusSuspension: PlayerFocusSuspension?
 
     /// - Parameter item: Capture to display.
     init(item: Item) {
@@ -73,7 +74,11 @@ final class CameraCapturePreviewViewController: UIViewController {
 
     private func installVideo(_ url: URL) {
         let controller = AVPlayerViewController()
-        controller.player = AVPlayer(url: url)
+        let player = AVPlayer(url: url)
+        controller.player = player
+        focusSuspension = PlayerFocusSuspension(
+            player: player, pictureInPictureHost: controller
+        )
         controller.view.translatesAutoresizingMaskIntoConstraints = false
         addChild(controller)
         view.addSubview(controller.view)

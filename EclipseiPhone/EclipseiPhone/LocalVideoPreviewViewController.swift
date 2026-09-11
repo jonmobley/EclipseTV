@@ -20,6 +20,7 @@ final class LocalVideoPreviewViewController: AVPlayerViewController {
     private let isLooping: Bool
     private let startAt: TimeInterval
     private var endObserver: NSObjectProtocol?
+    private var focusSuspension: PlayerFocusSuspension?
     /// Fired once on dismiss with the player’s last position (seconds).
     var onDismiss: ((TimeInterval) -> Void)?
 
@@ -86,6 +87,7 @@ final class LocalVideoPreviewViewController: AVPlayerViewController {
             item.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero)
         }
         player = item
+        focusSuspension = PlayerFocusSuspension(player: item, pictureInPictureHost: self)
 
         guard isLooping else { return }
         endObserver = NotificationCenter.default.addObserver(
