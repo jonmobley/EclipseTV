@@ -30,7 +30,9 @@ extension LibraryGridViewController {
         guard !isBlackSelected, !isLogoSelected, !isScreensaverSelected else {
             return nil
         }
-        guard livePollGateMembershipId == nil else { return nil }
+        guard QuestPollSessionStore.shared.practiceMembershipId == nil else {
+            return nil
+        }
         let manager = ExternalDisplayManager.shared
         guard !manager.isWebLive, !manager.isPDFLive, !manager.isCameraLive,
               !manager.isParkedOnQuickChangeStill, !manager.isCountdownLive else {

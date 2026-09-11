@@ -72,12 +72,8 @@ extension LibraryGridViewController {
         case .livePoll:
             guard let itemId, let uuid = UUID(uuidString: itemId),
                   let item = LivePollStore.shared.poll(id: uuid) else { return }
-            if QuestPollSessionStore.shared.membershipId == item.id,
-               QuestPollSessionStore.shared.session != nil {
-                presentQuestPollLive()
-            } else {
-                startLivePoll(item)
-            }
+            // Same one-tap rule as the director's own tile tap.
+            selectLivePoll(item)
         case .black:
             if !isBlackSelected { toggleBlackLive() }
         }
@@ -121,7 +117,6 @@ extension LibraryGridViewController {
         liveHeader.clearScreensaverPreview()
         liveHeader.clearCameraPreview()
         liveHeader.clearLibraryVideoPreview()
-        liveHeader.hideLivePollGate()
         liveHeader.setSlideshowRibbonToggleVisible(false, isOn: false)
         liveHeader.setScreenFitToggleVisible(false, mode: .fit)
         liveHeader.allowsSlideshowBrowse = false
