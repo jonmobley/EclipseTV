@@ -206,6 +206,11 @@ Views/
 - Restart app for memory cleanup  
 - Check network bandwidth for video playback
 
+### "Upload Symbols Failed" for WebRTC.framework when distributing the iPhone app
+- Expected: WebRTC arrives as a stripped prebuilt xcframework, so the archive has no dSYM for it
+- The build is still accepted; only WebRTC's own frames stay unsymbolicated
+- See [Scripts/WebRTCUploadSymbols.md](Scripts/WebRTCUploadSymbols.md) for the cause and how to supply the dSYM
+
 ## 📄 License
 
 Copyright © 2026 Moxie LLC. All rights reserved.
