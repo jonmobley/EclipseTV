@@ -33,18 +33,37 @@ extension LibraryGridViewController {
         }
     }
 
+    /// Opens the phone browser for the website that is currently live.
+    ///
+    /// Reached from the live preview tap. The browser adopts the warm page, so the
+    /// hero falls back to a static thumbnail while it is up.
+    func presentWebControllerForLivePage() {
+        let mgr = ExternalDisplayManager.shared
+        guard mgr.isWebLive,
+              let pageId = mgr.liveWebPageId,
+              let page = WebPageStore.shared.page(id: pageId) else { return }
+        presentWebPage(page)
+    }
+
     /// Marks a saved website live without opening the phone browser.
+    ///
+    /// Tapping the card of the page that is already live opens the browser instead,
+    /// matching the live preview tap.
     ///
     /// YouTube / Vimeo / direct-file URLs play edge-to-edge instead of loading
     /// the desktop watch page.
     func presentWebPageLive(_ page: WebPage) {
+        let mgr = ExternalDisplayManager.shared
+        if page.videoLink == nil, mgr.isWebLive, mgr.liveWebPageId == page.id {
+            presentWebPage(page)
+            return
+        }
         guard !blockLiveChangeIfLocked() else { return }
         guard hasLiveOutputDestination else { return }
         if sendShowLiveSelectIfOperator(.web, itemId: page.id.uuidString) {
             Haptics.impactLight()
             return
         }
-        let mgr = ExternalDisplayManager.shared
         if let link = page.videoLink {
             if mgr.isWebVideoLive, mgr.liveWebVideoPageId == page.id {
                 return
@@ -55,9 +74,6 @@ extension LibraryGridViewController {
             Haptics.impactLight()
             reloadLibraryGrid()
             refreshLiveHeader()
-            return
-        }
-        if mgr.isWebLive, mgr.liveWebPageId == page.id {
             return
         }
         SlideshowPlaybackController.shared.stop()

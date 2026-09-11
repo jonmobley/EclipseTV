@@ -500,6 +500,9 @@ final class LibraryGridViewController: UIViewController {
         liveHeader.onRequestCameraController = { [weak self] in
             self?.onPresentCamera?()
         }
+        liveHeader.onRequestWebController = { [weak self] in
+            self?.presentWebControllerForLivePage()
+        }
         liveHeader.onSlideshowSwipe = { delta in
             SlideshowPlaybackController.shared.goToAdjacentSlide(delta: delta)
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -966,6 +969,8 @@ final class LibraryGridViewController: UIViewController {
                 // In-app hero shows the warm page even with no AirPlay display.
                 liveHeader.showWebPreview(pageId: pageId)
             }
+            // Only a saved bookmark can be handed to the phone browser.
+            liveHeader.allowsWebControllerTap = page != nil
             liveHeader.updatePlayback(PlaybackState())
             return
         }

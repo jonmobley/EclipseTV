@@ -94,6 +94,8 @@ final class LiveHeaderView: UIView {
     var onRequestHostController: (() -> Void)?
     /// Opens the Camera live controller from the expanded hero.
     var onRequestCameraController: (() -> Void)?
+    /// Opens the phone browser for the live website from the expanded hero.
+    var onRequestWebController: (() -> Void)?
     /// Swipe on the hero while a Slideshow is live: `+1` next, `-1` previous.
     var onSlideshowSwipe: ((Int) -> Void)?
     /// Swipe on the hero while a Show still is live: `+1` next, `-1` previous.
@@ -140,6 +142,23 @@ final class LiveHeaderView: UIView {
             guard allowsCameraControllerTap != oldValue else { return }
             applyInteractionForPresentation()
         }
+    }
+    /// When true, tapping the expanded website hero opens the phone browser that
+    /// drives the live page.
+    var allowsWebControllerTap = false {
+        didSet {
+            guard allowsWebControllerTap != oldValue else { return }
+            applyInteractionForPresentation()
+        }
+    }
+
+    /// Clears every tap-to-open affordance so a previous live kind cannot claim the
+    /// tap after the hero moves on to different content.
+    func resetTapAffordances() {
+        allowsFullscreenTap = false
+        allowsHostControllerTap = false
+        allowsCameraControllerTap = false
+        allowsWebControllerTap = false
     }
 
     // MARK: - Init
@@ -397,6 +416,7 @@ final class LiveHeaderView: UIView {
             // LIVE badge; video transport uses the bottom gradient. Never show
             // image titles on the preview — art alone is enough.
             self.wantsPlaybackControls = showControls
+            self.resetTapAffordances()
             self.allowsFullscreenTap = allowsStillFullscreenTap
             self.gradientLayer.isHidden = !showControls
             self.liveBadge.isHidden = !showLiveBadge
@@ -470,9 +490,7 @@ final class LiveHeaderView: UIView {
             }
 
             self.wantsPlaybackControls = showsTransport
-            self.allowsFullscreenTap = false
-            self.allowsHostControllerTap = false
-            self.allowsCameraControllerTap = false
+            self.resetTapAffordances()
             self.gradientLayer.isHidden = true
             self.liveBadge.isHidden = !showLiveBadge
             self.subtitleLabel.isHidden = true
@@ -550,7 +568,7 @@ final class LiveHeaderView: UIView {
         clearCameraPreview()
         clearLibraryVideoPreview()
         hideCountdownClock()
-        allowsFullscreenTap = false
+        resetTapAffordances()
         backgroundColor = .secondarySystemBackground
         imageView.image = nil
         imageView.isHidden = true
@@ -590,6 +608,7 @@ final class LiveHeaderView: UIView {
             || allowsFullscreenTap
             || allowsHostControllerTap
             || allowsCameraControllerTap
+            || allowsWebControllerTap
             || slideshowRibbonButton != nil
             || screenFitButton != nil
             || cameraFlipButton != nil
@@ -598,6 +617,7 @@ final class LiveHeaderView: UIView {
 
     /// Expanded phone-live still: open fullscreen Preview.
     /// Live Poll room: open host CONTROLS. Camera: open the camera controller.
+    /// Website: open the phone browser that drives the live page.
     @objc func handleFullscreenContentTap() {
         guard !isCompactPresentation else { return }
         if allowsHostControllerTap {
@@ -608,6 +628,11 @@ final class LiveHeaderView: UIView {
         if allowsCameraControllerTap {
             Haptics.impactLight()
             onRequestCameraController?()
+            return
+        }
+        if allowsWebControllerTap {
+            Haptics.impactLight()
+            onRequestWebController?()
             return
         }
         guard allowsFullscreenTap else { return }

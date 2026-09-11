@@ -492,12 +492,18 @@ extension LibraryGridViewController: UICollectionViewDataSource,
     /// like a normal browser load so Back still works and AirPlay follows.
     ///
     /// Video links skip the desktop browser and go live as fullscreen video instead.
+    ///
+    /// When `page` is already live (hero tap, re-tapped card) the TV is left alone:
+    /// re-presenting the same URL runs a full transition for nothing, and the browser
+    /// keeps AirPlay in step from `didCommit` anyway.
     func presentWebPage(_ page: WebPage) {
         if page.videoLink != nil {
             presentWebPageLive(page)
             return
         }
-        let markLive = hasLiveOutputDestination && !isLiveOutputLocked
+        let mgr = ExternalDisplayManager.shared
+        let alreadyLive = mgr.isWebLive && mgr.liveWebPageId == page.id
+        let markLive = hasLiveOutputDestination && !isLiveOutputLocked && !alreadyLive
         if let open = openController(ofType: WebRemoteViewController.self) {
             if markLive {
                 SlideshowPlaybackController.shared.stop()

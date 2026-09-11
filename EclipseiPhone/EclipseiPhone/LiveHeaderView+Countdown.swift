@@ -37,9 +37,7 @@ extension LiveHeaderView {
             self.subtitleLabel.isHidden = true
 
             self.wantsPlaybackControls = false
-            self.allowsFullscreenTap = false
-            self.allowsHostControllerTap = false
-            self.allowsCameraControllerTap = false
+            self.resetTapAffordances()
             self.gradientLayer.isHidden = true
             self.liveBadge.isHidden = !showLiveBadge
             self.controls.isHidden = true
