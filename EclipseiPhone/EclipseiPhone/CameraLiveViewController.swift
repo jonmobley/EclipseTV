@@ -13,8 +13,10 @@ import AVFoundation
 /// The preview is the largest 16:9 / 9:16 panel that fits the stage (edge contact
 /// where the aspect allows). A Landscape Show on a portrait-held phone keeps
 /// that 16:9 crop — same framing as the home Camera tile — instead of rotating
-/// the camera UI. Capture controls sit outside the panel, like the system
-/// Camera app: a photo shutter beside a record button. Tap record to start/stop
+/// the camera UI, and stacks the header above it and a Show-style thumbnail
+/// grid below it in the black bands (`CameraStackedLayout`). Capture controls
+/// sit outside the panel, like the system Camera app: a photo shutter beside a
+/// record button. Tap record to start/stop
 /// video (except Always Record When Live, which owns recording while on-air).
 /// Photos work in preview, live, and while a clip is rolling. Tap the stage to
 /// go live or stop when AirPlay, EclipseTV, or Practice Mode is on. Otherwise
@@ -163,6 +165,24 @@ final class CameraLiveViewController: UIViewController {
     }()
     /// Program thumb of what's on AirPlay while this camera is still preview-only.
     let liveOutputThumbView = CameraLiveOutputThumbView()
+    /// Program · frames · stills as a Show-style grid under a 16:9 panel (portrait hold).
+    let thumbGridView: UICollectionView = {
+        let layout = UICollectionViewFlowLayout()
+        layout.scrollDirection = .vertical
+        let view = UICollectionView(frame: .zero, collectionViewLayout: layout)
+        view.backgroundColor = .clear
+        view.showsVerticalScrollIndicator = false
+        view.alwaysBounceVertical = true
+        view.clipsToBounds = true
+        view.contentInsetAdjustmentBehavior = .never
+        view.delaysContentTouches = false
+        view.translatesAutoresizingMaskIntoConstraints = true
+        view.isHidden = true
+        return view
+    }()
+    /// Set while header · panel · grid are stacked in the black bands; nil means
+    /// the chrome overlays the centered panel instead.
+    var stackedLayout: CameraStackedLayout?
     /// Cutaway being replaced by the active Photos picker, or nil when adding.
     var stillPickerReplaceId: UUID?
     /// True while Back is committing a Background park so `cameraDidEnd` won't re-dismiss.
@@ -199,6 +219,7 @@ final class CameraLiveViewController: UIViewController {
         view.addSubview(backButton)
         setupPreviewChrome()
         setupCaptureMocks()
+        setupThumbGrid()
         setupStillRibbon()
         setupLiveOutputThumb()
         setupFrameRibbon()
@@ -353,13 +374,7 @@ final class CameraLiveViewController: UIViewController {
 
         let edge = captureDockEdge
         let dock = Self.captureDockSpan(safeEdge: captureDockSafePad(for: edge))
-        let panel = Self.phoneCameraPanelRect(
-            in: bounds,
-            aspect: ExternalOutputSettings.orientation.aspectRatio,
-            dockEdge: edge,
-            dockSpan: dock
-        )
-        panelView.frame = panel
+        panelView.frame = resolvePhoneCameraPanel(edge: edge, dockSpan: dock)
         layoutTopChromeInPanel()
         layoutBottomChromeInPanel()
 

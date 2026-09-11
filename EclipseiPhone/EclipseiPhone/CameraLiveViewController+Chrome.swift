@@ -21,14 +21,18 @@ extension CameraLiveViewController {
         applyLiveBadgeAppearance()
     }
 
-    /// Places Back · centered LIVE · Settings over the panel (safe-area aware).
+    /// Places Back · centered LIVE · Settings (safe-area aware).
+    ///
+    /// Stacked: the row sits in the band above the panel. Otherwise it overlays
+    /// the panel's top edge.
     func layoutTopChromeInPanel() {
         let panel = panelView.convert(panelView.bounds, to: view)
         guard panel.width > 1, panel.height > 1 else { return }
 
         let inset: CGFloat = 18
         let controlSize = Self.chromeControlSize
-        let rowY = max(panel.minY + inset, view.safeAreaInsets.top + 8)
+        let rowY = stackedLayout?.header.minY
+            ?? max(panel.minY + inset, view.safeAreaInsets.top + 8)
         let leading = max(panel.minX + inset, view.safeAreaInsets.left + 12)
         let trailing = min(
             panel.maxX - inset - controlSize,
@@ -149,9 +153,7 @@ extension CameraLiveViewController {
         view.bringSubviewToFront(photoButton)
         view.bringSubviewToFront(shutterButton)
         view.bringSubviewToFront(flipButton)
-        layoutLiveOutputThumb(panel: panel)
-        layoutStillRibbon(panel: panel)
-        layoutFrameRibbon(panel: panel)
+        layoutThumbnails(panel: panel)
 
         updateShutterAccessibilityHint()
     }
@@ -275,6 +277,7 @@ extension CameraLiveViewController {
         layoutTopChromeInPanel()
         layoutBottomChromeInPanel()
         stillRibbonView.reloadData()
+        thumbGridView.reloadData()
     }
 
     /// Whether AirPlay currently owns the camera overlay (including still park).
@@ -438,6 +441,9 @@ extension CameraLiveViewController {
     }
 
     /// Capsule elapsed-time pill, centered in the camera preview panel.
+    ///
+    /// Sits under the LIVE pill when the header overlays the panel; in the stacked
+    /// layout the header is above the panel, so the pill takes the panel's top edge.
     private func layoutRecordingTimerPill(in panel: CGRect) {
         guard !recordingTimerPillView.isHidden else { return }
         let textSize = recordingTimerLabel.sizeThatFits(CGSize(width: 120, height: 36))
@@ -448,7 +454,9 @@ extension CameraLiveViewController {
         recordingTimerPillView.layer.cornerRadius = height / 2
         recordingTimerPillView.clipsToBounds = true
         let y: CGFloat
-        if goLiveButton.isHidden {
+        if stackedLayout != nil {
+            y = panel.minY + 10
+        } else if goLiveButton.isHidden {
             y = goLiveButton.frame.minY
         } else {
             y = goLiveButton.frame.maxY + 8
