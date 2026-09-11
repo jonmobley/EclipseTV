@@ -25,6 +25,8 @@ final class WebRemoteViewController: UIViewController {
     var webPanelView: UIView?
     /// Suppresses scroll sync while applying programmatic scroll changes.
     var isSyncingScroll = false
+    /// Follows same-document URL changes (pushState / hash routing) onto AirPlay.
+    var webURLObservation: NSKeyValueObservation?
     /// True once the browser is on its way out, so the orientation is restored after the
     /// dismissal rather than while this screen still owns it.
     private var isLeaving = false
@@ -116,6 +118,7 @@ final class WebRemoteViewController: UIViewController {
         }
         guard isBeingDismissed || isMovingFromParent else { return }
         isLeaving = true
+        webURLObservation = nil
         // Park the warm session (home LiveHeader reclaims it if still live).
         WarmWebSessionPool.shared.relinquish(pageId: page.id, from: self)
         webView = nil

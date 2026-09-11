@@ -108,7 +108,25 @@ extension WebRemoteViewController: UIScrollViewDelegate,
         web.translatesAutoresizingMaskIntoConstraints = true
         stage.addSubview(web)
         webView = web
+        observeSameDocumentNavigation(web)
         captureBrowserSessionRootIfNeeded()
+    }
+
+    /// Pushes same-document URL changes (pushState / hash routing) to the TV.
+    ///
+    /// `didCommit` only fires for full document loads, so a single-page site could
+    /// route the phone to a new view while the external display stayed on the entry
+    /// URL. Full loads are left to `didCommit`: while one is in flight, `url` reports
+    /// the provisional (pre-redirect) address, which is not the page the TV should load.
+    private func observeSameDocumentNavigation(_ web: WKWebView) {
+        webURLObservation = web.observe(\.url, options: [.new]) { [weak self] web, _ in
+            MainActor.assumeIsolated {
+                guard let self, !web.isLoading,
+                      let url = web.url, !self.isBlankBrowserURL(url) else { return }
+                self.updateBrowserChrome()
+                ExternalDisplayManager.shared.loadWeb(url: url)
+            }
+        }
     }
 
     /// Pins the stage under the nav bar (Vertical) or full-bleed (Landscape).
