@@ -131,15 +131,18 @@ extension CameraLiveViewController {
 
     /// Places Frame · photo · record · Flip in the outside dock (not over the preview).
     ///
-    /// Portrait hold: bottom dock under the panel. Landscape hold: trailing dock.
+    /// Portrait hold: bottom dock under the panel. Landscape hold: the same row
+    /// turned with the phone, on whichever side the portrait bottom edge landed.
     func layoutBottomChromeInPanel() {
         let panel = panelView.convert(panelView.bounds, to: view)
         guard panel.width > 1, panel.height > 1 else { return }
 
-        if isPhoneCameraPortraitLayout {
+        let edge = captureDockEdge
+        switch edge {
+        case .bottom:
             layoutVerticalCaptureChrome(panel: panel)
-        } else {
-            layoutLandscapeCaptureChrome(panel: panel)
+        case .left, .right:
+            layoutLandscapeCaptureChrome(panel: panel, edge: edge)
         }
 
         view.bringSubviewToFront(frameButton)
@@ -169,7 +172,7 @@ extension CameraLiveViewController {
         )
         photoButton.frame = Self.photoButtonFrame(
             shutterFrame: shutterButton.frame,
-            isVertical: true
+            dockEdge: .bottom
         )
         frameButton.frame = CGRect(
             x: panel.minX + inset,
@@ -186,13 +189,24 @@ extension CameraLiveViewController {
         flipButton.transform = .identity
     }
 
-    /// Same chrome as the bottom dock, in the trailing column beside the panel.
-    private func layoutLandscapeCaptureChrome(panel: CGRect) {
+    /// The bottom row turned with the phone, in a column beside the panel.
+    ///
+    /// Frame leads and Flip trails the portrait row. Turned counterclockwise
+    /// (`.right`), the row's leading end lands at the bottom, so Frame is lowest
+    /// and Flip highest; turned clockwise (`.left`) it is the reverse. Photo stays
+    /// on Frame's side of record either way.
+    private func layoutLandscapeCaptureChrome(panel: CGRect, edge: CaptureDockEdge) {
         let inset: CGFloat = 20
         let controlSize = Self.chromeControlSize
-        let trailingPad = max(8, view.safeAreaInsets.right)
-        let colX = view.bounds.maxX - trailingPad - Self.shutterSize
+        let pad = max(8, captureDockSafePad(for: edge))
+        let colX = edge == .left
+            ? view.bounds.minX + pad
+            : view.bounds.maxX - pad - Self.shutterSize
         let sideX = colX + (Self.shutterSize - controlSize) / 2
+        let topY = panel.minY + inset
+        let bottomY = panel.maxY - inset - controlSize
+        let frameY = edge == .left ? topY : bottomY
+        let flipY = edge == .left ? bottomY : topY
 
         shutterButton.frame = CGRect(
             x: colX,
@@ -202,41 +216,51 @@ extension CameraLiveViewController {
         )
         photoButton.frame = Self.photoButtonFrame(
             shutterFrame: shutterButton.frame,
-            isVertical: false
+            dockEdge: edge
         )
         frameButton.frame = CGRect(
             x: sideX,
-            y: panel.minY + inset,
+            y: frameY,
             width: controlSize,
             height: controlSize
         )
         flipButton.frame = CGRect(
             x: sideX,
-            y: panel.maxY - inset - controlSize,
+            y: flipY,
             width: controlSize,
             height: controlSize
         )
         flipButton.transform = .identity
     }
 
-    /// Photo shutter sits beside record: leading in Vertical, above in Landscape.
-    static func photoButtonFrame(shutterFrame: CGRect, isVertical: Bool) -> CGRect {
+    /// Photo shutter sits beside record on Frame's side: left of it in the bottom
+    /// row, above it in a left column, below it in a right column.
+    static func photoButtonFrame(shutterFrame: CGRect, dockEdge: CaptureDockEdge) -> CGRect {
         let size = photoSize
         let gap = shutterPairGap
-        if isVertical {
+        switch dockEdge {
+        case .bottom:
             return CGRect(
                 x: shutterFrame.minX - gap - size,
                 y: shutterFrame.midY - size / 2,
                 width: size,
                 height: size
             )
+        case .left:
+            return CGRect(
+                x: shutterFrame.midX - size / 2,
+                y: shutterFrame.minY - gap - size,
+                width: size,
+                height: size
+            )
+        case .right:
+            return CGRect(
+                x: shutterFrame.midX - size / 2,
+                y: shutterFrame.maxY + gap,
+                width: size,
+                height: size
+            )
         }
-        return CGRect(
-            x: shutterFrame.midX - size / 2,
-            y: shutterFrame.minY - gap - size,
-            width: size,
-            height: size
-        )
     }
 
     /// Updates LIVE badge and shutter for preview vs AirPlay-live.

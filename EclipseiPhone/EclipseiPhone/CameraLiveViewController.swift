@@ -351,14 +351,12 @@ final class CameraLiveViewController: UIViewController {
         let bounds = stageView.bounds
         guard bounds.width > 0, bounds.height > 0 else { return }
 
-        let portrait = isPhoneCameraPortraitLayout
-        let dock = Self.captureDockSpan(safeTrailing: portrait
-            ? view.safeAreaInsets.bottom
-            : view.safeAreaInsets.right)
+        let edge = captureDockEdge
+        let dock = Self.captureDockSpan(safeEdge: captureDockSafePad(for: edge))
         let panel = Self.phoneCameraPanelRect(
             in: bounds,
             aspect: ExternalOutputSettings.orientation.aspectRatio,
-            dockOnBottom: portrait,
+            dockEdge: edge,
             dockSpan: dock
         )
         panelView.frame = panel
@@ -376,58 +374,6 @@ final class CameraLiveViewController: UIViewController {
         layoutMirrorView()
         layoutFrameOverlay()
         previewView.syncPhoneViewerOrientation(previewView.phoneInterfaceOrientation)
-    }
-
-    /// Bottom shutter dock when the camera UI is taller than it is wide.
-    var isPhoneCameraPortraitLayout: Bool {
-        stageView.bounds.height >= stageView.bounds.width
-    }
-
-    /// Largest Display Mode panel in the stage, with the shutter strip reserved outside.
-    ///
-    /// Dock follows how the phone is held, not Show format: bottom in portrait,
-    /// trailing in landscape. Aspect stays the Show's 16:9 / 9:16 — a Landscape
-    /// Show on a portrait phone is a 16:9 crop, matching the home Camera tile.
-    static func phoneCameraPanelRect(
-        in bounds: CGRect,
-        aspect: CGFloat,
-        dockOnBottom: Bool,
-        dockSpan: CGFloat
-    ) -> CGRect {
-        let available: CGRect
-        if dockOnBottom {
-            available = CGRect(
-                x: 0,
-                y: 0,
-                width: bounds.width,
-                height: max(0, bounds.height - dockSpan)
-            )
-        } else {
-            available = CGRect(
-                x: 0,
-                y: 0,
-                width: max(0, bounds.width - dockSpan),
-                height: bounds.height
-            )
-        }
-        guard available.width > 1, available.height > 1 else { return .zero }
-
-        var width = available.width
-        var height = width / aspect
-        if height > available.height {
-            height = available.height
-            width = height * aspect
-        }
-
-        let x = available.midX - width / 2
-        let y = available.midY - height / 2
-        return CGRect(x: x, y: y, width: width, height: height)
-    }
-
-    /// Outside-panel strip for Frame · photo · record · Flip
-    /// (gap + record button + safe-area pad).
-    static func captureDockSpan(safeTrailing: CGFloat) -> CGFloat {
-        chromeGap + shutterSize + max(8, safeTrailing)
     }
 
     /// Vertical Show still pins portrait. Landscape Show stays with the phone.
