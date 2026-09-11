@@ -15,8 +15,9 @@ extension CloudKitRecordMapper {
     /// Builds a PDFDoc record, attaching the file as a `CKAsset` when it is on disk.
     ///
     /// - Parameters:
-    ///   - assetURL: Local `.pdf` to upload. Pass nil only when the file is missing;
-    ///     the record then carries metadata alone and the asset is filled in later.
+    ///   - assetURL: Local `.pdf` to upload. Pass nil when the server already holds
+    ///     the file (see `CloudKitAssetUploadPolicy.pdfAssetURL`); the save is then a
+    ///     partial update that leaves the stored asset in place.
     ///   - showId: A Show that contains this PDF. Stored as a field always; used
     ///     as CloudKit `parent` only when `attachAsShareChild` is true. A PDF may
     ///     be in several Shows, but CloudKit allows one parent, so the caller picks.

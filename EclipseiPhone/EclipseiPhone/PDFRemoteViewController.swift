@@ -10,7 +10,8 @@ import PDFKit
 
 /// Phone-side PDF reader that drives a live AirPlay PDFView.
 ///
-/// Stages a Display Mode aspect panel. Closing dismisses the phone UI only —
+/// Stages a Display Mode aspect panel, with a page counter and thumbnail ribbon
+/// beneath it for multi-page documents. Closing dismisses the phone UI only —
 /// AirPlay stays live via `livePDFDocumentId`.
 ///
 /// Scroll/zoom stay on PDFKit; we observe offset via KVO so we never replace
@@ -24,6 +25,8 @@ final class PDFRemoteViewController: UIViewController {
     private var pdfView: PDFView?
     private var stageView: UIView?
     private var panelView: UIView?
+    private let pageRibbon = PDFPageRibbonView()
+    private var ribbonHeight: NSLayoutConstraint?
     private var lastPanelFrame: CGRect = .zero
     private var offsetObservation: NSKeyValueObservation?
     private weak var observedScrollView: UIScrollView?
@@ -78,7 +81,9 @@ final class PDFRemoteViewController: UIViewController {
 
     // MARK: - Setup
 
-    private func setupPDFView() {
+    /// Stage on top, page ribbon pinned beneath it. The ribbon starts collapsed and
+    /// only opens once a multi-page document has loaded.
+    private func setupStageAndRibbon() -> UIView {
         let stage = UIView()
         stage.backgroundColor = .black
         stage.clipsToBounds = true
@@ -86,14 +91,37 @@ final class PDFRemoteViewController: UIViewController {
         view.addSubview(stage)
         stageView = stage
 
+        pageRibbon.isHidden = true
+        pageRibbon.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(pageRibbon)
+        let height = pageRibbon.heightAnchor.constraint(equalToConstant: 0)
+        ribbonHeight = height
+
         let inset: CGFloat = 12
         let guide = view.safeAreaLayoutGuide
         NSLayoutConstraint.activate([
             stage.topAnchor.constraint(equalTo: guide.topAnchor, constant: inset),
-            stage.bottomAnchor.constraint(equalTo: guide.bottomAnchor, constant: -inset),
             stage.leadingAnchor.constraint(equalTo: guide.leadingAnchor, constant: inset),
-            stage.trailingAnchor.constraint(equalTo: guide.trailingAnchor, constant: -inset)
+            stage.trailingAnchor.constraint(equalTo: guide.trailingAnchor, constant: -inset),
+            stage.bottomAnchor.constraint(equalTo: pageRibbon.topAnchor, constant: -inset),
+            pageRibbon.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            pageRibbon.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            pageRibbon.bottomAnchor.constraint(equalTo: guide.bottomAnchor),
+            height
         ])
+        return stage
+    }
+
+    /// Shows the page strip for documents with more than one page.
+    private func configureRibbon(for document: PDFDocument, pdf: PDFView) {
+        guard document.pageCount > 1 else { return }
+        pageRibbon.isHidden = false
+        ribbonHeight?.constant = PDFPageRibbonView.preferredHeight
+        pageRibbon.attach(to: pdf)
+    }
+
+    private func setupPDFView() {
+        let stage = setupStageAndRibbon()
 
         let pdf = PDFView()
         pdf.displayMode = .singlePageContinuous
@@ -112,6 +140,7 @@ final class PDFRemoteViewController: UIViewController {
             return
         }
         pdf.document = document
+        configureRibbon(for: document, pdf: pdf)
 
         NotificationCenter.default.addObserver(
             self,
@@ -142,6 +171,7 @@ final class PDFRemoteViewController: UIViewController {
 
     @objc private func pdfViewChanged() {
         observeScrollViewIfNeeded()
+        if let pdfView { pageRibbon.refreshCounter(from: pdfView) }
         pushPageIndex()
         pushSyncState()
     }
@@ -178,6 +208,7 @@ final class PDFRemoteViewController: UIViewController {
         pdf.minScaleFactor = fit * 0.5
         pdf.maxScaleFactor = fit * 5
         observeScrollViewIfNeeded()
+        pageRibbon.refreshCounter(from: pdf)
         pushPageIndex()
         pushSyncState()
     }
@@ -233,6 +264,13 @@ final class PDFRemoteViewController: UIViewController {
         ExternalDisplayManager.shared.reloadPDFLayout()
     }
 
+    /// Keeps the navigation title current after a rename (local or synced in).
+    @objc private func pdfStoreChanged() {
+        guard let latest = PDFStore.shared.documents.first(where: { $0.id == document.id })
+        else { return }
+        title = latest.title
+    }
+
     // MARK: - Observers
 
     private func observePresentationChanges() {
@@ -246,6 +284,12 @@ final class PDFRemoteViewController: UIViewController {
             self,
             selector: #selector(outputSettingsChanged),
             name: ExternalOutputSettings.didChangeNotification,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(pdfStoreChanged),
+            name: PDFStore.didChangeNotification,
             object: nil
         )
     }
