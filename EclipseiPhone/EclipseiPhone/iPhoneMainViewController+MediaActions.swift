@@ -553,22 +553,19 @@ extension iPhoneMainViewController {
         present(alert, animated: true)
     }
 
-    /// Adds a named countdown tile at the end of this Show.
+    /// Configure-first Countdown add: duration, size & placement, background, and
+    /// ending are chosen on a sheet; Add appends the tile to this Show.
     func addCountdown(toShowId showId: UUID) {
-        let name = CountdownStore.shared.nextDefaultName(inShowId: showId)
-        let duration = CountdownController.lastStoredDuration()
-        do {
-            _ = try CountdownStore.shared.create(
-                name: name,
-                showId: showId,
-                duration: duration
-            )
-        } catch {
-            showAlert(
-                title: "Couldn't Create Countdown",
-                message: error.localizedDescription
+        guard !isAlreadyOpen(AddCountdownViewController.self) else { return }
+        let compose = AddCountdownViewController(showId: showId)
+        compose.onAdded = { [weak self] countdownId in
+            self?.libraryViewController.revealAddedShowMember(
+                id: ShowCountdownToken.token(for: countdownId)
             )
         }
+        let nav = UINavigationController(rootViewController: compose)
+        nav.modalPresentationStyle = .formSheet
+        presentationAnchor.present(nav, animated: true)
     }
 
     /// Multi-select Photos picker for Show import. Images skip crop; a single

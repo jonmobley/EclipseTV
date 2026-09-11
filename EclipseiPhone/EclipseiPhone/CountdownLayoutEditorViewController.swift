@@ -13,6 +13,7 @@ final class CountdownLayoutEditorViewController: UIViewController,
 
     private let item: ShowCountdown
     private var layout: CountdownClockLayout
+    private let onSave: ((CountdownClockLayout) -> Void)?
     private var panStart = CountdownClockLayout.default
     private var pinchStartScale: Double = 1
     private var clockObserver: NSObjectProtocol?
@@ -24,9 +25,14 @@ final class CountdownLayoutEditorViewController: UIViewController,
     private let resetButton = UIButton(type: .system)
 
     /// Opens the editor for `item`.
-    init(item: ShowCountdown) {
+    ///
+    /// - Parameter onSave: Receives the layout on Done instead of writing it to
+    ///   `CountdownStore`. Add Countdown passes this so an unsaved draft can be laid
+    ///   out before the countdown exists; the ⋯ menu leaves it nil.
+    init(item: ShowCountdown, onSave: ((CountdownClockLayout) -> Void)? = nil) {
         self.item = item
         self.layout = item.layout
+        self.onSave = onSave
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -57,8 +63,10 @@ final class CountdownLayoutEditorViewController: UIViewController,
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        // Position is judged against the picture, so the canvas shows it too.
-        background.apply(CountdownBackground.resolved(for: item.id).media)
+        // Position is judged against the picture, so the canvas shows it too. A
+        // draft is not in the store yet, so its own choice is the fallback.
+        let saved = CountdownStore.shared.countdown(id: item.id)?.background
+        background.apply((saved ?? item.background).media)
         background.play()
     }
 
@@ -265,7 +273,11 @@ final class CountdownLayoutEditorViewController: UIViewController,
     }
 
     @objc private func save() {
-        CountdownStore.shared.setLayout(id: item.id, layout: layout)
+        if let onSave {
+            onSave(layout.clampedScale)
+        } else {
+            CountdownStore.shared.setLayout(id: item.id, layout: layout)
+        }
         CountdownClockLayoutPreview.set(nil, for: item.id)
         dismiss(animated: true)
     }

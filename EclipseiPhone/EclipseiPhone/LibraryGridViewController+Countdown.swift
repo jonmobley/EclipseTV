@@ -345,26 +345,15 @@ extension LibraryGridViewController {
     }
 
     func promptCustomCountdownDuration(for itemId: UUID?) {
-        let seconds = durationForPrompt(itemId: itemId)
-        let alert = UIAlertController(
-            title: "Custom Time",
-            message: "Minutes, m:ss, or h:mm:ss.",
-            preferredStyle: .alert
-        )
-        alert.addTextField { field in
-            field.placeholder = "7:30"
-            field.text = CountdownController.displayString(seconds: seconds)
-            field.keyboardType = .numbersAndPunctuation
-            field.autocorrectionType = .no
-            field.clearButtonMode = .whileEditing
+        CountdownDurationPrompt.present(
+            from: self,
+            seconds: durationForPrompt(itemId: itemId)
+        ) { [weak self] seconds in
+            self?.applyCountdownDuration(seconds, to: itemId)
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            self?.refreshCountdownChrome()
+            self?.refreshSlideshowRibbonPresentation()
         }
-        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        alert.addAction(UIAlertAction(title: "Set", style: .default) { [weak self] _ in
-            self?.applyCustomCountdownDuration(
-                alert.textFields?.first?.text, to: itemId
-            )
-        })
-        present(alert, animated: true)
     }
 
     private func durationForPrompt(itemId: UUID?) -> Int {
@@ -376,17 +365,6 @@ extension LibraryGridViewController {
             return item.duration
         }
         return CountdownController.shared.duration
-    }
-
-    private func applyCustomCountdownDuration(_ raw: String?, to itemId: UUID?) {
-        guard let seconds = CountdownController.parseDuration(raw ?? "") else {
-            presentInvalidCountdownDurationAlert(for: itemId)
-            return
-        }
-        applyCountdownDuration(seconds, to: itemId)
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        refreshCountdownChrome()
-        refreshSlideshowRibbonPresentation()
     }
 
     private func applyCountdownDuration(_ seconds: Int, to itemId: UUID?) {
@@ -402,18 +380,6 @@ extension LibraryGridViewController {
             return
         }
         CountdownController.shared.setDuration(seconds)
-    }
-
-    private func presentInvalidCountdownDurationAlert(for itemId: UUID?) {
-        let alert = UIAlertController(
-            title: "Couldn't Set Time",
-            message: "Enter minutes, m:ss, or h:mm:ss — for example 7, 7:30, or 1:15:00.",
-            preferredStyle: .alert
-        )
-        alert.addAction(UIAlertAction(title: "OK", style: .default) { [weak self] _ in
-            self?.promptCustomCountdownDuration(for: itemId)
-        })
-        present(alert, animated: true)
     }
 
     private func promptRenameCountdown(_ item: ShowCountdown) {
