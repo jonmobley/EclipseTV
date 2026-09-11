@@ -38,6 +38,8 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
     /// Open Show id for per-Show prefs (name, share, delete, Practice Mode). `nil` on Home.
     var openShowId: UUID?
     var onShareShow: (() -> Void)?
+    /// Invoked when Export media is chosen for the open Show.
+    var onExportShowMedia: (() -> Void)?
     /// Invoked after the user confirms Delete Show. Host deletes and dismisses.
     var onDeleteShow: (() -> Void)?
 
@@ -61,6 +63,7 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
 
     private enum ShowSharingRow: Int, CaseIterable {
         case shareThisShow
+        case exportMedia
         case enterShareCode
     }
 
@@ -90,7 +93,7 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
 
     private var showSharingRows: [ShowSharingRow] {
         if openShowName != nil {
-            return [.shareThisShow, .enterShareCode]
+            return [.shareThisShow, .exportMedia, .enterShareCode]
         }
         return [.enterShareCode]
     }
@@ -275,7 +278,9 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
             return "Link an Apple TV running EclipseTV to sync Shows and present over Multipeer. "
                 + "AirPlay still works without a TV link."
         case .showSharing:
-            return "Show sharing lets you send and receive a show directly from another user. When they provide you a code, add it here."
+            return "Share this show invites collaborators over iCloud. "
+                + "Export media saves images, videos, slideshows, and PDFs "
+                + "as a numbered ZIP. Enter a code here to join someone else's Show."
         case .eclipseMac:
             return "Control Eclipse on a Mac, or send this iPhone’s camera as a "
                 + "live source (any Apple ID, same Wi‑Fi)."
@@ -557,6 +562,9 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
         case .shareThisShow:
             config.text = "Share this show"
             config.image = UIImage(systemName: "person.crop.circle.badge.plus")
+        case .exportMedia:
+            config.text = "Export media"
+            config.image = UIImage(systemName: "square.and.arrow.up")
         case .enterShareCode:
             config.text = "Enter Code"
             config.image = UIImage(systemName: "person.2.badge.key")
@@ -566,6 +574,7 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
     private func handleShowSharingRow(_ row: Int) {
         switch showSharingRows[row] {
         case .shareThisShow: onShareShow?()
+        case .exportMedia: onExportShowMedia?()
         case .enterShareCode: onEnterShareCode?()
         }
     }
