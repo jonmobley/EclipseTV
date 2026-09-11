@@ -67,8 +67,9 @@ extension LibraryGridViewController {
     /// A countdown, website, camera, or PDF is live with no display to sit on, so
     /// the phone hero is its only output and Practice must not take it.
     ///
-    /// The poll's own room is excluded — that overlay *is* the poll, and the
-    /// callers that matter already return early on `isQuestPollLive`.
+    /// A QuestPoll room is excluded — that overlay *is* a poll, and every
+    /// caller already answers `isQuestPollLive` first: the chrome yields the
+    /// hero to the live stage, and `practiceLivePoll` refuses outright.
     var livePollPracticeBlockedByPhoneHeroOverlay: Bool {
         let mgr = ExternalDisplayManager.shared
         return mgr.isOverlayLive && !mgr.isConnected && !mgr.isQuestPollLive

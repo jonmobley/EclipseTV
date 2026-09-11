@@ -62,15 +62,19 @@ extension LibraryGridViewController {
             onStatusMessage?("Stop what's live on this iPhone to practice this poll.")
             return
         }
+        // The rehearsal preview replaces the QuestPoll stage, and the room it
+        // belongs to stays open — so an audience would lose the stage with the
+        // room still running. End the room instead; the ⋯ menu offers that.
+        guard !ExternalDisplayManager.shared.isQuestPollLive else {
+            onStatusMessage?("End the live poll before practicing a deck.")
+            return
+        }
         isBlackSelected = false
         isLogoSelected = false
         isScreensaverSelected = false
         SlideshowPlaybackController.shared.stop()
         store.updateCurrentId(nil)
         stopQuestPollStatusPolling()
-        if ExternalDisplayManager.shared.isQuestPollLive {
-            ExternalDisplayManager.shared.stopWebAndRestoreLibrary()
-        }
         QuestPollSessionStore.shared.setPracticeMembershipId(item.id)
         let page = QuestPollConfig.previewPage(pollId: item.pollId)
         WarmWebSessionPool.shared.warmIfNeeded(for: page)
@@ -245,27 +249,15 @@ extension LibraryGridViewController {
 
     /// Card ⋯ menu: Practice, Replace Poll, Edit, End, Remove.
     ///
-    /// Practice is here because the tile tap goes live. A card that owns the
-    /// room is offered End Poll instead: rehearsing it would pull the room off
-    /// the projector while leaving it open for the audience.
+    /// Practice is here because the tile tap goes live. It is offered only
+    /// while no room is open: a rehearsal replaces the QuestPoll stage without
+    /// closing the room behind it, so the choice with a room up is End Poll.
     func livePollContextMenu(_ item: ShowLivePoll) -> UIMenu {
         let poll = QuestPollSessionStore.shared
         let ownsRoom = poll.membershipId == item.id && poll.session != nil
         var children: [UIMenuElement] = []
-        if poll.practiceMembershipId == item.id {
-            children.append(UIAction(
-                title: "Stop Practice",
-                image: UIImage(systemName: "eye.slash")
-            ) { [weak self] _ in
-                self?.stopPracticingLivePoll()
-            })
-        } else if !ownsRoom {
-            children.append(UIAction(
-                title: "Practice",
-                image: UIImage(systemName: "eye")
-            ) { [weak self] _ in
-                self?.practiceLivePoll(item)
-            })
+        if let practice = livePollPracticeAction(item) {
+            children.append(practice)
         }
         children.append(contentsOf: [
             UIAction(
@@ -300,6 +292,26 @@ extension LibraryGridViewController {
             self?.confirmDeleteLivePoll(item)
         })
         return UIMenu(children: children)
+    }
+
+    /// Practice / Stop Practice for the ⋯ menu, or nil while a room is open.
+    private func livePollPracticeAction(_ item: ShowLivePoll) -> UIAction? {
+        let poll = QuestPollSessionStore.shared
+        if poll.practiceMembershipId == item.id {
+            return UIAction(
+                title: "Stop Practice",
+                image: UIImage(systemName: "eye.slash")
+            ) { [weak self] _ in
+                self?.stopPracticingLivePoll()
+            }
+        }
+        guard poll.session == nil else { return nil }
+        return UIAction(
+            title: "Practice",
+            image: UIImage(systemName: "eye")
+        ) { [weak self] _ in
+            self?.practiceLivePoll(item)
+        }
     }
 
     /// Ends the room when removing the membership that owns it.
