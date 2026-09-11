@@ -18,6 +18,7 @@ final class AlbumItemPreviewViewController: UIViewController {
     private let closeButton = UIButton(type: .system)
     private var loadToken: RemoteImageRequest?
     private var player: AVPlayer?
+    private var focusSuspension: PlayerFocusSuspension?
 
     init(item: AlbumManifestItem) {
         self.item = item
@@ -92,6 +93,9 @@ final class AlbumItemPreviewViewController: UIViewController {
 
         let controller = AVPlayerViewController()
         controller.player = player
+        focusSuspension = PlayerFocusSuspension(
+            player: player, pictureInPictureHost: controller
+        )
         addChild(controller)
         controller.view.frame = view.bounds
         controller.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]

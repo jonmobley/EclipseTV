@@ -96,12 +96,14 @@ extension LiveHeaderView {
         setStaticPreviewHidden(true)
         setLibraryVideoFullscreenButtonVisible(true)
         bringLibraryVideoChromeToFront()
+        VideoFocusCoordinator.shared.register(self)
         player.play()
         pushLibraryVideoPlaybackToControls()
     }
 
     /// Stops and removes the in-hero library video player.
     func clearLibraryVideoPreview() {
+        VideoFocusCoordinator.shared.unregister(self)
         if let observer = libraryVideoEndObserver {
             NotificationCenter.default.removeObserver(observer)
             libraryVideoEndObserver = nil
@@ -304,5 +306,25 @@ extension LiveHeaderView {
         guard !isCompactPresentation else { return }
         _ = toggleLibraryVideoPlayback()
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
+    }
+}
+
+// MARK: - App Focus
+
+extension LiveHeaderView: FocusSuspendableVideo {
+
+    var isPlayingForFocus: Bool {
+        guard let player = libraryVideoPlayer else { return false }
+        return player.timeControlStatus != .paused
+    }
+
+    /// Goes through the transport helpers, not the player, so the scrubber and
+    /// play button match the suspension instead of showing a video still playing.
+    func suspendForFocusLoss() {
+        pauseLibraryVideoPreview()
+    }
+
+    func resumeAfterFocusGain() {
+        resumeLibraryVideoPreview()
     }
 }
