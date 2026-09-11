@@ -152,6 +152,8 @@ extension LibraryGridViewController {
     /// the transition dropped the user into the middle of the new content — or past the
     /// end of it, staring at blank space.
     private func scrollGridToTop() {
+        // The old content's place has nothing to say about the new content.
+        discardGridScrollAnchor()
         let top = -collectionView.adjustedContentInset.top
         guard collectionView.contentOffset.y != top else { return }
         collectionView.setContentOffset(CGPoint(x: 0, y: top), animated: false)
