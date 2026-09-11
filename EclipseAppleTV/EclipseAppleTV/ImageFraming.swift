@@ -155,6 +155,26 @@ enum ImageFraming {
         }
     }
 
+    /// Decode placement matching `apply(_:framing:fill:targetAspect:)`: a valid crop
+    /// wins over Fit / Fill, so the decode is budgeted for the same region that ends
+    /// up on screen.
+    ///
+    /// The stored rectangle is used as-is, before the display-aspect correction
+    /// `apply` makes. That correction only grows the region, so the budget is a lower
+    /// bound on what is rendered rather than an exact match.
+    static func placement(
+        framing: MediaFramingDTO?,
+        fill: Bool
+    ) -> StillDecodeBudget.Placement {
+        if let framing, framing.width > 0, framing.height > 0 {
+            return .crop(CGRect(
+                x: framing.x, y: framing.y,
+                width: framing.width, height: framing.height
+            ))
+        }
+        return fill ? .fill : .fit
+    }
+
     /// Applies a wire framing DTO: render at the framing then aspect-fit, or Fit / Fill
     /// contentMode.
     ///

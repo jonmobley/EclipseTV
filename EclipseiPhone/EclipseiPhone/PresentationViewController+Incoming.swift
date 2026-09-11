@@ -70,13 +70,17 @@ extension PresentationViewController {
         }
 
         if url.isFileURL {
-            let maxEdge = PresentationImageDecoder.maxPixelEdge(
+            let panel = PresentationImageDecoder.panelPixelSize(
                 for: view.window?.windowScene?.screen
+            )
+            let placement = PresentationImageDecoder.placement(
+                fill: fill || isLogo, framing: isLogo ? nil : framing
             )
             DispatchQueue.global(qos: .userInitiated).async { [weak self] in
                 let decoded = PresentationImageDecoder.decode(
                     fileURL: url,
-                    maxPixelEdge: maxEdge
+                    panelPixelSize: panel,
+                    placement: placement
                 )
                 let image: UIImage?
                 if let framing, let decoded, !isLogo,
