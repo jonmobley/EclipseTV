@@ -46,8 +46,7 @@ extension LibraryGridViewController {
     var allowsLiveHeroBrowse: Bool {
         guard showsLiveHero, !isLiveFromOtherShow else { return false }
         guard activeLiveSlideshow() == nil,
-              !showsLivePollRibbon,
-              !liveHeader.isShowingLivePollGate else { return false }
+              !showsLivePollRibbon else { return false }
         let manager = ExternalDisplayManager.shared
         guard !manager.isOverlayLive,
               !manager.isWebVideoLive,
