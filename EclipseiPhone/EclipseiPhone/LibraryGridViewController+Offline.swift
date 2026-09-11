@@ -110,7 +110,8 @@ extension LibraryGridViewController {
             presentLocalVideoPreview(
                 fileURL: url,
                 isMuted: item.isMuted ?? false,
-                isLooping: item.isLooping ?? false
+                isLooping: item.isLooping ?? false,
+                overlayTitle: MediaTitleStore.displayTitle(for: item)
             )
             return
         }
@@ -144,11 +145,15 @@ extension LibraryGridViewController {
     }
 
     /// Modal system-player Preview for a local video file.
+    ///
+    /// - Parameter overlayTitle: Floats over the upper third of the picture while it
+    ///   plays; pass `nil` for media that carries no library title.
     func presentLocalVideoPreview(
         fileURL: URL,
         isMuted: Bool = false,
         isLooping: Bool = false,
         startAt: TimeInterval = 0,
+        overlayTitle: String? = nil,
         onDismiss: ((TimeInterval) -> Void)? = nil
     ) {
         guard !isPreviewAlreadyOpen else { return }
@@ -160,7 +165,8 @@ extension LibraryGridViewController {
             fileURL: fileURL,
             isMuted: isMuted,
             isLooping: isLooping,
-            startAt: startAt
+            startAt: startAt,
+            overlayTitle: overlayTitle
         )
         preview.onDismiss = onDismiss
         present(preview, animated: true)
