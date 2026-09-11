@@ -51,7 +51,11 @@ struct CameraStackedLayoutTests {
             )
         )
         #expect(layout.header.minY == 59 + 8)
-        #expect(layout.header.height == CameraLiveViewController.chromeControlSize)
+        #expect(
+            layout.header.height
+                == CameraLiveViewController.chromeControlSize
+                + CameraLiveViewController.stackedTimerAllowance
+        )
         #expect(layout.panel.minY == layout.header.maxY + CameraLiveViewController.stackedHeaderGap)
         #expect(layout.panel.width == phone.width)
         #expect(abs(layout.panel.width / layout.panel.height - landscape) < 0.02)
@@ -159,6 +163,30 @@ struct CameraStackedLayoutTests {
             #expect(layout?.itemSize == tile)
             #expect(layout?.sectionInset.left == 16)
             #expect(layout?.minimumInteritemSpacing == 12)
+        }
+    }
+
+    /// While live and recording, the timer hangs under LIVE inside the header
+    /// band rather than on the camera.
+    @Test func stackedRecordingTimerStaysUnderLiveInTheHeaderBand() {
+        ExternalOutputOrientationFixture.with(.landscape) {
+            let vc = CameraLiveViewController()
+            vc.loadViewIfNeeded()
+            vc.view.bounds = phone
+            vc.view.layoutIfNeeded()
+            vc.refreshLiveChrome()
+
+            vc.goLiveButton.isHidden = false
+            vc.recordingTimerLabel.text = "12:34"
+            vc.recordingTimerPillView.isHidden = false
+            vc.layoutTopChromeInPanel()
+
+            let panel = vc.panelView.frame
+            let pill = vc.recordingTimerPillView.frame
+            #expect(vc.stackedLayout != nil)
+            #expect(pill.minY >= vc.goLiveButton.frame.maxY)
+            #expect(pill.maxY <= panel.minY)
+            #expect(abs(pill.midX - panel.midX) < 1)
         }
     }
 

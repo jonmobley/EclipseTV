@@ -440,10 +440,10 @@ extension CameraLiveViewController {
         )
     }
 
-    /// Capsule elapsed-time pill, centered in the camera preview panel.
+    /// Capsule elapsed-time pill, centered under the LIVE pill.
     ///
-    /// Sits under the LIVE pill when the header overlays the panel; in the stacked
-    /// layout the header is above the panel, so the pill takes the panel's top edge.
+    /// Stacked keeps it inside the header band (`stackedTimerAllowance` reserves
+    /// the room), so it tucks closer to LIVE than it does over the panel.
     private func layoutRecordingTimerPill(in panel: CGRect) {
         guard !recordingTimerPillView.isHidden else { return }
         let textSize = recordingTimerLabel.sizeThatFits(CGSize(width: 120, height: 36))
@@ -454,12 +454,10 @@ extension CameraLiveViewController {
         recordingTimerPillView.layer.cornerRadius = height / 2
         recordingTimerPillView.clipsToBounds = true
         let y: CGFloat
-        if stackedLayout != nil {
-            y = panel.minY + 10
-        } else if goLiveButton.isHidden {
+        if goLiveButton.isHidden {
             y = goLiveButton.frame.minY
         } else {
-            y = goLiveButton.frame.maxY + 8
+            y = goLiveButton.frame.maxY + (stackedLayout == nil ? 8 : 4)
         }
         recordingTimerPillView.frame = CGRect(
             x: panel.midX - width / 2,

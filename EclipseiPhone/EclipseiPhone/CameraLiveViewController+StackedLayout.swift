@@ -16,7 +16,8 @@ import UIKit
 /// the band above and the program / frame / still thumbnails take the band
 /// below, on the same column grid as an open Show. The dock keeps its strip.
 struct CameraStackedLayout: Equatable {
-    /// Row for Back · LIVE · Settings, clear of the panel.
+    /// Band for Back · LIVE · Settings, with room under LIVE for the recording
+    /// timer pill, clear of the panel.
     let header: CGRect
     /// Full-width Display Mode panel directly under the header.
     let panel: CGRect
@@ -42,8 +43,11 @@ extension CameraLiveViewController {
     static let thumbGridSpacing: CGFloat = 12
     /// Tile corner radius — matches `LibraryThumbnailCell`.
     static let thumbGridCornerRadius: CGFloat = 14
-    /// Space between the header row and the panel below it.
+    /// Space between the header band and the panel below it.
     static let stackedHeaderGap: CGFloat = 12
+    /// Extra band height under the LIVE pill so the recording timer pill fits in
+    /// the header without landing on the camera or moving the panel mid-take.
+    static let stackedTimerAllowance: CGFloat = 16
 
     /// Stacked geometry when the black bands have room for it, else nil.
     ///
@@ -62,7 +66,7 @@ extension CameraLiveViewController {
             x: 0,
             y: safeTop + 8,
             width: bounds.width,
-            height: chromeControlSize
+            height: chromeControlSize + stackedTimerAllowance
         )
         let panel = CGRect(
             x: 0,
