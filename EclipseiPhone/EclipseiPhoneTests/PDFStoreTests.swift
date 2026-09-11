@@ -38,9 +38,16 @@ struct PDFStoreTests {
     }
 
     /// The store never parses the bytes on add, so any file stands in for a PDF.
+    ///
+    /// Uniqueness lives in the enclosing directory rather than the file name, because
+    /// `add` derives the import title from the name — a prefix would land in the title.
     private func writeSourceFile(named name: String) throws -> URL {
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("\(UUID().uuidString)-\(name)")
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: directory, withIntermediateDirectories: true
+        )
+        let url = directory.appendingPathComponent(name)
         try Data("not really a pdf".utf8).write(to: url)
         return url
     }
