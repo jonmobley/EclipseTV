@@ -681,10 +681,21 @@ final class LibraryGridViewController: UIViewController {
                 // AirPlay / HDMI dropped — keep phone camera / web / PDF open; tip the user.
                 self.showPresentationToast("External display disconnected")
             }
+            // HDMI gained → this device can become director; lost → it steps down.
+            self.syncShowLiveSession()
             // Hero follows a real destination or Practice Mode.
             self.updateHeroVisibility()
             self.applyHeroChrome()
             overlayReload(note)
+        }
+        observe(ShowLiveSession.didChangeNotification) { [weak self] note in
+            self?.handleShowLiveSessionChanged(note)
+        }
+        observe(ShowLiveSession.incomingSelectNotification) { [weak self] note in
+            self?.handleIncomingShowLiveSelect(note)
+        }
+        observe(ShowLiveSession.incomingCommandNotification) { [weak self] note in
+            self?.handleIncomingShowLiveCommand(note)
         }
         observe(ExternalDisplayManager.webDidEndNotification, using: overlayReload)
         observe(ExternalDisplayManager.pdfDidEndNotification, using: overlayReload)

@@ -32,6 +32,11 @@ extension LibraryGridViewController {
 
     /// Tile tap: live card refreshes projector; otherwise show Practice / Start.
     func selectLivePoll(_ item: ShowLivePoll) {
+        // Operator: the director owns the QuestPoll room, so it starts / shows it.
+        if sendShowLiveSelectIfOperator(.livePoll, itemId: item.id.uuidString) {
+            Haptics.impactLight()
+            return
+        }
         if QuestPollSessionStore.shared.membershipId == item.id,
            QuestPollSessionStore.shared.session != nil {
             isBlackSelected = false

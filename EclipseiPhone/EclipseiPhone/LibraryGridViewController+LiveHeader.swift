@@ -16,7 +16,14 @@ extension LibraryGridViewController {
     /// there. Blackout chrome still updates so the header moon reflects live state.
     func refreshLiveHeader() {
         let mgr = ExternalDisplayManager.shared
-        let blackLive = isBlackSelected && !mgr.isOverlayLive
+        // Every go-live path ends here, so this is where the director publishes
+        // program to operators (deduped inside the session).
+        broadcastShowLiveSnapshotIfNeeded()
+        // An operator's header moon reflects the director's program, not local flags.
+        let remoteSnapshot = ShowLiveSession.shared.isRemoteOperator
+            ? ShowLiveSession.shared.snapshot : nil
+        let blackLive = remoteSnapshot?.isBlackout
+            ?? (isBlackSelected && !mgr.isOverlayLive)
         onBlackLiveChanged?(blackLive)
         onLiveOutputLockChanged?(isLiveOutputLocked)
         onLivePollPhoneHeroChanged?(isLivePollPhoneHeroActive)
@@ -51,6 +58,13 @@ extension LibraryGridViewController {
             syncLiveCameraFlipChrome()
             syncLiveHeroBrowseChrome()
             syncLiveNoteChrome()
+        }
+
+        // Operator: the hero is a follow monitor for the director's program.
+        if let remoteSnapshot {
+            refreshForeignLivePreview()
+            applyRemoteLiveHeader(remoteSnapshot)
+            return
         }
 
         // Another Show still owns live output — keep AirPlay as-is, show an empty
