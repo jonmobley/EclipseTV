@@ -698,6 +698,13 @@ extension LibraryGridViewController: UICollectionViewDataSource,
                     from: self
                 )
             }
+            let export = UIAction(
+                title: "Export media",
+                image: UIImage(systemName: "square.and.arrow.up")
+            ) { [weak self] _ in
+                guard let self else { return }
+                self.presentShowMediaExport(forShowId: show.id, from: self.view)
+            }
             let delete = UIAction(
                 title: "Delete Show",
                 image: UIImage(systemName: "trash"),
@@ -705,7 +712,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             ) { [weak self] _ in
                 self?.confirmDeleteShow(show)
             }
-            return UIMenu(children: [rename, share, delete])
+            return UIMenu(children: [rename, share, export, delete])
         }
     }
 

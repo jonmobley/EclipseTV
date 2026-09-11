@@ -227,6 +227,16 @@ extension iPhoneMainViewController {
                 )
             }
         }
+        settings.onExportShowMedia = { [weak self] in
+            guard let self,
+                  let id = self.libraryViewController.openShowId else { return }
+            self.dismiss(animated: true) {
+                self.presentShowMediaExport(
+                    forShowId: id,
+                    from: self.view
+                )
+            }
+        }
         settings.onDeleteShow = { [weak self] in
             guard let self, let id = self.libraryViewController.openShowId else { return }
             LocalAlbumStore.shared.delete(id: id)
