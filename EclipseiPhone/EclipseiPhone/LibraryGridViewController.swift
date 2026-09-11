@@ -238,10 +238,11 @@ final class LibraryGridViewController: UIViewController {
             && !isSelecting
     }
 
-    /// Live slideshow, Live Poll, or countdown ribbon is on for the open Show.
+    /// Live slideshow or Live Poll ribbon is on for the open Show.
+    ///
+    /// A live countdown has no ribbon: its duration lives in the tile's ⋯ menu.
     var showsLiveSlideshowRibbon: Bool {
         if showsLivePollRibbon { return true }
-        if showsCountdownRibbon { return true }
         guard isShowMode,
               let id = SlideshowPlaybackController.shared.activeSlideshowId,
               let show = SlideshowStore.shared.slideshow(id: id),

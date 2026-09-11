@@ -29,7 +29,7 @@ final class CountdownController {
         "CountdownController.didExpire"
     )
 
-    /// Ribbon / ⋯ duration chips, shortest first.
+    /// ⋯ menu duration presets, shortest first.
     nonisolated static let durationPresets: [Int] = [30, 60, 120, 300, 600]
 
     nonisolated static let defaultDuration = 300
@@ -98,7 +98,7 @@ final class CountdownController {
         Self.displayString(seconds: remaining)
     }
 
-    /// True when `duration` is one of the ribbon presets.
+    /// True when `duration` is one of the menu presets.
     var isPresetDuration: Bool {
         Self.durationPresets.contains(duration)
     }
