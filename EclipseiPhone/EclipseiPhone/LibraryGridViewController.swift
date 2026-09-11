@@ -1364,19 +1364,29 @@ extension LibraryGridViewController: TVLibraryStoreDelegate {
         pushCurrentToExternalDisplay()
         guard !isArranging else { return }
         pruneShowSelection()
-        // Prefer visible-only reload: go-live often coincides with video memory
+        // Prefer visible-only repaint: go-live often coincides with video memory
         // pressure that empties NSCache; a full reloadData blanked the whole Show.
         // Fall back when Display Mode just swapped buckets — visible paths can
-        // outlive the new data-source counts and crash reloadItems.
-        reloadVisibleItemsOrGrid()
+        // outlive the new data-source counts and crash the per-item update.
+        reconfigureVisibleItemsOrReloadGrid()
     }
 
-    /// Reloads on-screen cells, or the whole grid when any path is out of bounds.
+    /// Repaints on-screen cells in place, or reloads the grid when any path is
+    /// out of bounds.
+    ///
+    /// This fires from `updateCurrentId`, which go-live paths call *before*
+    /// `ExternalDisplayManager.present(_:)` ends the previous overlay. At that
+    /// instant a live website / PDF tile still reads as live, so this pass paints
+    /// a transitional state that the follow-up `reloadLibraryGrid()` corrects in
+    /// the same turn. `reconfigureItems` updates the existing cells with no
+    /// animation, so that correction lands. The animated `reloadItems` swap it
+    /// replaces was still crossfading old cells in when `reloadData()` ran, and
+    /// the stale red stroke on the website tile could outlive the reload.
     ///
     /// Bounds come from the data source (not `collectionView.numberOfSections`) so a
     /// layout that still reflects the previous Home/Show shape cannot green-light a
-    /// `reloadItems` against a shorter bucket.
-    private func reloadVisibleItemsOrGrid() {
+    /// `reconfigureItems` against a shorter bucket.
+    private func reconfigureVisibleItemsOrReloadGrid() {
         refreshVisibleThumbnailPins()
         let visible = collectionView.indexPathsForVisibleItems
         guard !visible.isEmpty else {
@@ -1395,7 +1405,7 @@ extension LibraryGridViewController: TVLibraryStoreDelegate {
             reloadLibraryGrid()
             return
         }
-        collectionView.reloadItems(at: safe)
+        collectionView.reconfigureItems(at: safe)
         refreshVisibleThumbnailPins()
     }
 
