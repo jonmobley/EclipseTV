@@ -152,13 +152,16 @@ extension LibraryGridViewController {
             )
             return
         }
+        // Video has Fit / Fill too, but only from its tile menu, next to Loop and Mute.
+        // The hero circle sits bottom-trailing, right where a live video puts its
+        // scrubber and duration label.
         guard let id = store.currentId,
-              let item = store.items.first(where: { $0.id == id }) else {
+              let item = store.items.first(where: { $0.id == id }),
+              !item.isVideo else {
             liveHeader.setScreenFitToggleVisible(false, mode: .fit)
             return
         }
-        // Custom framing acts like Fill for the hero shortcut icon. Video never has
-        // framing, so this resolves straight to its stored Fit / Fill.
+        // Custom framing acts like Fill for the hero shortcut icon.
         let mode: MediaFitMode =
             MediaFramingStore.hasFraming(forId: item.id)
             ? .fill
@@ -175,7 +178,8 @@ extension LibraryGridViewController {
             return
         }
         guard let id = store.currentId,
-              let item = store.items.first(where: { $0.id == id }) else { return }
+              let item = store.items.first(where: { $0.id == id }),
+              !item.isVideo else { return }
         let next: MediaFitMode =
             MediaFitSettings.mode(forId: item.id) == .fill ? .fit : .fill
         applyScreenFit(next, to: item)
