@@ -150,12 +150,18 @@ extension LibraryGridViewController {
             liveHeader.setScreenFitToggleVisible(false, mode: .fit)
             return
         }
-        // Custom framing acts like Fill for the hero shortcut icon.
-        let mode: MediaFitMode =
-            MediaFramingStore.hasFraming(forId: item.id)
-            ? .fill
-            : MediaFitSettings.mode(forId: item.id)
-        liveHeader.setScreenFitToggleVisible(true, mode: mode)
+        liveHeader.setScreenFitToggleVisible(true, mode: liveScreenFitMode(forId: item.id))
+    }
+
+    /// Framing the hero circle advertises for `id`: a custom position reads as Fill,
+    /// since like Fill it can crop.
+    ///
+    /// Shared with the tap handler so the icon and what the tap does can't drift —
+    /// reading the stored Fit / Fill here and the raw `MediaFitSettings` value there
+    /// is what let a framed still show the Fill icon and then apply Fill, silently
+    /// dropping the user's position while the icon sat still.
+    func liveScreenFitMode(forId id: String) -> MediaFitMode {
+        MediaFramingStore.hasFraming(forId: id) ? .fill : MediaFitSettings.mode(forId: id)
     }
 
     /// Flips Fit / Fill for the live still or slideshow (hero shortcut).
@@ -169,8 +175,7 @@ extension LibraryGridViewController {
         guard let id = store.currentId,
               let item = store.items.first(where: { $0.id == id }),
               !item.isVideo else { return }
-        let next: MediaFitMode =
-            MediaFitSettings.mode(forId: item.id) == .fill ? .fit : .fill
+        let next: MediaFitMode = liveScreenFitMode(forId: item.id) == .fill ? .fit : .fill
         applyScreenFit(next, to: item)
     }
 }
