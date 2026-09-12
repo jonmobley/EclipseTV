@@ -268,7 +268,7 @@ extension iPhoneMainViewController: AspectCropDelegate {
             pendingVideoThumbnail = nil
             pendingVideoCropPreviewSize = nil
             controller.dismiss(animated: true) { [weak self] in
-                self?.finishVerticalVideoCrop(
+                self?.finishVideoCrop(
                     sourceURL: videoURL,
                     previewSize: previewSize,
                     cropRectInPreview: cropRectInSource,
@@ -309,12 +309,15 @@ extension iPhoneMainViewController: AspectCropDelegate {
     }
 
     /// Scales the preview crop into video display pixels, exports, then adds or replaces.
-    private func finishVerticalVideoCrop(sourceURL: URL,
-                                         previewSize: CGSize,
-                                         cropRectInPreview: CGRect,
-                                         thumbnail: UIImage,
-                                         croppedStill: UIImage,
-                                         replacingItemId: String?) {
+    ///
+    /// Reached only from the tile's Edit Crop action now that import does not crop, so
+    /// the target aspect follows the active Display Mode rather than always being 9:16.
+    private func finishVideoCrop(sourceURL: URL,
+                                 previewSize: CGSize,
+                                 cropRectInPreview: CGRect,
+                                 thumbnail: UIImage,
+                                 croppedStill: UIImage,
+                                 replacingItemId: String?) {
         guard previewSize.width > 0, previewSize.height > 0 else {
             showTemporaryStatus("Couldn't crop that video. Try another.")
             if replacingItemId == nil { cleanupTempFile(at: sourceURL) }
@@ -423,7 +426,7 @@ extension iPhoneMainViewController: VideoThumbnailPreviewDelegate {
                     selectedThumbnail, forItemId: editId, videoURL: videoURL
                 )
             } else {
-                self?.continueVideoAdd(videoURL: videoURL, thumbnail: selectedThumbnail)
+                self?.finishVideoAdd(videoURL: videoURL, thumbnail: selectedThumbnail)
             }
         }
     }
@@ -433,35 +436,13 @@ extension iPhoneMainViewController: VideoThumbnailPreviewDelegate {
         controller.dismiss(animated: true)
     }
 
-    /// Adds the video, or opens a 9:16 crop first when Vertical mode requires it.
-    private func continueVideoAdd(videoURL: URL, thumbnail: UIImage) {
-        guard MediaAspect.requiresVerticalCrop else {
-            finishVideoAdd(videoURL: videoURL, thumbnail: thumbnail)
-            return
-        }
-
-        Task { @MainActor in
-            let size = await MediaAspect.videoDisplaySize(at: videoURL)
-            guard let size, !MediaAspect.matches(size, target: MediaAspect.vertical) else {
-                self.finishVideoAdd(videoURL: videoURL, thumbnail: thumbnail)
-                return
-            }
-
-            let frame = await VideoCropExporter.previewFrame(at: videoURL) ?? thumbnail
-            self.pendingVideoCropURL = videoURL
-            self.pendingVideoThumbnail = thumbnail
-            self.pendingVideoCropPreviewSize = MediaAspect.normalized(frame).size
-            let cropper = AspectCropViewController(
-                image: frame,
-                targetAspect: MediaAspect.vertical,
-                instruction: "Drag and pinch to frame your Vertical video crop"
-            )
-            cropper.delegate = self
-            cropper.modalPresentationStyle = .overFullScreen
-            self.presentationAnchor.present(cropper, animated: true)
-        }
-    }
-
+    /// Adds the picked video as-is, in either Display Mode.
+    ///
+    /// Vertical mode used to force non-9:16 video through the aspect cropper. It no
+    /// longer does: every output surface letterboxes video, so the bars appear either
+    /// way, and the crop paid a lossy re-encode that batch import never paid — the same
+    /// file imported through the two pickers produced two different library items.
+    /// Re-framing is still available on demand from the tile's Edit Crop action.
     private func finishVideoAdd(videoURL: URL, thumbnail: UIImage) {
         saveCustomThumbnail(thumbnail, for: videoURL)
         Task { @MainActor in
