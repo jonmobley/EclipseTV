@@ -10,8 +10,9 @@ import PDFKit
 
 /// Phone-side PDF reader that drives a live AirPlay PDFView.
 ///
-/// Stages a Display Mode aspect panel. Closing dismisses the phone UI only —
-/// AirPlay stays live via `livePDFDocumentId`.
+/// Stages a Display Mode aspect panel while a projector is available, and the
+/// full screen otherwise — see `PDFReaderViewportLayout`. Closing dismisses the
+/// phone UI only — AirPlay stays live via `livePDFDocumentId`.
 ///
 /// Scroll/zoom stay on PDFKit; we observe offset via KVO so we never replace
 /// `PDFView`'s scroll-view delegate (which would break pinch-zoom).
@@ -25,6 +26,9 @@ final class PDFRemoteViewController: UIViewController {
     private var stageView: UIView?
     private var panelView: UIView?
     private var lastPanelFrame: CGRect = .zero
+    /// Framing the last layout pass used, so a projector arriving or leaving
+    /// relayouts even when the new panel happens to measure the same.
+    private var lastPanelMatchedProjector: Bool?
     private var offsetObservation: NSKeyValueObservation?
     private weak var observedScrollView: UIScrollView?
     private var isSyncingScroll = false
@@ -86,13 +90,14 @@ final class PDFRemoteViewController: UIViewController {
         view.addSubview(stage)
         stageView = stage
 
-        let inset: CGFloat = 12
+        // Stage is the whole safe area; `PDFReaderViewportLayout` insets the panel
+        // inside it when there is a projector to frame.
         let guide = view.safeAreaLayoutGuide
         NSLayoutConstraint.activate([
-            stage.topAnchor.constraint(equalTo: guide.topAnchor, constant: inset),
-            stage.bottomAnchor.constraint(equalTo: guide.bottomAnchor, constant: -inset),
-            stage.leadingAnchor.constraint(equalTo: guide.leadingAnchor, constant: inset),
-            stage.trailingAnchor.constraint(equalTo: guide.trailingAnchor, constant: -inset)
+            stage.topAnchor.constraint(equalTo: guide.topAnchor),
+            stage.bottomAnchor.constraint(equalTo: guide.bottomAnchor),
+            stage.leadingAnchor.constraint(equalTo: guide.leadingAnchor),
+            stage.trailingAnchor.constraint(equalTo: guide.trailingAnchor)
         ])
 
         let pdf = PDFView()
@@ -146,16 +151,25 @@ final class PDFRemoteViewController: UIViewController {
         pushSyncState()
     }
 
-    /// Fits the PDF into the Display Mode panel. Skips when the panel is unchanged
+    /// Fits the PDF into the reader viewport. Skips when the viewport is unchanged
     /// so layout passes don't reset the user's zoom.
     private func layoutPhonePDFViewport(force: Bool) {
         guard let stage = stageView, let pdf = pdfView else { return }
         let bounds = stage.bounds
         guard bounds.width > 0, bounds.height > 0 else { return }
 
-        let panel = ExternalOutputSettings.displayModePanelRect(in: bounds)
-        if !force, panel == lastPanelFrame { return }
+        let matchesProjector = PDFReaderViewportLayout.matchesProjectorFraming
+        let panel = PDFReaderViewportLayout.panelRect(
+            in: bounds,
+            matchesProjectorFraming: matchesProjector
+        )
+        if !force,
+           panel == lastPanelFrame,
+           matchesProjector == lastPanelMatchedProjector {
+            return
+        }
         lastPanelFrame = panel
+        lastPanelMatchedProjector = matchesProjector
 
         if panelView == nil {
             let host = UIView(frame: panel)
@@ -233,6 +247,22 @@ final class PDFRemoteViewController: UIViewController {
         ExternalDisplayManager.shared.reloadPDFLayout()
     }
 
+    /// Swaps between the projector panel and the full screen when a display
+    /// arrives or drops while the reader is open.
+    @objc private func externalDisplayChanged() {
+        layoutPhonePDFViewport(force: false)
+    }
+
+    /// Re-reads the projector on foreground, because not every arrival posts:
+    /// the iOS 27+ scene accessory is a polled flag with no notification behind
+    /// it, so AirPlay started from Control Center over an open reader would
+    /// leave the phone full-screen while the TV letterboxed. Foreground is also
+    /// the safe moment to re-check — no pinch is in flight to stomp.
+    @objc private func appDidBecomeActive() {
+        ExternalDisplayManager.shared.refreshConnection()
+        layoutPhonePDFViewport(force: false)
+    }
+
     // MARK: - Observers
 
     private func observePresentationChanges() {
@@ -246,6 +276,18 @@ final class PDFRemoteViewController: UIViewController {
             self,
             selector: #selector(outputSettingsChanged),
             name: ExternalOutputSettings.didChangeNotification,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(externalDisplayChanged),
+            name: ExternalDisplayManager.didChangeNotification,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appDidBecomeActive),
+            name: UIApplication.didBecomeActiveNotification,
             object: nil
         )
     }
