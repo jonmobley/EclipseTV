@@ -248,7 +248,18 @@ class VideoThumbnailPreviewViewController: UIViewController {
     }
     
     private func loadVideoInfo() {
+        // Show the caution immediately; the format line fills in once the track loads.
         detailView.configure(format: nil, notice: notice)
+        Task {
+            let summary = await VideoFormatSummary.load(from: videoURL)
+            await MainActor.run {
+                self.detailView.configure(
+                    format: summary.map(VideoFormatSummary.describe),
+                    notice: self.notice
+                )
+            }
+        }
+
         Task {
             do {
                 let duration = try await asset.load(.duration)
