@@ -46,7 +46,7 @@ enum EclipseShareProtocol {
         case setDisplayMode = "set_display_mode"
         /// Companion sets Cut vs Crossfade for TV content switches.
         case setContentTransition = "set_content_transition"
-        /// Companion sets whether a still fills (crops to) the TV screen or letterboxes.
+        /// Companion sets whether an item fills (crops to) the TV screen or letterboxes.
         case setImageFit = "set_image_fit"
         /// Companion pushes Show groupings; the TV presents them as albums.
         case setLibraryAlbums = "set_library_albums"
@@ -187,9 +187,11 @@ struct EclipseShareEnvelope: Codable {
     var id: String?
     var isLooping: Bool? = nil
     var isMuted: Bool? = nil
-    /// Fit / Fill framing for a still. `true` fills (and crops to) the screen, `false`
-    /// letterboxes it. Carried on `playRequest` so the TV frames the first show
+    /// Fit / Fill framing for a still or a video. `true` fills (and crops to) the screen,
+    /// `false` letterboxes it. Carried on `playRequest` so the TV frames the first show
     /// correctly, and on `setImageFit` when the choice changes while an item is live.
+    ///
+    /// `framing` is the stills-only extension of this; video has no custom crop.
     var isFill: Bool? = nil
     var toIndex: Int? = nil
     /// Full ordered list of item ids (file names) for a `reorderItems` message.
@@ -290,8 +292,9 @@ struct EclipseShareEnvelope: Codable {
         )
     }
 
-    /// Sets whether a still fills (crops to) the TV screen instead of letterboxing.
-    /// - Parameter framing: Custom crop rect. Pass nil to clear a saved position.
+    /// Sets whether an item fills (crops to) the TV screen instead of letterboxing.
+    /// - Parameter framing: Custom crop rect for a still. Pass nil to clear a saved
+    ///   position, and always for video.
     static func setImageFit(
         id: String,
         isFill: Bool,

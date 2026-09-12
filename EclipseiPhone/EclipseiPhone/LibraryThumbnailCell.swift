@@ -232,7 +232,7 @@ final class LibraryThumbnailCell: UICollectionViewCell {
     /// - Parameter isLocked: Live lock uses amber chrome.
     /// - Parameter showsTypeIcon: False for the live-slideshow ribbon (all stills).
     /// - Parameter thumbnailContentMode: Framing for the tile. Defaults to the
-    ///   item's Screen Fit (videos always letterbox).
+    ///   item's Screen Fit. Video honours Fit / Fill but never a custom crop.
     func configure(
         with item: LibraryItemDTO,
         thumbnail: UIImage?,

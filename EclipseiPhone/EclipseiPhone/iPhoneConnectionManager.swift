@@ -448,12 +448,12 @@ class iPhoneConnectionManager: NSObject {
 
     /// Asks the Apple TV to make the item with the given id (file name) live/fullscreen.
     ///
-    /// Carries the item's Fit / Fill choice so a still is framed on the TV exactly as it
-    /// is on this phone's own external output.
+    /// Carries the item's Fit / Fill choice so a still or video is framed on the TV
+    /// exactly as it is on this phone's own external output.
     /// - Parameter startAt: Absolute resume seconds for video; omit / 0 plays from the start.
     ///   Callers that want parked leave state must pass `VideoResumeStore` themselves —
     ///   slideshow and other auto-advance paths must not inherit a parked seek.
-    /// - Parameter isFill: Still framing override (slideshows). Nil uses the item's saved Fit / Fill.
+    /// - Parameter isFill: Framing override (slideshows). Nil uses the item's saved Fit / Fill.
     @MainActor
     @discardableResult
     func sendPlayRequest(id: String, startAt: Double? = nil, isFill: Bool? = nil) -> Bool {
@@ -506,8 +506,8 @@ class iPhoneConnectionManager: NSObject {
                            description: "video setting", broadcast: true)
     }
 
-    /// Asks the Apple TV to letterbox (Fit), crop (Fill), or apply a custom crop
-    /// position for a still. Broadcast to all synced TVs so every screen frames
+    /// Asks the Apple TV to letterbox (Fit) or crop (Fill) an item, or apply a custom
+    /// crop position to a still. Broadcast to all synced TVs so every screen frames
     /// the item the same way.
     ///
     /// When `framing` is non-nil, always sends `isFill: true` so older TVs that
