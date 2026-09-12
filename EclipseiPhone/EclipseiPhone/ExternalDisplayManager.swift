@@ -879,9 +879,14 @@ final class ExternalDisplayManager {
     // MARK: - Web Preview Forwarders
 
     /// Loads a navigated URL on the external web view without ending the overlay.
+    ///
+    /// Restores a dropped web overlay, but never takes program from whatever
+    /// replaced this page — see `WebOverlayReclaim`.
     /// - Parameter pageId: Optional bookmark id when the in-browser site identity changes.
     func loadWeb(url: URL, pageId: UUID? = nil) {
         guard case .web = overlaySource else {
+            guard WebOverlayReclaim.allowsRestore(lastContent: lastSource?.content)
+            else { return }
             presentWeb(url, pageId: pageId)
             return
         }
