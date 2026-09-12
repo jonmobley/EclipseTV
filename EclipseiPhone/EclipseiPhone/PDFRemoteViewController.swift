@@ -253,6 +253,16 @@ final class PDFRemoteViewController: UIViewController {
         layoutPhonePDFViewport(force: false)
     }
 
+    /// Re-reads the projector on foreground, because not every arrival posts:
+    /// the iOS 27+ scene accessory is a polled flag with no notification behind
+    /// it, so AirPlay started from Control Center over an open reader would
+    /// leave the phone full-screen while the TV letterboxed. Foreground is also
+    /// the safe moment to re-check — no pinch is in flight to stomp.
+    @objc private func appDidBecomeActive() {
+        ExternalDisplayManager.shared.refreshConnection()
+        layoutPhonePDFViewport(force: false)
+    }
+
     // MARK: - Observers
 
     private func observePresentationChanges() {
@@ -272,6 +282,12 @@ final class PDFRemoteViewController: UIViewController {
             self,
             selector: #selector(externalDisplayChanged),
             name: ExternalDisplayManager.didChangeNotification,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appDidBecomeActive),
+            name: UIApplication.didBecomeActiveNotification,
             object: nil
         )
     }
