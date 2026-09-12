@@ -8,7 +8,6 @@
 // iPhoneMainViewController+Picker.swift
 import UIKit
 import PhotosUI
-import UniformTypeIdentifiers
 import AVFoundation
 import os
 
@@ -98,7 +97,7 @@ extension iPhoneMainViewController: PHPickerViewControllerDelegate {
 
         if pendingLogoPick {
             let provider = results[0].itemProvider
-            guard provider.canLoadObject(ofClass: UIImage.self) else {
+            guard PhotoImportLoader.isImage(provider) else {
                 pendingLogoPick = false
                 showAlert(title: "Image Error", message: "Choose an image for the Background.")
                 return
@@ -125,130 +124,15 @@ extension iPhoneMainViewController: PHPickerViewControllerDelegate {
         }
 
         let provider = results[0].itemProvider
-        if provider.hasItemConformingToTypeIdentifier(UTType.movie.identifier) {
+        if PhotoImportLoader.isMovie(provider) {
             handlePickedVideo(provider)
-        } else if provider.canLoadObject(ofClass: UIImage.self) {
+        } else if PhotoImportLoader.isImage(provider) {
             // Re-send keeps crop/confirm so the restored still can be framed.
             // Camera-roll image adds ingest immediately (no crop).
             if connectionManager.pendingRestoreId != nil {
                 handlePickedImage(provider)
             } else {
                 importPickedMediaBatch(results)
-            }
-        }
-    }
-
-    private func handlePickedLogo(_ provider: NSItemProvider) {
-        provider.loadObject(ofClass: UIImage.self) { [weak self] object, _ in
-            guard let self else { return }
-            DispatchQueue.main.async {
-                self.pendingLogoPick = false
-                guard let image = object as? UIImage else {
-                    self.showAlert(
-                        title: "Image Error",
-                        message: "Could not load the selected image. Please try again."
-                    )
-                    return
-                }
-                // Save only — tap Background to go live. Already-live output
-                // refreshes via LogoStore.didChangeNotification.
-                LogoStore.shared.save(image)
-            }
-        }
-    }
-
-    private func handlePickedScreensaver(_ provider: NSItemProvider) {
-        if provider.hasItemConformingToTypeIdentifier(UTType.movie.identifier) {
-            provider.loadFileRepresentation(forTypeIdentifier: UTType.movie.identifier) {
-                [weak self] url, _ in
-                guard let self else { return }
-                guard let url,
-                      let local = self.copyPickedVideoToSandbox(url) else {
-                    DispatchQueue.main.async {
-                        self.pendingScreensaverPick = false
-                        self.showAlert(
-                            title: "Video Error",
-                            message: "Could not access that video. Please try again."
-                        )
-                    }
-                    return
-                }
-                DispatchQueue.main.async {
-                    self.pendingScreensaverPick = false
-                    // Save only — tap Screensaver to go live. Already-live output
-                    // refreshes via ScreensaverStore.didChangeNotification.
-                    ScreensaverStore.shared.saveVideo(from: local)
-                    self.cleanupTempFile(at: local)
-                }
-            }
-            return
-        }
-        guard provider.canLoadObject(ofClass: UIImage.self) else {
-            pendingScreensaverPick = false
-            showAlert(
-                title: "Couldn't Replace",
-                message: "Choose an image or video for the Screensaver."
-            )
-            return
-        }
-        provider.loadObject(ofClass: UIImage.self) { [weak self] object, _ in
-            guard let self else { return }
-            DispatchQueue.main.async {
-                self.pendingScreensaverPick = false
-                guard let image = object as? UIImage else {
-                    self.showAlert(
-                        title: "Image Error",
-                        message: "Could not load the selected image. Please try again."
-                    )
-                    return
-                }
-                // Save only — tap Screensaver to go live. Already-live output
-                // refreshes via ScreensaverStore.didChangeNotification.
-                ScreensaverStore.shared.saveImage(image)
-            }
-        }
-    }
-
-    private func handlePickedVideo(_ provider: NSItemProvider) {
-        // PHPicker provides the file in a temporary location that is removed when the
-        // completion returns, so copy it into our sandbox inside the callback.
-        provider.loadFileRepresentation(forTypeIdentifier: UTType.movie.identifier) { [weak self] url, _ in
-            guard let self = self else { return }
-            guard let url = url, let localVideoURL = self.copyPickedVideoToSandbox(url) else {
-                DispatchQueue.main.async {
-                    self.showAlert(title: "Video Error", message: "Could not access the selected video. Please try again.")
-                }
-                return
-            }
-
-            Task {
-                let validationResult = await MediaValidator.validateVideo(at: localVideoURL)
-                await MainActor.run {
-                    switch validationResult {
-                    case .valid:
-                        self.showVideoThumbnailPreview(for: localVideoURL)
-                    case .invalid(let reason):
-                        self.cleanupTempFile(at: localVideoURL)
-                        self.showAlert(title: "Video Rejected", message: reason)
-                    }
-                }
-            }
-        }
-    }
-
-    private func handlePickedImage(_ provider: NSItemProvider) {
-        provider.loadObject(ofClass: UIImage.self) { [weak self] object, _ in
-            guard let self = self else { return }
-            guard let image = object as? UIImage else {
-                DispatchQueue.main.async {
-                    self.showAlert(title: "Image Error", message: "Could not load the selected image. Please try again.")
-                }
-                return
-            }
-
-            DispatchQueue.main.async {
-                // Vertical + non-9:16 → crop first; otherwise confirm preview.
-                self.presentImageAddFlow(for: image)
             }
         }
     }

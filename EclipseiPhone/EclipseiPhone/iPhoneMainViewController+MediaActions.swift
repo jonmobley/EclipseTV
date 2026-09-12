@@ -635,27 +635,6 @@ extension iPhoneMainViewController {
         presentSystemPicker(picker)
     }
 
-    /// Copies a picked video into the app's temporary directory so it remains accessible
-    /// after the image picker delegate callback returns. Returns the local copy URL.
-    func copyPickedVideoToSandbox(_ sourceURL: URL) -> URL? {
-        let fileManager = FileManager.default
-        let ext = sourceURL.pathExtension.isEmpty ? "mov" : sourceURL.pathExtension
-        let destinationURL = fileManager.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString)
-            .appendingPathExtension(ext)
-
-        do {
-            if fileManager.fileExists(atPath: destinationURL.path) {
-                try fileManager.removeItem(at: destinationURL)
-            }
-            try fileManager.copyItem(at: sourceURL, to: destinationURL)
-            return destinationURL
-        } catch {
-            logger.error("Failed to copy picked video to sandbox: \(error.localizedDescription)")
-            return nil
-        }
-    }
-
     @objc func cancelButtonTapped() {
         // Cancel the current transfer
         connectionManager.cancelCurrentTransfer()
