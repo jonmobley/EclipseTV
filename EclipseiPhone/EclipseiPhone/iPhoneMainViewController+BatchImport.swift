@@ -180,7 +180,9 @@ extension iPhoneMainViewController {
         case .invalid:
             cleanupTempFile(at: localURL)
             return nil
-        case .valid:
+        case .valid, .warning:
+            // A batch has no per-item confirm sheet to carry a caution, and one soft
+            // clip is not worth interrupting the run for.
             break
         }
 

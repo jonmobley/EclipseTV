@@ -227,6 +227,9 @@ extension iPhoneMainViewController: PHPickerViewControllerDelegate {
                     switch validationResult {
                     case .valid:
                         self.showVideoThumbnailPreview(for: localVideoURL)
+                    case .warning(let reason):
+                        // Importable — the confirm sheet carries the caution.
+                        self.showVideoThumbnailPreview(for: localVideoURL, notice: reason)
                     case .invalid(let reason):
                         self.cleanupTempFile(at: localVideoURL)
                         self.showAlert(title: "Video Rejected", message: reason)

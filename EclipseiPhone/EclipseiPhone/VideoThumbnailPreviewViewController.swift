@@ -19,6 +19,8 @@ class VideoThumbnailPreviewViewController: UIViewController {
     
     weak var delegate: VideoThumbnailPreviewDelegate?
     private let videoURL: URL
+    /// Caution from validation, shown alongside the format line.
+    private let notice: String?
     private var asset: AVAsset
     private var imageGenerator: AVAssetImageGenerator
     private var videoDuration: CMTime = .zero
@@ -27,8 +29,11 @@ class VideoThumbnailPreviewViewController: UIViewController {
     /// Bumps on every scrub request so stale generator callbacks never paint.
     private var scrubGeneration: UInt64 = 0
 
-    private static let scrubPreviewSize = CGSize(width: 480, height: 270)
-    private static let finalThumbnailSize = CGSize(width: 800, height: 450)
+    /// Square, like `VideoPosterFrame.maximumSize`, because `maximumSize` fits the frame
+    /// inside the box: a 16:9 box gave a 9:16 clip a third of the width it gave a
+    /// landscape one, and this frame is kept as the library thumbnail.
+    private static let scrubPreviewSize = CGSize(width: 480, height: 480)
+    private static let finalThumbnailSize = CGSize(width: 800, height: 800)
 
     // MARK: - UI Elements
     
@@ -78,6 +83,8 @@ class VideoThumbnailPreviewViewController: UIViewController {
         label.text = "Drag the slider to choose a thumbnail frame for your video"
         return label
     }()
+
+    private let detailView = VideoImportDetailView()
     
     private let buttonStackView: UIStackView = {
         let stack = UIStackView()
@@ -109,8 +116,9 @@ class VideoThumbnailPreviewViewController: UIViewController {
     
     // MARK: - Initialization
     
-    init(videoURL: URL) {
+    init(videoURL: URL, notice: String? = nil) {
         self.videoURL = videoURL
+        self.notice = notice
         self.asset = AVURLAsset(url: videoURL)
         self.imageGenerator = AVAssetImageGenerator(asset: asset)
         super.init(nibName: nil, bundle: nil)
@@ -168,6 +176,7 @@ class VideoThumbnailPreviewViewController: UIViewController {
         view.addSubview(containerView)
         containerView.addSubview(thumbnailImageView)
         containerView.addSubview(instructionLabel)
+        containerView.addSubview(detailView)
         containerView.addSubview(scrubberSlider)
         containerView.addSubview(timeLabel)
         containerView.addSubview(buttonStackView)
@@ -179,6 +188,7 @@ class VideoThumbnailPreviewViewController: UIViewController {
         containerView.translatesAutoresizingMaskIntoConstraints = false
         thumbnailImageView.translatesAutoresizingMaskIntoConstraints = false
         instructionLabel.translatesAutoresizingMaskIntoConstraints = false
+        detailView.translatesAutoresizingMaskIntoConstraints = false
         scrubberSlider.translatesAutoresizingMaskIntoConstraints = false
         timeLabel.translatesAutoresizingMaskIntoConstraints = false
         buttonStackView.translatesAutoresizingMaskIntoConstraints = false
@@ -200,9 +210,14 @@ class VideoThumbnailPreviewViewController: UIViewController {
             instructionLabel.topAnchor.constraint(equalTo: thumbnailImageView.bottomAnchor, constant: 16),
             instructionLabel.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 20),
             instructionLabel.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -20),
-            
+
+            // Format + caution
+            detailView.topAnchor.constraint(equalTo: instructionLabel.bottomAnchor, constant: 10),
+            detailView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 20),
+            detailView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -20),
+
             // Scrubber slider
-            scrubberSlider.topAnchor.constraint(equalTo: instructionLabel.bottomAnchor, constant: 20),
+            scrubberSlider.topAnchor.constraint(equalTo: detailView.bottomAnchor, constant: 12),
             scrubberSlider.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 20),
             scrubberSlider.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -20),
             scrubberSlider.heightAnchor.constraint(equalToConstant: 44),
@@ -233,6 +248,18 @@ class VideoThumbnailPreviewViewController: UIViewController {
     }
     
     private func loadVideoInfo() {
+        // Show the caution immediately; the format line fills in once the track loads.
+        detailView.configure(format: nil, notice: notice)
+        Task {
+            let summary = await VideoFormatSummary.load(from: videoURL)
+            await MainActor.run {
+                self.detailView.configure(
+                    format: summary.map(VideoFormatSummary.describe),
+                    notice: self.notice
+                )
+            }
+        }
+
         Task {
             do {
                 let duration = try await asset.load(.duration)
