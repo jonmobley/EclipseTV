@@ -82,7 +82,9 @@ extension LiveHeaderView {
         libraryVideoIsLooping = isLooping
 
         let layer = AVPlayerLayer(player: player)
-        layer.videoGravity = .resizeAspect
+        layer.videoGravity = MediaFitSettings.isFill(forId: itemId)
+            ? .resizeAspectFill
+            : .resizeAspect
         layer.frame = host.bounds
         host.layer.addSublayer(layer)
         libraryVideoLayer = layer

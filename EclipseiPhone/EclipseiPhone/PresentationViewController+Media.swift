@@ -12,6 +12,15 @@ import AVFoundation
 
 extension PresentationViewController {
 
+    /// Player gravity for a Fit / Fill choice.
+    ///
+    /// The two `AVLayerVideoGravity` values are the whole of what video framing can be:
+    /// there is no video equivalent of a still's Custom crop, which pre-renders a
+    /// bitmap. `.resize` is never used — it stretches.
+    static func videoGravity(fill: Bool) -> AVLayerVideoGravity {
+        fill ? .resizeAspectFill : .resizeAspect
+    }
+
     /// Shows image/video host and applies Landscape / Vertical panel layout.
     func showMediaContainer() {
         mediaContainer.isHidden = false
@@ -96,12 +105,14 @@ extension PresentationViewController {
     /// Plays a video on the primary media surface (layer only — no TV transport chrome).
     /// - Parameter startAt: Absolute seconds to seek before the first `play()`.
     /// - Parameter autoplay: When false, parks on a decoded frame instead of playing.
+    /// - Parameter fill: Crop to fill the panel instead of letterboxing.
     func showVideo(
         at url: URL,
         isLooping: Bool,
         isMuted: Bool,
         startAt: TimeInterval = 0,
-        autoplay: Bool = true
+        autoplay: Bool = true,
+        fill: Bool = false
     ) {
         messageLabel.text = nil
         imageView.isHidden = true
@@ -113,6 +124,9 @@ extension PresentationViewController {
 
         // Keep the already-decoded incoming player — a new AVPlayer flashes black.
         if adoptIncomingVideoIfAvailable() {
+            // Re-assert gravity: the adopted layer was built for the incoming source,
+            // and a Fit / Fill change re-presents the same URL.
+            playerLayer?.videoGravity = Self.videoGravity(fill: fill)
             applyMediaLayout()
             installVideoTransportObserver()
             return
@@ -123,7 +137,7 @@ extension PresentationViewController {
             url: url, isMuted: isMuted, isLooping: isLooping
         )
         let layer = AVPlayerLayer(player: player)
-        layer.videoGravity = .resizeAspect
+        layer.videoGravity = Self.videoGravity(fill: fill)
         mediaContentView.layer.insertSublayer(layer, at: 0)
 
         self.player = player

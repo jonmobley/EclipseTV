@@ -369,7 +369,7 @@ final class LiveHeaderView: UIView {
         let thumbToken = thumbnail.map { "\(ObjectIdentifier($0))" } ?? "nil"
         let fitToken: String
         if item.isVideo {
-            fitToken = "video"
+            fitToken = MediaFitSettings.isFill(forId: item.id) ? "video-fill" : "video-fit"
         } else if MediaFramingStore.hasFraming(forId: item.id) {
             fitToken = "custom"
         } else {
@@ -391,11 +391,14 @@ final class LiveHeaderView: UIView {
                 self.imageView.alpha = 1
                 self.placeholderIcon.isHidden = true
             } else {
-                // Video letterboxes on black so the card matches the stage; stills
-                // keep the light fill. Never put a film glyph on a video preview.
+                // Video sits on black so the card matches the stage; stills keep the
+                // light fill. Never put a film glyph on a video preview.
                 self.backgroundColor = item.isVideo ? .black : .secondarySystemBackground
                 if item.isVideo {
-                    self.imageView.contentMode = .scaleAspectFit
+                    // No custom framing for video, so the poster follows Fit / Fill
+                    // straight from the item's Screen Fit.
+                    self.imageView.contentMode =
+                        MediaFitSettings.mode(forId: item.id).contentMode
                     self.imageView.image = thumbnail
                 } else {
                     let fallback = SlideshowPlaybackController.shared

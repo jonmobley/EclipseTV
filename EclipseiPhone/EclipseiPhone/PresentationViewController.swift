@@ -481,7 +481,8 @@ final class PresentationViewController: UIViewController {
                 isLooping: isLooping,
                 isMuted: isMuted,
                 startAt: source.videoStartAt,
-                autoplay: source.videoAutoplay
+                autoplay: source.videoAutoplay,
+                fill: source.videoFill
             )
         case .screensaver(let url, let crossfade):
             hideCountdown()
