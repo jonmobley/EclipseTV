@@ -7,14 +7,16 @@
 
 import UIKit
 
-/// Shared Fit / Fill / Custom submenu for stills.
+/// Shared Fit / Fill / Custom submenu for library media.
 enum MediaFitMenu {
 
     /// Builds the Screen Fit menu for `id`.
     ///
     /// Custom is the pan/zoom cropper. Fit and Fill discard any saved position.
+    /// - Parameter allowsCustom: Pass false for video, which has Fit and Fill only.
     static func make(
         forId id: String,
+        allowsCustom: Bool = true,
         onSelectFit: @escaping (MediaFitMode) -> Void,
         onCustom: @escaping () -> Void
     ) -> UIMenu {
@@ -31,12 +33,14 @@ enum MediaFitMenu {
                 onSelectFit(mode)
             }
         }
-        actions.append(UIAction(
-            title: "Custom",
-            image: UIImage(systemName: hasCustom ? "checkmark" : "crop")
-        ) { _ in
-            onCustom()
-        })
+        if allowsCustom {
+            actions.append(UIAction(
+                title: "Custom",
+                image: UIImage(systemName: hasCustom ? "checkmark" : "crop")
+            ) { _ in
+                onCustom()
+            })
+        }
         return UIMenu(
             title: "Screen Fit",
             image: UIImage(systemName: "aspectratio"),
