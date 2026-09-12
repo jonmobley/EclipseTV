@@ -578,6 +578,12 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             return
         }
 
+        // A card tap clears these on the way in, but an operator's select reaches
+        // here directly, and a tool left selected outranks the still going out.
+        isBlackSelected = false
+        isLogoSelected = false
+        isScreensaverSelected = false
+
         // Captures never go to Apple TV — AirPlay from the phone, downloading first
         // when this device only has the CloudKit metadata.
         if let capture = CaptureStore.shared.record(id: item.id) {
