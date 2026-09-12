@@ -27,8 +27,11 @@ class VideoThumbnailPreviewViewController: UIViewController {
     /// Bumps on every scrub request so stale generator callbacks never paint.
     private var scrubGeneration: UInt64 = 0
 
-    private static let scrubPreviewSize = CGSize(width: 480, height: 270)
-    private static let finalThumbnailSize = CGSize(width: 800, height: 450)
+    /// Square, like `VideoPosterFrame.maximumSize`, because `maximumSize` fits the frame
+    /// inside the box: a 16:9 box gave a 9:16 clip a third of the width it gave a
+    /// landscape one, and this frame is kept as the library thumbnail.
+    private static let scrubPreviewSize = CGSize(width: 480, height: 480)
+    private static let finalThumbnailSize = CGSize(width: 800, height: 800)
 
     // MARK: - UI Elements
     
