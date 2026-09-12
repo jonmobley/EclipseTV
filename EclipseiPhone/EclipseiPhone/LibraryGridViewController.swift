@@ -912,6 +912,10 @@ final class LibraryGridViewController: UIViewController {
             liveHeader.setCameraFlipVisible(false)
             liveHeader.allowsSlideshowBrowse = false
             liveHeader.allowsLibraryBrowse = false
+            // No kind owns the tap once the hero is gone, so the expand control
+            // cannot survive to promise the previous one on the way back.
+            liveHeader.resetTapAffordances()
+            liveHeader.syncExpandControl()
             liveHeader.isHidden = true
             liveHeader.isUserInteractionEnabled = false
             refreshForeignLivePreview()
@@ -921,13 +925,16 @@ final class LibraryGridViewController: UIViewController {
         }
         liveHeader.isHidden = false
         liveHeader.isUserInteractionEnabled = true
-        // Ribbon, Screen Fit, Flip Camera, swipe browse, and the note follow the
-        // active still / slideshow / camera. Browse runs last: it defers to the
-        // ribbon's `allowsSlideshowBrowse` when a slideshow owns the gesture.
+        // Ribbon, Screen Fit, Flip Camera, the expand control, swipe browse, and
+        // the note follow the active still / slideshow / camera. Browse runs last:
+        // it defers to the ribbon's `allowsSlideshowBrowse` when a slideshow owns
+        // the gesture. The expand control reads the tap affordances the branches
+        // below set, so it can only be resolved once they have all run.
         defer {
             syncSlideshowRibbonIfChromeChanged()
             syncLiveScreenFitChrome()
             syncLiveCameraFlipChrome()
+            liveHeader.syncExpandControl()
             syncLiveHeroBrowseChrome()
             syncLiveNoteChrome()
         }

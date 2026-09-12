@@ -44,7 +44,7 @@ extension LiveHeaderView {
             libraryVideoIsLooping = isLooping
             PresentationAudioSession.activateIfNeeded(muted: isMuted)
             setStaticPreviewHidden(true)
-            setLibraryVideoFullscreenButtonVisible(true)
+            setLibraryVideoFullscreenAvailable(true)
             bringLibraryVideoChromeToFront()
             return
         }
@@ -94,7 +94,7 @@ extension LiveHeaderView {
         installLibraryVideoTimeObserver(for: player)
 
         setStaticPreviewHidden(true)
-        setLibraryVideoFullscreenButtonVisible(true)
+        setLibraryVideoFullscreenAvailable(true)
         bringLibraryVideoChromeToFront()
         player.play()
         pushLibraryVideoPlaybackToControls()
@@ -117,7 +117,7 @@ extension LiveHeaderView {
         libraryVideoHost?.removeFromSuperview()
         libraryVideoHost = nil
         libraryVideoItemId = nil
-        setLibraryVideoFullscreenButtonVisible(false)
+        setLibraryVideoFullscreenAvailable(false)
         setStaticPreviewHidden(false)
     }
 
@@ -219,42 +219,13 @@ extension LiveHeaderView {
         libraryVideoLayer?.frame = host.bounds
     }
 
-    /// Shows or hides the enter-fullscreen control for phone-local library video.
-    func setLibraryVideoFullscreenButtonVisible(_ visible: Bool) {
-        guard visible else {
-            libraryVideoFullscreenButton?.removeFromSuperview()
-            libraryVideoFullscreenButton = nil
-            return
-        }
-        if libraryVideoFullscreenButton != nil {
-            bringLibraryVideoChromeToFront()
-            return
-        }
-        var config = UIButton.Configuration.plain()
-        config.image = UIImage(
-            systemName: "arrow.up.left.and.arrow.down.right",
-            withConfiguration: UIImage.SymbolConfiguration(pointSize: 14, weight: .semibold)
-        )
-        config.baseForegroundColor = .white
-        config.contentInsets = NSDirectionalEdgeInsets(
-            top: 8, leading: 8, bottom: 8, trailing: 8
-        )
-        let button = UIButton(configuration: config)
-        button.backgroundColor = UIColor.black.withAlphaComponent(0.45)
-        button.layer.cornerRadius = 8
-        button.clipsToBounds = true
-        button.accessibilityLabel = "Full Screen"
-        button.translatesAutoresizingMaskIntoConstraints = false
-        button.addAction(UIAction { [weak self] _ in
-            self?.onRequestFullscreen?()
-        }, for: .touchUpInside)
-        addSubview(button)
-        NSLayoutConstraint.activate([
-            button.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
-            button.topAnchor.constraint(equalTo: topAnchor, constant: 10)
-        ])
-        libraryVideoFullscreenButton = button
-        bringLibraryVideoChromeToFront()
+    /// Offers (or withdraws) fullscreen Preview for phone-local library video.
+    ///
+    /// The shared expand control renders it — this hero's body tap is play/pause,
+    /// so the control is the only way into Preview here.
+    func setLibraryVideoFullscreenAvailable(_ available: Bool) {
+        allowsLibraryVideoFullscreen = available
+        syncExpandControl()
     }
 
     // MARK: - Private
@@ -295,9 +266,7 @@ extension LiveHeaderView {
             insertSubview(host, at: 0)
         }
         bringWebPreviewChromeToFront()
-        if let fullscreen = libraryVideoFullscreenButton {
-            bringSubviewToFront(fullscreen)
-        }
+        bringExpandControlToFront()
     }
 
     @objc fileprivate func handleLibraryVideoTap() {
