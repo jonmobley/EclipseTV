@@ -19,6 +19,8 @@ class VideoThumbnailPreviewViewController: UIViewController {
     
     weak var delegate: VideoThumbnailPreviewDelegate?
     private let videoURL: URL
+    /// Caution from validation, shown alongside the format line.
+    private let notice: String?
     private var asset: AVAsset
     private var imageGenerator: AVAssetImageGenerator
     private var videoDuration: CMTime = .zero
@@ -81,6 +83,8 @@ class VideoThumbnailPreviewViewController: UIViewController {
         label.text = "Drag the slider to choose a thumbnail frame for your video"
         return label
     }()
+
+    private let detailView = VideoImportDetailView()
     
     private let buttonStackView: UIStackView = {
         let stack = UIStackView()
@@ -112,8 +116,9 @@ class VideoThumbnailPreviewViewController: UIViewController {
     
     // MARK: - Initialization
     
-    init(videoURL: URL) {
+    init(videoURL: URL, notice: String? = nil) {
         self.videoURL = videoURL
+        self.notice = notice
         self.asset = AVURLAsset(url: videoURL)
         self.imageGenerator = AVAssetImageGenerator(asset: asset)
         super.init(nibName: nil, bundle: nil)
@@ -171,6 +176,7 @@ class VideoThumbnailPreviewViewController: UIViewController {
         view.addSubview(containerView)
         containerView.addSubview(thumbnailImageView)
         containerView.addSubview(instructionLabel)
+        containerView.addSubview(detailView)
         containerView.addSubview(scrubberSlider)
         containerView.addSubview(timeLabel)
         containerView.addSubview(buttonStackView)
@@ -182,6 +188,7 @@ class VideoThumbnailPreviewViewController: UIViewController {
         containerView.translatesAutoresizingMaskIntoConstraints = false
         thumbnailImageView.translatesAutoresizingMaskIntoConstraints = false
         instructionLabel.translatesAutoresizingMaskIntoConstraints = false
+        detailView.translatesAutoresizingMaskIntoConstraints = false
         scrubberSlider.translatesAutoresizingMaskIntoConstraints = false
         timeLabel.translatesAutoresizingMaskIntoConstraints = false
         buttonStackView.translatesAutoresizingMaskIntoConstraints = false
@@ -203,9 +210,14 @@ class VideoThumbnailPreviewViewController: UIViewController {
             instructionLabel.topAnchor.constraint(equalTo: thumbnailImageView.bottomAnchor, constant: 16),
             instructionLabel.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 20),
             instructionLabel.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -20),
-            
+
+            // Format + caution
+            detailView.topAnchor.constraint(equalTo: instructionLabel.bottomAnchor, constant: 10),
+            detailView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 20),
+            detailView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -20),
+
             // Scrubber slider
-            scrubberSlider.topAnchor.constraint(equalTo: instructionLabel.bottomAnchor, constant: 20),
+            scrubberSlider.topAnchor.constraint(equalTo: detailView.bottomAnchor, constant: 12),
             scrubberSlider.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 20),
             scrubberSlider.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -20),
             scrubberSlider.heightAnchor.constraint(equalToConstant: 44),
@@ -236,6 +248,7 @@ class VideoThumbnailPreviewViewController: UIViewController {
     }
     
     private func loadVideoInfo() {
+        detailView.configure(format: nil, notice: notice)
         Task {
             do {
                 let duration = try await asset.load(.duration)

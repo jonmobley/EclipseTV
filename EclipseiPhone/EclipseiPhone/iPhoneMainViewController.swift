@@ -238,8 +238,10 @@ class iPhoneMainViewController: UIViewController {
     
     // MARK: - Helper Methods
     
-    func showVideoThumbnailPreview(for videoURL: URL) {
-        let previewController = VideoThumbnailPreviewViewController(videoURL: videoURL)
+    func showVideoThumbnailPreview(for videoURL: URL, notice: String? = nil) {
+        let previewController = VideoThumbnailPreviewViewController(
+            videoURL: videoURL, notice: notice
+        )
         previewController.delegate = self
         previewController.modalPresentationStyle = .overFullScreen
         presentationAnchor.present(previewController, animated: true)
