@@ -61,8 +61,10 @@ extension LiveHeaderView: UIGestureRecognizerDelegate {
     /// Keeps the hero's tap-to-open gesture off its own chrome.
     ///
     /// A recognized tap cancels touches in the view, so without this a press on
-    /// Flip Camera / Screen Fit / the ribbon toggle would open the camera
-    /// controller or fullscreen Preview instead of running the control.
+    /// Flip Camera / Screen Fit / the ribbon toggle / the expand control would
+    /// open the camera controller or fullscreen Preview instead of running the
+    /// control. The expand control happens to want the same destination, but it
+    /// must still be the one to send it, or its own highlight never fires.
     func gestureRecognizer(
         _ gestureRecognizer: UIGestureRecognizer,
         shouldReceive touch: UITouch
