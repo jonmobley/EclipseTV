@@ -21,6 +21,21 @@ struct MediaFitMenuTests {
         #expect(titles == ["Fit", "Fill", "Custom"])
     }
 
+    /// Video has Fit and Fill but no Custom: there is no video equivalent of the
+    /// pre-rendered crop a still's Custom position produces.
+    @Test func screenFitMenuDropsCustomWhenNotAllowed() {
+        let id = "fit-menu-\(UUID().uuidString)"
+        defer { MediaFramingStore.clear(forId: id) }
+        let menu = MediaFitMenu.make(
+            forId: id,
+            allowsCustom: false,
+            onSelectFit: { _ in },
+            onCustom: {}
+        )
+        let titles = menu.children.compactMap { ($0 as? UIAction)?.title }
+        #expect(titles == ["Fit", "Fill"])
+    }
+
     @Test func customRowIsCheckedWhenFramingIsSaved() {
         let id = "fit-menu-\(UUID().uuidString)"
         defer { MediaFramingStore.clear(forId: id) }

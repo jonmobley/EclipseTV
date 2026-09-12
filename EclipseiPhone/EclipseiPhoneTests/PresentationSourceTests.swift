@@ -31,6 +31,22 @@ struct PresentationSourceTests {
         #expect(parked.content == source.content)
     }
 
+    /// Parking must not quietly reframe the clip it parks.
+    @Test func pausingVideoKeepsFill() {
+        let url = URL(fileURLWithPath: "/tmp/clip.mp4")
+        let source = PresentationSource.video(
+            url, isLooping: false, isMuted: false, startAt: 0, fill: true
+        )
+        #expect(source.videoFill)
+        #expect(source.pausingVideo(at: 2).videoFill)
+    }
+
+    @Test func videoFitsByDefault() {
+        let url = URL(fileURLWithPath: "/tmp/clip.mp4")
+        let source = PresentationSource.video(url, isLooping: false, isMuted: false)
+        #expect(source.videoFill == false)
+    }
+
     @Test func pausingVideoIsNoOpForStills() {
         let url = URL(fileURLWithPath: "/tmp/still.jpg")
         let source = PresentationSource.image(url)
