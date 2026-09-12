@@ -643,6 +643,7 @@ extension LibraryGridViewController {
         ]
         if item.isVideo {
             children.append(contentsOf: videoOptionActions(for: item))
+            children.append(screenFitMenu(for: item))
         } else {
             children.append(noteAction(for: item))
             children.append(screenFitMenu(for: item))

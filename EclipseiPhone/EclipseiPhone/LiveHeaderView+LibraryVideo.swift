@@ -42,6 +42,10 @@ extension LiveHeaderView {
         if libraryVideoItemId == itemId, libraryVideoPlayer != nil {
             libraryVideoPlayer?.isMuted = isMuted
             libraryVideoIsLooping = isLooping
+            // A Fit / Fill change re-presents the same item, which lands here rather
+            // than rebuilding the layer. Re-assert gravity or the hero keeps the old
+            // framing while the tile and the TV move.
+            applyLibraryVideoGravity(forId: itemId)
             PresentationAudioSession.activateIfNeeded(muted: isMuted)
             setStaticPreviewHidden(true)
             setLibraryVideoFullscreenButtonVisible(true)
@@ -82,10 +86,10 @@ extension LiveHeaderView {
         libraryVideoIsLooping = isLooping
 
         let layer = AVPlayerLayer(player: player)
-        layer.videoGravity = .resizeAspect
         layer.frame = host.bounds
         host.layer.addSublayer(layer)
         libraryVideoLayer = layer
+        applyLibraryVideoGravity(forId: itemId)
 
         let tap = UITapGestureRecognizer(target: self, action: #selector(handleLibraryVideoTap))
         host.addGestureRecognizer(tap)
@@ -98,6 +102,13 @@ extension LiveHeaderView {
         bringLibraryVideoChromeToFront()
         player.play()
         pushLibraryVideoPlaybackToControls()
+    }
+
+    /// Frames the hero player to match the item's Fit / Fill choice.
+    private func applyLibraryVideoGravity(forId itemId: String) {
+        libraryVideoLayer?.videoGravity = MediaFitSettings.isFill(forId: itemId)
+            ? .resizeAspectFill
+            : .resizeAspect
     }
 
     /// Stops and removes the in-hero library video player.

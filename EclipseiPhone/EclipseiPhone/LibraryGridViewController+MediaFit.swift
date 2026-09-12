@@ -11,14 +11,16 @@ import UIKit
 
 extension LibraryGridViewController {
 
-    /// Fit / Fill / Custom submenu for how a still is framed on the external display.
+    /// Fit / Fill / Custom submenu for how an item is framed on the external display.
     ///
-    /// Offered on the tile ⋯ menu for stills only — video framing is fixed to
-    /// aspect fit. Custom opens the pan/zoom editor; Fit and Fill discard any
-    /// saved position. The hero circle is a Fit / Fill shortcut.
+    /// Custom opens the pan/zoom editor; Fit and Fill discard any saved position. Video
+    /// gets Fit and Fill only — `AVPlayerLayer` has exactly those two gravities, and an
+    /// arbitrary crop would need a render-time composition. For a live still the hero
+    /// circle is a shortcut for the same two; video changes framing only from here.
     func screenFitMenu(for item: LibraryItemDTO) -> UIMenu {
         MediaFitMenu.make(
             forId: item.id,
+            allowsCustom: !item.isVideo,
             onSelectFit: { [weak self] mode in
                 self?.applyScreenFit(mode, to: item)
             },
@@ -29,7 +31,7 @@ extension LibraryGridViewController {
     }
 
     /// Saves Fit / Fill, clears any custom position, tells the Apple TV, and
-    /// re-pushes the still when it's live so every screen reframes.
+    /// re-pushes the item when it's live so every screen reframes.
     func applyScreenFit(_ mode: MediaFitMode, to item: LibraryItemDTO) {
         let hadFraming = MediaFramingStore.hasFraming(forId: item.id)
         let modeChanged = MediaFitSettings.mode(forId: item.id) != mode
@@ -41,7 +43,13 @@ extension LibraryGridViewController {
         connectionManager.sendImageFit(id: item.id, isFill: mode == .fill)
         reloadLibraryGrid()
         refreshLiveHeader()
-        refreshLivePresentationIfNeeded(for: item)
+        if item.isVideo {
+            // Re-present through the video path so the seek position survives, the way
+            // the Loop and Mute toggles do.
+            refreshLiveVideoPresentationIfNeeded(id: item.id)
+        } else {
+            refreshLivePresentationIfNeeded(for: item)
+        }
     }
 
     /// Saves a custom crop position, tells the Apple TV, and re-pushes when live.
@@ -144,6 +152,9 @@ extension LibraryGridViewController {
             )
             return
         }
+        // Video has Fit / Fill too, but only from its tile menu, next to Loop and Mute.
+        // The hero circle sits bottom-trailing, right where a live video puts its
+        // scrubber and duration label.
         guard let id = store.currentId,
               let item = store.items.first(where: { $0.id == id }),
               !item.isVideo else {
@@ -158,7 +169,7 @@ extension LibraryGridViewController {
         liveHeader.setScreenFitToggleVisible(true, mode: mode)
     }
 
-    /// Flips Fit / Fill for the live still or slideshow (hero shortcut).
+    /// Flips Fit / Fill for the live item or slideshow (hero shortcut).
     ///
     /// Also clears any custom position so the toggle always lands on Fit or Fill.
     func toggleLiveScreenFit() {
