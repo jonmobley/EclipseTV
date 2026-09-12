@@ -380,7 +380,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             isLogoSelected = false
             presentScreensaverLive()
         case .camera:
-            presentCameraLiveOnOutput()
+            presentCameraFromTile()
         case .createShow:
             onCreateShow?()
         case .addShowMedia:
