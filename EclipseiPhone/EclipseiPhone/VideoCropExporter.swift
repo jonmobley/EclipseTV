@@ -11,6 +11,35 @@ import UIKit
 /// Exports a video cropped to a rect in the asset's display (orientation-applied) space.
 enum VideoCropExporter {
 
+    /// Frame rates believable enough to copy from track metadata. Outside this range the
+    /// value is treated as unreliable rather than preserved.
+    static let frameRateRange: ClosedRange<Double> = 1...240
+
+    /// Cadence used only when a track reports no usable rate at all.
+    static let fallbackFrameDuration = CMTime(value: 1, timescale: 30)
+
+    // MARK: - Frame rate
+
+    /// Output cadence for a crop composition, matching the source instead of resampling.
+    ///
+    /// `minFrameDuration` is preferred because it is an exact rational, so NTSC rates
+    /// like 23.976 (1001/24000) survive the round trip; deriving the same rate from
+    /// `nominalFrameRate` quantises it to a flat 24.
+    static func outputFrameDuration(
+        nominalFrameRate: Float,
+        minFrameDuration: CMTime
+    ) -> CMTime {
+        if minFrameDuration.isNumeric, minFrameDuration.seconds > 0,
+           frameRateRange.contains(1 / minFrameDuration.seconds) {
+            return minFrameDuration
+        }
+        let nominal = Double(nominalFrameRate)
+        guard nominal.isFinite, frameRateRange.contains(nominal) else {
+            return fallbackFrameDuration
+        }
+        return CMTime(seconds: 1 / nominal, preferredTimescale: 600)
+    }
+
     /// - Parameters:
     ///   - sourceURL: Input video.
     ///   - cropRect: Crop in display-oriented pixel coordinates (origin top-left).
@@ -25,6 +54,8 @@ enum VideoCropExporter {
         let natural = try await track.load(.naturalSize)
         let transform = try await track.load(.preferredTransform)
         let duration = try await asset.load(.duration)
+        let nominalFrameRate = try await track.load(.nominalFrameRate)
+        let minFrameDuration = try await track.load(.minFrameDuration)
         let displaySize = natural.applying(transform)
         let renderSize = CGSize(width: abs(displaySize.width), height: abs(displaySize.height))
 
@@ -67,7 +98,10 @@ enum VideoCropExporter {
 
         let videoComposition = AVMutableVideoComposition()
         videoComposition.renderSize = cropped.size
-        videoComposition.frameDuration = CMTime(value: 1, timescale: 30)
+        videoComposition.frameDuration = outputFrameDuration(
+            nominalFrameRate: nominalFrameRate,
+            minFrameDuration: minFrameDuration
+        )
         videoComposition.instructions = [instruction]
 
         let outURL = FileManager.default.temporaryDirectory
