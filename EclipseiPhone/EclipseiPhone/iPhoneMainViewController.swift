@@ -110,7 +110,7 @@ class iPhoneMainViewController: UIViewController {
     var currentTempFileURL: URL? // Track temp files for cleanup
     /// When set, the active `AspectCropViewController` is cropping a video (not a still).
     var pendingVideoCropURL: URL?
-    /// Thumbnail chosen before a Vertical video crop; reused after export.
+    /// Poster held across a video edit crop; reused after export.
     var pendingVideoThumbnail: UIImage?
     /// Size of the still shown in the video cropper (for mapping crop → video pixels).
     var pendingVideoCropPreviewSize: CGSize?
