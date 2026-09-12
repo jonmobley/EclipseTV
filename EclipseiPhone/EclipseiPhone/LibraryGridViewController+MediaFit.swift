@@ -16,9 +16,13 @@ extension LibraryGridViewController {
     /// Offered on the tile ⋯ menu for stills only — video framing is fixed to
     /// aspect fit. Custom opens the pan/zoom editor; Fit and Fill discard any
     /// saved position. The hero circle is a Fit / Fill shortcut.
+    ///
+    /// An unmeasured still keeps Fit and Fill: a row missing because a thumbnail
+    /// happened to be purged is worse than a row that does nothing.
     func screenFitMenu(for item: LibraryItemDTO) -> UIMenu {
         MediaFitMenu.make(
             forId: item.id,
+            offersFitFill: MediaFitAvailability.fitDiffersFromFill(forId: item.id) ?? true,
             onSelectFit: { [weak self] mode in
                 self?.applyScreenFit(mode, to: item)
             },
@@ -123,6 +127,20 @@ extension LibraryGridViewController {
     }
 
     /// Hero Fit / Fill control while a still or this Show’s slideshow is live.
+    ///
+    /// The circle appears only when the two framings it switches between are
+    /// different pictures, so a still already shaped like the panel doesn't get a
+    /// button that changes nothing. That includes a still the user has positioned by
+    /// hand: the circle means Fit ↔ Fill, and pressing it into service as "undo my
+    /// crop" would be a second verb wearing the same icon. Resetting a matching
+    /// still's position lives in the ⋯ Screen Fit menu instead.
+    ///
+    /// A slideshow keeps the circle whatever its slides look like — the aspect
+    /// changes from slide to slide, so the choice still means something.
+    ///
+    /// Hidden while the still's shape is unknown: the hero has no thumbnail to show
+    /// yet either, and `didUpdateThumbnailFor` re-runs this once one lands. A button
+    /// that appears late beats one that vanishes under a finger.
     func syncLiveScreenFitChrome() {
         guard showsLiveHero, !isLiveFromOtherShow else {
             liveHeader.setScreenFitToggleVisible(false, mode: .fit)
@@ -146,7 +164,8 @@ extension LibraryGridViewController {
         }
         guard let id = store.currentId,
               let item = store.items.first(where: { $0.id == id }),
-              !item.isVideo else {
+              !item.isVideo,
+              MediaFitAvailability.fitDiffersFromFill(forId: item.id) == true else {
             liveHeader.setScreenFitToggleVisible(false, mode: .fit)
             return
         }

@@ -65,6 +65,7 @@ extension MediaLibraryPickerViewController {
     ) -> UIMenu {
         MediaFitMenu.make(
             forId: item.id,
+            offersFitFill: MediaFitAvailability.fitDiffersFromFill(forId: item.id) ?? true,
             onSelectFit: { [weak self] mode in
                 self?.onApplyScreenFit?(item, mode)
             },
