@@ -107,6 +107,7 @@ extension iPhoneMainViewController {
         setupMusicDrawer()
         raiseAudioMiniChrome()
         setupTransferOverlay()
+        setupImportProgressOverlay()
     }
 
     /// Pins the header bar to the top safe area.

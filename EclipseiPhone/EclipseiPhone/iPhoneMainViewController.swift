@@ -82,6 +82,11 @@ class iPhoneMainViewController: UIViewController {
         return label
     }()
 
+    /// Determinate progress and a working Cancel while picked media downloads
+    /// from iCloud. Separate from `statusLabel` / `cancelButton`, which belong to
+    /// the Multipeer transfer that happens after an import.
+    let importProgressView = MediaImportProgressView()
+
     let cancelButton: UIButton = {
         let button = UIButton(type: .system)
         button.setTitle("Cancel", for: .normal)
@@ -105,6 +110,8 @@ class iPhoneMainViewController: UIViewController {
     /// Retained for cleanup; connection troubleshooting alerts are no longer scheduled.
     var connectionHintTimer: Timer?
     var isShowingPicker = false // Track if we're showing the image picker
+    /// Tracks the iCloud downloads behind an in-flight Photos import.
+    let photoImportSession = PhotoImportSession()
     private var statusFadeTimer: Timer?
     let logger = Logger(subsystem: "com.eclipseapp.ios", category: "MainViewController")
     var currentTempFileURL: URL? // Track temp files for cleanup

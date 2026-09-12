@@ -7,7 +7,6 @@
 
 import UIKit
 import PhotosUI
-import UniformTypeIdentifiers
 
 // MARK: - Multi-Select Import (no crop)
 
@@ -25,59 +24,153 @@ extension iPhoneMainViewController {
         pendingSlideshowName = nil
         connectionManager.pendingRestoreId = nil
 
-        let makingSlideshow = slideshowShowId != nil && slideshowName != nil
-        showTemporaryStatus("Importing \(results.count)…", duration: 120)
-
         Task { @MainActor in
-            var addedIds: [String] = []
-            var failed = 0
-            for result in results {
-                if makingSlideshow {
-                    // Slideshows are images-only this phase.
-                    if result.itemProvider.hasItemConformingToTypeIdentifier(
-                        UTType.movie.identifier
-                    ) {
-                        failed += 1
-                        continue
-                    }
-                }
-                if let id = await importOnePickedResult(
-                    result,
-                    albumId: makingSlideshow ? nil : albumId,
-                    ownerShowId: makingSlideshow ? slideshowShowId : nil
-                ) {
-                    addedIds.append(id)
-                } else {
-                    failed += 1
-                }
-            }
+            await runImport(
+                results,
+                albumId: albumId,
+                slideshowShowId: slideshowShowId,
+                slideshowName: slideshowName
+            )
+        }
+    }
 
-            if isConnected() {
-                connectionManager.flushPendingUploads(
-                    for: TVLibraryStore.shared.activeLibraryMode
-                )
-            }
+    /// Downloads the picks, then adds them in the order they were picked.
+    ///
+    /// Download and ingest are separate passes because a pick's original may have
+    /// to come from iCloud: those arrive out of order and some never arrive at
+    /// all, so the library add waits until the files are on disk.
+    private func runImport(
+        _ results: [PHPickerResult],
+        albumId: UUID?,
+        slideshowShowId: UUID?,
+        slideshowName: String?
+    ) async {
+        let makingSlideshow = slideshowShowId != nil && slideshowName != nil
+        var outcome = PhotoImportOutcome()
+        let picks = eligiblePicks(
+            from: results,
+            imagesOnly: makingSlideshow,
+            tally: &outcome.tally
+        )
+        guard !picks.isEmpty else {
+            showTemporaryStatus(outcome.tally.statusMessage)
+            return
+        }
 
-            if makingSlideshow,
-               let showId = slideshowShowId,
-               let name = slideshowName {
-                finishSlideshowImport(
-                    name: name,
-                    showId: showId,
-                    itemIds: addedIds,
-                    failed: failed
-                )
-                return
-            }
+        beginImportProgress(count: picks.count)
+        let downloaded = await prepareImportPicks(picks)
+        outcome.merge(downloaded)
+        // Picks the user stopped before they were scheduled leave no failure of
+        // their own, so the session is the authority on whether this was cut short.
+        outcome.tally.wasCancelled = outcome.tally.wasCancelled
+            || photoImportSession.isCancelled
+        endImportProgress()
 
-            let added = addedIds.count
-            if added == 0 {
-                showTemporaryStatus("Couldn't import selection")
-            } else if failed == 0 {
-                showTemporaryStatus("Added \(added)")
-            } else {
-                showTemporaryStatus("Added \(added), \(failed) skipped")
+        let addedIds = ingest(
+            outcome.preparedInPickOrder,
+            albumId: makingSlideshow ? nil : albumId,
+            ownerShowId: makingSlideshow ? slideshowShowId : nil
+        )
+        outcome.tally.added = addedIds.count
+
+        if isConnected() {
+            connectionManager.flushPendingUploads(
+                for: TVLibraryStore.shared.activeLibraryMode
+            )
+        }
+
+        reportImport(
+            outcome,
+            from: results,
+            addedIds: addedIds,
+            albumId: albumId,
+            slideshowShowId: slideshowShowId,
+            slideshowName: slideshowName
+        )
+    }
+
+    /// Reports what landed, builds the Slideshow if one was asked for, and offers
+    /// another attempt at anything left in iCloud.
+    private func reportImport(
+        _ outcome: PhotoImportOutcome,
+        from results: [PHPickerResult],
+        addedIds: [String],
+        albumId: UUID?,
+        slideshowShowId: UUID?,
+        slideshowName: String?
+    ) {
+        if let showId = slideshowShowId, let name = slideshowName {
+            finishSlideshowImport(
+                name: name,
+                showId: showId,
+                itemIds: addedIds,
+                tally: outcome.tally
+            )
+        } else {
+            showTemporaryStatus(outcome.tally.statusMessage)
+        }
+
+        offerICloudRetry(
+            outcome,
+            from: results,
+            addedIds: addedIds,
+            albumId: albumId,
+            slideshowShowId: slideshowShowId,
+            slideshowName: slideshowName
+        )
+    }
+
+    // MARK: - Selection
+
+    /// Drops picks we can rule out before paying for a download.
+    ///
+    /// - Parameters:
+    ///   - imagesOnly: Slideshows take images only this phase, so a picked movie
+    ///     is skipped here rather than downloaded and then discarded.
+    ///   - tally: Receives the skips.
+    private func eligiblePicks(
+        from results: [PHPickerResult],
+        imagesOnly: Bool,
+        tally: inout PhotoImportTally
+    ) -> [PhotoImportPick] {
+        var picks: [PhotoImportPick] = []
+        for (index, result) in results.enumerated() {
+            let provider = result.itemProvider
+            let isMovie = PhotoImportLoader.isMovie(provider)
+            guard isMovie || PhotoImportLoader.isImage(provider) else {
+                tally.skipped += 1
+                continue
             }
+            if imagesOnly, isMovie {
+                tally.skipped += 1
+                continue
+            }
+            picks.append(PhotoImportPick(index: index, result: result))
+        }
+        return picks
+    }
+
+    // MARK: - Ingest
+
+    /// Adds downloaded files to the library, keeping the user's pick order.
+    private func ingest(
+        _ prepared: [PhotoImportPrepared],
+        albumId: UUID?,
+        ownerShowId: UUID?
+    ) -> [String] {
+        prepared.map { pick in
+            if pick.isVideo, let thumbnail = pick.thumbnail {
+                saveCustomThumbnail(thumbnail, for: pick.localURL)
+            }
+            return addMedia(
+                localURL: pick.localURL,
+                isVideo: pick.isVideo,
+                thumbnail: pick.thumbnail,
+                duration: pick.duration,
+                toAlbumId: albumId,
+                sendIfConnected: false,
+                ownerShowId: ownerShowId
+            )
         }
     }
 
@@ -87,10 +180,10 @@ extension iPhoneMainViewController {
         name: String,
         showId: UUID,
         itemIds: [String],
-        failed: Int
+        tally: PhotoImportTally
     ) {
         guard !itemIds.isEmpty else {
-            showTemporaryStatus("Couldn't create Slideshow")
+            showTemporaryStatus(tally.slideshowFailureMessage)
             return
         }
         let orientation = LocalAlbumStore.shared.album(id: showId)?.orientation
@@ -105,140 +198,41 @@ extension iPhoneMainViewController {
             libraryViewController.revealAddedShowMember(
                 id: ShowSlideshowToken.token(for: created.id)
             )
-            if failed == 0 {
-                showTemporaryStatus("Slideshow created")
-            } else {
-                showTemporaryStatus("Slideshow created, \(failed) skipped")
-            }
+            showTemporaryStatus(tally.slideshowMessage)
         } catch {
             showTemporaryStatus(error.localizedDescription)
         }
     }
 
-    // MARK: - Per-item ingest
+    // MARK: - Retry
 
-    /// Imports one pick. Returns the new library id on success.
-    /// - Parameter ownerShowId: CloudKit Show link when the file is not a member
-    ///   (slideshow slides).
-    private func importOnePickedResult(
-        _ result: PHPickerResult,
+    /// Offers another attempt at the picks whose originals never left iCloud.
+    ///
+    /// A Slideshow that already exists is left alone: re-running the import would
+    /// build a second one beside it instead of filling in its gaps. When nothing
+    /// was created there is nothing to collide with, so retrying rebuilds it whole.
+    private func offerICloudRetry(
+        _ outcome: PhotoImportOutcome,
+        from results: [PHPickerResult],
+        addedIds: [String],
         albumId: UUID?,
-        ownerShowId: UUID? = nil
-    ) async -> String? {
-        let provider = result.itemProvider
-        if provider.hasItemConformingToTypeIdentifier(UTType.movie.identifier) {
-            return await importPickedVideoSkippingCrop(
-                provider, albumId: albumId, ownerShowId: ownerShowId
-            )
+        slideshowShowId: UUID?,
+        slideshowName: String?
+    ) {
+        guard !outcome.tally.wasCancelled else { return }
+        if slideshowShowId != nil, !addedIds.isEmpty { return }
+
+        let retryable: [PHPickerResult] = outcome.retryableIndexes.compactMap { index in
+            guard results.indices.contains(index) else { return nil }
+            return results[index]
         }
-        if provider.canLoadObject(ofClass: UIImage.self) {
-            return await importPickedImageSkippingCrop(
-                provider, albumId: albumId, ownerShowId: ownerShowId
-            )
-        }
-        return nil
-    }
-
-    private func importPickedImageSkippingCrop(
-        _ provider: NSItemProvider,
-        albumId: UUID?,
-        ownerShowId: UUID? = nil
-    ) async -> String? {
-        guard let image = await loadUIImage(from: provider) else { return nil }
-        let optimized = MediaValidator.downscaleImage(image)
-        guard let data = optimized.jpegData(compressionQuality: 0.7) else { return nil }
-
-        let fileURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("batch_\(UUID().uuidString).jpg")
-        do {
-            try data.write(to: fileURL, options: .atomic)
-        } catch {
-            return nil
-        }
-
-        return addMedia(
-            localURL: fileURL,
-            isVideo: false,
-            thumbnail: optimized,
-            duration: 0,
-            toAlbumId: albumId,
-            sendIfConnected: false,
-            ownerShowId: ownerShowId
-        )
-    }
-
-    private func importPickedVideoSkippingCrop(
-        _ provider: NSItemProvider,
-        albumId: UUID?,
-        ownerShowId: UUID? = nil
-    ) async -> String? {
-        // Copied inside the PHPicker callback so the file survives after it returns.
-        guard let localURL = await loadMovieFileURL(from: provider) else { return nil }
-
-        let validation = await MediaValidator.validateVideo(at: localURL)
-        switch validation {
-        case .invalid:
-            cleanupTempFile(at: localURL)
-            return nil
-        case .valid:
-            break
-        }
-
-        let thumbnail = await VideoCropExporter.previewFrame(at: localURL)
-        if let thumbnail {
-            saveCustomThumbnail(thumbnail, for: localURL)
-        }
-
-        let duration = await VideoPosterFrame.durationSeconds(at: localURL)
-        return addMedia(
-            localURL: localURL,
-            isVideo: true,
-            thumbnail: thumbnail,
-            duration: duration,
-            toAlbumId: albumId,
-            sendIfConnected: false,
-            ownerShowId: ownerShowId
-        )
-    }
-
-    // MARK: - NSItemProvider helpers
-
-    private func loadUIImage(from provider: NSItemProvider) async -> UIImage? {
-        await withCheckedContinuation { continuation in
-            provider.loadObject(ofClass: UIImage.self) { object, _ in
-                continuation.resume(returning: object as? UIImage)
-            }
-        }
-    }
-
-    /// Copies the movie out of PHPicker's ephemeral location before the callback returns.
-    private func loadMovieFileURL(from provider: NSItemProvider) async -> URL? {
-        await withCheckedContinuation { continuation in
-            provider.loadFileRepresentation(
-                forTypeIdentifier: UTType.movie.identifier
-            ) { url, _ in
-                guard let url else {
-                    continuation.resume(returning: nil)
-                    return
-                }
-                continuation.resume(returning: Self.copyTemporaryMovie(from: url))
-            }
-        }
-    }
-
-    private static func copyTemporaryMovie(from sourceURL: URL) -> URL? {
-        let ext = sourceURL.pathExtension.isEmpty ? "mov" : sourceURL.pathExtension
-        let destination = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString)
-            .appendingPathExtension(ext)
-        do {
-            if FileManager.default.fileExists(atPath: destination.path) {
-                try FileManager.default.removeItem(at: destination)
-            }
-            try FileManager.default.copyItem(at: sourceURL, to: destination)
-            return destination
-        } catch {
-            return nil
+        guard !retryable.isEmpty else { return }
+        presentICloudRetry(message: outcome.tally.iCloudRetryMessage) { [weak self] in
+            guard let self else { return }
+            self.pendingAlbumId = albumId
+            self.pendingSlideshowShowId = slideshowShowId
+            self.pendingSlideshowName = slideshowName
+            self.importPickedMediaBatch(retryable)
         }
     }
 }
