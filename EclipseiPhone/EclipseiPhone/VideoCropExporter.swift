@@ -77,11 +77,15 @@ enum VideoCropExporter {
         try compTrack.insertTimeRange(timeRange, of: track, at: .zero)
 
         let audioTracks = try await asset.loadTracks(withMediaType: .audio)
-        if let audio = audioTracks.first,
-           let compAudio = composition.addMutableTrack(
-            withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid
-           ) {
-            try? compAudio.insertTimeRange(timeRange, of: audio, at: .zero)
+        if let audio = audioTracks.first {
+            // Throw rather than skip: a crop that quietly drops the soundtrack looks
+            // like a success, so the caller can't tell the user anything went wrong.
+            guard let compAudio = composition.addMutableTrack(
+                withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid
+            ) else {
+                throw ExportError.audioCopyFailed
+            }
+            try compAudio.insertTimeRange(timeRange, of: audio, at: .zero)
         }
 
         let layerInstruction = AVMutableVideoCompositionLayerInstruction(assetTrack: compTrack)
@@ -136,5 +140,6 @@ enum VideoCropExporter {
         case noVideoTrack
         case invalidCrop
         case compositionFailed
+        case audioCopyFailed
     }
 }
