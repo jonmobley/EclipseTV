@@ -36,6 +36,26 @@ struct MediaFitMenuTests {
         #expect(titles == ["Fit", "Fill"])
     }
 
+    /// With no Custom row to carry it, a stored framing must not leave the menu with
+    /// nothing checked at all.
+    @Test func fitRowStaysCheckedWithoutCustomDespiteStoredFraming() {
+        let id = "fit-menu-\(UUID().uuidString)"
+        defer { MediaFramingStore.clear(forId: id) }
+        MediaFramingStore.set(
+            MediaFraming(x: 0, y: 0, width: 1, height: 1),
+            forId: id
+        )
+        let menu = MediaFitMenu.make(
+            forId: id,
+            allowsCustom: false,
+            onSelectFit: { _ in },
+            onCustom: {}
+        )
+        let fit = menu.children.compactMap { $0 as? UIAction }
+            .first { $0.title == "Fit" }
+        #expect(fit?.image == UIImage(systemName: "checkmark"))
+    }
+
     @Test func customRowIsCheckedWhenFramingIsSaved() {
         let id = "fit-menu-\(UUID().uuidString)"
         defer { MediaFramingStore.clear(forId: id) }

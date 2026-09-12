@@ -15,8 +15,8 @@ extension LibraryGridViewController {
     ///
     /// Custom opens the pan/zoom editor; Fit and Fill discard any saved position. Video
     /// gets Fit and Fill only — `AVPlayerLayer` has exactly those two gravities, and an
-    /// arbitrary crop would need a render-time composition. The hero circle is a
-    /// Fit / Fill shortcut.
+    /// arbitrary crop would need a render-time composition. For a live still the hero
+    /// circle is a shortcut for the same two; video changes framing only from here.
     func screenFitMenu(for item: LibraryItemDTO) -> UIMenu {
         MediaFitMenu.make(
             forId: item.id,

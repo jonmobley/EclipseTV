@@ -20,7 +20,9 @@ enum MediaFitMenu {
         onSelectFit: @escaping (MediaFitMode) -> Void,
         onCustom: @escaping () -> Void
     ) -> UIMenu {
-        let hasCustom = MediaFramingStore.hasFraming(forId: id)
+        // Without a Custom row there is nothing for a stored framing to check, so the
+        // Fit / Fill rows must not both go unchecked because one happens to exist.
+        let hasCustom = allowsCustom && MediaFramingStore.hasFraming(forId: id)
         let current = MediaFitSettings.mode(forId: id)
         // Checkmark rides in the trailing image slot rather than `state:` so the
         // selected row keeps the same title inset as the others.
