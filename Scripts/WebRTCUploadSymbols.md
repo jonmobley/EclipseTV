@@ -35,6 +35,13 @@ including our pinned 140.0.0 — ship the xcframework only.
 **1. Ship as-is.** Click Done. Expect the warning on every upload while we're pinned below
 152.0.0.
 
+There is also a `Generate WebRTC dSYM` build phase on the EclipseiPhone target
+(`Scripts/generate_webrtc_dsym.sh`, from PR #33) that runs `dsymutil` over the embedded
+framework on install builds. It can only emit a bundle whose UUID matches — the symbols it
+would need were stripped upstream — so it silences the Organizer warning without making a
+single WebRTC frame readable. It reports every failure as a build warning, so it can never
+fail an archive. Remove the phase if you would rather see the honest warning.
+
 **2. Move to a milestone that publishes symbols, then inject them.** Change the WebRTC
 requirement in `eclipsepro/Packages/EclipsePhoneCameraClient/Package.swift` to `152.0.0` or
 newer (that package lives outside this repo, and the version constraint is what keeps
@@ -55,7 +62,9 @@ Scripts/inject_webrtc_dsym.sh ~/Library/Developer/Xcode/Archives/…/EclipseiPho
 ```
 
 It's safe to re-run: an archive that already covers the needed UUIDs, or that embeds no
-WebRTC at all, exits 0 without downloading anything. If the pinned release publishes no
+WebRTC at all, exits 0 without downloading anything. "Covers" means a DWARF file with real
+debug info — the `__debug_info` section the build phase above cannot produce — so a
+symbol-free placeholder sitting in `dSYMs/` does not stop the real bundle from landing. If the pinned release publishes no
 dSYM, it exits non-zero and says so rather than installing anything, because a
 UUID-matched bundle holding a *different* build's debug info would be accepted by App
 Store Connect and then mis-symbolicate every WebRTC frame.

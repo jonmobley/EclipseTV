@@ -60,7 +60,7 @@ if [[ ! -d "$ARCHIVE" ]]; then
     exit 66
 fi
 
-for tool in curl unzip dwarfdump; do
+for tool in curl unzip dwarfdump otool; do
     if ! command -v "$tool" >/dev/null 2>&1; then
         echo "error: required tool not found: $tool"
         exit 69
@@ -94,10 +94,21 @@ fi
 echo "Archive embeds WebRTC with UUID(s):"
 sed 's/^/  /' <<<"$NEEDED_UUIDS"
 
+# True when a dSYM's DWARF file carries debug info rather than just a UUID.
+#
+# The `Generate WebRTC dSYM` build phase runs dsymutil over the stripped framework, which
+# produces a bundle that matches on UUID — enough for the upload check, nothing to
+# symbolicate with. Treating that as coverage would make this script decline to install
+# the real symbols after the pin moves to a release that publishes them.
+carries_debug_info() {
+    otool -l "$1" 2>/dev/null | grep -q 'sectname __debug_info'
+}
+
 # True when the archive's dSYMs folder already covers every UUID the binary needs.
 archive_covers_needed_uuids() {
     local present="" dwarf
     while IFS= read -r dwarf; do
+        carries_debug_info "$dwarf" || continue
         present+="$(uuids_of "$dwarf")"$'\n'
     done < <(find "$ARCHIVE/dSYMs" -path '*/Contents/Resources/DWARF/*' -type f 2>/dev/null)
 
