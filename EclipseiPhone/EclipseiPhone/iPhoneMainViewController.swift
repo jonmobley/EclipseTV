@@ -68,6 +68,11 @@ class iPhoneMainViewController: UIViewController {
     /// Pager pinned to the safe area (compact Music page — Music has its own nav bar).
     var homePagerTopToSafeAreaConstraint: NSLayoutConstraint?
 
+    /// Determinate progress and a working Cancel while picked media downloads
+    /// from iCloud. Separate from the transfer toast and `cancelButton`, which belong
+    /// to the Multipeer transfer that happens after an import.
+    let importProgressView = MediaImportProgressView()
+
     /// Cancels an in-flight EclipseTV transfer; status itself is a presentation toast.
     let cancelButton: UIButton = {
         let button = UIButton(type: .system)
@@ -92,6 +97,8 @@ class iPhoneMainViewController: UIViewController {
     /// Retained for cleanup; connection troubleshooting alerts are no longer scheduled.
     var connectionHintTimer: Timer?
     var isShowingPicker = false // Track if we're showing the image picker
+    /// Tracks the iCloud downloads behind an in-flight Photos import.
+    let photoImportSession = PhotoImportSession()
     let logger = Logger(subsystem: "com.eclipseapp.ios", category: "MainViewController")
     var currentTempFileURL: URL? // Track temp files for cleanup
     /// When set, the active `AspectCropViewController` is cropping a video (not a still).
