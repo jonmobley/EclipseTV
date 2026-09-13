@@ -156,21 +156,18 @@ extension LibraryGridViewController {
         return !isShowGridItemLive(item)
     }
 
-    /// Live stroke for Show tiles: the director snapshot for operators, otherwise the
-    /// same `currentLiveProgram()` that snapshot is built from.
+    /// Whether this tile carries the red live stroke.
+    ///
+    /// One resolved program, one stroke: an operator matches the director's
+    /// snapshot, every other device matches the program resolved from its own
+    /// live-state stores. Per-tile predicates that each read a different store
+    /// are what let two tiles claim live at the same time. Practice reaches the
+    /// poll card through the resolver's `practicePollMembershipId`, not a case here.
     func isShowGridItemLive(_ item: ShowGridItem) -> Bool {
         if ShowLiveSession.shared.isRemoteOperator {
             return isShowGridItemLiveRemotely(item)
         }
-        // Practice lights the poll card without anything on program output.
-        if case .livePoll(let poll) = item,
-           QuestPollSessionStore.shared.practiceMembershipId == poll.id {
-            return true
-        }
-        guard let program = currentLiveProgram(), !program.isBlackout else {
-            return false
-        }
-        return item.matches(program)
+        return resolvedShowProgram?.matches(item) == true
     }
 
     // MARK: - Private

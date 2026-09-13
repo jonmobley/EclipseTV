@@ -61,6 +61,11 @@ extension LibraryGridViewController {
         case .slideshow:
             guard let itemId, let uuid = UUID(uuidString: itemId),
                   let show = SlideshowStore.shared.slideshow(id: uuid) else { return }
+            // As the Show tap does: a tool left selected outranks the slides that
+            // are about to go out.
+            isBlackSelected = false
+            isLogoSelected = false
+            isScreensaverSelected = false
             SlideshowPlaybackController.shared.play(
                 show, connectionManager: connectionManager, startingAt: 0
             )
@@ -85,11 +90,8 @@ extension LibraryGridViewController {
     /// Live stroke from the director snapshot instead of local program state.
     func isShowGridItemLiveRemotely(_ item: ShowGridItem) -> Bool {
         guard let snap = ShowLiveSession.shared.snapshot,
-              !snap.isBlackout,
-              let kind = snap.liveKind else {
-            return false
-        }
-        return item.matches(LiveProgram(kind: kind, itemId: snap.liveItemId))
+              let program = ShowProgram(snapshot: snap) else { return false }
+        return program.matches(item)
     }
 
     /// Follow-monitor hero for an operator (no local camera / web / video player).
@@ -154,9 +156,13 @@ extension LibraryGridViewController {
 // MARK: - Snapshot
 
 extension LibraryGridViewController {
-    /// Director wire snapshot: `currentLiveProgram()` plus lock state and identity.
+
+    /// Program mirrored to operators, resolved through the same priority order the
+    /// local grid paints with, so a follow phone cannot show a different tile live.
     func makeShowLiveSnapshot(showId: UUID) -> ShowLiveSnapshot {
-        let program = currentLiveProgram()
+        let program = ShowProgramResolver.resolve(
+            showProgramState(includingPracticePoll: false)
+        )
         // `showLiveVideoState` and `showLiveCountdownState` answer nil unless that
         // kind is live, so an operator's transport and clock follow the director
         // without the caller re-deriving which one is on program.
@@ -164,7 +170,7 @@ extension LibraryGridViewController {
             showId: showId,
             liveItemId: program?.itemId,
             liveKind: program?.kind,
-            isBlackout: program?.isBlackout ?? false,
+            isBlackout: program?.kind == .black,
             isLocked: isLiveOutputLocked,
             directorName: UIDevice.current.name,
             video: showLiveVideoState,

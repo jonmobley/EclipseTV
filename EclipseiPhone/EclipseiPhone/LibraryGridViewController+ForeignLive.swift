@@ -18,7 +18,7 @@ extension LibraryGridViewController {
     /// director snapshot and Home Show cards use. Camera, Background, Screensaver,
     /// and Blackout are global tools (no owner).
     var liveOwningShowId: UUID? {
-        guard let program = currentLiveProgram(), let itemId = program.itemId else {
+        guard let program = resolvedShowProgram, let itemId = program.itemId else {
             return nil
         }
         switch program.kind {
