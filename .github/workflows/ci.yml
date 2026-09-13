@@ -20,10 +20,10 @@ defaults:
     working-directory: EclipseTV
 
 jobs:
-  # The wire protocol is a verbatim copy in each project because the two apps don't
-  # share a module. This costs seconds on Linux, so run it before any macOS minutes.
-  shared-sources:
-    name: Shared sources in sync
+  # Checks that need neither Xcode nor a simulator. Seconds on Linux, and they run
+  # before any macOS minutes are spent.
+  repo-checks:
+    name: Repo checks
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -34,12 +34,21 @@ jobs:
         uses: actions/checkout@v7
         with:
           path: EclipseTV
+      # The wire protocol is a verbatim copy in each project because the two apps
+      # don't share a module.
       - name: Verify duplicated sources match across targets
         run: Scripts/verify_shared_sources.sh
+      - name: Check build-number ordering
+        run: Scripts/set_build_number.sh --self-test
+      # The stamper reads the app build number out of both project files and the TV
+      # plist. A restructure that breaks that reading should fail here, not at the
+      # moment someone is trying to cut a release.
+      - name: Verify the build-number stamper can still read both projects
+        run: Scripts/set_build_number.sh --dry-run
 
   build-and-test:
     name: ${{ matrix.name }}
-    needs: shared-sources
+    needs: repo-checks
     runs-on: macos-26
     strategy:
       # One platform breaking shouldn't hide the other's result.
