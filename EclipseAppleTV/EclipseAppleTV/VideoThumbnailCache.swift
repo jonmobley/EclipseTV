@@ -22,7 +22,7 @@ class VideoThumbnailCache {
     private var cache = NSCache<NSString, UIImage>()
     private let fileManager = FileManager.default
     private let cacheDirectory: URL
-    private let logger = Logger(subsystem: "com.eclipseapp.appletv", category: "ThumbnailCache")
+    private let logger = Logger(subsystem: "com.eclipsetv.app", category: "VideoThumbnailCache")
     
     private init() {
         // Set up in-memory cache

@@ -57,7 +57,7 @@ extension MediaLibraryPickerViewController {
             presentCannotPreview()
             return
         }
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptics.impactLight()
         let preview = LocalMediaPreviewViewController(
             items: previewable,
             startIndex: index
@@ -87,11 +87,12 @@ extension MediaLibraryPickerViewController {
                 isMuted: item.isMuted ?? false
             )
         )
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptics.impactLight()
         let preview = LocalVideoPreviewViewController(
             fileURL: fileURL,
             isMuted: item.isMuted ?? false,
-            isLooping: item.isLooping ?? false
+            isLooping: item.isLooping ?? false,
+            overlayTitle: MediaTitleStore.displayTitle(for: item)
         )
         present(preview, animated: true)
     }

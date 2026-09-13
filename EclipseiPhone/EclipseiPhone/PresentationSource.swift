@@ -45,17 +45,26 @@ struct PresentationSource: Equatable {
     let videoStartAt: TimeInterval
     /// When false, `.video` is shown paused (blackout restore). Default is to play.
     let videoAutoplay: Bool
+    /// When true, `.video` fills (and crops to) the panel instead of letterboxing.
+    ///
+    /// Lives here rather than inside `Content.video` so the many `case .video(let url,
+    /// _, _)` matches across the app keep working, matching how `videoStartAt` and
+    /// `videoAutoplay` are already carried.
+    let videoFill: Bool
 
     /// - Parameter videoStartAt: Resume offset for library video (0 = from the start).
     /// - Parameter videoAutoplay: Play immediately. False parks on a still frame.
+    /// - Parameter videoFill: Fill the panel instead of letterboxing.
     init(
         content: Content,
         videoStartAt: TimeInterval = 0,
-        videoAutoplay: Bool = true
+        videoAutoplay: Bool = true,
+        videoFill: Bool = false
     ) {
         self.content = content
         self.videoStartAt = videoStartAt
         self.videoAutoplay = videoAutoplay
+        self.videoFill = videoFill
     }
 
     // MARK: - Convenience builders
@@ -73,12 +82,14 @@ struct PresentationSource: Equatable {
         isLooping: Bool,
         isMuted: Bool,
         startAt: TimeInterval = 0,
-        autoplay: Bool = true
+        autoplay: Bool = true,
+        fill: Bool = false
     ) -> PresentationSource {
         PresentationSource(
             content: .video(url: url, isLooping: isLooping, isMuted: isMuted),
             videoStartAt: startAt,
-            videoAutoplay: autoplay
+            videoAutoplay: autoplay,
+            videoFill: fill
         )
     }
 
@@ -88,7 +99,8 @@ struct PresentationSource: Equatable {
         return PresentationSource(
             content: content,
             videoStartAt: startAt,
-            videoAutoplay: false
+            videoAutoplay: false,
+            videoFill: videoFill
         )
     }
 
@@ -136,8 +148,8 @@ struct PresentationSource: Equatable {
     /// Builds a source for a mirrored TV-library item, using the phone's local full-res
     /// copy when present and falling back to its thumbnail otherwise.
     ///
-    /// Stills carry Fit / Fill (`fill` when set, otherwise the item's `MediaFitSettings`)
-    /// and any saved custom framing from `MediaFramingStore`.
+    /// Both stills and video carry Fit / Fill (`fill` when set, otherwise the item's
+    /// `MediaFitSettings`). Only stills carry custom framing from `MediaFramingStore`.
     /// - Parameter startAt: Resume offset for video (0 = from the start).
     /// - Parameter fill: Slideshow-level framing override for stills.
     static func forLibraryItem(
@@ -155,7 +167,8 @@ struct PresentationSource: Equatable {
                 localURL,
                 isLooping: item.isLooping ?? false,
                 isMuted: item.isMuted ?? false,
-                startAt: startAt
+                startAt: startAt,
+                fill: fill ?? MediaFitSettings.isFill(forId: item.id)
             )
         }
         return .image(

@@ -14,7 +14,7 @@ import os.log
 class VideoCacheManager {
     static let shared = VideoCacheManager()
     
-    private let logger = Logger(subsystem: "EclipseAppleTV", category: "VideoCacheManager")
+    private let logger = Logger(subsystem: "com.eclipsetv.app", category: "VideoCacheManager")
     private let maxCacheSize = 10 // Maximum number of videos to keep cached
     private let preloadDistance = 2 // Number of videos to preload on each side
     
@@ -175,8 +175,7 @@ class VideoCacheManager {
     }
     
     private func isVideoFile(_ path: String) -> Bool {
-        let ext = URL(fileURLWithPath: path).pathExtension.lowercased()
-        return ["mp4", "mov", "m4v"].contains(ext)
+        MediaItem.isVideoPath(path)
     }
     
     // MARK: - Memory Pressure Monitoring

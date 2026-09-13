@@ -2,8 +2,7 @@
 //  PhoneCameraSendView.swift
 //  Eclipse
 //
-//  Description: Send this iPhone’s camera to EclipsePro on the Mac (LAN WebRTC).
-//  Thread Safety: Main thread only — SwiftUI view.
+//  Copyright © 2026 Moxie LLC. All rights reserved.
 //
 
 import EclipsePhoneCameraClient

@@ -34,7 +34,7 @@ extension LibraryThumbnailCell {
             systemName: symbol,
             withConfiguration: UIImage.SymbolConfiguration(pointSize: 22, weight: .bold)
         )
-        selectionBadge.tintColor = isSelected ? .systemBlue : .white
+        selectionBadge.tintColor = isSelected ? .accent : .white
         selectionBadge.backgroundColor = isSelected
             ? .white
             : UIColor.black.withAlphaComponent(0.35)
@@ -42,7 +42,7 @@ extension LibraryThumbnailCell {
         cardView.bringSubviewToFront(selectionBadge)
         cardView.layer.borderWidth = isSelected ? 3 : 0
         cardView.layer.borderColor = isSelected
-            ? UIColor.systemBlue.cgColor
+            ? UIColor.accent.cgColor
             : UIColor.clear.cgColor
     }
 }

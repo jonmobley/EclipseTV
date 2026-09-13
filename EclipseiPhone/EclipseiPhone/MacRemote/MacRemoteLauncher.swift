@@ -2,8 +2,7 @@
 //  MacRemoteLauncher.swift
 //  Eclipse
 //
-//  Description: Presents the Mac remote flow from Settings or a deep link.
-//  Thread Safety: Main thread only.
+//  Copyright © 2026 Moxie LLC. All rights reserved.
 //
 
 import UIKit

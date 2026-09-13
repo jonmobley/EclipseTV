@@ -54,17 +54,17 @@ extension LibraryGridViewController {
     func applyVideoSetting(id: String, isLooping: Bool?, isMuted: Bool?) {
         store.updateVideoSetting(id: id, isLooping: isLooping, isMuted: isMuted)
         EclipseSyncController.shared.backend.scheduleMediaPrefsSave(libraryId: id)
-        UISelectionFeedbackGenerator().selectionChanged()
+        Haptics.selection()
         _ = connectionManager.sendVideoSetting(
             id: id, isLooping: isLooping, isMuted: isMuted
         )
         refreshLiveVideoPresentationIfNeeded(id: id)
     }
 
-    /// Re-pushes the live video so AirPlay picks up new loop / mute flags.
+    /// Re-pushes the live video so AirPlay picks up new loop / mute / fit flags.
     ///
-    /// Keeps the current playback position so mute/loop does not restart from 0.
-    private func refreshLiveVideoPresentationIfNeeded(id: String) {
+    /// Keeps the current playback position so the change does not restart from 0.
+    func refreshLiveVideoPresentationIfNeeded(id: String) {
         guard store.currentId == id,
               let item = store.items.first(where: { $0.id == id }),
               item.isVideo else { return }
@@ -73,7 +73,8 @@ extension LibraryGridViewController {
             return
         }
         let manager = ExternalDisplayManager.shared
-        guard manager.isConnected,
+        // Same projector signal as the go-live tap; `present` attaches on demand.
+        guard LiveOutputRouting.projectorAvailable,
               !manager.isOverlayLive,
               !manager.isJoinedLive else { return }
         let startAt = manager.currentVideoPlaybackTime(forItemId: id) ?? 0

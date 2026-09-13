@@ -25,7 +25,7 @@ extension LibraryGridViewController {
         }
         reloadForSelectChange()
         notifySelectChrome()
-        UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+        Haptics.impactRigid()
         showPresentationToast("Select items, then use Actions")
     }
 
@@ -75,7 +75,7 @@ extension LibraryGridViewController {
             applySelectAppearance(to: cell, at: indexPath)
         }
         notifySelectChrome()
-        UISelectionFeedbackGenerator().selectionChanged()
+        Haptics.selection()
         return true
     }
 
@@ -107,7 +107,7 @@ extension LibraryGridViewController {
                     LocalAlbumStore.shared.remove(itemId: id, fromAlbumId: showId)
                 }
             }
-            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            Haptics.success()
         })
         present(alert, animated: true)
     }
@@ -156,63 +156,18 @@ extension LibraryGridViewController {
         return !isShowGridItemLive(item)
     }
 
-    /// Same live predicates used when configuring Show tiles.
+    /// Whether this tile carries the red live stroke.
+    ///
+    /// One resolved program, one stroke: an operator matches the director's
+    /// snapshot, every other device matches the program resolved from its own
+    /// live-state stores. Per-tile predicates that each read a different store
+    /// are what let two tiles claim live at the same time. Practice reaches the
+    /// poll card through the resolver's `practicePollMembershipId`, not a case here.
     func isShowGridItemLive(_ item: ShowGridItem) -> Bool {
         if ShowLiveSession.shared.isRemoteOperator {
             return isShowGridItemLiveRemotely(item)
         }
-        switch item {
-        case .slideshow(let show):
-            return SlideshowPlaybackController.shared.isLive(slideshowId: show.id)
-                && !isBlackSelected
-                && !isLogoSelected
-                && !isScreensaverSelected
-        case .screensaver:
-            return isScreensaverSelected
-                && !ExternalDisplayManager.shared.isOverlayLive
-        case .logo:
-            return isLogoSelected && !ExternalDisplayManager.shared.isOverlayLive
-        case .camera:
-            return ExternalDisplayManager.shared.isCameraTileLive
-        case .countdown(let item):
-            return ExternalDisplayManager.shared.isCountdownLive
-                && CountdownController.shared.liveCountdownId == item.id
-                && !isBlackSelected
-                && !isLogoSelected
-                && !isScreensaverSelected
-        case .media(let media):
-            return media.id == store.currentId
-                && SlideshowPlaybackController.shared.activeSlideshowId == nil
-                && !isBlackSelected
-                && !isLogoSelected
-                && !isScreensaverSelected
-                && !ExternalDisplayManager.shared.isOverlayLive
-        case .website(let page):
-            let mgr = ExternalDisplayManager.shared
-            let webLive = mgr.isWebLive && mgr.liveWebPageId == page.id
-            let videoLive = mgr.isWebVideoLive && mgr.liveWebVideoPageId == page.id
-            return (webLive || videoLive)
-                && !isBlackSelected
-                && !isLogoSelected
-                && !isScreensaverSelected
-        case .pdf(let doc):
-            let mgr = ExternalDisplayManager.shared
-            return mgr.isPDFLive && mgr.livePDFDocumentId == doc.id
-                && !isBlackSelected
-                && !isLogoSelected
-                && !isScreensaverSelected
-        case .livePoll(let item):
-            if QuestPollSessionStore.shared.practiceMembershipId == item.id {
-                return true
-            }
-            return ExternalDisplayManager.shared.isQuestPollLive
-                && QuestPollSessionStore.shared.membershipId == item.id
-                && !isBlackSelected
-                && !isLogoSelected
-                && !isScreensaverSelected
-        case .unresolved, .add:
-            return false
-        }
+        return resolvedShowProgram?.matches(item) == true
     }
 
     // MARK: - Private
@@ -285,7 +240,7 @@ extension LibraryGridViewController {
         }
         let name = LocalAlbumStore.shared.album(id: albumId)?.name ?? "Show"
         showPresentationToast("Copied to \(name)")
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        Haptics.success()
     }
 
     /// Leaves select mode after a bulk action applies.

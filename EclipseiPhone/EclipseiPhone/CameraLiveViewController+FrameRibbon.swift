@@ -66,10 +66,18 @@ extension CameraLiveViewController: UICollectionViewDataSource, UICollectionView
         return panel.minX + cameraThumbEdgeInset(panel: panel)
     }
 
-    /// Reloads ribbon thumbs after the library or live overlay changes.
+    /// Reloads frame thumbs (ribbon and grid) after the library or live overlay changes.
     func reloadFrameRibbon() {
         frameRibbonView.reloadData()
-        layoutFrameRibbon(panel: panelView.convert(panelView.bounds, to: view))
+        thumbGridView.reloadData()
+        layoutThumbnails(panel: panelView.convert(panelView.bounds, to: view))
+    }
+
+    /// Tap toggles the overlay on the camera; tapping the live one turns it off.
+    func toggleFrameOverlay(_ id: UUID) {
+        let store = CameraFrameStore.shared
+        store.select(store.selectedId == id ? nil : id)
+        Haptics.impactLight()
     }
 
     func collectionView(
@@ -78,6 +86,9 @@ extension CameraLiveViewController: UICollectionViewDataSource, UICollectionView
     ) -> Int {
         if collectionView === stillRibbonView {
             return stillRibbonItems.count
+        }
+        if collectionView === thumbGridView {
+            return thumbGridItemCount()
         }
         guard collectionView === frameRibbonView else { return 0 }
         return CameraFrameStore.shared.enabledFrames.count
@@ -89,6 +100,9 @@ extension CameraLiveViewController: UICollectionViewDataSource, UICollectionView
     ) -> UICollectionViewCell {
         if collectionView === stillRibbonView {
             return stillRibbonCell(at: indexPath)
+        }
+        if collectionView === thumbGridView {
+            return thumbGridCell(at: indexPath)
         }
         guard collectionView === frameRibbonView,
               let cell = collectionView.dequeueReusableCell(
@@ -117,13 +131,14 @@ extension CameraLiveViewController: UICollectionViewDataSource, UICollectionView
             handleStillRibbonTap(at: indexPath)
             return
         }
+        if collectionView === thumbGridView {
+            handleThumbGridTap(at: indexPath)
+            return
+        }
         guard collectionView === frameRibbonView else { return }
-        let store = CameraFrameStore.shared
-        let frames = store.enabledFrames
+        let frames = CameraFrameStore.shared.enabledFrames
         guard frames.indices.contains(indexPath.item) else { return }
-        let id = frames[indexPath.item].id
-        store.select(store.selectedId == id ? nil : id)
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        toggleFrameOverlay(frames[indexPath.item].id)
     }
 
     /// Configures a Background / quick-change / add cell for the stills ribbon.
@@ -187,7 +202,7 @@ final class CameraFrameRibbonCell: UICollectionViewCell {
     private let imageView: UIImageView = {
         let view = UIImageView()
         view.contentMode = .scaleAspectFit
-        view.backgroundColor = UIColor(white: 0.12, alpha: 1)
+        view.backgroundColor = .mediaPlaceholder
         view.clipsToBounds = true
         view.layer.cornerRadius = 10
         view.translatesAutoresizingMaskIntoConstraints = false
@@ -209,11 +224,17 @@ final class CameraFrameRibbonCell: UICollectionViewCell {
         fatalError("init(coder:) has not been implemented")
     }
 
+    /// Ribbon thumbs are 10pt; Show-sized grid tiles take the Show card radius.
+    func applyCornerRadius(_ radius: CGFloat) {
+        imageView.layer.cornerRadius = radius
+        imageView.layer.cornerCurve = .continuous
+    }
+
     func configure(image: UIImage?, isLive: Bool) {
         imageView.image = image
         imageView.layer.borderWidth = isLive ? 3 : 1
         imageView.layer.borderColor = isLive
-            ? UIColor.systemBlue.cgColor
+            ? UIColor.accent.cgColor
             : UIColor.white.withAlphaComponent(0.35).cgColor
         accessibilityLabel = "Frame overlay"
         accessibilityValue = isLive ? "On camera" : "Off"

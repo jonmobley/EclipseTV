@@ -94,15 +94,44 @@ struct LibraryThumbnailFitTests {
         #expect(cell.imageView.contentMode == .scaleAspectFill)
     }
 
-    @Test func videoThumbnailAlwaysLetterboxes() {
+    @Test func videoThumbnailCropsWhenFill() {
         let id = uniqueId()
         defer { MediaFitSettings.clear(forId: id) }
         MediaFitSettings.setMode(.fill, forId: id)
 
         let cell = makeCell()
         cell.configure(with: makeVideo(id: id), thumbnail: swatch(), isLive: false)
+        #expect(cell.imageView.contentMode == .scaleAspectFill)
+        #expect(cell.cardView.backgroundColor == UIColor.black)
+    }
+
+    @Test func videoThumbnailLetterboxesWhenFit() {
+        let id = uniqueId()
+        defer { MediaFitSettings.clear(forId: id) }
+        MediaFitSettings.setMode(.fit, forId: id)
+
+        let cell = makeCell()
+        cell.configure(with: makeVideo(id: id), thumbnail: swatch(), isLive: false)
         #expect(cell.imageView.contentMode == .scaleAspectFit)
         #expect(cell.cardView.backgroundColor == UIColor.black)
+    }
+
+    /// A custom crop is a stills-only feature, so it must not leak into video framing.
+    @Test func videoIgnoresStrayCustomFraming() {
+        let id = uniqueId()
+        defer {
+            MediaFitSettings.clear(forId: id)
+            MediaFramingStore.clear(forId: id)
+        }
+        MediaFitSettings.setMode(.fill, forId: id)
+        MediaFramingStore.set(
+            MediaFraming(x: 0.1, y: 0.1, width: 0.8, height: 0.8),
+            forId: id
+        )
+
+        let cell = makeCell()
+        cell.configure(with: makeVideo(id: id), thumbnail: swatch(), isLive: false)
+        #expect(cell.imageView.contentMode == .scaleAspectFill)
     }
 
     @Test func explicitContentModeOverridesStoredFit() {
@@ -128,6 +157,7 @@ struct LibraryThumbnailFitTests {
             MediaFitSettings.clear(forId: videoId)
         }
         MediaFitSettings.setMode(.fill, forId: stillId)
+        MediaFitSettings.setMode(.fill, forId: videoId)
         #expect(
             MediaFitSettings.thumbnailContentMode(for: makeStill(id: stillId))
                 == .scaleAspectFill
@@ -138,6 +168,10 @@ struct LibraryThumbnailFitTests {
         )
         #expect(
             MediaFitSettings.thumbnailContentMode(for: makeVideo(id: videoId))
+                == .scaleAspectFill
+        )
+        #expect(
+            MediaFitSettings.thumbnailContentMode(for: makeVideo(id: uniqueId()))
                 == .scaleAspectFit
         )
     }

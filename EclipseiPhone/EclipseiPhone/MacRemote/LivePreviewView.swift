@@ -1,9 +1,8 @@
 //
 //  LivePreviewView.swift
-//  EclipseRemote
+//  Eclipse
 //
-//  Description: Live program preview styled like the Show-page LiveHeaderView.
-//  Thread Safety: Main thread only — SwiftUI view.
+//  Copyright © 2026 Moxie LLC. All rights reserved.
 //
 
 import SwiftUI

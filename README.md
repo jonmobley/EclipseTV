@@ -56,14 +56,14 @@ Eclipse is a companion pair:
 ## 📋 Requirements
 
 ### Apple TV App
-- **tvOS 17.0+**
+- **tvOS 18.2+**
 - **Apple TV HD or Apple TV 4K**
-- **Xcode 15.0+** (for development)
+- **Xcode 16.2+** (for development)
 
 ### iPhone App
-- **iOS 16.0+** 
+- **iOS 18.2+** 
 - **iPhone or iPad** with Wi-Fi connectivity
-- **Xcode 15.0+** (for development)
+- **Xcode 16.2+** (for development)
 
 ## 🛠 Installation & Setup
 
@@ -206,6 +206,11 @@ Views/
 - Restart app for memory cleanup  
 - Check network bandwidth for video playback
 
+### "Upload Symbols Failed" for WebRTC.framework when distributing the iPhone app
+- Expected: WebRTC arrives as a stripped prebuilt xcframework, so the archive has no dSYM for it
+- The build is still accepted; only WebRTC's own frames stay unsymbolicated
+- See [Scripts/WebRTCUploadSymbols.md](Scripts/WebRTCUploadSymbols.md) for the cause and how to supply the dSYM
+
 ## 📄 License
 
 Copyright © 2026 Moxie LLC. All rights reserved.
@@ -219,7 +224,7 @@ See [LICENSE](LICENSE) for full terms.
 **Eclipse** - Advanced media viewing and wireless connectivity for Apple TV
 - **Architecture**: `MediaDataSource`-centered single source of truth (UIKit, not full MVVM)
 - **Frameworks**: UIKit, AVKit, MultipeerConnectivity, Combine
-- **Platform**: tvOS 17.0+ / iOS 16.0+
+- **Platform**: tvOS 18.2+ / iOS 18.2+
 
 ---
 

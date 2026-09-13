@@ -107,36 +107,26 @@ struct QuestPollRibbonTests {
         )
     }
 
-    @Test func ribbonTracksOnProgramPracticeOrGateNotALeftoverRoom() {
+    @Test func ribbonTracksOnProgramOrPracticeNotALeftoverRoom() {
         #expect(QuestPollRibbon.shouldShow(
             isShowMode: true,
             liveRoomActive: false,
-            isPracticing: false,
-            isGated: true
-        ))
-        #expect(QuestPollRibbon.shouldShow(
-            isShowMode: true,
-            liveRoomActive: false,
-            isPracticing: true,
-            isGated: false
+            isPracticing: true
         ))
         #expect(QuestPollRibbon.shouldShow(
             isShowMode: true,
             liveRoomActive: true,
-            isPracticing: false,
-            isGated: false
+            isPracticing: false
         ))
         #expect(QuestPollRibbon.shouldShow(
             isShowMode: true,
             liveRoomActive: false,
-            isPracticing: false,
-            isGated: false
+            isPracticing: false
         ) == false)
         #expect(QuestPollRibbon.shouldShow(
             isShowMode: false,
             liveRoomActive: true,
-            isPracticing: true,
-            isGated: true
+            isPracticing: true
         ) == false)
     }
 

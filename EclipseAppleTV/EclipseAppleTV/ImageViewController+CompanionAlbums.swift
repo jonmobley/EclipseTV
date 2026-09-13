@@ -321,7 +321,7 @@ private extension ImageViewController {
     func fillCover(on cell: AlbumFolderCell, item: Int, path: String?) {
         guard let path else { return }
         let size = TVGridMetrics.thumbnailTargetSize(for: dataSource.activeLibraryMode)
-        let isVideo = ["mp4", "mov"].contains(URL(fileURLWithPath: path).pathExtension.lowercased())
+        let isVideo = MediaItem.isVideoPath(path)
         Task {
             let image: UIImage?
             if isVideo {

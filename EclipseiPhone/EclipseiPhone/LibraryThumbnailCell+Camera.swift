@@ -33,7 +33,7 @@ extension LibraryThumbnailCell {
         imageView.contentMode = .scaleAspectFill
         hideMediaBadges()
 
-        cardView.backgroundColor = UIColor(white: 0.12, alpha: 1)
+        cardView.backgroundColor = .mediaPlaceholder
         captionLabel.text = "Camera"
         captionLabel.isHidden = false
         setTypeIcon(.camera)

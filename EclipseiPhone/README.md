@@ -65,8 +65,8 @@ See [EclipseSync-VERIFICATION.md](EclipseSync-VERIFICATION.md).
 
 ## Requirements
 
-- iOS 16.0+
-- Xcode 15.0+ (development)
+- iOS 18.2+
+- Xcode 16.2+ (development)
 - Local Network + Photos (+ Camera / Microphone as needed)
 - Optional: Eclipse Apple TV on the same Wi‑Fi; iCloud for Eclipse Sync
 

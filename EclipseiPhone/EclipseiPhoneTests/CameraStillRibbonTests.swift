@@ -63,6 +63,19 @@ struct CameraStillRibbonTests {
         )
     }
 
+    @Test func idleTileTapGoesLiveWithoutOpeningTheController() {
+        #expect(
+            CameraStillRibbon.cameraTileTap(isCameraTileLive: false) == .goLive
+        )
+    }
+
+    @Test func liveTileTapReopensTheController() {
+        #expect(
+            CameraStillRibbon.cameraTileTap(isCameraTileLive: true)
+                == .openController
+        )
+    }
+
     @Test func closingOnBackgroundCommitsToBackgroundTile() {
         #expect(
             CameraStillRibbon.shouldCommitToBackground(parked: .background)

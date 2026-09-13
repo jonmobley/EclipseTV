@@ -8,7 +8,6 @@
 // iPhoneMainViewController+Picker.swift
 import UIKit
 import PhotosUI
-import UniformTypeIdentifiers
 import AVFoundation
 import os
 
@@ -98,7 +97,7 @@ extension iPhoneMainViewController: PHPickerViewControllerDelegate {
 
         if pendingLogoPick {
             let provider = results[0].itemProvider
-            guard provider.canLoadObject(ofClass: UIImage.self) else {
+            guard PhotoImportLoader.isImage(provider) else {
                 pendingLogoPick = false
                 showAlert(title: "Image Error", message: "Choose an image for the Background.")
                 return
@@ -125,130 +124,15 @@ extension iPhoneMainViewController: PHPickerViewControllerDelegate {
         }
 
         let provider = results[0].itemProvider
-        if provider.hasItemConformingToTypeIdentifier(UTType.movie.identifier) {
+        if PhotoImportLoader.isMovie(provider) {
             handlePickedVideo(provider)
-        } else if provider.canLoadObject(ofClass: UIImage.self) {
+        } else if PhotoImportLoader.isImage(provider) {
             // Re-send keeps crop/confirm so the restored still can be framed.
             // Camera-roll image adds ingest immediately (no crop).
             if connectionManager.pendingRestoreId != nil {
                 handlePickedImage(provider)
             } else {
                 importPickedMediaBatch(results)
-            }
-        }
-    }
-
-    private func handlePickedLogo(_ provider: NSItemProvider) {
-        provider.loadObject(ofClass: UIImage.self) { [weak self] object, _ in
-            guard let self else { return }
-            DispatchQueue.main.async {
-                self.pendingLogoPick = false
-                guard let image = object as? UIImage else {
-                    self.showAlert(
-                        title: "Image Error",
-                        message: "Could not load the selected image. Please try again."
-                    )
-                    return
-                }
-                // Save only — tap Background to go live. Already-live output
-                // refreshes via LogoStore.didChangeNotification.
-                LogoStore.shared.save(image)
-            }
-        }
-    }
-
-    private func handlePickedScreensaver(_ provider: NSItemProvider) {
-        if provider.hasItemConformingToTypeIdentifier(UTType.movie.identifier) {
-            provider.loadFileRepresentation(forTypeIdentifier: UTType.movie.identifier) {
-                [weak self] url, _ in
-                guard let self else { return }
-                guard let url,
-                      let local = self.copyPickedVideoToSandbox(url) else {
-                    DispatchQueue.main.async {
-                        self.pendingScreensaverPick = false
-                        self.showAlert(
-                            title: "Video Error",
-                            message: "Could not access that video. Please try again."
-                        )
-                    }
-                    return
-                }
-                DispatchQueue.main.async {
-                    self.pendingScreensaverPick = false
-                    // Save only — tap Screensaver to go live. Already-live output
-                    // refreshes via ScreensaverStore.didChangeNotification.
-                    ScreensaverStore.shared.saveVideo(from: local)
-                    self.cleanupTempFile(at: local)
-                }
-            }
-            return
-        }
-        guard provider.canLoadObject(ofClass: UIImage.self) else {
-            pendingScreensaverPick = false
-            showAlert(
-                title: "Couldn't Replace",
-                message: "Choose an image or video for the Screensaver."
-            )
-            return
-        }
-        provider.loadObject(ofClass: UIImage.self) { [weak self] object, _ in
-            guard let self else { return }
-            DispatchQueue.main.async {
-                self.pendingScreensaverPick = false
-                guard let image = object as? UIImage else {
-                    self.showAlert(
-                        title: "Image Error",
-                        message: "Could not load the selected image. Please try again."
-                    )
-                    return
-                }
-                // Save only — tap Screensaver to go live. Already-live output
-                // refreshes via ScreensaverStore.didChangeNotification.
-                ScreensaverStore.shared.saveImage(image)
-            }
-        }
-    }
-
-    private func handlePickedVideo(_ provider: NSItemProvider) {
-        // PHPicker provides the file in a temporary location that is removed when the
-        // completion returns, so copy it into our sandbox inside the callback.
-        provider.loadFileRepresentation(forTypeIdentifier: UTType.movie.identifier) { [weak self] url, _ in
-            guard let self = self else { return }
-            guard let url = url, let localVideoURL = self.copyPickedVideoToSandbox(url) else {
-                DispatchQueue.main.async {
-                    self.showAlert(title: "Video Error", message: "Could not access the selected video. Please try again.")
-                }
-                return
-            }
-
-            Task {
-                let validationResult = await MediaValidator.validateVideo(at: localVideoURL)
-                await MainActor.run {
-                    switch validationResult {
-                    case .valid:
-                        self.showVideoThumbnailPreview(for: localVideoURL)
-                    case .invalid(let reason):
-                        self.cleanupTempFile(at: localVideoURL)
-                        self.showAlert(title: "Video Rejected", message: reason)
-                    }
-                }
-            }
-        }
-    }
-
-    private func handlePickedImage(_ provider: NSItemProvider) {
-        provider.loadObject(ofClass: UIImage.self) { [weak self] object, _ in
-            guard let self = self else { return }
-            guard let image = object as? UIImage else {
-                DispatchQueue.main.async {
-                    self.showAlert(title: "Image Error", message: "Could not load the selected image. Please try again.")
-                }
-                return
-            }
-
-            DispatchQueue.main.async {
-                // Vertical + non-9:16 → crop first; otherwise confirm preview.
-                self.presentImageAddFlow(for: image)
             }
         }
     }
@@ -268,7 +152,7 @@ extension iPhoneMainViewController: AspectCropDelegate {
             pendingVideoThumbnail = nil
             pendingVideoCropPreviewSize = nil
             controller.dismiss(animated: true) { [weak self] in
-                self?.finishVerticalVideoCrop(
+                self?.finishVideoCrop(
                     sourceURL: videoURL,
                     previewSize: previewSize,
                     cropRectInPreview: cropRectInSource,
@@ -309,14 +193,17 @@ extension iPhoneMainViewController: AspectCropDelegate {
     }
 
     /// Scales the preview crop into video display pixels, exports, then adds or replaces.
-    private func finishVerticalVideoCrop(sourceURL: URL,
-                                         previewSize: CGSize,
-                                         cropRectInPreview: CGRect,
-                                         thumbnail: UIImage,
-                                         croppedStill: UIImage,
-                                         replacingItemId: String?) {
+    ///
+    /// Reached only from the tile's Edit Crop action now that import does not crop, so
+    /// the target aspect follows the active Display Mode rather than always being 9:16.
+    private func finishVideoCrop(sourceURL: URL,
+                                 previewSize: CGSize,
+                                 cropRectInPreview: CGRect,
+                                 thumbnail: UIImage,
+                                 croppedStill: UIImage,
+                                 replacingItemId: String?) {
         guard previewSize.width > 0, previewSize.height > 0 else {
-            showTemporaryStatus("Couldn't crop that video. Try another.")
+            showPresentationToast("Couldn't crop that video. Try another.")
             if replacingItemId == nil { cleanupTempFile(at: sourceURL) }
             pendingEditItemId = nil
             return
@@ -324,7 +211,7 @@ extension iPhoneMainViewController: AspectCropDelegate {
 
         Task { @MainActor in
             guard let videoSize = await MediaAspect.videoDisplaySize(at: sourceURL) else {
-                self.showTemporaryStatus("Couldn't crop that video. Try another.")
+                self.showPresentationToast("Couldn't crop that video. Try another.")
                 if replacingItemId == nil { self.cleanupTempFile(at: sourceURL) }
                 self.pendingEditItemId = nil
                 return
@@ -355,7 +242,7 @@ extension iPhoneMainViewController: AspectCropDelegate {
 
                 if let editId = replacingItemId {
                     self.pendingEditItemId = nil
-                    self.statusLabel.alpha = 0
+                    self.removePresentationToastIfPresent()
                     self.replaceEditedVideo(
                         at: croppedURL, itemId: editId, thumbnail: croppedThumb
                     )
@@ -369,7 +256,7 @@ extension iPhoneMainViewController: AspectCropDelegate {
                     )
                 }
             } catch {
-                self.showTemporaryStatus("Couldn't crop that video. Try another.")
+                self.showPresentationToast("Couldn't crop that video. Try another.")
                 if replacingItemId == nil { self.cleanupTempFile(at: sourceURL) }
                 self.pendingEditItemId = nil
             }
@@ -423,7 +310,7 @@ extension iPhoneMainViewController: VideoThumbnailPreviewDelegate {
                     selectedThumbnail, forItemId: editId, videoURL: videoURL
                 )
             } else {
-                self?.continueVideoAdd(videoURL: videoURL, thumbnail: selectedThumbnail)
+                self?.finishVideoAdd(videoURL: videoURL, thumbnail: selectedThumbnail)
             }
         }
     }
@@ -433,35 +320,13 @@ extension iPhoneMainViewController: VideoThumbnailPreviewDelegate {
         controller.dismiss(animated: true)
     }
 
-    /// Adds the video, or opens a 9:16 crop first when Vertical mode requires it.
-    private func continueVideoAdd(videoURL: URL, thumbnail: UIImage) {
-        guard MediaAspect.requiresVerticalCrop else {
-            finishVideoAdd(videoURL: videoURL, thumbnail: thumbnail)
-            return
-        }
-
-        Task { @MainActor in
-            let size = await MediaAspect.videoDisplaySize(at: videoURL)
-            guard let size, !MediaAspect.matches(size, target: MediaAspect.vertical) else {
-                self.finishVideoAdd(videoURL: videoURL, thumbnail: thumbnail)
-                return
-            }
-
-            let frame = await VideoCropExporter.previewFrame(at: videoURL) ?? thumbnail
-            self.pendingVideoCropURL = videoURL
-            self.pendingVideoThumbnail = thumbnail
-            self.pendingVideoCropPreviewSize = MediaAspect.normalized(frame).size
-            let cropper = AspectCropViewController(
-                image: frame,
-                targetAspect: MediaAspect.vertical,
-                instruction: "Drag and pinch to frame your Vertical video crop"
-            )
-            cropper.delegate = self
-            cropper.modalPresentationStyle = .overFullScreen
-            self.presentationAnchor.present(cropper, animated: true)
-        }
-    }
-
+    /// Adds the picked video as-is, in either Display Mode.
+    ///
+    /// Vertical mode used to force non-9:16 video through the aspect cropper. It no
+    /// longer does: every output surface letterboxes video, so the bars appear either
+    /// way, and the crop paid a lossy re-encode that batch import never paid — the same
+    /// file imported through the two pickers produced two different library items.
+    /// Re-framing is still available on demand from the tile's Edit Crop action.
     private func finishVideoAdd(videoURL: URL, thumbnail: UIImage) {
         saveCustomThumbnail(thumbnail, for: videoURL)
         Task { @MainActor in
@@ -484,7 +349,10 @@ extension iPhoneMainViewController: VideoThumbnailPreviewDelegate {
         do {
             try thumbnailData.write(to: thumbnailURL)
             // Store the thumbnail path associated with the video
-            UserDefaults.standard.set(thumbnailURL.path, forKey: "customThumbnail_\(videoURL.lastPathComponent)")
+            UserDefaults.standard.set(
+                thumbnailURL.path,
+                forKey: DefaultsKeys.customThumbnail(fileName: videoURL.lastPathComponent)
+            )
         } catch {
             logger.error("Failed to save custom thumbnail: \(error.localizedDescription)")
         }

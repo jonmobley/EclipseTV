@@ -18,7 +18,7 @@ struct AudioMiniPlayerBubbleTests {
             frame: CGRect(x: 0, y: 0, width: 72, height: 72)
         )
         bubble.reload()
-        #expect(bubble.musicButton.configuration?.baseBackgroundColor == UIColor.systemBlue)
+        #expect(bubble.musicButton.configuration?.baseBackgroundColor == UIColor.accent)
         #expect(bubble.musicButton.configuration?.cornerStyle == .capsule)
         #expect(bubble.musicButton.accessibilityTraits.contains(.button))
         #expect(bubble.musicButton.accessibilityHint == "Choose something to play.")

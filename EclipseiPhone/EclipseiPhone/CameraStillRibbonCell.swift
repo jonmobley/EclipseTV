@@ -51,6 +51,14 @@ final class CameraStillRibbonCell: UICollectionViewCell {
         fatalError("init(coder:) has not been implemented")
     }
 
+    /// Ribbon thumbs are 10pt; Show-sized grid tiles take the Show card radius.
+    func applyCornerRadius(_ radius: CGFloat) {
+        contentView.layer.cornerRadius = radius
+        contentView.layer.cornerCurve = .continuous
+        imageView.layer.cornerRadius = radius
+        imageView.layer.cornerCurve = .continuous
+    }
+
     /// Configures art, red live stroke, and VoiceOver for a ribbon item.
     func configure(
         image: UIImage?,

@@ -199,13 +199,17 @@ extension ImageViewController {
         }
     }
 
-    /// The companion switched a still between Fit and Fill. Re-frame it in place when it's
+    /// The companion switched an item between Fit and Fill. Re-frame it in place when it's
     /// the item currently on screen; otherwise the stored choice applies on its next show.
     func connectionManager(_ manager: ConnectionManager, didReceiveImageFitForId id: String) {
-        guard activeCollection == .library, !isInGridMode, !isVideo,
+        guard activeCollection == .library, !isInGridMode,
               let index = libraryIndex(forItemId: id),
               index == dataSource.currentIndex else { return }
-        applyImageFitToCurrentImage()
+        if isVideo {
+            applyVideoFitToCurrentVideo()
+        } else {
+            applyImageFitToCurrentImage()
+        }
     }
 
     /// A purged item was re-sent from the companion: the fresh file was just added via
@@ -290,13 +294,10 @@ extension ImageViewController {
         // Load videos from main Videos folder
         logger.debug("Looking for videos in: \(videosURL.path, privacy: .public)")
         if let files = try? fileManager.contentsOfDirectory(at: videosURL, includingPropertiesForKeys: nil) {
-            for file in files {
-                let ext = file.pathExtension.lowercased()
-                if ext == "mp4" || ext == "mov" {
-                    let path = file.path
-                    logger.debug("Adding video to dataSource: \(path, privacy: .public)")
-                    dataSource.addMedia(at: path)
-                }
+            for file in files where MediaItem.isVideoPath(file.path) {
+                let path = file.path
+                logger.debug("Adding video to dataSource: \(path, privacy: .public)")
+                dataSource.addMedia(at: path)
             }
         } else {
             logger.debug("No files found in Videos folder")
@@ -306,13 +307,10 @@ extension ImageViewController {
         let loopURL = videosURL.appendingPathComponent("Loop")
         logger.debug("Looking for videos in Loop folder: \(loopURL.path, privacy: .public)")
         if let loopFiles = try? fileManager.contentsOfDirectory(at: loopURL, includingPropertiesForKeys: nil) {
-            for file in loopFiles {
-                let ext = file.pathExtension.lowercased()
-                if ext == "mp4" || ext == "mov" {
-                    let path = file.path
-                    logger.debug("Adding loop video to dataSource: \(path, privacy: .public)")
-                    dataSource.addMedia(at: path)
-                }
+            for file in loopFiles where MediaItem.isVideoPath(file.path) {
+                let path = file.path
+                logger.debug("Adding loop video to dataSource: \(path, privacy: .public)")
+                dataSource.addMedia(at: path)
             }
         } else {
             logger.debug("No files found in Videos/Loop folder")

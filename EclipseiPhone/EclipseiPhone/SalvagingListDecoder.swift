@@ -1,8 +1,8 @@
 //
 //  SalvagingListDecoder.swift
-//  EclipseiPhone
+//  Eclipse
 //
-//  Shared recovery path for stores that persist a list as one JSON blob.
+//  Copyright © 2026 Moxie LLC. All rights reserved.
 //
 
 import Foundation

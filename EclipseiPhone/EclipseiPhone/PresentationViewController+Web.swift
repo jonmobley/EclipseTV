@@ -163,9 +163,22 @@ extension PresentationViewController: WKNavigationDelegate {
     }
 
     /// Loads `url` into the live web view without tearing down the overlay.
+    ///
+    /// While the page is still arriving through a transition, the navigation is folded
+    /// into that transition (rebuilt on `url`) so the commit installs the page the phone
+    /// is actually on. The phone's warm page is interactive long before the TV has
+    /// painted the bookmark, so tapping a link in that window is common. Adopting the
+    /// half-loaded incoming view here instead labelled it with `url` without loading it,
+    /// and the pending commit then reloaded the bookmark over it — the TV stayed on the
+    /// entry page while the phone had moved on.
     func loadWeb(url: URL) {
+        let source = PresentationSource.web(url)
+        if isTransitionInFlight, case .web = pendingTransitionSource?.content {
+            show(source)
+            return
+        }
         guard !webContainer.isHidden else {
-            showWeb(url: url)
+            show(source)
             return
         }
         let view = ensureWebView()

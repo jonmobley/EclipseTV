@@ -31,6 +31,24 @@ playing under video. Muted library video and silent web pages do not yield even 
 the preference is on. Audible presentation uses `.moviePlayback` only when yielding;
 otherwise it stays on `.default` so the mix is not ducked.
 
+## Only phone-screen video registers for focus suspension
+
+`VideoFocusCoordinator` pauses registered video on `willResignActive` and resumes it on
+`didBecomeActive`, so minimising Eclipse (or peeking at the app switcher) does not leave
+a clip playing audio behind the app. Registration is deliberately narrow: the hero
+Practice Mode player and the fullscreen phone previews. Registering the AirPlay path
+(`PresentationViewController.player`, its screensaver loop, or the web views) would undo
+`ExternalDisplayManager.keepPresentationAlive()` and blank the TV the moment the operator
+opens another app; ambient music owns the `audio` background mode and must keep playing.
+Phone web media is out for a second reason: the browser's `EclipseWebMediaSync` reporter
+forwards its pause to the TV.
+
+Only videos the coordinator itself paused are resumed, so a video the user paused by hand
+stays paused, and the second lifecycle notification of one trip out of the app cannot
+widen that set. A player in Picture in Picture reports itself as not playing rather than
+suspending: PiP *is* the user asking for playback outside the app, which is why
+`PlayerFocusSuspension` takes over the `AVPlayerViewController` delegate.
+
 ## Photo capture has no fallback
 
 `capturePhotoToLibrary` uses only the full-resolution frame it renders on demand and

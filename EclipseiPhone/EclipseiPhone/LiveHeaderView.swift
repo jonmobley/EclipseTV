@@ -50,7 +50,9 @@ final class LiveHeaderView: UIView {
     var libraryVideoIsLooping = false
     var libraryVideoEndObserver: NSObjectProtocol?
     var libraryVideoTimeObserver: Any?
-    var libraryVideoFullscreenButton: UIButton?
+    /// Top-trailing control that opens the hero's fullscreen surface.
+    /// Installed by `syncExpandControl()`; see `LiveHeaderView+Expand`.
+    var heroExpandButton: UIButton?
     /// Toggles the live slide ribbon while a Slideshow owns the hero.
     var slideshowRibbonButton: UIButton?
     /// Circular Fit / Fill shortcut while a still or slideshow owns the hero.
@@ -152,6 +154,17 @@ final class LiveHeaderView: UIView {
             applyInteractionForPresentation()
         }
     }
+    /// When true, the in-hero library video offers fullscreen Preview.
+    ///
+    /// Separate from `allowsFullscreenTap` because that hero's body tap is
+    /// play/pause — only the expand control opens Preview there.
+    /// Owned by `showLibraryVideoPreview` / `clearLibraryVideoPreview`.
+    var allowsLibraryVideoFullscreen = false {
+        didSet {
+            guard allowsLibraryVideoFullscreen != oldValue else { return }
+            applyInteractionForPresentation()
+        }
+    }
 
     /// Clears every tap-to-open affordance so a previous live kind cannot claim the
     /// tap after the hero moves on to different content.
@@ -181,7 +194,7 @@ final class LiveHeaderView: UIView {
 
     private func setupViews() {
         backgroundColor = .secondarySystemBackground
-        layer.cornerRadius = 16
+        layer.cornerRadius = CornerRadii.card
         layer.masksToBounds = true
         // Thin outline so Black / dark live content doesn't blend into the screen.
         applyOutputLockChrome()
@@ -369,7 +382,7 @@ final class LiveHeaderView: UIView {
         let thumbToken = thumbnail.map { "\(ObjectIdentifier($0))" } ?? "nil"
         let fitToken: String
         if item.isVideo {
-            fitToken = "video"
+            fitToken = MediaFitSettings.isFill(forId: item.id) ? "video-fill" : "video-fit"
         } else if MediaFramingStore.hasFraming(forId: item.id) {
             fitToken = "custom"
         } else {
@@ -391,11 +404,14 @@ final class LiveHeaderView: UIView {
                 self.imageView.alpha = 1
                 self.placeholderIcon.isHidden = true
             } else {
-                // Video letterboxes on black so the card matches the stage; stills
-                // keep the light fill. Never put a film glyph on a video preview.
+                // Video sits on black so the card matches the stage; stills keep the
+                // light fill. Never put a film glyph on a video preview.
                 self.backgroundColor = item.isVideo ? .black : .secondarySystemBackground
                 if item.isVideo {
-                    self.imageView.contentMode = .scaleAspectFit
+                    // No custom framing for video, so the poster follows Fit / Fill
+                    // straight from the item's Screen Fit.
+                    self.imageView.contentMode =
+                        MediaFitSettings.mode(forId: item.id).contentMode
                     self.imageView.image = thumbnail
                 } else {
                     let fallback = SlideshowPlaybackController.shared
@@ -597,48 +613,28 @@ final class LiveHeaderView: UIView {
             : message
     }
 
-    /// Compact mini: tap to return. Expanded: transport / slideshow / still Preview.
-    /// The slide-ribbon, Screen Fit, and Flip Camera buttons must stay tappable
-    /// when shown. Practice / Start on the Live Poll gate must stay tappable too.
+    /// Compact mini: tap to return. Expanded: transport, slideshow browse, or
+    /// whatever `heroExpandTarget` opens. The slide-ribbon, Screen Fit, Flip
+    /// Camera, and expand buttons must stay tappable when shown.
     func applyInteractionForPresentation() {
         isUserInteractionEnabled =
             isCompactPresentation
             || wantsPlaybackControls
             || allowsSlideshowBrowse
             || allowsLibraryBrowse
-            || allowsFullscreenTap
-            || allowsHostControllerTap
-            || allowsCameraControllerTap
-            || allowsOverlayControllerTap
+            || heroExpandTarget != nil
             || slideshowRibbonButton != nil
             || screenFitButton != nil
             || cameraFlipButton != nil
-            || isShowingLivePollGate
     }
 
-    /// Expanded phone-live still: open fullscreen Preview.
-    /// Live Poll room: open host CONTROLS. Camera: open the camera controller.
-    /// Website / PDF: open the phone browser or reader that drives the live page.
+    /// Opens whatever fullscreen surface the expanded hero stands in for.
+    ///
+    /// Shares `heroExpandTarget` with the top-trailing expand control, so the
+    /// visible affordance and the body tap can never disagree.
     @objc func handleFullscreenContentTap() {
         guard !isCompactPresentation else { return }
-        if allowsHostControllerTap {
-            Haptics.impactLight()
-            onRequestHostController?()
-            return
-        }
-        if allowsCameraControllerTap {
-            Haptics.impactLight()
-            onRequestCameraController?()
-            return
-        }
-        if allowsOverlayControllerTap {
-            Haptics.impactLight()
-            onRequestOverlayController?()
-            return
-        }
-        guard allowsFullscreenTap else { return }
-        Haptics.impactLight()
-        onRequestFullscreen?()
+        requestExpandedPresentation()
     }
 
     /// Applies the latest playback state to the transport controls.
@@ -704,7 +700,7 @@ final class LiveHeaderView: UIView {
 
         // Brief hold so thumbnail/layout can settle under the snapshot.
         UIView.animate(
-            withDuration: 0.35,
+            withDuration: ContentTransitionStyle.crossfadeDuration,
             delay: 0.08,
             options: [.curveEaseInOut, .allowUserInteraction]
         ) {

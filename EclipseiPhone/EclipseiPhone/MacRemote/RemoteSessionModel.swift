@@ -1,10 +1,8 @@
 //
 //  RemoteSessionModel.swift
-//  EclipseRemote
+//  Eclipse
 //
-//  Description: Observable session state for pairing, SSE snapshots, and
-//               command dispatch to the Mac remote server.
-//  Thread Safety: Main actor — UI-facing ObservableObject.
+//  Copyright © 2026 Moxie LLC. All rights reserved.
 //
 
 import Combine

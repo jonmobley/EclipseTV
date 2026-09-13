@@ -67,7 +67,7 @@ final class PlaybackControlsView: UIView {
 
     private func setupViews() {
         backgroundColor = UIColor.black.withAlphaComponent(0.35)
-        layer.cornerRadius = 12
+        layer.cornerRadius = CornerRadii.standard
         layer.masksToBounds = true
 
         let buttonConfig = UIImage.SymbolConfiguration(pointSize: 22, weight: .semibold)
@@ -99,7 +99,7 @@ final class PlaybackControlsView: UIView {
 
         slider.minimumValue = 0
         slider.maximumValue = 1
-        slider.minimumTrackTintColor = .systemBlue
+        slider.minimumTrackTintColor = .accent
         slider.maximumTrackTintColor = UIColor.white.withAlphaComponent(0.4)
         slider.isContinuous = true
         slider.translatesAutoresizingMaskIntoConstraints = false
@@ -160,7 +160,7 @@ final class PlaybackControlsView: UIView {
     // MARK: - Actions
 
     @objc private func playPauseTapped() {
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptics.impactLight()
         onTogglePlayPause?()
     }
 

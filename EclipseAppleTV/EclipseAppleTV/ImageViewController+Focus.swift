@@ -171,7 +171,7 @@ extension ImageViewController {
         let mediaItem = MediaItem(path: path)
 
         // Preload images in background for smooth transitions
-        Task {
+        Task { @MainActor in
             if mediaItem.isVideo {
                 // For videos, ensure the thumbnail is cached via the shared pipeline
                 let cellSize = TVGridMetrics.preloadItemSize(
@@ -179,8 +179,8 @@ extension ImageViewController {
                 )
                 _ = await VideoThumbnailCache.shared.getThumbnailAsync(for: mediaItem.path, targetSize: cellSize)
             } else {
-                // For images, preload the full-size image
-                _ = await AsyncImageLoader.shared.loadImage(from: mediaItem.path, targetSize: self.view.bounds.size)
+                // Same decode as display, so the fullscreen show hits this cache entry.
+                _ = await self.loadStill(at: mediaItem.path)
             }
         }
     }

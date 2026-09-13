@@ -2,8 +2,7 @@
 //  ConnectView.swift
 //  Eclipse
 //
-//  Description: Host entry, PIN pairing, and QR scan for EclipsePro Mac remote.
-//  Thread Safety: Main thread only — SwiftUI view.
+//  Copyright © 2026 Moxie LLC. All rights reserved.
 //
 
 import SwiftUI

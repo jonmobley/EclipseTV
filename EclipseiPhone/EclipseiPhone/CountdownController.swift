@@ -29,12 +29,13 @@ final class CountdownController {
         "CountdownController.didExpire"
     )
 
-    /// Ribbon / ⋯ duration chips, shortest first.
+    /// ⋯ menu duration presets, shortest first.
     nonisolated static let durationPresets: [Int] = [30, 60, 120, 300, 600]
 
     nonisolated static let defaultDuration = 300
 
     private let defaults: UserDefaults
+    private let now: () -> Date
     private var timer: Timer?
     private var deadline: Date?
 
@@ -54,9 +55,11 @@ final class CountdownController {
     /// last start. Taken from the deadline, not from when the tick noticed.
     private(set) var expiredAt: Date?
 
-    /// Creates a controller; tests pass an isolated defaults suite.
-    init(defaults: UserDefaults = .standard) {
+    /// Creates a controller; tests pass an isolated defaults suite and a clock they
+    /// can advance, so crossing zero is not tied to wall-clock sleeps.
+    init(defaults: UserDefaults = .standard, now: @escaping () -> Date = { Date() }) {
         self.defaults = defaults
+        self.now = now
         duration = Self.lastStoredDuration(defaults: defaults)
         remaining = duration
     }
@@ -95,7 +98,7 @@ final class CountdownController {
         Self.displayString(seconds: remaining)
     }
 
-    /// True when `duration` is one of the ribbon presets.
+    /// True when `duration` is one of the menu presets.
     var isPresetDuration: Bool {
         Self.durationPresets.contains(duration)
     }
@@ -149,7 +152,7 @@ final class CountdownController {
             remaining = duration
         }
         expiredAt = nil
-        deadline = Date().addingTimeInterval(TimeInterval(remaining))
+        deadline = now().addingTimeInterval(TimeInterval(remaining))
         running = true
         installTimer()
         notify()
@@ -191,7 +194,7 @@ final class CountdownController {
         expiredAt = nil
         defaults.set(next, forKey: Self.durationKey)
         if running {
-            deadline = Date().addingTimeInterval(TimeInterval(next))
+            deadline = now().addingTimeInterval(TimeInterval(next))
         }
         if let liveCountdownId {
             CountdownStore.shared.setDuration(id: liveCountdownId, seconds: next)
@@ -201,7 +204,7 @@ final class CountdownController {
 
     /// How long ago the clock hit zero, or nil when it hasn't since the last start.
     var secondsSinceExpiry: TimeInterval? {
-        expiredAt.map { -$0.timeIntervalSinceNow }
+        expiredAt.map { now().timeIntervalSince($0) }
     }
 
     /// Recomputes remaining from `deadline`. Tests call this instead of waiting.
@@ -211,7 +214,7 @@ final class CountdownController {
     @discardableResult
     func syncRemainingFromDeadline() -> Bool {
         guard running, let deadline else { return false }
-        remaining = max(0, Int(ceil(deadline.timeIntervalSinceNow)))
+        remaining = max(0, Int(ceil(deadline.timeIntervalSince(now()))))
         guard remaining == 0 else { return false }
         running = false
         expiredAt = deadline

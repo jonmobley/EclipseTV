@@ -11,8 +11,8 @@ import LivePollKit
 /// Keychain-backed Live Poll account for the iPhone app.
 enum LivePollAccountStore {
 
-    private static let legacyPINKey = "Eclipse.questpoll.hostPin"
-    private static let migrationPromptedKey = "Eclipse.livepoll.didPromptPINMigration"
+    private static let legacyPINKey = DefaultsKeys.legacyLivePollHostPIN
+    private static let migrationPromptedKey = DefaultsKeys.livePollDidPromptPINMigration
 
     /// Account store wired to Eclipse's Keychain helper.
     static let shared: LivePollAccount = LivePollAccount(

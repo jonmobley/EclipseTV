@@ -130,6 +130,9 @@ extension ImageViewController {
                 // Ensure player view is set up before assigning player
                 self.setupPlayerView()
                 self.playerView.player = player
+                // One player view serves every video, so gravity carries over from the
+                // last one and each item has to re-assert its own choice.
+                self.applyVideoFit(forPath: mediaItem.path)
 
                 // Add observer for playback end (removes any prior observers first)
                 self.installVideoEndObserver(for: player, mediaItem: mediaItem)
@@ -141,6 +144,22 @@ extension ImageViewController {
                 }
             }
         }
+    }
+
+    // MARK: - Video Fit
+
+    /// Applies the companion's Fit / Fill choice for `path` to the player.
+    ///
+    /// `AVPlayerViewController.videoGravity` takes effect immediately, so a mid-show
+    /// change needs no player rebuild — unlike loop, which swaps the player class.
+    internal func applyVideoFit(forPath path: String) {
+        playerView.videoGravity = ImageFitSettings.mode(forPath: path).videoGravity
+    }
+
+    /// Applies the stored Fit / Fill choice to whatever video is on screen.
+    internal func applyVideoFitToCurrentVideo() {
+        guard let path = currentDisplayPath() else { return }
+        applyVideoFit(forPath: path)
     }
 
     private func handleVideoPlaybackEnd(for mediaItem: MediaItem) {
@@ -459,9 +478,10 @@ extension ImageViewController {
                         tempOverlay.addSubview(snapshot)
                     }
                 } else if !self.imageView.isHidden, let currentImage = self.imageView.image {
-                    // If transitioning from an image, use that as overlay
+                    // If transitioning from an image, use that as overlay, framed the
+                    // way it is showing so a Fit still does not jump to Fill mid-fade.
                     let imageView = UIImageView(image: currentImage)
-                    imageView.contentMode = .scaleAspectFill
+                    imageView.contentMode = self.imageView.contentMode
                     imageView.clipsToBounds = true
                     imageView.frame = self.view.bounds
                     tempOverlay.addSubview(imageView)
@@ -486,7 +506,7 @@ extension ImageViewController {
                 // Dissolve the overlay only once the first frame is ready, which both
                 // hides the spinner and avoids a black flash during the transition.
                 self.startWhenReady(player) {
-                    UIView.animate(withDuration: 0.4, animations: {
+                    UIView.animate(withDuration: ContentTransitionSettings.crossfadeDuration, animations: {
                         tempOverlay.alpha = 0
                     }) { _ in
                         // Clean up

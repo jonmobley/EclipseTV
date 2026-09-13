@@ -68,27 +68,19 @@ class iPhoneMainViewController: UIViewController {
     /// Pager pinned to the safe area (compact Music page — Music has its own nav bar).
     var homePagerTopToSafeAreaConstraint: NSLayoutConstraint?
 
-    /// Transient transfer/status message overlaid on top of the library while sending.
-    let statusLabel: PaddedLabel = {
-        let label = PaddedLabel()
-        label.textAlignment = .center
-        label.textColor = .white
-        label.font = UIFont.systemFont(ofSize: 16, weight: .semibold)
-        label.numberOfLines = 0
-        label.backgroundColor = UIColor.black.withAlphaComponent(0.7)
-        label.layer.cornerRadius = 10
-        label.layer.masksToBounds = true
-        label.alpha = 0
-        return label
-    }()
+    /// Determinate progress and a working Cancel while picked media downloads
+    /// from iCloud. Separate from the transfer toast and `cancelButton`, which belong
+    /// to the Multipeer transfer that happens after an import.
+    let importProgressView = MediaImportProgressView()
 
+    /// Cancels an in-flight EclipseTV transfer; status itself is a presentation toast.
     let cancelButton: UIButton = {
         let button = UIButton(type: .system)
         button.setTitle("Cancel", for: .normal)
         button.titleLabel?.font = UIFont.systemFont(ofSize: 18, weight: .medium)
         button.backgroundColor = .systemRed
         button.setTitleColor(.white, for: .normal)
-        button.layer.cornerRadius = 12
+        button.layer.cornerRadius = CornerRadii.standard
         button.alpha = 0
         button.isHidden = true
         return button
@@ -105,12 +97,13 @@ class iPhoneMainViewController: UIViewController {
     /// Retained for cleanup; connection troubleshooting alerts are no longer scheduled.
     var connectionHintTimer: Timer?
     var isShowingPicker = false // Track if we're showing the image picker
-    private var statusFadeTimer: Timer?
+    /// Tracks the iCloud downloads behind an in-flight Photos import.
+    let photoImportSession = PhotoImportSession()
     let logger = Logger(subsystem: "com.eclipseapp.ios", category: "MainViewController")
     var currentTempFileURL: URL? // Track temp files for cleanup
     /// When set, the active `AspectCropViewController` is cropping a video (not a still).
     var pendingVideoCropURL: URL?
-    /// Thumbnail chosen before a Vertical video crop; reused after export.
+    /// Poster held across a video edit crop; reused after export.
     var pendingVideoThumbnail: UIImage?
     /// Size of the still shown in the video cropper (for mapping crop → video pixels).
     var pendingVideoCropPreviewSize: CGSize?
@@ -238,8 +231,10 @@ class iPhoneMainViewController: UIViewController {
     
     // MARK: - Helper Methods
     
-    func showVideoThumbnailPreview(for videoURL: URL) {
-        let previewController = VideoThumbnailPreviewViewController(videoURL: videoURL)
+    func showVideoThumbnailPreview(for videoURL: URL, notice: String? = nil) {
+        let previewController = VideoThumbnailPreviewViewController(
+            videoURL: videoURL, notice: notice
+        )
         previewController.delegate = self
         previewController.modalPresentationStyle = .overFullScreen
         presentationAnchor.present(previewController, animated: true)
@@ -279,34 +274,11 @@ class iPhoneMainViewController: UIViewController {
         return connectionManager.isConnectedToPeer(peer)
     }
     
-    func showTemporaryStatus(_ message: String, duration: TimeInterval = 3.0) {
-        // Cancel any existing timer safely
-        statusFadeTimer?.invalidate()
-        statusFadeTimer = nil
-        
-        // Show the message
-        DispatchQueue.main.async {
-            self.statusLabel.text = message
-            self.statusLabel.alpha = 1.0
-            
-            // Create a timer to fade out the message with weak self
-            self.statusFadeTimer = Timer.scheduledTimer(withTimeInterval: duration, repeats: false) { [weak self] timer in
-                timer.invalidate()
-                UIView.animate(withDuration: 0.5) {
-                    self?.statusLabel.alpha = 0
-                }
-                self?.statusFadeTimer = nil
-            }
-        }
-    }
-    
     // MARK: - Private Methods
     
     private func invalidateAllTimers() {
         autoConnectTimer?.invalidate()
         autoConnectTimer = nil
-        statusFadeTimer?.invalidate()
-        statusFadeTimer = nil
         connectionHintTimer?.invalidate()
         connectionHintTimer = nil
     }

@@ -29,7 +29,7 @@ protocol ConnectionManagerDelegate: AnyObject {
     func connectionManager(_ manager: ConnectionManager, didReceiveReorderRequest orderedIds: [String])
     /// The companion requested a per-item video setting change. Nil fields are unchanged.
     func connectionManager(_ manager: ConnectionManager, didReceiveVideoSettingForId id: String, isLooping: Bool?, isMuted: Bool?)
-    /// The companion changed a still's Fit / Fill framing (already stored); re-frame it if
+    /// The companion changed an item's Fit / Fill framing (already stored); re-frame it if
     /// it is the item on screen.
     func connectionManager(_ manager: ConnectionManager, didReceiveImageFitForId id: String)
     /// A purged item was just re-sent: the freshly received file is at `newPath` and the
@@ -342,7 +342,7 @@ class ConnectionManager: NSObject {
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
                 self.activateModeIfNeeded(from: envelope)
-                // Stamped on the request so a still is framed like the companion's own
+                // Stamped on the request so the item is framed like the companion's own
                 // output from the first frame.
                 if let isFill {
                     ImageFitSettings.setFill(isFill, forFileName: id)

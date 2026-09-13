@@ -38,6 +38,7 @@ extension MediaLibraryPickerViewController {
         ]
         if item.isVideo {
             children.append(contentsOf: videoLibraryActions(for: item))
+            children.append(screenFitMenu(for: item))
             children.append(editAction(forId: item.id))
         } else {
             children.append(noteAction(forId: item.id))
@@ -48,10 +49,11 @@ extension MediaLibraryPickerViewController {
         return UIMenu(children: children)
     }
 
-    /// Preview, Add to Show, Delete. Library is the only place orphan PDFs can go.
+    /// Preview, Rename, Add to Show, Delete. Library is the only place orphan PDFs can go.
     func pdfLibraryMenu(for doc: SavedPDF) -> UIMenu {
         UIMenu(children: [
             previewAction { [weak self] in self?.previewPDF(doc) },
+            renamePDFAction(doc),
             addToShowMenu(membershipId: doc.id.uuidString),
             deletePDFAction(doc)
         ])
@@ -89,6 +91,15 @@ extension MediaLibraryPickerViewController {
         }
     }
 
+    private func renamePDFAction(_ doc: SavedPDF) -> UIAction {
+        UIAction(
+            title: "Rename",
+            image: UIImage(systemName: "pencil")
+        ) { [weak self] _ in
+            self?.presentRenamePDFPrompt(doc)
+        }
+    }
+
     func noteAction(forId id: String) -> UIAction {
         UIAction(
             title: MediaNoteStore.menuTitle(forId: id),
@@ -111,6 +122,11 @@ extension MediaLibraryPickerViewController {
     private func screenFitMenu(for item: LibraryItemDTO) -> UIMenu {
         MediaFitMenu.make(
             forId: item.id,
+            offersFitFill: MediaFitAvailability.offersFitFill(
+                forId: item.id,
+                isVideo: item.isVideo
+            ),
+            allowsCustom: !item.isVideo,
             onSelectFit: { [weak self] mode in
                 self?.onApplyScreenFit?(item, mode)
             },
@@ -286,7 +302,7 @@ extension MediaLibraryPickerViewController {
     private func presentNotConnectedAlert() {
         let alert = UIAlertController(
             title: "EclipseTV Not Linked",
-            message: "This action needs a link to the Eclipse TV app (pairing code). "
+            message: "This action needs a link to the EclipseTV app (Pairing Code). "
                 + "AirPlay alone is enough to present, but not for this.",
             preferredStyle: .alert
         )

@@ -44,7 +44,8 @@ final class WebPagesViewController: UITableViewController {
         super.viewDidLoad()
         title = "History"
         if isNavRoot {
-            let leftSystemItem: UIBarButtonItem.SystemItem = isAddToShowMode ? .cancel : .done
+            // Browsing sheets close; only the add-to-Show picker has something to cancel.
+            let leftSystemItem: UIBarButtonItem.SystemItem = isAddToShowMode ? .cancel : .close
             navigationItem.leftBarButtonItem = UIBarButtonItem(
                 barButtonSystemItem: leftSystemItem,
                 target: self,
@@ -234,6 +235,8 @@ final class WebPagesViewController: UITableViewController {
             completion(false)
         })
         alert.addAction(UIAlertAction(title: "Delete", style: .destructive) { [weak self] _ in
+            // Same as PDF delete: never leave the audience on a page the phone dropped.
+            ExternalDisplayManager.shared.stopWebIfLive(pageId: page.id)
             self?.store.remove(id: page.id)
             completion(true)
         })

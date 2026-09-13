@@ -137,7 +137,9 @@ extension CloudKitSyncEngine {
         return CloudKitRecordMapper.makePDFRecord(
             from: doc,
             existing: existing,
-            assetURL: assetURL,
+            assetURL: CloudKitAssetUploadPolicy.pdfAssetURL(
+                assetURL, isSynced: PDFStore.shared.isSynced(id: doc.id)
+            ),
             showId: resolved.showId,
             attachAsShareChild: resolved.attachAsShareChild
         )

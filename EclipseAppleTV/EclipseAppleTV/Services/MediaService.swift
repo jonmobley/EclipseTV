@@ -36,8 +36,7 @@ class MediaService {
             }
 
             // Find bundled videos anywhere in the app bundle
-            let videoExtensions = ["mp4", "mov", "m4v"]
-            for ext in videoExtensions {
+            for ext in MediaItem.videoExtensions.sorted() {
                 if let urls = Bundle.main.urls(forResourcesWithExtension: ext, subdirectory: nil) {
                     for url in urls {
                         let item = try await MediaItem.from(path: url.path)
@@ -47,8 +46,7 @@ class MediaService {
             }
 
             // Optionally find loose images in bundle (assets won't appear here)
-            let imageExtensions = ["jpg", "jpeg", "png", "heic"]
-            for ext in imageExtensions {
+            for ext in MediaItem.imageExtensions.sorted() {
                 if let urls = Bundle.main.urls(forResourcesWithExtension: ext, subdirectory: nil) {
                     for url in urls {
                         let item = try await MediaItem.from(path: url.path)

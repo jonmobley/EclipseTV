@@ -32,4 +32,17 @@ struct CloudKitAssetUploadPolicyTests {
             #expect(CloudKitAssetUploadPolicy.assetURL(url, state: state) == nil)
         }
     }
+
+    // MARK: - PDFs
+
+    private let pdfURL = URL(fileURLWithPath: "/tmp/eclipse-test-asset.pdf")
+
+    @Test func unsyncedPDFCarriesTheFile() {
+        #expect(CloudKitAssetUploadPolicy.pdfAssetURL(pdfURL, isSynced: false) == pdfURL)
+    }
+
+    /// A rename is the only post-sync PDF save; it must not re-send the document.
+    @Test func syncedPDFSavesMetadataOnly() {
+        #expect(CloudKitAssetUploadPolicy.pdfAssetURL(pdfURL, isSynced: true) == nil)
+    }
 }

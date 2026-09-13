@@ -24,19 +24,18 @@ struct QuestPollRibbonItem: Equatable {
 /// Builds and advances the Live Poll ribbon from session phase.
 enum QuestPollRibbon {
 
-    /// Join / Question / Results strip while the poll is on program, in
-    /// Practice, or on the Start gate. A leftover room after the user switched
-    /// to a photo is not `liveRoomActive`.
+    /// Join / Question / Results strip while the poll is on program or in
+    /// Practice. A leftover room after the user switched to a photo is not
+    /// `liveRoomActive`.
     static func shouldShow(
         isShowMode: Bool,
         liveRoomActive: Bool,
-        isPracticing: Bool,
-        isGated: Bool
+        isPracticing: Bool
     ) -> Bool {
-        isShowMode && (liveRoomActive || isPracticing || isGated)
+        isShowMode && (liveRoomActive || isPracticing)
     }
 
-    /// Red live stroke on the current cue while on program or Practice, never the gate.
+    /// Red live stroke on the current cue while on program or in Practice.
     static func cueIsLive(
         index: Int,
         currentIndex: Int,

@@ -13,8 +13,10 @@ import AVFoundation
 /// The preview is the largest 16:9 / 9:16 panel that fits the stage (edge contact
 /// where the aspect allows). A Landscape Show on a portrait-held phone keeps
 /// that 16:9 crop — same framing as the home Camera tile — instead of rotating
-/// the camera UI. Capture controls sit outside the panel, like the system
-/// Camera app: a photo shutter beside a record button. Tap record to start/stop
+/// the camera UI, and stacks the header above it and a Show-style thumbnail
+/// grid below it in the black bands (`CameraStackedLayout`). Capture controls
+/// sit outside the panel, like the system Camera app: a photo shutter beside a
+/// record button. Tap record to start/stop
 /// video (except Always Record When Live, which owns recording while on-air).
 /// Photos work in preview, live, and while a clip is rolling. Tap the stage to
 /// go live or stop when AirPlay, EclipseTV, or Practice Mode is on. Otherwise
@@ -163,6 +165,24 @@ final class CameraLiveViewController: UIViewController {
     }()
     /// Program thumb of what's on AirPlay while this camera is still preview-only.
     let liveOutputThumbView = CameraLiveOutputThumbView()
+    /// Program · frames · stills as a Show-style grid under a 16:9 panel (portrait hold).
+    let thumbGridView: UICollectionView = {
+        let layout = UICollectionViewFlowLayout()
+        layout.scrollDirection = .vertical
+        let view = UICollectionView(frame: .zero, collectionViewLayout: layout)
+        view.backgroundColor = .clear
+        view.showsVerticalScrollIndicator = false
+        view.alwaysBounceVertical = true
+        view.clipsToBounds = true
+        view.contentInsetAdjustmentBehavior = .never
+        view.delaysContentTouches = false
+        view.translatesAutoresizingMaskIntoConstraints = true
+        view.isHidden = true
+        return view
+    }()
+    /// Set while header · panel · grid are stacked in the black bands; nil means
+    /// the chrome overlays the centered panel instead.
+    var stackedLayout: CameraStackedLayout?
     /// Cutaway being replaced by the active Photos picker, or nil when adding.
     var stillPickerReplaceId: UUID?
     /// True while Back is committing a Background park so `cameraDidEnd` won't re-dismiss.
@@ -199,6 +219,7 @@ final class CameraLiveViewController: UIViewController {
         view.addSubview(backButton)
         setupPreviewChrome()
         setupCaptureMocks()
+        setupThumbGrid()
         setupStillRibbon()
         setupLiveOutputThumb()
         setupFrameRibbon()
@@ -351,17 +372,9 @@ final class CameraLiveViewController: UIViewController {
         let bounds = stageView.bounds
         guard bounds.width > 0, bounds.height > 0 else { return }
 
-        let portrait = isPhoneCameraPortraitLayout
-        let dock = Self.captureDockSpan(safeTrailing: portrait
-            ? view.safeAreaInsets.bottom
-            : view.safeAreaInsets.right)
-        let panel = Self.phoneCameraPanelRect(
-            in: bounds,
-            aspect: ExternalOutputSettings.orientation.aspectRatio,
-            dockOnBottom: portrait,
-            dockSpan: dock
-        )
-        panelView.frame = panel
+        let edge = captureDockEdge
+        let dock = Self.captureDockSpan(safeEdge: captureDockSafePad(for: edge))
+        panelView.frame = resolvePhoneCameraPanel(edge: edge, dockSpan: dock)
         layoutTopChromeInPanel()
         layoutBottomChromeInPanel()
 
@@ -376,58 +389,6 @@ final class CameraLiveViewController: UIViewController {
         layoutMirrorView()
         layoutFrameOverlay()
         previewView.syncPhoneViewerOrientation(previewView.phoneInterfaceOrientation)
-    }
-
-    /// Bottom shutter dock when the camera UI is taller than it is wide.
-    var isPhoneCameraPortraitLayout: Bool {
-        stageView.bounds.height >= stageView.bounds.width
-    }
-
-    /// Largest Display Mode panel in the stage, with the shutter strip reserved outside.
-    ///
-    /// Dock follows how the phone is held, not Show format: bottom in portrait,
-    /// trailing in landscape. Aspect stays the Show's 16:9 / 9:16 — a Landscape
-    /// Show on a portrait phone is a 16:9 crop, matching the home Camera tile.
-    static func phoneCameraPanelRect(
-        in bounds: CGRect,
-        aspect: CGFloat,
-        dockOnBottom: Bool,
-        dockSpan: CGFloat
-    ) -> CGRect {
-        let available: CGRect
-        if dockOnBottom {
-            available = CGRect(
-                x: 0,
-                y: 0,
-                width: bounds.width,
-                height: max(0, bounds.height - dockSpan)
-            )
-        } else {
-            available = CGRect(
-                x: 0,
-                y: 0,
-                width: max(0, bounds.width - dockSpan),
-                height: bounds.height
-            )
-        }
-        guard available.width > 1, available.height > 1 else { return .zero }
-
-        var width = available.width
-        var height = width / aspect
-        if height > available.height {
-            height = available.height
-            width = height * aspect
-        }
-
-        let x = available.midX - width / 2
-        let y = available.midY - height / 2
-        return CGRect(x: x, y: y, width: width, height: height)
-    }
-
-    /// Outside-panel strip for Frame · photo · record · Flip
-    /// (gap + record button + safe-area pad).
-    static func captureDockSpan(safeTrailing: CGFloat) -> CGFloat {
-        chromeGap + shutterSize + max(8, safeTrailing)
     }
 
     /// Vertical Show still pins portrait. Landscape Show stays with the phone.

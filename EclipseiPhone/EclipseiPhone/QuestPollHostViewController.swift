@@ -75,20 +75,23 @@ final class QuestPollHostViewController: UIViewController {
 
         let heading = UILabel()
         heading.text = "CONTROLS"
-        heading.font = .systemFont(ofSize: 12, weight: .semibold)
+        heading.font = .scaled(12, weight: .semibold, relativeTo: .caption1)
+        heading.adjustsFontForContentSizeCategory = true
         heading.textColor = UIColor.white.withAlphaComponent(0.45)
         heading.textAlignment = .left
 
         stack.addArrangedSubview(heading)
         stack.addArrangedSubview(makeResponsesCard())
 
-        countdownLabel.font = .monospacedDigitSystemFont(ofSize: 15, weight: .semibold)
+        countdownLabel.font = .scaledMonospacedDigit(15, weight: .semibold, relativeTo: .subheadline)
+        countdownLabel.adjustsFontForContentSizeCategory = true
         countdownLabel.textColor = UIColor.white.withAlphaComponent(0.7)
         countdownLabel.textAlignment = .center
         countdownLabel.isHidden = true
         stack.addArrangedSubview(countdownLabel)
 
-        progressLabel.font = .systemFont(ofSize: 14, weight: .medium)
+        progressLabel.font = .scaled(14, weight: .medium, relativeTo: .footnote)
+        progressLabel.adjustsFontForContentSizeCategory = true
         progressLabel.textColor = UIColor.white.withAlphaComponent(0.55)
         progressLabel.textAlignment = .center
         stack.addArrangedSubview(progressLabel)
@@ -132,7 +135,7 @@ final class QuestPollHostViewController: UIViewController {
         }, for: .touchUpInside)
         stack.addArrangedSubview(joinQRButton)
 
-        styleSecondary(projectorButton, title: "Projector", systemImage: "display")
+        styleSecondary(projectorButton, title: "Audience Page", systemImage: "display")
         projectorButton.addAction(UIAction { [weak self] _ in
             self?.openProjector()
         }, for: .touchUpInside)
@@ -144,7 +147,7 @@ final class QuestPollHostViewController: UIViewController {
         }, for: .touchUpInside)
         stack.addArrangedSubview(endButton)
 
-        styleTextLink(copyLinkButton, title: "Copy join link", systemImage: "link")
+        styleTextLink(copyLinkButton, title: "Copy Join Link", systemImage: "link")
         copyLinkButton.addAction(UIAction { [weak self] _ in
             self?.copyJoinLink()
         }, for: .touchUpInside)
@@ -174,18 +177,17 @@ final class QuestPollHostViewController: UIViewController {
     private func makeResponsesCard() -> UIView {
         let card = UIView()
         card.backgroundColor = UIColor(white: 0.14, alpha: 1)
-        card.layer.cornerRadius = 16
+        card.layer.cornerRadius = CornerRadii.card
         card.layer.masksToBounds = true
 
         let caption = UILabel()
         caption.text = "Responses"
-        caption.font = .systemFont(ofSize: 14, weight: .medium)
+        caption.font = .scaled(14, weight: .medium, relativeTo: .footnote)
+        caption.adjustsFontForContentSizeCategory = true
         caption.textColor = UIColor.white.withAlphaComponent(0.55)
         caption.translatesAutoresizingMaskIntoConstraints = false
 
-        responsesValue.font = UIFontMetrics(forTextStyle: .largeTitle).scaledFont(
-            for: .systemFont(ofSize: 56, weight: .bold)
-        )
+        responsesValue.font = .scaled(56, weight: .bold, relativeTo: .largeTitle)
         responsesValue.adjustsFontForContentSizeCategory = true
         responsesValue.textColor = .white
         responsesValue.textAlignment = .center
@@ -207,16 +209,19 @@ final class QuestPollHostViewController: UIViewController {
 
     private func stylePrimary(_ button: UIButton) {
         var config = UIButton.Configuration.filled()
-        config.baseBackgroundColor = .systemBlue
+        config.baseBackgroundColor = .accent
         config.baseForegroundColor = .white
         config.cornerStyle = .large
         config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer {
             var attrs = $0
-            attrs.font = .systemFont(ofSize: 17, weight: .semibold)
+            attrs.font = .scaled(17, weight: .semibold, maximumPointSize: Self.buttonFontCap)
             return attrs
         }
         button.configuration = config
     }
+
+    /// Buttons here have fixed heights, so their titles grow only up to this.
+    private static let buttonFontCap: CGFloat = 24
 
     private func styleSecondary(_ button: UIButton, title: String, systemImage: String) {
         var config = UIButton.Configuration.plain()
@@ -230,7 +235,7 @@ final class QuestPollHostViewController: UIViewController {
         config.background.cornerRadius = 14
         config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer {
             var attrs = $0
-            attrs.font = .systemFont(ofSize: 16, weight: .semibold)
+            attrs.font = .scaled(16, weight: .semibold, maximumPointSize: Self.buttonFontCap)
             return attrs
         }
         button.configuration = config
@@ -250,7 +255,7 @@ final class QuestPollHostViewController: UIViewController {
         config.baseForegroundColor = UIColor.white.withAlphaComponent(0.55)
         config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer {
             var attrs = $0
-            attrs.font = .systemFont(ofSize: 16, weight: .medium)
+            attrs.font = .scaled(16, weight: .medium, maximumPointSize: Self.buttonFontCap)
             return attrs
         }
         button.configuration = config
@@ -327,13 +332,15 @@ final class QuestPollHostViewController: UIViewController {
         resultsStack.isHidden = false
         let heading = UILabel()
         heading.text = "Results · \(results.total) total"
-        heading.font = .systemFont(ofSize: 13, weight: .semibold)
+        heading.font = .scaled(13, weight: .semibold, relativeTo: .footnote)
+        heading.adjustsFontForContentSizeCategory = true
         heading.textColor = UIColor.white.withAlphaComponent(0.55)
         resultsStack.addArrangedSubview(heading)
         for option in results.options {
             let row = UILabel()
             row.text = "\(option.text)  \(option.percent)% · \(option.count)"
-            row.font = .systemFont(ofSize: 15, weight: .medium)
+            row.font = .scaled(15, weight: .medium, relativeTo: .subheadline)
+            row.adjustsFontForContentSizeCategory = true
             row.textColor = .white
             row.numberOfLines = 0
             resultsStack.addArrangedSubview(row)
@@ -387,14 +394,13 @@ final class QuestPollHostViewController: UIViewController {
     private func copyJoinLink() {
         guard let code = QuestPollSessionStore.shared.session?.code else { return }
         UIPasteboard.general.string = QuestPollConfig.joinURL(code: code).absoluteString
-        let generator = UINotificationFeedbackGenerator()
-        generator.notificationOccurred(.success)
+        Haptics.success()
         var config = copyLinkButton.configuration
         config?.title = "Copied"
         copyLinkButton.configuration = config
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
             var restored = self?.copyLinkButton.configuration
-            restored?.title = "Copy join link"
+            restored?.title = "Copy Join Link"
             self?.copyLinkButton.configuration = restored
         }
     }

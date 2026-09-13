@@ -12,15 +12,22 @@ extension LibraryGridViewController {
     /// Countdown tile: go live, or pause/resume when this timer is already on output.
     func beginCountdown(_ item: ShowCountdown) {
         guard ensureCountdownDestination() else { return }
-        if sendShowLiveSelectIfOperator(.countdown, itemId: item.id.uuidString) {
+        // Operator: same tap semantics as local — pause/resume the clock that is
+        // already on the director, otherwise ask the director to go live with it.
+        if isRemoteCountdownLive(item.id),
+           sendShowLiveCommandIfOperator(.countdownToggleRunning) {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            return
+        }
+        if sendShowLiveSelectIfOperator(.countdown, itemId: item.id.uuidString) {
+            Haptics.impactLight()
             return
         }
         let clock = CountdownController.shared
         if ExternalDisplayManager.shared.isCountdownLive,
            clock.liveCountdownId == item.id {
             clock.toggleRunning()
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            Haptics.impactLight()
             return
         }
         presentCountdownLive(item)
@@ -31,7 +38,7 @@ extension LibraryGridViewController {
         guard ensureCountdownDestination() else { return }
         guard !blockLiveChangeIfLocked() else { return }
         if sendShowLiveSelectIfOperator(.countdown, itemId: item.id.uuidString) {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            Haptics.impactLight()
             return
         }
         isBlackSelected = false
@@ -42,11 +49,11 @@ extension LibraryGridViewController {
         CountdownController.shared.present(item)
         ExternalDisplayManager.shared.presentCountdown()
         announceAirPlayOverlayIfLinked()
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptics.impactLight()
         reloadLibraryGrid()
         refreshLiveHeader()
+        // Hides a slideshow strip the clock just replaced; the clock has no ribbon.
         refreshSlideshowRibbonPresentation()
-        scrollLiveSlideshowRibbonToCurrentSlide()
     }
 
     /// Live hero for the countdown clock.
@@ -56,62 +63,12 @@ extension LibraryGridViewController {
             text: clock.displayString,
             isExpired: clock.remaining == 0
         )
+        liveHeader.updatePlayback(PlaybackState())
     }
 
-    /// Whether the live ribbon is showing duration presets.
-    var showsCountdownRibbon: Bool {
-        CountdownRibbon.shouldShow(
-            isShowMode: isShowMode,
-            isCountdownLive: ExternalDisplayManager.shared.isCountdownLive,
-            belongsToOpenShow: liveCountdownBelongsToOpenShow
-        )
-    }
-
-    /// Ribbon index of the live clock's current length (Custom chip when custom).
-    func countdownRibbonSelectedIndex() -> Int {
-        CountdownRibbon.selectedIndex(
-            duration: CountdownController.shared.duration,
-            presets: CountdownController.durationPresets
-        )
-    }
-
-    /// True when the live clock is a countdown card in the open Show.
-    var liveCountdownBelongsToOpenShow: Bool {
-        guard let id = CountdownController.shared.liveCountdownId,
-              let item = CountdownStore.shared.countdown(id: id),
-              let openShowId
-        else { return false }
-        return item.showId == openShowId
-    }
-
-    /// Duration-preset count plus Custom for the live ribbon.
-    func countdownRibbonItemCount() -> Int {
-        guard showsCountdownRibbon else { return 0 }
-        return CountdownController.durationPresets.count + 1
-    }
-
-    /// Configures a ribbon cell for a duration preset or Custom.
-    func configureCountdownRibbonCell(
-        _ cell: LibraryThumbnailCell,
-        at indexPath: IndexPath
-    ) {
-        let presets = CountdownController.durationPresets
-        if indexPath.item == presets.count {
-            configureCustomCountdownRibbonCell(cell)
-            return
-        }
-        guard presets.indices.contains(indexPath.item) else { return }
-        let seconds = presets[indexPath.item]
-        let selected = seconds == CountdownController.shared.duration
-        cell.configureSpecial(
-            title: CountdownController.displayString(seconds: seconds),
-            systemImage: "timer",
-            thumbnail: nil,
-            fillColor: UIColor(white: 0.16, alpha: 1),
-            isLive: selected,
-            outlined: !selected,
-            typeIcon: .countdown
-        )
+    /// Duration the chips should mark selected: the director's when operating.
+    var selectedCountdownDuration: Int {
+        remoteCountdownState?.duration ?? CountdownController.shared.duration
     }
 
     /// Configures a Show-grid Countdown tile.
@@ -121,7 +78,7 @@ extension LibraryGridViewController {
         isLive: Bool
     ) {
         let seconds = isLive
-            ? CountdownController.shared.remaining
+            ? (remoteCountdownState?.remaining ?? CountdownController.shared.remaining)
             : item.duration
         let isExpired = isLive && seconds == 0
         cell.configureCountdown(
@@ -132,27 +89,6 @@ extension LibraryGridViewController {
             isExpired: isExpired,
             endHint: item.endAction.tileHint
         )
-    }
-
-    /// Applies the tapped duration preset, or opens Custom Time.
-    func handleCountdownRibbonTap(at indexPath: IndexPath) {
-        let presets = CountdownController.durationPresets
-        if indexPath.item == presets.count {
-            promptCustomCountdownDuration(for: CountdownController.shared.liveCountdownId)
-            return
-        }
-        guard presets.indices.contains(indexPath.item) else { return }
-        let seconds = presets[indexPath.item]
-        // Re-applying the live length restarts the clock from full, and this chip is
-        // the highlighted one — the operator reads it as inert, not as a reset.
-        guard seconds != CountdownController.shared.duration else {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            return
-        }
-        applyCountdownDuration(seconds, to: clockTargetId())
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        refreshCountdownChrome()
-        refreshSlideshowRibbonPresentation()
     }
 
     /// Pauses and drops the clock when this countdown is deleted while live.
@@ -169,14 +105,16 @@ extension LibraryGridViewController {
 
     /// Refreshes hero + visible tiles without reloading the whole grid.
     func refreshCountdownChrome() {
+        // Director clock ticks once a second; operators mirror it from the snapshot.
+        broadcastShowLiveSnapshotIfNeeded()
         guard ExternalDisplayManager.shared.isCountdownLive else {
             reloadGridIfSafe()
             refreshLiveHeader()
             return
         }
-        // Live Poll Practice / Start chrome owns the hero while the clock keeps
+        // A Live Poll Practice preview owns the hero while the clock keeps
         // running on the projector; a tick must not paint the clock back over it.
-        guard !showsLivePollIdleHeader else {
+        guard !showsLivePollPracticeHeader else {
             updateVisibleCountdownTiles()
             return
         }
@@ -233,15 +171,15 @@ extension LibraryGridViewController {
 
     /// Reset and duration chips for a countdown ⋯ menu.
     func countdownToolActions(for item: ShowCountdown) -> [UIMenuElement] {
-        let clock = CountdownController.shared
-        let isLive = clock.liveCountdownId == item.id
-            && ExternalDisplayManager.shared.isCountdownLive
-        let selectedDuration = isLive ? clock.duration : item.duration
+        // Live here or on the director; both read the same predicate as the tile.
+        let isLive = isShowGridItemLive(.countdown(item))
+        let selectedDuration = isLive ? selectedCountdownDuration : item.duration
         let reset = UIAction(
             title: "Reset",
             image: UIImage(systemName: "arrow.counterclockwise")
-        ) { _ in
+        ) { [weak self] _ in
             guard isLive else { return }
+            if self?.sendShowLiveCommandIfOperator(.countdownReset) == true { return }
             CountdownController.shared.reset()
         }
         var durationActions: [UIMenuElement] = CountdownController.durationPresets.map {
@@ -252,7 +190,6 @@ extension LibraryGridViewController {
                 state: selected ? .on : .off
             ) { [weak self] _ in
                 self?.applyCountdownDuration(seconds, to: item.id)
-                self?.refreshSlideshowRibbonPresentation()
             }
         }
         let isPreset = CountdownController.durationPresets.contains(selectedDuration)
@@ -294,36 +231,19 @@ extension LibraryGridViewController {
 
     // MARK: - Private
 
-    private func configureCustomCountdownRibbonCell(_ cell: LibraryThumbnailCell) {
-        let clock = CountdownController.shared
-        let selected = !clock.isPresetDuration
-        let title = selected
-            ? CountdownController.displayString(seconds: clock.duration)
-            : "Custom"
-        cell.configureSpecial(
-            title: title,
-            systemImage: "pencil",
-            thumbnail: nil,
-            fillColor: UIColor(white: 0.16, alpha: 1),
-            isLive: selected,
-            outlined: !selected,
-            typeIcon: .countdown
-        )
-    }
-
-    private func updateVisibleCountdownTiles() {
+    /// Ticks the live countdown tile (local clock, or the director's on an operator).
+    func updateVisibleCountdownTiles() {
         guard let showsSection = sectionIndex(for: .shows) else { return }
-        let liveId = CountdownController.shared.liveCountdownId
-        let clock = CountdownController.shared
+        let remaining = remoteCountdownState?.remaining
+            ?? CountdownController.shared.remaining
         for (index, row) in openShowGridItems.enumerated() {
             guard case .countdown(let item) = row,
                   let cell = collectionView.cellForItem(
                     at: IndexPath(item: index, section: showsSection)
                   ) as? LibraryThumbnailCell
             else { continue }
-            let isLive = item.id == liveId
-                && ExternalDisplayManager.shared.isCountdownLive
-            let seconds = isLive ? clock.remaining : item.duration
+            let isLive = isShowGridItemLive(.countdown(item))
+            let seconds = isLive ? remaining : item.duration
             let isExpired = isLive && seconds == 0
             if isLive {
                 cell.applyCountdownTime(seconds, isExpired: isExpired)
@@ -340,34 +260,22 @@ extension LibraryGridViewController {
         }
     }
 
-    private func clockTargetId() -> UUID? {
-        CountdownController.shared.liveCountdownId
-    }
-
     func promptCustomCountdownDuration(for itemId: UUID?) {
-        let seconds = durationForPrompt(itemId: itemId)
-        let alert = UIAlertController(
-            title: "Custom Time",
-            message: "Minutes, m:ss, or h:mm:ss.",
-            preferredStyle: .alert
-        )
-        alert.addTextField { field in
-            field.placeholder = "7:30"
-            field.text = CountdownController.displayString(seconds: seconds)
-            field.keyboardType = .numbersAndPunctuation
-            field.autocorrectionType = .no
-            field.clearButtonMode = .whileEditing
+        CountdownDurationPrompt.present(
+            from: self,
+            seconds: durationForPrompt(itemId: itemId)
+        ) { [weak self] seconds in
+            self?.applyCountdownDuration(seconds, to: itemId)
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            self?.refreshCountdownChrome()
+            self?.refreshSlideshowRibbonPresentation()
         }
-        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        alert.addAction(UIAlertAction(title: "Set", style: .default) { [weak self] _ in
-            self?.applyCustomCountdownDuration(
-                alert.textFields?.first?.text, to: itemId
-            )
-        })
-        present(alert, animated: true)
     }
 
     private func durationForPrompt(itemId: UUID?) -> Int {
+        if isRemoteCountdownLive(itemId), let remote = remoteCountdownState {
+            return remote.duration
+        }
         if let itemId,
            CountdownController.shared.liveCountdownId == itemId {
             return CountdownController.shared.duration
@@ -378,18 +286,15 @@ extension LibraryGridViewController {
         return CountdownController.shared.duration
     }
 
-    private func applyCustomCountdownDuration(_ raw: String?, to itemId: UUID?) {
-        guard let seconds = CountdownController.parseDuration(raw ?? "") else {
-            presentInvalidCountdownDurationAlert(for: itemId)
+    private func applyCountdownDuration(_ seconds: Int, to itemId: UUID?) {
+        // Operator editing the director's live clock: the director applies it.
+        if isRemoteCountdownLive(itemId),
+           sendShowLiveCommandIfOperator(
+               .countdownSetDuration,
+               value: Double(CountdownController.clampedDuration(seconds))
+           ) {
             return
         }
-        applyCountdownDuration(seconds, to: itemId)
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        refreshCountdownChrome()
-        refreshSlideshowRibbonPresentation()
-    }
-
-    private func applyCountdownDuration(_ seconds: Int, to itemId: UUID?) {
         if let itemId, CountdownController.shared.liveCountdownId == itemId,
            ExternalDisplayManager.shared.isCountdownLive {
             CountdownController.shared.setDuration(seconds)
@@ -402,18 +307,6 @@ extension LibraryGridViewController {
             return
         }
         CountdownController.shared.setDuration(seconds)
-    }
-
-    private func presentInvalidCountdownDurationAlert(for itemId: UUID?) {
-        let alert = UIAlertController(
-            title: "Couldn't Set Time",
-            message: "Enter minutes, m:ss, or h:mm:ss — for example 7, 7:30, or 1:15:00.",
-            preferredStyle: .alert
-        )
-        alert.addAction(UIAlertAction(title: "OK", style: .default) { [weak self] _ in
-            self?.promptCustomCountdownDuration(for: itemId)
-        })
-        present(alert, animated: true)
     }
 
     private func promptRenameCountdown(_ item: ShowCountdown) {

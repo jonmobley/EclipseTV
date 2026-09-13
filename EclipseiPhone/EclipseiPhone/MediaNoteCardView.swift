@@ -38,7 +38,7 @@ final class MediaNoteCardView: UIView {
 
     private func setup() {
         backgroundColor = .secondarySystemGroupedBackground
-        layer.cornerRadius = 22
+        layer.cornerRadius = CornerRadii.large
         layer.cornerCurve = .continuous
         clipsToBounds = true
         isAccessibilityElement = true

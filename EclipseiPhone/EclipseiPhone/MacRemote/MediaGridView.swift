@@ -1,9 +1,8 @@
 //
 //  MediaGridView.swift
-//  EclipseRemote
+//  Eclipse
 //
-//  Description: Media grid styled like Show-page thumbnail tiles.
-//  Thread Safety: Main thread only — SwiftUI view.
+//  Copyright © 2026 Moxie LLC. All rights reserved.
 //
 
 import SwiftUI

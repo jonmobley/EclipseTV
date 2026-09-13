@@ -57,8 +57,7 @@ extension ImageViewController {
         logger.info("Displaying image: \(mediaItem.fileName)")
         
         Task { @MainActor in
-            // Load full-size image
-            let image = await AsyncImageLoader.shared.loadImage(from: mediaItem.path, targetSize: self.view.bounds.size)
+            let image = await self.loadStill(at: mediaItem.path)
             
             await MainActor.run {
                 if let image = image {
@@ -110,8 +109,8 @@ extension ImageViewController {
     private func displayImageWithDissolveTransition(_ mediaItem: MediaItem) {
         logger.info("🖼️ [DISSOLVE] Transitioning to image: \(mediaItem.fileName)")
         
-        Task {
-            let fullSizeImage = await AsyncImageLoader.shared.loadImage(from: mediaItem.path, targetSize: self.view.bounds.size)
+        Task { @MainActor in
+            let fullSizeImage = await self.loadStill(at: mediaItem.path)
             
             await MainActor.run {
                 guard let image = fullSizeImage else {
@@ -135,7 +134,7 @@ extension ImageViewController {
                 self.view.addSubview(tempImageView)
                 
                 // Dissolve transition
-                UIView.animate(withDuration: 0.4, animations: {
+                UIView.animate(withDuration: ContentTransitionSettings.crossfadeDuration, animations: {
                     // Fade out current content
                     self.imageView.alpha = 0
                     self.playerView.view.alpha = 0
@@ -377,14 +376,27 @@ extension ImageViewController {
     internal func applyImageFitToCurrentImage() {
         guard !isVideo, let path = currentDisplayPath() else { return }
         Task { @MainActor in
-            let image = await AsyncImageLoader.shared.loadImage(
-                from: path, targetSize: self.view.bounds.size
-            )
+            let image = await self.loadStill(at: path)
             guard let image else { return }
             let framed = Self.framedStill(image, forPath: path)
             self.imageView.contentMode = framed.contentMode
             self.imageView.image = framed.image
         }
+    }
+
+    /// Loads a fullscreen still decoded for the framing `framedStill` will apply.
+    ///
+    /// The decode ceiling follows the region that ends up on screen (Fill covers, a
+    /// custom crop keeps a fraction), so `.scaleAspectFill` never has to magnify an
+    /// undersized bitmap. Preloading must use the same call to hit the same cache entry.
+    internal func loadStill(at path: String) async -> UIImage? {
+        let placement = ImageFraming.placement(
+            framing: ImageFramingSettings.framing(forPath: path),
+            fill: ImageFitSettings.mode(forPath: path) == .fill
+        )
+        return await AsyncImageLoader.shared.loadStill(
+            from: path, panelSize: view.bounds.size, placement: placement
+        )
     }
 
     /// Crops to a saved custom position when present; otherwise Fit / Fill.

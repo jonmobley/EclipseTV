@@ -52,8 +52,8 @@ final class AlbumBrowserStore {
     private let session: URLSession
     private let logger = Logger(subsystem: "com.eclipseapp.ios", category: "AlbumBrowserStore")
 
-    private let codeKey = "EclipseiPhone.album.code"
-    private let manifestKey = "EclipseiPhone.album.manifest"
+    private let codeKey = DefaultsKeys.albumBrowserCode
+    private let manifestKey = DefaultsKeys.albumBrowserManifest
 
     init(defaults: UserDefaults = .standard, session: URLSession = .shared) {
         self.defaults = defaults

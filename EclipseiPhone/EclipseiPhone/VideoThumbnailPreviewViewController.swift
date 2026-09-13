@@ -19,6 +19,8 @@ class VideoThumbnailPreviewViewController: UIViewController {
     
     weak var delegate: VideoThumbnailPreviewDelegate?
     private let videoURL: URL
+    /// Caution from validation, shown alongside the format line.
+    private let notice: String?
     private var asset: AVAsset
     private var imageGenerator: AVAssetImageGenerator
     private var videoDuration: CMTime = .zero
@@ -27,15 +29,18 @@ class VideoThumbnailPreviewViewController: UIViewController {
     /// Bumps on every scrub request so stale generator callbacks never paint.
     private var scrubGeneration: UInt64 = 0
 
-    private static let scrubPreviewSize = CGSize(width: 480, height: 270)
-    private static let finalThumbnailSize = CGSize(width: 800, height: 450)
+    /// Square, like `VideoPosterFrame.maximumSize`, because `maximumSize` fits the frame
+    /// inside the box: a 16:9 box gave a 9:16 clip a third of the width it gave a
+    /// landscape one, and this frame is kept as the library thumbnail.
+    private static let scrubPreviewSize = CGSize(width: 480, height: 480)
+    private static let finalThumbnailSize = CGSize(width: 800, height: 800)
 
     // MARK: - UI Elements
     
     private let containerView: UIView = {
         let view = UIView()
         view.backgroundColor = .black
-        view.layer.cornerRadius = 12
+        view.layer.cornerRadius = CornerRadii.standard
         view.clipsToBounds = true
         return view
     }()
@@ -44,7 +49,7 @@ class VideoThumbnailPreviewViewController: UIViewController {
         let imageView = UIImageView()
         imageView.contentMode = .scaleAspectFit
         imageView.backgroundColor = .black
-        imageView.layer.cornerRadius = 8
+        imageView.layer.cornerRadius = CornerRadii.compact
         imageView.clipsToBounds = true
         return imageView
     }()
@@ -54,7 +59,7 @@ class VideoThumbnailPreviewViewController: UIViewController {
         slider.minimumValue = 0
         slider.maximumValue = 1
         slider.value = 0
-        slider.minimumTrackTintColor = .systemBlue
+        slider.minimumTrackTintColor = .accent
         slider.maximumTrackTintColor = .systemGray4
         slider.thumbTintColor = .white
         return slider
@@ -63,7 +68,8 @@ class VideoThumbnailPreviewViewController: UIViewController {
     private let timeLabel: UILabel = {
         let label = UILabel()
         label.textColor = .white
-        label.font = UIFont.systemFont(ofSize: 14, weight: .medium)
+        label.font = .scaledMonospacedDigit(14, weight: .medium, relativeTo: .footnote)
+        label.adjustsFontForContentSizeCategory = true
         label.textAlignment = .center
         label.text = "00:00 / 00:00"
         return label
@@ -72,12 +78,15 @@ class VideoThumbnailPreviewViewController: UIViewController {
     private let instructionLabel: UILabel = {
         let label = UILabel()
         label.textColor = .lightGray
-        label.font = UIFont.systemFont(ofSize: 16)
+        label.font = .preferredFont(forTextStyle: .callout)
+        label.adjustsFontForContentSizeCategory = true
         label.textAlignment = .center
         label.numberOfLines = 0
         label.text = "Drag the slider to choose a thumbnail frame for your video"
         return label
     }()
+
+    private let detailView = VideoImportDetailView()
     
     private let buttonStackView: UIStackView = {
         let stack = UIStackView()
@@ -90,7 +99,8 @@ class VideoThumbnailPreviewViewController: UIViewController {
     private let cancelButton: UIButton = {
         let button = UIButton(type: .system)
         button.setTitle("Cancel", for: .normal)
-        button.titleLabel?.font = UIFont.systemFont(ofSize: 18, weight: .medium)
+        button.titleLabel?.font = .scaled(18, weight: .medium, maximumPointSize: 26)
+        button.titleLabel?.adjustsFontForContentSizeCategory = true
         button.setTitleColor(.systemRed, for: .normal)
         button.backgroundColor = UIColor.systemRed.withAlphaComponent(0.1)
         button.layer.cornerRadius = 25
@@ -100,17 +110,19 @@ class VideoThumbnailPreviewViewController: UIViewController {
     private let useButton: UIButton = {
         let button = UIButton(type: .system)
         button.setTitle("Use This Frame", for: .normal)
-        button.titleLabel?.font = UIFont.systemFont(ofSize: 18, weight: .medium)
+        button.titleLabel?.font = .scaled(18, weight: .medium, maximumPointSize: 26)
+        button.titleLabel?.adjustsFontForContentSizeCategory = true
         button.setTitleColor(.white, for: .normal)
-        button.backgroundColor = .systemBlue
+        button.backgroundColor = .accent
         button.layer.cornerRadius = 25
         return button
     }()
     
     // MARK: - Initialization
     
-    init(videoURL: URL) {
+    init(videoURL: URL, notice: String? = nil) {
         self.videoURL = videoURL
+        self.notice = notice
         self.asset = AVURLAsset(url: videoURL)
         self.imageGenerator = AVAssetImageGenerator(asset: asset)
         super.init(nibName: nil, bundle: nil)
@@ -168,6 +180,7 @@ class VideoThumbnailPreviewViewController: UIViewController {
         view.addSubview(containerView)
         containerView.addSubview(thumbnailImageView)
         containerView.addSubview(instructionLabel)
+        containerView.addSubview(detailView)
         containerView.addSubview(scrubberSlider)
         containerView.addSubview(timeLabel)
         containerView.addSubview(buttonStackView)
@@ -179,6 +192,7 @@ class VideoThumbnailPreviewViewController: UIViewController {
         containerView.translatesAutoresizingMaskIntoConstraints = false
         thumbnailImageView.translatesAutoresizingMaskIntoConstraints = false
         instructionLabel.translatesAutoresizingMaskIntoConstraints = false
+        detailView.translatesAutoresizingMaskIntoConstraints = false
         scrubberSlider.translatesAutoresizingMaskIntoConstraints = false
         timeLabel.translatesAutoresizingMaskIntoConstraints = false
         buttonStackView.translatesAutoresizingMaskIntoConstraints = false
@@ -200,9 +214,14 @@ class VideoThumbnailPreviewViewController: UIViewController {
             instructionLabel.topAnchor.constraint(equalTo: thumbnailImageView.bottomAnchor, constant: 16),
             instructionLabel.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 20),
             instructionLabel.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -20),
-            
+
+            // Format + caution
+            detailView.topAnchor.constraint(equalTo: instructionLabel.bottomAnchor, constant: 10),
+            detailView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 20),
+            detailView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -20),
+
             // Scrubber slider
-            scrubberSlider.topAnchor.constraint(equalTo: instructionLabel.bottomAnchor, constant: 20),
+            scrubberSlider.topAnchor.constraint(equalTo: detailView.bottomAnchor, constant: 12),
             scrubberSlider.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 20),
             scrubberSlider.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -20),
             scrubberSlider.heightAnchor.constraint(equalToConstant: 44),
@@ -233,6 +252,18 @@ class VideoThumbnailPreviewViewController: UIViewController {
     }
     
     private func loadVideoInfo() {
+        // Show the caution immediately; the format line fills in once the track loads.
+        detailView.configure(format: nil, notice: notice)
+        Task {
+            let summary = await VideoFormatSummary.load(from: videoURL)
+            await MainActor.run {
+                self.detailView.configure(
+                    format: summary.map(VideoFormatSummary.describe),
+                    notice: self.notice
+                )
+            }
+        }
+
         Task {
             do {
                 let duration = try await asset.load(.duration)

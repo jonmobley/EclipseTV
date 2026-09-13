@@ -87,8 +87,8 @@ Views/
 
 ## Requirements
 
-- **Xcode 15.0+**
-- **tvOS 17.0+**
+- **Xcode 16.2+**
+- **tvOS 18.2+**
 - **Apple TV HD or Apple TV 4K**
 - **iOS companion app** for media transfer (optional)
 
@@ -205,4 +205,4 @@ This project is provided as-is with no warranties. For educational and personal 
 **Eclipse Apple TV** - Advanced media viewing and wireless connectivity for Apple TV
 - Architecture: `MediaDataSource`-centered single source of truth (UIKit, not full MVVM)
 - Frameworks: UIKit, AVKit, MultipeerConnectivity, Combine
-- Platform: tvOS 17.0+
+- Platform: tvOS 18.2+

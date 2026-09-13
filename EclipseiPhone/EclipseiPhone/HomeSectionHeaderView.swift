@@ -119,7 +119,7 @@ final class HomeSectionHeaderView: UICollectionReusableView {
         if let trailingTitle, let trailingHandler {
             var config = UIButton.Configuration.plain()
             config.title = trailingTitle
-            config.baseForegroundColor = .systemBlue
+            config.baseForegroundColor = .accent
             config.contentInsets = .zero
             config.titleTextAttributesTransformer =
                 UIConfigurationTextAttributesTransformer { incoming in
@@ -183,7 +183,7 @@ final class HomeSectionHeaderView: UICollectionReusableView {
             config.imagePlacement = .leading
         }
         if item.isSelected {
-            config.baseBackgroundColor = .systemBlue
+            config.baseBackgroundColor = .accent
             config.baseForegroundColor = .white
         } else {
             config.baseForegroundColor = .label

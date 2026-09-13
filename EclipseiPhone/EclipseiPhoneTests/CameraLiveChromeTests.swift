@@ -143,7 +143,7 @@ struct CameraLiveChromeTests {
         let shutter = CGRect(x: 159, y: 740, width: 72, height: 72)
         let photo = CameraLiveViewController.photoButtonFrame(
             shutterFrame: shutter,
-            isVertical: true
+            dockEdge: .bottom
         )
         #expect(photo.width == CameraLiveViewController.photoSize)
         #expect(photo.height == CameraLiveViewController.photoSize)
@@ -156,11 +156,12 @@ struct CameraLiveChromeTests {
         #expect(abs(photo.midY - shutter.midY) < 0.5)
     }
 
-    @Test func photoShutterSitsAboveRecordInLandscapeDock() {
-        let shutter = CGRect(x: 760, y: 159, width: 72, height: 72)
+    /// Clockwise turn: the row's leading end lands at the top, so Photo is above.
+    @Test func photoShutterSitsAboveRecordInLeftDock() {
+        let shutter = CGRect(x: 12, y: 159, width: 72, height: 72)
         let photo = CameraLiveViewController.photoButtonFrame(
             shutterFrame: shutter,
-            isVertical: false
+            dockEdge: .left
         )
         #expect(photo.intersects(shutter) == false)
         #expect(
@@ -169,6 +170,66 @@ struct CameraLiveChromeTests {
             ) < 0.5
         )
         #expect(abs(photo.midX - shutter.midX) < 0.5)
+    }
+
+    /// Counterclockwise turn: the row's leading end lands at the bottom, so Photo
+    /// is below — the same side of the thumb it was on in portrait.
+    @Test func photoShutterSitsBelowRecordInRightDock() {
+        let shutter = CGRect(x: 760, y: 159, width: 72, height: 72)
+        let photo = CameraLiveViewController.photoButtonFrame(
+            shutterFrame: shutter,
+            dockEdge: .right
+        )
+        #expect(photo.intersects(shutter) == false)
+        #expect(
+            abs(
+                shutter.maxY + CameraLiveViewController.shutterPairGap - photo.minY
+            ) < 0.5
+        )
+        #expect(abs(photo.midX - shutter.midX) < 0.5)
+    }
+
+    @Test func portraitHoldDocksAtTheBottomWhateverTheSceneSays() {
+        #expect(
+            CameraLiveViewController.captureDockEdge(
+                isPortraitLayout: true, interfaceOrientation: .landscapeLeft
+            ) == .bottom
+        )
+        #expect(
+            CameraLiveViewController.captureDockEdge(
+                isPortraitLayout: true, interfaceOrientation: .portrait
+            ) == .bottom
+        )
+    }
+
+    /// Home indicator on the right means the phone turned counterclockwise and the
+    /// portrait bottom edge is now on the right; on the left it is the mirror.
+    @Test func landscapeDockFollowsTheTurn() {
+        #expect(
+            CameraLiveViewController.captureDockEdge(
+                isPortraitLayout: false, interfaceOrientation: .landscapeRight
+            ) == .right
+        )
+        #expect(
+            CameraLiveViewController.captureDockEdge(
+                isPortraitLayout: false, interfaceOrientation: .landscapeLeft
+            ) == .left
+        )
+    }
+
+    /// iPad multitasking can hand a landscape layout a portrait scene orientation;
+    /// the dock keeps the trailing column rather than guessing a turn.
+    @Test func landscapeLayoutWithoutALandscapeSceneKeepsTheRightDock() {
+        #expect(
+            CameraLiveViewController.captureDockEdge(
+                isPortraitLayout: false, interfaceOrientation: .portrait
+            ) == .right
+        )
+        #expect(
+            CameraLiveViewController.captureDockEdge(
+                isPortraitLayout: false, interfaceOrientation: .unknown
+            ) == .right
+        )
     }
 
     @Test func captureDockShowsSeparatePhotoAndRecordButtons() {
@@ -190,11 +251,11 @@ struct CameraLiveChromeTests {
 
     @Test func portraitHoldCropsLandscapeShowToSixteenByNine() {
         let bounds = CGRect(x: 0, y: 0, width: 390, height: 844)
-        let dock = CameraLiveViewController.captureDockSpan(safeTrailing: 34)
+        let dock = CameraLiveViewController.captureDockSpan(safeEdge: 34)
         let panel = CameraLiveViewController.phoneCameraPanelRect(
             in: bounds,
             aspect: 16.0 / 9.0,
-            dockOnBottom: true,
+            dockEdge: .bottom,
             dockSpan: dock
         )
         #expect(abs(panel.width / panel.height - 16.0 / 9.0) < 0.01)
@@ -202,17 +263,41 @@ struct CameraLiveChromeTests {
         #expect(abs(panel.width - bounds.width) < 0.5)
     }
 
-    @Test func landscapeHoldKeepsLandscapeShowPanelBesideTrailingDock() {
+    @Test func landscapeHoldKeepsLandscapeShowPanelBesideRightDock() {
         let bounds = CGRect(x: 0, y: 0, width: 844, height: 390)
-        let dock = CameraLiveViewController.captureDockSpan(safeTrailing: 21)
+        let dock = CameraLiveViewController.captureDockSpan(safeEdge: 21)
         let panel = CameraLiveViewController.phoneCameraPanelRect(
             in: bounds,
             aspect: 16.0 / 9.0,
-            dockOnBottom: false,
+            dockEdge: .right,
             dockSpan: dock
         )
         #expect(abs(panel.width / panel.height - 16.0 / 9.0) < 0.01)
         #expect(panel.maxX <= bounds.width - dock + 0.5)
+    }
+
+    /// A left dock reserves its strip on the left; the panel is the same size,
+    /// shifted over so the two never overlap.
+    @Test func leftDockReservesTheLeadingStripForTheShutter() {
+        let bounds = CGRect(x: 0, y: 0, width: 844, height: 390)
+        let dock = CameraLiveViewController.captureDockSpan(safeEdge: 21)
+        let left = CameraLiveViewController.phoneCameraPanelRect(
+            in: bounds,
+            aspect: 16.0 / 9.0,
+            dockEdge: .left,
+            dockSpan: dock
+        )
+        let right = CameraLiveViewController.phoneCameraPanelRect(
+            in: bounds,
+            aspect: 16.0 / 9.0,
+            dockEdge: .right,
+            dockSpan: dock
+        )
+        #expect(abs(left.width / left.height - 16.0 / 9.0) < 0.01)
+        #expect(left.minX >= dock - 0.5)
+        #expect(abs(left.size.width - right.size.width) < 0.5)
+        #expect(abs(left.size.height - right.size.height) < 0.5)
+        #expect(abs(left.minX - (bounds.width - right.maxX)) < 0.5)
     }
 
     @Test func landscapeShowAllowsPortraitCameraInterface() {
@@ -237,6 +322,43 @@ struct CameraLiveChromeTests {
             #expect(vc.isPhoneCameraPortraitLayout)
             #expect(vc.shutterButton.frame.minY >= panel.maxY - 0.5)
             #expect(abs(vc.shutterButton.center.x - panel.midX) < 1)
+            #expect(vc.frameButton.frame.maxX <= vc.photoButton.frame.minX)
+            #expect(vc.photoButton.frame.maxX <= vc.shutterButton.frame.minX)
+            #expect(vc.shutterButton.frame.maxX <= vc.flipButton.frame.minX)
+        }
+    }
+
+    /// Landscape is the portrait row turned with the phone: Frame keeps Photo's
+    /// side of record, Flip the other, and both land on the edge the turn produced.
+    @Test func landscapeDockIsTheBottomRowTurnedWithThePhone() {
+        ExternalOutputOrientationFixture.with(.landscape) {
+            let vc = CameraLiveViewController()
+            vc.loadViewIfNeeded()
+            vc.view.bounds = CGRect(x: 0, y: 0, width: 844, height: 390)
+            vc.view.layoutIfNeeded()
+            vc.refreshLiveChrome()
+
+            let panel = vc.panelView.frame
+            let shutter = vc.shutterButton.frame
+            #expect(vc.isPhoneCameraPortraitLayout == false)
+            #expect(abs(shutter.midY - panel.midY) < 1)
+            #expect(shutter.intersects(panel) == false)
+            #expect(vc.photoButton.frame.intersects(shutter) == false)
+
+            switch vc.captureDockEdge {
+            case .right:
+                #expect(shutter.minX >= panel.maxX - 0.5)
+                #expect(vc.flipButton.frame.maxY <= shutter.minY)
+                #expect(vc.photoButton.frame.minY >= shutter.maxY)
+                #expect(vc.frameButton.frame.minY >= vc.photoButton.frame.maxY)
+            case .left:
+                #expect(shutter.maxX <= panel.minX + 0.5)
+                #expect(vc.frameButton.frame.maxY <= vc.photoButton.frame.minY)
+                #expect(vc.photoButton.frame.maxY <= shutter.minY)
+                #expect(vc.flipButton.frame.minY >= shutter.maxY)
+            case .bottom:
+                Issue.record("landscape layout must not dock at the bottom")
+            }
         }
     }
 

@@ -1,9 +1,8 @@
 //
 //  SSEEventParser.swift
-//  EclipseRemoteProtocol
+//  Eclipse
 //
-//  Description: Incremental parser for `text/event-stream` data frames.
-//  Thread Safety: Instances are not thread-safe; call from one task at a time.
+//  Copyright © 2026 Moxie LLC. All rights reserved.
 //
 
 import Foundation

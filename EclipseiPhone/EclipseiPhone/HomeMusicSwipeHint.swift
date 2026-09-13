@@ -48,13 +48,13 @@ final class HomeMusicSwipeHint: UIView {
         blurView.clipsToBounds = true
         blurView.translatesAutoresizingMaskIntoConstraints = false
         blurView.applyReduceTransparencyFallback(
-            opaqueFill: UIColor(white: 0.16, alpha: 1)
+            opaqueFill: .specialTile
         )
         addSubview(blurView)
 
         iconBackground.backgroundColor = UIAccessibility.isReduceTransparencyEnabled
-            ? UIColor.systemBlue
-            : UIColor.systemBlue.withAlphaComponent(0.45)
+            ? UIColor.accent
+            : UIColor.accent.withAlphaComponent(0.45)
         iconBackground.layer.cornerRadius = 10
         iconBackground.layer.cornerCurve = .continuous
         iconBackground.translatesAutoresizingMaskIntoConstraints = false
@@ -100,7 +100,7 @@ final class HomeMusicSwipeHint: UIView {
         dismissConfig.background.backgroundColor = UIAccessibility.isReduceTransparencyEnabled
             ? UIColor(white: 0.28, alpha: 1)
             : UIColor.white.withAlphaComponent(0.12)
-        dismissConfig.background.cornerRadius = 12
+        dismissConfig.background.cornerRadius = CornerRadii.standard
         dismissConfig.contentInsets = NSDirectionalEdgeInsets(
             top: 7, leading: 7, bottom: 7, trailing: 7
         )

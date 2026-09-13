@@ -32,11 +32,11 @@ final class AudioMiniVolumeBar: UIView {
         accessibilityLabel = "Volume"
         accessibilityTraits = .adjustable
         backgroundColor = UIColor.secondaryLabel.withAlphaComponent(0.18)
-        layer.cornerRadius = 12
+        layer.cornerRadius = CornerRadii.standard
         layer.cornerCurve = .continuous
         clipsToBounds = true
 
-        fill.backgroundColor = .systemBlue
+        fill.backgroundColor = .accent
         fill.isUserInteractionEnabled = false
         addSubview(fill)
 

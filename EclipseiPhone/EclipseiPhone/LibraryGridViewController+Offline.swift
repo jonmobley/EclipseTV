@@ -31,6 +31,9 @@ extension LibraryGridViewController {
     func performDelete(id: String) {
         let wasPending = PendingUploadStore.shared.contains(id: id)
         let sent = connectionManager.sendDeleteRequest(id: id)
+        if sent || wasPending {
+            endLiveIfDeleting(mediaId: id)
+        }
         if wasPending {
             store.removeLocalItem(id: id)
         } else if sent {
@@ -43,16 +46,31 @@ extension LibraryGridViewController {
             MediaFramingStore.clear(forId: id)
             MediaNoteStore.clear(forId: id)
             MediaTitleStore.clear(forId: id)
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            Haptics.impactLight()
         } else {
             presentNotConnectedAlert()
         }
     }
 
-    /// Selects an item as live without the Eclipse TV app (AirPlay remember / push).
+    /// Ends program output for a library item that is about to be deleted.
+    ///
+    /// PDF delete already stops its overlay before removing the document; media deleted
+    /// while live left the audience on a file the phone no longer had. Clearing the
+    /// selection first lets `currentSourceProvider` fall back to Screensaver instead of
+    /// handing the deleted item back. Must run before `removeLocalItem`, which drops
+    /// `currentId` without notifying.
+    func endLiveIfDeleting(mediaId id: String) {
+        guard store.currentId == id else { return }
+        store.updateCurrentId(nil)
+        ExternalDisplayManager.shared.endDeletedLibraryItem()
+        syncScreensaverFallbackLiveSelection()
+        reloadGridIfSafe()
+        refreshLiveHeader()
+    }
+
+    /// Selects an item as live without the EclipseTV app (AirPlay remember / push).
     func presentOfflineLive(for item: LibraryItemDTO) {
         if item.isVideo {
-            AudioPlayerController.shared.stop()
             if let localURL = LocalMediaStore.shared.localURL(forId: item.id) {
                 PresentationPrewarmer.shared.prewarm(url: localURL)
             }
@@ -67,7 +85,7 @@ extension LibraryGridViewController {
         )
         store.updateCurrentId(item.id)
         ExternalDisplayManager.shared.present(source)
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptics.impactLight()
     }
 
     /// Fullscreen Preview of a local full-res copy (⋯ Preview, or tap when locked
@@ -110,7 +128,8 @@ extension LibraryGridViewController {
             presentLocalVideoPreview(
                 fileURL: url,
                 isMuted: item.isMuted ?? false,
-                isLooping: item.isLooping ?? false
+                isLooping: item.isLooping ?? false,
+                overlayTitle: MediaTitleStore.displayTitle(for: item)
             )
             return
         }
@@ -132,7 +151,7 @@ extension LibraryGridViewController {
             return
         }
 
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptics.impactLight()
         let preview = LocalMediaPreviewViewController(items: previewable, startIndex: index)
         preview.onDismiss = { [weak self] id in
             self?.revealShowMember(id: id)
@@ -144,23 +163,28 @@ extension LibraryGridViewController {
     }
 
     /// Modal system-player Preview for a local video file.
+    ///
+    /// - Parameter overlayTitle: Floats over the upper third of the picture while it
+    ///   plays; pass `nil` for media that carries no library title.
     func presentLocalVideoPreview(
         fileURL: URL,
         isMuted: Bool = false,
         isLooping: Bool = false,
         startAt: TimeInterval = 0,
+        overlayTitle: String? = nil,
         onDismiss: ((TimeInterval) -> Void)? = nil
     ) {
         guard !isPreviewAlreadyOpen else { return }
         AudioAmbientPolicy.applyYieldIfNeeded(
             for: PresentationSource.video(fileURL, isLooping: isLooping, isMuted: isMuted)
         )
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptics.impactLight()
         let preview = LocalVideoPreviewViewController(
             fileURL: fileURL,
             isMuted: isMuted,
             isLooping: isLooping,
-            startAt: startAt
+            startAt: startAt,
+            overlayTitle: overlayTitle
         )
         preview.onDismiss = onDismiss
         present(preview, animated: true)
@@ -206,7 +230,7 @@ extension LibraryGridViewController {
     /// 9:16 panel (cropped) instead of letterboxing on the phone.
     func presentPhonePreview(id: String, fileURL: URL, isVideo: Bool) {
         guard !isPreviewAlreadyOpen else { return }
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptics.impactLight()
         let preview = DisplayModeMediaPreviewViewController(
             fileURL: fileURL,
             isVideo: isVideo,
@@ -218,7 +242,7 @@ extension LibraryGridViewController {
     func presentNotConnectedAlert() {
         let alert = UIAlertController(
             title: "EclipseTV Not Linked",
-            message: "This action needs a link to the Eclipse TV app (pairing code). "
+            message: "This action needs a link to the EclipseTV app (Pairing Code). "
                 + "AirPlay alone is enough to present, but not for this.",
             preferredStyle: .alert
         )

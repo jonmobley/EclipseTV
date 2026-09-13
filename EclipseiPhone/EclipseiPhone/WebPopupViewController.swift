@@ -42,7 +42,7 @@ final class WebPopupViewController: UIViewController {
         view.backgroundColor = .systemBackground
         navigationItem.largeTitleDisplayMode = .never
         navigationItem.rightBarButtonItem = UIBarButtonItem(
-            barButtonSystemItem: .done,
+            barButtonSystemItem: .close,
             target: self,
             action: #selector(doneTapped)
         )

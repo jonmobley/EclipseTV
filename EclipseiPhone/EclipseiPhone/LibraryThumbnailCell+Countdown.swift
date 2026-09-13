@@ -25,7 +25,7 @@ extension LibraryThumbnailCell {
         endHint: String? = nil
     ) {
         resetChrome()
-        cardView.backgroundColor = UIColor(white: 0.12, alpha: 1)
+        cardView.backgroundColor = .mediaPlaceholder
         imageView.image = nil
         imageView.alpha = 0
         placeholderIcon.isHidden = true

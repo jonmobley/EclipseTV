@@ -32,8 +32,8 @@ final class AudioPlayerController: NSObject {
     /// Relative mix level for ambient music (`0…1`), independent of system volume.
     private(set) var volume: Float = 1
 
-    private static let volumeDefaultsKey = "Eclipse.audio.playerVolume"
-    private static let playsNextDefaultsKey = "Eclipse.audio.playsNext"
+    private static let volumeDefaultsKey = DefaultsKeys.audioPlayerVolume
+    private static let playsNextDefaultsKey = DefaultsKeys.audioPlaysNext
 
     /// When true, the next queue item starts automatically when a track ends.
     private(set) var playsNext = true

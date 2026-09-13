@@ -16,6 +16,11 @@ enum ContentTransitionSettings {
         case cut = "Cut"
     }
 
+    /// Dissolve length for Crossfade. Matches the iPhone's
+    /// `ContentTransitionStyle.crossfadeDuration` so AirPlay and EclipseTV feel
+    /// the same in one Show.
+    static let crossfadeDuration: TimeInterval = 0.35
+
     /// Defaults to Crossfade when unset or unknown.
     static var style: Style {
         get {

@@ -16,13 +16,6 @@ import UIKit
 /// iCloud Sync status surfaces via `EclipseSyncStatusBanner`, not the header.
 final class HomeHeaderBar: UIView {
 
-    /// Multipeer EclipseTV link state. `.paused` is the AirPlay-first default.
-    enum ConnectionDisplayState {
-        case connected
-        case disconnected
-        case paused
-    }
-
     // MARK: - Subviews
 
     private let backButton = MinimumHitTargetButton(type: .system)
@@ -194,7 +187,7 @@ final class HomeHeaderBar: UIView {
         addButton.configuration = Self.barIconConfig(
             systemName: "plus",
             symbolConfig: symbolConfig,
-            foreground: .systemBlue
+            foreground: .accent
         )
         addButton.translatesAutoresizingMaskIntoConstraints = false
         addButton.accessibilityLabel = "Add"
@@ -590,7 +583,7 @@ final class HomeHeaderBar: UIView {
             var config = UIButton.Configuration.filled()
             config.image = UIImage(systemName: name, withConfiguration: symbolConfig)
             config.baseForegroundColor = .white
-            config.baseBackgroundColor = .systemBlue
+            config.baseBackgroundColor = .accent
             config.cornerStyle = .capsule
             config.contentInsets = NSDirectionalEdgeInsets(
                 top: 6, leading: 6, bottom: 6, trailing: 6
@@ -609,7 +602,7 @@ final class HomeHeaderBar: UIView {
         var config = UIButton.Configuration.filled()
         config.title = "+ New Show"
         config.baseForegroundColor = .white
-        config.baseBackgroundColor = .systemBlue
+        config.baseBackgroundColor = .accent
         config.cornerStyle = .capsule
         config.contentInsets = NSDirectionalEdgeInsets(
             top: 7, leading: 14, bottom: 7, trailing: 14

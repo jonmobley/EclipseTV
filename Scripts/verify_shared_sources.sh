@@ -113,4 +113,9 @@ TV_ALBUM_MANIFEST="$REPO_ROOT/EclipseAppleTV/EclipseAppleTV/RemoteAlbum/AlbumMan
 IPHONE_ALBUM_MANIFEST="$REPO_ROOT/EclipseiPhone/EclipseiPhone/AlbumManifest.swift"
 compare_from "$TV_ALBUM_MANIFEST" "$IPHONE_ALBUM_MANIFEST" "struct AlbumManifest" "AlbumManifest.swift" || status=1
 
+# Both outputs must size a fullscreen still's decode identically for a given framing.
+TV_DECODE_BUDGET="$REPO_ROOT/EclipseAppleTV/EclipseAppleTV/StillDecodeBudget.swift"
+IPHONE_DECODE_BUDGET="$REPO_ROOT/EclipseiPhone/EclipseiPhone/StillDecodeBudget.swift"
+compare_from "$TV_DECODE_BUDGET" "$IPHONE_DECODE_BUDGET" "enum StillDecodeBudget" "StillDecodeBudget.swift" || status=1
+
 exit $status

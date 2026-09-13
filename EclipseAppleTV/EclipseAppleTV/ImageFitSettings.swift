@@ -5,9 +5,10 @@
 //  Copyright © 2026 Moxie LLC. All rights reserved.
 //
 
+import AVFoundation
 import UIKit
 
-/// How a still is framed on the TV screen.
+/// How an item is framed on the TV screen.
 enum ImageFitMode: String {
     /// Whole image visible, letterboxed to the screen. Default, matching the companion.
     case fit = "Fit"
@@ -17,9 +18,14 @@ enum ImageFitMode: String {
     var contentMode: UIView.ContentMode {
         self == .fill ? .scaleAspectFill : .scaleAspectFit
     }
+
+    /// Equivalent player gravity, for video. Video has no Custom framing.
+    var videoGravity: AVLayerVideoGravity {
+        self == .fill ? .resizeAspectFill : .resizeAspect
+    }
 }
 
-/// Per-item Fit / Fill framing for stills, mirrored from the iPhone companion.
+/// Per-item Fit / Fill framing for library media, mirrored from the iPhone companion.
 ///
 /// The companion owns the choice (it needs it for its own AirPlay output), and pushes it
 /// down with every `playRequest` plus a `setImageFit` when it changes mid-show. Storing it
@@ -31,7 +37,7 @@ enum ImageFitMode: String {
 enum ImageFitSettings {
     private static let key = "EclipseTV.ImageFit"
 
-    /// Framing for a still by its file name, defaulting to `.fit`.
+    /// Framing for an item by its file name, defaulting to `.fit`.
     static func mode(forFileName name: String) -> ImageFitMode {
         guard let raw = storedModes()[name], let mode = ImageFitMode(rawValue: raw) else {
             return .fit
@@ -39,7 +45,7 @@ enum ImageFitSettings {
         return mode
     }
 
-    /// Framing for a still by its on-disk path.
+    /// Framing for an item by its on-disk path.
     static func mode(forPath path: String) -> ImageFitMode {
         mode(forFileName: (path as NSString).lastPathComponent)
     }
