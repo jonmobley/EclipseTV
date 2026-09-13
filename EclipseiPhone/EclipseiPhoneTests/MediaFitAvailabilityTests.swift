@@ -87,4 +87,14 @@ struct MediaFitAvailabilityTests {
             ) == nil
         )
     }
+
+    /// Video keeps Fit and Fill whatever its poster frame measures: the poster can be
+    /// replaced with a still shaped unlike the clip, and video has no Custom row to
+    /// leave behind, so dropping the two rows would empty the menu.
+    @Test func videoAlwaysOffersFitAndFill() {
+        let id = "video-fit-\(UUID().uuidString)"
+        #expect(MediaFitAvailability.offersFitFill(forId: id, isVideo: true))
+        // A still with no measurement keeps them too, but for the other reason.
+        #expect(MediaFitAvailability.offersFitFill(forId: id, isVideo: false))
+    }
 }

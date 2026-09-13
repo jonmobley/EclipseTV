@@ -38,6 +38,7 @@ extension MediaLibraryPickerViewController {
         ]
         if item.isVideo {
             children.append(contentsOf: videoLibraryActions(for: item))
+            children.append(screenFitMenu(for: item))
             children.append(editAction(forId: item.id))
         } else {
             children.append(noteAction(forId: item.id))
@@ -121,7 +122,11 @@ extension MediaLibraryPickerViewController {
     private func screenFitMenu(for item: LibraryItemDTO) -> UIMenu {
         MediaFitMenu.make(
             forId: item.id,
-            offersFitFill: MediaFitAvailability.fitDiffersFromFill(forId: item.id) ?? true,
+            offersFitFill: MediaFitAvailability.offersFitFill(
+                forId: item.id,
+                isVideo: item.isVideo
+            ),
+            allowsCustom: !item.isVideo,
             onSelectFit: { [weak self] mode in
                 self?.onApplyScreenFit?(item, mode)
             },

@@ -130,6 +130,9 @@ extension ImageViewController {
                 // Ensure player view is set up before assigning player
                 self.setupPlayerView()
                 self.playerView.player = player
+                // One player view serves every video, so gravity carries over from the
+                // last one and each item has to re-assert its own choice.
+                self.applyVideoFit(forPath: mediaItem.path)
 
                 // Add observer for playback end (removes any prior observers first)
                 self.installVideoEndObserver(for: player, mediaItem: mediaItem)
@@ -141,6 +144,22 @@ extension ImageViewController {
                 }
             }
         }
+    }
+
+    // MARK: - Video Fit
+
+    /// Applies the companion's Fit / Fill choice for `path` to the player.
+    ///
+    /// `AVPlayerViewController.videoGravity` takes effect immediately, so a mid-show
+    /// change needs no player rebuild — unlike loop, which swaps the player class.
+    internal func applyVideoFit(forPath path: String) {
+        playerView.videoGravity = ImageFitSettings.mode(forPath: path).videoGravity
+    }
+
+    /// Applies the stored Fit / Fill choice to whatever video is on screen.
+    internal func applyVideoFitToCurrentVideo() {
+        guard let path = currentDisplayPath() else { return }
+        applyVideoFit(forPath: path)
     }
 
     private func handleVideoPlaybackEnd(for mediaItem: MediaItem) {

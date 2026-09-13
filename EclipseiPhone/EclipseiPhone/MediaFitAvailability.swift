@@ -47,4 +47,16 @@ enum MediaFitAvailability {
               size.width > 0, size.height > 0 else { return nil }
         return fitDiffersFromFill(forSize: size)
     }
+
+    /// Whether an item's Screen Fit menu should carry the Fit and Fill rows.
+    ///
+    /// Video always keeps them. The measurement above reads the item's still
+    /// thumbnail, which for video is a poster frame the user can replace with one
+    /// shaped differently from the clip — and with no Custom row to fall back on,
+    /// a wrong measurement would leave the menu with nothing in it.
+    @MainActor
+    static func offersFitFill(forId id: String, isVideo: Bool) -> Bool {
+        guard !isVideo else { return true }
+        return fitDiffersFromFill(forId: id) ?? true
+    }
 }

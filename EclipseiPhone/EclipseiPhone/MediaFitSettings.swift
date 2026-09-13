@@ -25,11 +25,15 @@ enum MediaFitMode: String, CaseIterable {
     }
 }
 
-/// Per-item Fit / Fill choice for stills sent to the external display.
+/// Per-item Fit / Fill choice for media sent to the external display.
 ///
 /// Stored as a light `[itemId: rawValue]` map in `UserDefaults` alongside the other
 /// `ExternalOutputSettings` preferences. Items without an entry use `.fit`, so the
-/// map only ever holds the stills the user explicitly switched to Fill.
+/// map only ever holds the items the user explicitly switched to Fill.
+///
+/// Applies to video as well as stills. Video has no Custom framing — `AVPlayerLayer`
+/// offers exactly the two gravities that Fit and Fill map onto, and cropping to an
+/// arbitrary rect would need a render-time video composition.
 enum MediaFitSettings {
     private static let key = "EclipseTV.media.fitModes"
 
@@ -48,10 +52,10 @@ enum MediaFitSettings {
 
     /// Tile framing that matches how `item` is shown live.
     ///
-    /// Videos always letterbox (`.scaleAspectFit`). Stills use the item's
-    /// Screen Fit setting so a Fit still isn't cropped in the grid.
+    /// Both stills and video use the item's Screen Fit setting, so a Fit item isn't
+    /// cropped in the grid and a Fill one isn't letterboxed there.
     static func thumbnailContentMode(for item: LibraryItemDTO) -> UIView.ContentMode {
-        item.isVideo ? .scaleAspectFit : mode(forId: item.id).contentMode
+        mode(forId: item.id).contentMode
     }
 
     static func setMode(_ mode: MediaFitMode, forId id: String) {

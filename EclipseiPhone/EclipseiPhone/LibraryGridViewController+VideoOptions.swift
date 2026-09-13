@@ -61,10 +61,10 @@ extension LibraryGridViewController {
         refreshLiveVideoPresentationIfNeeded(id: id)
     }
 
-    /// Re-pushes the live video so AirPlay picks up new loop / mute flags.
+    /// Re-pushes the live video so AirPlay picks up new loop / mute / fit flags.
     ///
-    /// Keeps the current playback position so mute/loop does not restart from 0.
-    private func refreshLiveVideoPresentationIfNeeded(id: String) {
+    /// Keeps the current playback position so the change does not restart from 0.
+    func refreshLiveVideoPresentationIfNeeded(id: String) {
         guard store.currentId == id,
               let item = store.items.first(where: { $0.id == id }),
               item.isVideo else { return }

@@ -28,6 +28,7 @@ extension PresentationViewController {
                 isMuted: isMuted,
                 startAt: source.videoStartAt,
                 autoplay: source.videoAutoplay,
+                fill: source.videoFill,
                 generation: generation
             )
         case .screensaver(let url, let crossfade):
@@ -142,6 +143,7 @@ extension PresentationViewController {
         isMuted: Bool,
         startAt: TimeInterval,
         autoplay: Bool,
+        fill: Bool,
         generation: Int
     ) {
         let host = makeIncomingMediaHost()
@@ -151,7 +153,7 @@ extension PresentationViewController {
             url: url, isMuted: isMuted, isLooping: isLooping
         )
         let layer = AVPlayerLayer(player: player)
-        layer.videoGravity = .resizeAspect
+        layer.videoGravity = Self.videoGravity(fill: fill)
         host.layer.insertSublayer(layer, at: 0)
 
         incomingPlayer = player
