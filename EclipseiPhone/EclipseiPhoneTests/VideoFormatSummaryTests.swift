@@ -17,6 +17,8 @@ struct VideoFormatSummaryTests {
         #expect(VideoFormatSummary.frameRateText(23.976) == "24")
         #expect(VideoFormatSummary.frameRateText(29.97) == "30")
         #expect(VideoFormatSummary.frameRateText(59.94) == "60")
+        // Four times further from its whole number than 29.97, and still NTSC.
+        #expect(VideoFormatSummary.frameRateText(119.88) == "120")
     }
 
     @Test func wholeRatesHaveNoDecimalPoint() {

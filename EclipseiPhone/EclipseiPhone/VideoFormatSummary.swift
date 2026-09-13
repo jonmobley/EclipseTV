@@ -72,11 +72,15 @@ enum VideoFormatSummary {
         return parts.joined(separator: "  ·  ")
     }
 
-    /// Whole numbers when the rate is within rounding distance of one, so NTSC 23.976 and
-    /// 29.97 read as the 24 and 30 people expect. One decimal otherwise.
+    /// Whole numbers when the rate is within rounding distance of one, so NTSC 23.976,
+    /// 29.97, and 59.94 read as the 24, 30, and 60 people expect. One decimal otherwise.
+    ///
+    /// The tolerance is a fraction of the rate, not a flat epsilon, because every NTSC
+    /// rate sits the same 0.1% below its whole number (rate × 1000/1001) — so in absolute
+    /// terms 59.94 is twice as far from 60 as 29.97 is from 30, and 119.88 four times.
     static func frameRateText(_ fps: Double) -> String {
         let rounded = fps.rounded()
-        if abs(fps - rounded) < 0.05 {
+        if rounded > 0, abs(fps - rounded) / rounded < 0.002 {
             return String(Int(rounded))
         }
         return String(format: "%.1f", fps)
