@@ -27,8 +27,9 @@ the archive, and nothing `dsymutil` can recover locally. `DEBUG_INFORMATION_FORM
 governs code we compile, so it has no bearing here.
 
 Upstream started publishing the debug info as a **separate release asset**,
-`WebRTC-M<milestone>-dSYM.zip`, with **152.0.0**. Releases 119.0.0 through 151.0.1 —
-including our pinned 140.0.0 — ship the xcframework only.
+`WebRTC-M<milestone>-dSYM.zip`, with **152.0.0** (2026-08-31). Releases 119.0.0 through
+151.0.1 — including our pinned 140.0.0 — ship the xcframework only. **153.0.0**
+(2026-09-11) is the newest release and also carries the asset.
 
 ## Options
 
@@ -45,9 +46,15 @@ fail an archive. Remove the phase if you would rather see the honest warning.
 **2. Move to a milestone that publishes symbols, then inject them.** Change the WebRTC
 requirement in `eclipsepro/Packages/EclipsePhoneCameraClient/Package.swift` to `152.0.0` or
 newer (that package lives outside this repo, and the version constraint is what keeps
-`Package.resolved` on 140.0.0), re-resolve packages, and confirm the camera client still
-builds — stasel's major version tracks the Chromium milestone, so the ObjC API can shift
-between them. Then run the script below on each archive before uploading.
+`Package.resolved` on 140.0.0), re-resolve packages, and commit the updated
+`Package.resolved` here. Confirm the camera client still builds and that a phone-to-Mac
+camera send still connects: stasel's major version tracks the Chromium milestone, so 140 →
+153 crosses thirteen of them and the ObjC API can shift on the way. Then run the script
+below on each archive before uploading.
+
+Cost of doing this, measured against the real 153.0.0 assets: the dSYM zip is 395 MiB and
+the `ios-arm64` DWARF inside it is 203 MB, so the first archive pays a ~400 MB download
+(cached afterwards) and every archive grows by ~200 MB.
 
 ## Scripts/inject_webrtc_dsym.sh
 
@@ -61,13 +68,19 @@ archive's `dSYMs/` folder.
 Scripts/inject_webrtc_dsym.sh ~/Library/Developer/Xcode/Archives/…/EclipseiPhone.xcarchive
 ```
 
+The asset holds one bundle per slice at its top level — `WebRTC-ios-arm64.dSYM`,
+`…-ios-x86_64_arm64-simulator.dSYM`, `…-ios-x86_64_arm64-maccatalyst.dSYM`, and
+`…-macos-x86_64_arm64.dSYM` in 153.0.0. The script unpacks `ios-arm64` first, since that
+is the slice a device archive embeds, and only reaches for the others if its UUIDs don't
+match.
+
 It's safe to re-run: an archive that already covers the needed UUIDs, or that embeds no
 WebRTC at all, exits 0 without downloading anything. "Covers" means a DWARF file with real
 debug info — the `__debug_info` section the build phase above cannot produce — so a
-symbol-free placeholder sitting in `dSYMs/` does not stop the real bundle from landing. If the pinned release publishes no
-dSYM, it exits non-zero and says so rather than installing anything, because a
-UUID-matched bundle holding a *different* build's debug info would be accepted by App
-Store Connect and then mis-symbolicate every WebRTC frame.
+symbol-free placeholder sitting in `dSYMs/` does not stop the real bundle from landing. If
+the pinned release publishes no dSYM, it exits non-zero and says so rather than installing
+anything, because a UUID-matched bundle holding a *different* build's debug info would be
+accepted by App Store Connect and then mis-symbolicate every WebRTC frame.
 
 To run it automatically, add it as an **Archive post-action** on the EclipseiPhone scheme
 (Product → Scheme → Edit Scheme → Archive → Post-actions → New Run Script Action, with
