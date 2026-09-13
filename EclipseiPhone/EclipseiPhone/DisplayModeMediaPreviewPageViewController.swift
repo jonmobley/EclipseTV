@@ -38,6 +38,7 @@ final class DisplayModeMediaPreviewPageViewController: UIViewController {
     private var simplePlayer: AVPlayer?
     private var simplePlayerLayer: AVPlayerLayer?
     private var endObserver: NSObjectProtocol?
+    private var focusSuspension: PlayerFocusSuspension?
 
     /// - Parameters:
     ///   - fileURL: Local still or video file.
@@ -132,6 +133,7 @@ final class DisplayModeMediaPreviewPageViewController: UIViewController {
         panelView.layer.addSublayer(layer)
         simplePlayer = player
         simplePlayerLayer = layer
+        focusSuspension = PlayerFocusSuspension(player: player)
         endObserver = NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime,
             object: player.currentItem,
