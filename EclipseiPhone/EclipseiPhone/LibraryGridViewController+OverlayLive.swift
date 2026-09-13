@@ -12,9 +12,29 @@ import UIKit
 
 extension LibraryGridViewController {
 
+    /// Camera tile tap: go live, or open the controller when already live.
+    ///
+    /// Opening the viewfinder does not touch output, so the lock does not gate it.
+    /// A remote operator never presents locally, so its tile is never live here and
+    /// the tap falls through to `presentCameraLiveOnOutput` to command the director.
+    func presentCameraFromTile() {
+        switch CameraStillRibbon.cameraTileTap(
+            isCameraTileLive: ExternalDisplayManager.shared.isCameraTileLive
+        ) {
+        case .openController:
+            Haptics.impactLight()
+            onPresentCamera?()
+        case .goLive:
+            presentCameraLiveOnOutput()
+        }
+    }
+
     /// Puts Camera live on the grid without opening the controller.
     ///
-    /// The phone viewfinder opens from the live preview tap (or ⋯ Open Controller).
+    /// The no-UI path, matching `presentWebPageLive` / `presentPDFLive`: an
+    /// operator's tap applied on the director must not pop a viewfinder there.
+    /// A tile tap goes through `presentCameraFromTile` instead, and the phone
+    /// viewfinder also opens from the live preview tap or ⋯ Open Controller.
     func presentCameraLiveOnOutput() {
         guard !blockLiveChangeIfLocked() else { return }
         if sendShowLiveSelectIfOperator(.camera, itemId: nil) {

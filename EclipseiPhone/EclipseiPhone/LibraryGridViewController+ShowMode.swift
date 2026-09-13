@@ -443,7 +443,7 @@ extension LibraryGridViewController {
             isScreensaverSelected = false
             presentLogoLive()
         case .camera:
-            presentCameraLiveOnOutput()
+            presentCameraFromTile()
         case .livePoll(let item):
             selectLivePoll(item)
         case .countdown(let item):

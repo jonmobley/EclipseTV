@@ -48,11 +48,11 @@ extension LiveHeaderView {
         if controls.isHidden != hideControls {
             controls.isHidden = hideControls
         }
-        if let fullscreen = libraryVideoFullscreenButton {
-            fullscreen.alpha = controlsFade
-            let hideFullscreen = controlsFade <= 0.01
-            if fullscreen.isHidden != hideFullscreen {
-                fullscreen.isHidden = hideFullscreen
+        if let expand = heroExpandButton {
+            expand.alpha = controlsFade
+            let hideExpand = controlsFade <= 0.01
+            if expand.isHidden != hideExpand {
+                expand.isHidden = hideExpand
             }
         }
         if let ribbon = slideshowRibbonButton {
