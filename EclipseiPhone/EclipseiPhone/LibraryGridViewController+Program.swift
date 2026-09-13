@@ -19,6 +19,16 @@ extension LibraryGridViewController {
         ShowProgramResolver.resolve(showProgramState())
     }
 
+    /// The program on real output, which is the same thing minus Practice.
+    ///
+    /// Questions about who holds the projector — the foreign-Show mini preview, the
+    /// Home Show cards, the snapshot operators follow — have to leave Practice out.
+    /// A rehearsal has no room and no output, so counting it would announce that
+    /// another Show owns a display with nothing on it.
+    var outputOwningShowProgram: ShowProgram? {
+        ShowProgramResolver.resolve(showProgramState(includingPracticePoll: false))
+    }
+
     /// Samples every store that can own live output into one value.
     ///
     /// - Parameter includingPracticePoll: Practice is a phone rehearsal with no
@@ -53,7 +63,7 @@ extension LibraryGridViewController {
     /// Show. Media, pages, and PDFs are members by id; slideshows, countdowns, and polls
     /// record their Show on the model, since their tokens live on the surface only.
     func showOwnsLiveProgram(_ show: LocalAlbum) -> Bool {
-        guard let program = resolvedShowProgram, let itemId = program.itemId else {
+        guard let program = outputOwningShowProgram, let itemId = program.itemId else {
             return false
         }
         switch program.kind {

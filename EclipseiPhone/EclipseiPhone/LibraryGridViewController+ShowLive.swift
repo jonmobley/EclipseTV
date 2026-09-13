@@ -160,9 +160,7 @@ extension LibraryGridViewController {
     /// Program mirrored to operators, resolved through the same priority order the
     /// local grid paints with, so a follow phone cannot show a different tile live.
     func makeShowLiveSnapshot(showId: UUID) -> ShowLiveSnapshot {
-        let program = ShowProgramResolver.resolve(
-            showProgramState(includingPracticePoll: false)
-        )
+        let program = outputOwningShowProgram
         // `showLiveVideoState` and `showLiveCountdownState` answer nil unless that
         // kind is live, so an operator's transport and clock follow the director
         // without the caller re-deriving which one is on program.
