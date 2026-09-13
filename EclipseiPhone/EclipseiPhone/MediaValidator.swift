@@ -10,6 +10,8 @@ import AVFoundation
 
 enum MediaValidationResult {
     case valid
+    /// Importable, but with something the user should be told before committing.
+    case warning(reason: String)
     case invalid(reason: String)
 }
 
@@ -41,11 +43,14 @@ class MediaValidator {
             let minDim = min(width, height)
 
             if maxDim > 3840 {
-                return .invalid(reason: "Video resolution too high (\(Int(maxDim))p). Maximum allowed is 4K (3840p).")
+                return .invalid(reason: "Video is too big (\(dimensionText(width, height))). The longest edge must be 3840 pixels or less.")
             }
-            
+
+            // Warn rather than reject: every output surface letterboxes video, so a
+            // small clip still plays correctly — it just looks soft on a TV.
+            var warning: String?
             if minDim < 720 {
-                return .invalid(reason: "Video resolution too low (\(Int(minDim))p). Minimum required is 720p.")
+                warning = "This video is low resolution (\(dimensionText(width, height))) and may look soft on a TV."
             }
 
             do {
@@ -60,11 +65,19 @@ class MediaValidator {
                 // This prevents blocking valid videos due to file system errors
             }
 
+            if let warning {
+                return .warning(reason: warning)
+            }
             return .valid
             
         } catch {
             return .invalid(reason: "Unable to analyze video file: \(error.localizedDescription)")
         }
+    }
+
+    /// Orientation-applied pixel dimensions, for messages that name a real size.
+    private static func dimensionText(_ width: CGFloat, _ height: CGFloat) -> String {
+        "\(Int(width.rounded())) × \(Int(height.rounded()))"
     }
 
     static func downscaleImage(_ image: UIImage, maxDimension: CGFloat = 3840) -> UIImage {

@@ -121,7 +121,12 @@ extension iPhoneMainViewController {
         case .failure(let failure):
             return .failure(failure)
         case .success(let localURL):
-            guard case .valid = await MediaValidator.validateVideo(at: localURL) else {
+            // A batch has no per-item confirm sheet to carry a caution, and one soft
+            // clip is not worth interrupting the run for.
+            switch await MediaValidator.validateVideo(at: localURL) {
+            case .valid, .warning:
+                break
+            case .invalid:
                 cleanupTempFile(at: localURL)
                 return .failure(.unreadable)
             }

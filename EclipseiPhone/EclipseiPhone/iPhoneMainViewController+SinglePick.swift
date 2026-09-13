@@ -125,6 +125,9 @@ extension iPhoneMainViewController {
                 switch await MediaValidator.validateVideo(at: localURL) {
                 case .valid:
                     showVideoThumbnailPreview(for: localURL)
+                case .warning(let reason):
+                    // Importable — the confirm sheet carries the caution.
+                    showVideoThumbnailPreview(for: localURL, notice: reason)
                 case .invalid(let reason):
                     cleanupTempFile(at: localURL)
                     showAlert(title: "Video Rejected", message: reason)
