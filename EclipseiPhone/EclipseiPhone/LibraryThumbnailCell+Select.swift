@@ -40,9 +40,11 @@ extension LibraryThumbnailCell {
             : UIColor.black.withAlphaComponent(0.35)
         selectionBadge.isHidden = false
         cardView.bringSubviewToFront(selectionBadge)
-        cardView.layer.borderWidth = isSelected ? 3 : 0
-        cardView.layer.borderColor = isSelected
-            ? UIColor.accent.cgColor
-            : UIColor.clear.cgColor
+        // Registered as the idle edge rather than written onto the layer: a check
+        // mark only ever appears on a tile that is not live, and stroke
+        // reconciliation clears live state by restoring whatever idle edge the
+        // tile registered. A direct write here was erased the next time a tick or
+        // a reload reconciled the grid.
+        setIdleBorder(width: isSelected ? 3 : 0, color: isSelected ? .accent : .clear)
     }
 }
