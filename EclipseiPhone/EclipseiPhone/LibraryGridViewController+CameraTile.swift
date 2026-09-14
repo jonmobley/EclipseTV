@@ -43,7 +43,7 @@ extension LibraryGridViewController {
         if let cell = visibleCameraCell() {
             CameraManager.shared.captureLastFrame(from: cell.cameraPreview)
             cell.configureCamera(
-                isLive: ExternalDisplayManager.shared.isCameraTileLive,
+                isLive: isShowGridItemLive(.camera),
                 lastFrame: CameraManager.shared.lastFrame,
                 parkedStill: ExternalDisplayManager.shared.cameraTileParkedStillImage,
                 warmPreview: false,
@@ -69,6 +69,11 @@ extension LibraryGridViewController {
     }
 
     /// Re-attaches the visible Camera tile after session start / Display Mode changes.
+    ///
+    /// Live comes from the resolved program, like every other tile. Reading
+    /// `isCameraTileLive` straight off the manager here let this pass disagree with
+    /// the grid it is painting into — it runs outside `cellForItemAt`, so it was the
+    /// one write that could not be corrected by a reload.
     func refreshVisibleCameraTilePreview() {
         guard !ExternalDisplayManager.shared.isCameraModeActive,
               !isCameraControlPresented,
@@ -78,7 +83,7 @@ extension LibraryGridViewController {
             return
         }
         cell.configureCamera(
-            isLive: ExternalDisplayManager.shared.isCameraTileLive,
+            isLive: isShowGridItemLive(.camera),
             lastFrame: CameraManager.shared.lastFrame,
             parkedStill: ExternalDisplayManager.shared.cameraTileParkedStillImage,
             warmPreview: true,

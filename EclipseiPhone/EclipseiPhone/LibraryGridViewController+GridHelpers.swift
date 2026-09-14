@@ -89,7 +89,12 @@ extension LibraryGridViewController {
         }
     }
 
-    /// Reloads only the Camera tile (live preview / last-frame updates).
+    /// Repaints only the Camera tile (live preview / last-frame updates).
+    ///
+    /// In place and unanimated, like every other partial update on this grid. The
+    /// last frame is captured on the same taps that change what is live, so an
+    /// animated `reloadItems` here was crossfading a replacement cell in exactly
+    /// when the go-live `reloadData()` landed — and the losing cell kept its stroke.
     func reloadCameraTile() {
         guard let showsSection = sectionIndex(for: .shows),
               let item = cameraShowItemIndex else { return }
@@ -97,6 +102,8 @@ extension LibraryGridViewController {
         guard collectionView.indexPathsForVisibleItems.contains(indexPath) else {
             return
         }
-        collectionView.reloadItems(at: [indexPath])
+        UIView.performWithoutAnimation {
+            collectionView.reconfigureItems(at: [indexPath])
+        }
     }
 }

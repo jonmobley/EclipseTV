@@ -44,10 +44,11 @@ extension LibraryGridViewController: TVLibraryStoreDelegate {
     /// `ExternalDisplayManager.present(_:)` ends the previous overlay. At that
     /// instant a live website / PDF tile still reads as live, so this pass paints
     /// a transitional state that the follow-up `reloadLibraryGrid()` corrects in
-    /// the same turn. `reconfigureItems` updates the existing cells with no
-    /// animation, so that correction lands. The animated `reloadItems` swap it
-    /// replaces was still crossfading old cells in when `reloadData()` ran, and
-    /// the stale red stroke on the website tile could outlive the reload.
+    /// the same turn. Both the update and its animation are suppressed so that
+    /// correction lands: the animated `reloadItems` this replaced was still
+    /// crossfading old cells in when `reloadData()` ran, and the stale red stroke
+    /// on the website tile outlived the reload. `reconfigureItems` animates by
+    /// default too, which reopened the same window.
     ///
     /// Bounds come from the data source (not `collectionView.numberOfSections`) so a
     /// layout that still reflects the previous Home/Show shape cannot green-light a
@@ -71,7 +72,9 @@ extension LibraryGridViewController: TVLibraryStoreDelegate {
             reloadLibraryGrid()
             return
         }
-        collectionView.reconfigureItems(at: safe)
+        UIView.performWithoutAnimation {
+            collectionView.reconfigureItems(at: safe)
+        }
         refreshVisibleThumbnailPins()
     }
 

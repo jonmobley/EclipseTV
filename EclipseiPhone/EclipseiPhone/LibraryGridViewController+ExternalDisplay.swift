@@ -94,6 +94,8 @@ extension LibraryGridViewController {
         slideshowRibbonView.reloadData()
         collectionView.layoutIfNeeded()
         refreshVisibleThumbnailPins()
+        // Last word on which tile is live, after the cells exist again.
+        syncVisibleShowTileLiveStrokes()
     }
 
     /// Clears home-grid live selection when a joined album item becomes the live output.
