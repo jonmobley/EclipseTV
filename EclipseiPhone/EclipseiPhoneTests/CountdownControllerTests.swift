@@ -149,7 +149,155 @@ struct CountdownControllerTests {
         #expect(clock.isPresetDuration == false)
     }
 
+    // MARK: - Held Time
+
+    @Test func cuttingAwayHoldsTheRemainderAndComingBackResumesIt() {
+        let time = FakeClock()
+        let clock = makeClock(now: { time.now })
+        let timer = makeCountdown(duration: 300)
+
+        clock.present(timer)
+        #expect(clock.remaining == 300)
+        time.advance(by: 100)
+        clock.syncRemainingFromDeadline()
+        #expect(clock.remaining == 200)
+
+        // A video going live tears the countdown overlay down.
+        clock.endLive()
+        #expect(clock.liveCountdownId == nil)
+        #expect(clock.running == false)
+        #expect(clock.heldRemaining(for: timer) == 200)
+        #expect(clock.startSeconds(for: timer) == 200)
+
+        // Time under the video is not charged to a clock that is not running.
+        time.advance(by: 500)
+        #expect(clock.heldRemaining(for: timer) == 200)
+
+        clock.present(timer)
+        #expect(clock.running)
+        #expect(clock.remaining == 200)
+        #expect(clock.heldRemaining(for: timer) == nil)
+        clock.pause()
+    }
+
+    @Test func eachCountdownKeepsItsOwnPlaceAcrossADirectSwap() {
+        let time = FakeClock()
+        let clock = makeClock(now: { time.now })
+        let first = makeCountdown(duration: 300)
+        let second = makeCountdown(duration: 60)
+
+        clock.present(first)
+        time.advance(by: 100)
+        clock.syncRemainingFromDeadline()
+
+        // Countdown → countdown never reaches overlay teardown, so `present`
+        // is what has to hold the clock it replaces.
+        clock.present(second)
+        #expect(clock.liveCountdownId == second.id)
+        #expect(clock.duration == 60)
+        #expect(clock.remaining == 60)
+        #expect(clock.heldRemaining(for: first) == 200)
+
+        time.advance(by: 20)
+        clock.syncRemainingFromDeadline()
+        #expect(clock.remaining == 40)
+
+        clock.present(first)
+        #expect(clock.remaining == 200)
+        #expect(clock.heldRemaining(for: second) == 40)
+        clock.pause()
+    }
+
+    @Test func representingTheLiveCountdownStartsItOver() {
+        let time = FakeClock()
+        let clock = makeClock(now: { time.now })
+        let timer = makeCountdown(duration: 300)
+
+        clock.present(timer)
+        time.advance(by: 100)
+        clock.syncRemainingFromDeadline()
+        #expect(clock.remaining == 200)
+
+        // The hold files 200 for this very tile, and the same tap must not then
+        // resume from it.
+        clock.present(timer)
+        #expect(clock.remaining == 300)
+        #expect(clock.heldRemaining(for: timer) == nil)
+        clock.pause()
+    }
+
+    @Test func anExpiredClockStartsOverRatherThanResuming() {
+        let time = FakeClock()
+        let clock = makeClock(now: { time.now })
+        let timer = makeCountdown(duration: 30)
+
+        clock.present(timer)
+        time.advance(by: 30)
+        #expect(clock.syncRemainingFromDeadline())
+        #expect(clock.remaining == 0)
+
+        clock.endLive()
+        #expect(clock.heldRemaining(for: timer) == nil)
+        #expect(clock.startSeconds(for: timer) == 30)
+
+        clock.present(timer)
+        #expect(clock.remaining == 30)
+        clock.pause()
+    }
+
+    @Test func aClockStoppedAtFullLengthHasNothingToHold() {
+        let clock = makeClock()
+        let timer = makeCountdown(duration: 120)
+
+        clock.present(timer)
+        clock.reset()
+        clock.endLive()
+        #expect(clock.heldRemaining(for: timer) == nil)
+        #expect(clock.startSeconds(for: timer) == 120)
+    }
+
+    @Test func editingTheTileLengthInvalidatesTheHold() {
+        let time = FakeClock()
+        let clock = makeClock(now: { time.now })
+        var timer = makeCountdown(duration: 300)
+
+        clock.present(timer)
+        time.advance(by: 100)
+        clock.syncRemainingFromDeadline()
+        clock.endLive()
+        #expect(clock.heldRemaining(for: timer) == 200)
+
+        // Choosing a new length is asking for that length.
+        timer.duration = 600
+        #expect(clock.heldRemaining(for: timer) == nil)
+        #expect(clock.startSeconds(for: timer) == 600)
+    }
+
+    @Test func discardingHeldTimeStartsTheNextTapOver() {
+        let time = FakeClock()
+        let clock = makeClock(now: { time.now })
+        let timer = makeCountdown(duration: 300)
+
+        clock.present(timer)
+        time.advance(by: 100)
+        clock.syncRemainingFromDeadline()
+        clock.endLive()
+        #expect(clock.heldRemaining(for: timer) == 200)
+
+        clock.discardHeldTime(for: timer.id)
+        #expect(clock.heldRemaining(for: timer) == nil)
+        #expect(clock.startSeconds(for: timer) == 300)
+
+        clock.present(timer)
+        #expect(clock.remaining == 300)
+        clock.pause()
+    }
+
     // MARK: - Helpers
+
+    private func makeCountdown(duration: Int) -> ShowCountdown {
+        ShowCountdown(showId: UUID(), name: "Countdown", duration: duration)
+    }
 
     private func makeClock(
         now: @escaping () -> Date = { Date() }
