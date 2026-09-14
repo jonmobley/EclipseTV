@@ -584,6 +584,15 @@ final class ExternalDisplayManager {
         default:
             PresentationPrewarmer.shared.clear()
         }
+        // Before the overlay switch, because that switch announces the outgoing
+        // overlay's end and those observers read `lastSource` to decide what is on
+        // program. `WebOverlayReclaim` is the one that matters: the browser closes
+        // on that very notification, and a navigation committing on the way out
+        // asks whether it may restore its page. Answering from the source being
+        // replaced let a website take program back from the slideshow that had
+        // just replaced it — which is the two-red-strokes report, and exactly what
+        // that guard exists to refuse.
+        lastSource = source
         switch source.content {
         case .camera:
             beginOverlay(.camera, liveId: nil)
@@ -613,7 +622,6 @@ final class ExternalDisplayManager {
                 liveWebVideoPageId = adopted
             }
         }
-        lastSource = source
         presentationVC?.show(source)
         updateIdleTimer()
     }

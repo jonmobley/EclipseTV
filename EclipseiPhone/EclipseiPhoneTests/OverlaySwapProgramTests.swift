@@ -104,6 +104,40 @@ struct OverlaySwapProgramTests {
         clearOverlays()
     }
 
+    /// The browser closes on the same notification that ends the web overlay, and a
+    /// navigation committing on the way out asks `loadWeb` whether it may restore
+    /// the page. Once a still is taking program the answer is no — otherwise the
+    /// website reclaims output from the slideshow that just replaced it, and both
+    /// cards end up carrying a red stroke.
+    @Test func aLateBrowserCommitCannotReclaimOutputFromTheStillThatReplacedIt() {
+        let mgr = ExternalDisplayManager.shared
+        clearOverlays()
+        let pageId = UUID()
+        mgr.presentWeb(url, pageId: pageId)
+
+        let slide = URL(fileURLWithPath: "/tmp/slide.jpg")
+        let reclaimed = Reclaimed()
+        let token = NotificationCenter.default.addObserver(
+            forName: ExternalDisplayManager.webDidEndNotification,
+            object: nil,
+            queue: nil
+        ) { [url] _ in
+            MainActor.assumeIsolated {
+                mgr.loadWeb(url: url, pageId: pageId)
+                reclaimed.didReclaim = mgr.isWebLive
+            }
+        }
+        defer { NotificationCenter.default.removeObserver(token) }
+
+        mgr.present(.image(slide, fill: false))
+
+        #expect(reclaimed.didReclaim == false)
+        #expect(mgr.isWebLive == false)
+        #expect(mgr.liveWebPageId == nil)
+        #expect(Self.program() == nil)
+        clearOverlays()
+    }
+
     // MARK: - Helpers
 
     /// The overlay half of what `LibraryGridViewController` samples for the grid.
@@ -152,5 +186,11 @@ struct OverlaySwapProgramTests {
     @MainActor
     private final class Observed {
         var programs: [ShowProgram?] = []
+    }
+
+    /// Whether a late browser commit took the web overlay back.
+    @MainActor
+    private final class Reclaimed {
+        var didReclaim = true
     }
 }
