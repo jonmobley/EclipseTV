@@ -34,10 +34,24 @@ final class CountdownController {
 
     nonisolated static let defaultDuration = 300
 
+    /// A part-used clock kept for a countdown that is no longer on output.
+    ///
+    /// The length it was counting is stored beside the remainder so editing the
+    /// tile's duration invalidates the hold instead of resuming against a length
+    /// the user has since changed.
+    private struct HeldClock {
+        var remaining: Int
+        var duration: Int
+    }
+
     private let defaults: UserDefaults
     private let now: () -> Date
     private var timer: Timer?
     private var deadline: Date?
+
+    /// Part-used clocks by countdown id, so cutting away to a video and back
+    /// resumes rather than starting over. Session-only: a relaunch starts fresh.
+    private var heldClocks: [UUID: HeldClock] = [:]
 
     /// Countdown whose clock is on AirPlay / HDMI / Practice, if any.
     private(set) var liveCountdownId: UUID?
@@ -76,23 +90,54 @@ final class CountdownController {
         timer?.invalidate()
     }
 
-    /// Binds the clock to `item` and starts from its duration.
+    // MARK: - Going Live
+
+    /// Binds the clock to `item` and starts it, resuming a held remainder if any.
     func present(_ item: ShowCountdown) {
+        // Read before holding, so re-presenting the countdown already on output
+        // cannot resume from the remainder that hold is about to file for it.
+        let resumed = heldRemaining(for: item)
+        holdOutgoingClock()
+        heldClocks[item.id] = nil
         liveCountdownId = item.id
-        setDuration(item.duration)
+        applyDuration(item.duration)
+        if let resumed {
+            remaining = resumed
+        }
         start()
     }
 
-    /// Clears the live id and pauses (overlay teardown).
+    /// Clears the live id and pauses, keeping any remainder for a later tap.
     func endLive() {
+        holdOutgoingClock()
         liveCountdownId = nil
         expiredAt = nil
-        if running {
-            pause()
-        } else {
-            notify()
-        }
+        notify()
     }
+
+    /// Seconds a tap on `item` would resume from, or nil when it would start over.
+    ///
+    /// Tiles read this so the number on the card is the number a tap produces.
+    func heldRemaining(for item: ShowCountdown) -> Int? {
+        guard let held = heldClocks[item.id],
+              held.duration == Self.clampedDuration(item.duration),
+              held.remaining > 0, held.remaining < held.duration
+        else { return nil }
+        return held.remaining
+    }
+
+    /// Seconds a tap on `item` would put on the clock.
+    func startSeconds(for item: ShowCountdown) -> Int {
+        heldRemaining(for: item) ?? item.duration
+    }
+
+    /// Drops any remainder held for `id` so the next tap starts over.
+    func discardHeldTime(for id: UUID) {
+        guard heldClocks.removeValue(forKey: id) != nil else { return }
+        notify()
+    }
+
+    // MARK: - Clock
 
     /// Starts from remaining, or from `duration` when already at zero.
     func start() {
@@ -109,11 +154,7 @@ final class CountdownController {
     /// Holds remaining without clearing it.
     func pause() {
         guard running else { return }
-        syncRemainingFromDeadline()
-        running = false
-        deadline = nil
-        timer?.invalidate()
-        timer = nil
+        stopKeepingRemaining()
         notify()
     }
 
@@ -136,17 +177,7 @@ final class CountdownController {
 
     /// Sets length, resets remaining, and keeps running if it was.
     func setDuration(_ seconds: Int) {
-        let next = Self.clampedDuration(seconds)
-        duration = next
-        remaining = next
-        expiredAt = nil
-        defaults.set(next, forKey: Self.durationKey)
-        if running {
-            deadline = now().addingTimeInterval(TimeInterval(next))
-        }
-        if let liveCountdownId {
-            CountdownStore.shared.setDuration(id: liveCountdownId, seconds: next)
-        }
+        applyDuration(seconds)
         notify()
     }
 
@@ -173,6 +204,45 @@ final class CountdownController {
     }
 
     // MARK: - Private
+
+    /// Duration write shared with `present(_:)`, which notifies once it has also
+    /// applied any resumed remainder.
+    private func applyDuration(_ seconds: Int) {
+        let next = Self.clampedDuration(seconds)
+        duration = next
+        remaining = next
+        expiredAt = nil
+        defaults.set(next, forKey: Self.durationKey)
+        if running {
+            deadline = now().addingTimeInterval(TimeInterval(next))
+        }
+        if let liveCountdownId {
+            CountdownStore.shared.setDuration(id: liveCountdownId, seconds: next)
+        }
+    }
+
+    /// Stops the clock leaving output and files any part-used remainder under its id.
+    ///
+    /// Countdown → countdown does not reach overlay teardown, because the overlay
+    /// kind is unchanged and `ExternalDisplayManager` has nothing to end, so
+    /// `present(_:)` holds the outgoing clock here as well as `endLive()`.
+    /// A clock at zero or still at full length has no remainder worth keeping.
+    private func holdOutgoingClock() {
+        let outgoing = liveCountdownId
+        stopKeepingRemaining()
+        guard let outgoing, remaining > 0, remaining < duration else { return }
+        heldClocks[outgoing] = HeldClock(remaining: remaining, duration: duration)
+    }
+
+    /// `pause()` without the notification, for callers that post their own.
+    private func stopKeepingRemaining() {
+        guard running else { return }
+        syncRemainingFromDeadline()
+        running = false
+        deadline = nil
+        timer?.invalidate()
+        timer = nil
+    }
 
     private func installTimer() {
         timer?.invalidate()
