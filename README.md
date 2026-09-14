@@ -187,6 +187,26 @@ Views/
 - **Performance Optimization**: Async loading and intelligent caching
 - **Focus Management**: Apple TV remote navigation optimization
 
+### Cutting a build for TestFlight
+
+Raise the build number before archiving. App Store Connect refuses a build number it
+has already accepted for the current `MARKETING_VERSION`, and it reports the clash only
+after the upload finishes:
+
+```bash
+Scripts/set_build_number.sh   # stamps both apps; commit the result, then archive
+```
+
+The number lives in three places — `CURRENT_PROJECT_VERSION` in each app's project,
+plus `CFBundleVersion` in `EclipseAppleTV/Info.plist`, because the TV target ships a
+literal plist while the iPhone target generates one. The script keeps all three in step,
+derives `YYYYMMDD.<minute of day>` so each run sorts above the last, and refuses to move
+the number backwards unless you pass `--force` (for a deliberate reset alongside a
+`MARKETING_VERSION` bump). `--dry-run` shows what it would change.
+
+Both apps are then archived from Xcode on a Mac. Expect the WebRTC symbol warning on the
+iPhone upload — see below.
+
 ## 🐛 Troubleshooting
 
 ### Connection Issues
