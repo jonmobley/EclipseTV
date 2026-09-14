@@ -128,11 +128,17 @@ final class CountdownController {
         return "\(name)\n\(displayString)"
     }
 
-    /// Binds the clock to `item` and starts from its duration.
-    func present(_ item: ShowCountdown) {
+    /// Binds the clock to `item` without announcing it.
+    ///
+    /// Going live publishes the overlay between this and `start()`. Announcing the
+    /// bind first repainted the Show grid from the *previous* program, and while a
+    /// countdown was already live that repaint was the last one the tiles got —
+    /// `refreshCountdownChrome` deliberately skips the grid once the clock owns
+    /// output, so the outgoing timer kept the red stroke and the incoming one never
+    /// took it.
+    func prepare(_ item: ShowCountdown) {
         liveCountdownId = item.id
-        setDuration(item.duration)
-        start()
+        applyDuration(item.duration, notifying: false)
     }
 
     /// Clears the live id and pauses (overlay teardown).
@@ -188,18 +194,7 @@ final class CountdownController {
 
     /// Sets length, resets remaining, and keeps running if it was.
     func setDuration(_ seconds: Int) {
-        let next = Self.clampedDuration(seconds)
-        duration = next
-        remaining = next
-        expiredAt = nil
-        defaults.set(next, forKey: Self.durationKey)
-        if running {
-            deadline = now().addingTimeInterval(TimeInterval(next))
-        }
-        if let liveCountdownId {
-            CountdownStore.shared.setDuration(id: liveCountdownId, seconds: next)
-        }
-        notify()
+        applyDuration(seconds, notifying: true)
     }
 
     /// How long ago the clock hit zero, or nil when it hasn't since the last start.
@@ -225,6 +220,22 @@ final class CountdownController {
     }
 
     // MARK: - Private
+
+    private func applyDuration(_ seconds: Int, notifying: Bool) {
+        let next = Self.clampedDuration(seconds)
+        duration = next
+        remaining = next
+        expiredAt = nil
+        defaults.set(next, forKey: Self.durationKey)
+        if running {
+            deadline = now().addingTimeInterval(TimeInterval(next))
+        }
+        if let liveCountdownId {
+            CountdownStore.shared.setDuration(id: liveCountdownId, seconds: next)
+        }
+        guard notifying else { return }
+        notify()
+    }
 
     private func installTimer() {
         timer?.invalidate()

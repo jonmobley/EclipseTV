@@ -63,6 +63,11 @@ final class LibraryThumbnailCell: UICollectionViewCell {
     /// reframe Save is exactly when the cache misses.
     private var configuredSourceImage: UIImage?
 
+    /// Whether the card currently carries the live stroke.
+    private var isLiveStroked = false
+    private var idleBorderWidth: CGFloat = 0
+    private var idleBorderColor: UIColor = .clear
+
     // MARK: - Init
 
     override init(frame: CGRect) {
@@ -418,9 +423,8 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         setTypeIcon(typeIcon)
         updateCaptionScrim()
         setLive(isLive, isLocked: isLocked)
-        if outlined && !isLive {
-            cardView.layer.borderWidth = 1
-            cardView.layer.borderColor = UIColor.separator.cgColor
+        if outlined {
+            setIdleBorder(width: 1, color: .separator)
         }
         accessibilityLabel = isLive
             ? (isLocked ? "\(title), live, locked" : "\(title), live")
@@ -453,6 +457,9 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         captionScrimView.isHidden = true
         hideMediaBadges()
         selectionBadge.isHidden = true
+        isLiveStroked = false
+        idleBorderWidth = 0
+        idleBorderColor = .clear
         cardView.layer.borderWidth = 0
         menuButton.menu = nil
         menuButton.isHidden = true
@@ -494,17 +501,33 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         selectionBadge.tintColor = .accent
         selectionBadge.backgroundColor = .white
         selectionBadge.isHidden = !isSelected
-        cardView.layer.borderWidth = isSelected ? 3 : 0
-        cardView.layer.borderColor = isSelected
-            ? UIColor.accent.cgColor
-            : UIColor.clear.cgColor
+        setIdleBorder(width: isSelected ? 3 : 0, color: isSelected ? .accent : .clear)
     }
 
     /// - Parameter isLocked: When live is locked, the stroke uses amber.
     func setLive(_ isLive: Bool, isLocked: Bool = false) {
-        cardView.layer.borderWidth = isLive ? 3 : 0
-        let accent: UIColor = isLocked ? .systemOrange : .systemRed
-        cardView.layer.borderColor = isLive ? accent.cgColor : UIColor.clear.cgColor
+        isLiveStroked = isLive
+        guard isLive else {
+            cardView.layer.borderWidth = idleBorderWidth
+            cardView.layer.borderColor = idleBorderColor.cgColor
+            return
+        }
+        cardView.layer.borderWidth = 3
+        cardView.layer.borderColor = (isLocked ? UIColor.systemOrange : .systemRed).cgColor
+    }
+
+    /// Edge a tile keeps when it is *not* live (Camera's hairline, the outlined
+    /// "Syncing…" placeholder).
+    ///
+    /// Registered here rather than written straight onto the layer so `setLive` stays
+    /// the only owner of the card border. Stroke reconciliation re-asserts live state
+    /// on tiles it did not configure, and it must be able to clear a stroke without
+    /// also erasing chrome it knows nothing about.
+    func setIdleBorder(width: CGFloat, color: UIColor) {
+        idleBorderWidth = width
+        idleBorderColor = color
+        guard !isLiveStroked else { return }
+        setLive(false)
     }
 
     override func prepareForReuse() {

@@ -555,7 +555,9 @@ extension LibraryGridViewController {
             connectionManager: connectionManager,
             startingAt: startingAt
         )
-        collectionView.reloadData()
+        // The full reload: playback pushes the first slide through
+        // `ExternalDisplayManager`, which ends whatever overlay was live.
+        reloadLibraryGrid()
         refreshLiveHeader()
     }
 

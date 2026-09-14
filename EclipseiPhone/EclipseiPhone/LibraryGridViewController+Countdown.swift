@@ -46,8 +46,11 @@ extension LibraryGridViewController {
         isScreensaverSelected = false
         SlideshowPlaybackController.shared.stop()
         store.updateCurrentId(nil)
-        CountdownController.shared.present(item)
+        // Bind, publish the overlay, then run: the clock and `overlaySource` name
+        // the same countdown before anything observing either of them repaints.
+        CountdownController.shared.prepare(item)
         ExternalDisplayManager.shared.presentCountdown()
+        CountdownController.shared.start()
         announceAirPlayOverlayIfLinked()
         Haptics.impactLight()
         reloadLibraryGrid()
@@ -231,7 +234,14 @@ extension LibraryGridViewController {
 
     // MARK: - Private
 
-    /// Ticks the live countdown tile (local clock, or the director's on an operator).
+    /// Ticks every countdown tile (local clock, or the director's on an operator).
+    ///
+    /// While a countdown owns output this is the only pass the tiles get —
+    /// `refreshCountdownChrome` skips the grid reload so a once-a-second tick does
+    /// not rebuild it. So it has to reconcile the whole tile, not just the live
+    /// one's digits: a timer that stopped being live keeps the red stroke and the
+    /// running clock otherwise, which is how two countdowns ended up looking like
+    /// they shared one live state.
     func updateVisibleCountdownTiles() {
         guard let showsSection = sectionIndex(for: .shows) else { return }
         let remaining = remoteCountdownState?.remaining
@@ -245,9 +255,8 @@ extension LibraryGridViewController {
             let isLive = isShowGridItemLive(.countdown(item))
             let seconds = isLive ? remaining : item.duration
             let isExpired = isLive && seconds == 0
-            if isLive {
-                cell.applyCountdownTime(seconds, isExpired: isExpired)
-            }
+            cell.applyCountdownTime(seconds, isExpired: isExpired)
+            cell.setLive(isLive, isLocked: isLiveOutputLocked)
             var spoken = "\(item.name), \(CountdownController.displayString(seconds: seconds))"
             if let hint = item.endAction.tileHint {
                 spoken += ", \(hint.lowercased())"
