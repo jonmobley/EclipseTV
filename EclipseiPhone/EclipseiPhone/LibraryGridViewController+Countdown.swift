@@ -80,9 +80,12 @@ extension LibraryGridViewController {
         item: ShowCountdown,
         isLive: Bool
     ) {
+        let clock = CountdownController.shared
+        // An idle tile shows what a tap would put on the clock: the saved length,
+        // or a remainder held from before something else took output.
         let seconds = isLive
-            ? (remoteCountdownState?.remaining ?? CountdownController.shared.remaining)
-            : item.duration
+            ? (remoteCountdownState?.remaining ?? clock.remaining)
+            : clock.startSeconds(for: item)
         let isExpired = isLive && seconds == 0
         cell.configureCountdown(
             name: item.name,
@@ -90,14 +93,22 @@ extension LibraryGridViewController {
             isLive: isLive,
             isLocked: isLiveOutputLocked,
             isExpired: isExpired,
+            isHeld: !isLive && clock.heldRemaining(for: item) != nil,
             endHint: item.endAction.tileHint
         )
     }
 
-    /// Pauses and drops the clock when this countdown is deleted while live.
+    /// Pauses and drops the clock when this countdown is deleted, live or held.
     func endCountdownIfDeleting(_ id: UUID) {
-        guard CountdownController.shared.liveCountdownId == id else { return }
-        CountdownController.shared.endLive()
+        let clock = CountdownController.shared
+        guard clock.liveCountdownId == id else {
+            clock.discardHeldTime(for: id)
+            return
+        }
+        clock.endLive()
+        // `endLive` files a remainder for the clock it just stopped, and a deleted
+        // countdown must not leave one behind.
+        clock.discardHeldTime(for: id)
         guard ExternalDisplayManager.shared.isCountdownLive else { return }
         if let source = ScreensaverStore.presentationSource {
             ExternalDisplayManager.shared.present(source)
@@ -133,13 +144,13 @@ extension LibraryGridViewController {
         updateVisibleCountdownTiles()
     }
 
-    /// ⋯ menu: edit layout, duration, background, rename, arrange, delete.
+    /// ⋯ menu: clock position, duration, background, rename, arrange, delete.
     func countdownContextMenu(_ item: ShowCountdown) -> UIMenu {
         let token = ShowCountdownToken.token(for: item.id)
         var children: [UIMenuElement] = [
             UIAction(
-                title: "Edit",
-                image: UIImage(systemName: "slider.horizontal.3")
+                title: "Position",
+                image: UIImage(systemName: "arrow.up.and.down.and.arrow.left.and.right")
             ) { [weak self] _ in
                 self?.presentCountdownLayoutEditor(item)
             }
@@ -181,7 +192,12 @@ extension LibraryGridViewController {
             title: "Reset",
             image: UIImage(systemName: "arrow.counterclockwise")
         ) { [weak self] _ in
-            guard isLive else { return }
+            // An idle tile has no clock to reset, but it may be holding a
+            // remainder that Reset is the way to throw away.
+            guard isLive else {
+                CountdownController.shared.discardHeldTime(for: item.id)
+                return
+            }
             if self?.sendShowLiveCommandIfOperator(.countdownReset) == true { return }
             CountdownController.shared.reset()
         }
@@ -241,7 +257,9 @@ extension LibraryGridViewController {
     /// not rebuild it. So it has to reconcile the whole tile, not just the live
     /// one's digits: a timer that stopped being live keeps the red stroke and the
     /// running clock otherwise, which is how two countdowns ended up looking like
-    /// they shared one live state.
+    /// they shared one live state. Idle tiles are repainted too — their digits are
+    /// a held remainder that a Reset elsewhere in the Show can drop while another
+    /// countdown owns output.
     func updateVisibleCountdownTiles() {
         guard let showsSection = sectionIndex(for: .shows) else { return }
         let remaining = remoteCountdownState?.remaining
@@ -253,11 +271,15 @@ extension LibraryGridViewController {
                   ) as? LibraryThumbnailCell
             else { continue }
             let isLive = isShowGridItemLive(.countdown(item))
-            let seconds = isLive ? remaining : item.duration
+            let held = isLive ? nil : CountdownController.shared.heldRemaining(for: item)
+            let seconds = isLive ? remaining : (held ?? item.duration)
             let isExpired = isLive && seconds == 0
-            cell.applyCountdownTime(seconds, isExpired: isExpired)
+            cell.applyCountdownTime(seconds, isExpired: isExpired, isHeld: held != nil)
             cell.setLive(isLive, isLocked: isLiveOutputLocked)
-            var spoken = "\(item.name), \(CountdownController.displayString(seconds: seconds))"
+            let time = CountdownController.displayString(seconds: seconds)
+            var spoken = held == nil
+                ? "\(item.name), \(time)"
+                : "\(item.name), paused at \(time)"
             if let hint = item.endAction.tileHint {
                 spoken += ", \(hint.lowercased())"
             }
@@ -311,6 +333,9 @@ extension LibraryGridViewController {
         }
         if let itemId {
             let next = CountdownController.clampedDuration(seconds)
+            // Choosing a new length is asking for that length, so a remainder held
+            // against the old one must not come back if the user picks it again.
+            CountdownController.shared.discardHeldTime(for: itemId)
             CountdownStore.shared.setDuration(id: itemId, seconds: next)
             UserDefaults.standard.set(next, forKey: CountdownController.durationKey)
             return

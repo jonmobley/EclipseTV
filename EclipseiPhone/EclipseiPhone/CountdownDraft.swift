@@ -50,7 +50,7 @@ struct CountdownDraft: Equatable {
         CountdownController.displayString(seconds: duration)
     }
 
-    /// One-line summary of `layout` for the Size & Placement row.
+    /// One-line summary of `layout` for the Size & Position row.
     ///
     /// `Centered · 100%` when untouched, otherwise `Custom position · 130%`, so the
     /// operator can see whether the editor has been used without opening it.

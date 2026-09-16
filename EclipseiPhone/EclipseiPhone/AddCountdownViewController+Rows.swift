@@ -35,7 +35,7 @@ extension AddCountdownViewController {
         switch sections[section] {
         case .name: return "Name"
         case .duration: return "Duration"
-        case .layout: return "Size & Placement"
+        case .layout: return "Size & Position"
         case .background: return "Background"
         case .showMedia: return "From This Show"
         case .ending: return "When It Ends"
@@ -75,10 +75,10 @@ extension AddCountdownViewController {
             return durationCell(tableView, at: indexPath)
         case .layout:
             let cell = tableView.dequeueReusableCell(withIdentifier: "row", for: indexPath)
-            var config = UIListContentConfiguration.valueCell()
-            config.text = "Edit Size & Placement"
-            config.secondaryText = draft.layoutSummary
-            config.image = UIImage(systemName: "slider.horizontal.3")
+            var config = cell.defaultContentConfiguration()
+            // The header names the concept, so the row shows the value, as Duration does.
+            config.text = draft.layoutSummary
+            config.image = UIImage(systemName: "arrow.up.and.down.and.arrow.left.and.right")
             cell.contentConfiguration = config
             cell.accessoryType = .disclosureIndicator
             return cell
