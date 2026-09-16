@@ -34,10 +34,24 @@ final class CountdownController {
 
     nonisolated static let defaultDuration = 300
 
+    /// A part-used clock kept for a countdown that is no longer on output.
+    ///
+    /// The length it was counting is stored beside the remainder so editing the
+    /// tile's duration invalidates the hold instead of resuming against a length
+    /// the user has since changed.
+    private struct HeldClock {
+        var remaining: Int
+        var duration: Int
+    }
+
     private let defaults: UserDefaults
     private let now: () -> Date
     private var timer: Timer?
     private var deadline: Date?
+
+    /// Part-used clocks by countdown id, so cutting away to a video and back
+    /// resumes rather than starting over. Session-only: a relaunch starts fresh.
+    private var heldClocks: [UUID: HeldClock] = [:]
 
     /// Countdown whose clock is on AirPlay / HDMI / Practice, if any.
     private(set) var liveCountdownId: UUID?
@@ -72,79 +86,58 @@ final class CountdownController {
         return stored > 0 ? clampedDuration(stored) : defaultDuration
     }
 
-    /// Clamps to 1 second…24 hours.
-    nonisolated static func clampedDuration(_ seconds: Int) -> Int {
-        min(max(seconds, 1), 24 * 60 * 60)
-    }
-
     deinit {
         timer?.invalidate()
     }
 
-    /// `M:SS` under an hour, otherwise `H:MM:SS`.
-    nonisolated static func displayString(seconds: Int) -> String {
-        let total = max(0, seconds)
-        let hours = total / 3600
-        let minutes = (total % 3600) / 60
-        let secs = total % 60
-        if hours > 0 {
-            return String(format: "%d:%02d:%02d", hours, minutes, secs)
-        }
-        return String(format: "%d:%02d", minutes, secs)
-    }
+    // MARK: - Going Live
 
-    /// Current remaining, formatted for tiles and the live hero.
-    var displayString: String {
-        Self.displayString(seconds: remaining)
-    }
-
-    /// True when `duration` is one of the menu presets.
-    var isPresetDuration: Bool {
-        Self.durationPresets.contains(duration)
-    }
-
-    /// Minutes (`7` → 7:00), `m:ss`, or `h:mm:ss`. Nil when empty or invalid.
-    nonisolated static func parseDuration(_ raw: String) -> Int? {
-        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-        let parts = trimmed.split(
-            separator: ":",
-            omittingEmptySubsequences: false
-        )
-        guard (1...3).contains(parts.count) else { return nil }
-        let values = parts.compactMap { Int($0) }
-        guard values.count == parts.count else { return nil }
-        guard let seconds = seconds(fromComponents: values), seconds >= 1 else {
-            return nil
-        }
-        return clampedDuration(seconds)
-    }
-
-    /// Tile caption: live name plus remaining time.
-    var tileTitle: String {
-        let name = liveCountdownId.flatMap {
-            CountdownStore.shared.countdown(id: $0)?.name
-        } ?? "Countdown"
-        return "\(name)\n\(displayString)"
-    }
-
-    /// Binds the clock to `item` and starts from its duration.
+    /// Binds the clock to `item` and starts it, resuming a held remainder if any.
     func present(_ item: ShowCountdown) {
+        // Read before holding, so re-presenting the countdown already on output
+        // cannot resume from the remainder that hold is about to file for it.
+        let resumed = heldRemaining(for: item)
+        holdOutgoingClock()
+        heldClocks[item.id] = nil
         liveCountdownId = item.id
-        setDuration(item.duration)
+        applyDuration(item.duration)
+        if let resumed {
+            remaining = resumed
+        }
         start()
     }
 
-    /// Clears the live id and pauses (overlay teardown).
+    /// Clears the live id and pauses, keeping any remainder for a later tap.
     func endLive() {
+        holdOutgoingClock()
         liveCountdownId = nil
         expiredAt = nil
-        if running {
-            pause()
-        } else {
-            notify()
-        }
+        notify()
     }
+
+    /// Seconds a tap on `item` would resume from, or nil when it would start over.
+    ///
+    /// Tiles read this so the number on the card is the number a tap produces.
+    func heldRemaining(for item: ShowCountdown) -> Int? {
+        guard let held = heldClocks[item.id],
+              held.duration == Self.clampedDuration(item.duration),
+              held.remaining > 0, held.remaining < held.duration
+        else { return nil }
+        return held.remaining
+    }
+
+    /// Seconds a tap on `item` would put on the clock.
+    func startSeconds(for item: ShowCountdown) -> Int {
+        heldRemaining(for: item) ?? item.duration
+    }
+
+    /// Drops any remainder held for `id` so the next tap starts over.
+    func discardHeldTime(for id: UUID) {
+        guard heldClocks.removeValue(forKey: id) != nil else { return }
+        notify()
+    }
+
+    // MARK: - Clock
 
     /// Starts from remaining, or from `duration` when already at zero.
     func start() {
@@ -161,11 +154,7 @@ final class CountdownController {
     /// Holds remaining without clearing it.
     func pause() {
         guard running else { return }
-        syncRemainingFromDeadline()
-        running = false
-        deadline = nil
-        timer?.invalidate()
-        timer = nil
+        stopKeepingRemaining()
         notify()
     }
 
@@ -188,17 +177,7 @@ final class CountdownController {
 
     /// Sets length, resets remaining, and keeps running if it was.
     func setDuration(_ seconds: Int) {
-        let next = Self.clampedDuration(seconds)
-        duration = next
-        remaining = next
-        expiredAt = nil
-        defaults.set(next, forKey: Self.durationKey)
-        if running {
-            deadline = now().addingTimeInterval(TimeInterval(next))
-        }
-        if let liveCountdownId {
-            CountdownStore.shared.setDuration(id: liveCountdownId, seconds: next)
-        }
+        applyDuration(seconds)
         notify()
     }
 
@@ -225,6 +204,45 @@ final class CountdownController {
     }
 
     // MARK: - Private
+
+    /// Duration write shared with `present(_:)`, which notifies once it has also
+    /// applied any resumed remainder.
+    private func applyDuration(_ seconds: Int) {
+        let next = Self.clampedDuration(seconds)
+        duration = next
+        remaining = next
+        expiredAt = nil
+        defaults.set(next, forKey: Self.durationKey)
+        if running {
+            deadline = now().addingTimeInterval(TimeInterval(next))
+        }
+        if let liveCountdownId {
+            CountdownStore.shared.setDuration(id: liveCountdownId, seconds: next)
+        }
+    }
+
+    /// Stops the clock leaving output and files any part-used remainder under its id.
+    ///
+    /// Countdown → countdown does not reach overlay teardown, because the overlay
+    /// kind is unchanged and `ExternalDisplayManager` has nothing to end, so
+    /// `present(_:)` holds the outgoing clock here as well as `endLive()`.
+    /// A clock at zero or still at full length has no remainder worth keeping.
+    private func holdOutgoingClock() {
+        let outgoing = liveCountdownId
+        stopKeepingRemaining()
+        guard let outgoing, remaining > 0, remaining < duration else { return }
+        heldClocks[outgoing] = HeldClock(remaining: remaining, duration: duration)
+    }
+
+    /// `pause()` without the notification, for callers that post their own.
+    private func stopKeepingRemaining() {
+        guard running else { return }
+        syncRemainingFromDeadline()
+        running = false
+        deadline = nil
+        timer?.invalidate()
+        timer = nil
+    }
 
     private func installTimer() {
         timer?.invalidate()
@@ -256,28 +274,6 @@ final class CountdownController {
 
     private func notify() {
         NotificationCenter.default.post(name: Self.didChangeNotification, object: self)
-    }
-
-    nonisolated private static func seconds(fromComponents values: [Int]) -> Int? {
-        switch values.count {
-        case 1:
-            guard values[0] >= 0 else { return nil }
-            return values[0] * 60
-        case 2:
-            let minutes = values[0]
-            let secs = values[1]
-            guard minutes >= 0, secs >= 0, secs < 60 else { return nil }
-            return minutes * 60 + secs
-        case 3:
-            let hours = values[0]
-            let minutes = values[1]
-            let secs = values[2]
-            guard hours >= 0, minutes >= 0, minutes < 60,
-                  secs >= 0, secs < 60 else { return nil }
-            return hours * 3600 + minutes * 60 + secs
-        default:
-            return nil
-        }
     }
 
 }

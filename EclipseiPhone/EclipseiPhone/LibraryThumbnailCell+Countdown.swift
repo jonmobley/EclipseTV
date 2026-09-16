@@ -15,6 +15,8 @@ extension LibraryThumbnailCell {
     ///
     /// Idle tiles pass the saved duration; live tiles pass remaining seconds.
     /// - Parameter isExpired: When live and at zero, the clock turns red (AirPlay match).
+    /// - Parameter isHeld: Idle tile showing a remainder a tap would resume, marked
+    ///   with a pause glyph so it reads as held time rather than a shorter length.
     /// - Parameter endHint: Second caption line when an end action is armed.
     func configureCountdown(
         name: String,
@@ -22,6 +24,7 @@ extension LibraryThumbnailCell {
         isLive: Bool,
         isLocked: Bool = false,
         isExpired: Bool = false,
+        isHeld: Bool = false,
         endHint: String? = nil
     ) {
         resetChrome()
@@ -31,9 +34,7 @@ extension LibraryThumbnailCell {
         placeholderIcon.isHidden = true
 
         let clock = CountdownController.displayString(seconds: seconds)
-        countdownTimeLabel.text = clock
-        countdownTimeLabel.textColor = isExpired ? .systemRed : .white
-        countdownTimeLabel.isHidden = false
+        applyCountdownTime(seconds, isExpired: isExpired, isHeld: isHeld)
 
         captionLabel.text = endHint.map { "\(name)\n\($0)" } ?? name
         captionLabel.numberOfLines = endHint == nil ? 1 : 2
@@ -49,7 +50,9 @@ extension LibraryThumbnailCell {
             cardView.bringSubviewToFront(typeIconOverlay)
         }
 
-        var spoken = "\(name), \(clock), countdown"
+        var spoken = isHeld
+            ? "\(name), paused at \(clock), countdown"
+            : "\(name), \(clock), countdown"
         if let endHint {
             spoken += ", \(endHint.lowercased())"
         }
@@ -60,9 +63,47 @@ extension LibraryThumbnailCell {
     }
 
     /// Updates only the clock digits/color during live ticks (keeps ⋯ / live stroke).
-    func applyCountdownTime(_ seconds: Int, isExpired: Bool) {
-        countdownTimeLabel.text = CountdownController.displayString(seconds: seconds)
+    func applyCountdownTime(_ seconds: Int, isExpired: Bool, isHeld: Bool = false) {
+        let clock = CountdownController.displayString(seconds: seconds)
+        if isHeld {
+            countdownTimeLabel.attributedText = Self.heldClockText(
+                clock, font: countdownTimeLabel.font
+            )
+        } else {
+            countdownTimeLabel.text = clock
+        }
         countdownTimeLabel.textColor = isExpired ? .systemRed : .white
         countdownTimeLabel.isHidden = false
+    }
+
+    // MARK: - Private
+
+    /// `⏸ 3:00` — the clock with a leading pause glyph sized to the digits.
+    ///
+    /// The colour is baked into the string rather than left to `textColor` so the
+    /// glyph and the digits cannot end up tinted differently.
+    private static func heldClockText(_ clock: String, font: UIFont) -> NSAttributedString {
+        let text = NSMutableAttributedString()
+        let config = UIImage.SymbolConfiguration(font: font, scale: .small)
+        if let glyph = UIImage(systemName: "pause.fill", withConfiguration: config) {
+            let tinted = glyph.withTintColor(.white, renderingMode: .alwaysOriginal)
+            let attachment = NSTextAttachment()
+            attachment.image = tinted
+            // Attachments sit on the baseline by default, which reads low beside
+            // 28pt digits; centre it on the cap height instead.
+            attachment.bounds = CGRect(
+                x: 0,
+                y: (font.capHeight - tinted.size.height) / 2,
+                width: tinted.size.width,
+                height: tinted.size.height
+            )
+            text.append(NSAttributedString(attachment: attachment))
+            text.append(NSAttributedString(string: " "))
+        }
+        text.append(NSAttributedString(
+            string: clock,
+            attributes: [.font: font, .foregroundColor: UIColor.white]
+        ))
+        return text
     }
 }
