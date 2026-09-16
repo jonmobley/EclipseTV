@@ -130,13 +130,13 @@ extension LibraryGridViewController {
         updateVisibleCountdownTiles()
     }
 
-    /// ⋯ menu: edit layout, duration, background, rename, arrange, delete.
+    /// ⋯ menu: clock position, duration, background, rename, arrange, delete.
     func countdownContextMenu(_ item: ShowCountdown) -> UIMenu {
         let token = ShowCountdownToken.token(for: item.id)
         var children: [UIMenuElement] = [
             UIAction(
-                title: "Edit",
-                image: UIImage(systemName: "slider.horizontal.3")
+                title: "Position",
+                image: UIImage(systemName: "arrow.up.and.down.and.arrow.left.and.right")
             ) { [weak self] _ in
                 self?.presentCountdownLayoutEditor(item)
             }

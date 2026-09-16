@@ -7,7 +7,7 @@
 
 import UIKit
 
-/// Configure-first Countdown add: name, duration, size & placement, background, ending.
+/// Configure-first Countdown add: name, duration, size & position, background, ending.
 ///
 /// Nothing reaches `CountdownStore` until Add, so backing out leaves the Show exactly
 /// as it was. Rows are drawn in `AddCountdownViewController+Rows`.
