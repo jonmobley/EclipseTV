@@ -141,6 +141,50 @@ struct CountdownControllerTests {
         #expect(clock.liveCountdownId == nil)
     }
 
+    /// Going live publishes the overlay between the bind and the start, so the bind
+    /// itself must stay silent: a tick announced here repaints the Show grid from
+    /// the program the user is leaving, and while a countdown is already live that
+    /// repaint is the last one the tiles get.
+    @Test func preparingATimerBindsItWithoutAnnouncingTheChange() {
+        let clock = makeClock()
+        let item = ShowCountdown(showId: UUID(), name: "Doors", duration: 90)
+
+        var announcements = 0
+        let token = NotificationCenter.default.addObserver(
+            forName: CountdownController.didChangeNotification,
+            object: clock,
+            queue: nil
+        ) { _ in
+            announcements += 1
+        }
+        defer { NotificationCenter.default.removeObserver(token) }
+
+        clock.prepare(item)
+        #expect(clock.liveCountdownId == item.id)
+        #expect(clock.duration == 90)
+        #expect(clock.remaining == 90)
+        #expect(clock.running == false)
+        #expect(announcements == 0)
+
+        clock.start()
+        #expect(clock.running)
+        #expect(announcements == 1)
+        clock.pause()
+    }
+
+    @Test func preparingASecondTimerReplacesTheFirst() {
+        let clock = makeClock()
+        let first = ShowCountdown(showId: UUID(), name: "Break", duration: 60)
+        let second = ShowCountdown(showId: UUID(), name: "Doors", duration: 90)
+        clock.prepare(first)
+        clock.start()
+        clock.prepare(second)
+        #expect(clock.liveCountdownId == second.id)
+        #expect(clock.duration == 90)
+        #expect(clock.remaining == 90)
+        clock.pause()
+    }
+
     @Test func isPresetDurationIsFalseForCustomLength() {
         let clock = makeClock()
         clock.setDuration(60)

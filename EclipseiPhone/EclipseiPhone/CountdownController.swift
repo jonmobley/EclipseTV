@@ -92,18 +92,32 @@ final class CountdownController {
 
     // MARK: - Going Live
 
-    /// Binds the clock to `item` and starts it, resuming a held remainder if any.
-    func present(_ item: ShowCountdown) {
-        // Read before holding, so re-presenting the countdown already on output
+    /// Binds the clock to `item` without announcing it, resuming a held remainder
+    /// if any.
+    ///
+    /// Going live publishes the overlay between this and `start()`. Announcing the
+    /// bind first repainted the Show grid from the *previous* program, and while a
+    /// countdown was already live that repaint was the last one the tiles got —
+    /// `refreshCountdownChrome` deliberately skips the grid once the clock owns
+    /// output, so the outgoing timer kept the red stroke and the incoming one never
+    /// took it.
+    func prepare(_ item: ShowCountdown) {
+        // Read before holding, so re-binding the countdown already on output
         // cannot resume from the remainder that hold is about to file for it.
         let resumed = heldRemaining(for: item)
         holdOutgoingClock()
         heldClocks[item.id] = nil
         liveCountdownId = item.id
-        applyDuration(item.duration)
+        applyDuration(item.duration, notifying: false)
         if let resumed {
             remaining = resumed
         }
+    }
+
+    /// Binds, resumes any held remainder, and starts — for tests and callers that
+    /// do not need the silent prepare / overlay / start split.
+    func present(_ item: ShowCountdown) {
+        prepare(item)
         start()
     }
 
@@ -177,8 +191,7 @@ final class CountdownController {
 
     /// Sets length, resets remaining, and keeps running if it was.
     func setDuration(_ seconds: Int) {
-        applyDuration(seconds)
-        notify()
+        applyDuration(seconds, notifying: true)
     }
 
     /// How long ago the clock hit zero, or nil when it hasn't since the last start.
@@ -205,9 +218,9 @@ final class CountdownController {
 
     // MARK: - Private
 
-    /// Duration write shared with `present(_:)`, which notifies once it has also
-    /// applied any resumed remainder.
-    private func applyDuration(_ seconds: Int) {
+    /// Duration write shared with `prepare(_:)`, which skips the notification so
+    /// the overlay can publish before anything observing the clock repaints.
+    private func applyDuration(_ seconds: Int, notifying: Bool) {
         let next = Self.clampedDuration(seconds)
         duration = next
         remaining = next
@@ -219,13 +232,15 @@ final class CountdownController {
         if let liveCountdownId {
             CountdownStore.shared.setDuration(id: liveCountdownId, seconds: next)
         }
+        guard notifying else { return }
+        notify()
     }
 
     /// Stops the clock leaving output and files any part-used remainder under its id.
     ///
     /// Countdown → countdown does not reach overlay teardown, because the overlay
     /// kind is unchanged and `ExternalDisplayManager` has nothing to end, so
-    /// `present(_:)` holds the outgoing clock here as well as `endLive()`.
+    /// `prepare(_:)` holds the outgoing clock here as well as `endLive()`.
     /// A clock at zero or still at full length has no remainder worth keeping.
     private func holdOutgoingClock() {
         let outgoing = liveCountdownId

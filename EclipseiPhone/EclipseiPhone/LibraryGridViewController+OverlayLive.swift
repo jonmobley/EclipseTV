@@ -152,9 +152,15 @@ extension LibraryGridViewController {
     // MARK: - Camera Session
 
     /// Marks Background live after Camera closed while parked on that still.
+    ///
+    /// Only when nothing took over. Camera also ends because something else is going
+    /// live, and that swap publishes the incoming source before it announces the
+    /// camera's end — so a Background reading here is Background because the user
+    /// chose it, not because the camera happened to be parked on it.
     func adoptBackgroundSelectionIfCameraCommitted() {
         let mgr = ExternalDisplayManager.shared
-        guard !mgr.isCameraModeActive, mgr.isShowingBackgroundStill else { return }
+        guard !mgr.isCameraModeActive, !mgr.isOverlayLive,
+              mgr.isShowingBackgroundStill else { return }
         isBlackSelected = false
         isScreensaverSelected = false
         isLogoSelected = true

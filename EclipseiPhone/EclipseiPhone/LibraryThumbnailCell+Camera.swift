@@ -40,11 +40,7 @@ extension LibraryThumbnailCell {
         placeholderIcon.isHidden = true
         updateCaptionScrim()
         setLive(isLive, isLocked: isLocked)
-        if !isLive {
-            cardView.layer.borderWidth = 1
-            cardView.layer.borderColor =
-                UIColor.white.withAlphaComponent(0.3).cgColor
-        }
+        setIdleBorder(width: 1, color: UIColor.white.withAlphaComponent(0.3))
 
         placeholderIcon.image = UIImage(systemName: "camera.fill")
         placeholderIcon.tintColor = UIColor.white.withAlphaComponent(0.85)

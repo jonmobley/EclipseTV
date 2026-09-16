@@ -552,10 +552,15 @@ final class ExternalDisplayManager {
     ///   here brings it back as a dead feed with the phone UI already told camera ended.
     ///   Web and PDF overlays are still torn down, since `endBlackout` rebuilds those and
     ///   a retained `WKWebView` would hold a content process for the whole blackout.
+    /// - Parameter liveOverlayId: Bookmark / document that owns the incoming source.
+    ///   It is adopted as part of the swap rather than by the caller afterwards —
+    ///   the swap notifies observers synchronously, and those observers repaint the
+    ///   grid from `ShowProgramResolver`.
     private func present(
         _ source: PresentationSource,
         asJoined: Bool,
-        preservingCameraOverlay: Bool
+        preservingCameraOverlay: Bool,
+        liveOverlayId: UUID? = nil
     ) {
         refreshConnection()
         // Capture mid-play leave before teardown — skip blackout (temporary blank).
@@ -568,10 +573,9 @@ final class ExternalDisplayManager {
             blackoutRestore = nil
         }
         AudioAmbientPolicy.applyYieldIfNeeded(for: source)
-        // Direct-file web videos clear here; `presentWebVideo` re-sets the page id.
-        if case .webVideo = source.content {
-            // Keep until `presentWebVideo` assigns (or restore keeps the prior id).
-        } else {
+        // Anything that is not an embed drops the web-video card; a direct file
+        // re-adopts `liveOverlayId` below, and a restore keeps the prior id.
+        if case .webVideo = source.content {} else {
             liveWebVideoPageId = nil
         }
         switch source.content {
@@ -580,25 +584,44 @@ final class ExternalDisplayManager {
         default:
             PresentationPrewarmer.shared.clear()
         }
+        // Before the overlay switch, because that switch announces the outgoing
+        // overlay's end and those observers read `lastSource` to decide what is on
+        // program. `WebOverlayReclaim` is the one that matters: the browser closes
+        // on that very notification, and a navigation committing on the way out
+        // asks whether it may restore its page. Answering from the source being
+        // replaced let a website take program back from the slideshow that had
+        // just replaced it — which is the two-red-strokes report, and exactly what
+        // that guard exists to refuse.
+        lastSource = source
         switch source.content {
         case .camera:
-            beginOverlay(.camera, endingOther: true)
+            beginOverlay(.camera, liveId: nil)
             parkedCameraStill = nil
         case .web(let url):
-            beginOverlay(.web(url), endingOther: true)
+            beginOverlay(.web(url), liveId: liveOverlayId)
         case .webVideo(let link):
-            beginOverlay(.webVideo(link), endingOther: true)
+            beginOverlay(.webVideo(link), liveId: liveOverlayId)
         case .pdf(let url):
-            beginOverlay(.pdf(url), endingOther: true)
+            beginOverlay(.pdf(url), liveId: liveOverlayId)
         case .countdown:
-            beginOverlay(.countdown, endingOther: true)
+            beginOverlay(.countdown, liveId: nil)
         default:
+            // A direct-file web video is plain video, not an overlay, but the card
+            // that owns it is still program — so it adopts the id as part of the
+            // teardown, for the same reason an overlay does.
+            let adopted: UUID?
+            if case .video = source.content {
+                adopted = liveOverlayId
+            } else {
+                adopted = nil
+            }
             if let current = overlaySource,
                !(preservingCameraOverlay && current == .camera) {
-                endOverlay(notify: true)
+                endOverlay(notify: true, adoptingWebVideoId: adopted)
+            } else if let adopted {
+                liveWebVideoPageId = adopted
             }
         }
-        lastSource = source
         presentationVC?.show(source)
         updateIdleTimer()
     }
@@ -710,27 +733,31 @@ final class ExternalDisplayManager {
     /// - Parameter pageId: Saved bookmark id so the home tile stays live after the
     ///   phone browser is closed (and after in-page navigation changes the URL).
     func presentWeb(_ url: URL, pageId: UUID? = nil) {
-        // Set the live id after `present` so a same-kind replace cannot clear it
-        // mid-transition via `clearLiveOverlayId`.
-        present(.web(url))
-        if let pageId {
-            liveWebPageId = pageId
-        }
+        present(
+            .web(url),
+            asJoined: false,
+            preservingCameraOverlay: false,
+            liveOverlayId: pageId
+        )
     }
 
     /// Starts presenting a YouTube / Vimeo embed or a direct media URL.
     ///
     /// - Parameter pageId: Saved bookmark id so the Show tile stays live.
     func presentWebVideo(_ link: WebVideoLink, pageId: UUID? = nil) {
+        let source: PresentationSource
         switch link {
         case .directFile(let url):
-            present(.video(url, isLooping: false, isMuted: false))
+            source = .video(url, isLooping: false, isMuted: false)
         case .youTube, .vimeo:
-            present(.webVideo(link))
+            source = .webVideo(link)
         }
-        if let pageId {
-            liveWebVideoPageId = pageId
-        }
+        present(
+            source,
+            asJoined: false,
+            preservingCameraOverlay: false,
+            liveOverlayId: pageId
+        )
     }
 
     /// Whether a web-video card is the active presentation source.
@@ -747,10 +774,12 @@ final class ExternalDisplayManager {
     /// - Parameter documentId: Saved id so the home tile stays live after the
     ///   phone reader is closed.
     func presentPDF(_ url: URL, documentId: UUID? = nil) {
-        present(.pdf(url))
-        if let documentId {
-            livePDFDocumentId = documentId
-        }
+        present(
+            .pdf(url),
+            asJoined: false,
+            preservingCameraOverlay: false,
+            liveOverlayId: documentId
+        )
     }
 
     /// Presents a solid black screen on the external display.
@@ -1016,21 +1045,32 @@ final class ExternalDisplayManager {
 
     // MARK: - Overlay Helpers
 
-    private func beginOverlay(_ next: OverlaySource, endingOther: Bool) {
-        if endingOther, let current = overlaySource, current != next {
-            if Self.isSameOverlayKind(current, next) {
-                // web→web / pdf→pdf: swap content in `show` without telling the phone
-                // UI the overlay ended (that would dismiss the browser/reader).
-            } else {
-                tearDown(current)
-                clearLiveOverlayId(for: current)
-                notifyOverlayEnd(current)
-            }
-        }
+    /// Swaps the live overlay to `next`, publishing it before the old one goes.
+    ///
+    /// `tearDown` and `notifyOverlayEnd` run their observers synchronously, and those
+    /// observers repaint the Show grid from `ShowProgramResolver`. Ending the outgoing
+    /// overlay first left a window where `overlaySource` still named the outgoing kind
+    /// while `clearLiveOverlayId` had already dropped the id that claimed it: the
+    /// resolver saw an overlay no store owned and painted *every* tile dark, and the
+    /// incoming tile only recovered if a later reload happened to land. Publishing
+    /// `next` (and the id that owns it) first means no observer can see a torn program.
+    ///
+    /// - Parameter liveId: Bookmark / document id the incoming overlay is live as.
+    ///   Nil leaves the current id alone, which is what a same-kind reload wants.
+    private func beginOverlay(_ next: OverlaySource, liveId: UUID?) {
+        let previous = overlaySource
         if case .camera = next {} else {
             parkedCameraStill = nil
         }
         overlaySource = next
+        assignLiveOverlayId(liveId, for: next)
+        guard let previous, previous != next else { return }
+        // web→web / pdf→pdf: swap content in `show` without telling the phone UI the
+        // overlay ended (that would dismiss the browser/reader).
+        guard !Self.isSameOverlayKind(previous, next) else { return }
+        tearDown(previous)
+        clearLiveOverlayId(for: previous)
+        notifyOverlayEnd(previous)
     }
 
     /// Whether both overlays are the same content kind (URL may differ).
@@ -1044,16 +1084,36 @@ final class ExternalDisplayManager {
         }
     }
 
-    private func endOverlay(notify: Bool) {
+    /// - Parameter adoptingWebVideoId: Card that owns the direct-file video replacing
+    ///   this overlay. Adopted before `notify`, so an observer repainting the grid
+    ///   never sees output with nothing claiming it.
+    private func endOverlay(notify: Bool, adoptingWebVideoId: UUID? = nil) {
         guard let current = overlaySource else { return }
         tearDown(current)
         overlaySource = nil
         parkedCameraStill = nil
         clearLiveOverlayId(for: current)
+        if let adoptingWebVideoId {
+            liveWebVideoPageId = adoptingWebVideoId
+        }
         if notify {
             notifyOverlayEnd(current)
         }
         updateIdleTimer()
+    }
+
+    private func assignLiveOverlayId(_ id: UUID?, for source: OverlaySource) {
+        guard let id else { return }
+        switch source {
+        case .web:
+            liveWebPageId = id
+        case .webVideo:
+            liveWebVideoPageId = id
+        case .pdf:
+            livePDFDocumentId = id
+        case .camera, .countdown:
+            break
+        }
     }
 
     private func clearLiveOverlayId(for source: OverlaySource) {
