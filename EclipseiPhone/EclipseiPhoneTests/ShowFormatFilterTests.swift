@@ -71,6 +71,31 @@ struct ShowFormatFilterBarTests {
         #expect(vertical?.configuration?.baseBackgroundColor == UIColor.accent)
         #expect(all?.configuration?.baseBackgroundColor != UIColor.accent)
     }
+
+    @Test func chipsStaySingleLineInAnIPadSheet() {
+        let host = laidOutFilterBar(width: 540)
+        let all = chip(titled: "All", in: host.bar)
+        let horizontal = chip(titled: "Horizontal", in: host.bar)
+        let vertical = chip(titled: "Vertical", in: host.bar)
+        #expect(all?.configuration?.titleLineBreakMode == .byTruncatingTail)
+        #expect(horizontal?.configuration?.titleLineBreakMode == .byTruncatingTail)
+        #expect((horizontal?.bounds.height ?? 0) > 0)
+        #expect((horizontal?.bounds.height ?? 0) < 48)
+        #expect((all?.bounds.height ?? 0) < 48)
+        #expect((vertical?.bounds.height ?? 0) < 48)
+        #expect((horizontal?.bounds.width ?? 0) > (all?.bounds.width ?? 0))
+        #expect((vertical?.bounds.width ?? 0) > (all?.bounds.width ?? 0))
+    }
+
+    @Test func chipsStaySingleLineAfterANarrowFirstLayout() {
+        let host = laidOutFilterBar(width: 80)
+        host.window.frame.size.width = 540
+        host.root.frame.size.width = 540
+        host.window.layoutIfNeeded()
+        let horizontal = chip(titled: "Horizontal", in: host.bar)
+        #expect((horizontal?.bounds.height ?? 0) < 48)
+        #expect((horizontal?.bounds.width ?? 0) > 80)
+    }
 }
 
 @MainActor
@@ -93,7 +118,32 @@ struct HomeSectionHeaderFilterChipTests {
         #expect(all?.configuration?.baseBackgroundColor == UIColor.accent)
         #expect(all?.configuration?.baseForegroundColor == UIColor.white)
         #expect(horizontal?.configuration?.baseBackgroundColor != UIColor.accent)
+        #expect(all?.configuration?.titleLineBreakMode == .byTruncatingTail)
+        #expect(horizontal?.configuration?.titleLineBreakMode == .byTruncatingTail)
     }
+}
+
+private struct LaidOutFilterBar {
+    let bar: ShowFormatFilterBar
+    let root: UIView
+    let window: UIWindow
+}
+
+@MainActor
+private func laidOutFilterBar(width: CGFloat) -> LaidOutFilterBar {
+    let bar = ShowFormatFilterBar()
+    bar.translatesAutoresizingMaskIntoConstraints = false
+    let root = UIView(frame: CGRect(x: 0, y: 0, width: width, height: 120))
+    root.addSubview(bar)
+    NSLayoutConstraint.activate([
+        bar.topAnchor.constraint(equalTo: root.topAnchor, constant: 8),
+        bar.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
+        bar.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20)
+    ])
+    let window = UIWindow(frame: root.frame)
+    window.addSubview(root)
+    window.layoutIfNeeded()
+    return LaidOutFilterBar(bar: bar, root: root, window: window)
 }
 
 private func chip(titled title: String, in view: UIView) -> UIButton? {

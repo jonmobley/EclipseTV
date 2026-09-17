@@ -79,7 +79,7 @@ final class ShowFormatFilterBar: UIView {
         NSLayoutConstraint.activate([
             stack.topAnchor.constraint(equalTo: topAnchor),
             stack.leadingAnchor.constraint(equalTo: leadingAnchor),
-            stack.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor),
+            stack.trailingAnchor.constraint(equalTo: trailingAnchor),
             stack.bottomAnchor.constraint(equalTo: bottomAnchor)
         ])
         reloadChips()
@@ -104,6 +104,10 @@ final class ShowFormatFilterBar: UIView {
             button.addTarget(self, action: #selector(chipTapped(_:)), for: .touchUpInside)
             stack.addArrangedSubview(button)
         }
+        let spacer = UIView()
+        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        spacer.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        stack.addArrangedSubview(spacer)
     }
 
     @objc private func chipTapped(_ sender: UIButton) {

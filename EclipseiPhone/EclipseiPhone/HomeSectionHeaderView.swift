@@ -191,6 +191,8 @@ final class HomeSectionHeaderView: UICollectionReusableView {
         config.contentInsets = NSDirectionalEdgeInsets(
             top: 7, leading: 12, bottom: 7, trailing: 12
         )
+        // iPad page sheets layout narrow first; wrapping would stick.
+        config.titleLineBreakMode = .byTruncatingTail
         config.titleTextAttributesTransformer =
             UIConfigurationTextAttributesTransformer { incoming in
                 var outgoing = incoming
@@ -206,6 +208,7 @@ final class HomeSectionHeaderView: UICollectionReusableView {
             button.accessibilityTraits.insert(.selected)
         }
         button.setContentHuggingPriority(.required, for: .horizontal)
+        button.setContentCompressionResistancePriority(.required, for: .horizontal)
         return button
     }
 
