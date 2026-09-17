@@ -381,6 +381,9 @@ final class LibraryGridViewController: UIViewController {
         makePageCollectionView(layout: makeHomePageLayout(), registersHero: true)
     }()
 
+    /// Compact Library↔Music pager pan; Home hero paging must win horizontal swipes.
+    var homePagerPanToYield: UIPanGestureRecognizer?
+
     lazy var showCollectionView: UICollectionView = {
         makePageCollectionView(layout: makeShowPageLayout(), registersHero: false)
     }()

@@ -17,11 +17,14 @@ extension iPhoneMainViewController: UIGestureRecognizerDelegate {
         drawer.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(drawer)
         NSLayoutConstraint.activate([
-            drawer.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            drawer.topAnchor.constraint(equalTo: view.topAnchor),
             drawer.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             drawer.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             drawer.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
+        drawer.onProgressChanged = { [weak self] _ in
+            self?.raiseHomeOverlayChrome()
+        }
 
         let edge = UIScreenEdgePanGestureRecognizer(
             target: self, action: #selector(handleMusicEdgePan(_:))

@@ -56,18 +56,25 @@ struct HomeMusicLayoutTests {
 @MainActor
 struct HomeMusicDrawerViewTests {
 
-    @Test func closedDrawerOnlyHitsThePullTab() {
+    @Test func openDrawerHitsThePanel() {
+        let drawer = HomeMusicDrawerView(frame: CGRect(x: 0, y: 0, width: 800, height: 600))
+        drawer.isDrawerEnabled = true
+        drawer.panelWidth = 340
+        drawer.layoutIfNeeded()
+        drawer.setOpen(true, animated: false)
+        #expect(drawer.hitTest(CGPoint(x: 780, y: 300), with: nil) != nil)
+        drawer.setOpen(false, animated: false)
+        #expect(drawer.hitTest(CGPoint(x: 780, y: 300), with: nil) == nil)
+    }
+
+    @Test func closedDrawerDoesNotStealHits() {
         let drawer = HomeMusicDrawerView(frame: CGRect(x: 0, y: 0, width: 800, height: 600))
         drawer.isDrawerEnabled = true
         drawer.panelWidth = 340
         drawer.layoutIfNeeded()
         drawer.setOpen(false, animated: false)
 
-        let tab = drawer.convert(
-            CGPoint(x: 800 - 8, y: 300),
-            to: drawer
-        )
-        #expect(drawer.hitTest(tab, with: nil) != nil)
+        #expect(drawer.hitTest(CGPoint(x: 800 - 8, y: 300), with: nil) == nil)
         #expect(drawer.hitTest(CGPoint(x: 40, y: 40), with: nil) == nil)
     }
 
@@ -105,5 +112,64 @@ struct AudioMiniChromeZOrderTests {
         )
         let views = host.subviews
         #expect(views.firstIndex(of: bubble)! > views.firstIndex(of: player)!)
+    }
+}
+
+@MainActor
+struct HomeOverlayZOrderTests {
+
+    @Test func openDrawerSitsAboveHeaderButtons() {
+        let host = UIView()
+        let header = UIView()
+        let drawer = UIView()
+        let player = UIView()
+        let bubble = UIView()
+        host.addSubview(header)
+        host.addSubview(player)
+        host.addSubview(bubble)
+        host.addSubview(drawer)
+        HomeOverlayZOrder.raise(
+            header: header,
+            player: player,
+            bubble: bubble,
+            drawer: drawer,
+            drawerOpen: true,
+            in: host
+        )
+        #expect(
+            HomeOverlayZOrder.isDrawerAboveHeader(
+                drawer: drawer, header: header, in: host
+            )
+        )
+        let views = host.subviews
+        #expect(views.last === drawer)
+    }
+
+    @Test func closedDrawerLeavesMusicBubbleOnTop() {
+        let host = UIView()
+        let header = UIView()
+        let drawer = UIView()
+        let player = UIView()
+        let bubble = UIView()
+        host.addSubview(header)
+        host.addSubview(drawer)
+        host.addSubview(player)
+        host.addSubview(bubble)
+        HomeOverlayZOrder.raise(
+            header: header,
+            player: player,
+            bubble: bubble,
+            drawer: drawer,
+            drawerOpen: false,
+            in: host
+        )
+        #expect(
+            HomeOverlayZOrder.isDrawerAboveHeader(
+                drawer: drawer, header: header, in: host
+            )
+        )
+        let views = host.subviews
+        #expect(views.last === bubble)
+        #expect(views.firstIndex(of: bubble)! > views.firstIndex(of: drawer)!)
     }
 }

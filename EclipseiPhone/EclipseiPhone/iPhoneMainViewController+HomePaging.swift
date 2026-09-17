@@ -47,8 +47,8 @@ extension iPhoneMainViewController: UIScrollViewDelegate {
 
         embedLibraryPage()
         embedMusicPage()
-        // Header is added in `setupHeaderBar` before the pager — keep it on top.
-        view.bringSubviewToFront(headerBar)
+        // Header sits above the pager; Music drawer / bubble re-assert after.
+        raiseHomeOverlayChrome()
         applyHomePagerTopAttachment()
         updateHomeSplitLayoutIfNeeded()
         updateHomeChromeForCurrentPage()
@@ -348,6 +348,8 @@ extension iPhoneMainViewController: UIScrollViewDelegate {
         // pans that start on it — including rubber-band at the ends — so they
         // never transfer into Library→Music paging.
         wireHomePagerToYieldToLiveRibbon()
+        libraryViewController.homePagerPanToYield =
+            homePagerScrollView.panGestureRecognizer
     }
 
     /// Pager pan waits for the docked ribbon pan and the hero browse swipes to
@@ -457,7 +459,7 @@ extension iPhoneMainViewController: UIScrollViewDelegate {
         headerBar.transform = CGAffineTransform(translationX: -p * slide, y: 0)
         headerBar.isUserInteractionEnabled = p < 0.5
         if p < 1 {
-            view.bringSubviewToFront(headerBar)
+            raiseHomeOverlayChrome()
         }
     }
 }
