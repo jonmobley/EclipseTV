@@ -100,12 +100,16 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             header.configure(title: "")
         case .shows:
             if isHomePage(collectionView) {
+                let showSeeAll = HomeHeaderNavLayout.showsHomeSeeAll(
+                    horizontalSizeClass: traitCollection.horizontalSizeClass,
+                    verticalSizeClass: traitCollection.verticalSizeClass
+                )
                 header.configure(
                     title: "Recent",
-                    trailingTitle: "See All",
-                    trailingHandler: { [weak self] in
-                        self?.presentAllShows()
-                    },
+                    trailingTitle: showSeeAll ? "See All" : nil,
+                    trailingHandler: showSeeAll
+                        ? { [weak self] in self?.presentAllShows() }
+                        : nil,
                     actions: homeRecentFilterActions()
                 )
             } else {
@@ -173,6 +177,16 @@ extension LibraryGridViewController: UICollectionViewDataSource,
     ) {
         pinArrivingThumbnail(at: indexPath, in: collectionView)
         fillPlaceholderThumbnailIfReady(cell, at: indexPath, in: collectionView)
+        yieldOuterPansToHomeHero(cell)
+    }
+
+    /// Home hero paging is nested inside vertical (and compact horizontal) scroll
+    /// views; without this, those pans win and the gallery cannot swipe.
+    private func yieldOuterPansToHomeHero(_ cell: UICollectionViewCell) {
+        guard let hero = cell as? HomeHeroCarouselCell else { return }
+        let heroPan = hero.pagingScrollView.panGestureRecognizer
+        homeCollectionView.panGestureRecognizer.require(toFail: heroPan)
+        homePagerPanToYield?.require(toFail: heroPan)
     }
 
     func collectionView(

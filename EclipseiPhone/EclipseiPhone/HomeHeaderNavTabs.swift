@@ -44,6 +44,28 @@ enum HomeHeaderNavLayout {
     ) -> Bool {
         horizontalSizeClass == .regular && verticalSizeClass == .regular
     }
+
+    /// Home See All duplicates the iPad Show tab; compact still needs the link.
+    static func showsHomeSeeAll(
+        horizontalSizeClass: UIUserInterfaceSizeClass,
+        verticalSizeClass: UIUserInterfaceSizeClass
+    ) -> Bool {
+        !showsDestinationTabs(
+            horizontalSizeClass: horizontalSizeClass,
+            verticalSizeClass: verticalSizeClass
+        )
+    }
+
+    /// Library on iPad tabs is an instant swap; compact keeps the push slide.
+    static func usesInstantLibraryTransition(
+        horizontalSizeClass: UIUserInterfaceSizeClass,
+        verticalSizeClass: UIUserInterfaceSizeClass
+    ) -> Bool {
+        showsDestinationTabs(
+            horizontalSizeClass: horizontalSizeClass,
+            verticalSizeClass: verticalSizeClass
+        )
+    }
 }
 
 /// Selected Home vs Show, plus whether Music is pinned beside the grid.

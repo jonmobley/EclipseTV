@@ -59,10 +59,13 @@ final class HomeHeroCarouselCell: UICollectionViewCell, UIScrollViewDelegate {
     private let scrollView = UIScrollView()
     private let pageControl = UIPageControl()
     private var pageViews: [UIView] = []
-    private var configuredWidth: CGFloat = 0
+    private var configuredSize: CGSize = .zero
     private var isAdjustingOffset = false
     private var cardWidthConstraint: NSLayoutConstraint?
     private var cardHeightConstraint: NSLayoutConstraint?
+
+    /// Horizontal pager hosting the marketing slides.
+    var pagingScrollView: UIScrollView { scrollView }
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -76,17 +79,14 @@ final class HomeHeroCarouselCell: UICollectionViewCell, UIScrollViewDelegate {
     override func layoutSubviews() {
         super.layoutSubviews()
         applyCardSize()
-        let width = scrollView.bounds.width
-        guard width > 0, abs(width - configuredWidth) > 0.5 else { return }
-        configuredWidth = width
-        layoutPages(width: width)
+        contentView.layoutIfNeeded()
+        rebuildPagesIfSizeChanged()
     }
 
     /// Rebuilds pages from `HomeHeroSlide.all`.
     func reload() {
-        configuredWidth = 0
-        applyCardSize()
-        layoutPages(width: scrollView.bounds.width)
+        configuredSize = .zero
+        setNeedsLayout()
     }
 
     // MARK: - Private
@@ -97,6 +97,9 @@ final class HomeHeroCarouselCell: UICollectionViewCell, UIScrollViewDelegate {
 
         scrollView.isPagingEnabled = true
         scrollView.showsHorizontalScrollIndicator = false
+        scrollView.alwaysBounceHorizontal = true
+        scrollView.isDirectionalLockEnabled = true
+        scrollView.delaysContentTouches = false
         scrollView.delegate = self
         scrollView.clipsToBounds = true
         scrollView.layer.applyContinuousCorner(radius: CornerRadii.large)
@@ -143,6 +146,17 @@ final class HomeHeroCarouselCell: UICollectionViewCell, UIScrollViewDelegate {
         else { return }
         cardWidthConstraint?.constant = card.width
         cardHeightConstraint?.constant = card.height
+    }
+
+    /// Pages are laid out in the scroll view's bounds; both axes must match.
+    private func rebuildPagesIfSizeChanged() {
+        let size = scrollView.bounds.size
+        guard size.width > 0, size.height > 0 else { return }
+        let sizeChanged = abs(size.width - configuredSize.width) > 0.5
+            || abs(size.height - configuredSize.height) > 0.5
+        guard sizeChanged else { return }
+        configuredSize = size
+        layoutPages(width: size.width)
     }
 
     private var enclosingCollectionViewHeight: CGFloat {

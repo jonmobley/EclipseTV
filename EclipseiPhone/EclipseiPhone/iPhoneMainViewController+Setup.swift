@@ -381,14 +381,22 @@ extension iPhoneMainViewController {
     }
 
     /// Pushes onto the Home nav stack, or presents full-screen when there is none.
+    ///
+    /// iPad destination tabs swap instantly — a slide made Library feel like a
+    /// different app instead of the Home / Show / Library cluster.
     private func showMediaLibraryPage(_ picker: MediaLibraryPickerViewController) {
+        let animated = !HomeHeaderNavLayout.usesInstantLibraryTransition(
+            horizontalSizeClass: traitCollection.horizontalSizeClass,
+            verticalSizeClass: traitCollection.verticalSizeClass
+        )
+        picker.usesInstantTransition = !animated
         if let nav = navigationController {
             navigationItem.backButtonTitle = "Back"
-            nav.pushViewController(picker, animated: true)
+            nav.pushViewController(picker, animated: animated)
             return
         }
         let wrapped = UINavigationController(rootViewController: picker)
         wrapped.modalPresentationStyle = .fullScreen
-        presentationAnchor.present(wrapped, animated: true)
+        presentationAnchor.present(wrapped, animated: animated)
     }
 }

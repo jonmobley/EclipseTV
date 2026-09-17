@@ -66,8 +66,8 @@ extension iPhoneMainViewController {
         return UIMenu(children: children)
     }
 
-    /// iPad header tabs: Home closes Show, Show opens the list, Library opens
-    /// the media library. Music is the blue circle (and dropdown), not a tab.
+    /// iPad header tabs: Home closes Show, Show opens the list, Library
+    /// swaps in instantly (no push slide). Music is the blue circle, not a tab.
     func selectHeaderDestination(_ destination: HomeHeaderDestination) {
         switch destination {
         case .home:

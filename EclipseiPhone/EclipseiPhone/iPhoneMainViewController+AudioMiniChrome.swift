@@ -334,13 +334,62 @@ extension iPhoneMainViewController {
         audioMiniHeightConstraint?.constant = next
     }
 
-    /// Expanded card and Music bubble stay above the Music drawer.
-    func raiseAudioMiniChrome() {
-        AudioMiniChromeZOrder.raise(
+    /// Header, then Music. An open drawer sits above header buttons; the Music
+    /// bubble stays tappable while the pane is closed.
+    func raiseHomeOverlayChrome() {
+        HomeOverlayZOrder.raise(
+            header: headerBar,
             player: audioMiniPlayer,
             bubble: audioMiniBubble,
+            drawer: isMusicInDrawer ? musicDrawer : nil,
+            drawerOpen: musicDrawer.progress >= 0.02,
             in: view
         )
+    }
+
+    /// Expanded card and Music bubble stay above the Music drawer when it is closed.
+    func raiseAudioMiniChrome() {
+        raiseHomeOverlayChrome()
+    }
+}
+
+/// Sibling order for Home overlays: header, closed drawer, Music bubble;
+/// an open Music drawer covers header buttons.
+enum HomeOverlayZOrder {
+    /// Raises Home chrome so an open Music drawer is the top layer.
+    static func raise(
+        header: UIView,
+        player: UIView,
+        bubble: UIView,
+        drawer: UIView?,
+        drawerOpen: Bool,
+        in host: UIView
+    ) {
+        host.bringSubviewToFront(header)
+        guard let drawer else {
+            AudioMiniChromeZOrder.raise(player: player, bubble: bubble, in: host)
+            return
+        }
+        if drawerOpen {
+            AudioMiniChromeZOrder.raise(player: player, bubble: bubble, in: host)
+            host.bringSubviewToFront(drawer)
+        } else {
+            host.bringSubviewToFront(drawer)
+            AudioMiniChromeZOrder.raise(player: player, bubble: bubble, in: host)
+        }
+    }
+
+    /// Whether `drawer` is above `header` in `host`.
+    static func isDrawerAboveHeader(
+        drawer: UIView,
+        header: UIView,
+        in host: UIView
+    ) -> Bool {
+        let views = host.subviews
+        guard let drawerIndex = views.firstIndex(of: drawer),
+              let headerIndex = views.firstIndex(of: header)
+        else { return false }
+        return drawerIndex > headerIndex
     }
 }
 

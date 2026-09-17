@@ -87,6 +87,9 @@ final class MediaLibraryPickerViewController: UIViewController {
 
     var isAddToShowMode: Bool { targetShowId != nil }
 
+    /// iPad destination tabs open and close this page with no slide animation.
+    var usesInstantTransition = false
+
     private var isNavRoot: Bool {
         navigationController?.viewControllers.first === self
     }
@@ -244,8 +247,9 @@ final class MediaLibraryPickerViewController: UIViewController {
 
     /// Pops when pushed from Home; dismisses when this page is the presented root.
     private func closePicker(completion: (() -> Void)? = nil) {
+        let animated = !usesInstantTransition
         if let nav = navigationController, nav.viewControllers.first !== self {
-            nav.popViewController(animated: true)
+            nav.popViewController(animated: animated)
             if let completion {
                 if let coordinator = nav.transitionCoordinator {
                     coordinator.animate(alongsideTransition: nil) { _ in
@@ -257,7 +261,7 @@ final class MediaLibraryPickerViewController: UIViewController {
             }
             return
         }
-        dismiss(animated: true, completion: completion)
+        dismiss(animated: animated, completion: completion)
     }
 
     @objc private func addTapped() {

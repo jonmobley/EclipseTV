@@ -33,6 +33,32 @@ struct HomeHeaderNavLayoutTests {
             )
         )
     }
+
+    @Test func seeAllOnlyWhenDestinationTabsAreHidden() {
+        #expect(
+            HomeHeaderNavLayout.showsHomeSeeAll(
+                horizontalSizeClass: .compact, verticalSizeClass: .regular
+            )
+        )
+        #expect(
+            !HomeHeaderNavLayout.showsHomeSeeAll(
+                horizontalSizeClass: .regular, verticalSizeClass: .regular
+            )
+        )
+    }
+
+    @Test func libraryTransitionIsInstantOnPadTabs() {
+        #expect(
+            HomeHeaderNavLayout.usesInstantLibraryTransition(
+                horizontalSizeClass: .regular, verticalSizeClass: .regular
+            )
+        )
+        #expect(
+            !HomeHeaderNavLayout.usesInstantLibraryTransition(
+                horizontalSizeClass: .compact, verticalSizeClass: .regular
+            )
+        )
+    }
 }
 
 @MainActor

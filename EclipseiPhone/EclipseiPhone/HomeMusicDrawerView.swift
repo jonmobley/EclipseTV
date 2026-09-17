@@ -7,7 +7,8 @@
 
 import UIKit
 
-/// Floating Music drawer: pull-tab, dimming scrim, and a sliding panel.
+/// Floating Music drawer: dimming scrim and a sliding panel.
+/// The pull-tab is a close handle on the open pane; the Music circle opens it.
 final class HomeMusicDrawerView: UIView, UIGestureRecognizerDelegate {
 
     static let tabWidth: CGFloat = 32
@@ -39,6 +40,9 @@ final class HomeMusicDrawerView: UIView, UIGestureRecognizerDelegate {
             applyChrome()
         }
     }
+
+    /// Invoked when open progress changes (0 closed, 1 open).
+    var onProgressChanged: ((CGFloat) -> Void)?
 
     /// When false, the overlay is hidden (paging or pinned split).
     var isDrawerEnabled = false {
@@ -91,10 +95,7 @@ final class HomeMusicDrawerView: UIView, UIGestureRecognizerDelegate {
 
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         guard isDrawerEnabled, !isHidden else { return nil }
-        if progress < 0.02 {
-            let tabPoint = tab.convert(point, from: self)
-            return tab.hitTest(tabPoint, with: event)
-        }
+        if progress < 0.02 { return nil }
         return super.hitTest(point, with: event)
     }
 
@@ -296,7 +297,10 @@ final class HomeMusicDrawerView: UIView, UIGestureRecognizerDelegate {
 
     private func setProgress(_ value: CGFloat, animated: Bool) {
         progress = min(1, max(0, value))
-        let apply = { self.applyChrome() }
+        let apply = {
+            self.applyChrome()
+            self.onProgressChanged?(self.progress)
+        }
         guard animated else {
             apply()
             settleIfNeeded(animated: false)
@@ -324,9 +328,13 @@ final class HomeMusicDrawerView: UIView, UIGestureRecognizerDelegate {
         }
     }
 
+    /// Closed offset tucks the pull-tab off-screen. The blue Music circle opens
+    /// the pane; a peeking tab covered Recent See All on iPad.
+    private var closedOffset: CGFloat { panelWidth + Self.tabWidth }
+
     private func applyChrome() {
         slideContainer.transform = CGAffineTransform(
-            translationX: (1 - progress) * panelWidth, y: 0
+            translationX: (1 - progress) * closedOffset, y: 0
         )
         dimmingView.alpha = progress
     }
@@ -346,6 +354,7 @@ final class HomeMusicDrawerView: UIView, UIGestureRecognizerDelegate {
 
     private func updateTabAccessibility() {
         let open = progress > 0.5
+        tab.isAccessibilityElement = open
         tab.accessibilityLabel = open ? "Close Music" : "Music"
         tab.accessibilityHint = open
             ? "Hides the Music drawer."
