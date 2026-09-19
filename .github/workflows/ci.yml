@@ -40,6 +40,8 @@ jobs:
         run: Scripts/verify_shared_sources.sh
       - name: Check build-number ordering
         run: Scripts/set_build_number.sh --self-test
+      - name: Check WebRTC dSYM injection helpers
+        run: Scripts/inject_webrtc_dsym.sh --self-test
       # The stamper reads the app build number out of both project files and the TV
       # plist. A restructure that breaks that reading should fail here, not at the
       # moment someone is trying to cut a release.
