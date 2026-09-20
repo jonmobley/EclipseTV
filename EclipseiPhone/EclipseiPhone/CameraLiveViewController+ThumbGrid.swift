@@ -35,6 +35,61 @@ extension CameraLiveViewController {
         thumbGridView.addGestureRecognizer(longPress)
     }
 
+    /// Re-applies the red live stroke on visible camera thumbs after a park / overlay
+    /// tap. `reloadData()` alone can leave the cell that just went on program with
+    /// the idle hairline it was painted with before the store changed.
+    func syncVisibleCameraThumbLiveStrokes() {
+        let stills = stillRibbonItems
+        for path in stillRibbonView.indexPathsForVisibleItems {
+            guard stills.indices.contains(path.item),
+                  let cell = stillRibbonView.cellForItem(at: path)
+                    as? CameraStillRibbonCell
+            else { continue }
+            configureStillRibbonCell(cell, item: stills[path.item])
+        }
+        let store = CameraFrameStore.shared
+        let frames = store.enabledFrames
+        for path in frameRibbonView.indexPathsForVisibleItems {
+            guard frames.indices.contains(path.item),
+                  let cell = frameRibbonView.cellForItem(at: path)
+                    as? CameraFrameRibbonCell
+            else { continue }
+            let frame = frames[path.item]
+            cell.configure(
+                image: store.image(for: frame.id),
+                isLive: store.selectedId == frame.id
+            )
+        }
+        syncVisibleThumbGridLiveStrokes()
+    }
+
+    /// Same pass for the stacked Show-style grid (portrait hold of Landscape).
+    private func syncVisibleThumbGridLiveStrokes() {
+        let items = thumbGridItems
+        let store = CameraFrameStore.shared
+        for path in thumbGridView.indexPathsForVisibleItems {
+            guard items.indices.contains(path.item) else { continue }
+            switch items[path.item] {
+            case .program:
+                guard let cell = thumbGridView.cellForItem(at: path)
+                    as? CameraProgramGridCell else { continue }
+                configureLiveOutputThumb(cell.thumbView)
+                cell.mirrorThumbAccessibility()
+            case .frame(let id):
+                guard let cell = thumbGridView.cellForItem(at: path)
+                    as? CameraFrameRibbonCell else { continue }
+                cell.configure(
+                    image: store.image(for: id),
+                    isLive: store.selectedId == id
+                )
+            case .still(let item):
+                guard let cell = thumbGridView.cellForItem(at: path)
+                    as? CameraStillRibbonCell else { continue }
+                configureStillRibbonCell(cell, item: item)
+            }
+        }
+    }
+
     /// Program, enabled frames, then Background · quick-change stills · +.
     var thumbGridItems: [CameraThumbGridItem] {
         Self.thumbGridItems(

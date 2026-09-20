@@ -16,6 +16,7 @@ final class CameraStillRibbonCell: UICollectionViewCell {
         view.contentMode = .scaleAspectFill
         view.clipsToBounds = true
         view.layer.cornerRadius = 10
+        view.layer.cornerCurve = .continuous
         view.translatesAutoresizingMaskIntoConstraints = false
         return view
     }()
@@ -30,8 +31,10 @@ final class CameraStillRibbonCell: UICollectionViewCell {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
+        clipsToBounds = false
         contentView.backgroundColor = UIColor.black.withAlphaComponent(0.45)
         contentView.layer.cornerRadius = 10
+        contentView.layer.cornerCurve = .continuous
         contentView.clipsToBounds = true
         contentView.addSubview(imageView)
         contentView.addSubview(symbolView)
@@ -81,13 +84,24 @@ final class CameraStillRibbonCell: UICollectionViewCell {
         contentView.backgroundColor = image == nil
             ? UIColor.black.withAlphaComponent(0.45)
             : .black
-        contentView.layer.borderWidth = isLive ? 3 : 1
-        contentView.layer.borderColor = isLive
-            ? UIColor.systemRed.cgColor
-            : UIColor.white.withAlphaComponent(0.35).cgColor
+        applyLiveStroke(isLive)
         self.accessibilityLabel = accessibilityLabel
         accessibilityValue = isLive ? "On program" : "Off"
         self.accessibilityHint = accessibilityHint
         isAccessibilityElement = true
+    }
+
+    /// Red program ring. Drawn on the still itself so an opaque thumbnail cannot
+    /// cover the content-view border — tapping another cutaway went live with
+    /// no visible stroke.
+    func applyLiveStroke(_ isLive: Bool) {
+        let width: CGFloat = isLive ? 3 : 1
+        let color = isLive
+            ? UIColor.systemRed.cgColor
+            : UIColor.white.withAlphaComponent(0.35).cgColor
+        imageView.layer.borderWidth = width
+        imageView.layer.borderColor = color
+        contentView.layer.borderWidth = width
+        contentView.layer.borderColor = color
     }
 }

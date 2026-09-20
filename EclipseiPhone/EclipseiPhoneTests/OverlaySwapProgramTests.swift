@@ -45,6 +45,29 @@ struct OverlaySwapProgramTests {
         clearOverlays()
     }
 
+    @Test func aCameraHandingOffToAStillIsTheStillBeforeItAnnouncesTheEnd() {
+        let mgr = ExternalDisplayManager.shared
+        clearOverlays()
+        mgr.presentCamera()
+        #expect(Self.program() == ShowProgram(kind: .camera))
+
+        let stillId = "cut.jpg"
+        let observed = Observed()
+        let token = observe(ExternalDisplayManager.cameraDidEndNotification, into: observed)
+        defer { NotificationCenter.default.removeObserver(token) }
+
+        TVLibraryStore.shared.updateCurrentId(stillId)
+        mgr.present(
+            .image(URL(fileURLWithPath: "/tmp/\(stillId)"), fill: false)
+        )
+
+        let expected = ShowProgram(kind: .media, itemId: stillId)
+        #expect(observed.programs == [expected])
+        #expect(Self.program() == expected)
+        TVLibraryStore.shared.updateCurrentId(nil)
+        clearOverlays()
+    }
+
     @Test func aCameraHandingOffToAWebsiteIsTheWebsiteBeforeItAnnouncesTheEnd() {
         let mgr = ExternalDisplayManager.shared
         clearOverlays()
@@ -152,6 +175,7 @@ struct OverlaySwapProgramTests {
         state.webPageId = mgr.isWebLive ? mgr.liveWebPageId : nil
         state.webVideoPageId = mgr.isWebVideoLive ? mgr.liveWebVideoPageId : nil
         state.pdfDocumentId = mgr.isPDFLive ? mgr.livePDFDocumentId : nil
+        state.mediaId = TVLibraryStore.shared.currentId
         return ShowProgramResolver.resolve(state)
     }
 
@@ -180,6 +204,7 @@ struct OverlaySwapProgramTests {
             mgr.stopWebAndRestoreLibrary()
         }
         CountdownController.shared.endLive()
+        TVLibraryStore.shared.updateCurrentId(nil)
     }
 
     /// Program sampled at each teardown notification, in arrival order.
