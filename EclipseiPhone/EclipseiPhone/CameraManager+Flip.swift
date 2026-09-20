@@ -124,6 +124,19 @@ extension CameraManager {
             connection.automaticallyAdjustsVideoMirroring = false
             connection.isVideoMirrored = mirror
         }
+        applyVideoStabilizationLocked()
+    }
+
+    /// Enables handheld EIS on live outputs. Flip rebuilds connections, so this
+    /// runs after every input swap. The movie writer is configured when recording
+    /// starts — leaving it off here keeps cinematic-grade latency off program.
+    func applyVideoStabilizationLocked() {
+        let format = videoDevice?.activeFormat
+        for output in captureSession.outputs {
+            guard output !== movieFileOutput else { continue }
+            guard let connection = output.connection(with: .video) else { continue }
+            CameraVideoStabilization.apply(.live, to: connection, format: format)
+        }
     }
 
     /// Wide-angle camera at `position`, if present.

@@ -250,6 +250,11 @@ extension CameraManager: AVCaptureFileOutputRecordingDelegate {
                 videoConnection.automaticallyAdjustsVideoMirroring = false
                 videoConnection.isVideoMirrored = self.videoDevice?.position == .front
             }
+            CameraVideoStabilization.apply(
+                .recording,
+                to: videoConnection,
+                format: videoDevice?.activeFormat
+            )
         }
 
         let micAuthorized =
