@@ -16,8 +16,15 @@ final class HomeHeroCarouselCell: UICollectionViewCell, UIScrollViewDelegate {
     static let cardAspectWidthOverHeight: CGFloat = 16.0 / 9.0
     /// Page dots under the card (gap + control).
     static let pageControlBand: CGFloat = 28
+    /// Card + dots may use at most this share of the collection view height.
+    ///
+    /// Phone portrait 16:9 full-bleed is well under this. Full-bleed of the
+    /// landscape width is taller than the short pane, which clipped the dots
+    /// and pushed Recent off-screen.
+    static let maxBandHeightFractionOfContainer: CGFloat = 0.6
 
-    /// 16:9 card that spans the pane on the phone and caps on wide iPad.
+    /// 16:9 card that spans a tall phone pane, and shrinks (staying 16:9) when
+    /// that bleed would overflow iPhone landscape or a wide iPad.
     static func cardSize(
         availableWidth: CGFloat,
         containerHeight: CGFloat,
@@ -25,22 +32,43 @@ final class HomeHeroCarouselCell: UICollectionViewCell, UIScrollViewDelegate {
     ) -> CGSize {
         let maxWidth = max(availableWidth, 1)
         let fullBleedHeight = (maxWidth / cardAspectWidthOverHeight).rounded(.down)
-        let heightCap: CGFloat
-        if horizontalSizeClass == .regular, containerHeight > 0 {
-            heightCap = max(
-                StackedHeroMetrics.phoneMaxHeight,
-                (containerHeight * StackedHeroMetrics.regularWidthHeightFraction)
-                    .rounded(.down)
-            )
-        } else {
-            heightCap = fullBleedHeight
-        }
-        let height = max(min(fullBleedHeight, heightCap), 1)
+        let height = max(
+            min(
+                fullBleedHeight,
+                heightCap(
+                    fullBleedHeight: fullBleedHeight,
+                    containerHeight: containerHeight,
+                    horizontalSizeClass: horizontalSizeClass
+                )
+            ),
+            1
+        )
         let width = min(
             maxWidth,
             (height * cardAspectWidthOverHeight).rounded(.down)
         )
         return CGSize(width: max(width, 1), height: height)
+    }
+
+    /// Regular-width cap (centered iPad card) plus a short-pane ceiling.
+    private static func heightCap(
+        fullBleedHeight: CGFloat,
+        containerHeight: CGFloat,
+        horizontalSizeClass: UIUserInterfaceSizeClass
+    ) -> CGFloat {
+        var cap = fullBleedHeight
+        if horizontalSizeClass == .regular, containerHeight > 0 {
+            cap = max(
+                StackedHeroMetrics.phoneMaxHeight,
+                (containerHeight * StackedHeroMetrics.regularWidthHeightFraction)
+                    .rounded(.down)
+            )
+        }
+        guard containerHeight > 0 else { return cap }
+        let paneCap = (
+            containerHeight * maxBandHeightFractionOfContainer - pageControlBand
+        ).rounded(.down)
+        return min(cap, max(paneCap, 1))
     }
 
     /// Card + page-control band for the Home hero section.
@@ -134,13 +162,23 @@ final class HomeHeroCarouselCell: UICollectionViewCell, UIScrollViewDelegate {
         accessibilityHint = "Swipe horizontally for more"
     }
 
-    /// Centers a 16:9 card in the cell; full-bleed on the phone, inset on wide iPad.
+    /// Centers a 16:9 card in the cell; full-bleed on a tall phone, inset when
+    /// the layout capped the band (iPhone landscape / wide iPad).
     private func applyCardSize() {
-        let card = Self.cardSize(
+        var card = Self.cardSize(
             availableWidth: contentView.bounds.width,
             containerHeight: enclosingCollectionViewHeight,
             horizontalSizeClass: traitCollection.horizontalSizeClass
         )
+        // Layout owns the band height; never let the card overflow this cell.
+        let fittedHeight = max(contentView.bounds.height - Self.pageControlBand, 1)
+        if contentView.bounds.height > 1, card.height > fittedHeight + 0.5 {
+            card.height = fittedHeight
+            card.width = min(
+                max(contentView.bounds.width, 1),
+                (fittedHeight * Self.cardAspectWidthOverHeight).rounded(.down)
+            )
+        }
         guard abs((cardWidthConstraint?.constant ?? 0) - card.width) > 0.5
             || abs((cardHeightConstraint?.constant ?? 0) - card.height) > 0.5
         else { return }
@@ -285,7 +323,10 @@ final class HomeHeroCarouselCell: UICollectionViewCell, UIScrollViewDelegate {
         NSLayoutConstraint.activate([
             stack.topAnchor.constraint(equalTo: page.topAnchor, constant: 24),
             stack.leadingAnchor.constraint(equalTo: page.leadingAnchor, constant: 20),
-            stack.trailingAnchor.constraint(equalTo: page.trailingAnchor, constant: -20)
+            stack.trailingAnchor.constraint(equalTo: page.trailingAnchor, constant: -20),
+            stack.bottomAnchor.constraint(
+                lessThanOrEqualTo: page.bottomAnchor, constant: -16
+            )
         ])
     }
 
@@ -306,6 +347,8 @@ final class HomeHeroCarouselCell: UICollectionViewCell, UIScrollViewDelegate {
         label.text = text
         label.font = font
         label.adjustsFontForContentSizeCategory = true
+        label.adjustsFontSizeToFitWidth = true
+        label.minimumScaleFactor = 0.7
         label.textColor = color
         label.textAlignment = .center
         return label

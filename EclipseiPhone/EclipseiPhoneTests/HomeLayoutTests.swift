@@ -81,8 +81,8 @@ struct HomeLayoutTests {
 
     /// The Home marketing card is 16:9 at every pane size.
     @Test func homeHeroCardIsAlwaysSixteenByNine() {
-        for width in [CGFloat(320), 390, 430, 744, 1024, 1366] {
-            for height in [CGFloat(844), 1024, 1366] {
+        for width in [CGFloat(320), 390, 430, 667, 852, 744, 1024, 1366] {
+            for height in [CGFloat(375), 393, 844, 1024, 1366] {
                 for sizeClass in [UIUserInterfaceSizeClass.compact, .regular] {
                     let card = HomeHeroCarouselCell.cardSize(
                         availableWidth: width - inset * 2,
@@ -109,6 +109,28 @@ struct HomeLayoutTests {
         #expect(abs(card.width - available) < 2)
     }
 
+    /// Compact-width landscape used to size 16:9 from the long edge, so the
+    /// band was taller than the phone and the page dots were clipped.
+    @Test func homeHeroFitsIPhoneLandscapePane() {
+        for size in [CGSize(width: 667, height: 375), CGSize(width: 852, height: 393)] {
+            let card = HomeHeroCarouselCell.cardSize(
+                availableWidth: size.width - inset * 2,
+                containerHeight: size.height,
+                horizontalSizeClass: .compact
+            )
+            let band = HomeHeroCarouselCell.bandHeight(
+                availableWidth: size.width - inset * 2,
+                containerHeight: size.height,
+                horizontalSizeClass: .compact
+            )
+            let maxBand = size.height
+                * HomeHeroCarouselCell.maxBandHeightFractionOfContainer
+            #expect(band <= maxBand + 1, "hero band \(band) overflows \(size)")
+            #expect(card.width < size.width - inset * 2 - 40)
+            #expect(abs(card.width / card.height - 16.0 / 9.0) < 0.02)
+        }
+    }
+
     @Test func homeHeroDoesNotSpanThirteenInchLandscape() {
         let available: CGFloat = 1366 - inset * 2
         let card = HomeHeroCarouselCell.cardSize(
@@ -118,6 +140,41 @@ struct HomeLayoutTests {
         )
         #expect(card.width < available - 40)
         #expect(abs(card.width / card.height - 16.0 / 9.0) < 0.02)
+    }
+
+    /// The hero cell itself must be shorter than an iPhone landscape collection
+    /// view, so paging and Recent stay on-screen.
+    @Test func homeHeroCellFitsInAnIPhoneLandscapeCollectionView() {
+        let size = CGSize(width: 852, height: 393)
+        let layout = LibraryGridViewController.makeHomeLayout(
+            sectionInset: inset,
+            spacing: spacing
+        ) { .home }
+
+        let collectionView = UICollectionView(
+            frame: CGRect(origin: .zero, size: size),
+            collectionViewLayout: layout
+        )
+        let dataSource = OverreportingDataSource()
+        dataSource.register(on: collectionView)
+        dataSource.sectionCount = 2
+        dataSource.itemsPerSection = 1
+        collectionView.dataSource = dataSource
+        collectionView.reloadData()
+        collectionView.layoutIfNeeded()
+
+        let frame = collectionView.layoutAttributesForItem(
+            at: IndexPath(item: 0, section: 0)
+        )?.frame
+        #expect(frame != nil)
+        #expect(
+            (frame?.height ?? .greatestFiniteMagnitude) < size.height,
+            "hero cell \(String(describing: frame)) is taller than the pane"
+        )
+        #expect(
+            (frame?.maxY ?? .greatestFiniteMagnitude) < size.height,
+            "hero cell extends past the landscape collection view"
+        )
     }
 
     @Test func columnCountNeverFallsBelowTheModeBaseline() {
