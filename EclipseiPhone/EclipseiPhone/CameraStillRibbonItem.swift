@@ -28,8 +28,8 @@ enum CameraTileTapAction: Equatable {
     /// Put the feed on program. The controller stays closed — output is the point
     /// and the viewfinder is optional, unlike a website or PDF.
     case goLive
-    /// Open the phone controller. Live is already handled, so this is all the tap
-    /// can still mean.
+    /// Open the phone viewfinder. Used when the tile is already live, and when
+    /// there is no destination (or live is locked) so the tap is Preview.
     case openController
 }
 
@@ -63,13 +63,18 @@ enum CameraStillRibbon {
         parked == .background
     }
 
-    /// First tap goes live; a tap on the already-live tile opens the controller.
+    /// Go live when a destination is available; otherwise open the viewfinder.
     ///
-    /// Website and PDF cards open their controller on every tap, so the tile the
-    /// user closed out of is always one tap away again. Camera withholds the
-    /// controller on the way live, which left the second tap doing nothing at all
-    /// and the closed viewfinder reachable only from the hero or ⋯.
-    static func cameraTileTap(isCameraTileLive: Bool) -> CameraTileTapAction {
-        isCameraTileLive ? .openController : .goLive
+    /// Website and PDF cards open their controller on every tap, including
+    /// Preview (no AirPlay / Practice, or live locked). Camera still withholds
+    /// the controller on the way live so the feed can sit on the grid, but the
+    /// idle tile matches that Preview rule instead of marking live with nobody
+    /// watching. A tap on the already-live tile opens the controller.
+    static func cameraTileTap(
+        isCameraTileLive: Bool,
+        prefersPhonePreview: Bool
+    ) -> CameraTileTapAction {
+        if isCameraTileLive || prefersPhonePreview { return .openController }
+        return .goLive
     }
 }
