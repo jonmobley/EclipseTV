@@ -139,8 +139,8 @@ extension LibraryGridViewController {
         )
     }
 
-    /// Marketing carousel above Recent. Full-bleed 16:9 on the phone; a centered
-    /// 16:9 card on wide iPad so the band is not a short full-width strip.
+    /// Marketing carousel above Recent. Full-bleed 16:9 on a tall phone; a
+    /// centered 16:9 card on iPhone landscape and wide iPad so the band fits.
     private static func heroSection(
         containerWidth: CGFloat,
         containerHeight: CGFloat,

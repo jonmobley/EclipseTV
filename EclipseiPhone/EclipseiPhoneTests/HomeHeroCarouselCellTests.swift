@@ -46,4 +46,26 @@ struct HomeHeroCarouselCellTests {
             ) < 1
         )
     }
+
+    /// Landscape cells are shorter than 16:9 of their width; pages must still
+    /// fill the capped card, not the full cell width.
+    @Test func pagingPagesFillALandscapeCappedCard() {
+        let band = HomeHeroCarouselCell.bandHeight(
+            availableWidth: 820,
+            containerHeight: 393,
+            horizontalSizeClass: .compact
+        )
+        let cell = HomeHeroCarouselCell(
+            frame: CGRect(x: 0, y: 0, width: 820, height: band)
+        )
+        cell.reload()
+        cell.layoutIfNeeded()
+        let scroll = cell.pagingScrollView
+        #expect(scroll.bounds.width < 820 - 40)
+        #expect(abs(scroll.bounds.width / scroll.bounds.height - 16.0 / 9.0) < 0.02)
+        let looped = CGFloat(HomeHeroSlide.all.count + 2)
+        #expect(
+            abs(scroll.contentSize.width - scroll.bounds.width * looped) < 1
+        )
+    }
 }
