@@ -24,10 +24,14 @@ enum ShowGridItem: Equatable {
     case add
 
     /// Library media id whose decoded thumb backs this tile, if any.
+    ///
+    /// A countdown backed by Show media borrows that item's thumb, so it is pinned
+    /// while on screen and painted in place when the decode lands late.
     var libraryThumbnailId: String? {
         switch self {
         case .media(let media): return media.id
         case .slideshow(let show): return show.resolvedCoverId
+        case .countdown(let countdown): return countdown.background.libraryItemId
         default: return nil
         }
     }

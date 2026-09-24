@@ -75,16 +75,13 @@ extension CameraLiveViewController {
 
     /// Fills the panel with the mirror, rotating sensor frames to match live preview.
     ///
-    /// Uses the lens horizon angle — Vertical is not always 90° (portrait-mounted front
-    /// sensors report 0°). 90°/270° swap width and height so a Landscape 16:9 panel
-    /// stays 16:9 instead of clipping to a square.
+    /// Uses the frame-tap angle — the lens horizon angle, reversed while the tap is
+    /// mirrored. Vertical is not always 90° either (portrait-mounted front sensors
+    /// report 0°). 90°/270° swap width and height so a Landscape 16:9 panel stays
+    /// 16:9 instead of clipping to a square.
     func layoutMirrorView() {
         guard !mirrorView.isHidden else { return }
-        let degrees = Double(
-            CameraManager.shared.quantizedRotationAngle(
-                CameraManager.shared.horizonLevelCaptureRotationAngle()
-            )
-        )
+        let degrees = Double(CameraManager.shared.frameTapRotationAngle())
         PresentationViewController.applyRotatedLayout(
             to: mirrorView,
             in: panelView,

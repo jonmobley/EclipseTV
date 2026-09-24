@@ -117,6 +117,7 @@ extension LibraryGridViewController {
                 }
                 return Self.showsGridSection(
                     containerWidth: width,
+                    containerHeight: environment.container.effectiveContentSize.height,
                     sectionInset: sectionInset,
                     spacing: spacing,
                     showsFormatFilter: live.showsRecentFormatFilter
@@ -139,8 +140,8 @@ extension LibraryGridViewController {
         )
     }
 
-    /// Marketing carousel above Recent. Full-bleed 16:9 on the phone; a centered
-    /// 16:9 card on wide iPad so the band is not a short full-width strip.
+    /// Marketing carousel above Recent. Full-bleed 16:9 on a tall phone; a shorter
+    /// full-width card in phone landscape; a centered 16:9 card on wide iPad.
     private static func heroSection(
         containerWidth: CGFloat,
         containerHeight: CGFloat,
@@ -297,18 +298,49 @@ extension LibraryGridViewController {
         return CGSize(width: width, height: height)
     }
 
+    /// Largest Home Recent tile on a phone turned sideways.
+    ///
+    /// Display Mode's 2-up / 3-up squares are sized for a tall portrait pane.
+    /// On a short landscape phone those same counts made each Show nearly half
+    /// the screen. This cap adds columns until the tile fits.
+    static let phoneLandscapeRecentMaxTile: CGFloat = 128
+
+    /// Columns for Home Recent. Display Mode's count, plus extra on phone landscape.
+    static func homeRecentColumnCount(
+        containerWidth: CGFloat,
+        containerHeight: CGFloat,
+        sectionInset: CGFloat,
+        spacing: CGFloat
+    ) -> Int {
+        let base = homeGridColumnCount(
+            containerWidth: containerWidth,
+            sectionInset: sectionInset,
+            spacing: spacing
+        )
+        guard StackedHeroMetrics.isPhoneLandscapePane(
+            width: containerWidth, height: containerHeight
+        ) else { return base }
+        let available = containerWidth - sectionInset * 2
+        guard available > 0 else { return base }
+        let slot = phoneLandscapeRecentMaxTile + spacing
+        let fitted = Int(ceil((available + spacing) / slot))
+        return min(max(base, fitted), 8)
+    }
+
     /// Square tile for Home Recent (Landscape + Vertical Shows share one grid).
     static func homeRecentTileSize(
         containerWidth: CGFloat,
         sectionInset: CGFloat,
-        spacing: CGFloat
+        spacing: CGFloat,
+        containerHeight: CGFloat = 0
     ) -> CGSize {
         let width = columnWidth(
             containerWidth: containerWidth,
             sectionInset: sectionInset,
             spacing: spacing,
-            columns: CGFloat(homeGridColumnCount(
+            columns: CGFloat(homeRecentColumnCount(
                 containerWidth: containerWidth,
+                containerHeight: containerHeight,
                 sectionInset: sectionInset,
                 spacing: spacing
             ))
@@ -319,19 +351,22 @@ extension LibraryGridViewController {
     /// Recent Shows on Home: square tiles (both Display Modes) wrapping down the page.
     private static func showsGridSection(
         containerWidth: CGFloat,
+        containerHeight: CGFloat,
         sectionInset: CGFloat,
         spacing: CGFloat,
         showsFormatFilter: Bool = false
     ) -> NSCollectionLayoutSection {
-        let columns = homeGridColumnCount(
+        let columns = homeRecentColumnCount(
             containerWidth: containerWidth,
+            containerHeight: containerHeight,
             sectionInset: sectionInset,
             spacing: spacing
         )
         let tile = homeRecentTileSize(
             containerWidth: containerWidth,
             sectionInset: sectionInset,
-            spacing: spacing
+            spacing: spacing,
+            containerHeight: containerHeight
         )
 
         let itemSize = NSCollectionLayoutSize(

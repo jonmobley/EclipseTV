@@ -79,6 +79,85 @@ struct HomeLayoutTests {
         }
     }
 
+    /// Phone landscape packs Recent so a Show is a thumbnail, not half the screen.
+    @Test func phoneLandscapeRecentTilesStaySmallAndFillTheRow() {
+        let width: CGFloat = 780
+        let height: CGFloat = 390
+        let columns = LibraryGridViewController.homeRecentColumnCount(
+            containerWidth: width,
+            containerHeight: height,
+            sectionInset: inset,
+            spacing: spacing
+        )
+        let portraitColumns = LibraryGridViewController.homeRecentColumnCount(
+            containerWidth: 390,
+            containerHeight: 844,
+            sectionInset: inset,
+            spacing: spacing
+        )
+        #expect(columns >= 5)
+        #expect(columns > portraitColumns)
+
+        let tile = LibraryGridViewController.homeRecentTileSize(
+            containerWidth: width,
+            sectionInset: inset,
+            spacing: spacing,
+            containerHeight: height
+        )
+        #expect(tile.width == tile.height)
+        #expect(tile.width <= LibraryGridViewController.phoneLandscapeRecentMaxTile)
+        #expect(tile.width > 64)
+
+        let used = tile.width * CGFloat(columns) + spacing * CGFloat(columns - 1) + inset * 2
+        #expect(used <= width)
+        #expect(width - used < CGFloat(columns))
+    }
+
+    /// The Home collection view itself must emit the compact tile, not only the helper.
+    @Test func phoneLandscapeRecentCellsMatchTheCompactTile() {
+        let width: CGFloat = 780
+        let height: CGFloat = 390
+        let layout = LibraryGridViewController.makeHomeLayout(
+            sectionInset: inset,
+            spacing: spacing
+        ) { .home }
+
+        let collectionView = UICollectionView(
+            frame: CGRect(x: 0, y: 0, width: width, height: height),
+            collectionViewLayout: layout
+        )
+        let dataSource = OverreportingDataSource()
+        dataSource.register(on: collectionView)
+        dataSource.sectionCount = 2
+        dataSource.itemsPerSection = 8
+        collectionView.dataSource = dataSource
+        collectionView.reloadData()
+        collectionView.layoutIfNeeded()
+
+        let tile = collectionView.layoutAttributesForItem(
+            at: IndexPath(item: 0, section: 1)
+        )?.frame.size
+        let expected = LibraryGridViewController.homeRecentTileSize(
+            containerWidth: width,
+            sectionInset: inset,
+            spacing: spacing,
+            containerHeight: height
+        )
+        #expect(tile == expected)
+
+        let hero = collectionView.layoutAttributesForItem(
+            at: IndexPath(item: 0, section: 0)
+        )?.frame.height
+        let band = LibraryGridViewController.heroBandHeight(
+            containerWidth: width,
+            containerHeight: height,
+            sectionInset: inset,
+            horizontalSizeClass: .compact
+        )
+        #expect(hero == band)
+        #expect(band < height * 0.6)
+    }
+
     /// The Home marketing card is 16:9 at every pane size.
     @Test func homeHeroCardIsAlwaysSixteenByNine() {
         for width in [CGFloat(320), 390, 430, 744, 1024, 1366] {
@@ -118,6 +197,26 @@ struct HomeLayoutTests {
         )
         #expect(card.width < available - 40)
         #expect(abs(card.width / card.height - 16.0 / 9.0) < 0.02)
+    }
+
+    /// Phone landscape is short. A full-bleed 16:9 of the long edge is taller
+    /// than the pane, so the card stays full width and gives Recent the rest.
+    @Test func homeHeroStaysFullWidthAndShortOnPhoneLandscape() {
+        for sizeClass in [UIUserInterfaceSizeClass.compact, .regular] {
+            let available: CGFloat = 780 - inset * 2
+            let card = HomeHeroCarouselCell.cardSize(
+                availableWidth: available,
+                containerHeight: 390,
+                horizontalSizeClass: sizeClass
+            )
+            let bleed = (available / HomeHeroCarouselCell.cardAspectWidthOverHeight)
+                .rounded(.down)
+            #expect(abs(card.width - available) < 2, "\(sizeClass.rawValue)")
+            #expect(card.height < bleed - 20, "\(card) still a full-bleed 16:9")
+            let budget = (390 * StackedHeroMetrics.phoneLandscapeHeroHeightFraction)
+                .rounded(.down)
+            #expect(abs(card.height - budget) < 2)
+        }
     }
 
     @Test func columnCountNeverFallsBelowTheModeBaseline() {

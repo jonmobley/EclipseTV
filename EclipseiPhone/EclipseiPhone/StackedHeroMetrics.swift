@@ -18,6 +18,25 @@ enum StackedHeroMetrics {
     static let phoneMaxHeight: CGFloat = 280
     /// Fraction of the pane’s safe height used by the preview on regular width.
     static let regularWidthHeightFraction: CGFloat = 0.45
+    /// Shortest / tallest pane still treated as a phone turned sideways.
+    static let phoneLandscapeMinPaneHeight: CGFloat = 280
+    static let phoneLandscapeMaxPaneHeight: CGFloat = 520
+    /// Hero card height budget on a phone-landscape pane, as a fraction of its height.
+    ///
+    /// A full-bleed 16:9 of the long edge is taller than the phone, so the card
+    /// stays full width and this fraction leaves a row of Recent underneath.
+    static let phoneLandscapeHeroHeightFraction: CGFloat = 0.40
+
+    /// A wide, short pane: iPhone landscape, including Plus / Max.
+    ///
+    /// Requires a clearly wide ratio so a mid-rotation frame doesn't take this path.
+    /// iPad landscape is taller than `phoneLandscapeMaxPaneHeight` and stays out.
+    static func isPhoneLandscapePane(width: CGFloat, height: CGFloat) -> Bool {
+        guard height >= phoneLandscapeMinPaneHeight,
+              height < phoneLandscapeMaxPaneHeight
+        else { return false }
+        return width > height * 1.15
+    }
 
     /// Max stacked-hero height for the current Display Mode aspect.
     static func maxHeight(

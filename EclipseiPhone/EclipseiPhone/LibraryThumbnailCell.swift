@@ -327,6 +327,12 @@ final class LibraryThumbnailCell: UICollectionViewCell {
     /// end up full-frame just because its thumbnail decoded after the first paint.
     func applyLoadedThumbnail(_ image: UIImage) {
         guard imageView.image == nil else { return }
+        // A countdown tile borrows Show media as its backdrop; that art goes under
+        // the digits at scrim strength, never as full-bright poster.
+        if !countdownTimeLabel.isHidden {
+            applyCountdownBackdrop(image)
+            return
+        }
         configuredSourceImage = image
         if let id = configuredMediaId {
             let framed = MediaFramingStore.framedStill(

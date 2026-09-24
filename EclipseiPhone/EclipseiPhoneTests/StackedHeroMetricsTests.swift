@@ -14,6 +14,15 @@ struct StackedHeroMetricsTests {
     private let inset: CGFloat = 16
     private let zeroSafe = UIEdgeInsets.zero
 
+    @Test func phoneLandscapePaneIsWideAndShortOnly() {
+        #expect(StackedHeroMetrics.isPhoneLandscapePane(width: 780, height: 390))
+        #expect(StackedHeroMetrics.isPhoneLandscapePane(width: 956, height: 440))
+        #expect(!StackedHeroMetrics.isPhoneLandscapePane(width: 390, height: 844))
+        #expect(!StackedHeroMetrics.isPhoneLandscapePane(width: 1366, height: 1024))
+        // Mid-rotation frames are not landscape yet.
+        #expect(!StackedHeroMetrics.isPhoneLandscapePane(width: 500, height: 480))
+    }
+
     @Test func compactWidthStaysAtThePhoneCap() {
         for aspect in [16.0 / 9.0, 9.0 / 16.0] {
             let height = StackedHeroMetrics.maxHeight(

@@ -44,6 +44,27 @@ struct ShowGridItemTests {
         #expect(ShowGridItem.add.libraryThumbnailId == nil)
     }
 
+    @Test func countdownBackedByShowMediaPinsThatItem() {
+        let countdown = ShowCountdown(
+            showId: UUID(),
+            name: "Break",
+            duration: 60,
+            background: .libraryItem(id: "photo.jpg")
+        )
+        #expect(ShowGridItem.countdown(countdown).libraryThumbnailId == "photo.jpg")
+    }
+
+    @Test func countdownOnToolBackgroundsHasNoLibraryThumbnail() {
+        let screensaver = ShowCountdown(
+            showId: UUID(), name: "Break", duration: 60, background: .screensaver
+        )
+        let background = ShowCountdown(
+            showId: UUID(), name: "Break", duration: 60, background: .background
+        )
+        #expect(ShowGridItem.countdown(screensaver).libraryThumbnailId == nil)
+        #expect(ShowGridItem.countdown(background).libraryThumbnailId == nil)
+    }
+
     @Test func slideshowPinsResolvedCoverWhenPresent() {
         let cover = "cover.jpg"
         let show = Slideshow(

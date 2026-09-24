@@ -142,9 +142,40 @@ extension CameraManager: AVCaptureVideoDataOutputSampleBufferDelegate {
             ?? CameraPreviewView.programFallbackRotationAngle
     }
 
-    /// Applies the active lens’s horizon capture angle to a sensor-space still.
+    /// True while the frame tap delivers horizontally flipped (front-lens) buffers.
+    ///
+    /// Reads the active device rather than `cameraPosition`, which publishes to the
+    /// main queue and so still names the previous lens right after a flip.
+    var isFrameTapMirrored: Bool {
+        (videoDevice?.position ?? cameraPosition) == .front
+    }
+
+    /// Clockwise degrees that stand a tapped frame upright, mirroring included.
+    func frameTapRotationAngle() -> Int {
+        Self.frameTapRotationAngle(
+            captureAngle: quantizedRotationAngle(horizonLevelCaptureRotationAngle()),
+            isMirrored: isFrameTapMirrored
+        )
+    }
+
+    /// A mirrored frame needs the opposite rotation.
+    ///
+    /// `applyVideoMirroringLocked` flips front-lens frames on a connection whose
+    /// rotation stays 0°, so the flip lands in sensor space and reverses the sense of
+    /// whatever rotation follows. The preview layer and movie output never hit this
+    /// because they hand both values to AVFoundation, which rotates first and mirrors
+    /// the result. Rotating a tapped frame by the raw capture angle put the front lens
+    /// 180° out in a portrait hold; landscape hid it, since 0° and 180° commute with
+    /// a flip.
+    static func frameTapRotationAngle(captureAngle: Int, isMirrored: Bool) -> Int {
+        let normalized = ((captureAngle % 360) + 360) % 360
+        guard isMirrored else { return normalized }
+        return (360 - normalized) % 360
+    }
+
+    /// Stands a sensor-space still upright for the active lens.
     func applyHorizonCaptureOrientation(to ciImage: CIImage) -> CIImage {
-        switch quantizedRotationAngle(horizonLevelCaptureRotationAngle()) {
+        switch frameTapRotationAngle() {
         case 90:
             return ciImage.oriented(.right)
         case 180:

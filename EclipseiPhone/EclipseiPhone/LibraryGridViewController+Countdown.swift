@@ -94,7 +94,8 @@ extension LibraryGridViewController {
             isLocked: isLiveOutputLocked,
             isExpired: isExpired,
             isHeld: !isLive && clock.heldRemaining(for: item) != nil,
-            endHint: item.endAction.tileHint
+            endHint: item.endAction.tileHint,
+            background: CountdownBackground.resolved(for: item).tileImage
         )
     }
 
