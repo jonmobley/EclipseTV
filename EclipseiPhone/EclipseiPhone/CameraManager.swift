@@ -74,7 +74,25 @@ final class CameraManager: NSObject {
     private(set) var lastFrame: UIImage?
 
     /// True while a caller wants the session running (home tile / fullscreen / AirPlay).
-    private(set) var wantsSessionRunning = false
+    ///
+    /// Guarded by `wantsSessionLock` because callers set it on the main queue while
+    /// `sessionQueue` reads it inside start/stop work.
+    private var _wantsSessionRunning = false
+    private let wantsSessionLock = NSLock()
+
+    /// Whether a caller currently wants the capture session running.
+    var wantsSessionRunning: Bool {
+        wantsSessionLock.lock()
+        defer { wantsSessionLock.unlock() }
+        return _wantsSessionRunning
+    }
+
+    /// Updates the session-intent flag from any queue.
+    func setWantsSessionRunning(_ value: Bool) {
+        wantsSessionLock.lock()
+        _wantsSessionRunning = value
+        wantsSessionLock.unlock()
+    }
 
     /// Shared capture session used by phone and external preview layers.
     var captureSession: AVCaptureSession {
@@ -344,7 +362,7 @@ final class CameraManager: NSObject {
 
     /// Starts the capture session if not already running.
     func startSession() {
-        wantsSessionRunning = true
+        setWantsSessionRunning(true)
         startCaptureIfPossible(attempt: 0, completion: {})
     }
 
@@ -353,7 +371,7 @@ final class CameraManager: NSObject {
     /// Defers `startRunning` until the app is active and retries briefly when the
     /// capture server is not ready yet (common on cold launch).
     func prepareAndStart(completion: @escaping () -> Void) {
-        wantsSessionRunning = true
+        setWantsSessionRunning(true)
         installSessionRecoveryIfNeeded()
         configureSession { [weak self] in
             guard let self else {
@@ -371,7 +389,7 @@ final class CameraManager: NSObject {
     /// from paths that never ask whether one is running — the external display tearing
     /// down camera mode, the close destination, a blackout.
     func stopSession() {
-        wantsSessionRunning = false
+        setWantsSessionRunning(false)
         clearActiveStartWait()
 
         sessionQueue.async { [weak self] in

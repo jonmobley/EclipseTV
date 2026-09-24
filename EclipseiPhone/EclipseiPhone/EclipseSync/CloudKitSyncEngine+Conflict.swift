@@ -68,7 +68,14 @@ extension CloudKitSyncEngine {
             engine?.state.remove(pendingRecordZoneChanges: [
                 .saveRecord(record.recordID)
             ])
-            markLocalRecordSynced(record)
+            // Media: never mark synced here — that would clear dirty prefs (and any
+            // pendingUpload) without pushing local fields. Leave dirty so a later
+            // bootstrap can requeue a metadata-only save.
+            if record.recordType == CloudKitSchema.RecordType.mediaItem {
+                mediaDirty.markDirty(record.recordID.recordName)
+            } else {
+                markLocalRecordSynced(record)
+            }
             logger.error(
                 "Dropped pending save; server record already exists for \(record.recordID.recordName, privacy: .public)"
             )
@@ -108,11 +115,11 @@ extension CloudKitSyncEngine {
         case CloudKitSchema.RecordType.pdfDoc:
             if let uuid = UUID(uuidString: name) { schedulePDFSave(id: uuid) }
         case CloudKitSchema.RecordType.mediaItem:
-            if CloudKitRecordMapper.isImportedMedia(server) {
-                scheduleMediaSave(cloudId: name)
-            } else {
-                scheduleCaptureSave(id: name)
-            }
+            // Metadata-only: leave syncState alone so CloudKitAssetUploadPolicy does
+            // not re-attach the file. Same path as scheduleMediaPrefsSave, but without
+            // its isApplyingRemote guard (we are inside a conflict apply).
+            mediaDirty.markDirty(name)
+            scheduleSave(CloudKitSchema.mediaRecordID(for: name))
         case CloudKitSchema.RecordType.webPage:
             if let uuid = UUID(uuidString: name) { scheduleWebPageSave(id: uuid) }
         case CloudKitSchema.RecordType.slideshow:

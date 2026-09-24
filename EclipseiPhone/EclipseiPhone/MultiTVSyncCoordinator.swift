@@ -102,15 +102,15 @@ final class MultiTVSyncCoordinator {
             return
         }
 
-        let orderedIds = replayable.map { $0.id }
+        let orderedIds = payload.map { $0.id }
         logger.info(
             "Replaying \(payload.count) of \(replayable.count) item(s) to replica \(name, privacy: .public)"
         )
         connectionManager?.replayLibrary(payload, orderedIds: orderedIds, toPeerNamed: name) { [weak self] sent in
             guard let self, sent else { return }
-            // Record only the items we could actually replay; if the local set later grows
-            // (more items get local copies), the signature changes and we replay again.
-            self.syncedSignatureByTV[name] = Self.signature(forIds: payload.map { $0.id })
+            // Signature matches the ordered payload we actually sent (missing local
+            // copies were never named in the reorder envelope).
+            self.syncedSignatureByTV[name] = Self.signature(forIds: orderedIds)
             if let peer = self.connectionManager?.session?.connectedPeers
                 .first(where: { $0.displayName == name }) {
                 _ = self.connectionManager?.sendEnvelope(

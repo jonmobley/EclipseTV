@@ -56,8 +56,13 @@ extension ImageViewController {
     private func startWhenReady(_ player: AVPlayer, reveal: @escaping () -> Void) {
         let startAt = pendingVideoStartAt
         pendingVideoStartAt = nil
+        // KVO readiness and the timeout fallback both clear `token`; without this
+        // latch both can invoke `begin()` and double preroll/play.
+        var didBegin = false
 
         let begin: () -> Void = {
+            guard !didBegin else { return }
+            didBegin = true
             let playAndReveal = {
                 player.preroll(atRate: 1.0) { _ in
                     player.play()
@@ -111,37 +116,41 @@ extension ImageViewController {
         }
     }
 
+    /// Installs video using the same order as `rebuildCurrentVideoPlayer`: retire the
+    /// outgoing player, then create and attach the replacement.
     internal func displayVideo(_ mediaItem: MediaItem) {
         logger.info("Displaying video: \(mediaItem.fileName)")
+        videoDisplayGeneration &+= 1
+        let generation = videoDisplayGeneration
 
         Task { @MainActor in
-            // Hide image view and show player
-            await MainActor.run {
-                self.imageView.isHidden = true
-                self.playerView.view.isHidden = false
-                self.isVideo = true
+            guard self.videoDisplayGeneration == generation else { return }
+
+            self.imageView.isHidden = true
+            self.playerView.view.isHidden = false
+            self.isVideo = true
+
+            // Retire before setup so `setupPlayer` does not overwrite a live looper
+            // that `retireCurrentPlayer` would then destroy.
+            self.retireCurrentPlayer(stopBroadcasting: false, detachPlayer: false)
+            guard self.videoDisplayGeneration == generation else { return }
+
+            let player = self.setupPlayer(for: mediaItem)
+            guard self.videoDisplayGeneration == generation else {
+                player.pause()
+                return
             }
 
-            // Create player with seamless looping support
-            let player = self.setupPlayer(for: mediaItem)
-
-            // Set up player
-            await MainActor.run {
-                // Ensure player view is set up before assigning player
-                self.setupPlayerView()
-                self.playerView.player = player
-                // One player view serves every video, so gravity carries over from the
-                // last one and each item has to re-assert its own choice.
-                self.applyVideoFit(forPath: mediaItem.path)
-
-                // Add observer for playback end (removes any prior observers first)
-                self.installVideoEndObserver(for: player, mediaItem: mediaItem)
-                self.installPlaybackStatusObserver(on: player)
-
-                // Start playback once the first frame is ready to avoid the spinner
-                self.startWhenReady(player) {
-                    self.activityIndicator.stopAnimating()
-                }
+            self.setupPlayerView()
+            self.playerView.player = player
+            // One player view serves every video, so gravity carries over from the
+            // last one and each item has to re-assert its own choice.
+            self.applyVideoFit(forPath: mediaItem.path)
+            self.installVideoEndObserver(for: player, mediaItem: mediaItem)
+            self.installPlaybackStatusObserver(on: player)
+            self.startWhenReady(player) {
+                guard self.videoDisplayGeneration == generation else { return }
+                self.activityIndicator.stopAnimating()
             }
         }
     }
@@ -425,8 +434,8 @@ extension ImageViewController {
             // Note: Don't set rate directly here - let play() method handle playback start
             // Setting rate directly can interfere with pause/play logic
 
-            // Clear any existing looper
-            playerLooper = nil
+            // Outgoing looper was already retired; keep the property clear for non-loop.
+            assert(playerLooper == nil)
 
             logger.debug("▶️ Created regular player for: \(mediaItem.fileName)")
             return player
@@ -457,66 +466,74 @@ extension ImageViewController {
         logger.debug("🔁 Rebuilt active player to apply loop change for: \(mediaItem.fileName)")
     }
 
-    /// Displays a video with a smooth dissolve transition from current content
+    /// Displays a video with a smooth dissolve transition from current content.
+    ///
+    /// Snapshot the outgoing frame first, then retire → setup → assign so the new
+    /// looper is not destroyed by `retireCurrentPlayer`.
     internal func displayVideoWithDissolveTransition(_ mediaItem: MediaItem) {
         logger.info("🎬 [DISSOLVE] Transitioning to video: \(mediaItem.fileName)")
+        videoDisplayGeneration &+= 1
+        let generation = videoDisplayGeneration
 
         Task { @MainActor in
-            // Create player with seamless looping support
-            let player = self.setupPlayer(for: mediaItem)
+            guard self.videoDisplayGeneration == generation else { return }
 
-            await MainActor.run {
-                // Create a temporary overlay to prevent black flash
-                let tempOverlay = UIView(frame: self.view.bounds)
-                tempOverlay.backgroundColor = .black
+            let tempOverlay = UIView(frame: self.view.bounds)
+            tempOverlay.backgroundColor = .black
 
-                // Capture current frame if there's a video playing
-                if self.isVideo, self.playerView.player != nil {
-                    // Try to capture the current video frame as a snapshot
-                    if let snapshot = self.playerView.view.snapshotView(afterScreenUpdates: false) {
-                        snapshot.frame = self.view.bounds
-                        tempOverlay.addSubview(snapshot)
-                    }
-                } else if !self.imageView.isHidden, let currentImage = self.imageView.image {
-                    // If transitioning from an image, use that as overlay, framed the
-                    // way it is showing so a Fit still does not jump to Fill mid-fade.
-                    let imageView = UIImageView(image: currentImage)
-                    imageView.contentMode = self.imageView.contentMode
-                    imageView.clipsToBounds = true
-                    imageView.frame = self.view.bounds
-                    tempOverlay.addSubview(imageView)
+            if self.isVideo, self.playerView.player != nil {
+                if let snapshot = self.playerView.view.snapshotView(afterScreenUpdates: false) {
+                    snapshot.frame = self.view.bounds
+                    tempOverlay.addSubview(snapshot)
                 }
+            } else if !self.imageView.isHidden, let currentImage = self.imageView.image {
+                // Preserve Fit vs Fill framing so the still does not jump mid-fade.
+                let imageView = UIImageView(image: currentImage)
+                imageView.contentMode = self.imageView.contentMode
+                imageView.clipsToBounds = true
+                imageView.frame = self.view.bounds
+                tempOverlay.addSubview(imageView)
+            }
 
-                self.view.addSubview(tempOverlay)
+            self.view.addSubview(tempOverlay)
 
-                // Retire the outgoing video; the new player reinstalls the status observer.
-                self.retireCurrentPlayer(stopBroadcasting: false, detachPlayer: false)
+            self.retireCurrentPlayer(stopBroadcasting: false, detachPlayer: false)
+            guard self.videoDisplayGeneration == generation else {
+                tempOverlay.removeFromSuperview()
+                return
+            }
 
-                // Set up the main player view with the new player
-                self.setupPlayerView()
-                self.playerView.player = player
-                self.playerView.view.isHidden = false
-                self.playerView.view.alpha = 1  // Keep visible
-                self.isVideo = true
+            let player = self.setupPlayer(for: mediaItem)
+            guard self.videoDisplayGeneration == generation else {
+                player.pause()
+                tempOverlay.removeFromSuperview()
+                return
+            }
 
-                // Add observer for playback end (removes any prior observers first)
-                self.installVideoEndObserver(for: player, mediaItem: mediaItem)
-                self.installPlaybackStatusObserver(on: player)
+            self.setupPlayerView()
+            self.playerView.player = player
+            self.playerView.view.isHidden = false
+            self.playerView.view.alpha = 1
+            self.isVideo = true
+            self.applyVideoFit(forPath: mediaItem.path)
 
-                // Dissolve the overlay only once the first frame is ready, which both
-                // hides the spinner and avoids a black flash during the transition.
-                self.startWhenReady(player) {
-                    UIView.animate(withDuration: ContentTransitionSettings.crossfadeDuration, animations: {
-                        tempOverlay.alpha = 0
-                    }) { _ in
-                        // Clean up
-                        tempOverlay.removeFromSuperview()
-                        self.imageView.isHidden = true
-                        self.imageView.alpha = 1  // Reset for future use
+            self.installVideoEndObserver(for: player, mediaItem: mediaItem)
+            self.installPlaybackStatusObserver(on: player)
 
-                        self.setNeedsFocusUpdate()
-                        self.updateFocusIfNeeded()
-                    }
+            self.startWhenReady(player) {
+                guard self.videoDisplayGeneration == generation else {
+                    tempOverlay.removeFromSuperview()
+                    return
+                }
+                UIView.animate(
+                    withDuration: ContentTransitionSettings.crossfadeDuration,
+                    animations: { tempOverlay.alpha = 0 }
+                ) { _ in
+                    tempOverlay.removeFromSuperview()
+                    self.imageView.isHidden = true
+                    self.imageView.alpha = 1
+                    self.setNeedsFocusUpdate()
+                    self.updateFocusIfNeeded()
                 }
             }
         }

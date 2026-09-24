@@ -19,6 +19,8 @@ final class CloudKitSharedSyncHost: NSObject, CKSyncEngineDelegate {
 
     private let container: CKContainer
     private let sharedZones: CloudKitSharedZoneIndex
+    private let mediaDirty: CloudKitMediaDirtyStore
+    private let evictedMedia: CloudKitEvictedMediaStore
     private var engine: CKSyncEngine?
     private let stateKey = "EclipseTV.cloudKit.sharedSyncEngineState"
     private let logger = Logger(
@@ -27,9 +29,16 @@ final class CloudKitSharedSyncHost: NSObject, CKSyncEngineDelegate {
     )
     private var didStart = false
 
-    init(container: CKContainer, sharedZones: CloudKitSharedZoneIndex) {
+    init(
+        container: CKContainer,
+        sharedZones: CloudKitSharedZoneIndex,
+        mediaDirty: CloudKitMediaDirtyStore,
+        evictedMedia: CloudKitEvictedMediaStore
+    ) {
         self.container = container
         self.sharedZones = sharedZones
+        self.mediaDirty = mediaDirty
+        self.evictedMedia = evictedMedia
     }
 
     /// Tears the engine down and discards its change tokens.
@@ -102,9 +111,17 @@ final class CloudKitSharedSyncHost: NSObject, CKSyncEngineDelegate {
                         )
                     }
                 case CloudKitSchema.RecordType.mediaItem:
-                    if let capture = CloudKitRecordMapper.capture(from: record) {
-                        CaptureStore.shared.applyRemote(capture)
-                    }
+                    // Same keep-bytes path as the private engine — CKSyncEngine already
+                    // paid for the asset; discarding it forces a second download on tap.
+                    CloudKitRemoteMediaApply.apply(
+                        record,
+                        hasPendingLocalPrefs: mediaDirty.contains(
+                            record.recordID.recordName
+                        ),
+                        wasEvictedByUser: evictedMedia.contains(
+                            record.recordID.recordName
+                        )
+                    )
                 case CloudKitSchema.RecordType.pdfDoc:
                     if let doc = CloudKitRecordMapper.savedPDF(from: record) {
                         PDFStore.shared.applyRemote(

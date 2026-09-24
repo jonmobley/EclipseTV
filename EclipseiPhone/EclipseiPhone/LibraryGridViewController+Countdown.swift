@@ -230,10 +230,19 @@ extension LibraryGridViewController {
     // MARK: - Destination
 
     /// Returns false and alerts when only EclipseTV (or nothing) is available.
+    ///
+    /// Countdown needs AirPlay / HDMI or Practice — the same surface as web
+    /// overlays. Live Poll's idle-phone host (`canHostLivePoll`) must not be used
+    /// here: it returns true with no destination, and countdown has no phone hero
+    /// unless `showsLiveHero` finds a real output.
     @discardableResult
     func ensureCountdownDestination() -> Bool {
         if ShowLiveSession.shared.isRemoteOperator { return true }
-        if canPresentQuestPollOverlay { return true }
+        if LiveOutputRouting.canPresentWebOverlay(
+            practiceMode: prefersDisconnectedLivePreview
+        ) {
+            return true
+        }
         let message: String
         if TVLibraryStore.shared.isOnline {
             message = "Countdown needs AirPlay or HDMI. EclipseTV stays on the library."
