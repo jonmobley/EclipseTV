@@ -106,76 +106,11 @@ extension CloudKitSyncEngine {
     func applyRemoteMedia(_ record: CKRecord) {
         // Preferences the user changed here have not reached the server yet, so the
         // record being applied is the older one — see `applyRemoteMediaPrefs`.
-        let hasPendingPrefs = mediaDirty.contains(record.recordID.recordName)
-        if CloudKitRecordMapper.isImportedMedia(record),
-           let imported = CloudKitRecordMapper.importedMedia(from: record) {
-            ImportedMediaStore.shared.applyRemote(imported)
-            CloudKitRecordMapper.applyRemoteMediaPrefs(
-                from: record,
-                libraryId: imported.libraryId,
-                hasPendingLocalEdits: hasPendingPrefs
-            )
-            TVLibraryStore.shared.refreshMergedImports()
-            adoptFetchedAsset(
-                from: record,
-                libraryId: imported.libraryId,
-                mode: imported.orientation.libraryMode,
-                provenance: .imported
-            ) {
-                ImportedMediaStore.shared.setSyncState(id: imported.cloudId, .synced)
-                TVLibraryStore.shared.refreshMergedImports()
-            }
-            return
-        }
-        if let capture = CloudKitRecordMapper.capture(from: record) {
-            CaptureStore.shared.applyRemote(capture)
-            CloudKitRecordMapper.applyRemoteMediaPrefs(
-                from: record,
-                libraryId: capture.libraryFileName,
-                hasPendingLocalEdits: hasPendingPrefs
-            )
-            TVLibraryStore.shared.refreshMergedCaptures()
-            adoptFetchedAsset(
-                from: record,
-                libraryId: capture.libraryFileName,
-                mode: capture.orientation.libraryMode,
-                provenance: .captured
-            ) {
-                CaptureStore.shared.setSyncState(id: capture.id, .synced)
-                TVLibraryStore.shared.refreshMergedCaptures()
-            }
-        }
-    }
-
-    /// Keeps the asset bytes that arrived with `record`, when policy allows.
-    ///
-    /// The copy runs off the main thread because a full-resolution video can be
-    /// hundreds of megabytes. The `CKAsset` is held across it so CloudKit's staged
-    /// file — which the system purges on its own schedule — outlives the copy.
-    private func adoptFetchedAsset(
-        from record: CKRecord,
-        libraryId: String,
-        mode: EclipseShareProtocol.LibraryMode,
-        provenance: MediaProvenance,
-        onStored: @escaping () -> Void
-    ) {
-        let asset = record[CloudKitSchema.MediaKey.asset] as? CKAsset
-        guard let assetURL = CloudKitAssetAdoptionPolicy.adoptableURL(
-            asset?.fileURL,
-            hasLocalBytes: LocalMediaStore.shared.hasMedia(forId: libraryId, mode: mode),
+        CloudKitRemoteMediaApply.apply(
+            record,
+            hasPendingLocalPrefs: mediaDirty.contains(record.recordID.recordName),
             wasEvictedByUser: evictedMedia.contains(record.recordID.recordName)
-        ) else { return }
-        LocalMediaStore.shared.store(
-            fileURL: assetURL,
-            forId: libraryId,
-            mode: mode,
-            provenance: provenance
-        ) { stored in
-            withExtendedLifetime(asset) {
-                guard stored else { return }
-                onStored()
-            }
-        }
+        )
     }
 
     private func applyRemoteCameraFrame(_ record: CKRecord) {

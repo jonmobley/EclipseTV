@@ -87,6 +87,7 @@ extension iPhoneConnectionManager {
                     self.delegate?.connectionManager(self, didFailTransferIsVideo: false, error: error)
                 } else {
                     self.logger.info("Image transfer completed successfully.")
+                    if let restoreId { self.clearPendingRestore(id: restoreId) }
                     self.delegate?.connectionManager(self, didUpdateImageTransferProgress: 100)
                 }
                 
@@ -243,6 +244,7 @@ extension iPhoneConnectionManager {
                     self.delegate?.connectionManager(self, didFailTransferIsVideo: true, error: error)
                 } else {
                     self.logger.info("Video transfer completed successfully.")
+                    if let restoreId { self.clearPendingRestore(id: restoreId) }
                     self.delegate?.connectionManager(self, didUpdateVideoTransferProgress: 100)
                 }
                 
@@ -329,8 +331,10 @@ extension iPhoneConnectionManager {
     }
 
     /// If a re-send was requested, tells the active TV the upcoming resource restores a
-    /// purged item, then clears the flag. Returns the id so replicas can get the same
-    /// envelope before their resource.
+    /// purged item. Returns the id so replicas can get the same envelope before their
+    /// resource. Leaves `pendingRestoreId` set until the resource succeeds or the caller
+    /// cancels — clearing after the envelope alone made a failed/cancelled transfer retry
+    /// as a brand-new item instead of a restore.
     @discardableResult
     private func sendPendingRestoreIfNeeded(
         to peer: MCPeerID,
@@ -340,11 +344,15 @@ extension iPhoneConnectionManager {
         guard sendRestoreEnvelope(id: restoreId, to: peer, via: session) else {
             return nil
         }
-        // Clear only once the TV has actually been told. Clearing up front meant a
-        // failed send consumed the intent, and the resource that followed was filed
-        // as a brand-new item instead of restoring the purged one.
-        pendingRestoreId = nil
         return restoreId
+    }
+
+    /// Clears restore intent after the active-TV resource lands (or the user cancels).
+    func clearPendingRestore(id: String? = nil) {
+        if let id {
+            guard pendingRestoreId == id else { return }
+        }
+        pendingRestoreId = nil
     }
 
     /// Sends a `restore_item` envelope to one peer ahead of its media resource.

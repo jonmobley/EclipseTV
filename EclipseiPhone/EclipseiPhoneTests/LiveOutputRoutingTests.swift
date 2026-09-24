@@ -248,6 +248,54 @@ struct LiveOutputRoutingTests {
         )
     }
 
+    /// Countdown go-live must use the web-overlay gate, not Live Poll's idle-phone host.
+    ///
+    /// Offline with Practice off, `canHostLivePoll` is true (phone hosts the poll) but
+    /// countdown has no hero without a destination — so that gate would mark the tile
+    /// live with nowhere to show the clock.
+    @Test func countdownDestinationMatchesWebOverlayNotLivePoll() {
+        #expect(
+            LiveOutputRouting.canHostLivePoll(
+                airPlayConnected: false,
+                eclipseTVOnline: false,
+                practiceMode: false
+            )
+        )
+        #expect(
+            LiveOutputRouting.canPresentWebOverlay(
+                airPlayConnected: false,
+                practiceMode: false
+            ) == false
+        )
+
+        #expect(
+            LiveOutputRouting.canHostLivePoll(
+                airPlayConnected: false,
+                eclipseTVOnline: true,
+                practiceMode: false
+            ) == false
+        )
+        #expect(
+            LiveOutputRouting.canPresentWebOverlay(
+                airPlayConnected: false,
+                practiceMode: false
+            ) == false
+        )
+
+        #expect(
+            LiveOutputRouting.canPresentWebOverlay(
+                airPlayConnected: false,
+                practiceMode: true
+            )
+        )
+        #expect(
+            LiveOutputRouting.canPresentWebOverlay(
+                airPlayConnected: true,
+                practiceMode: false
+            )
+        )
+    }
+
     @Test func livePollHostsOnPhoneWhenNothingIsConnected() {
         #expect(
             LiveOutputRouting.canHostLivePoll(

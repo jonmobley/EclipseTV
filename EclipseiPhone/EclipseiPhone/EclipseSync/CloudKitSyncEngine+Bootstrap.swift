@@ -86,15 +86,40 @@ extension CloudKitSyncEngine {
     private func enqueueMediaChanges(
         into changes: inout [CKSyncEngine.PendingRecordZoneChange]
     ) {
-        mediaDirty.seedIfNeeded(
-            with: CaptureStore.shared.syncableIds + ImportedMediaStore.shared.syncableIds
-        )
+        // Seed only rows with local bytes. Including `.remoteOnly` would leave sticky
+        // dirty forever: makeRecordToSave returns nil and the pending change is dropped
+        // without markClean.
+        mediaDirty.seedIfNeeded(with: mediaRecordNamesWithLocalBytes())
         var names = Set(CaptureStore.shared.idsNeedingUpload)
         names.formUnion(ImportedMediaStore.shared.idsNeedingUpload)
         names.formUnion(mediaDirty.allDirty)
         for name in names {
             changes.append(.saveRecord(CloudKitSchema.mediaRecordID(for: name)))
         }
+    }
+
+    /// Capture / import record names that still have a file on disk.
+    private func mediaRecordNamesWithLocalBytes() -> [String] {
+        var names: [String] = []
+        for capture in CaptureStore.shared.allActive
+        where capture.syncState != .localOnly {
+            if LocalMediaStore.shared.hasMedia(
+                forId: capture.libraryFileName,
+                mode: capture.orientation.libraryMode
+            ) {
+                names.append(capture.id)
+            }
+        }
+        for imported in ImportedMediaStore.shared.allActive
+        where imported.syncState != .localOnly {
+            if LocalMediaStore.shared.hasMedia(
+                forId: imported.libraryId,
+                mode: imported.orientation.libraryMode
+            ) {
+                names.append(imported.cloudId)
+            }
+        }
+        return names
     }
 
     /// Recreates the private library zone and re-enqueues local content.

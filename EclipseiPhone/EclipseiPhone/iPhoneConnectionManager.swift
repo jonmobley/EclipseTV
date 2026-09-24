@@ -172,14 +172,24 @@ class iPhoneConnectionManager: NSObject {
             return
         }
         logger.debug("App became active, ensuring connection")
-        // If we have a peer but aren't connected, try to reconnect
-        if let selectedPeer = discoveredPeers.first, session?.connectedPeers.isEmpty == true {
+        // Prefer the user's chosen TV over whichever peer was discovered first.
+        if session?.connectedPeers.isEmpty == true,
+           let selectedPeer = preferredReconnectPeer() {
             logger.debug("Trying to reconnect to \(selectedPeer.displayName, privacy: .public)")
             invitePeer(selectedPeer)
         } else if discoveredPeers.isEmpty && !isBrowsing {
             // If we don't have any discovered peers, start browsing
             startBrowsing()
         }
+    }
+
+    /// Peer to invite after foregrounding: preferred name first, then first discovered.
+    private func preferredReconnectPeer() -> MCPeerID? {
+        if let preferred = CompanionSettings.preferredTVName,
+           let match = discoveredPeers.first(where: { $0.displayName == preferred }) {
+            return match
+        }
+        return discoveredPeers.first
     }
 
     /// Keeps the TV aligned with Display Mode / transition settings, then flushes

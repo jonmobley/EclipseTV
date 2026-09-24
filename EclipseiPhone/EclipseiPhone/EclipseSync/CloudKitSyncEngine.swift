@@ -47,7 +47,9 @@ final class CloudKitSyncEngine: NSObject, SyncBackend {
     }()
     lazy var sharedEngineHost = CloudKitSharedSyncHost(
         container: container,
-        sharedZones: sharedZones
+        sharedZones: sharedZones,
+        mediaDirty: mediaDirty,
+        evictedMedia: evictedMedia
     )
 
     let stateKey = "EclipseTV.cloudKit.syncEngineState"

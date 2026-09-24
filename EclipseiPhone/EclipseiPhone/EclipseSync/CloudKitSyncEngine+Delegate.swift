@@ -63,6 +63,8 @@ extension CloudKitSyncEngine: CKSyncEngineDelegate {
                 mutableRecordMap[recordID] = record
             } else if case .saveRecord(let recordID) = change {
                 syncEngine.state.remove(pendingRecordZoneChanges: [.saveRecord(recordID)])
+                // No file (or unknown id): stop re-enqueueing a sticky dirty media row.
+                noteDroppedMediaSave(recordID)
             }
         }
         let recordMap = mutableRecordMap
@@ -97,6 +99,7 @@ extension CloudKitSyncEngine: CKSyncEngineDelegate {
                 engine?.state.remove(pendingRecordZoneChanges: [
                     .saveRecord(failed.record.recordID)
                 ])
+                noteDroppedMediaSave(failed.record.recordID)
                 logger.error(
                     "Dropped pending save for \(failed.record.recordID.recordName, privacy: .public): \(failed.error.localizedDescription)"
                 )
@@ -142,5 +145,18 @@ extension CloudKitSyncEngine: CKSyncEngineDelegate {
         @unknown default:
             await account.refresh()
         }
+    }
+
+    /// Clears sticky preference dirty when a media save cannot be built or is dropped.
+    ///
+    /// `remoteOnly` rows have no local file, so `makeRecordToSave` returns nil; without
+    /// `markClean` every foreground requeues them forever. Leaves `syncState` alone —
+    /// `.pendingUpload` without a file should stay pending until bytes land.
+    func noteDroppedMediaSave(_ recordID: CKRecord.ID) {
+        let name = recordID.recordName
+        guard CaptureStore.shared.record(id: name) != nil
+            || ImportedMediaStore.shared.record(id: name) != nil
+        else { return }
+        mediaDirty.markClean(name)
     }
 }

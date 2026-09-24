@@ -13,13 +13,17 @@ import AVKit
 // MARK: - Video Settings
 
 extension ImageViewController {
-    /// Clean up player looper resources
+    /// Clean up player looper resources.
+    ///
+    /// `disableLooping()` must run before releasing the looper; nil alone leaves the
+    /// AVPlayerLooper managing a queue it no longer owns.
     func cleanupPlayerLooper() {
         #if DEBUG
         if let player = playerView.player {
             cleanupLooperDebugging(for: player)
         }
         #endif
+        playerLooper?.disableLooping()
         playerLooper = nil
     }
 
