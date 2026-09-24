@@ -63,7 +63,6 @@ final class LocalMediaPreviewPageViewController: UIViewController {
     private func setupImage() {
         // Preview inspects the still like Photos (fit), not the TV Fit/Fill framing.
         zoomView.translatesAutoresizingMaskIntoConstraints = false
-        zoomView.image = UIImage(contentsOfFile: item.fileURL.path)
         zoomView.onZoomedChanged = { [weak self] zoomed in
             guard let self else { return }
             self.isZoomed = zoomed
@@ -77,6 +76,28 @@ final class LocalMediaPreviewPageViewController: UIViewController {
             zoomView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             zoomView.trailingAnchor.constraint(equalTo: view.trailingAnchor)
         ])
+        loadPreviewImage()
+    }
+
+    /// Decodes at the screen's native longest edge off the main thread.
+    ///
+    /// Imports are capped near 4K, but `UIImage(contentsOfFile:)` still materialises
+    /// the full bitmap on the main thread and hitchs while swiping the gallery.
+    private func loadPreviewImage() {
+        let url = item.fileURL
+        let maxEdge = Self.previewMaxPixelEdge
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let image = ThumbnailDecoder.decode(fileURL: url, maxPixelEdge: maxEdge)
+            DispatchQueue.main.async {
+                self?.zoomView.image = image
+            }
+        }
+    }
+
+    /// Longest native screen edge — enough for fullscreen inspect without full decode.
+    private static var previewMaxPixelEdge: Int {
+        let bounds = UIScreen.main.nativeBounds
+        return max(1, Int(max(bounds.width, bounds.height)))
     }
 
     private func setupNoteOverlay() {

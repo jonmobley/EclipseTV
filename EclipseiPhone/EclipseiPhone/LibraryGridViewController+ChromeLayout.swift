@@ -197,7 +197,9 @@ extension LibraryGridViewController {
     /// Top content inset so the grid starts below the pinned hero (0 in landscape).
     ///
     /// The inset stays at the expanded footprint so tiles scroll under the card.
-    /// - Parameter preservingProgress: Content scroll progress to keep stable across inset changes.
+    /// Growing it for a note or ribbon moves the first row only when the grid
+    /// is already at the top; a scrolled grid keeps its offset.
+    /// - Parameter preservingProgress: Scroll progress sampled before this pass.
     func syncHeroOverlayInsets(preservingProgress: CGFloat) {
         let top = (isSideBySideChrome || !showsLiveHero)
             ? 0
@@ -212,6 +214,9 @@ extension LibraryGridViewController {
         var inset = collectionView.contentInset
         let topChanged = abs(inset.top - top) > 0.5
         let bottomChanged = abs(inset.bottom - bottom) > 0.5
+        // Sample before the inset write. UIKit may move the offset itself when
+        // the inset changes, and that is the jump this pass has to undo.
+        let previousOffsetY = collectionView.contentOffset.y
         inset.top = top
         inset.bottom = bottom
         collectionView.contentInset = inset
@@ -219,12 +224,10 @@ extension LibraryGridViewController {
         collectionView.verticalScrollIndicatorInsets.bottom = miniPlayerBottomInset
 
         if topChanged || bottomChanged {
-            // Re-pin the same content under the finger (avoid UIKit inset/offset
-            // fights), clamped so a bigger viewport can't strand us past the end.
-            let pinned = min(max(0, preservingProgress), maxVerticalScroll())
-            collectionView.contentOffset = CGPoint(
-                x: collectionView.contentOffset.x,
-                y: -collectionView.adjustedContentInset.top + pinned
+            applyHeroOverlayContentOffset(
+                previousOffsetY: previousOffsetY,
+                preservingProgress: preservingProgress,
+                topInsetChanged: topChanged
             )
         }
 

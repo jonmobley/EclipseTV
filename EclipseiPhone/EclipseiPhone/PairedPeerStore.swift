@@ -19,6 +19,9 @@ final class PairedPeerStore {
     private let defaults: UserDefaults
     private let key = "EclipseTV.companion.pairedTVs"
     private let logger = Logger(subsystem: "com.eclipseapp.ios", category: "PairedPeerStore")
+    /// When true, the primary payload was unreadable and a backup was parked;
+    /// mutations must not overwrite the primary until a successful load.
+    private var didFailToLoad = false
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -31,6 +34,7 @@ final class PairedPeerStore {
 
     /// Records a successful connection so future discovery can auto-invite.
     func remember(displayName: String) {
+        guard !didFailToLoad else { return }
         var names = pairedNames()
         guard names.insert(displayName).inserted else { return }
         persist(names)
@@ -39,6 +43,7 @@ final class PairedPeerStore {
 
     /// Removes one paired TV.
     func forget(displayName: String) {
+        guard !didFailToLoad else { return }
         var names = pairedNames()
         guard names.remove(displayName) != nil else { return }
         persist(names)
@@ -46,7 +51,9 @@ final class PairedPeerStore {
 
     /// Clears every paired TV.
     func forgetAll() {
+        didFailToLoad = false
         defaults.removeObject(forKey: key)
+        defaults.removeObject(forKey: SalvagingListDecoder.backupKey(for: key))
     }
 
     /// Sorted display names for Settings / library UI.
@@ -56,16 +63,23 @@ final class PairedPeerStore {
 
     // MARK: - Private
 
+    /// Loads through the salvaging decoder so a bad payload cannot be overwritten
+    /// by the next `remember` / `forget` with an empty allowlist.
     private func pairedNames() -> Set<String> {
-        guard let data = defaults.data(forKey: key),
-              let names = try? JSONDecoder().decode(Set<String>.self, from: data) else {
-            return []
-        }
-        return names
+        let outcome = SalvagingListDecoder.decodeList(
+            String.self,
+            forKey: key,
+            from: defaults,
+            logger: logger
+        )
+        didFailToLoad = outcome.didFailToLoad
+        if outcome.didFailToLoad { return [] }
+        return Set(outcome.elements)
     }
 
     private func persist(_ names: Set<String>) {
-        if let data = try? JSONEncoder().encode(names) {
+        // Store as a sorted array so SalvagingListDecoder can salvage element-wise.
+        if let data = try? JSONEncoder().encode(names.sorted()) {
             defaults.set(data, forKey: key)
         }
     }

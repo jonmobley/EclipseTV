@@ -191,13 +191,14 @@ final class AddCountdownViewController: UITableViewController, UITextFieldDelega
 
     /// Show thumbnails land from disk after the sheet paints; repaint just that row.
     private func observeThumbnails() {
+        let thumbnailIdKey = TVLibraryStore.thumbnailIdKey
         thumbnailObserver = NotificationCenter.default.addObserver(
             forName: TVLibraryStore.thumbnailDidChangeNotification,
             object: nil,
             queue: .main
         ) { [weak self] note in
             guard let self,
-                  let id = note.userInfo?[TVLibraryStore.thumbnailIdKey] as? String,
+                  let id = note.userInfo?[thumbnailIdKey] as? String,
                   let section = self.sections.firstIndex(of: .showMedia),
                   let row = self.showMedia.firstIndex(where: { $0.mediaId == id })
             else { return }

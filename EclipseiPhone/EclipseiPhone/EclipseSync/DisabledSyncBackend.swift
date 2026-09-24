@@ -40,6 +40,8 @@ final class DisabledSyncBackend: SyncBackend {
 
     func retryPendingWork() {}
 
+    func fetchChangesNow() {}
+
     func scheduleShowSave(id: UUID) {}
 
     func scheduleShowDelete(id: UUID) {}

@@ -39,6 +39,75 @@ struct GridScrollAnchor: Equatable {
     }
 }
 
+// MARK: - Live Chrome vs Grid Offset
+
+extension LibraryGridViewController {
+
+    /// Progress within this of 0 still counts as the top. A bounce or a
+    /// sub-point remainder should not be treated as the user having scrolled.
+    static let heroOverlayTopSlop: CGFloat = 1
+
+    /// Content offset after live chrome changes the grid's top inset.
+    ///
+    /// A note or slideshow ribbon under the preview grows that inset. The first
+    /// row moves down to clear it only when the grid is already at the top.
+    /// Otherwise the offset is held, so the thumbnails on screen stay put and
+    /// the new chrome covers them until the user scrolls back up.
+    /// - Parameters:
+    ///   - previousOffsetY: `contentOffset.y` before the inset change.
+    ///   - previousProgress: Scroll progress before the inset change (0 = top).
+    ///   - adjustedTopInset: Top inset after the change.
+    ///   - maxScroll: Largest legal progress after the change.
+    ///   - topInsetChanged: Whether the top inset actually moved.
+    /// - Returns: The `contentOffset.y` to apply.
+    static func heroOverlayContentOffsetY(
+        previousOffsetY: CGFloat,
+        previousProgress: CGFloat,
+        adjustedTopInset: CGFloat,
+        maxScroll: CGFloat,
+        topInsetChanged: Bool
+    ) -> CGFloat {
+        let restingAtTop = previousProgress <= heroOverlayTopSlop
+        if !topInsetChanged || restingAtTop {
+            let pinned = min(max(0, previousProgress), max(0, maxScroll))
+            return -adjustedTopInset + pinned
+        }
+        let lower = -adjustedTopInset
+        let upper = lower + max(0, maxScroll)
+        return min(max(previousOffsetY, lower), upper)
+    }
+
+    /// Writes the offset for a top-inset change.
+    ///
+    /// A ribbon show/hide runs inside an animation. Holding a scrolled grid
+    /// has to be instant, or the thumbnails drift as the strip grows over them.
+    /// A grid already at the top uses the ordinary offset write so the first
+    /// row can move with that animation.
+    func applyHeroOverlayContentOffset(
+        previousOffsetY: CGFloat,
+        preservingProgress: CGFloat,
+        topInsetChanged: Bool
+    ) {
+        let offsetY = Self.heroOverlayContentOffsetY(
+            previousOffsetY: previousOffsetY,
+            previousProgress: preservingProgress,
+            adjustedTopInset: collectionView.adjustedContentInset.top,
+            maxScroll: maxVerticalScroll(),
+            topInsetChanged: topInsetChanged
+        )
+        let offset = CGPoint(x: collectionView.contentOffset.x, y: offsetY)
+        let holdingScrolledGrid = topInsetChanged
+            && preservingProgress > Self.heroOverlayTopSlop
+        if holdingScrolledGrid {
+            UIView.performWithoutAnimation {
+                collectionView.contentOffset = offset
+            }
+        } else {
+            collectionView.contentOffset = offset
+        }
+    }
+}
+
 // MARK: - Keeping the Grid's Place Across a Reflow
 
 extension LibraryGridViewController {

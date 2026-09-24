@@ -70,7 +70,8 @@ final class LiveHeaderView: UIView {
     /// Identity of the last applied live content; used to skip no-op crossfades.
     private var presentedContentKey: String?
     /// In-flight dissolve overlay (removed when the next transition starts).
-    private var transitionSnapshot: UIView?
+    /// Exposed for tests that inject a stand-in when `snapshotView` is unavailable.
+    var transitionSnapshot: UIView?
     /// Whether playback transport should show when not in compact presentation.
     var wantsPlaybackControls = false
     /// Compact presentation progress (0 = full hero, 1 = tucked mini preview).
@@ -361,14 +362,7 @@ final class LiveHeaderView: UIView {
         showsLiveBadge: Bool? = nil
     ) {
         let showLiveBadge = showsLiveBadge ?? LiveOutputRouting.showsHeroLiveBadge()
-        clearWebPreview(parking: true)
-        clearScreensaverPreview()
-        clearCameraPreview()
-        if !showsLocalTransport {
-            clearLibraryVideoPreview()
-        }
         guard let item = item else {
-            clearLibraryVideoPreview()
             allowsFullscreenTap = false
             let message = isOnline
                 ? "Select item to go live"
@@ -393,6 +387,14 @@ final class LiveHeaderView: UIView {
             + ":local\(showsLocalTransport):fs\(allowsStillFullscreenTap):\(fitToken)"
             + ":monitor\(usesRemoteVideoMonitor):badge\(showLiveBadge)"
         applyContent(key: key) {
+            // After the snapshot. Tearing a live preview down first made the
+            // dissolve start from the poster or an empty hero.
+            self.clearWebPreview(parking: true)
+            self.clearScreensaverPreview()
+            self.clearCameraPreview()
+            if !showsLocalTransport {
+                self.clearLibraryVideoPreview()
+            }
             self.hideCountdownClock()
             let showControls = item.isVideo && (isOnline || showsLocalTransport)
             if usesRemoteVideoMonitor {
@@ -475,16 +477,6 @@ final class LiveHeaderView: UIView {
         stableContentKey: String? = nil
     ) {
         let showLiveBadge = showsLiveBadge ?? LiveOutputRouting.showsHeroLiveBadge()
-        if !keepWebPreview {
-            clearWebPreview(parking: true)
-        }
-        if !keepScreensaverPreview {
-            clearScreensaverPreview()
-        }
-        if !keepCameraPreview {
-            clearCameraPreview()
-        }
-        clearLibraryVideoPreview()
         let thumbToken = thumbnail.map { "\(ObjectIdentifier($0))" } ?? "nil"
         let key = stableContentKey ?? (
             "overlay:\(title):\(systemImage ?? ""):\(thumbToken)"
@@ -492,6 +484,17 @@ final class LiveHeaderView: UIView {
             + ":badge\(showLiveBadge):transport\(showsTransport)"
         )
         applyContent(key: key) {
+            // After the snapshot, and only for previews this overlay is not keeping.
+            if !keepWebPreview {
+                self.clearWebPreview(parking: true)
+            }
+            if !keepScreensaverPreview {
+                self.clearScreensaverPreview()
+            }
+            if !keepCameraPreview {
+                self.clearCameraPreview()
+            }
+            self.clearLibraryVideoPreview()
             self.hideCountdownClock()
             self.backgroundColor = fillColor
             // Background / website / camera art always fills the hero.
@@ -564,16 +567,16 @@ final class LiveHeaderView: UIView {
         bringSubviewToFront(titleLabel)
         bringSubviewToFront(subtitleLabel)
         bringSubviewToFront(controls)
+        // Title and badge were just lifted. Put the dissolve back over the
+        // picture so a preview installed mid-fade does not hard-cut.
+        raiseInFlightTransitionSnapshot()
     }
 
     /// Empty Show hero while live output still belongs to another Show.
     func configureSelectToGoLive() {
-        clearWebPreview(parking: true)
-        clearScreensaverPreview()
-        clearCameraPreview()
-        clearLibraryVideoPreview()
         applyContent(key: "selectToGoLive") {
             self.allowsFullscreenTap = false
+            // Placeholder clears the outgoing preview after the snapshot.
             self.showPlaceholder(message: "Select item to go live")
         }
     }
@@ -682,6 +685,10 @@ final class LiveHeaderView: UIView {
         presentedContentKey = key
         guard shouldCrossfade else {
             update()
+            // A repeat pass for the same content skips a new dissolve. Countdown
+            // re-raises its clock on every pass, which would paint the digits on
+            // top of the dissolve already running — a hard cut of the numbers.
+            raiseInFlightTransitionSnapshot()
             return
         }
 
@@ -711,5 +718,13 @@ final class LiveHeaderView: UIView {
                 self?.transitionSnapshot = nil
             }
         }
+    }
+
+    /// Keeps an in-flight dissolve above content a same-key update just brought forward.
+    func raiseInFlightTransitionSnapshot() {
+        guard let snapshot = transitionSnapshot, snapshot.superview === self else { return }
+        bringSubviewToFront(snapshot)
+        bringSubviewToFront(liveBadge)
+        bringSubviewToFront(controls)
     }
 }

@@ -38,6 +38,13 @@ class iPhoneConnectionManager: NSObject {
     
     private let serviceType = "eclipse-share" // MUST MATCH EXACTLY on both devices
 
+    /// Posted on the main queue when a Multipeer control command fails to send.
+    ///
+    /// User info may include `description` (String). Observers should debounce —
+    /// a flapping link can fire this repeatedly.
+    static let commandSendFailedNotification =
+        Notification.Name("iPhoneConnectionManager.commandSendFailed")
+
     /// Allowlist of Apple TVs this phone has successfully paired with.
     private let pairedStore = PairedPeerStore.shared
 
@@ -598,11 +605,13 @@ class iPhoneConnectionManager: NSObject {
         let stamped = envelope.withLibraryMode(ExternalOutputSettings.libraryMode)
         guard let session = session, let data = stamped.encoded() else {
             logger.error("Cannot send \(description): no session or failed to encode")
+            notifyCommandSendFailed(description)
             return false
         }
         let peers = syncTargetPeers(broadcast: broadcast, in: session)
         guard !peers.isEmpty else {
             logger.error("Cannot send \(description): no active session or peer")
+            notifyCommandSendFailed(description)
             return false
         }
         do {
@@ -611,7 +620,19 @@ class iPhoneConnectionManager: NSObject {
             return true
         } catch {
             logger.error("Failed to send \(description): \(error.localizedDescription)")
+            notifyCommandSendFailed(description)
             return false
+        }
+    }
+
+    /// Surfaces a failed TV control send so the operator sees more than a log line.
+    private func notifyCommandSendFailed(_ description: String) {
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(
+                name: Self.commandSendFailedNotification,
+                object: self,
+                userInfo: ["description": description]
+            )
         }
     }
 

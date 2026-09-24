@@ -25,6 +25,13 @@ protocol SyncBackend: AnyObject {
     /// Re-enqueues pending uploads after foregrounding or a transient failure.
     func retryPendingWork()
 
+    /// Pulls remote private-database changes without waiting for a silent push.
+    ///
+    /// `CKSyncEngine` normally wakes on CloudKit push. Foregrounding is the
+    /// fallback when push is delayed or unavailable, so another phone's edits
+    /// land when the operator returns to Eclipse.
+    func fetchChangesNow()
+
     /// Schedules a Show metadata upload (name, membership, cover, orientation).
     func scheduleShowSave(id: UUID)
 

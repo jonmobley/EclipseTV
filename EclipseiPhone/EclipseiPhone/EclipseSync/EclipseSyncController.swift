@@ -65,6 +65,11 @@ final class EclipseSyncController {
                 Task { @MainActor in
                     await self?.refreshAccount()
                     self?.backend.retryPendingWork()
+                    // Push wakes CKSyncEngine in the background; pull on
+                    // foreground so edits from another phone still arrive when
+                    // silent delivery is delayed or the Push capability is off.
+                    self?.backend.fetchChangesNow()
+                    self?.fetchAcceptedShares()
                 }
             }
         }

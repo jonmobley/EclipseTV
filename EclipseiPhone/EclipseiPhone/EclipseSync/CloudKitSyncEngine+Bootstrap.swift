@@ -149,6 +149,23 @@ extension CloudKitSyncEngine {
         enqueueAllLocal()
     }
 
+    /// Pulls private-database changes without waiting for a silent push.
+    ///
+    /// Mirrors `CloudKitSharedSyncHost.fetchChangesNow`. Push remains the
+    /// primary wake; this is the foreground fallback.
+    func fetchChangesNow() {
+        guard let engine, account.isAccountAvailable else { return }
+        Task { [weak self] in
+            do {
+                try await engine.fetchChanges()
+            } catch {
+                self?.logger.error(
+                    "Private fetch failed: \(error.localizedDescription)"
+                )
+            }
+        }
+    }
+
     // MARK: - Local store observation
 
     func observeLocalStores() {

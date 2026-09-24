@@ -84,12 +84,16 @@ struct CountdownDraft: Equatable {
     }
 
     /// Creates the countdown in `store` and remembers `duration` as the next default.
+    ///
+    /// `store` defaults to nil so the MainActor `.shared` lookup happens inside the
+    /// function. A default argument is nonisolated, and reading `.shared` there warns.
     @MainActor
     @discardableResult
     func commit(
-        to store: CountdownStore = .shared,
+        to store: CountdownStore? = nil,
         defaults: UserDefaults = .standard
     ) throws -> ShowCountdown {
+        let store = store ?? CountdownStore.shared
         let item = try store.create(
             name: name,
             showId: showId,

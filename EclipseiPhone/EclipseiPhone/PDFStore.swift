@@ -53,7 +53,8 @@ final class PDFStore {
         try? FileManager.default.createDirectory(
             at: self.rootDirectory, withIntermediateDirectories: true
         )
-        excludeFromBackup(self.rootDirectory)
+        // Keep PDFs in the device backup. CloudKit also syncs them, but an
+        // incomplete sync plus restore used to leave the operator with nothing.
         load()
     }
 
@@ -233,12 +234,5 @@ final class PDFStore {
 
     private func persistSyncedIds() {
         defaults.set(Array(syncedIds), forKey: syncedIdsKey)
-    }
-
-    private func excludeFromBackup(_ url: URL) {
-        var values = URLResourceValues()
-        values.isExcludedFromBackup = true
-        var mutableURL = url
-        try? mutableURL.setResourceValues(values)
     }
 }

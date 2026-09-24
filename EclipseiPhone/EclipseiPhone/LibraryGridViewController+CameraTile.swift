@@ -117,6 +117,19 @@ extension LibraryGridViewController {
             self?.liveHeader.layoutCameraPreviewIfNeeded()
             self?.syncLiveCameraFlipChrome()
         }
+        // `queue: nil`: delivered synchronously on main, where the swap posts it with
+        // the first new-lens frame in hand and enqueues that frame right after. A
+        // main-queue observer would run after the enqueue and flash the old angle.
+        observerTokens.append(
+            NotificationCenter.default.addObserver(
+                forName: CameraManager.previewRotationNeedsApplyNotification,
+                object: nil,
+                queue: nil,
+                using: { [weak self] _ in
+                    self?.liveHeader.layoutCameraPreviewIfNeeded()
+                }
+            )
+        )
         // Flipping is blocked mid-movie — keep the hero control's state honest
         // however the recording was started or stopped.
         observe(CameraManager.recordingDidChangeNotification) { [weak self] _ in

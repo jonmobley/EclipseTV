@@ -51,20 +51,50 @@ extension ImageViewController {
         }
     }
 
+    /// Whether a deferred `play()` may still run for this generation and player.
+    ///
+    /// Extracted so unit tests can lock the ghost-audio guard without spinning up
+    /// `AVPlayerViewController`.
+    static func shouldBeginPlayback(
+        generation: UInt64,
+        currentGeneration: UInt64,
+        attachedPlayer: AVPlayer?,
+        expectedPlayer: AVPlayer
+    ) -> Bool {
+        generation == currentGeneration && attachedPlayer === expectedPlayer
+    }
+
     /// Calls `play()` once the item is ready, prerolling to ensure a first frame is
     /// decoded before we reveal the player (avoids AVPlayerViewController's spinner).
+    ///
+    /// Captures `videoDisplayGeneration` so a late preroll / seek / 1s timeout after
+    /// `retireCurrentPlayer` cannot resurrect a detached player (ghost audio).
     private func startWhenReady(_ player: AVPlayer, reveal: @escaping () -> Void) {
         let startAt = pendingVideoStartAt
         pendingVideoStartAt = nil
+        let generation = videoDisplayGeneration
         // KVO readiness and the timeout fallback both clear `token`; without this
         // latch both can invoke `begin()` and double preroll/play.
         var didBegin = false
 
-        let begin: () -> Void = {
+        let isCurrent: () -> Bool = { [weak self] in
+            guard let self else { return false }
+            return Self.shouldBeginPlayback(
+                generation: generation,
+                currentGeneration: self.videoDisplayGeneration,
+                attachedPlayer: self.playerView.player,
+                expectedPlayer: player
+            )
+        }
+
+        let begin: () -> Void = { [weak self] in
+            guard self != nil else { return }
             guard !didBegin else { return }
             didBegin = true
+            guard isCurrent() else { return }
             let playAndReveal = {
                 player.preroll(atRate: 1.0) { _ in
+                    guard isCurrent() else { return }
                     player.play()
                     reveal()
                 }
@@ -72,6 +102,7 @@ extension ImageViewController {
             if let startAt, startAt > 0 {
                 let time = CMTime(seconds: startAt, preferredTimescale: 600)
                 player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero) { _ in
+                    guard isCurrent() else { return }
                     playAndReveal()
                 }
             } else {
@@ -83,10 +114,11 @@ extension ImageViewController {
             if let startAt, startAt > 0 {
                 let time = CMTime(seconds: startAt, preferredTimescale: 600)
                 player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero) { _ in
+                    guard isCurrent() else { return }
                     player.play()
                     reveal()
                 }
-            } else {
+            } else if isCurrent() {
                 player.play()
                 reveal()
             }

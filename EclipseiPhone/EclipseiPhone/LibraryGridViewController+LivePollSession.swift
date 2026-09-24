@@ -115,6 +115,11 @@ extension LibraryGridViewController {
                 await self?.endQuestPollSession(clearAccount: true)
             }
         }
+        picker.onAccountDeleted = { [weak self] in
+            Task { @MainActor in
+                await self?.endQuestPollSession(clearAccount: true)
+            }
+        }
         picker.onEditHost = { [weak self] in
             self?.presentQuestPollHostEditor()
         }

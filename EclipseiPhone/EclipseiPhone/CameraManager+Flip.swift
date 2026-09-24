@@ -68,7 +68,11 @@ extension CameraManager {
     ) {
         let session = captureSession
         session.beginConfiguration()
-        defer { session.commitConfiguration() }
+        pauseFrameMirrors()
+        defer {
+            session.commitConfiguration()
+            releaseFrameMirrorsAfterSwap(sessionRunning: session.isRunning)
+        }
 
         var removed: [AVCaptureDeviceInput] = []
         for input in session.inputs {
@@ -89,7 +93,6 @@ extension CameraManager {
             videoDevice = device
             applyVideoMirroringLocked(for: position)
             refreshCaptureRotationCoordinator()
-            publishCameraPosition(position)
             resetZoom()
         } catch {
             logger.error("Flip camera failed: \(error.localizedDescription)")
@@ -108,7 +111,6 @@ extension CameraManager {
             videoDevice = input.device
             applyVideoMirroringLocked(for: input.device.position)
             refreshCaptureRotationCoordinator()
-            publishCameraPosition(input.device.position)
             return
         }
     }
@@ -124,6 +126,8 @@ extension CameraManager {
             connection.automaticallyAdjustsVideoMirroring = false
             connection.isVideoMirrored = mirror
         }
+        // The swap rebuilt the data connection; put its rotation back to sensor space.
+        zeroFrameTapRotationLocked()
     }
 
     /// Wide-angle camera at `position`, if present.
