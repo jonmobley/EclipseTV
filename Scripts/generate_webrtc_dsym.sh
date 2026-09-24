@@ -36,9 +36,16 @@ if [[ ! -f "$FRAMEWORK_BINARY" ]]; then
     exit 0
 fi
 
-if ! xcrun dsymutil "$FRAMEWORK_BINARY" -o "$DSYM_OUTPUT"; then
-    echo "warning: dsymutil failed for WebRTC.framework; the archive will not include its dSYM"
+# dsymutil writes "error:" to stderr when the stripped binary's debug map is not
+# readable (user-script sandbox: "Operation not permitted"). Xcode promotes any
+# line that starts with "error:" into a failed build phase even when this script
+# exits 0. Swallow that output: the pinned WebRTC binary is stripped anyway
+# (see Scripts/WebRTCUploadSymbols.md), so a missing dSYM must not fail the archive.
+dsym_log="$(mktemp)"
+if ! xcrun dsymutil "$FRAMEWORK_BINARY" -o "$DSYM_OUTPUT" >"$dsym_log" 2>&1; then
+    rm -f "$dsym_log"
     exit 0
 fi
+rm -f "$dsym_log"
 
 echo "Generated ${DSYM_OUTPUT}"

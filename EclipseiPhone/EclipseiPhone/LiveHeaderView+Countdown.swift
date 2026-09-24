@@ -23,12 +23,16 @@ extension LiveHeaderView {
     /// - Parameter isExpired: When true, the digits turn red (matches AirPlay).
     func configureCountdownClock(text: String, isExpired: Bool) {
         guard canCommitCountdownChrome() else { return }
-        clearWebPreview(parking: true)
-        clearScreensaverPreview()
-        clearCameraPreview()
-        clearLibraryVideoPreview()
         let showLiveBadge = LiveOutputRouting.showsHeroLiveBadge()
         applyContent(key: "overlay:countdown") {
+            // Inside the snapshot, not before it. Clearing the outgoing preview
+            // first made the dissolve start from whatever was left underneath
+            // (the Screensaver poster, or an empty hero) instead of the frame
+            // the operator was actually looking at.
+            self.clearWebPreview(parking: true)
+            self.clearScreensaverPreview()
+            self.clearCameraPreview()
+            self.clearLibraryVideoPreview()
             self.backgroundColor = UIColor(white: 0.08, alpha: 1)
             self.imageView.image = nil
             self.imageView.isHidden = true
@@ -108,6 +112,9 @@ extension LiveHeaderView {
         insertSubview(view, at: 0)
         bringSubviewToFront(countdownClockLabel)
         bringSubviewToFront(liveBadge)
+        // Choosing a background while the go-live dissolve is still running
+        // must not pop the digits out of it.
+        raiseInFlightTransitionSnapshot()
         // On screen now, so nothing is being held for.
         view.alpha = 1
         countdownBackgroundDeadline = nil

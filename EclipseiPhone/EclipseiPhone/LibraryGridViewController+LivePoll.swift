@@ -78,11 +78,14 @@ extension LibraryGridViewController {
         isLogoSelected = false
         isScreensaverSelected = false
         SlideshowPlaybackController.shared.stop()
-        store.updateCurrentId(nil)
         stopQuestPollStatusPolling()
+        // Before clearing the library selection. That refresh runs immediately,
+        // and with nothing selected Practice Mode paints the Screensaver unless
+        // this card already owns the hero.
         QuestPollSessionStore.shared.setPracticeMembershipId(item.id)
         let page = QuestPollConfig.previewPage(pollId: item.pollId)
         WarmWebSessionPool.shared.warmIfNeeded(for: page)
+        store.updateCurrentId(nil)
         Haptics.impactLight()
         refreshLivePollPresentation()
     }
@@ -109,16 +112,19 @@ extension LibraryGridViewController {
         guard QuestPollSessionStore.shared.session != nil else { return }
         guard ensureQuestPollDestination() else { return }
         guard !blockLiveChangeIfLocked() else { return }
+        let code = QuestPollSessionStore.shared.session?.code
+        let page = QuestPollConfig.previewPage(code: code)
+        WarmWebSessionPool.shared.warmIfNeeded(for: page)
+        // Publish the page before dropping the previous selection. Clearing it
+        // first refreshes the hero with nothing live, and Practice Mode fills
+        // that gap with the Screensaver.
+        ExternalDisplayManager.shared.presentWeb(page.url, pageId: page.id)
         QuestPollSessionStore.shared.setPracticeMembershipId(nil)
         isBlackSelected = false
         isLogoSelected = false
         isScreensaverSelected = false
         SlideshowPlaybackController.shared.stop()
         store.updateCurrentId(nil)
-        let code = QuestPollSessionStore.shared.session?.code
-        let page = QuestPollConfig.previewPage(code: code)
-        WarmWebSessionPool.shared.warmIfNeeded(for: page)
-        ExternalDisplayManager.shared.presentWeb(page.url, pageId: page.id)
         announceAirPlayOverlayIfLinked()
         Haptics.impactLight()
         refreshLivePollPresentation()

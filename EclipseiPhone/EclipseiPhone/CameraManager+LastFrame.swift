@@ -150,10 +150,34 @@ extension CameraManager: AVCaptureVideoDataOutputSampleBufferDelegate {
         (videoDevice?.position ?? cameraPosition) == .front
     }
 
+    /// Leaves frame-tap buffers in the sensor's native orientation.
+    ///
+    /// The hero and the fullscreen mirror rotate those buffers themselves. Newer
+    /// front cameras default this connection above 0°, so the buffer arrived already
+    /// turned and the view turned it again — a 90° lean in portrait. Apple's guidance
+    /// for `AVCaptureVideoDataOutput` clients that rotate for themselves is to pin
+    /// the connection at 0. Call inside a session configuration block; the input
+    /// swap rebuilds this connection, so a flip must call it again.
+    func zeroFrameTapRotationLocked() {
+        guard let connection = videoDataOutput.connection(with: .video),
+              connection.isVideoRotationAngleSupported(0),
+              connection.videoRotationAngle != 0 else { return }
+        connection.videoRotationAngle = 0
+    }
+
+    /// Rotation already baked into frame-tap buffers, in degrees.
+    ///
+    /// Zero after `zeroFrameTapRotationLocked()`; read so a connection that refused
+    /// 0° is still subtracted rather than doubled.
+    func frameTapConnectionRotationAngle() -> CGFloat {
+        videoDataOutput.connection(with: .video)?.videoRotationAngle ?? 0
+    }
+
     /// Clockwise degrees that stand a tapped frame upright, mirroring included.
     func frameTapRotationAngle() -> Int {
         Self.frameTapRotationAngle(
             captureAngle: quantizedRotationAngle(horizonLevelCaptureRotationAngle()),
+            connectionAngle: quantizedRotationAngle(frameTapConnectionRotationAngle()),
             isMirrored: isFrameTapMirrored
         )
     }
@@ -167,10 +191,26 @@ extension CameraManager: AVCaptureVideoDataOutputSampleBufferDelegate {
     /// the result. Rotating a tapped frame by the raw capture angle put the front lens
     /// 180° out in a portrait hold; landscape hid it, since 0° and 180° commute with
     /// a flip.
-    static func frameTapRotationAngle(captureAngle: Int, isMirrored: Bool) -> Int {
-        let normalized = ((captureAngle % 360) + 360) % 360
-        guard isMirrored else { return normalized }
-        return (360 - normalized) % 360
+    ///
+    /// `connectionAngle` is rotation the data output already applied, so only the
+    /// remainder is turned here. The connection rotates first and mirrors the result,
+    /// which leaves the flip in the output's own space; the remainder is therefore
+    /// still reversed for a mirrored buffer, whatever the connection angle.
+    static func frameTapRotationAngle(
+        captureAngle: Int,
+        connectionAngle: Int = 0,
+        isMirrored: Bool
+    ) -> Int {
+        let capture = normalizedRotation(captureAngle)
+        let connection = normalizedRotation(connectionAngle)
+        let remaining = normalizedRotation(capture - connection)
+        guard isMirrored else { return remaining }
+        return normalizedRotation(-remaining)
+    }
+
+    /// Wraps `angle` into 0..<360.
+    private static func normalizedRotation(_ angle: Int) -> Int {
+        ((angle % 360) + 360) % 360
     }
 
     /// Stands a sensor-space still upright for the active lens.

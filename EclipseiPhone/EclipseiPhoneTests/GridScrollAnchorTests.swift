@@ -57,4 +57,108 @@ struct GridScrollAnchorTests {
         #expect(bottom.progress(forMaxProgress: 0) == 0)
         #expect(bottom.progress(forMaxProgress: -40) == 0)
     }
+
+    /// A note or ribbon under the preview grows the top inset. A scrolled grid
+    /// keeps the offset it had, instead of shifting the thumbnails down.
+    @Test func scrolledGridHoldsStillWhenLiveChromeGrows() {
+        let offset = LibraryGridViewController.heroOverlayContentOffsetY(
+            previousOffsetY: -180,
+            previousProgress: 220,
+            adjustedTopInset: 490,
+            maxScroll: 2000,
+            topInsetChanged: true
+        )
+        #expect(offset == -180)
+    }
+
+    /// Same hold when the note or ribbon goes away: thumbnails must not jump up.
+    @Test func scrolledGridHoldsStillWhenLiveChromeShrinks() {
+        let offset = LibraryGridViewController.heroOverlayContentOffsetY(
+            previousOffsetY: -270,
+            previousProgress: 220,
+            adjustedTopInset: 400,
+            maxScroll: 2000,
+            topInsetChanged: true
+        )
+        #expect(offset == -270)
+    }
+
+    /// Already at the top, the first row moves down with the new chrome.
+    @Test func gridAtTheTopMovesWithLiveChrome() {
+        let grown = LibraryGridViewController.heroOverlayContentOffsetY(
+            previousOffsetY: -400,
+            previousProgress: 0,
+            adjustedTopInset: 490,
+            maxScroll: 2000,
+            topInsetChanged: true
+        )
+        #expect(grown == -490)
+
+        let shrunk = LibraryGridViewController.heroOverlayContentOffsetY(
+            previousOffsetY: -490,
+            previousProgress: 0,
+            adjustedTopInset: 400,
+            maxScroll: 2000,
+            topInsetChanged: true
+        )
+        #expect(shrunk == -400)
+    }
+
+    /// A bounce past the top, or a fraction of a point, is still the top.
+    @Test func nearTopStillMovesWithLiveChrome() {
+        let bounced = LibraryGridViewController.heroOverlayContentOffsetY(
+            previousOffsetY: -430,
+            previousProgress: -30,
+            adjustedTopInset: 490,
+            maxScroll: 2000,
+            topInsetChanged: true
+        )
+        #expect(bounced == -490)
+
+        let noise = LibraryGridViewController.heroOverlayContentOffsetY(
+            previousOffsetY: -399.6,
+            previousProgress: 0.4,
+            adjustedTopInset: 490,
+            maxScroll: 2000,
+            topInsetChanged: true
+        )
+        #expect(noise == -489.6)
+    }
+
+    /// Just past the slop counts as scrolled, so the thumbnails stay put.
+    @Test func aRealScrollDoesNotMoveWithLiveChrome() {
+        let offset = LibraryGridViewController.heroOverlayContentOffsetY(
+            previousOffsetY: -398,
+            previousProgress: 2,
+            adjustedTopInset: 490,
+            maxScroll: 2000,
+            topInsetChanged: true
+        )
+        #expect(offset == -398)
+    }
+
+    /// A bottom-inset change (mini player) still keeps the same content progress.
+    @Test func bottomInsetChangeKeepsScrollProgress() {
+        let offset = LibraryGridViewController.heroOverlayContentOffsetY(
+            previousOffsetY: -180,
+            previousProgress: 220,
+            adjustedTopInset: 400,
+            maxScroll: 2000,
+            topInsetChanged: false
+        )
+        #expect(offset == -180)
+    }
+
+    /// Shrinking the inset can leave a barely-scrolled offset above the new
+    /// minimum. It clamps to the top of the new range rather than past it.
+    @Test func heldOffsetClampsIntoTheNewRange() {
+        let offset = LibraryGridViewController.heroOverlayContentOffsetY(
+            previousOffsetY: -480,
+            previousProgress: 20,
+            adjustedTopInset: 400,
+            maxScroll: 2000,
+            topInsetChanged: true
+        )
+        #expect(offset == -400)
+    }
 }

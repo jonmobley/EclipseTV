@@ -91,7 +91,11 @@ final class CameraMirrorView: UIView {
         renderer.flush()
     }
 
-    /// Displays `sampleBuffer` immediately. Called on `CameraManager.frameQueue`.
+    /// Displays `sampleBuffer` immediately.
+    ///
+    /// Called on `CameraManager.frameQueue`, except for the first frame after a lens
+    /// swap, which arrives on main right after the view has been retargeted. The gate
+    /// holds the frame queue while that happens, so the two never overlap.
     ///
     /// The renderer has no control timebase, so each sample is tagged to display on
     /// arrival instead of being scheduled against a clock.

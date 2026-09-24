@@ -282,6 +282,12 @@ final class CameraLiveViewController: UIViewController {
             name: CameraManager.captureRotationAngleDidChangeNotification,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(previewRotationNeedsApply),
+            name: CameraManager.previewRotationNeedsApplyNotification,
+            object: nil
+        )
         refreshLiveChrome()
     }
 
@@ -359,6 +365,11 @@ final class CameraLiveViewController: UIViewController {
     /// Phone turned while the UI stayed put (Vertical Show pins portrait) — only the
     /// frame-tap mirror needs re-rotating; the hardware layer follows its coordinator.
     @objc private func captureRotationAngleDidChange() {
+        layoutMirrorView()
+    }
+
+    /// Lens swap committed; the first new-lens frame is enqueued right after this.
+    @objc private func previewRotationNeedsApply() {
         layoutMirrorView()
     }
 

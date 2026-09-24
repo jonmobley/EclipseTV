@@ -78,6 +78,52 @@ struct CameraPreviewRotationTests {
         )
     }
 
+    /// A front camera whose data connection already turned the buffer must not be
+    /// turned again. That second turn is the portrait hero leaning 90° after Flip.
+    @Test func frameTapSkipsRotationTheConnectionAlreadyApplied() {
+        #expect(
+            CameraManager.frameTapRotationAngle(
+                captureAngle: 90,
+                connectionAngle: 90,
+                isMirrored: false
+            ) == 0
+        )
+        #expect(
+            CameraManager.frameTapRotationAngle(
+                captureAngle: 90,
+                connectionAngle: 90,
+                isMirrored: true
+            ) == 0
+        )
+        #expect(
+            CameraManager.frameTapRotationAngle(
+                captureAngle: 180,
+                connectionAngle: 90,
+                isMirrored: false
+            ) == 90
+        )
+    }
+
+    /// The connection rotates first and mirrors the result, so the remaining turn
+    /// is still reversed for a mirrored buffer even when the connection did some of
+    /// the turning. Buffer = M(R90 S); wanted M(S); R_v M R90 = M R(90-v) → v = 90.
+    @Test func mirroredRemainderIsReversedWhateverTheConnectionAngle() {
+        #expect(
+            CameraManager.frameTapRotationAngle(
+                captureAngle: 0,
+                connectionAngle: 90,
+                isMirrored: true
+            ) == 90
+        )
+        #expect(
+            CameraManager.frameTapRotationAngle(
+                captureAngle: 270,
+                connectionAngle: 180,
+                isMirrored: true
+            ) == 270
+        )
+    }
+
     @Test func unmirroredFrameTapKeepsCaptureAngle() {
         for angle in [0, 90, 180, 270] {
             #expect(

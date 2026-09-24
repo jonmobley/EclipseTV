@@ -183,12 +183,14 @@ final class PlayerFocusSuspension: NSObject, FocusSuspendableVideo {
     init(
         player: AVPlayer,
         pictureInPictureHost: AVPlayerViewController? = nil,
-        coordinator: VideoFocusCoordinator = .shared
+        coordinator: VideoFocusCoordinator? = nil
     ) {
         self.player = player
         super.init()
         pictureInPictureHost?.delegate = self
-        coordinator.register(self)
+        // Default lookup stays inside the function: a default argument is
+        // nonisolated and cannot read MainActor `.shared`.
+        (coordinator ?? .shared).register(self)
     }
 
     /// Treats `waitingToPlayAtSpecifiedRate` as playing: a streaming item that is
@@ -214,15 +216,20 @@ final class PlayerFocusSuspension: NSObject, FocusSuspendableVideo {
 
 extension PlayerFocusSuspension: AVPlayerViewControllerDelegate {
 
-    func playerViewControllerWillStartPictureInPicture(
+    /// The delegate requirement is nonisolated; these callbacks arrive on the main thread.
+    nonisolated func playerViewControllerWillStartPictureInPicture(
         _ playerViewController: AVPlayerViewController
     ) {
-        isInPictureInPicture = true
+        MainActor.assumeIsolated {
+            isInPictureInPicture = true
+        }
     }
 
-    func playerViewControllerDidStopPictureInPicture(
+    nonisolated func playerViewControllerDidStopPictureInPicture(
         _ playerViewController: AVPlayerViewController
     ) {
-        isInPictureInPicture = false
+        MainActor.assumeIsolated {
+            isInPictureInPicture = false
+        }
     }
 }

@@ -45,12 +45,16 @@ extension LibraryGridViewController {
         isLogoSelected = false
         isScreensaverSelected = false
         SlideshowPlaybackController.shared.stop()
-        store.updateCurrentId(nil)
         // Bind, publish the overlay, then run: the clock and `overlaySource` name
         // the same countdown before anything observing either of them repaints.
+        // The library selection is cleared after that. Clearing it first refreshes
+        // the hero while the countdown is not live yet, and with nothing selected
+        // Practice Mode paints the Screensaver — a flash of wallpaper that then
+        // sits there for as long as an image countdown waits on its picture.
         CountdownController.shared.prepare(item)
         ExternalDisplayManager.shared.presentCountdown()
         CountdownController.shared.start()
+        store.updateCurrentId(nil)
         announceAirPlayOverlayIfLinked()
         Haptics.impactLight()
         reloadLibraryGrid()

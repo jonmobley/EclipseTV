@@ -35,6 +35,15 @@ final class CameraManager: NSObject {
         "CameraManager.cameraPositionDidChange"
     )
 
+    /// Posted synchronously on main after a lens swap commits, one frame in hand.
+    ///
+    /// Frame-tap previews retarget here; the frame is enqueued right after, in the
+    /// same pass, so the new turn and the new picture commit together. Observe
+    /// with `queue: nil` — a main-queue observer would run after that enqueue.
+    static let previewRotationNeedsApplyNotification = Notification.Name(
+        "CameraManager.previewRotationNeedsApply"
+    )
+
     /// Posted on the main queue when the lens horizon capture angle changes (phone turned).
     ///
     /// Frame-tap mirrors rotate their view by hand, so they need this even when the UI
@@ -133,13 +142,17 @@ final class CameraManager: NSObject {
     /// One-shot still requests awaiting the next sample, each with the longest-edge
     /// ceiling it asked for (nil meaning sensor resolution). Access on `frameQueue`.
     var stillRequests: [(maxPixelEdge: CGFloat?, deliver: (UIImage?) -> Void)] = []
-    private let videoDataOutput = AVCaptureVideoDataOutput()
+    let videoDataOutput = AVCaptureVideoDataOutput()
     let frameQueue = DispatchQueue(label: "com.eclipseapp.ios.camera.frames")
     /// Views rendering the live feed from the frame tap. Mutated and read on `frameQueue`.
     ///
     /// The session drives one `AVCaptureVideoPreviewLayer` at a time, so a second live
     /// view (the phone panel while AirPlay holds the preview) is served from here.
     var frameMirrors: [WeakFrameMirror] = []
+    /// Lens-swap gate on the mirrors. Touched from the session, frame, and main
+    /// queues, so every access goes through `frameMirrorGateLock`.
+    var frameMirrorGate = CameraFrameMirrorGate()
+    let frameMirrorGateLock = NSLock()
     let ciContext = CIContext(options: [.useSoftwareRenderer: false])
 
     /// Movie file output for tap-to-record (attached lazily).
@@ -339,6 +352,7 @@ final class CameraManager: NSObject {
             return
         }
         session.addOutput(videoDataOutput)
+        zeroFrameTapRotationLocked()
     }
 
     // MARK: - Session Lifecycle
