@@ -56,6 +56,39 @@ struct CameraPreviewRotationTests {
         )
     }
 
+    /// Front-lens frames reach the tap already flipped in sensor space, which reverses
+    /// the sense of the rotation applied after. Rotating by the raw capture angle stood
+    /// the hero and the panel mirror 180° out in a portrait hold.
+    @Test func mirroredFrameTapReversesPortraitRotation() {
+        #expect(
+            CameraManager.frameTapRotationAngle(captureAngle: 90, isMirrored: true) == 270
+        )
+        #expect(
+            CameraManager.frameTapRotationAngle(captureAngle: 270, isMirrored: true) == 90
+        )
+    }
+
+    /// A flip commutes with 0° and 180°, which is why landscape holds always looked right.
+    @Test func mirroredFrameTapLeavesLandscapeRotationAlone() {
+        #expect(
+            CameraManager.frameTapRotationAngle(captureAngle: 0, isMirrored: true) == 0
+        )
+        #expect(
+            CameraManager.frameTapRotationAngle(captureAngle: 180, isMirrored: true) == 180
+        )
+    }
+
+    @Test func unmirroredFrameTapKeepsCaptureAngle() {
+        for angle in [0, 90, 180, 270] {
+            #expect(
+                CameraManager.frameTapRotationAngle(
+                    captureAngle: angle,
+                    isMirrored: false
+                ) == angle
+            )
+        }
+    }
+
     @Test func backCameraIsNeverMirrored() {
         #expect(
             CameraPreviewView.shouldMirrorPreview(

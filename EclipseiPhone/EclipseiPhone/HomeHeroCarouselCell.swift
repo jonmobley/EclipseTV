@@ -12,12 +12,16 @@ final class HomeHeroCarouselCell: UICollectionViewCell, UIScrollViewDelegate {
 
     static let reuseIdentifier = "HomeHeroCarouselCell"
 
-    /// Card width ÷ height. The Home hero is always 16:9.
+    /// Card width ÷ height. The Home hero is 16:9 except on a phone turned sideways.
     static let cardAspectWidthOverHeight: CGFloat = 16.0 / 9.0
     /// Page dots under the card (gap + control).
     static let pageControlBand: CGFloat = 28
 
     /// 16:9 card that spans the pane on the phone and caps on wide iPad.
+    ///
+    /// Phone landscape stays full width and caps the height. A 16:9 of the long
+    /// edge is taller than the phone, which pushed Recent off screen and, when
+    /// the page width lagged the new bounds, showed two slides at once.
     static func cardSize(
         availableWidth: CGFloat,
         containerHeight: CGFloat,
@@ -25,22 +29,45 @@ final class HomeHeroCarouselCell: UICollectionViewCell, UIScrollViewDelegate {
     ) -> CGSize {
         let maxWidth = max(availableWidth, 1)
         let fullBleedHeight = (maxWidth / cardAspectWidthOverHeight).rounded(.down)
-        let heightCap: CGFloat
-        if horizontalSizeClass == .regular, containerHeight > 0 {
-            heightCap = max(
-                StackedHeroMetrics.phoneMaxHeight,
-                (containerHeight * StackedHeroMetrics.regularWidthHeightFraction)
-                    .rounded(.down)
-            )
-        } else {
-            heightCap = fullBleedHeight
+        let cap = heightCap(
+            fullBleedHeight: fullBleedHeight,
+            maxWidth: maxWidth,
+            containerHeight: containerHeight,
+            horizontalSizeClass: horizontalSizeClass
+        )
+        let height = max(min(fullBleedHeight, cap), 1)
+        if StackedHeroMetrics.isPhoneLandscapePane(width: maxWidth, height: containerHeight) {
+            return CGSize(width: maxWidth, height: height)
         }
-        let height = max(min(fullBleedHeight, heightCap), 1)
         let width = min(
             maxWidth,
             (height * cardAspectWidthOverHeight).rounded(.down)
         )
         return CGSize(width: max(width, 1), height: height)
+    }
+
+    /// Tallest the card may be before the 16:9 width is derived.
+    private static func heightCap(
+        fullBleedHeight: CGFloat,
+        maxWidth: CGFloat,
+        containerHeight: CGFloat,
+        horizontalSizeClass: UIUserInterfaceSizeClass
+    ) -> CGFloat {
+        if StackedHeroMetrics.isPhoneLandscapePane(width: maxWidth, height: containerHeight) {
+            return max(
+                (containerHeight * StackedHeroMetrics.phoneLandscapeHeroHeightFraction)
+                    .rounded(.down),
+                1
+            )
+        }
+        if horizontalSizeClass == .regular, containerHeight > 0 {
+            return max(
+                StackedHeroMetrics.phoneMaxHeight,
+                (containerHeight * StackedHeroMetrics.regularWidthHeightFraction)
+                    .rounded(.down)
+            )
+        }
+        return fullBleedHeight
     }
 
     /// Card + page-control band for the Home hero section.
@@ -59,7 +86,9 @@ final class HomeHeroCarouselCell: UICollectionViewCell, UIScrollViewDelegate {
     private let scrollView = UIScrollView()
     private let pageControl = UIPageControl()
     private var pageViews: [UIView] = []
-    private var configuredSize: CGSize = .zero
+    private var configuredWidth: CGFloat = 0
+    private var configuredHeight: CGFloat = 0
+    private var isApplyingCardSize = false
     private var isAdjustingOffset = false
     private var cardWidthConstraint: NSLayoutConstraint?
     private var cardHeightConstraint: NSLayoutConstraint?
@@ -78,15 +107,23 @@ final class HomeHeroCarouselCell: UICollectionViewCell, UIScrollViewDelegate {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        applyCardSize()
-        contentView.layoutIfNeeded()
-        rebuildPagesIfSizeChanged()
+        // Re-entering from `layoutIfNeeded` would read the pre-constraint bounds
+        // and latch the page width there — landscape then shows two slides.
+        guard !isApplyingCardSize else { return }
+        if applyCardSize() {
+            isApplyingCardSize = true
+            contentView.layoutIfNeeded()
+            isApplyingCardSize = false
+        }
+        layoutPagesIfNeeded()
     }
 
     /// Rebuilds pages from `HomeHeroSlide.all`.
     func reload() {
-        configuredSize = .zero
-        setNeedsLayout()
+        configuredWidth = 0
+        configuredHeight = 0
+        applyCardSize()
+        layoutPagesIfNeeded()
     }
 
     // MARK: - Private
@@ -97,18 +134,19 @@ final class HomeHeroCarouselCell: UICollectionViewCell, UIScrollViewDelegate {
 
         scrollView.isPagingEnabled = true
         scrollView.showsHorizontalScrollIndicator = false
-        scrollView.alwaysBounceHorizontal = true
-        scrollView.isDirectionalLockEnabled = true
-        scrollView.delaysContentTouches = false
         scrollView.delegate = self
         scrollView.clipsToBounds = true
+        // Landscape safe-area insets would otherwise shift the page and reveal
+        // the next slide inside the same card.
+        scrollView.contentInsetAdjustmentBehavior = .never
+        scrollView.insetsLayoutMarginsFromSafeArea = false
         scrollView.layer.applyContinuousCorner(radius: CornerRadii.large)
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(scrollView)
 
         pageControl.numberOfPages = HomeHeroSlide.all.count
         pageControl.currentPage = 0
-        pageControl.currentPageIndicatorTintColor = .accent
+        pageControl.currentPageIndicatorTintColor = .systemBlue
         pageControl.pageIndicatorTintColor = UIColor.tertiaryLabel
         pageControl.isUserInteractionEnabled = false
         pageControl.translatesAutoresizingMaskIntoConstraints = false
@@ -135,28 +173,47 @@ final class HomeHeroCarouselCell: UICollectionViewCell, UIScrollViewDelegate {
     }
 
     /// Centers a 16:9 card in the cell; full-bleed on the phone, inset on wide iPad.
-    private func applyCardSize() {
+    ///
+    /// - Returns: Whether the card constraints changed and need a layout pass
+    ///   before page frames are measured.
+    @discardableResult
+    private func applyCardSize() -> Bool {
+        let available = contentView.bounds.width
+        guard available > 1 else { return false }
         let card = Self.cardSize(
-            availableWidth: contentView.bounds.width,
+            availableWidth: available,
             containerHeight: enclosingCollectionViewHeight,
             horizontalSizeClass: traitCollection.horizontalSizeClass
         )
         guard abs((cardWidthConstraint?.constant ?? 0) - card.width) > 0.5
             || abs((cardHeightConstraint?.constant ?? 0) - card.height) > 0.5
-        else { return }
+        else { return false }
         cardWidthConstraint?.constant = card.width
         cardHeightConstraint?.constant = card.height
+        return true
     }
 
-    /// Pages are laid out in the scroll view's bounds; both axes must match.
-    private func rebuildPagesIfSizeChanged() {
-        let size = scrollView.bounds.size
-        guard size.width > 0, size.height > 0 else { return }
-        let sizeChanged = abs(size.width - configuredSize.width) > 0.5
-            || abs(size.height - configuredSize.height) > 0.5
-        guard sizeChanged else { return }
-        configuredSize = size
-        layoutPages(width: size.width)
+    /// Lays out one page per slide once the card has a real size.
+    ///
+    /// Pages follow the card constraints, not a stale bounds read. Rotation used
+    /// to measure the scroll view before the new width landed, then skip the
+    /// pass that could rebuild — leaving portrait-width slides side by side.
+    private func layoutPagesIfNeeded() {
+        let width = pageLength(cardWidthConstraint?.constant, fallback: scrollView.bounds.width)
+        let height = pageLength(cardHeightConstraint?.constant, fallback: scrollView.bounds.height)
+        guard width > 1, height > 1 else { return }
+        let widthChanged = abs(width - configuredWidth) > 0.5
+        let heightChanged = abs(height - configuredHeight) > 0.5
+        guard widthChanged || heightChanged else { return }
+        configuredWidth = width
+        configuredHeight = height
+        layoutPages(width: width, height: height)
+    }
+
+    /// Constraint constant once it is real; otherwise the current bounds.
+    private func pageLength(_ target: CGFloat?, fallback: CGFloat) -> CGFloat {
+        if let target, target > 1 { return target }
+        return fallback
     }
 
     private var enclosingCollectionViewHeight: CGFloat {
@@ -171,8 +228,7 @@ final class HomeHeroCarouselCell: UICollectionViewCell, UIScrollViewDelegate {
     }
 
     /// Content order: [last clone, …slides…, first clone] so paging can wrap.
-    private func layoutPages(width: CGFloat) {
-        let height = scrollView.bounds.height
+    private func layoutPages(width: CGFloat, height: CGFloat) {
         guard width > 0, height > 0 else { return }
         let slides = HomeHeroSlide.all
         guard !slides.isEmpty else { return }
