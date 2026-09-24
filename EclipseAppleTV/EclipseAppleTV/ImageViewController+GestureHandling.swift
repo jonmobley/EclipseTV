@@ -148,6 +148,12 @@ extension ImageViewController {
             }
             return
         }
+
+        // Help is an overlay, not presented — close it before any other Menu action.
+        if !helpView.isHidden {
+            didTapCloseButton()
+            return
+        }
         
         // Second priority: If in move mode, exit move mode
         if isMoveMode {
@@ -273,6 +279,9 @@ extension ImageViewController {
 
     /// Whether Menu should be handled in-app instead of exiting to Home.
     private func shouldHandleMenuPress() -> Bool {
+        // Help is an in-view overlay, not a presented VC — treat it like a modal
+        // so Menu closes Help instead of exiting to the tvOS Home screen.
+        if !helpView.isHidden { return true }
         if presentedViewController != nil { return true }
         if isMoveMode { return true }
         if !isInGridMode { return true }

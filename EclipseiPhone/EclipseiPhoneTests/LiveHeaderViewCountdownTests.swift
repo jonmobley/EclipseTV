@@ -44,51 +44,32 @@ struct LiveHeaderViewCountdownTests {
 
     /// Go-live refreshes the hero twice. The second pass shares the countdown
     /// key, so it must not lift the digits above the dissolve already running.
+    ///
+    /// Injects a stand-in dissolve: unit hosts often return nil from
+    /// `snapshotView(afterScreenUpdates:)`, which would skip the production path
+    /// this test is meant to lock down.
     @Test func rebuildingCountdownChromeKeepsDigitsUnderTheDissolve() {
-        let previous = ExternalOutputSettings.contentTransition
-        ExternalOutputSettings.contentTransition = .crossfade
-        defer { ExternalOutputSettings.contentTransition = previous }
-
         let header = makeHeader()
-        // The hero opts out of the autoresizing mask, so a bare frame collapses
-        // to zero once it joins a view and the dissolve never starts.
-        header.translatesAutoresizingMaskIntoConstraints = true
-        header.frame = CGRect(x: 0, y: 0, width: 320, height: 180)
-        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 320, height: 180))
-        window.rootViewController = UIViewController()
-        window.rootViewController?.view.addSubview(header)
-        window.makeKeyAndVisible()
-        window.layoutIfNeeded()
-        // snapshotView returns nil until the hero has been rendered once.
-        header.drawHierarchy(in: header.bounds, afterScreenUpdates: true)
-        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
-
-        header.configureOverlay(
-            title: "Photo",
-            systemImage: nil,
-            fillColor: .black,
-            thumbnail: UIImage(systemName: "photo"),
-            showsLiveBadge: false
-        )
         header.configureCountdownClock(text: "5:00", isExpired: false)
+
+        let dissolve = UIView(frame: header.bounds)
+        header.addSubview(dissolve)
+        header.transitionSnapshot = dissolve
+        header.bringSubviewToFront(header.liveBadge)
+        header.bringSubviewToFront(header.controls)
+
+        // Same-key rebuild — used to paint digits on top of the in-flight dissolve.
         header.configureCountdownClock(text: "5:00", isExpired: false)
 
         let clockIndex = header.subviews.firstIndex(of: header.countdownClockLabel)
+        let dissolveIndex = header.subviews.firstIndex(of: dissolve)
         let badgeIndex = header.subviews.firstIndex(of: header.liveBadge)
-        guard let clockIndex, let badgeIndex, clockIndex < badgeIndex else {
-            Issue.record("Countdown digits were not under the dissolve")
-            window.isHidden = true
+        guard let clockIndex, let dissolveIndex, let badgeIndex else {
+            Issue.record("Missing countdown, dissolve, or live badge in the hero")
             return
         }
-        let between = header.subviews[(clockIndex + 1)..<badgeIndex]
-        if between.isEmpty {
-            let names = header.subviews.map { String(describing: type(of: $0)) }
-            Issue.record(
-                "No dissolve above the digits. subviews=\(names) bounds=\(header.bounds) inWindow=\(header.window != nil)"
-            )
-        }
-        #expect(!between.isEmpty)
-        window.isHidden = true
+        #expect(clockIndex < dissolveIndex)
+        #expect(dissolveIndex < badgeIndex)
     }
 
     @Test func applyCountdownClockUpdatesDigits() {

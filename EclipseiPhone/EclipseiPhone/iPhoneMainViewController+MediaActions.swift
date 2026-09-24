@@ -117,12 +117,39 @@ extension iPhoneMainViewController {
         target: CGFloat,
         instruction: String
     ) {
-        let image: UIImage?
-        if let url = LocalMediaStore.shared.localURL(forId: item.id) {
-            image = UIImage(contentsOfFile: url.path)
-        } else {
-            image = TVLibraryStore.shared.thumbnail(for: item.id)
+        let fileURL = LocalMediaStore.shared.localURL(forId: item.id)
+        let fallbackThumb = TVLibraryStore.shared.thumbnail(for: item.id)
+        let maxEdge = Int(max(
+            UIScreen.main.nativeBounds.width,
+            UIScreen.main.nativeBounds.height
+        ))
+        showPresentationToast("Preparing…", duration: 8)
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let decoded: UIImage?
+            if let fileURL {
+                // Framing is normalized; the editor needs geometry, not full pixels.
+                decoded = ThumbnailDecoder.decode(fileURL: fileURL, maxPixelEdge: maxEdge)
+            } else {
+                decoded = fallbackThumb
+            }
+            DispatchQueue.main.async {
+                self?.presentStillFramingEditor(
+                    item: item,
+                    image: decoded,
+                    target: target,
+                    instruction: instruction
+                )
+            }
         }
+    }
+
+    /// Presents the crop editor once a downsampled still is ready.
+    private func presentStillFramingEditor(
+        item: LibraryItemDTO,
+        image: UIImage?,
+        target: CGFloat,
+        instruction: String
+    ) {
         guard let image else {
             showPresentationToast("Couldn't edit that image.")
             return

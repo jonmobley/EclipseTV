@@ -145,7 +145,9 @@ class iPhoneMainViewController: UIViewController {
     /// Width of the floating card (`compactWidth`, squeezed on narrow phones).
     var audioMiniCardWidthConstraint: NSLayoutConstraint?
     var audioPlayerObserver: NSObjectProtocol?
-    
+    /// Debounce for "Couldn't reach Apple TV" toasts from failed Multipeer commands.
+    var lastCommandSendFailedToastAt: Date?
+
     // MARK: - Lifecycle
     
     override func viewDidLoad() {

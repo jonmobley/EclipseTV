@@ -57,6 +57,13 @@ extension iPhoneMainViewController {
             name: JoinedAccountReconcile.conflictNotification,
             object: nil
         )
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleCommandSendFailed),
+            name: iPhoneConnectionManager.commandSendFailedNotification,
+            object: nil
+        )
     }
 
     @objc private func handleLocalAlbumsChanged() {
@@ -68,6 +75,17 @@ extension iPhoneMainViewController {
         showPresentationToast(
             "Join codes differ — this phone and Apple TV are on different albums."
         )
+    }
+
+    /// Operator-facing toast when a TV control command fails (play/delete/reorder…).
+    @objc private func handleCommandSendFailed() {
+        let now = Date()
+        if let last = lastCommandSendFailedToastAt,
+           now.timeIntervalSince(last) < 3 {
+            return
+        }
+        lastCommandSendFailedToastAt = now
+        showPresentationToast("Couldn't reach Apple TV", duration: 3)
     }
 
     @objc private func handleExternalDisplayChange() {

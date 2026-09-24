@@ -107,11 +107,24 @@ final class DisplayModeMediaPreviewPageViewController: UIViewController {
     // MARK: - Setup
 
     private func setupImage() {
-        zoomView.image = UIImage(contentsOfFile: fileURL.path)
         zoomView.onZoomedChanged = { [weak self] zoomed in
             self?.onZoomedChanged?(zoomed)
         }
         panelView.addSubview(zoomView)
+        let url = fileURL
+        let maxEdge = Self.previewMaxPixelEdge
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let image = ThumbnailDecoder.decode(fileURL: url, maxPixelEdge: maxEdge)
+            DispatchQueue.main.async {
+                self?.zoomView.image = image
+            }
+        }
+    }
+
+    /// Longest native screen edge — enough for the Display Mode panel.
+    private static var previewMaxPixelEdge: Int {
+        let bounds = UIScreen.main.nativeBounds
+        return max(1, Int(max(bounds.width, bounds.height)))
     }
 
     private func setupVideo() {

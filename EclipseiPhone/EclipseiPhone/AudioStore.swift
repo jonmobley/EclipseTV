@@ -62,7 +62,8 @@ final class AudioStore {
         try? FileManager.default.createDirectory(
             at: rootDirectory, withIntermediateDirectories: true
         )
-        excludeFromBackup(rootDirectory)
+        // User-imported tracks are not CloudKit-synced; keep them in the device
+        // backup so a restore does not silently drop ambient music.
         load()
     }
 

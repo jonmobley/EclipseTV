@@ -70,7 +70,8 @@ final class LiveHeaderView: UIView {
     /// Identity of the last applied live content; used to skip no-op crossfades.
     private var presentedContentKey: String?
     /// In-flight dissolve overlay (removed when the next transition starts).
-    private var transitionSnapshot: UIView?
+    /// Exposed for tests that inject a stand-in when `snapshotView` is unavailable.
+    var transitionSnapshot: UIView?
     /// Whether playback transport should show when not in compact presentation.
     var wantsPlaybackControls = false
     /// Compact presentation progress (0 = full hero, 1 = tucked mini preview).

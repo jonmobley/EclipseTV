@@ -109,6 +109,14 @@ and break that camera path.
 The audio background mode is the ambient music player. It keeps playing when
 the operator leaves the app. It is not a streaming service.
 
+`remote-notification` and `aps-environment` (development in the entitlements
+file; Xcode flips it to production at App Store export) are required so
+`CKSyncEngine` can wake on CloudKit silent push for Eclipse Sync across
+iPhones. Enable the Push Notifications capability on the
+`com.mobleypro.eclipse.EclipseiPhone` App ID if automatic signing has not
+already done so. The app also pulls on foreground as a fallback when push is
+delayed.
+
 Camera and microphone: live camera on the external display, video recording,
 and QR pairing.
 
