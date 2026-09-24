@@ -63,16 +63,39 @@ struct CameraStillRibbonTests {
         )
     }
 
-    @Test func idleTileTapGoesLiveWithoutOpeningTheController() {
+    @Test func idleTileTapGoesLiveWhenOutputIsAvailable() {
         #expect(
-            CameraStillRibbon.cameraTileTap(isCameraTileLive: false) == .goLive
+            CameraStillRibbon.cameraTileTap(
+                isCameraTileLive: false,
+                prefersPhonePreview: false
+            ) == .goLive
+        )
+    }
+
+    @Test func idleTileTapOpensViewfinderWhenDisconnectedWithoutPractice() {
+        #expect(
+            CameraStillRibbon.cameraTileTap(
+                isCameraTileLive: false,
+                prefersPhonePreview: true
+            ) == .openController
         )
     }
 
     @Test func liveTileTapReopensTheController() {
         #expect(
-            CameraStillRibbon.cameraTileTap(isCameraTileLive: true)
-                == .openController
+            CameraStillRibbon.cameraTileTap(
+                isCameraTileLive: true,
+                prefersPhonePreview: false
+            ) == .openController
+        )
+    }
+
+    @Test func liveTileTapStillOpensControllerWhenPreviewWouldBePreferred() {
+        #expect(
+            CameraStillRibbon.cameraTileTap(
+                isCameraTileLive: true,
+                prefersPhonePreview: true
+            ) == .openController
         )
     }
 
