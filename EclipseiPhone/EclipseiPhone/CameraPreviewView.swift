@@ -195,11 +195,18 @@ final class CameraPreviewView: UIView {
         return !isExternalDisplay
     }
 
-    /// Applies horizon-level rotation once a connection exists.
+    /// Applies mirroring, handheld EIS, and horizon-level rotation once a
+    /// connection exists. Preview-optimized EIS lives here: this layer is AirPlay
+    /// program, and flip rebuilds the connection.
     private func applyPreviewOrientation() {
         guard let connection = videoPreviewLayer.connection else { return }
         refreshRotationCoordinator()
         applyPreviewMirroring(to: connection)
+        CameraVideoStabilization.apply(
+            .live,
+            to: connection,
+            format: activeVideoDevice?.activeFormat
+        )
         let angle = programPreviewRotationAngle
         if connection.isVideoRotationAngleSupported(angle),
            connection.videoRotationAngle != angle {
