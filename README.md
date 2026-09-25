@@ -204,8 +204,8 @@ derives `YYYYMMDD.<minute of day>` so each run sorts above the last, and refuses
 the number backwards unless you pass `--force` (for a deliberate reset alongside a
 `MARKETING_VERSION` bump). `--dry-run` shows what it would change.
 
-Both apps are then archived from Xcode on a Mac. Expect the WebRTC symbol warning on the
-iPhone upload — see below.
+Both apps are then archived from Xcode on a Mac. The shared EclipseiPhone scheme
+injects a WebRTC dSYM into the archive before Distribute App (see below).
 
 ## 🐛 Troubleshooting
 
@@ -227,9 +227,9 @@ iPhone upload — see below.
 - Check network bandwidth for video playback
 
 ### "Upload Symbols Failed" for WebRTC.framework when distributing the iPhone app
-- Expected: WebRTC arrives as a stripped prebuilt xcframework, so the archive has no dSYM for it
-- The build is still accepted; only WebRTC's own frames stay unsymbolicated
-- See [Scripts/WebRTCUploadSymbols.md](Scripts/WebRTCUploadSymbols.md) for the cause and how to supply the dSYM
+- The shared EclipseiPhone scheme's Archive post-action injects a UUID-matched dSYM
+- Archive with that scheme, then Distribute; do not dismiss the old warning as expected
+- If a personal scheme hides the shared one, see [Scripts/WebRTCUploadSymbols.md](Scripts/WebRTCUploadSymbols.md)
 
 ## 📄 License
 

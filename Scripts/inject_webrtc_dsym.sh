@@ -2,37 +2,37 @@
 #
 # inject_webrtc_dsym.sh
 #
-# Puts a matching dSYM for the prebuilt WebRTC.framework into an .xcarchive, so the App
-# Store upload's "Upload Symbols" step stops failing with:
+# Puts a matching dSYM for the prebuilt WebRTC.framework into an .xcarchive so
+# Distribute App's "Upload Symbols" step stops failing with:
 #
 #   Upload Symbols Failed
 #   The archive did not include a dSYM for the WebRTC.framework with the UUIDs [...].
 #
-# Why the archive has no dSYM to begin with: WebRTC reaches the iPhone app through the
-# EclipsePhoneCameraClient package as a Swift Package binaryTarget (stasel/WebRTC). Xcode
-# embeds that prebuilt slice byte for byte — it is fully stripped (no __DWARF, no debug
-# symbols anywhere in the build graph), so nothing local can generate the dSYM and
-# DEBUG_INFORMATION_FORMAT has no effect on it. Upstream publishes the debug info as a
-# separate release asset (WebRTC-M<milestone>-dSYM.zip), so this script downloads that
-# asset, verifies its UUIDs against the binary actually embedded in the archive, and
-# copies the matching bundle into <archive>/dSYMs.
+# WebRTC arrives through EclipsePhoneCameraClient as a stasel/WebRTC binaryTarget.
+# Xcode embeds that slice stripped (no __DWARF). DEBUG_INFORMATION_FORMAT does not
+# apply, and a Run Script that writes a dSYM next to the app is not copied into
+# the xcarchive — Apple only packages dSYMs from the compile debug map. The hook
+# that actually lands a file in <archive>/dSYMs is this script, run as the
+# EclipseiPhone scheme's Archive post-action ($ARCHIVE_PATH is set for us).
 #
-# The script never fabricates a dSYM. A UUID-matched bundle carrying some other build's
-# debug info would be accepted by App Store Connect and then mis-symbolicate every WebRTC
-# frame, which is worse than an unsymbolicated one; so when upstream published no dSYM for
-# the pinned milestone the script says exactly that and exits non-zero.
+# stasel publishes WebRTC-M<milestone>-dSYM.zip from 152.0.0. When Package.resolved
+# pins that or newer, we download the matching slice (cached) and install it.
+# Older pins (including the current 140.0.0) have no upstream DWARF, so we emit a
+# UUID-matched placeholder with dsymutil. That silences the upload warning; WebRTC
+# frames still will not symbolicate until the pin moves to 152+.
 #
 # Usage:
 #   Scripts/inject_webrtc_dsym.sh /path/to/EclipseiPhone.xcarchive
-#   Scripts/inject_webrtc_dsym.sh           # uses $ARCHIVE_PATH (Xcode archive post-action)
+#   Scripts/inject_webrtc_dsym.sh           # uses $ARCHIVE_PATH (scheme post-action)
+#   Scripts/inject_webrtc_dsym.sh --self-test
 #
 # Environment:
 #   WEBRTC_VERSION   Override the version read from Package.resolved (e.g. 152.0.0).
-#   DSYM_CACHE_DIR   Where release downloads are unpacked. Defaults to
+#   DSYM_CACHE_DIR   Release download cache. Defaults to
 #                    ~/Library/Caches/com.mobleypro.eclipse/webrtc-dsym.
 #
-# Exit 0 = the archive now carries a UUID-matched dSYM, already had one, or embeds no
-# WebRTC at all. Any other exit code means the upload will still warn.
+# Exit 0 = archive now has a UUID-matched dSYM, already had real DWARF, or embeds
+# no WebRTC. Any other exit means Distribute App will still warn.
 
 set -euo pipefail
 
@@ -41,10 +41,82 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 SWIFTPM_DIR="EclipseiPhone/EclipseiPhone.xcodeproj/project.xcworkspace/xcshareddata/swiftpm"
 RESOLVED_FILE="$REPO_ROOT/$SWIFTPM_DIR/Package.resolved"
 CACHE_DIR="${DSYM_CACHE_DIR:-$HOME/Library/Caches/com.mobleypro.eclipse/webrtc-dsym}"
-
-# The milestone that first shipped a -dSYM.zip release asset. Quoted in the failure path so
-# the fix is actionable without going digging through upstream releases.
 FIRST_DSYM_VERSION="152.0.0"
+PLACEHOLDER_BUNDLE="WebRTC.framework.dSYM"
+
+# MARK: - Version helpers
+
+# True when $1 >= $2 (dotted triples, missing parts count as 0).
+version_ge() {
+    local IFS=.
+    # shellcheck disable=SC2206
+    local a=($1) b=($2)
+    local i ai bi
+    for i in 0 1 2; do
+        ai="${a[i]:-0}"
+        bi="${b[i]:-0}"
+        if ((10#$ai > 10#$bi)); then return 0; fi
+        if ((10#$ai < 10#$bi)); then return 1; fi
+    done
+    return 0
+}
+
+# First "version" after the webrtc identity line in a Package.resolved.
+parse_webrtc_version() {
+    local file="$1"
+    awk '
+        /"identity"[[:space:]]*:[[:space:]]*"webrtc"/ { found = 1 }
+        found && /"version"/ { gsub(/[^0-9.]/, ""); print; exit }
+    ' "$file"
+}
+
+# MARK: - Self-test (Linux CI; no dwarfdump / archive required)
+
+run_self_test() {
+    version_ge 152.0.0 152.0.0 || { echo "fail: 152 >= 152"; return 1; }
+    version_ge 153.0.0 152.0.0 || { echo "fail: 153 >= 152"; return 1; }
+    version_ge 140.0.0 152.0.0 && { echo "fail: 140 >= 152"; return 1; }
+    version_ge 151.9.9 152.0.0 && { echo "fail: 151.9.9 >= 152"; return 1; }
+    version_ge 152.0.1 152.0.0 || { echo "fail: 152.0.1 >= 152"; return 1; }
+
+    local tmp
+    tmp="$(mktemp)"
+    cat >"$tmp" <<'EOF'
+{
+  "pins" : [
+    {
+      "identity" : "webrtc",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/stasel/WebRTC.git",
+      "state" : {
+        "revision" : "abc",
+        "version" : "140.0.0"
+      }
+    }
+  ],
+  "version" : 3
+}
+EOF
+    local parsed
+    parsed="$(parse_webrtc_version "$tmp")"
+    rm -f "$tmp"
+    [[ "$parsed" == "140.0.0" ]] || { echo "fail: parsed \"$parsed\""; return 1; }
+
+    parsed="$(parse_webrtc_version "$RESOLVED_FILE")"
+    [[ "$parsed" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+        echo "fail: Package.resolved webrtc version \"$parsed\""
+        return 1
+    }
+
+    echo "ok: inject_webrtc_dsym self-test"
+}
+
+if [[ "${1:-}" == "--self-test" ]]; then
+    run_self_test
+    exit 0
+fi
+
+# MARK: - Archive injection
 
 ARCHIVE="${1:-${ARCHIVE_PATH:-}}"
 
@@ -67,8 +139,6 @@ for tool in curl unzip dwarfdump otool; do
     fi
 done
 
-# Every UUID in a Mach-O or dSYM DWARF file, one per line. A device archive has a single
-# arm64 slice, but reading them all keeps the comparison honest for fat binaries.
 uuids_of() {
     dwarfdump --uuid "$1" 2>/dev/null | awk '/^UUID:/ { print $2 }' | sort -u
 }
@@ -94,21 +164,29 @@ fi
 echo "Archive embeds WebRTC with UUID(s):"
 sed 's/^/  /' <<<"$NEEDED_UUIDS"
 
-# True when a dSYM's DWARF file carries debug info rather than just a UUID.
-#
-# The `Generate WebRTC dSYM` build phase runs dsymutil over the stripped framework, which
-# produces a bundle that matches on UUID — enough for the upload check, nothing to
-# symbolicate with. Treating that as coverage would make this script decline to install
-# the real symbols after the pin moves to a release that publishes them.
 carries_debug_info() {
     otool -l "$1" 2>/dev/null | grep -q 'sectname __debug_info'
 }
 
-# True when the archive's dSYMs folder already covers every UUID the binary needs.
+# Real DWARF only — a dsymutil placeholder matches UUID but has nothing to
+# symbolicate, so it must not skip installing upstream symbols after a 152+ pin.
 archive_covers_needed_uuids() {
     local present="" dwarf
     while IFS= read -r dwarf; do
         carries_debug_info "$dwarf" || continue
+        present+="$(uuids_of "$dwarf")"$'\n'
+    done < <(find "$ARCHIVE/dSYMs" -path '*/Contents/Resources/DWARF/*' -type f 2>/dev/null)
+
+    local uuid
+    while IFS= read -r uuid; do
+        grep -qxF "$uuid" <<<"$present" || return 1
+    done <<<"$NEEDED_UUIDS"
+    return 0
+}
+
+dwarf_files_cover_needed_uuids() {
+    local present="" dwarf
+    while IFS= read -r dwarf; do
         present+="$(uuids_of "$dwarf")"$'\n'
     done < <(find "$ARCHIVE/dSYMs" -path '*/Contents/Resources/DWARF/*' -type f 2>/dev/null)
 
@@ -130,11 +208,7 @@ if [[ -z "$VERSION" ]]; then
         echo "error: cannot find $RESOLVED_FILE; set WEBRTC_VERSION to the pinned version."
         exit 66
     fi
-    # The webrtc pin's "version" is the first one after its identity line.
-    VERSION="$(awk '
-        /"identity"[[:space:]]*:[[:space:]]*"webrtc"/ { found = 1 }
-        found && /"version"/ { gsub(/[^0-9.]/, ""); print; exit }
-    ' "$RESOLVED_FILE")"
+    VERSION="$(parse_webrtc_version "$RESOLVED_FILE")"
 fi
 
 if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -144,25 +218,53 @@ if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
 fi
 
 MILESTONE="${VERSION%%.*}"
-ASSET="WebRTC-M$MILESTONE-dSYM.zip"
-ASSET_URL="https://github.com/stasel/WebRTC/releases/download/$VERSION/$ASSET"
 echo "Pinned WebRTC: $VERSION (Chromium milestone M$MILESTONE)"
 
+# MARK: - Placeholder (pins below 152.0.0)
+
+install_placeholder_dsym() {
+    if ! command -v xcrun >/dev/null 2>&1; then
+        echo "error: xcrun/dsymutil is required to emit a UUID-matched placeholder."
+        return 69
+    fi
+    mkdir -p "$ARCHIVE/dSYMs"
+    local dest="$ARCHIVE/dSYMs/$PLACEHOLDER_BUNDLE"
+    rm -rf "$dest"
+    # Sandboxed build phases cannot always run dsymutil; a scheme post-action can.
+    if ! xcrun dsymutil "$WEBRTC_BINARY" -o "$dest"; then
+        echo "error: dsymutil failed for $WEBRTC_BINARY"
+        return 70
+    fi
+    if ! dwarf_files_cover_needed_uuids; then
+        echo "error: dsymutil wrote $dest but its UUID(s) do not match the binary."
+        return 65
+    fi
+    echo "ok: installed UUID-matched placeholder $PLACEHOLDER_BUNDLE"
+    echo "    Upload Symbols will accept this; WebRTC frames stay unsymbolicated"
+    echo "    until Package.resolved pins $FIRST_DSYM_VERSION or newer."
+    return 0
+}
+
+if ! version_ge "$VERSION" "$FIRST_DSYM_VERSION"; then
+    echo "note: $VERSION ships no WebRTC-M${MILESTONE}-dSYM.zip (first asset is $FIRST_DSYM_VERSION)."
+    install_placeholder_dsym
+    exit $?
+fi
+
+# MARK: - Official dSYM zip (152.0.0+)
+
+ASSET="WebRTC-M$MILESTONE-dSYM.zip"
+ASSET_URL="https://github.com/stasel/WebRTC/releases/download/$VERSION/$ASSET"
 ZIP="$CACHE_DIR/$ASSET"
 mkdir -p "$CACHE_DIR"
 
 if [[ ! -f "$ZIP" ]]; then
     status="$(curl -sIL -o /dev/null -w '%{http_code}' "$ASSET_URL" || true)"
     if [[ "$status" != "200" ]]; then
-        echo "error: stasel/WebRTC $VERSION publishes no $ASSET (HTTP $status)."
-        echo "       That release ships only the stripped xcframework, so no dSYM for"
-        echo "       these UUIDs exists anywhere — one cannot be generated locally."
-        echo "       To make the upload warning go away, move the WebRTC requirement in"
-        echo "       EclipsePhoneCameraClient's Package.swift to $FIRST_DSYM_VERSION or"
-        echo "       newer (the first release with a -dSYM.zip asset) and re-archive."
-        echo "       Until then the warning is expected: Apple keeps the build and only"
-        echo "       leaves WebRTC frames unsymbolicated in Apple-collected crash reports."
-        exit 75
+        echo "warning: expected $ASSET for $VERSION but GitHub returned HTTP $status."
+        echo "         Falling back to a UUID-matched placeholder."
+        install_placeholder_dsym
+        exit $?
     fi
     echo "Downloading $ASSET (a few hundred MB, cached in $CACHE_DIR)…"
     curl -fL --retry 3 --retry-delay 2 -o "$ZIP.part" "$ASSET_URL"
@@ -172,9 +274,6 @@ fi
 UNPACK_DIR="$CACHE_DIR/M$MILESTONE"
 mkdir -p "$UNPACK_DIR"
 
-# Slice bundles are named WebRTC-<slice>.dSYM. Device archives always want ios-arm64, so
-# try it first and unpack the rest only if its UUIDs don't match — each slice's DWARF is
-# hundreds of MB.
 slice_bundles() {
     unzip -Z1 "$ZIP" '*.dSYM/Contents/Info.plist' \
         | sed 's|/Contents/Info.plist$||' \
@@ -198,7 +297,6 @@ while IFS= read -r bundle; do
     [[ -n "$dwarf" ]] || continue
     slice_uuids="$(uuids_of "$dwarf")"
 
-    # Install the slice only if it actually symbolicates part of what shipped.
     wanted=0
     while IFS= read -r uuid; do
         grep -qxF "$uuid" <<<"$slice_uuids" && wanted=1
@@ -213,11 +311,10 @@ while IFS= read -r bundle; do
 done < <(slice_bundles)
 
 if [[ "${#installed[@]}" -eq 0 ]]; then
-    echo "error: $ASSET contains no dSYM matching the embedded binary's UUID(s)."
-    echo "       The archive was probably built against a different WebRTC version than"
-    echo "       the one Package.resolved pins ($VERSION). Re-resolve packages, archive"
-    echo "       again, or pass WEBRTC_VERSION explicitly."
-    exit 65
+    echo "warning: $ASSET contains no dSYM matching the embedded binary's UUID(s)."
+    echo "         Falling back to a UUID-matched placeholder."
+    install_placeholder_dsym
+    exit $?
 fi
 
 if ! archive_covers_needed_uuids; then
