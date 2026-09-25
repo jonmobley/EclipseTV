@@ -90,6 +90,8 @@ extension LibraryGridViewController {
             isLocked: isLiveOutputLocked
         )
         cell.refreshLiveCameraPreview()
+        syncVisibleShowTileLiveStrokes()
+        scheduleVisibleShowTileLiveStrokeSync()
     }
 
     /// Updates only the tile's capture rotation after the phone turns.

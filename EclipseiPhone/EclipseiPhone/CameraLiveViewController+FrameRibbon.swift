@@ -71,6 +71,10 @@ extension CameraLiveViewController: UICollectionViewDataSource, UICollectionView
         frameRibbonView.reloadData()
         thumbGridView.reloadData()
         layoutThumbnails(panel: panelView.convert(panelView.bounds, to: view))
+        stillRibbonView.layoutIfNeeded()
+        frameRibbonView.layoutIfNeeded()
+        thumbGridView.layoutIfNeeded()
+        syncVisibleCameraThumbLiveStrokes()
     }
 
     /// Tap toggles the overlay on the camera; tapping the live one turns it off.
@@ -234,7 +238,7 @@ final class CameraFrameRibbonCell: UICollectionViewCell {
         imageView.image = image
         imageView.layer.borderWidth = isLive ? 3 : 1
         imageView.layer.borderColor = isLive
-            ? UIColor.accent.cgColor
+            ? UIColor.systemRed.cgColor
             : UIColor.white.withAlphaComponent(0.35).cgColor
         accessibilityLabel = "Frame overlay"
         accessibilityValue = isLive ? "On camera" : "Off"

@@ -80,6 +80,9 @@ extension CameraLiveViewController {
         stillRibbonView.reloadData()
         thumbGridView.reloadData()
         layoutThumbnails(panel: panelView.convert(panelView.bounds, to: view))
+        stillRibbonView.layoutIfNeeded()
+        thumbGridView.layoutIfNeeded()
+        syncVisibleCameraThumbLiveStrokes()
     }
 
     /// 14pt in-panel pad, plus any home-indicator overlap (Landscape panel).
