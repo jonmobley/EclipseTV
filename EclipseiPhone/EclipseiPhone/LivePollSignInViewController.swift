@@ -24,6 +24,8 @@ final class LivePollSignInViewController: UIViewController {
     private let errorLabel = UILabel()
     private let sendButton = UIButton(type: .system)
     private let statusLabel = UILabel()
+    /// Code to type on the emailed link's confirmation page.
+    private let codeLabel = UILabel()
 
     /// Compact card matching the old PIN sheet footprint.
     static let sheetSize = CGSize(width: 420, height: 420)
@@ -98,6 +100,11 @@ final class LivePollSignInViewController: UIViewController {
         statusLabel.textAlignment = .center
         statusLabel.isHidden = true
 
+        codeLabel.font = .monospacedSystemFont(ofSize: 34, weight: .bold)
+        codeLabel.textAlignment = .center
+        codeLabel.accessibilityIdentifier = "livepoll.signin.code"
+        codeLabel.isHidden = true
+
         var config = UIButton.Configuration.filled()
         config.title = "Email me a link"
         config.cornerStyle = .large
@@ -113,7 +120,7 @@ final class LivePollSignInViewController: UIViewController {
         }, for: .touchUpInside)
 
         let stack = UIStackView(arrangedSubviews: [
-            messageLabel, emailField, errorLabel, sendButton, statusLabel
+            messageLabel, emailField, errorLabel, sendButton, statusLabel, codeLabel
         ])
         stack.axis = .vertical
         stack.spacing = 16
@@ -152,12 +159,19 @@ final class LivePollSignInViewController: UIViewController {
         errorLabel.text = nil
         statusLabel.text = "Check your email, then return here."
         statusLabel.isHidden = false
+        showCode(nil)
         pollTask?.cancel()
         pollTask = Task { @MainActor [weak self] in
             guard let self else { return }
             do {
-                let pollToken = try await self.client.requestMagicLink(email: email)
-                await self.waitForAccountToken(pollToken)
+                let signIn = try await self.client.requestDeviceSignIn(email: email)
+                if let code = signIn.userCode {
+                    // The emailed link only completes sign-in with this code.
+                    self.statusLabel.text =
+                        "Open the link we emailed you and enter this code on that page."
+                    self.showCode(code)
+                }
+                await self.waitForAccountToken(signIn.pollToken)
             } catch {
                 self.errorLabel.text = (error as? LivePollError)?.userMessage
                     ?? "Could not send the sign-in email."
@@ -187,8 +201,24 @@ final class LivePollSignInViewController: UIViewController {
         setBusy(false)
     }
 
+    /// Shows "482 913", or hides the code when `code` is nil.
+    private func showCode(_ code: String?) {
+        guard let code else {
+            codeLabel.text = nil
+            codeLabel.isHidden = true
+            return
+        }
+        let spaced = code.count == 6
+            ? code.prefix(3) + " " + code.suffix(3)
+            : Substring(code)
+        codeLabel.text = String(spaced)
+        codeLabel.accessibilityLabel = "Sign-in code \(code.map(String.init).joined(separator: " "))"
+        codeLabel.isHidden = false
+    }
+
     private func setBusy(_ busy: Bool) {
         isBusy = busy
+        if !busy { showCode(nil) }
         emailField.isEnabled = !busy
         refresh()
     }
