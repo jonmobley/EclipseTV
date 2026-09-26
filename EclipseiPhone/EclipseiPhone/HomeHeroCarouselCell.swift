@@ -267,7 +267,7 @@ final class HomeHeroCarouselCell: UICollectionViewCell, UIScrollViewDelegate {
         page.clipsToBounds = true
         page.backgroundColor = slide.palette.fallbackColor
         addBackground(for: slide, to: page)
-        addTopCenteredCopy(for: slide, to: page)
+        addCenteredCopy(for: slide, to: page)
         return page
     }
 
@@ -288,8 +288,11 @@ final class HomeHeroCarouselCell: UICollectionViewCell, UIScrollViewDelegate {
         pinEdges(gradient, to: page)
     }
 
-    /// Icon + title + subtitle, centered as a column under the top of the card.
-    private func addTopCenteredCopy(for slide: HomeHeroSlide, to page: UIView) {
+    /// Icon + title + subtitle, centered vertically and horizontally in the card.
+    ///
+    /// Top/bottom insets are inequalities so oversize dynamic-type copy stays
+    /// inside the card instead of pushing the stack past the rounded corners.
+    private func addCenteredCopy(for slide: HomeHeroSlide, to page: UIView) {
         let hasImage = slide.imageName.flatMap { UIImage(named: $0) } != nil
         if hasImage { addImageScrim(to: page) }
 
@@ -339,9 +342,12 @@ final class HomeHeroCarouselCell: UICollectionViewCell, UIScrollViewDelegate {
         stack.translatesAutoresizingMaskIntoConstraints = false
         page.addSubview(stack)
         NSLayoutConstraint.activate([
-            stack.topAnchor.constraint(equalTo: page.topAnchor, constant: 24),
+            stack.centerYAnchor.constraint(equalTo: page.centerYAnchor),
+            stack.centerXAnchor.constraint(equalTo: page.centerXAnchor),
             stack.leadingAnchor.constraint(equalTo: page.leadingAnchor, constant: 20),
-            stack.trailingAnchor.constraint(equalTo: page.trailingAnchor, constant: -20)
+            stack.trailingAnchor.constraint(equalTo: page.trailingAnchor, constant: -20),
+            stack.topAnchor.constraint(greaterThanOrEqualTo: page.topAnchor, constant: 20),
+            stack.bottomAnchor.constraint(lessThanOrEqualTo: page.bottomAnchor, constant: -20)
         ])
     }
 

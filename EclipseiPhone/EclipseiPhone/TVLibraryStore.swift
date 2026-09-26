@@ -564,6 +564,8 @@ final class TVLibraryStore {
         logger.info(
             "Recovering \(orphans.count) local \(mode.rawValue, privacy: .public) items"
         )
+        let orientation: ExternalOutputOrientation =
+            mode == .landscape ? .landscape : .portrait
         for id in orphans {
             let isVideo = Self.isVideoFilename(id)
             let item = LibraryItemDTO(
@@ -578,6 +580,18 @@ final class TVLibraryStore {
             PendingUploadStore.shared.enqueue(item, mode: mode)
             if !items.contains(where: { $0.id == id }) {
                 items.append(item)
+            }
+            // Also enroll for CloudKit so this recovered file reaches other devices.
+            // `register` short-circuits when a row already exists, so this is a no-op
+            // for imports that already flowed through `addLocalItem`.
+            if !CaptureStore.shared.contains(id: id) {
+                _ = ImportedMediaStore.shared.register(
+                    libraryId: id,
+                    isVideo: isVideo,
+                    duration: 0,
+                    orientation: orientation,
+                    showId: nil
+                )
             }
             if let url = LocalMediaStore.shared.localURL(forId: id, mode: mode),
                !isVideo,

@@ -662,6 +662,12 @@ final class LibraryGridViewController: UIViewController {
             self?.reloadGridIfSafe()
             self?.updateEmptyState()
         }
+        // Imports flip `.downloading` → `.synced` on their own store; without this the
+        // tile's "Downloading…" pill would outlive the download. Merging is the remote
+        // apply's job, so this only repaints.
+        observe(ImportedMediaStore.didChangeNotification) { [weak self] _ in
+            self?.reloadGridIfSafe()
+        }
         observe(EclipseSyncController.statusDidChangeNotification) { [weak self] _ in
             self?.syncStatusBanner.reload()
         }

@@ -112,15 +112,25 @@ extension LibraryGridViewController {
     }
 
     /// Presents Preview for `item` among `neighbors` (images swipe; video is modal).
+    ///
+    /// Routes by `MediaSyncPresence` first so a device with no local bytes still does
+    /// the right thing: purged tiles reach the re-send sheet, iCloud tiles download
+    /// and come back through here, and only a genuinely stranded item shows the alert.
     func presentLocalPreview(for item: LibraryItemDTO, in neighbors: [LibraryItemDTO]) {
+        let presence = MediaSyncPresence.resolve(for: item)
+        if presence == .purgedOnTV {
+            presentOptions(forItemId: item.id)
+            return
+        }
+        if presence.wantsCloudDownload {
+            downloadFromCloud(libraryItem: item) { [weak self] available in
+                self?.presentLocalPreview(for: available, in: neighbors)
+            }
+            return
+        }
+
         guard let url = LocalMediaStore.shared.localURL(forId: item.id) else {
-            let alert = UIAlertController(
-                title: "Can't Preview",
-                message: "No local copy on this phone. Add the item from Photos first.",
-                preferredStyle: .alert
-            )
-            alert.addAction(UIAlertAction(title: "OK", style: .default))
-            present(alert, animated: true)
+            presentCannotPreviewAlert()
             return
         }
 
@@ -141,13 +151,7 @@ extension LibraryGridViewController {
         guard !isPreviewAlreadyOpen else { return }
         let previewable = LocalMediaPreviewViewController.imagePreviewableItems(from: neighbors)
         guard let index = previewable.firstIndex(where: { $0.id == item.id }) else {
-            let alert = UIAlertController(
-                title: "Can't Preview",
-                message: "No local copy on this phone. Add the item from Photos first.",
-                preferredStyle: .alert
-            )
-            alert.addAction(UIAlertAction(title: "OK", style: .default))
-            present(alert, animated: true)
+            presentCannotPreviewAlert()
             return
         }
 
@@ -237,6 +241,22 @@ extension LibraryGridViewController {
             usesSeamlessLoop: isVideo && id == ShowToolToken.screensaver
         )
         present(preview, animated: true)
+    }
+
+    /// Alert for a truly stranded item — no local bytes and no cloud copy to fetch.
+    ///
+    /// `presentLocalPreview` calls this only after `MediaSyncPresence` has ruled out
+    /// the download and re-send paths, so the wording focuses on re-adding rather
+    /// than the misleading "first time" nudge the old copy used.
+    private func presentCannotPreviewAlert() {
+        let alert = UIAlertController(
+            title: "Can't Preview",
+            message: "This item isn't on this device and isn't available from iCloud. "
+                + "Re-add it from Photos to see it here.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
     }
 
     func presentNotConnectedAlert() {

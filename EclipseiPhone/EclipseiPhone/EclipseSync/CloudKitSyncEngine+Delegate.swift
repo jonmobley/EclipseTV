@@ -38,9 +38,13 @@ extension CloudKitSyncEngine: CKSyncEngineDelegate {
                     recordName: deletion.recordID.recordName
                 )
             }
+            EclipseSyncActivity.shared.noteSyncCompleted()
 
         case .sentRecordZoneChanges(let sent):
             await handleSent(sent)
+            if !sent.savedRecords.isEmpty || !sent.deletedRecordIDs.isEmpty {
+                EclipseSyncActivity.shared.noteSyncCompleted()
+            }
 
         case .sentDatabaseChanges:
             break

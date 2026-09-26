@@ -451,14 +451,9 @@ extension LibraryGridViewController {
             isScreensaverSelected = false
             beginCountdown(item)
         case .media(let item):
-            if prefersPhonePreviewOnTap {
-                presentLocalPreview(for: item, in: openShowItems)
-                return
-            }
-            isBlackSelected = false
-            isLogoSelected = false
-            isScreensaverSelected = false
-            SlideshowPlaybackController.shared.stop()
+            // `presentMedia` routes by presence — purged → options sheet, iCloud →
+            // download-then-preview, local → the preview / go-live fork that the
+            // old branch here duplicated. Delegating keeps one router for both grids.
             presentMedia(item)
         case .website(let page):
             // The browser is how the page is driven, so a tap opens it while
@@ -650,7 +645,9 @@ extension LibraryGridViewController {
         if item.isAvailable != false, item.isVideo {
             children.append(editAction(for: item))
         }
-        if let capture = CaptureStore.shared.record(id: item.id),
+        if MediaSyncPresence.resolve(for: item).wantsCloudDownload {
+            children.append(downloadFromCloudAction(for: item))
+        } else if let capture = CaptureStore.shared.record(id: item.id),
            LocalMediaStore.shared.hasMedia(
             forId: capture.libraryFileName,
             mode: capture.orientation.libraryMode

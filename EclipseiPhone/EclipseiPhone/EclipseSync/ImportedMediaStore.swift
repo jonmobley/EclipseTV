@@ -191,6 +191,11 @@ final class ImportedMediaStore {
             from: defaults,
             logger: logger
         ).elements
+        // A download that was in flight when the process died has no waiter left to
+        // finish it; left as-is the tile would spin until the next tap.
+        for index in records.indices where records[index].syncState == .downloading {
+            records[index].syncState = .remoteOnly
+        }
     }
 
     private func persist() {

@@ -12,7 +12,20 @@ import UIKit
 extension MediaLibraryPickerViewController {
 
     /// Fullscreen Preview on top of Media Library (dismiss returns here, not Home).
+    ///
+    /// Routes by `MediaSyncPresence` first: a purged item hands off to the re-send
+    /// flow, an iCloud-only item downloads (with a toast) and comes back through
+    /// here, and only a genuinely stranded item hits the alert.
     func previewMedia(_ item: LibraryItemDTO) {
+        let presence = MediaSyncPresence.resolve(for: item)
+        if presence == .purgedOnTV {
+            onRequestResend?(item.id)
+            return
+        }
+        if presence.wantsCloudDownload {
+            downloadFromCloudAndPreview(item)
+            return
+        }
         guard let url = LocalMediaStore.shared.localURL(forId: item.id) else {
             presentCannotPreview()
             return
@@ -22,6 +35,36 @@ extension MediaLibraryPickerViewController {
             return
         }
         previewImage(item)
+    }
+
+    /// Fetches `item`'s asset from iCloud, then re-enters `previewMedia`.
+    ///
+    /// Mirrors `LibraryGridViewController.downloadFromCloud`: the tile picks up the
+    /// "Downloading…" pill from the store's state change, and the toast is the
+    /// picker's own acknowledgement of the tap.
+    private func downloadFromCloudAndPreview(_ item: LibraryItemDTO) {
+        showPresentationToast(String(localized: "Downloading from iCloud…"), duration: 8)
+        EclipseSyncController.shared.backend.downloadAsset(
+            id: item.id, progress: nil
+        ) { [weak self] result in
+            guard let self else { return }
+            self.removePresentationToastIfPresent()
+            switch result {
+            case .success:
+                var available = item
+                available.isAvailable = true
+                self.previewMedia(available)
+            case .failure(let error):
+                Haptics.error()
+                let alert = UIAlertController(
+                    title: "Download Failed",
+                    message: error.localizedDescription,
+                    preferredStyle: .alert
+                )
+                alert.addAction(UIAlertAction(title: "OK", style: .default))
+                self.present(alert, animated: true)
+            }
+        }
     }
 
     /// Pushes the PDF reader so Back returns to Media Library.
@@ -100,7 +143,8 @@ extension MediaLibraryPickerViewController {
     private func presentCannotPreview() {
         let alert = UIAlertController(
             title: "Can't Preview",
-            message: "No local copy on this phone. Add the item from Photos first.",
+            message: "This item isn't on this device and isn't available from iCloud. "
+                + "Re-add it from Photos to see it here.",
             preferredStyle: .alert
         )
         alert.addAction(UIAlertAction(title: "OK", style: .default))

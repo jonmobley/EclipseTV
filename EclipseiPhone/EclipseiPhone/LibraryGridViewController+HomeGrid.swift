@@ -568,12 +568,24 @@ extension LibraryGridViewController: UICollectionViewDataSource,
     }
 
     func presentMedia(_ item: LibraryItemDTO) {
-        if prefersPhonePreviewOnTap {
-            presentLocalPreview(for: item, in: openShowItems.isEmpty ? displayItems : openShowItems)
+        // Route by presence first so a device with no output still does the right
+        // thing on a tap: purged tiles reach the re-send sheet, iCloud tiles download
+        // (then re-enter here with local bytes), and only genuinely local items land
+        // in the phone-preview branch that requires a file on disk.
+        let presence = MediaSyncPresence.resolve(for: item)
+        if presence == .purgedOnTV {
+            presentOptions(forItemId: item.id)
             return
         }
-        if item.isAvailable == false {
-            presentOptions(forItemId: item.id)
+        if presence.wantsCloudDownload {
+            downloadFromCloud(libraryItem: item) { [weak self] available in
+                self?.presentMedia(available)
+            }
+            return
+        }
+
+        if prefersPhonePreviewOnTap {
+            presentLocalPreview(for: item, in: openShowItems.isEmpty ? displayItems : openShowItems)
             return
         }
         if sendShowLiveSelectIfOperator(.media, itemId: item.id) {
@@ -639,9 +651,20 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             finish(libraryItem)
             return
         }
+        downloadFromCloud(libraryItem: libraryItem, then: finish)
+    }
 
+    /// Fetches an item's bytes from iCloud, then hands back the DTO marked available.
+    ///
+    /// Works for captures and imports alike: `downloadAsset` resolves either registry
+    /// from the library id. The tile shows "Downloading…" from the store's state
+    /// change; the toast is the immediate acknowledgement of the tap.
+    func downloadFromCloud(
+        libraryItem: LibraryItemDTO,
+        then finish: @escaping (LibraryItemDTO) -> Void
+    ) {
         showPresentationToast(String(localized: "Downloading from iCloud…"), duration: 8)
-        EclipseSyncController.shared.backend.downloadAsset(id: capture.id, progress: nil) {
+        EclipseSyncController.shared.backend.downloadAsset(id: libraryItem.id, progress: nil) {
             [weak self] result in
             guard let self else { return }
             self.removePresentationToastIfPresent()
@@ -760,8 +783,22 @@ extension LibraryGridViewController: UICollectionViewDataSource,
     /// Builds the per-item options menu shown via long-press context menu.
     func optionsMenu(for item: LibraryItemDTO) -> UIMenu {
         let id = item.id
+        let presence = MediaSyncPresence.resolve(for: item)
 
-        if item.isAvailable == false {
+        if presence.wantsCloudDownload {
+            return UIMenu(children: [
+                downloadFromCloudAction(for: item),
+                UIAction(
+                    title: "Delete",
+                    image: UIImage(systemName: "trash"),
+                    attributes: .destructive
+                ) { [weak self] _ in
+                    self?.confirmDelete(id: id, name: item.name)
+                }
+            ])
+        }
+
+        if presence == .purgedOnTV {
             let resend = UIAction(
                 title: "Re-send from Photos",
                 image: UIImage(systemName: "arrow.up.circle")
@@ -807,5 +844,18 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         }
         children.append(delete)
         return UIMenu(children: children)
+    }
+
+    /// Menu action that fetches an iCloud-only item's bytes onto this device.
+    ///
+    /// The store's state change repaints the tile, so nothing else has to happen
+    /// when the download lands.
+    func downloadFromCloudAction(for item: LibraryItemDTO) -> UIAction {
+        UIAction(
+            title: "Download from iCloud",
+            image: UIImage(systemName: "icloud.and.arrow.down")
+        ) { [weak self] _ in
+            self?.downloadFromCloud(libraryItem: item) { _ in }
+        }
     }
 }

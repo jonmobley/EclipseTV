@@ -59,8 +59,22 @@ extension MediaLibraryPickerViewController {
         ])
     }
 
+    /// Re-send for a TV-purged file; Download for an item that is only in iCloud.
     private func unavailableMediaMenu(for item: LibraryItemDTO) -> UIMenu {
-        UIMenu(children: [
+        if MediaSyncPresence.resolve(for: item).wantsCloudDownload {
+            return UIMenu(children: [
+                UIAction(
+                    title: "Download from iCloud",
+                    image: UIImage(systemName: "icloud.and.arrow.down")
+                ) { _ in
+                    EclipseSyncController.shared.backend.downloadAsset(
+                        id: item.id, progress: nil
+                    ) { _ in }
+                },
+                deleteMediaAction(item)
+            ])
+        }
+        return UIMenu(children: [
             UIAction(
                 title: "Re-send from Photos",
                 image: UIImage(systemName: "arrow.up.circle")

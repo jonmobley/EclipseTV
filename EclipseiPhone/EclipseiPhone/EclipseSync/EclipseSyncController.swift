@@ -46,6 +46,9 @@ final class EclipseSyncController {
     /// Boots the sync backend. Call once from `AppDelegate`.
     func start() {
         backend.start()
+        // Enrolls any pre-Sync imported files so they upload on the next work sweep.
+        // Idempotent; a run with nothing to backfill is a directory scan and a return.
+        LegacyMediaBackfill.run()
         if statusObserver == nil {
             statusObserver = NotificationCenter.default.addObserver(
                 forName: CloudKitAccountMonitor.didChangeNotification,
@@ -100,6 +103,14 @@ final class EclipseSyncController {
     /// Banner copy when sync is paused, or nil when healthy / not yet evaluated.
     var statusBannerText: String? {
         pauseReason?.userMessage
+    }
+
+    /// One-line status for the Settings row ("On · Synced 2 minutes ago").
+    var settingsSummary: String {
+        EclipseSyncStatusSummary.text(
+            pauseReason: pauseReason,
+            lastSyncedAt: EclipseSyncActivity.shared.lastSyncedAt
+        )
     }
 
     /// Applies a server tombstone to whichever local store owns `recordName`.

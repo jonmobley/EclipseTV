@@ -138,6 +138,7 @@ final class CloudKitSharedSyncHost: NSObject, CKSyncEngineDelegate {
                     recordName: deletion.recordID.recordName
                 )
             }
+            EclipseSyncActivity.shared.noteSyncCompleted()
         default:
             break
         }

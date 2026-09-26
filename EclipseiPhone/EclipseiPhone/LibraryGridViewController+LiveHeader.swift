@@ -22,8 +22,12 @@ extension LibraryGridViewController {
         // An operator's header moon reflects the director's program, not local flags.
         let remoteSnapshot = ShowLiveSession.shared.isRemoteOperator
             ? ShowLiveSession.shared.snapshot : nil
+        // Camera is the one overlay `beginBlackout` deliberately preserves — the
+        // session keeps running so toggling blackout off can restart the feed
+        // instantly, but the TV is really black underneath. Treat that the same
+        // as any other blackout so the moon lights up.
         let blackLive = remoteSnapshot?.isBlackout
-            ?? (isBlackSelected && !mgr.isOverlayLive)
+            ?? (isBlackSelected && (!mgr.isOverlayLive || mgr.isCameraModeActive))
         onBlackLiveChanged?(blackLive)
         onLiveOutputLockChanged?(isLiveOutputLocked)
         onLivePollPhoneHeroChanged?(isLivePollPhoneHeroActive)
@@ -146,6 +150,18 @@ extension LibraryGridViewController {
             liveHeader.updatePlayback(PlaybackState())
             return
         }
+        // Blackout wins over the camera branches: `beginBlackout` keeps the
+        // camera overlay alive so it can resume instantly, but the TV is truly
+        // black, and the hero must mirror that instead of the live feed / still.
+        if isBlackSelected {
+            liveHeader.configureOverlay(
+                title: "Blackout",
+                systemImage: "moon.fill",
+                fillColor: .black
+            )
+            liveHeader.updatePlayback(PlaybackState())
+            return
+        }
         if mgr.isCameraLive {
             presentCameraInLiveHeader()
             return
@@ -163,15 +179,6 @@ extension LibraryGridViewController {
         }
         if mgr.isCountdownLive {
             applyCountdownLiveHeader()
-            return
-        }
-        if isBlackSelected {
-            liveHeader.configureOverlay(
-                title: "Blackout",
-                systemImage: "moon.fill",
-                fillColor: .black
-            )
-            liveHeader.updatePlayback(PlaybackState())
             return
         }
         if isLogoSelected {

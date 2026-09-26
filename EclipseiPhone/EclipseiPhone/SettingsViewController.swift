@@ -48,6 +48,7 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
         case playback
         case notes
         case showSharing
+        case eclipseSync
         case eclipseTV
         case eclipseMac
         case recommendations
@@ -78,7 +79,7 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
             result.append(.showLivePreview)
         }
         result.append(contentsOf: [
-            .playback, .notes, .showSharing, .eclipseTV, .eclipseMac,
+            .playback, .notes, .showSharing, .eclipseSync, .eclipseTV, .eclipseMac,
             .recommendations, .help
         ])
         return result
@@ -126,6 +127,13 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
             name: UIAccessibility.guidedAccessStatusDidChangeNotification,
             object: nil
         )
+        observeEclipseSyncStatus()
+    }
+
+    /// Refreshes the Eclipse Sync row when the pause reason or last-synced time moves.
+    func reloadEclipseSyncSection() {
+        guard isViewLoaded, let index = sections.firstIndex(of: .eclipseSync) else { return }
+        tableView.reloadSections(IndexSet(integer: index), with: .none)
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -232,6 +240,7 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
         case .playback: return PlaybackRow.allCases.count
         case .notes: return 1
         case .showSharing: return showSharingRows.count
+        case .eclipseSync: return 1
         case .eclipseTV: return 1
         case .eclipseMac: return MacRow.allCases.count
         case .recommendations: return 1
@@ -250,6 +259,7 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
         case .playback: return "Playback"
         case .notes: return "Notes"
         case .showSharing: return "Show Sharing"
+        case .eclipseSync: return "iCloud"
         case .eclipseTV: return "EclipseTV"
         case .eclipseMac: return "Eclipse for Mac"
         case .recommendations: return GuidedAccessRecommendation.settingsHeader
@@ -267,6 +277,8 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
         case .notes:
             return "Notes stay attached to each image. Always shows an empty Note "
                 + "card on Preview so you can add notes while browsing."
+        case .eclipseSync:
+            return Self.eclipseSyncFooter
         case .eclipseTV:
             return "Link an Apple TV running EclipseTV to sync Shows and present over Multipeer. "
                 + "AirPlay still works without a TV link."
@@ -330,6 +342,8 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
             config.image = UIImage(systemName: "note.text")
         case .showSharing:
             configureShowSharingCell(cell, config: &config, row: indexPath.row)
+        case .eclipseSync:
+            configureEclipseSyncCell(cell, config: &config)
         case .eclipseTV:
             config.text = "EclipseTV"
             config.secondaryText = eclipseTVSummary()
@@ -387,6 +401,8 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
             )
         case .showSharing:
             handleShowSharingRow(indexPath.row)
+        case .eclipseSync:
+            handleEclipseSyncRowTap()
         case .eclipseTV:
             pushEclipseTV()
         case .eclipseMac:

@@ -55,6 +55,7 @@ extension LibraryThumbnailCell {
         guard let handler else {
             rewindButton.isHidden = true
             refreshTypeIconVisibility()
+            refreshUploadBadgeVisibility()
             updateCaptionScrim()
             return
         }
@@ -62,6 +63,7 @@ extension LibraryThumbnailCell {
         rewindButton.addAction(UIAction { _ in handler() }, for: .touchUpInside)
         cardView.bringSubviewToFront(rewindButton)
         refreshTypeIconVisibility()
+        refreshUploadBadgeVisibility()
         updateCaptionScrim()
     }
 

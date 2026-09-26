@@ -28,7 +28,12 @@ final class LibraryThumbnailCell: UICollectionViewCell {
     let durationLabel = PaddedLabel()
     /// Large monospaced clock for Countdown tiles (set duration / remaining).
     let countdownTimeLabel = UILabel()
-    private let unavailableBadge = PaddedLabel()
+    /// Bottom-centre "In iCloud" / "Downloading…" / "Unavailable" pill.
+    let syncPill = SyncStatusPillView()
+    /// Bottom-leading cloud-up glyph while an item waits to reach iCloud.
+    let uploadBadge = UIImageView()
+    /// Whether the current item wants `uploadBadge`; Rewind can still cover it.
+    var wantsUploadBadge = false
     /// Multi-select tick for the Add-to-Show picker and Show-grid select mode.
     let selectionBadge = UIImageView()
     /// Hides the last-frame freeze once the tile preview is painting.
@@ -135,10 +140,7 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         durationLabel.isHidden = true
         cardView.addSubview(durationLabel)
 
-        configurePill(unavailableBadge, background: UIColor.black.withAlphaComponent(0.7), textColor: .white)
-        unavailableBadge.text = "Unavailable"
-        unavailableBadge.isHidden = true
-        cardView.addSubview(unavailableBadge)
+        installSyncPresenceChrome()
 
         selectionBadge.image = UIImage(
             systemName: "checkmark.circle.fill",
@@ -198,9 +200,6 @@ final class LibraryThumbnailCell: UICollectionViewCell {
                 equalTo: cardView.bottomAnchor, constant: -8
             ),
 
-            unavailableBadge.centerXAnchor.constraint(equalTo: cardView.centerXAnchor),
-            unavailableBadge.bottomAnchor.constraint(equalTo: cardView.bottomAnchor, constant: -8),
-
             selectionBadge.trailingAnchor.constraint(
                 equalTo: cardView.trailingAnchor, constant: -8
             ),
@@ -238,13 +237,16 @@ final class LibraryThumbnailCell: UICollectionViewCell {
     /// - Parameter showsTypeIcon: False for the live-slideshow ribbon (all stills).
     /// - Parameter thumbnailContentMode: Framing for the tile. Defaults to the
     ///   item's Screen Fit. Video honours Fit / Fill but never a custom crop.
+    /// - Parameter syncPresence: Where the bytes are. Defaults to the live
+    ///   capture / import registries; tests inject a value.
     func configure(
         with item: LibraryItemDTO,
         thumbnail: UIImage?,
         isLive: Bool,
         isLocked: Bool = false,
         showsTypeIcon: Bool = true,
-        thumbnailContentMode: UIView.ContentMode? = nil
+        thumbnailContentMode: UIView.ContentMode? = nil,
+        syncPresence: MediaSyncPresence? = nil
     ) {
         // Under memory pressure `thumbnail(for:)` can briefly return nil after a
         // reload — keep the previous bitmap for the same item instead of flashing
@@ -274,9 +276,10 @@ final class LibraryThumbnailCell: UICollectionViewCell {
             imageView.image = framed.image
         }
 
-        let isUnavailable = (item.isAvailable == false)
+        let presence = syncPresence ?? MediaSyncPresence.resolve(for: item)
+        let isUnavailable = !presence.isPlayable
 
-        imageView.alpha = isUnavailable ? 0.35 : 1.0
+        applySyncPresence(presence)
         placeholderIcon.isHidden = image != nil
         placeholderIcon.image = UIImage(systemName: item.isVideo ? "film" : "photo")
         placeholderIcon.tintColor = .tertiaryLabel
@@ -291,7 +294,6 @@ final class LibraryThumbnailCell: UICollectionViewCell {
             raiseDurationOverlay()
         }
 
-        unavailableBadge.isHidden = !isUnavailable
         applyOverlayTitle(forId: item.id)
         setLive(isLive && !isUnavailable, isLocked: isLocked)
         var a11y = MediaTitleStore.title(forId: item.id) ?? item.name
@@ -303,7 +305,7 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         } else {
             a11y += ", photo"
         }
-        if isUnavailable { a11y += ", unavailable" }
+        if let suffix = presence.accessibilitySuffix { a11y += ", \(suffix)" }
         if isLive && !isUnavailable { a11y += ", live" }
         if isLive && !isUnavailable && isLocked { a11y += ", locked" }
         accessibilityLabel = a11y
@@ -483,10 +485,10 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         durationLabel.isHidden ? nil : durationLabel.text
     }
 
-    /// Clears duration / unavailable / type-icon chrome used only by media cells.
+    /// Clears duration / sync-presence / type-icon chrome used only by media cells.
     func hideMediaBadges() {
         durationLabel.isHidden = true
-        unavailableBadge.isHidden = true
+        clearSyncPresence()
         setTypeIcon(nil)
     }
 
@@ -547,57 +549,5 @@ final class LibraryThumbnailCell: UICollectionViewCell {
     private static func formatDuration(_ seconds: Double) -> String {
         let total = Int(seconds.rounded())
         return String(format: "%d:%02d", total / 60, total % 60)
-    }
-}
-
-/// A label with internal padding, used for the duration and unavailable pills.
-final class PaddedLabel: UILabel {
-    private let insets = UIEdgeInsets(top: 3, left: 7, bottom: 3, right: 7)
-
-    override func drawText(in rect: CGRect) {
-        super.drawText(in: rect.inset(by: insets))
-    }
-
-    override var intrinsicContentSize: CGSize {
-        let size = super.intrinsicContentSize
-        return CGSize(width: size.width + insets.left + insets.right,
-                      height: size.height + insets.top + insets.bottom)
-    }
-}
-
-/// Vertical `CAGradientLayer` host for caption readability scrims.
-final class GradientView: UIView {
-    var colors: [UIColor] = [] {
-        didSet { updateColors() }
-    }
-    var locations: [NSNumber] = [0, 1] {
-        didSet { gradient.locations = locations }
-    }
-
-    private let gradient = CAGradientLayer()
-
-    override init(frame: CGRect) {
-        super.init(frame: frame)
-        // Clear→black must composite over the thumbnail; opaque skips that blend.
-        isOpaque = false
-        backgroundColor = .clear
-        gradient.startPoint = CGPoint(x: 0.5, y: 0)
-        gradient.endPoint = CGPoint(x: 0.5, y: 1)
-        layer.addSublayer(gradient)
-        updateColors()
-    }
-
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        gradient.frame = bounds
-    }
-
-    private func updateColors() {
-        gradient.colors = colors.map(\.cgColor)
-        gradient.locations = locations
     }
 }
