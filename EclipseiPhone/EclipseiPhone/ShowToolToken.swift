@@ -18,15 +18,22 @@ enum ShowToolToken {
     static let ptzCamera = "__eclipse.tool.ptzCamera"
 
     /// Every reserved tool id starts with this. Unknown ids with it (tools added by a
-    /// newer Eclipse) are kept through sync, so an older build never strips them.
+    /// newer Eclipse) are kept through sync, so an older build never strips them —
+    /// except `retired` ones, which are deliberately dropped.
     static let prefix = "__eclipse.tool."
+
+    /// Tool ids Eclipse no longer uses; dropped from surfaces rather than kept.
+    static let retired: Set<String> = ["__eclipse.tool.blackout"]
 
     /// Default leading tools when a Show has no customized surface. (PTZ Camera is not
     /// a default: it only appears when added from the + menu.)
     static let all: [String] = [screensaver, logo, camera]
 
-    /// Tools that can appear in the + menu when missing from the surface.
-    static let addable: [String] = all + [ptzCamera]
+    /// Default tools that can appear in the + menu when removed from the surface.
+    static let addable: [String] = all
+
+    /// Opt-in tools (not on new Shows) offered in the + menu until added.
+    static let optional: [String] = [ptzCamera]
 
     /// Display title for + menu / accessibility.
     static func title(for token: String) -> String? {
