@@ -15,6 +15,8 @@ enum ShowGridItem: Equatable {
     case screensaver
     case logo
     case camera
+    /// Network PTZ camera (CamTailKit): live NDI picture, steer / track / presets.
+    case ptzCamera
     case countdown(ShowCountdown)
     case media(LibraryItemDTO)
     case website(WebPage)
@@ -45,7 +47,7 @@ enum ShowGridItem: Equatable {
         switch self {
         case .slideshow, .screensaver, .logo, .media, .website, .pdf:
             return true
-        case .camera, .livePoll, .countdown, .unresolved, .add:
+        case .camera, .ptzCamera, .livePoll, .countdown, .unresolved, .add:
             return false
         }
     }
@@ -56,6 +58,7 @@ enum ShowGridItem: Equatable {
         case .screensaver: return ShowToolToken.screensaver
         case .logo: return ShowToolToken.logo
         case .camera: return ShowToolToken.camera
+        case .ptzCamera: return ShowToolToken.ptzCamera
         case .livePoll(let item): return ShowLivePollToken.token(for: item.id)
         case .countdown(let item): return ShowCountdownToken.token(for: item.id)
         case .media(let media): return media.id

@@ -210,6 +210,7 @@ extension LibraryGridViewController {
         case ShowToolToken.screensaver: return .screensaver
         case ShowToolToken.logo: return .logo
         case ShowToolToken.camera: return .camera
+        case ShowToolToken.ptzCamera: return .ptzCamera
         default:
             if let uuid = ShowLivePollToken.livePollId(from: id) {
                 if let item = LivePollStore.shared.poll(id: uuid),
@@ -334,6 +335,13 @@ extension LibraryGridViewController {
                     ? nil
                     : toolContextMenu(token: ShowToolToken.camera)
             )
+        case .ptzCamera:
+            cell.configurePTZCamera(isLive: live, isLocked: isLiveOutputLocked)
+            cell.setMoreMenu(
+                (isArranging || isSelecting)
+                    ? nil
+                    : toolContextMenu(token: ShowToolToken.ptzCamera)
+            )
         case .livePoll(let item):
             configureLivePollTile(cell, item: item, isLive: live)
             cell.setMoreMenu(
@@ -444,6 +452,8 @@ extension LibraryGridViewController {
             presentLogoLive()
         case .camera:
             presentCameraFromTile()
+        case .ptzCamera:
+            presentPTZCameraFromTile()
         case .livePoll(let item):
             selectLivePoll(item)
         case .countdown(let item):
@@ -734,6 +744,13 @@ extension LibraryGridViewController {
             }
         case ShowToolToken.camera:
             children.append(contentsOf: cameraToolActions())
+        case ShowToolToken.ptzCamera:
+            children.append(UIAction(
+                title: "Open Controls",
+                image: UIImage(systemName: "slider.horizontal.3")
+            ) { [weak self] _ in
+                self?.presentPTZCameraControls()
+            })
         case ShowToolToken.screensaver:
             children.append(UIAction(
                 title: "Preview",

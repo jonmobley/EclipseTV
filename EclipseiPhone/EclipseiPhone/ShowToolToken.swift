@@ -14,12 +14,19 @@ enum ShowToolToken {
     static let screensaver = "__eclipse.tool.screensaver"
     static let logo = "__eclipse.tool.logo"
     static let camera = "__eclipse.tool.camera"
+    /// A network PTZ camera (OBSBOT Tail 2) shown and controlled via CamTailKit.
+    static let ptzCamera = "__eclipse.tool.ptzCamera"
 
-    /// Default leading tools when a Show has no customized surface.
+    /// Every reserved tool id starts with this. Unknown ids with it (tools added by a
+    /// newer Eclipse) are kept through sync, so an older build never strips them.
+    static let prefix = "__eclipse.tool."
+
+    /// Default leading tools when a Show has no customized surface. (PTZ Camera is not
+    /// a default: it only appears when added from the + menu.)
     static let all: [String] = [screensaver, logo, camera]
 
     /// Tools that can appear in the + menu when missing from the surface.
-    static let addable: [String] = all
+    static let addable: [String] = all + [ptzCamera]
 
     /// Display title for + menu / accessibility.
     static func title(for token: String) -> String? {
@@ -27,6 +34,7 @@ enum ShowToolToken {
         case screensaver: return "Screensaver"
         case logo: return "Background"
         case camera: return "Camera"
+        case ptzCamera: return "PTZ Camera"
         default: return nil
         }
     }
@@ -37,11 +45,12 @@ enum ShowToolToken {
         case screensaver: return "sparkles.tv"
         case logo: return "seal.fill"
         case camera: return "camera.fill"
+        case ptzCamera: return "web.camera"
         default: return nil
         }
     }
 
     static func isTool(_ id: String) -> Bool {
-        id == screensaver || id == logo || id == camera
+        id == screensaver || id == logo || id == camera || id == ptzCamera
     }
 }

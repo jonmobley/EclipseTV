@@ -40,6 +40,7 @@ extension LibraryGridViewController {
         state.isBlackSelected = isBlackSelected
         state.isOverlayLive = mgr.isOverlayLive
         state.isCameraTileLive = mgr.isCameraTileLive
+        state.isPTZCameraLive = mgr.isPTZCameraLive
         state.countdownId = mgr.isCountdownLive
             ? CountdownController.shared.liveCountdownId
             : nil
@@ -78,7 +79,7 @@ extension LibraryGridViewController {
         case .livePoll:
             return UUID(uuidString: itemId)
                 .flatMap { LivePollStore.shared.poll(id: $0) }?.showId == show.id
-        case .camera, .logo, .screensaver, .black:
+        case .camera, .ptzCamera, .logo, .screensaver, .black:
             return false
         }
     }

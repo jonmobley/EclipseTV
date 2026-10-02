@@ -445,6 +445,7 @@ final class LibraryThumbnailCell: UICollectionViewCell {
     }
 
     func resetChrome() {
+        removePTZPreview()
         contentView.alpha = 1
         imageView.image = nil
         imageView.alpha = 1.0

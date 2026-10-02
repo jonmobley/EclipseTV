@@ -86,6 +86,8 @@ extension LibraryGridViewController {
                 return id == ShowToolToken.logo
             case .camera:
                 return id == ShowToolToken.camera
+            case .ptzCamera:
+                return id == ShowToolToken.ptzCamera
             case .media(let media):
                 return media.id == id
             case .website(let page):

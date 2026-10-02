@@ -25,6 +25,8 @@ struct PresentationSource: Equatable {
         case screensaver(url: URL, crossfade: Bool)
         /// Live back-camera feed from `CameraManager` (AirPlay only).
         case camera
+        /// Live picture from the network PTZ camera (CamTailKit's NDI stream).
+        case ptzCamera
         /// A web page rendered full-bleed on the external display (AirPlay only).
         case web(URL)
         /// YouTube / Vimeo embed played edge-to-edge (AirPlay only).

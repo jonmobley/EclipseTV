@@ -59,6 +59,10 @@ extension LibraryGridViewController {
     /// hero falls back to a static thumbnail while it is up.
     func presentControllerForLiveOverlay() {
         let mgr = ExternalDisplayManager.shared
+        if mgr.isPTZCameraLive {
+            presentPTZCameraControls()
+            return
+        }
         if mgr.isWebLive,
            let pageId = mgr.liveWebPageId,
            let page = WebPageStore.shared.page(id: pageId) {

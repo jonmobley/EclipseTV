@@ -16,6 +16,11 @@ extension LibraryGridViewController {
     /// there. Blackout chrome still updates so the header moon reflects live state.
     func refreshLiveHeader() {
         let mgr = ExternalDisplayManager.shared
+        // Only the PTZ branch below keeps its live picture in the hero.
+        if !(mgr.isPTZCameraLive && showsLiveHero && !ShowLiveSession.shared.isRemoteOperator
+             && !isLiveFromOtherShow) {
+            liveHeader.clearPTZPreview()
+        }
         // Every go-live path ends here, so this is where the director publishes
         // program to operators (deduped inside the session).
         broadcastShowLiveSnapshotIfNeeded()
@@ -144,6 +149,10 @@ extension LibraryGridViewController {
             // Only a saved document can be handed to the phone reader.
             liveHeader.allowsOverlayControllerTap = doc != nil
             liveHeader.updatePlayback(PlaybackState())
+            return
+        }
+        if mgr.isPTZCameraLive {
+            presentPTZCameraInLiveHeader()
             return
         }
         if mgr.isCameraLive {

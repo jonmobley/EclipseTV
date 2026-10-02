@@ -84,6 +84,8 @@ extension CameraLiveViewController {
                 fill: dim,
                 title: "Camera"
             )
+        case .ptzCamera:
+            return LiveOutputArt(image: nil, symbol: "web.camera", fill: dim, title: "PTZ Camera")
         case .black:
             return LiveOutputArt(
                 image: nil, symbol: "moon.fill", fill: .black, title: "Blackout"

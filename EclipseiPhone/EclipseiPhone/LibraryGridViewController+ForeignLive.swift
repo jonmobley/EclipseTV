@@ -33,7 +33,7 @@ extension LibraryGridViewController {
         case .livePoll:
             return UUID(uuidString: itemId)
                 .flatMap { LivePollStore.shared.poll(id: $0) }?.showId
-        case .camera, .logo, .screensaver, .black:
+        case .camera, .ptzCamera, .logo, .screensaver, .black:
             return nil
         }
     }

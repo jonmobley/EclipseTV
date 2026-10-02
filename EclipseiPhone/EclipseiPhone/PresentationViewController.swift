@@ -101,6 +101,8 @@ final class PresentationViewController: UIViewController {
     }()
 
     let cameraPreviewView = CameraPreviewView()
+    /// Network PTZ camera picture while it's on program (created on demand).
+    var ptzCameraView: UIView?
 
     /// PNG frame overlay on AirPlay camera (matches phone framing).
     let cameraFrameOverlayView: UIImageView = {
@@ -471,6 +473,7 @@ final class PresentationViewController: UIViewController {
             isPresentingVideo = false
         }
 
+        if source.content != .ptzCamera { hidePTZCamera() }
         switch source.content {
         case .image(let url, let fill, let framing):
             hideCountdown()
@@ -501,6 +504,9 @@ final class PresentationViewController: UIViewController {
             hideCountdown()
             hideMediaContainer()
             showCamera()
+        case .ptzCamera:
+            hideCountdown()
+            showPTZCamera()
         case .web(let url):
             hideCountdown()
             hideMediaContainer()
@@ -532,6 +538,7 @@ final class PresentationViewController: UIViewController {
     func showBlack() {
         teardownPlayer()
         hideCamera()
+        hidePTZCamera()
         hideMediaContainer()
         teardownWeb()
         teardownPDF()
@@ -556,6 +563,7 @@ final class PresentationViewController: UIViewController {
 
         teardownPlayer()
         hideCamera()
+        hidePTZCamera()
         hideMediaContainer()
         teardownWeb()
         teardownPDF()

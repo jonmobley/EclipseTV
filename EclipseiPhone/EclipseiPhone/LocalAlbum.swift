@@ -152,6 +152,9 @@ struct LocalAlbum: Codable, Equatable, Identifiable, Hashable {
         livePolls: Set<String>?
     ) -> Bool {
         if ShowToolToken.isTool(id) { return true }
+        // A tool from a newer Eclipse this build doesn't know yet: keep it rather than
+        // strip it from a synced Show.
+        if id.hasPrefix(ShowToolToken.prefix) { return true }
         if id == ShowCountdownToken.legacyTool { return true }
         if id == ShowLivePollToken.legacyTool { return true }
         if members.contains(id) { return true }

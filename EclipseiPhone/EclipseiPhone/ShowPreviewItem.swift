@@ -58,7 +58,7 @@ enum ShowPreviewGallery {
                 ))
             case .media(let dto):
                 return stillItem(dto, localStillURL: localStillURL)
-            case .slideshow, .camera, .livePoll, .countdown, .website, .pdf, .add, .unresolved:
+            case .slideshow, .camera, .ptzCamera, .livePoll, .countdown, .website, .pdf, .add, .unresolved:
                 return nil
             }
         }
@@ -106,7 +106,7 @@ enum ShowPreviewGallery {
             return (url, false)
         case .screensaver(let url, _), .video(let url, _, _):
             return (url, true)
-        case .camera, .web, .webVideo, .pdf, .black, .countdown, .unavailable:
+        case .camera, .ptzCamera, .web, .webVideo, .pdf, .black, .countdown, .unavailable:
             return nil
         }
     }
