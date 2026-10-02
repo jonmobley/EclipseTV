@@ -37,6 +37,8 @@ extension PresentationViewController {
             )
         case .camera:
             installIncomingCamera(generation: generation)
+        case .ptzCamera:
+            installIncomingPTZCamera(generation: generation)
         case .web(let url):
             installIncomingWeb(url: url, generation: generation)
         case .webVideo(let link):

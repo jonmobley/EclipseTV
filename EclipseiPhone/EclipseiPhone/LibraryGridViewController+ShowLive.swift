@@ -53,6 +53,9 @@ extension LibraryGridViewController {
             presentPDFLive(doc)
         case .camera:
             presentCameraLiveOnOutput()
+        case .ptzCamera:
+            // Operators don't send PTZ Camera yet (its Show Live support is a later step).
+            break
         case .countdown:
             guard let itemId, let uuid = UUID(uuidString: itemId),
                   let item = CountdownStore.shared.countdown(id: uuid) else { return }
@@ -164,10 +167,13 @@ extension LibraryGridViewController {
         // `showLiveVideoState` and `showLiveCountdownState` answer nil unless that
         // kind is live, so an operator's transport and clock follow the director
         // without the caller re-deriving which one is on program.
+        // PTZ Camera isn't part of Show Live yet, and a peer on an older build can't
+        // decode the new kind: send it as "nothing live" rather than break the session.
+        let sharedProgram = program?.kind == .ptzCamera ? nil : program
         return ShowLiveSnapshot(
             showId: showId,
-            liveItemId: program?.itemId,
-            liveKind: program?.kind,
+            liveItemId: sharedProgram?.itemId,
+            liveKind: sharedProgram?.kind,
             isBlackout: program?.kind == .black,
             isLocked: isLiveOutputLocked,
             directorName: UIDevice.current.name,
@@ -209,6 +215,8 @@ extension LibraryGridViewController {
             )
         case .camera:
             applyRemoteOverlayHeader(title: "Camera", systemImage: "camera.fill")
+        case .ptzCamera:
+            applyRemoteOverlayHeader(title: "PTZ Camera", systemImage: "web.camera")
         case .countdown:
             applyRemoteCountdownHeader(snap)
         case .slideshow:

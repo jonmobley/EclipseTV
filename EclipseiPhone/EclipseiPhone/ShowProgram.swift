@@ -74,6 +74,8 @@ extension ShowProgram {
             return kind == .logo
         case .camera:
             return kind == .camera
+        case .ptzCamera:
+            return kind == .ptzCamera
         case .unresolved, .add:
             return false
         }

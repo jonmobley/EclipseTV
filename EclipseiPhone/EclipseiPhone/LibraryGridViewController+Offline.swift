@@ -219,7 +219,7 @@ extension LibraryGridViewController {
             presentPhonePreview(
                 id: ShowToolToken.screensaver, fileURL: url, isVideo: true
             )
-        case .camera, .web, .webVideo, .pdf, .black, .countdown, .unavailable:
+        case .camera, .ptzCamera, .web, .webVideo, .pdf, .black, .countdown, .unavailable:
             break
         }
     }

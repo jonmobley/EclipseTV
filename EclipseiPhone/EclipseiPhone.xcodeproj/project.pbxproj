@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		E2F51CF32F1FDBB500B87D90 /* EclipsePhoneCameraClient in Frameworks */ = {isa = PBXBuildFile; productRef = E2F51CF42F1FDBB500B87D90 /* EclipsePhoneCameraClient */; };
 		LP0000000000000000000B2 /* LivePollKit in Frameworks */ = {isa = PBXBuildFile; productRef = LP0000000000000000000B1 /* LivePollKit */; };
+		CT0000000000000000000B2 /* CamTailKit in Frameworks */ = {isa = PBXBuildFile; productRef = CT0000000000000000000B1 /* CamTailKit */; };
 		LP0000000000000000000B3 /* LivePollKit in Frameworks */ = {isa = PBXBuildFile; productRef = LP0000000000000000000B4 /* LivePollKit */; };
 /* End PBXBuildFile section */
 
@@ -73,6 +74,7 @@
 			files = (
 				E2F51CF32F1FDBB500B87D90 /* EclipsePhoneCameraClient in Frameworks */,
 				LP0000000000000000000B2 /* LivePollKit in Frameworks */,
+				CT0000000000000000000B2 /* CamTailKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -138,6 +140,7 @@
 			packageProductDependencies = (
 				E2F51CF42F1FDBB500B87D90 /* EclipsePhoneCameraClient */,
 				LP0000000000000000000B1 /* LivePollKit */,
+				CT0000000000000000000B1 /* CamTailKit */,
 			);
 			productName = EclipseiPhone;
 			productReference = E24EA38F2D8A64E7002DB63F /* EclipseiPhone.app */;
@@ -226,6 +229,7 @@
 			packageReferences = (
 				E2F51CF52F1FDBB500B87D90 /* XCLocalSwiftPackageReference "../../eclipsepro/Packages/EclipsePhoneCameraClient" */,
 				LP0000000000000000000B0 /* XCLocalSwiftPackageReference "../../eclipsepro/Packages/LivePollKit" */,
+				CT0000000000000000000B0 /* XCLocalSwiftPackageReference "../../CamTail/Packages/CamTailKit" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = E24EA3902D8A64E7002DB63F /* Products */;
@@ -365,6 +369,23 @@
 				CURRENT_PROJECT_VERSION = 20260924.909;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = EclipseiPhone/Info.plist;
+				"LIBRARY_SEARCH_PATHS[sdk=iphoneos*]" = (
+					"$(inherited)",
+					"\"/Library/NDI SDK for Apple/lib/iOS\"",
+				);
+				"OTHER_LDFLAGS[sdk=iphoneos*]" = (
+					"$(inherited)",
+					"-lndi_ios",
+					"-lc++",
+					"-framework",
+					VideoToolbox,
+					"-framework",
+					Accelerate,
+					"-framework",
+					AudioToolbox,
+					"-framework",
+					CoreAudio,
+				);
 				INFOPLIST_KEY_CFBundleDisplayName = Eclipse;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.entertainment";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -396,6 +417,23 @@
 				CURRENT_PROJECT_VERSION = 20260924.909;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = EclipseiPhone/Info.plist;
+				"LIBRARY_SEARCH_PATHS[sdk=iphoneos*]" = (
+					"$(inherited)",
+					"\"/Library/NDI SDK for Apple/lib/iOS\"",
+				);
+				"OTHER_LDFLAGS[sdk=iphoneos*]" = (
+					"$(inherited)",
+					"-lndi_ios",
+					"-lc++",
+					"-framework",
+					VideoToolbox,
+					"-framework",
+					Accelerate,
+					"-framework",
+					AudioToolbox,
+					"-framework",
+					CoreAudio,
+				);
 				INFOPLIST_KEY_CFBundleDisplayName = Eclipse;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.entertainment";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -658,6 +696,10 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../../eclipsepro/Packages/LivePollKit;
 		};
+		CT0000000000000000000B0 /* XCLocalSwiftPackageReference "../../CamTail/Packages/CamTailKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../../CamTail/Packages/CamTailKit;
+		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -675,6 +717,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = LP0000000000000000000B0 /* XCLocalSwiftPackageReference "../../eclipsepro/Packages/LivePollKit" */;
 			productName = LivePollKit;
+		};
+		CT0000000000000000000B1 /* CamTailKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = CT0000000000000000000B0 /* XCLocalSwiftPackageReference "../../CamTail/Packages/CamTailKit" */;
+			productName = CamTailKit;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

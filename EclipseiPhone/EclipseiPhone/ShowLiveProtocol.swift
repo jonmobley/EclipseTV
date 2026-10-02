@@ -77,6 +77,8 @@ enum ShowLiveItemKind: String, Codable, Equatable {
     case web
     case pdf
     case camera
+    /// Network PTZ camera. Not sent to Show Live peers yet (older builds can't decode it).
+    case ptzCamera
     case countdown
     case slideshow
     case logo

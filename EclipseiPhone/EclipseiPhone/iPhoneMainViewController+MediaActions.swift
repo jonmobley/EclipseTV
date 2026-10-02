@@ -337,7 +337,7 @@ extension iPhoneMainViewController {
         ]
         if let albumId,
            let album = LocalAlbumStore.shared.album(id: albumId) {
-            let missing = album.missingToolTokens
+            let missing = album.missingToolTokens + album.addableOptionalToolTokens
             if !missing.isEmpty {
                 let restoreActions: [UIAction] = missing.compactMap { token in
                     guard let title = ShowToolToken.title(for: token),

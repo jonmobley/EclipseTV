@@ -782,6 +782,17 @@ final class ExternalDisplayManager {
         )
     }
 
+    /// Puts the network PTZ camera's live picture on the external display. A plain
+    /// source (not an overlay): presenting it tears any overlay down like a still does.
+    func presentPTZCamera() {
+        present(PresentationSource(content: .ptzCamera))
+    }
+
+    /// Whether the PTZ camera's picture is what the external display shows.
+    var isPTZCameraLive: Bool {
+        lastSource?.content == .ptzCamera
+    }
+
     /// Presents a solid black screen on the external display.
     func presentBlack() {
         beginBlackout()
