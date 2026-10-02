@@ -692,7 +692,10 @@ final class LiveHeaderView: UIView {
         }
 
         transitionSnapshot?.removeFromSuperview()
-        let snapshot = snapshotView(afterScreenUpdates: false)
+        // `snapshotView` can come back nil (seen on iOS 26 before the hero's first
+        // commit), which silently turned the dissolve into a hard cut; fall back to
+        // rendering the layer into a still.
+        let snapshot = snapshotView(afterScreenUpdates: false) ?? renderedSnapshot()
         update()
 
         guard let snapshot else { return }
@@ -717,6 +720,19 @@ final class LiveHeaderView: UIView {
                 self?.transitionSnapshot = nil
             }
         }
+    }
+
+    /// The hero as it looks now, drawn into a still (fallback for `snapshotView`).
+    private func renderedSnapshot() -> UIView? {
+        guard bounds.width > 0, bounds.height > 0 else { return nil }
+        let format = UIGraphicsImageRendererFormat.preferred()
+        format.opaque = false
+        let image = UIGraphicsImageRenderer(bounds: bounds, format: format).image { context in
+            layer.render(in: context.cgContext)
+        }
+        let still = UIImageView(image: image)
+        still.contentMode = .scaleToFill
+        return still
     }
 
     /// Keeps an in-flight dissolve above content a same-key update just brought forward.

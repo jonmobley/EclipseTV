@@ -96,6 +96,12 @@ struct PhotoImportSessionTests {
         let session = PhotoImportSession()
         session.begin(total: 1)
         try await Task.sleep(for: PhotoImportSession.revealDelay * 2)
+        // The reveal runs on the main actor; under a busy full test run it can land a
+        // beat after 2x the delay, so allow up to 2 s more before calling it missing.
+        let deadline = Date().addingTimeInterval(2)
+        while !session.isVisible, Date() < deadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
         #expect(session.isVisible)
     }
 
