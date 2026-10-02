@@ -12,23 +12,23 @@ import UIKit
 @MainActor
 struct AudioMiniPlayerViewTests {
 
-    /// Landscape has room for the full card; portrait squeezes it to fit beside
-    /// the Music circle rather than falling back to a full-width footer.
+    /// Landscape has room for the full card; portrait squeezes it to fit the
+    /// Music circle rather than falling back to a full-width footer.
     @Test func cardWidthLeavesRoomForTheMusicCircle() {
         let reserved = AudioMiniPlayerView.compactTrailingInset * 2
             + AudioMiniPlayerBubbleView.side
-            + AudioMiniPlayerView.circleFooterGap
+            - AudioMiniPlayerView.connectedOverlap
 
         #expect(
             AudioMiniPlayerView.cardWidth(containerWidth: 852, horizontalSafeArea: 118)
-                == AudioMiniPlayerView.compactWidth
+                == AudioMiniPlayerView.compactWidth + AudioMiniPlayerView.connectedOverlap
         )
 
         let portrait = AudioMiniPlayerView.cardWidth(
             containerWidth: 393, horizontalSafeArea: 0
         )
         #expect(portrait == 393 - reserved)
-        #expect(portrait < AudioMiniPlayerView.compactWidth)
+        #expect(portrait < AudioMiniPlayerView.compactWidth + AudioMiniPlayerView.connectedOverlap)
     }
 
     /// Auto Layout reports a zero-width container during early layout, and
@@ -45,72 +45,75 @@ struct AudioMiniPlayerViewTests {
     }
 
     @Test func barFillMatchesPlayerBackground() {
-        let bar = AudioMiniPlayerView(frame: CGRect(x: 0, y: 0, width: 390, height: 98))
-        #expect(bar.isOpaque)
-        #expect(bar.backgroundColor == UIColor.secondarySystemBackground)
+        let bar = AudioMiniPlayerView(frame: CGRect(x: 0, y: 0, width: 390, height: 64))
+        let fill = bar.subviews.first {
+            $0.backgroundColor == AudioMiniPlayerView.barBackgroundColor
+        }
+        #expect(fill != nil)
+        #expect(bar.backgroundColor == .clear)
     }
 
-    @Test func volumeSliderStartsClosed() {
-        let bar = AudioMiniPlayerView(frame: CGRect(x: 0, y: 0, width: 390, height: 98))
-        bar.layoutIfNeeded()
-        #expect(bar.isVolumeExpanded == false)
-        bar.collapseVolumeControl()
-        #expect(bar.isVolumeExpanded == false)
+    @Test func cardMatesWithTheMusicCircle() {
+        #expect(AudioMiniPlayerBubbleView.side == AudioMiniPlayerView.preferredHeight)
+        #expect(AudioMiniPlayerView.connectedOverlap == AudioMiniPlayerView.preferredHeight / 2)
+        let rect = CGRect(x: 0, y: 0, width: 200, height: 64)
+        let path = AudioMiniPlayerShape.maskPath(in: rect, biteOnRight: true)
+        #expect(path.contains(CGPoint(x: 8, y: 32)))
+        #expect(path.contains(CGPoint(x: 150, y: 32)))
+        #expect(!path.contains(CGPoint(x: 0, y: 0)))
+        #expect(!path.contains(CGPoint(x: 190, y: 32)))
+        #expect(!path.contains(CGPoint(x: 199, y: 1)))
     }
 
-    @Test func volumeControlOpensOnDemand() {
-        let side = AudioMiniVolumeControl.buttonSide
-        let control = AudioMiniVolumeControl(
-            frame: CGRect(x: 0, y: 0, width: side, height: side)
+    @Test func mirroredCardBitesTheLeadingEdge() {
+        let path = AudioMiniPlayerShape.maskPath(
+            in: CGRect(x: 0, y: 0, width: 200, height: 64),
+            biteOnRight: false
         )
-        control.layoutIfNeeded()
-        #expect(control.isExpanded == false)
-        control.setExpanded(true, animated: false)
-        #expect(control.isExpanded == true)
-        control.setExpanded(false, animated: false)
-        #expect(control.isExpanded == false)
+        #expect(!path.contains(CGPoint(x: 10, y: 32)))
+        #expect(path.contains(CGPoint(x: 50, y: 32)))
+        #expect(path.contains(CGPoint(x: 190, y: 32)))
+        #expect(!path.contains(CGPoint(x: 199, y: 1)))
     }
 
-    @Test func volumePercentTextClamps() {
-        #expect(AudioMiniVolumeControl.percentText(for: 0) == "0%")
-        #expect(AudioMiniVolumeControl.percentText(for: 0.4) == "40%")
-        #expect(AudioMiniVolumeControl.percentText(for: 0.75) == "75%")
-        #expect(AudioMiniVolumeControl.percentText(for: 1) == "100%")
-        #expect(AudioMiniVolumeControl.percentText(for: -0.2) == "0%")
-        #expect(AudioMiniVolumeControl.percentText(for: 1.4) == "100%")
-    }
-
-    @Test func volumeReadoutAppearsWhileDragging() {
-        let side = AudioMiniVolumeControl.buttonSide
-        let control = AudioMiniVolumeControl(
-            frame: CGRect(x: 0, y: 0, width: side, height: side)
-        )
-        var last: (Float, Bool)?
-        control.onVolumeChange = { last = ($0, $1) }
-        control.setExpanded(true, animated: false)
-        #expect(control.isReadoutVisible == false)
-
-        control.applyDragVolume(0.4)
-        #expect(control.isReadoutVisible)
-        #expect(last?.0 == 0.4)
-        #expect(last?.1 == false)
-
-        control.finishDragVolume()
-        #expect(control.isReadoutVisible)
-        #expect(last?.1 == true)
-
-        control.setExpanded(false, animated: false)
-        #expect(control.isReadoutVisible == false)
-    }
-
-    @Test func cardChromeIsRoundedAndShadowed() {
+    @Test func barUsesDuckAndStop() {
         let bar = AudioMiniPlayerView(
             frame: CGRect(x: 0, y: 0, width: 360, height: AudioMiniPlayerView.preferredHeight)
         )
         bar.layoutIfNeeded()
-        #expect(bar.layer.cornerRadius == AudioMiniPlayerView.compactCornerRadius)
+        let buttons = bar.subviews.compactMap { $0 as? UIButton }
+        let duck = buttons.first { $0.accessibilityLabel == "Duck volume" }
+        let stop = buttons.first { $0.accessibilityLabel == "Stop" }
+        #expect(duck != nil)
+        #expect(stop?.accessibilityHint == "Fades out and stops playback.")
+        bar.applyDuckChrome(ducked: true)
+        #expect(duck?.accessibilityValue == "On")
+        #expect(duck?.configuration?.background.backgroundColor == UIColor.accent)
+        bar.applyDuckChrome(ducked: false)
+        #expect(duck?.accessibilityValue == "Off")
+    }
+
+    @Test func micDuckLowersPlaybackVolume() {
+        let player = AudioPlayerController.shared
+        let wasDucked = player.isDucked
+        defer { player.setDucked(wasDucked) }
+        player.setDucked(false)
+        #expect(player.playbackVolume == player.volume)
+        player.setDucked(true)
+        #expect(player.isDucked)
+        #expect(player.playbackVolume == min(player.volume, AudioPlayerController.duckedVolume))
+        player.setDucked(false)
+        #expect(player.isDucked == false)
+        #expect(player.playbackVolume == player.volume)
+    }
+
+    @Test func cardChromeIsShadowed() {
+        let bar = AudioMiniPlayerView(
+            frame: CGRect(x: 0, y: 0, width: 360, height: AudioMiniPlayerView.preferredHeight)
+        )
+        bar.layoutIfNeeded()
         #expect(bar.layer.shadowOpacity > 0)
-        // Volume slider opens above the card, so it must not be clipped.
+        #expect(bar.layer.shadowPath != nil)
         #expect(bar.clipsToBounds == false)
     }
 
@@ -120,6 +123,9 @@ struct AudioMiniPlayerViewTests {
                 == AudioMiniPlayerView.preferredHeight
                 - AudioMiniPlayerView.controlChromeInset * 2
         )
-        #expect(AudioMiniVolumeControl.buttonSide == AudioMiniPlayerView.controlSide)
+        #expect(
+            AudioMiniPlayerView.controlTrailingInset
+                == AudioMiniPlayerView.connectedOverlap + AudioMiniPlayerView.controlChromeInset
+        )
     }
 }

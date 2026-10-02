@@ -7,15 +7,16 @@
 
 import UIKit
 
-/// Persistent Music control. Compact: idle opens a picker; session expands the
-/// card; expanded becomes Stop. Regular: always toggles the Music drawer.
+/// Persistent Music control. Compact: idle opens a picker; a session shows or
+/// hides the card. Regular: always toggles the Music drawer.
 final class AudioMiniPlayerBubbleView: UIView {
 
-    static let side: CGFloat = 72
+    /// Matches the mini-player card so the two share one height.
+    static let side: CGFloat = AudioMiniPlayerView.preferredHeight
     /// Pressed-in scale while idle so opening Music still feels like a control.
     static let idlePressScale: CGFloat = 0.9
 
-    /// Compact: picker / expand / stop. Regular: Music drawer toggle.
+    /// Compact: picker, or show / hide the card. Regular: Music drawer toggle.
     var onToggle: (() -> Void)?
 
     private let musicCircle = HighlightForwardingButton(type: .system)
@@ -33,7 +34,7 @@ final class AudioMiniPlayerBubbleView: UIView {
     }
 
     /// Updates chrome from the shared player.
-    /// - Parameter barExpanded: Card is showing; this circle is Stop.
+    /// - Parameter barExpanded: Card is showing; VoiceOver says hide.
     /// - Parameter togglesMusicPane: Regular-width drawer mode (no card).
     func reload(barExpanded: Bool = false, togglesMusicPane: Bool = false) {
         let player = AudioPlayerController.shared
@@ -46,31 +47,27 @@ final class AudioMiniPlayerBubbleView: UIView {
         applyIdlePressReaction(highlighted: musicButton.isHighlighted)
     }
 
-    /// Playing: waveform. Expanded: stop. Otherwise: music note.
+    /// Playing: waveform. Otherwise: music note. The circle never becomes Stop.
     func applySessionChrome(
         active: Bool,
         playing: Bool,
         expanded: Bool = false,
         togglesMusicPane: Bool = false
     ) {
-        let showStop = active && expanded && !togglesMusicPane
-        applyPlaybackChrome(playing: playing && !showStop, showStop: showStop)
+        applyPlaybackChrome(playing: playing)
         applyAccessibility(
             active: active,
             playing: playing,
-            showStop: showStop,
+            expanded: expanded,
             togglesMusicPane: togglesMusicPane
         )
     }
 
-    /// Playing: 3-bar waveform. Stop: stop glyph. Otherwise: music note.
-    func applyPlaybackChrome(playing: Bool, showStop: Bool = false) {
-        musicButton.configuration = Self.musicConfiguration(
-            showsNote: !playing && !showStop,
-            showsStop: showStop
-        )
+    /// Playing: 3-bar waveform. Otherwise: music note.
+    func applyPlaybackChrome(playing: Bool) {
+        musicButton.configuration = Self.musicConfiguration(showsNote: !playing)
         waveformView.setPlaying(playing)
-        applyShadow(playing: playing || showStop)
+        applyShadow(playing: playing)
     }
 
     var showsPlaybackWaveform: Bool { waveformView.isPlaying && !waveformView.isHidden }
@@ -133,19 +130,9 @@ final class AudioMiniPlayerBubbleView: UIView {
         musicButton.layer.shadowPath = UIBezierPath(ovalIn: musicButton.bounds).cgPath
     }
 
-    private static func musicConfiguration(
-        showsNote: Bool,
-        showsStop: Bool
-    ) -> UIButton.Configuration {
+    private static func musicConfiguration(showsNote: Bool) -> UIButton.Configuration {
         var config = UIButton.Configuration.filled()
-        if showsStop {
-            config.image = UIImage(
-                systemName: "stop.fill",
-                withConfiguration: UIImage.SymbolConfiguration(
-                    pointSize: 22, weight: .semibold
-                )
-            )
-        } else if showsNote {
+        if showsNote {
             config.image = UIImage(
                 systemName: "music.note",
                 withConfiguration: UIImage.SymbolConfiguration(
@@ -162,7 +149,7 @@ final class AudioMiniPlayerBubbleView: UIView {
     private func applyAccessibility(
         active: Bool,
         playing: Bool,
-        showStop: Bool,
+        expanded: Bool,
         togglesMusicPane: Bool
     ) {
         musicButton.accessibilityTraits = .button
@@ -173,14 +160,11 @@ final class AudioMiniPlayerBubbleView: UIView {
                 : (active ? "Paused" : nil)
             return
         }
-        if showStop {
-            musicButton.accessibilityLabel = "Stop"
-            musicButton.accessibilityHint = "Fades out and stops playback."
-            musicButton.accessibilityValue = playing ? "Playing" : "Paused"
-        } else if active {
-            musicButton.accessibilityLabel = "Expand"
-            musicButton.accessibilityHint =
-                "Shows the playback bar. Tap again to stop."
+        if active {
+            musicButton.accessibilityLabel = expanded ? "Hide player" : "Show player"
+            musicButton.accessibilityHint = expanded
+                ? "Hides the playback bar. Music keeps playing."
+                : "Shows the playback bar."
             musicButton.accessibilityValue = playing ? "Playing" : "Paused"
         } else {
             musicButton.accessibilityLabel = "Music"

@@ -44,36 +44,39 @@ struct AudioMiniPlayerBubbleTests {
         #expect(abs(bubble.musicButton.transform.a - 1) < 0.001)
     }
 
-    @Test func playingShowsWaveformAsExpand() {
+    @Test func playingShowsWaveformAsShowPlayer() {
         let bubble = AudioMiniPlayerBubbleView(
-            frame: CGRect(x: 0, y: 0, width: 72, height: 72)
+            frame: CGRect(x: 0, y: 0, width: 64, height: 64)
         )
         bubble.applySessionChrome(active: true, playing: true)
         #expect(bubble.showsPlaybackWaveform)
-        #expect(bubble.musicButton.accessibilityLabel == "Expand")
+        #expect(bubble.musicButton.accessibilityLabel == "Show player")
         #expect(bubble.musicButton.configuration?.image == nil)
         #expect(bubble.intrinsicContentSize.width == AudioMiniPlayerBubbleView.side)
     }
 
-    @Test func expandedSessionShowsStop() {
+    @Test func expandedSessionStillTogglesThePlayer() {
         let bubble = AudioMiniPlayerBubbleView(
-            frame: CGRect(x: 0, y: 0, width: 72, height: 72)
+            frame: CGRect(x: 0, y: 0, width: 64, height: 64)
         )
         bubble.applySessionChrome(active: true, playing: true, expanded: true)
-        #expect(bubble.showsPlaybackWaveform == false)
-        #expect(bubble.musicButton.accessibilityLabel == "Stop")
+        #expect(bubble.showsPlaybackWaveform)
+        #expect(bubble.musicButton.accessibilityLabel == "Hide player")
         #expect(bubble.musicButton.configuration?.cornerStyle == .capsule)
-        #expect(bubble.musicButton.configuration?.image != nil)
-        #expect(bubble.musicButton.accessibilityHint == "Fades out and stops playback.")
+        #expect(bubble.musicButton.configuration?.image == nil)
+        #expect(
+            bubble.musicButton.accessibilityHint
+                == "Hides the playback bar. Music keeps playing."
+        )
     }
 
     @Test func pausedSessionShowsNoteNotStop() {
         let bubble = AudioMiniPlayerBubbleView(
-            frame: CGRect(x: 0, y: 0, width: 72, height: 72)
+            frame: CGRect(x: 0, y: 0, width: 64, height: 64)
         )
         bubble.applySessionChrome(active: true, playing: false)
         #expect(bubble.showsPlaybackWaveform == false)
-        #expect(bubble.musicButton.accessibilityLabel == "Expand")
+        #expect(bubble.musicButton.accessibilityLabel == "Show player")
         #expect(bubble.musicButton.configuration?.image != nil)
     }
 

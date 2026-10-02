@@ -22,19 +22,15 @@ extension iPhoneMainViewController {
     }
 
     /// Circle tap: on regular width toggles the Music drawer. On compact,
-    /// expands the card when a session is active, stops when expanded, or
-    /// opens the picker when idle.
+    /// shows or hides the card when a session is active, or opens the picker
+    /// when idle. Stop lives on the card.
     func handleAudioMiniBubbleToggle() {
         if usesMusicDrawerChrome {
             toggleMusicDrawer()
             return
         }
         if AudioPlayerController.shared.hasActiveSession {
-            if audioMiniCollapsed {
-                setAudioMiniCollapsed(false, animated: true)
-            } else {
-                stopAmbientPlayback()
-            }
+            setAudioMiniCollapsed(!audioMiniCollapsed, animated: true)
         } else {
             presentMusicPicker()
         }
@@ -121,9 +117,8 @@ extension iPhoneMainViewController {
     /// Shows the mini card or the persistent Music bubble, and insets Library + Music.
     ///
     /// The corner button stays up even when idle so Music is always one tap away.
-    /// Compact: circle expands the card (or opens the picker when idle); the same
-    /// circle becomes Stop while expanded; close collapses. Regular: circle
-    /// toggles the Music drawer; the card never appears.
+    /// Compact: the circle shows or hides the card (or opens the picker when
+    /// idle). Regular: the circle toggles the Music drawer; the card never appears.
     func refreshAudioMiniPlayer() {
         let drawerChrome = usesMusicDrawerChrome
         if drawerChrome { audioMiniCollapsed = true }
@@ -144,9 +139,6 @@ extension iPhoneMainViewController {
         if !active { audioMiniCollapsed = true }
 
         let showBar = !drawerChrome && active && !audioMiniCollapsed
-        if !showBar {
-            audioMiniPlayer.collapseVolumeControl()
-        }
 
         audioMiniPlayer.reload()
         audioMiniBubble.reload(
@@ -197,7 +189,6 @@ extension iPhoneMainViewController {
         let bubble = audioMiniBubble
         bar.reload()
         bubble.reload(barExpanded: true)
-        bar.collapseVolumeControl()
 
         bar.isHidden = false
         bar.alpha = 0
@@ -229,7 +220,6 @@ extension iPhoneMainViewController {
         let bubble = audioMiniBubble
         bar.reload()
         bubble.reload(barExpanded: false)
-        bar.collapseVolumeControl()
 
         audioMiniHeightConstraint?.constant = AudioMiniPlayerView.preferredHeight
         bar.isHidden = false

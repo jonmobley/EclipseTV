@@ -31,6 +31,15 @@ final class AudioPlayerController: NSObject {
     private(set) var isMuted = false
     /// Relative mix level for ambient music (`0…1`), independent of system volume.
     private(set) var volume: Float = 1
+    /// Mic duck: playback holds at `duckedVolume` so speech can sit over the music.
+    private(set) var isDucked = false
+    /// Linear ceiling while `isDucked` (~ −14 dB).
+    static let duckedVolume: Float = 0.2
+
+    /// Mix level sent to the player. The mic duck holds this at `duckedVolume`.
+    var playbackVolume: Float {
+        isDucked ? min(volume, Self.duckedVolume) : volume
+    }
 
     private static let volumeDefaultsKey = DefaultsKeys.audioPlayerVolume
     private static let playsNextDefaultsKey = DefaultsKeys.audioPlaysNext
@@ -201,7 +210,7 @@ final class AudioPlayerController: NSObject {
         isPlaying = true
         updateNowPlayingPlayback()
         notify()
-        fadePlayerVolume(to: volume)
+        fadePlayerVolume(to: playbackVolume)
     }
 
     /// Pauses after a volume fade-out (`fade: false` syncs state when audio is already gone).
@@ -219,11 +228,11 @@ final class AudioPlayerController: NSObject {
             fadePlayerVolume(to: 0) { [weak self] in
                 guard let self else { return }
                 self.player?.pause()
-                self.player?.volume = self.volume
+                self.player?.volume = self.playbackVolume
             }
         } else {
             player?.pause()
-            player?.volume = volume
+            player?.volume = playbackVolume
         }
     }
 
@@ -318,9 +327,9 @@ final class AudioPlayerController: NSObject {
         volume = clamped
         cancelVolumeFade()
         if isPlaying {
-            player?.volume = clamped
+            player?.volume = playbackVolume
         } else {
-            // Keep the paused player silent; next `play()` fades up to `volume`.
+            // Keep the paused player silent; next `play()` fades up to `playbackVolume`.
             player?.pause()
             player?.volume = 0
         }
@@ -330,6 +339,18 @@ final class AudioPlayerController: NSObject {
         }
         guard notifyObservers else { return }
         UserDefaults.standard.set(clamped, forKey: Self.volumeDefaultsKey)
+        notify()
+    }
+
+    /// Lowers or restores ambient music so speech can sit over it.
+    ///
+    /// Audible playback fades to the ducked ceiling or back to the mix level.
+    func setDucked(_ ducked: Bool) {
+        guard ducked != isDucked else { return }
+        isDucked = ducked
+        if isPlaying {
+            fadePlayerVolume(to: playbackVolume)
+        }
         notify()
     }
 

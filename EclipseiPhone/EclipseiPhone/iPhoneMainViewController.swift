@@ -131,8 +131,8 @@ class iPhoneMainViewController: UIViewController {
 
     /// Floating mini player card for ambient music.
     let audioMiniPlayer = AudioMiniPlayerView()
-    /// Persistent Music control. Regular: toggles the drawer. Compact: picker /
-    /// expand card / stop.
+    /// Persistent Music control. Regular: toggles the drawer. Compact: picker,
+    /// or shows and hides the card.
     let audioMiniBubble = AudioMiniPlayerBubbleView()
     /// When true, the bar is hidden; the Music circle stays visible.
     /// Ambient control prefers the floating bubble; expand is temporary.
