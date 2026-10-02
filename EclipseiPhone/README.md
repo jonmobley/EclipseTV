@@ -35,6 +35,12 @@ Built around a Shows-first home (Recent Shows → open Show grid with live hero)
 - Shared capture session for tile + fullscreen + AirPlay
 - In-app captures stay phone-local (CloudKit may sync; Multipeer never)
 
+### PTZ Camera (OBSBOT Tail 2)
+- Opt-in Show tool from **+ → PTZ Camera** (not on new Shows); tile shows the camera's live NDI picture
+- Tap → program (AirPlay + hero), like Camera; tap the hero (or ⋯ Open Controls) → full camera controls
+- **The feature lives in CamTailKit** (`~/apps/CamTail/Packages/CamTailKit`), shared with the CamTail app so both always get the same improvements. Never add camera-control behaviour here; Eclipse only places it (tile, hero, AirPlay). After CamTailKit changes run `~/apps/CamTail/tools/build_all.sh` (builds both apps)
+- Device builds link the NDI SDK (`/Library/NDI SDK for Apple`); not shared over Show Live yet
+
 ### Ambient music
 - Local tracks / playlists; mini player bubble ↔ floating card
 - Yields with **pause** (not stop) when unmuted video / web media plays
