@@ -41,6 +41,7 @@ extension LibraryGridViewController {
             liveHeader.clearCameraPreview()
             liveHeader.setSlideshowRibbonToggleVisible(false, isOn: false)
             liveHeader.setScreenFitToggleVisible(false, mode: .fit)
+            liveHeader.setSlideshowCountdown(deadline: nil, interval: 0)
             liveHeader.setCameraFlipVisible(false)
             liveHeader.allowsSlideshowBrowse = false
             liveHeader.allowsLibraryBrowse = false
@@ -65,6 +66,7 @@ extension LibraryGridViewController {
         defer {
             syncSlideshowRibbonIfChromeChanged()
             syncLiveScreenFitChrome()
+            syncLiveSlideshowCountdownChrome()
             syncLiveCameraFlipChrome()
             liveHeader.syncExpandControl()
             syncLiveHeroBrowseChrome()
