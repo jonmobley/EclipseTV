@@ -27,5 +27,5 @@ No custom proprietary crypto.
 
 Support
 -------
-Contact: ________________
-Privacy policy: ________________
+Contact: hello@moxieapps.io
+Privacy policy: https://moxieapps.io/eclipse/privacy

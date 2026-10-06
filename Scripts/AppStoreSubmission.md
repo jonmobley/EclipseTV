@@ -4,13 +4,13 @@ Paste-ready answers for one universal-purchase record: iPhone/iPad
 `com.mobleypro.eclipse.EclipseiPhone` and Apple TV
 `com.mobleypro.eclipse.EclipseAppleTV`. Version 1.0.
 
-Privacy policy: https://quest.eclipseapp.com/privacy
+Privacy policy: https://moxieapps.io/eclipse/privacy
 
-Support URL: https://quest.eclipseapp.com/support
+Support URL: https://moxieapps.io/eclipse/support
 
-The contact address on those pages is jonmobley@gmail.com. Change it in
-`quest-relay/public/privacy.html` and `support.html` if that is not the public
-support address, then redeploy.
+Terms: https://moxieapps.io/eclipse/terms
+
+Contact address on those pages: hello@moxieapps.io (Moxie LLC).
 
 ## App Store text
 
