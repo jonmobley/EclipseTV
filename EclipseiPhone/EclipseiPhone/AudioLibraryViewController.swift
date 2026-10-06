@@ -19,6 +19,7 @@ final class AudioLibraryViewController: UITableViewController {
     private let playlistStore = AudioPlaylistStore.shared
     private let player = AudioPlayerController.shared
     private let cellReuseId = "audioCell"
+    private var lastPlayerRowState: AudioPlayerController.RowState?
     /// When true, lives as the home Music page (swipe from Library) instead of a modal.
     private let isEmbedded: Bool
     private lazy var addBarButton = UIBarButtonItem(
@@ -71,18 +72,22 @@ final class AudioLibraryViewController: UITableViewController {
 
         let names: [Notification.Name] = [
             AudioStore.didChangeNotification,
-            AudioPlaylistStore.didChangeNotification,
-            AudioPlayerController.didChangeNotification
+            AudioPlaylistStore.didChangeNotification
         ]
         for name in names {
             NotificationCenter.default.addObserver(
                 self, selector: #selector(reload), name: name, object: nil
             )
         }
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(playerDidChange),
+            name: AudioPlayerController.didChangeNotification, object: nil
+        )
     }
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        lastPlayerRowState = player.rowState
         tableView.reloadData()
     }
 
@@ -124,7 +129,14 @@ final class AudioLibraryViewController: UITableViewController {
 
     @objc private func reload() {
         guard isViewLoaded, tableView.window != nil else { return }
+        lastPlayerRowState = player.rowState
         tableView.reloadData()
+    }
+
+    /// Playback ticks leave rows alone so an open ⋯ menu stays open.
+    @objc private func playerDidChange() {
+        guard player.rowState != lastPlayerRowState else { return }
+        reload()
     }
 
     @objc private func addTapped() {

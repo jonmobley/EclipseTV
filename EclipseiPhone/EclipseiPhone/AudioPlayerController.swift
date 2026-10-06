@@ -60,6 +60,20 @@ final class AudioPlayerController: NSObject {
         subsystem: "com.eclipseapp.ios", category: "AudioPlayer"
     )
 
+    /// What a Music track row draws from the player: which track, and playing or not.
+    ///
+    /// `didChangeNotification` also fires twice a second while a track plays. A list
+    /// that reloads on every post rebuilds its ⋯ buttons and closes their menus the
+    /// moment they open, so rows reload only when this value changes.
+    struct RowState: Equatable {
+        var currentTrackId: UUID?
+        var isPlaying: Bool
+    }
+
+    var rowState: RowState {
+        RowState(currentTrackId: currentTrack?.id, isPlaying: isPlaying)
+    }
+
     /// Current track, if the queue points at a valid id.
     var currentTrack: AudioTrack? {
         guard queue.indices.contains(currentIndex) else { return nil }

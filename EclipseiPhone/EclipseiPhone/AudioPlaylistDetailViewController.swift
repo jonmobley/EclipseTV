@@ -11,6 +11,8 @@ import UIKit
 final class AudioPlaylistDetailViewController: UITableViewController {
 
     private let playlistId: UUID
+    private let player = AudioPlayerController.shared
+    private var lastPlayerRowState: AudioPlayerController.RowState?
     private let cellReuseId = "playlistTrackCell"
 
     private var playlist: AudioPlaylist? {
@@ -69,7 +71,7 @@ final class AudioPlaylistDetailViewController: UITableViewController {
         )
         NotificationCenter.default.addObserver(
             self,
-            selector: #selector(reload),
+            selector: #selector(playerDidChange),
             name: AudioPlayerController.didChangeNotification,
             object: nil
         )
@@ -98,11 +100,18 @@ final class AudioPlaylistDetailViewController: UITableViewController {
     }
 
     @objc private func reload() {
+        lastPlayerRowState = player.rowState
         updateChrome()
         tableView.reloadData()
         if playlist == nil {
             navigationController?.popViewController(animated: true)
         }
+    }
+
+    /// Playback ticks leave rows alone so an open ⋯ menu stays open.
+    @objc private func playerDidChange() {
+        guard player.rowState != lastPlayerRowState else { return }
+        reload()
     }
 
     /// Playlist name and trailing Play / Edit controls.
