@@ -28,6 +28,12 @@ final class SlideshowPlaybackController {
     /// Index of the slide currently on AirPlay / TV.
     private(set) var currentSlideIndex: Int = 0
 
+    /// When Autoplay will next advance; nil while Autoplay isn't counting down.
+    private(set) var autoplayDeadline: Date?
+
+    /// Full length of the current Autoplay countdown, in seconds.
+    private(set) var autoplayInterval: TimeInterval = 0
+
     private weak var connectionManager: iPhoneConnectionManager?
     private var autoplay = false
     private var loop = false
@@ -255,6 +261,7 @@ final class SlideshowPlaybackController {
     private func rescheduleAutoplayIfNeeded() {
         timer?.invalidate()
         timer = nil
+        autoplayDeadline = nil
         guard autoplay, let id = activeSlideshowId,
               let show = SlideshowStore.shared.slideshow(id: id) else { return }
         scheduleAdvance(after: TimeInterval(show.autoplaySeconds.rawValue))
@@ -262,6 +269,8 @@ final class SlideshowPlaybackController {
 
     private func scheduleAdvance(after seconds: TimeInterval) {
         timer?.invalidate()
+        autoplayInterval = seconds
+        autoplayDeadline = Date().addingTimeInterval(seconds)
         timer = Timer.scheduledTimer(withTimeInterval: seconds, repeats: false) { [weak self] _ in
             Task { @MainActor in
                 self?.advance()
@@ -303,6 +312,7 @@ final class SlideshowPlaybackController {
     private func resetPlaybackState() {
         timer?.invalidate()
         timer = nil
+        autoplayDeadline = nil
         activeSlideshowId = nil
         activeSlideIds = []
         currentSlideIndex = 0

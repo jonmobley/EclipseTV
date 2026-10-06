@@ -20,6 +20,7 @@ extension LiveHeaderView {
         guard visible else {
             screenFitButton?.removeFromSuperview()
             screenFitButton = nil
+            layoutSlideshowCountdownRing()
             applyInteractionForPresentation()
             return
         }
@@ -28,6 +29,7 @@ extension LiveHeaderView {
         }
         applyScreenFitButtonAppearance(mode: mode)
         bringScreenFitChromeToFront()
+        layoutSlideshowCountdownRing()
         applyInteractionForPresentation()
     }
 

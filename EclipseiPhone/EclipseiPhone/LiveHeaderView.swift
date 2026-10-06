@@ -57,6 +57,10 @@ final class LiveHeaderView: UIView {
     var slideshowRibbonButton: UIButton?
     /// Circular Fit / Fill shortcut while a still or slideshow owns the hero.
     var screenFitButton: UIButton?
+    /// Seconds-left ring while a slideshow's Autoplay is counting down.
+    var slideshowCountdownRing: SlideshowCountdownRingView?
+    /// Ring's trailing pin; shifts left to clear the Fit / Fill circle.
+    var slideshowCountdownTrailing: NSLayoutConstraint?
     /// Circular front / back shortcut while the live camera owns the hero.
     var cameraFlipButton: UIButton?
     /// Left/right swipes that browse slides or the Show's stills from the hero.

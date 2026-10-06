@@ -69,6 +69,13 @@ extension LiveHeaderView {
                 fit.isHidden = hideFit
             }
         }
+        if let ring = slideshowCountdownRing {
+            ring.alpha = controlsFade
+            let hideRing = controlsFade <= 0.01
+            if ring.isHidden != hideRing {
+                ring.isHidden = hideRing
+            }
+        }
         if let flip = cameraFlipButton {
             flip.alpha = controlsFade
             let hideFlip = controlsFade <= 0.01
