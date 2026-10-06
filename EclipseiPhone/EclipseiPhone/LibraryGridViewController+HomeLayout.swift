@@ -25,11 +25,13 @@ extension LibraryGridViewController {
     /// (tools + members from `surfaceIds`); no fixed tools band.
     /// Live ribbon docks under the hero chrome, so pass
     /// `showsSlideshowRibbon: false` for the scrolling Show grid.
+    /// `hidesHero` drops the carousel (iPhone landscape) so Recent starts at the top.
     static func visibleHomeSections(
         isShowMode: Bool,
-        showsSlideshowRibbon: Bool
+        showsSlideshowRibbon: Bool,
+        hidesHero: Bool = false
     ) -> [HomeSection] {
-        guard isShowMode else { return [.hero, .shows] }
+        guard isShowMode else { return hidesHero ? [.shows] : [.hero, .shows] }
         var sections: [HomeSection] = []
         if showsSlideshowRibbon {
             sections.append(.slideshowRibbon)
@@ -54,6 +56,8 @@ extension LibraryGridViewController {
         var showsSlideshowRibbon: Bool
         /// Home Recent format chips — taller header estimate when both formats exist.
         var showsRecentFormatFilter: Bool = false
+        /// iPhone landscape: no marketing carousel on Home.
+        var hidesHero: Bool = false
 
         /// Home with nothing playing — the state to assume once the controller is gone.
         static let home = HomeLayoutState(
@@ -64,7 +68,8 @@ extension LibraryGridViewController {
         var sections: [HomeSection] {
             LibraryGridViewController.visibleHomeSections(
                 isShowMode: isShowMode,
-                showsSlideshowRibbon: showsSlideshowRibbon
+                showsSlideshowRibbon: showsSlideshowRibbon,
+                hidesHero: hidesHero
             )
         }
     }

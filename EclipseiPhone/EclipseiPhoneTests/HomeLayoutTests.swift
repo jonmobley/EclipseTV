@@ -371,6 +371,22 @@ struct HomeLayoutTests {
         ) == [.hero, .shows])
     }
 
+    /// iPhone landscape drops the carousel so Recent starts at the top.
+    @Test func phoneLandscapeHomeHidesHero() {
+        #expect(LibraryGridViewController.visibleHomeSections(
+            isShowMode: false, showsSlideshowRibbon: false, hidesHero: true
+        ) == [.shows])
+
+        var state = LibraryGridViewController.HomeLayoutState.home
+        state.hidesHero = true
+        #expect(state.sections == [.shows])
+
+        // A Show never had the carousel; hiding it changes nothing there.
+        #expect(LibraryGridViewController.visibleHomeSections(
+            isShowMode: true, showsSlideshowRibbon: true, hidesHero: true
+        ) == [.slideshowRibbon, .shows])
+    }
+
     @Test func openShowUsesShowsGridWithoutInGridRibbon() {
         #expect(LibraryGridViewController.visibleHomeSections(
             isShowMode: true, showsSlideshowRibbon: false

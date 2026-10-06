@@ -70,6 +70,8 @@ final class LibraryGridViewController: UIViewController {
     var lastLayoutWidth: CGFloat = 0
     /// Last height used for side-by-side chrome; avoids redundant layout work.
     var lastLayoutHeight: CGFloat = 0
+    /// Home carousel is left out while an iPhone is in landscape.
+    var hidesHomeHero = false
     /// `gridHost` size at the last layout pass; a change is what re-applies the
     /// pending scroll anchor. See `LibraryGridViewController+ScrollAnchor`.
     var lastGridLayoutSize: CGSize = .zero

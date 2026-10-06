@@ -267,7 +267,7 @@ final class HomeHeroCarouselCell: UICollectionViewCell, UIScrollViewDelegate {
         page.clipsToBounds = true
         page.backgroundColor = slide.palette.fallbackColor
         addBackground(for: slide, to: page)
-        addTopCenteredCopy(for: slide, to: page)
+        addCenteredCopy(for: slide, to: page)
         return page
     }
 
@@ -288,8 +288,8 @@ final class HomeHeroCarouselCell: UICollectionViewCell, UIScrollViewDelegate {
         pinEdges(gradient, to: page)
     }
 
-    /// Icon + title + subtitle, centered as a column under the top of the card.
-    private func addTopCenteredCopy(for slide: HomeHeroSlide, to page: UIView) {
+    /// Icon + title + subtitle, centered as a column in the middle of the card.
+    private func addCenteredCopy(for slide: HomeHeroSlide, to page: UIView) {
         let hasImage = slide.imageName.flatMap { UIImage(named: $0) } != nil
         if hasImage { addImageScrim(to: page) }
 
@@ -339,7 +339,9 @@ final class HomeHeroCarouselCell: UICollectionViewCell, UIScrollViewDelegate {
         stack.translatesAutoresizingMaskIntoConstraints = false
         page.addSubview(stack)
         NSLayoutConstraint.activate([
-            stack.topAnchor.constraint(equalTo: page.topAnchor, constant: 24),
+            stack.centerYAnchor.constraint(equalTo: page.centerYAnchor),
+            stack.topAnchor.constraint(greaterThanOrEqualTo: page.topAnchor, constant: 12),
+            stack.bottomAnchor.constraint(lessThanOrEqualTo: page.bottomAnchor, constant: -12),
             stack.leadingAnchor.constraint(equalTo: page.leadingAnchor, constant: 20),
             stack.trailingAnchor.constraint(equalTo: page.trailingAnchor, constant: -20)
         ])
@@ -348,10 +350,10 @@ final class HomeHeroCarouselCell: UICollectionViewCell, UIScrollViewDelegate {
     private func addImageScrim(to page: UIView) {
         let scrim = GradientView()
         scrim.colors = [
-            UIColor.black.withAlphaComponent(0.55),
-            UIColor.clear
+            UIColor.black.withAlphaComponent(0.45),
+            UIColor.black.withAlphaComponent(0.30)
         ]
-        scrim.locations = [0, 0.65]
+        scrim.locations = [0, 1]
         scrim.translatesAutoresizingMaskIntoConstraints = false
         page.addSubview(scrim)
         pinEdges(scrim, to: page)

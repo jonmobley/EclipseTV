@@ -25,15 +25,17 @@ extension LibraryGridViewController {
             let tile = Self.homeRecentTileSize(
                 containerWidth: collectionView.bounds.width,
                 sectionInset: sectionInset,
-                spacing: interitemSpacing
+                spacing: interitemSpacing,
+                containerHeight: collectionView.bounds.height
+            )
+            let heroHeight = hidesHomeHero ? 0 : Self.heroBandHeight(
+                containerWidth: collectionView.bounds.width,
+                containerHeight: collectionView.bounds.height,
+                sectionInset: sectionInset,
+                horizontalSizeClass: traitCollection.horizontalSizeClass
             )
             emptyTopConstraint?.constant = collectionView.contentInset.top
-                + Self.heroBandHeight(
-                    containerWidth: collectionView.bounds.width,
-                    containerHeight: collectionView.bounds.height,
-                    sectionInset: sectionInset,
-                    horizontalSizeClass: traitCollection.horizontalSizeClass
-                )
+                + heroHeight
                 + Self.showsGridTopInset
                 + Self.sectionHeaderEstimatedHeight
                 + tile.height

@@ -125,8 +125,21 @@ extension LibraryGridViewController {
                 showCollectionView.reloadData()
             }
         }
+        syncHomeHeroVisibility()
         applyHeroChrome()
         invalidatePageLayouts()
+    }
+
+    /// iPhone turned sideways: drop the Home carousel so Recent fills the short screen.
+    ///
+    /// The data source and the layout both read `hidesHomeHero`, so the section
+    /// list changes for both at once and the reload keeps them in step.
+    private func syncHomeHeroVisibility() {
+        let hides = traitCollection.userInterfaceIdiom == .phone
+            && view.bounds.width > view.bounds.height
+        guard hides != hidesHomeHero else { return }
+        hidesHomeHero = hides
+        homeCollectionView.reloadData()
     }
 
     /// Applies Landscape vs Vertical chrome and reloads the active mode's library.

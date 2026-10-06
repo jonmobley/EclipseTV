@@ -30,7 +30,9 @@ extension LibraryGridViewController {
     /// gains the marketing carousel. The docked landscape ribbon is its own view.
     func pageSections(for collectionView: UICollectionView) -> [HomeSection] {
         if isHomePage(collectionView) {
-            return HomeLayoutState.home.sections
+            var home = HomeLayoutState.home
+            home.hidesHero = hidesHomeHero
+            return home.sections
         }
         if isDockedSlideshowRibbon(collectionView) {
             return [.slideshowRibbon]
@@ -87,7 +89,8 @@ extension LibraryGridViewController {
             HomeLayoutState(
                 isShowMode: false,
                 showsSlideshowRibbon: false,
-                showsRecentFormatFilter: self?.showsHomeRecentFormatFilter ?? false
+                showsRecentFormatFilter: self?.showsHomeRecentFormatFilter ?? false,
+                hidesHero: self?.hidesHomeHero ?? false
             )
         }
     }
