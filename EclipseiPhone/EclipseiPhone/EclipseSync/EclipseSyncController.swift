@@ -94,7 +94,11 @@ final class EclipseSyncController {
 
     /// Banner copy when sync is paused, or nil when healthy / not yet evaluated.
     var statusBannerText: String? {
-        pauseReason?.userMessage
+        #if DEBUG
+        // Store screenshots run on a signed-out simulator; hide the iCloud nag there.
+        if ProcessInfo.processInfo.arguments.contains("-StoreScreenshots") { return nil }
+        #endif
+        return pauseReason?.userMessage
     }
 
     /// Applies a server tombstone to whichever local store owns `recordName`.
