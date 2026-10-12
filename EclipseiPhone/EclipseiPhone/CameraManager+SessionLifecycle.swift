@@ -233,8 +233,15 @@ extension CameraManager {
         startCaptureIfPossible(attempt: 0, completion: {})
     }
 
+    /// Restarts capture on return to the foreground.
+    ///
+    /// Deliberately ignores `isSessionRunning`: the background stop runs on
+    /// `sessionQueue`, so on a quick app-switch round trip the main-thread flag can
+    /// still read `true` while that stop is pending — skipping here left the camera
+    /// black. `startCaptureIfPossible` queues behind the stop and checks the real
+    /// session state, so calling it when already running is a no-op.
     @objc func handleAppDidBecomeActiveForCapture() {
-        guard wantsSessionRunning, !isSessionRunning else { return }
+        guard wantsSessionRunning else { return }
         startCaptureIfPossible(attempt: 0, completion: {})
     }
 

@@ -130,6 +130,12 @@ extension CameraManager: AVCaptureFileOutputRecordingDelegate {
             guard self.stopSessionWhenRecordingFinishes else { return }
             self.stopSessionWhenRecordingFinishes = false
             self.stopCaptureSessionLocked()
+            // The movie can finish after the app is back in front (or after the
+            // camera was reopened) — the deferred stop must not leave it black.
+            DispatchQueue.main.async {
+                guard self.wantsSessionRunning else { return }
+                self.startCaptureIfPossible(attempt: 0, completion: {})
+            }
         }
 
         if let error {
