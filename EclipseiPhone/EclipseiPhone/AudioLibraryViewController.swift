@@ -267,22 +267,16 @@ final class AudioLibraryViewController: UITableViewController {
                 let track = trackStore.tracks[indexPath.row]
                 let isCurrent = player.currentTrack?.id == track.id
                 config.text = track.title
-                config.secondaryText = track.subtitle.isEmpty ? nil : track.subtitle
+                // One line per song: long titles end in "…", no artist line.
+                config.textProperties.numberOfLines = 1
+                config.textProperties.lineBreakMode = .byTruncatingTail
                 let symbol = isCurrent && player.isPlaying
                     ? "speaker.wave.2.fill" : "music.note"
                 config.image = UIImage(systemName: symbol)
                 applyNowPlayingStyle(&config, isCurrent: isCurrent)
                 cell.showsReorderControl = isEditing
-                if isEditing {
-                    cell.accessoryView = AudioMusicRowViews.durationAccessory(
-                        duration: track.duration
-                    )
-                } else {
-                    cell.accessoryView = AudioMusicRowViews.trackAccessory(
-                        duration: track.duration,
-                        menu: trackMoreMenu(for: track)
-                    )
-                }
+                // Song actions live on press-and-hold (context menu), not a ⋯ button.
+                cell.accessoryView = AudioMusicRowViews.durationAccessory(duration: track.duration)
             }
         }
 
@@ -488,7 +482,7 @@ final class AudioLibraryViewController: UITableViewController {
         }
     }
 
-    /// ⋯ / long-press menu for a library track (Play is row tap, not listed here).
+    /// Long-press menu for a library track (Play is row tap, not listed here).
     private func trackMoreMenu(for track: AudioTrack) -> UIMenu {
         let arrange = UIAction(
             title: "Arrange",

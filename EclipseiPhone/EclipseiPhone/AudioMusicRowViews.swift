@@ -38,21 +38,7 @@ enum AudioMusicRowViews {
         return sizedAccessory(stack)
     }
 
-    /// Right-aligned duration plus a ⋯ menu button for track rows.
-    static func trackAccessory(duration: TimeInterval, menu: UIMenu) -> UIView {
-        let label = metaLabel()
-        label.text = formatDuration(duration)
-        label.isHidden = label.text?.isEmpty == true
-
-        let more = moreButton(menu: menu)
-        let stack = UIStackView(arrangedSubviews: [label, more])
-        stack.axis = .horizontal
-        stack.alignment = .center
-        stack.spacing = 4
-        return sizedAccessory(stack)
-    }
-
-    /// Duration only (used while arranging, when the ⋯ is hidden).
+    /// Right-aligned duration for track rows (actions are on press-and-hold).
     static func durationAccessory(duration: TimeInterval) -> UIView? {
         let text = formatDuration(duration)
         guard !text.isEmpty else { return nil }
@@ -77,23 +63,5 @@ enum AudioMusicRowViews {
         label.setContentHuggingPriority(.required, for: .horizontal)
         label.setContentCompressionResistancePriority(.required, for: .horizontal)
         return label
-    }
-
-    private static func moreButton(menu: UIMenu) -> UIButton {
-        var config = UIButton.Configuration.plain()
-        config.image = UIImage(
-            systemName: "ellipsis",
-            withConfiguration: UIImage.SymbolConfiguration(pointSize: 15, weight: .bold)
-        )
-        config.baseForegroundColor = .secondaryLabel
-        config.contentInsets = NSDirectionalEdgeInsets(
-            top: 8, leading: 8, bottom: 8, trailing: 4
-        )
-        let button = UIButton(configuration: config)
-        button.menu = menu
-        button.showsMenuAsPrimaryAction = true
-        button.accessibilityLabel = "More"
-        button.setContentHuggingPriority(.required, for: .horizontal)
-        return button
     }
 }

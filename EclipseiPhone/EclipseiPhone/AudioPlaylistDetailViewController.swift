@@ -174,23 +174,17 @@ final class AudioPlaylistDetailViewController: UITableViewController {
             let player = AudioPlayerController.shared
             let isCurrent = player.currentTrack?.id == track.id
             config.text = track.title
-            config.secondaryText = track.subtitle.isEmpty ? nil : track.subtitle
+            // One line per song: long titles end in "…", no artist line.
+            config.textProperties.numberOfLines = 1
+            config.textProperties.lineBreakMode = .byTruncatingTail
             let symbol = isCurrent && player.isPlaying
                 ? "speaker.wave.2.fill" : "music.note"
             config.image = UIImage(systemName: symbol)
             applyNowPlayingStyle(&config, isCurrent: isCurrent)
             cell.selectionStyle = isEditing ? .none : .default
             cell.showsReorderControl = isEditing && canMoveRow(at: indexPath)
-            if isEditing {
-                cell.accessoryView = AudioMusicRowViews.durationAccessory(
-                    duration: track.duration
-                )
-            } else {
-                cell.accessoryView = AudioMusicRowViews.trackAccessory(
-                    duration: track.duration,
-                    menu: trackMoreMenu(for: track)
-                )
-            }
+            // Song actions live on press-and-hold (context menu), not a ⋯ button.
+            cell.accessoryView = AudioMusicRowViews.durationAccessory(duration: track.duration)
         }
         cell.contentConfiguration = config
         return cell
@@ -284,7 +278,7 @@ final class AudioPlaylistDetailViewController: UITableViewController {
         }
     }
 
-    /// ⋯ menu: Arrange / Add to Playlist / Delete (remove from this playlist).
+    /// Long-press menu: Arrange / Add to Playlist / Delete (remove from this playlist).
     private func trackMoreMenu(for track: AudioTrack) -> UIMenu {
         let arrange = UIAction(
             title: "Arrange",
