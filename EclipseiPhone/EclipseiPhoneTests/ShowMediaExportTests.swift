@@ -120,7 +120,9 @@ struct ShowMediaExportSettingsTests {
             settings.tableView(table, titleForHeaderInSection: $0) == "Show Sharing"
         }
         let section = try #require(sharing)
-        #expect(table.numberOfRows(inSection: section) == 3)
+        // Share + Export, plus Enter Share Code only when that entry is offered.
+        let joinRow = AlbumConfig.offersAccountCodeEntry || AlbumBrowserStore.shared.hasAccountConfigured
+        #expect(table.numberOfRows(inSection: section) == (joinRow ? 3 : 2))
 
         let exportCell = settings.tableView(
             table, cellForRowAt: IndexPath(row: 1, section: section)

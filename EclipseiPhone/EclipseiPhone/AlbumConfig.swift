@@ -26,6 +26,11 @@ enum AlbumConfig {
     /// Number of digits in an account code.
     static let codeLength = 6
 
+    /// Whether "Enter Share Code" is offered when no code is saved yet. Off for 1.0:
+    /// there is no public way to get a code, so App Review and customers would find a
+    /// dead end. A phone that already has a code keeps the shared-show browser.
+    static let offersAccountCodeEntry = false
+
     /// Normalizes raw user input into a candidate code (keeps digits only).
     static func normalize(_ raw: String) -> String {
         raw.unicodeScalars.filter { CharacterSet.decimalDigits.contains($0) }

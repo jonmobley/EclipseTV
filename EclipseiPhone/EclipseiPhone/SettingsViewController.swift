@@ -87,18 +87,20 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
             result.append(.show)
             result.append(.showLivePreview)
         }
-        result.append(contentsOf: [
-            .playback, .notes, .showSharing, .eclipseTV, .eclipseMac,
-            .recommendations, .help
-        ])
+        result.append(contentsOf: [.playback, .notes])
+        if !showSharingRows.isEmpty {
+            result.append(.showSharing)
+        }
+        result.append(contentsOf: [.eclipseTV, .eclipseMac, .recommendations, .help])
         return result
     }
 
     private var showSharingRows: [ShowSharingRow] {
-        if openShowName != nil {
-            return [.shareThisShow, .exportMedia, .enterShareCode]
+        var rows: [ShowSharingRow] = openShowName != nil ? [.shareThisShow, .exportMedia] : []
+        if AlbumConfig.offersAccountCodeEntry || AlbumBrowserStore.shared.hasAccountConfigured {
+            rows.append(.enterShareCode)
         }
-        return [.enterShareCode]
+        return rows
     }
 
     // MARK: - Lifecycle
@@ -278,12 +280,14 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
             return "Notes stay attached to each image. Always shows an empty Note "
                 + "card on Preview so you can add notes while browsing."
         case .eclipseTV:
-            return "Link an Apple TV running EclipseTV to sync Shows and present over Multipeer. "
+            return "Link an Apple TV running Eclipse to sync Shows and present over Multipeer. "
                 + "AirPlay still works without a TV link."
         case .showSharing:
+            let joinLine = showSharingRows.contains(.enterShareCode)
+                ? " Enter a code here to join someone else's Show." : ""
             return "Share this show invites collaborators over iCloud. "
                 + "Export media saves images, videos, slideshows, and PDFs "
-                + "as a numbered ZIP. Enter a code here to join someone else's Show."
+                + "as a numbered ZIP." + joinLine
         case .eclipseMac:
             return "Control Eclipse on a Mac, or send this iPhone’s camera as a "
                 + "live source (any Apple ID, same Wi‑Fi)."
