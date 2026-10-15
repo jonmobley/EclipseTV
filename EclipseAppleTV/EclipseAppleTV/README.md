@@ -63,10 +63,10 @@ Services/
 └── TVLibrarySync.swift     # Mirrors the local library to the connected iPhone
 
 RemoteAlbum/                 # Read-only cloud albums
-├── AlbumConfig.swift        # Manifest host, code rules, Supabase Realtime credentials
+├── AlbumConfig.swift        # Manifest host and code rules
 ├── AlbumManifest.swift      # JSON wire format for account albums
 ├── RemoteAlbumSync.swift    # HTTPS manifest fetch + media download
-└── RealtimeAlbumNotifier.swift # Supabase Realtime push to re-sync on change
+└── AlbumChangePoller.swift   # Re-syncs albums every 5 minutes while active
 RemoteAlbumStore.swift       # Downloaded albums (read-only), separate from the library
 
 VideoThumbnailCache.swift    # Memory + disk thumbnail cache
@@ -170,7 +170,7 @@ Cloud album items are read-only — no move/delete on the TV.
   - Service Type: `eclipse-share`
   - Bonjour Services: `_eclipse-share._tcp`, `_eclipse-share._udp`
 - Cloud albums: HTTPS manifest + media fetch from the hosted account
-- Realtime: Supabase Realtime WebSocket to re-sync albums when they change on the server
+- Refresh: re-syncs albums every 5 minutes while the app is active (no live push)
 
 ### **File Storage**
 - Local caching for recently viewed media

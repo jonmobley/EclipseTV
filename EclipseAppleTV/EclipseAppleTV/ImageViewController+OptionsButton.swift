@@ -36,11 +36,13 @@ extension ImageViewController {
     private func optionsMenuElements() -> [UIMenuElement] {
         var elements: [UIMenuElement] = []
 
-        let codeTitle = albumStore.hasAlbumConfigured ? "Change Account Code" : "Enter Account Code"
-        elements.append(UIAction(title: codeTitle,
-                                 image: UIImage(systemName: "number")) { [weak self] _ in
-            self?.presentAccountCodeEntry()
-        })
+        if albumStore.hasAlbumConfigured || AlbumConfig.offersAccountCodeEntry {
+            let codeTitle = albumStore.hasAlbumConfigured ? "Change Account Code" : "Enter Account Code"
+            elements.append(UIAction(title: codeTitle,
+                                     image: UIImage(systemName: "number")) { [weak self] _ in
+                self?.presentAccountCodeEntry()
+            })
+        }
 
         if albumStore.hasAlbumConfigured {
             elements.append(UIAction(title: "Refresh Albums",
@@ -50,15 +52,18 @@ extension ImageViewController {
             elements.append(UIAction(title: "Remove Albums",
                                      image: UIImage(systemName: "trash"),
                                      attributes: .destructive) { [weak self] _ in
-                self?.albumStore.clearAlbum()
-                self?.albumNotifier.stop()
-                self?.showNotificationToast(message: "Albums removed")
+                self?.confirmRemoveAlbums()
             })
         }
 
         elements.append(UIAction(title: "Show Pairing Code",
                                  image: UIImage(systemName: "lock.rectangle")) { [weak self] _ in
             self?.presentPairingCode()
+        })
+
+        elements.append(UIAction(title: "Forget Paired iPhones",
+                                 image: UIImage(systemName: "iphone.slash")) { [weak self] _ in
+            self?.confirmForgetPairedPhones()
         })
 
         elements.append(UIAction(title: "Show Help",
@@ -83,5 +88,26 @@ extension ImageViewController {
         if isInGridMode {
             view.bringSubviewToFront(optionsButton)
         }
+    }
+}
+
+// MARK: - Remove Albums
+
+extension ImageViewController {
+
+    /// Asks before deleting every downloaded album and the saved account code.
+    func confirmRemoveAlbums() {
+        let alert = UIAlertController(
+            title: "Remove Albums?",
+            message: "This deletes the downloaded albums from this Apple TV. You'll need the account code to get them back.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "Remove", style: .destructive) { [weak self] _ in
+            self?.albumStore.clearAlbum()
+            self?.albumNotifier.stop()
+            self?.showNotificationToast(message: "Albums removed")
+        })
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        present(alert, animated: true)
     }
 }

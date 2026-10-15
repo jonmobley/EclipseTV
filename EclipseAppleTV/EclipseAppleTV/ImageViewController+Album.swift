@@ -47,20 +47,19 @@ extension ImageViewController {
         #endif
     }
 
-    /// Wires the realtime notifier's callback once. A server "changed" nudge triggers the
-    /// same idempotent sync used on launch/foreground; coalescing in `RemoteAlbumSync`
-    /// keeps overlapping syncs safe.
+    /// Wires the re-sync timer's callback once. Each tick runs the same idempotent sync
+    /// used on launch/foreground; coalescing in `RemoteAlbumSync` keeps overlapping
+    /// syncs safe.
     func configureAlbumNotifier() {
         albumNotifier.onChange = { [weak self] in
-            self?.logger.info("Realtime nudge received — re-syncing albums")
+            self?.logger.info("Periodic album re-sync")
             self?.refreshAlbumIfConfigured()
         }
     }
 
-    /// Opens (or refreshes) the realtime subscription for the configured account code, or
-    /// tears it down when no account is configured. Safe to call repeatedly; subscribing
-    /// to the same code is a no-op.
-    func startRealtimeIfConfigured() {
+    /// Starts the periodic re-sync for the configured account code, or stops it when no
+    /// account is configured. Safe to call repeatedly; the same code is a no-op.
+    func startAlbumResyncIfConfigured() {
         guard albumStore.hasAlbumConfigured, let code = albumStore.accountCode else {
             albumNotifier.stop()
             return
@@ -103,7 +102,7 @@ extension ImageViewController {
     /// Triggers a background sync against the configured manifest URL, if any.
     func refreshAlbumIfConfigured() {
         guard albumStore.hasAlbumConfigured else { return }
-        startRealtimeIfConfigured()
+        startAlbumResyncIfConfigured()
         Task { [weak self] in
             do {
                 let count = try await RemoteAlbumSync.shared.sync()
@@ -304,7 +303,7 @@ extension ImageViewController {
     /// Surfaces the result (and any failure reason) as a toast on both the TV-entry and
     /// companion-push paths. If the server definitively rejects the code (HTTP 400/404),
     /// the previously configured code is restored so a known-bad code is never left
-    /// persisted or subscribed to over Realtime.
+    /// persisted or re-synced on a timer.
     func applyAccountCodeAndSync(_ rawCode: String) {
         let previousCode = albumStore.accountCode
         guard albumStore.setAccountCode(rawCode) else {
@@ -313,7 +312,7 @@ extension ImageViewController {
         }
 
         showNotificationToast(message: "Syncing albums…")
-        startRealtimeIfConfigured()
+        startAlbumResyncIfConfigured()
         connectionManager?.librarySync?.broadcastManifest()
 
         Task { [weak self] in
@@ -332,13 +331,13 @@ extension ImageViewController {
     }
 
     /// Handles a failed first sync after a code change: reverts a definitively bad code to
-    /// the prior configuration (and re-points Realtime accordingly), then reports the
+    /// the prior configuration (and re-points the re-sync timer accordingly), then reports the
     /// reason. Transient/server errors keep the code so a later sync can succeed.
     @MainActor
     private func handleAccountCodeFailure(_ error: Error, revertingTo previousCode: String?) {
         if let syncError = error as? RemoteAlbumSync.SyncError, syncError.isBadCode {
             albumStore.revertAccountCode(to: previousCode)
-            startRealtimeIfConfigured()
+            startAlbumResyncIfConfigured()
         }
         showNotificationToast(message: error.localizedDescription)
     }
@@ -353,7 +352,7 @@ extension ImageViewController {
             return
         }
         showNotificationToast(message: "Syncing albums…")
-        startRealtimeIfConfigured()
+        startAlbumResyncIfConfigured()
         Task { [weak self] in
             do {
                 let count = try await RemoteAlbumSync.shared.sync()

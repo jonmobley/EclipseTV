@@ -322,10 +322,11 @@ class iPhoneConnectionManager: NSObject {
 
         // Remembered TVs reconnect without a PIN; first-time peers need a pending PIN.
         let context: Data?
+        let deviceKey = Self.pairingDeviceKey()
         if pairedStore.isPaired(displayName: peer.displayName) {
-            context = PeerPairing.rememberedContext()
+            context = PeerPairing.rememberedContext(deviceKey: deviceKey)
         } else if let pin = pendingPairingPIN,
-                  let pinData = PeerPairing.pinContext(pin) {
+                  let pinData = PeerPairing.pinContext(pin, deviceKey: deviceKey) {
             context = pinData
         } else {
             logger.info("[Eclipse:CONN] iPhone skipping invite to \(peer.displayName, privacy: .private): not paired and no PIN entered")
@@ -335,6 +336,19 @@ class iPhoneConnectionManager: NSObject {
         pendingInvites[peer] = Date()
         browser?.invitePeer(peer, to: session, withContext: context, timeout: 60)
         logger.info("[Eclipse:CONN] iPhone invited peer: \(peer.displayName, privacy: .private) (timeout 60s)")
+    }
+
+    /// This phone's pairing secret, created once and kept in the Keychain. Apple TVs
+    /// remember paired phones by it, because every iPhone's name is now just "iPhone".
+    static func pairingDeviceKey() -> String {
+        let keychainKey = "pairing.deviceKey"
+        if let existing = KeychainStore.string(forKey: keychainKey),
+           PeerPairing.isValidDeviceKey(existing) {
+            return existing
+        }
+        let fresh = PeerPairing.generateDeviceKey()
+        KeychainStore.set(fresh, forKey: keychainKey)
+        return fresh
     }
 
     /// Supplies the TV-displayed PIN for the next first-time invite. Normalized digits only.

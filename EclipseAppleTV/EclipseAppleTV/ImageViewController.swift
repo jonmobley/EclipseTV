@@ -170,10 +170,9 @@ class ImageViewController: ManagedViewController, ConnectionManagerDelegate, UIG
     /// grid sections (sections 1…N) and kept entirely out of `MediaDataSource`.
     internal let albumStore = RemoteAlbumStore.shared
 
-    /// Pushes "album changed" nudges from the server over a Realtime WebSocket so the TV
-    /// re-syncs immediately while it stays open (instead of only on launch/foreground/
-    /// manual refresh).
-    internal let albumNotifier = RealtimeAlbumNotifier()
+    /// Re-syncs albums every few minutes while the TV stays open (in addition to
+    /// launch/foreground/manual refresh).
+    internal let albumNotifier = AlbumChangePoller()
 
     /// Which collection the fullscreen viewer is currently showing/navigating.
     internal var activeCollection: CollectionKind = .library
@@ -203,7 +202,13 @@ class ImageViewController: ManagedViewController, ConnectionManagerDelegate, UIG
     /// instance instead of a nil app-delegate reference.
     internal weak var connectionManager: ConnectionManager?
 
-    internal var isInGridMode = true // Start in grid mode
+    internal var isInGridMode = true { // Start in grid mode
+        didSet {
+            // A still photo doesn't hold off the screensaver the way a playing video
+            // does, so keep it away whenever an item is shown full screen.
+            UIApplication.shared.isIdleTimerDisabled = !isInGridMode
+        }
+    }
     internal let sampleImageNames = ["sample1", "sample2", "sample3"]
     internal let logger = Logger(subsystem: "com.eclipsetv.app", category: "ImageViewController")
 
@@ -314,6 +319,7 @@ class ImageViewController: ManagedViewController, ConnectionManagerDelegate, UIG
         // Observe the remote album and start an initial sync if one is configured.
         setupAlbumSync()
         observeCompanionAlbums()
+        observePairingPIN()
         titleLabel.text = usesAlbumHome ? albumHomeTitle : "Eclipse"
         
         // Note: Player view setup is deferred until actually needed for video playback
@@ -463,19 +469,8 @@ class ImageViewController: ManagedViewController, ConnectionManagerDelegate, UIG
     // MARK: - EmptyStateViewDelegate Implementation
     
     func emptyStateViewDidTapOpenApp(_ view: EmptyStateView) {
-        logger.info("User tapped 'Open App' button - data source count: \(self.dataSource.count)")
-        
-        // Force hide empty state and show grid view regardless of data source state
-        self.hideEmptyState()
-        
-        // Show notification to user
-        self.showNotificationToast(message: "Transitioning to grid view")
-        
-        // Ensure we're in grid mode
-        self.isInGridMode = true
-        
-        // Debug the data source
-        self.dataSource.debugState()
+        logger.info("User tapped 'How to Connect'")
+        showHelp()
     }
 }
 

@@ -54,6 +54,10 @@ class ConnectionManager: NSObject {
 
     /// Allowlist + current on-screen pairing PIN.
     private let pairedStore = PairedPeerStore.shared
+    /// Device keys from accepted invitations, kept until the session connects. The
+    /// advertiser and session call back on different queues, so access is locked.
+    private var acceptedDeviceKeys: [MCPeerID: String] = [:]
+    private let acceptedDeviceKeysLock = NSLock()
 
     private var session: MCSession?
     private var advertiser: MCNearbyServiceAdvertiser?
@@ -192,9 +196,10 @@ class ConnectionManager: NSObject {
         pairedStore.rotatePIN()
     }
 
-    /// Removes a previously paired iPhone from the allowlist.
-    func forgetPairedPhone(named displayName: String) {
-        pairedStore.forget(displayName: displayName)
+    /// Forgets every paired iPhone; each must enter the on-screen code again.
+    func forgetAllPairedPhones() {
+        pairedStore.forgetAll()
+        rotatePairingPIN()
     }
 
     /// Display names of phones that have successfully paired with this TV.
@@ -522,14 +527,18 @@ extension ConnectionManager: MCNearbyServiceAdvertiserDelegate {
         }
 
         switch parsed {
-        case .pin(let pin):
-            guard pin == pairedStore.currentPIN else {
+        case .pin(let pin, _):
+            let check = pairedStore.checkPIN(pin)
+            if check.rotated {
+                NotificationCenter.default.post(name: .pairingPINDidChange, object: self)
+            }
+            guard check.accepted else {
                 logger.error("[Eclipse:CONN] AppleTV REJECTED invitation from \(peerID.displayName, privacy: .private): wrong PIN")
                 invitationHandler(false, nil)
                 return
             }
-        case .remembered:
-            guard pairedStore.isPaired(displayName: peerID.displayName) else {
+        case .remembered(let deviceKey):
+            guard pairedStore.isPaired(deviceKey: deviceKey) else {
                 logger.error("[Eclipse:CONN] AppleTV REJECTED invitation from \(peerID.displayName, privacy: .private): not on allowlist")
                 invitationHandler(false, nil)
                 return
@@ -537,6 +546,7 @@ extension ConnectionManager: MCNearbyServiceAdvertiserDelegate {
         }
 
         logger.info("[Eclipse:CONN] AppleTV ACCEPTED invitation from \(peerID.displayName, privacy: .private)")
+        acceptedDeviceKeysLock.withLock { acceptedDeviceKeys[peerID] = parsed.deviceKey }
         invitationHandler(true, session)
     }
     
@@ -573,9 +583,14 @@ extension ConnectionManager: MCSessionDelegate {
 
             // First successful connect (PIN or remembered) lands the phone on the allowlist
             // so later reconnects can use the remembered context without re-entering a PIN.
-            pairedStore.remember(displayName: peerID.displayName)
+            if let deviceKey = acceptedDeviceKeysLock.withLock({
+                acceptedDeviceKeys.removeValue(forKey: peerID)
+            }) {
+                pairedStore.remember(deviceKey: deviceKey, displayName: peerID.displayName)
+            }
             // Rotate so a shoulder-surfed PIN cannot be reused by another device.
             pairedStore.rotatePIN()
+            NotificationCenter.default.post(name: .pairingPINDidChange, object: self)
             
             // Stop advertising once connected to avoid multiple connections
             stopAdvertising()
@@ -752,4 +767,9 @@ extension ConnectionManager: MCSessionDelegate {
             }
         }
     }
+}
+
+extension Notification.Name {
+    /// Posted when the on-screen pairing code changes (after a pair or too many wrong tries).
+    static let pairingPINDidChange = Notification.Name("EclipseTV.pairingPINDidChange")
 }

@@ -16,13 +16,23 @@ struct PeerPairingTests {
     }
 
     @Test func pinAndRememberedContextsParse() {
-        #expect(PeerPairing.parse(PeerPairing.pinContext("111222")) == .pin("111222"))
-        #expect(PeerPairing.parse(PeerPairing.rememberedContext()) == .remembered)
+        let key = PeerPairing.generateDeviceKey()
+        #expect(PeerPairing.parse(PeerPairing.pinContext("111222", deviceKey: key))
+            == .pin("111222", deviceKey: key))
+        #expect(PeerPairing.parse(PeerPairing.rememberedContext(deviceKey: key))
+            == .remembered(deviceKey: key))
     }
 
     @Test func rejectsLegacyHandshake() {
         let legacy = "EclipseShare/v1-iPhone".data(using: .utf8)
         #expect(PeerPairing.parse(legacy) == nil)
+        #expect(PeerPairing.parse("EclipseShare/v2|remembered".data(using: .utf8)) == nil)
+    }
+
+    @Test func deviceKeyIsStableAcrossCalls() {
+        let first = iPhoneConnectionManager.pairingDeviceKey()
+        #expect(PeerPairing.isValidDeviceKey(first))
+        #expect(iPhoneConnectionManager.pairingDeviceKey() == first)
     }
 
     @Test func albumConfigSharedCore() {

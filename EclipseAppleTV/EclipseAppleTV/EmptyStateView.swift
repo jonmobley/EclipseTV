@@ -5,6 +5,7 @@
 //  Copyright © 2026 Moxie LLC. All rights reserved.
 //
 
+import CoreImage
 import UIKit
 
 protocol EmptyStateViewDelegate: AnyObject {
@@ -90,7 +91,7 @@ class EmptyStateView: UIView {
     private let qrCodeImageView: UIImageView = {
         let imageView = UIImageView()
         imageView.contentMode = .scaleAspectFit
-        imageView.image = UIImage(named: "eclipse-qrcode")
+        imageView.image = EmptyStateView.makeQRCode(for: EmptyStateView.iPhoneAppURL)
         imageView.translatesAutoresizingMaskIntoConstraints = false
         imageView.isAccessibilityElement = true
         imageView.accessibilityLabel = "QR code to open Eclipse on iPhone"
@@ -99,7 +100,7 @@ class EmptyStateView: UIView {
     
     private let openAppButton: UIButton = {
         let button = UIButton(type: .system)
-        button.setTitle("Open App", for: .normal)
+        button.setTitle("How to Connect", for: .normal)
         button.setTitleColor(.white, for: .normal)
         button.titleLabel?.font = UIFont.systemFont(ofSize: 38, weight: .medium)
         button.backgroundColor = UIColor.white.withAlphaComponent(0.15)
@@ -113,8 +114,8 @@ class EmptyStateView: UIView {
         button.layer.shadowOffset = CGSize.zero
         button.layer.shadowRadius = 0
         button.layer.shadowOpacity = 0
-        button.accessibilityLabel = "Open App"
-        button.accessibilityHint = "Opens pairing instructions for the Eclipse iPhone app"
+        button.accessibilityLabel = "How to Connect"
+        button.accessibilityHint = "Shows how to connect the Eclipse iPhone app"
         
         return button
     }()
@@ -314,3 +315,25 @@ class EmptyStateView: UIView {
         }, completion: nil)
     }
 } 
+
+// MARK: - QR code
+
+extension EmptyStateView {
+
+    /// Where the on-screen QR code sends an iPhone: the Eclipse iPhone page, which links
+    /// to the App Store. A page we control, so the link can change without a TV update.
+    static let iPhoneAppURL = "https://moxieapps.io/eclipse/iphone"
+
+    /// Renders `string` as a crisp black-on-white QR code.
+    static func makeQRCode(for string: String) -> UIImage? {
+        guard let filter = CIFilter(name: "CIQRCodeGenerator") else { return nil }
+        filter.setValue(Data(string.utf8), forKey: "inputMessage")
+        filter.setValue("M", forKey: "inputCorrectionLevel")
+        guard let output = filter.outputImage?
+            .transformed(by: CGAffineTransform(scaleX: 12, y: 12)),
+              let cgImage = CIContext().createCGImage(output, from: output.extent) else {
+            return nil
+        }
+        return UIImage(cgImage: cgImage)
+    }
+}

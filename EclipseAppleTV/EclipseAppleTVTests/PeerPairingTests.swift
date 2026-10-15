@@ -23,26 +23,72 @@ struct PeerPairingTests {
         #expect(!PeerPairing.isValidPIN("12ab56"))
     }
 
+    private let key = String(repeating: "ab", count: 32)
+
     @Test func pinContextRoundTrips() {
-        let data = PeerPairing.pinContext("042891")
+        let data = PeerPairing.pinContext("042891", deviceKey: key)
         #expect(data != nil)
-        #expect(PeerPairing.parse(data) == .pin("042891"))
+        #expect(PeerPairing.parse(data) == .pin("042891", deviceKey: key))
     }
 
     @Test func rememberedContextRoundTrips() {
-        let data = PeerPairing.rememberedContext()
+        let data = PeerPairing.rememberedContext(deviceKey: key)
         #expect(data != nil)
-        #expect(PeerPairing.parse(data) == .remembered)
+        #expect(PeerPairing.parse(data) == .remembered(deviceKey: key))
     }
 
-    @Test func rejectsLegacyV1Token() {
-        let legacy = "EclipseShare/v1-iPhone".data(using: .utf8)
-        #expect(PeerPairing.parse(legacy) == nil)
+    @Test func rejectsOlderProtocols() {
+        #expect(PeerPairing.parse("EclipseShare/v1-iPhone".data(using: .utf8)) == nil)
+        // v2 trusted device names and carried no device key.
+        #expect(PeerPairing.parse("EclipseShare/v2|remembered".data(using: .utf8)) == nil)
+        #expect(PeerPairing.parse("EclipseShare/v2|123456".data(using: .utf8)) == nil)
+    }
+
+    @Test func rejectsMissingOrBadDeviceKey() {
+        #expect(PeerPairing.parse("EclipseShare/v3|remembered".data(using: .utf8)) == nil)
+        #expect(PeerPairing.parse("EclipseShare/v3|remembered|short".data(using: .utf8)) == nil)
+        let upper = String(repeating: "AB", count: 32)
+        #expect(PeerPairing.parse("EclipseShare/v3|remembered|\(upper)".data(using: .utf8)) == nil)
+        #expect(PeerPairing.rememberedContext(deviceKey: "nope") == nil)
     }
 
     @Test func rejectsWrongPINLengthInContext() {
-        let bad = "EclipseShare/v2|12345".data(using: .utf8)
+        let bad = "EclipseShare/v3|12345|\(key)".data(using: .utf8)
         #expect(PeerPairing.parse(bad) == nil)
+    }
+
+    @Test func generatedDeviceKeysAreValidAndDistinct() {
+        let a = PeerPairing.generateDeviceKey()
+        let b = PeerPairing.generateDeviceKey()
+        #expect(PeerPairing.isValidDeviceKey(a))
+        #expect(a != b)
+    }
+
+    @Test func pairedStoreTrustsDeviceKeyNotName() {
+        let defaults = UserDefaults(suiteName: "PeerPairingTests.\(UUID().uuidString)")!
+        let store = PairedPeerStore(defaults: defaults)
+        store.remember(deviceKey: key, displayName: "iPhone")
+        #expect(store.isPaired(deviceKey: key))
+        #expect(!store.isPaired(deviceKey: PeerPairing.generateDeviceKey()))
+        store.forgetAll()
+        #expect(!store.isPaired(deviceKey: key))
+    }
+
+    @Test func wrongPINsRotateCodeAndPausePairing() {
+        let defaults = UserDefaults(suiteName: "PeerPairingTests.\(UUID().uuidString)")!
+        let store = PairedPeerStore(defaults: defaults)
+        let original = store.currentPIN
+        let wrong = original == "000000" ? "111111" : "000000"
+        let start = Date()
+        for attempt in 1..<PairedPeerStore.maxWrongPINAttempts {
+            #expect(store.checkPIN(wrong, now: start) == (false, false), "attempt \(attempt)")
+        }
+        #expect(store.checkPIN(wrong, now: start) == (false, true))
+        #expect(store.currentPIN != original)
+        // Even the new code is refused during the pause, then accepted after it.
+        #expect(store.checkPIN(store.currentPIN, now: start.addingTimeInterval(5)).accepted == false)
+        let later = start.addingTimeInterval(PairedPeerStore.wrongPINLockout + 1)
+        #expect(store.checkPIN(store.currentPIN, now: later).accepted)
     }
 
     @Test func generatePINIsSixDigits() {

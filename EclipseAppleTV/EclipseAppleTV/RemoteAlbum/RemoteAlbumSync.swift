@@ -16,6 +16,7 @@ import os.log
 /// This is the Apple TV's only outbound internet networking. Sync is idempotent and
 /// safe to call repeatedly (on launch, when an account is configured, on a manual
 /// refresh, or when the scene becomes active); concurrent calls are coalesced.
+@MainActor
 final class RemoteAlbumSync {
 
     // MARK: - Singleton
@@ -66,9 +67,22 @@ final class RemoteAlbumSync {
     private let store = RemoteAlbumStore.shared
     private let session: URLSession
     private let logger = Logger(subsystem: "com.eclipsetv.app", category: "RemoteAlbumSync")
+    /// Main-actor isolated (with the class) so overlapping callers see one flag.
     private var isSyncing = false
+    /// Set when a manifest suddenly came back empty; the albums are only cleared if the
+    /// next sync agrees, so a brief server error can't wipe a TV's downloads.
+    private var pendingEmptyManifest = false
 
-    init(session: URLSession = .shared) {
+    /// Requests give up after 30 s of silence and any one download after 10 minutes,
+    /// so a stalled file can't block every later sync.
+    nonisolated private static let defaultSession: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 30
+        config.timeoutIntervalForResource = 10 * 60
+        return URLSession(configuration: config)
+    }()
+
+    init(session: URLSession = RemoteAlbumSync.defaultSession) {
         self.session = session
     }
 
@@ -94,6 +108,13 @@ final class RemoteAlbumSync {
         // account secret and must not land in plaintext in Console/sysdiagnose.
         logger.info("Starting account sync from \(url.host ?? "?", privacy: .public) \(url.absoluteString, privacy: .private)")
         let manifest = try await fetchManifest(from: url)
+        let incomingItems = manifest.albums.reduce(0) { $0 + $1.items.count }
+        if incomingItems == 0 && store.totalItemCount > 0 && !pendingEmptyManifest {
+            pendingEmptyManifest = true
+            logger.info("Manifest came back empty; keeping current albums until the next sync confirms")
+            return store.totalItemCount
+        }
+        pendingEmptyManifest = false
         return try await apply(manifest: manifest)
     }
 
@@ -133,7 +154,14 @@ final class RemoteAlbumSync {
                         resolvedItems.append(item)
                     }
                 } catch {
-                    logger.error("Skipping item \(entry.id, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                    // Keep the copy we already have rather than losing it to a failed
+                    // re-download; the next sync tries again.
+                    if let existing = existingById[entry.id], existing.fileExists {
+                        resolvedItems.append(existing)
+                        logger.error("Keeping old copy of \(entry.id, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                    } else {
+                        logger.error("Skipping item \(entry.id, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                    }
                 }
             }
             resolvedAlbums.append(Album(id: albumEntry.id,
@@ -142,7 +170,7 @@ final class RemoteAlbumSync {
         }
 
         let finalAlbums = resolvedAlbums
-        await store.applyAlbums(finalAlbums)
+        store.applyAlbums(finalAlbums)
         let total = finalAlbums.reduce(0) { $0 + $1.items.count }
         logger.info("Account sync complete: \(finalAlbums.count) album(s), \(total) item(s)")
         return total

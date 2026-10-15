@@ -30,6 +30,43 @@ extension ImageViewController {
         present(alert, animated: true)
     }
 
+    /// Keeps the on-screen code current when it changes after a pair or too many wrong tries.
+    func observePairingPIN() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handlePairingPINChanged),
+            name: .pairingPINDidChange,
+            object: nil
+        )
+    }
+
+    @objc private func handlePairingPINChanged() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self, let pin = self.connectionManager?.currentPairingPIN else { return }
+            self.emptyStateView.setPairingCode(pin)
+        }
+    }
+
+    /// Asks before forgetting every paired iPhone.
+    func confirmForgetPairedPhones() {
+        let count = connectionManager?.pairedPhoneNames.count ?? 0
+        let alert = UIAlertController(
+            title: "Forget Paired iPhones?",
+            message: count == 0
+                ? "No iPhones are paired with this Apple TV."
+                : "Every iPhone will need to enter the code on this screen to connect again.",
+            preferredStyle: .alert
+        )
+        if count > 0 {
+            alert.addAction(UIAlertAction(title: "Forget", style: .destructive) { [weak self] _ in
+                self?.connectionManager?.forgetAllPairedPhones()
+                self?.toastView.show(message: "Paired iPhones forgotten")
+            })
+        }
+        alert.addAction(UIAlertAction(title: count == 0 ? "OK" : "Cancel", style: .cancel))
+        present(alert, animated: true)
+    }
+
     private func formatPairingPIN(_ pin: String) -> String {
         let normalized = PeerPairing.normalizePIN(pin)
         guard PeerPairing.isValidPIN(normalized) else { return pin }

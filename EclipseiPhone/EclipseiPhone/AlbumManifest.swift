@@ -59,3 +59,32 @@ struct AlbumManifestItem: Codable, Equatable {
         return isVideo ? nil : remoteURL
     }
 }
+
+extension AlbumManifestItem {
+    private enum CodingKeys: String, CodingKey {
+        case id, url, thumbnailUrl, type, name, checksum
+        /// The aircamtv.com manifest names the thumbnail field `thumbnail`.
+        case thumbnail
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        url = try container.decode(String.self, forKey: .url)
+        thumbnailUrl = try container.decodeIfPresent(String.self, forKey: .thumbnailUrl)
+            ?? container.decodeIfPresent(String.self, forKey: .thumbnail)
+        type = try container.decode(String.self, forKey: .type)
+        name = try container.decodeIfPresent(String.self, forKey: .name)
+        checksum = try container.decodeIfPresent(String.self, forKey: .checksum)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(url, forKey: .url)
+        try container.encodeIfPresent(thumbnailUrl, forKey: .thumbnailUrl)
+        try container.encode(type, forKey: .type)
+        try container.encodeIfPresent(name, forKey: .name)
+        try container.encodeIfPresent(checksum, forKey: .checksum)
+    }
+}

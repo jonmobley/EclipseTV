@@ -18,7 +18,7 @@ class HelpView: UIView {
     
     private let titleLabel: UILabel = {
         let label = UILabel()
-        label.text = "EclipseTV Help"
+        label.text = "Eclipse Help"
         label.textColor = .white
         label.font = UIFont.preferredFont(forTextStyle: .title1)
         label.textAlignment = .center
@@ -30,9 +30,9 @@ class HelpView: UIView {
         label.text = """
         • Press Play/Pause to toggle between the grid and fullscreen
         
-        • Press Menu in fullscreen to return to the grid; press Menu in the grid to exit to Home. Use the ••• button for options
+        • Press Back (Menu) in fullscreen to return to the grid; press it in the grid to exit to Home. Use the ••• button for options
         
-        • Swipe Left/Right in fullscreen to move between items
+        • Swipe Left/Right on a fullscreen photo to move between items (on a video, return to the grid first)
         
         • Press and hold a video in the grid for Loop and Audio (mute) options
         
@@ -45,7 +45,7 @@ class HelpView: UIView {
         is set from the phone.
         
         Camera, websites, PDFs, countdowns, and Live Polls stay on AirPlay; when \
-        both are linked, EclipseTV parks black while AirPlay owns those overlays.
+        both are linked, Eclipse parks black while AirPlay owns those overlays.
         """
         label.textColor = UIColor(white: 0.9, alpha: 1.0) // Lighter, more readable text
         label.font = UIFont.preferredFont(forTextStyle: .body)
