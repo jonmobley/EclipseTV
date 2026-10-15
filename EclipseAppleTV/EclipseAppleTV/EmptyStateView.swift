@@ -102,6 +102,8 @@ class EmptyStateView: UIView {
         let button = UIButton(type: .system)
         button.setTitle("How to Connect", for: .normal)
         button.setTitleColor(.white, for: .normal)
+        // tvOS paints a focused system button white; keep the title readable on it.
+        button.setTitleColor(.black, for: .focused)
         button.titleLabel?.font = UIFont.systemFont(ofSize: 38, weight: .medium)
         button.backgroundColor = UIColor.white.withAlphaComponent(0.15)
         button.layer.cornerRadius = 12
@@ -159,7 +161,7 @@ class EmptyStateView: UIView {
         contentStackView.addArrangedSubview(openAppButton)
         
         // Setup constraints with priorities to avoid conflicts with Apple TV focus system
-        let containerCenterYConstraint = containerView.centerYAnchor.constraint(equalTo: centerYAnchor, constant: 50)
+        let containerCenterYConstraint = containerView.centerYAnchor.constraint(equalTo: centerYAnchor)
         containerCenterYConstraint.priority = UILayoutPriority(999)
         
         let containerLeadingConstraint = containerView.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 95)
@@ -185,10 +187,10 @@ class EmptyStateView: UIView {
         let contentStackMinWidthConstraint = contentStackView.widthAnchor.constraint(greaterThanOrEqualToConstant: 200)
         contentStackMinWidthConstraint.priority = UILayoutPriority(1) // Lowest possible priority
         
-        let qrCodeWidthConstraint = qrCodeImageView.widthAnchor.constraint(equalToConstant: 400)
+        let qrCodeWidthConstraint = qrCodeImageView.widthAnchor.constraint(equalToConstant: 300)
         qrCodeWidthConstraint.priority = UILayoutPriority(999)
         
-        let qrCodeHeightConstraint = qrCodeImageView.heightAnchor.constraint(equalToConstant: 400)
+        let qrCodeHeightConstraint = qrCodeImageView.heightAnchor.constraint(equalToConstant: 300)
         qrCodeHeightConstraint.priority = UILayoutPriority(999)
         
         let textStackWidthConstraint = textStackView.widthAnchor.constraint(equalTo: contentStackView.widthAnchor)
@@ -197,7 +199,7 @@ class EmptyStateView: UIView {
         let bodyLabelWidthConstraint = bodyLabel.widthAnchor.constraint(lessThanOrEqualToConstant: 900)
         bodyLabelWidthConstraint.priority = UILayoutPriority(750)
         
-        let buttonWidthConstraint = openAppButton.widthAnchor.constraint(equalToConstant: 300)
+        let buttonWidthConstraint = openAppButton.widthAnchor.constraint(equalToConstant: 440)
         buttonWidthConstraint.priority = UILayoutPriority(999)
         
         let buttonHeightConstraint = openAppButton.heightAnchor.constraint(equalToConstant: 80)

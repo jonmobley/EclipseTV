@@ -200,7 +200,15 @@ class ImageViewController: ManagedViewController, ConnectionManagerDelegate, UIG
     /// The peer-to-peer connection manager that owns this view controller as its
     /// delegate. Set by `SceneDelegate` so move-mode notifications reach the live
     /// instance instead of a nil app-delegate reference.
-    internal weak var connectionManager: ConnectionManager?
+    internal weak var connectionManager: ConnectionManager? {
+        // The empty state can be built before SceneDelegate attaches the manager (an
+        // empty library on a returning launch), which left the code showing dashes.
+        didSet {
+            if let pin = connectionManager?.currentPairingPIN {
+                emptyStateView.setPairingCode(pin)
+            }
+        }
+    }
 
     internal var isInGridMode = true { // Start in grid mode
         didSet {
