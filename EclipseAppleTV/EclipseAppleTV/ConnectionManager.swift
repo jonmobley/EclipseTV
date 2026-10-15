@@ -196,10 +196,16 @@ class ConnectionManager: NSObject {
         pairedStore.rotatePIN()
     }
 
-    /// Forgets every paired iPhone; each must enter the on-screen code again.
+    /// Forgets every paired iPhone and drops any phone connected right now; each must
+    /// enter the new on-screen code to connect again.
     func forgetAllPairedPhones() {
         pairedStore.forgetAll()
+        acceptedDeviceKeysLock.withLock { acceptedDeviceKeys.removeAll() }
         rotatePairingPIN()
+        NotificationCenter.default.post(name: .pairingPINDidChange, object: self)
+        if session?.connectedPeers.isEmpty == false {
+            disconnect()
+        }
     }
 
     /// Display names of phones that have successfully paired with this TV.

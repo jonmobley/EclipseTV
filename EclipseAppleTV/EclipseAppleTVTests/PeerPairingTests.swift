@@ -6,7 +6,9 @@
 //
 
 import Testing
+import CoreImage
 import Foundation
+import UIKit
 @testable import EclipseAppleTV
 
 struct PeerPairingTests {
@@ -154,5 +156,18 @@ struct PeerPairingTests {
                 inferredFromPath: "/Caches/Media/Landscape/a.jpg"
             ) == .landscape
         )
+    }
+}
+
+struct EmptyStateQRCodeTests {
+
+    @Test func qrCodePointsAtTheIPhonePage() throws {
+        let image = try #require(EmptyStateView.makeQRCode(for: EmptyStateView.iPhoneAppURL))
+        let cgImage = try #require(image.cgImage)
+        let detector = try #require(CIDetector(ofType: CIDetectorTypeQRCode, context: nil,
+                                               options: [CIDetectorAccuracy: CIDetectorAccuracyHigh]))
+        let features = detector.features(in: CIImage(cgImage: cgImage))
+        let message = (features.first as? CIQRCodeFeature)?.messageString
+        #expect(message == "https://moxieapps.io/eclipse/iphone")
     }
 }
