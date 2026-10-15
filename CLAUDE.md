@@ -19,3 +19,8 @@
 - For 1.0, "Albums by code" / "Enter Share Code" are hidden (`AlbumConfig.offersAccountCodeEntry`);
   the TV re-syncs albums every 5 min instead of a Supabase Realtime socket (no Lovable dependency
   except the aircamtv.com manifest).
+- App Store screenshots (Apple TV, 2026-10-15): build Release for a throwaway tvOS simulator, copy media into
+  `Library/Caches/Media/Landscape`, and set the library list with
+  `simctl spawn <udid> defaults write <container>/Library/Preferences/com.mobleypro.eclipse.EclipseTV EclipseTV.recentImagesKey.landscape -array a.jpg …`
+  (a plain domain write or editing the plist directly is ignored, and the app then deletes the files as orphans).
+  Drive the remote with osascript key codes to Simulator (123/124 arrows, 36 select, 53 Menu).
