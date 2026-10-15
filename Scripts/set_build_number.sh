@@ -27,7 +27,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 IPHONE_PROJECT="$REPO_ROOT/EclipseiPhone/EclipseiPhone.xcodeproj/project.pbxproj"
 IPHONE_BUNDLE_ID="com.mobleypro.eclipse.EclipseiPhone"
 TV_PROJECT="$REPO_ROOT/EclipseAppleTV/EclipseAppleTV.xcodeproj/project.pbxproj"
-TV_BUNDLE_ID="com.mobleypro.eclipse.EclipseAppleTV"
+TV_BUNDLE_ID="com.mobleypro.eclipse.EclipseTV"
 
 # The iPhone target sets GENERATE_INFOPLIST_FILE, so CFBundleVersion is derived from
 # CURRENT_PROJECT_VERSION at build time. The TV target ships a literal plist, which is

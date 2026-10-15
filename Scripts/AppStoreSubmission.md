@@ -2,7 +2,7 @@
 
 Paste-ready answers for one universal-purchase record: iPhone/iPad
 `com.mobleypro.eclipse.EclipseiPhone` and Apple TV
-`com.mobleypro.eclipse.EclipseAppleTV`. Version 1.0.
+`com.mobleypro.eclipse.EclipseTV`. Version 1.0.
 
 Privacy policy: https://moxieapps.io/eclipse/privacy
 
