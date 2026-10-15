@@ -48,6 +48,8 @@ final class QRScannerViewController: UIViewController, AVCaptureMetadataOutputOb
 
     var onCode: ((String) -> Void)?
     private let session = AVCaptureSession()
+    /// Start and stop run in order on one queue, so a quick close can't leave the camera on.
+    private let sessionQueue = DispatchQueue(label: "QRScanner.session")
     private var previewLayer: AVCaptureVideoPreviewLayer?
     private var didEmit = false
 
@@ -72,7 +74,7 @@ final class QRScannerViewController: UIViewController, AVCaptureMetadataOutputOb
         view.layer.addSublayer(preview)
         previewLayer = preview
 
-        DispatchQueue.global(qos: .userInitiated).async { [session] in
+        sessionQueue.async { [session] in
             session.startRunning()
         }
     }
@@ -84,7 +86,9 @@ final class QRScannerViewController: UIViewController, AVCaptureMetadataOutputOb
 
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
-        session.stopRunning()
+        sessionQueue.async { [session] in
+            session.stopRunning()
+        }
     }
 
     func metadataOutput(
@@ -96,7 +100,9 @@ final class QRScannerViewController: UIViewController, AVCaptureMetadataOutputOb
               let object = metadataObjects.first as? AVMetadataMachineReadableCodeObject,
               let value = object.stringValue else { return }
         didEmit = true
-        session.stopRunning()
+        sessionQueue.async { [session] in
+            session.stopRunning()
+        }
         onCode?(value)
     }
 }

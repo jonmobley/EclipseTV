@@ -6,6 +6,7 @@
 //
 
 import LivePollKit
+import SafariServices
 import UIKit
 
 /// Form-sheet email sign-in using the Live Poll device-flow magic link.
@@ -119,8 +120,25 @@ final class LivePollSignInViewController: UIViewController {
             self?.sendTapped()
         }, for: .touchUpInside)
 
+        var privacyConfig = UIButton.Configuration.plain()
+        privacyConfig.title = "Privacy Policy"
+        privacyConfig.titleTextAttributesTransformer =
+            UIConfigurationTextAttributesTransformer { incoming in
+                var attrs = incoming
+                attrs.font = .preferredFont(forTextStyle: .footnote)
+                return attrs
+            }
+        let privacyButton = UIButton(configuration: privacyConfig)
+        privacyButton.addAction(UIAction { [weak self] _ in
+            self?.present(
+                SFSafariViewController(url: SettingsViewController.privacyPolicyURL),
+                animated: true
+            )
+        }, for: .touchUpInside)
+
         let stack = UIStackView(arrangedSubviews: [
-            messageLabel, emailField, errorLabel, sendButton, statusLabel, codeLabel
+            messageLabel, emailField, errorLabel, sendButton, statusLabel, codeLabel,
+            privacyButton
         ])
         stack.axis = .vertical
         stack.spacing = 16

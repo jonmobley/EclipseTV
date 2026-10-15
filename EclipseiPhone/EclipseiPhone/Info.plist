@@ -58,6 +58,8 @@
         <key>NSAllowsArbitraryLoads</key>
         <true/>
     </dict>
+	<key>CKSharingSupported</key>
+	<true/>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Eclipse needs access to the local network to connect with your Apple TV, Eclipse on your Mac, other Eclipse devices, Phone Camera ingest, and your PTZ camera (control and live picture)</string>
 	<key>NSBonjourServices</key>

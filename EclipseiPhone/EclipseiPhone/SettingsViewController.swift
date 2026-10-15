@@ -5,6 +5,7 @@
 //  Copyright © 2026 Moxie LLC. All rights reserved.
 //
 
+import SafariServices
 import UIKit
 
 /// Companion settings root: drill into display, transition, camera, EclipseTV,
@@ -70,6 +71,15 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
         case remote
         case phoneCamera
     }
+
+    private enum HelpRow: Int, CaseIterable {
+        case gettingStarted
+        case support
+        case privacyPolicy
+    }
+
+    static let supportURL = URL(string: "https://moxieapps.io/eclipse/support")!
+    static let privacyPolicyURL = URL(string: "https://moxieapps.io/eclipse/privacy")!
 
     private var sections: [Section] {
         var result: [Section] = []
@@ -235,7 +245,7 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
         case .eclipseTV: return 1
         case .eclipseMac: return MacRow.allCases.count
         case .recommendations: return 1
-        case .help: return 1
+        case .help: return HelpRow.allCases.count
         }
     }
 
@@ -352,9 +362,21 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
             config.secondaryText = GuidedAccessRecommendation.statusText
             config.image = UIImage(systemName: "lock.iphone")
         case .help:
-            config.text = "Getting Started"
-            config.secondaryText = "Learn the basics"
-            config.image = UIImage(systemName: "questionmark.circle")
+            switch HelpRow(rawValue: indexPath.row) {
+            case .gettingStarted:
+                config.text = "Getting Started"
+                config.secondaryText = "Learn the basics"
+                config.image = UIImage(systemName: "questionmark.circle")
+            case .support:
+                config.text = "Support"
+                config.secondaryText = "Questions and contact"
+                config.image = UIImage(systemName: "lifepreserver")
+            case .privacyPolicy:
+                config.text = "Privacy Policy"
+                config.image = UIImage(systemName: "hand.raised")
+            case .none:
+                break
+            }
         }
 
         cell.contentConfiguration = config
@@ -403,7 +425,16 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
                 SettingsGuidedAccessViewController(), animated: true
             )
         case .help:
-            pushGettingStarted()
+            switch HelpRow(rawValue: indexPath.row) {
+            case .gettingStarted:
+                pushGettingStarted()
+            case .support:
+                present(SFSafariViewController(url: Self.supportURL), animated: true)
+            case .privacyPolicy:
+                present(SFSafariViewController(url: Self.privacyPolicyURL), animated: true)
+            case .none:
+                break
+            }
         }
     }
 
