@@ -13,14 +13,18 @@ import Testing
 struct QuestPollClientTests {
 
     @Test func presentURLMatchesProjectorPath() throws {
-        let url = try #require(URL(string: "https://quest.eclipseapp.com/present"))
+        let url = try #require(URL(string: "https://questpoll.com/present"))
         #expect(QuestPollConfig.isPresentURL(url))
-        let nested = try #require(URL(string: "https://quest.eclipseapp.com/present/"))
+        let nested = try #require(URL(string: "https://questpoll.com/present/"))
         #expect(QuestPollConfig.isPresentURL(nested))
         let withCode = try #require(
-            URL(string: "https://quest.eclipseapp.com/present?code=VR2V")
+            URL(string: "https://questpoll.com/present?code=VR2V")
         )
         #expect(QuestPollConfig.isPresentURL(withCode))
+        let legacy = try #require(
+            URL(string: "https://quest.eclipseapp.com/present?code=VR2V")
+        )
+        #expect(QuestPollConfig.isPresentURL(legacy))
         let other = try #require(URL(string: "https://example.com/present"))
         #expect(!QuestPollConfig.isPresentURL(other))
     }
@@ -95,7 +99,7 @@ struct QuestPollClientTests {
     @Test func previewPageUsesPresentURL() {
         #expect(QuestPollConfig.previewPage.url == QuestPollConfig.presentURL)
         #expect(QuestPollConfig.previewPage.id == QuestPollConfig.previewPageId)
-        #expect(QuestPollConfig.previewPage.title == "Live Poll")
+        #expect(QuestPollConfig.previewPage.title == "QuestPoll")
     }
 
     @Test func practicePreviewURLUsesPollIdWithoutCode() {
@@ -116,12 +120,12 @@ struct QuestPollClientTests {
 
     @Test func hostURLPointsAtHostConsole() {
         #expect(QuestPollConfig.hostURL.absoluteString.hasSuffix("/host"))
-        #expect(QuestPollConfig.origin.host == "quest.eclipseapp.com")
+        #expect(QuestPollConfig.origin.host == "questpoll.com")
     }
 
     @Test func joinURLUsesUnifiedOrigin() {
         let url = QuestPollConfig.joinURL(code: "VR2V")
-        #expect(url.host == "quest.eclipseapp.com")
+        #expect(url.host == "questpoll.com")
         #expect(url.path.hasSuffix("/join/VR2V"))
     }
 

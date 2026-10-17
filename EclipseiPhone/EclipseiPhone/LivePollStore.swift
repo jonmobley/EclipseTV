@@ -62,7 +62,7 @@ final class LivePollStore {
         let item = ShowLivePoll(
             showId: showId,
             pollId: pollId,
-            title: trimmedTitle.isEmpty ? "Live Poll" : trimmedTitle,
+            title: trimmedTitle.isEmpty ? "QuestPoll" : trimmedTitle,
             questionCount: questionCount
         )
         polls.append(item)
@@ -77,7 +77,7 @@ final class LivePollStore {
         guard let index = polls.firstIndex(where: { $0.id == id }) else { return }
         let trimmed = summary.title.trimmingCharacters(in: .whitespacesAndNewlines)
         polls[index].pollId = summary.id
-        polls[index].title = trimmed.isEmpty ? "Live Poll" : trimmed
+        polls[index].title = trimmed.isEmpty ? "QuestPoll" : trimmed
         polls[index].questionCount = max(summary.questionCount, 1)
         persist()
         scheduleSaveIfNeeded(id: id)

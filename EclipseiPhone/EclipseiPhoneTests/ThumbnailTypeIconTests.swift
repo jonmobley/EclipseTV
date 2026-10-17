@@ -186,7 +186,7 @@ struct ThumbnailTypeIconTests {
         #expect(cell.captionLabel.textAlignment == .center)
 
         cell.configureSpecial(
-            title: "Live Poll",
+            title: "QuestPoll",
             systemImage: "chart.bar.fill",
             thumbnail: nil,
             fillColor: .darkGray,

@@ -38,7 +38,7 @@ final class QuestPollPickerViewController: UITableViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = "Live Poll"
+        title = "QuestPoll"
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: "poll")
         navigationItem.leftBarButtonItem = UIBarButtonItem(
             barButtonSystemItem: .close,
@@ -161,7 +161,7 @@ final class QuestPollPickerViewController: UITableViewController {
     private func confirmDeleteAccount() {
         guard !isDeleting else { return }
         let alert = UIAlertController(
-            title: "Delete Live Poll Account?",
+            title: "Delete QuestPoll Account?",
             message: "Deletes this account and its decks. This cannot be undone.",
             preferredStyle: .alert
         )
