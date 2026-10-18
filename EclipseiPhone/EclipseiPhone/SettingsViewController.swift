@@ -34,6 +34,8 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
     var onShareShow: (() -> Void)?
     /// Invoked when Export media is chosen for the open Show.
     var onExportShowMedia: (() -> Void)?
+    /// Invoked when Download for Offline is chosen for the open Show.
+    var onDownloadShowOffline: (() -> Void)?
     /// Invoked after the user confirms Delete Show. Host deletes and dismisses.
     var onDeleteShow: (() -> Void)?
 
@@ -59,6 +61,7 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
     private enum ShowSharingRow: Int, CaseIterable {
         case shareThisShow
         case exportMedia
+        case downloadOffline
         case enterShareCode
     }
 
@@ -97,7 +100,8 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
     }
 
     private var showSharingRows: [ShowSharingRow] {
-        var rows: [ShowSharingRow] = openShowName != nil ? [.shareThisShow, .exportMedia] : []
+        var rows: [ShowSharingRow] = openShowName != nil
+            ? [.shareThisShow, .exportMedia, .downloadOffline] : []
         if AlbumConfig.offersAccountCodeEntry || AlbumBrowserStore.shared.hasAccountConfigured {
             rows.append(.enterShareCode)
         }
@@ -290,7 +294,8 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
                 ? " Enter a code here to join someone else's Show." : ""
             return "Share this show invites collaborators over iCloud. "
                 + "Export media saves images, videos, slideshows, and PDFs "
-                + "as a numbered ZIP." + joinLine
+                + "as a numbered ZIP. Download for Offline puts every photo and "
+                + "video on this iPhone so the Show plays without internet." + joinLine
         case .eclipseMac:
             return "Control Eclipse on a Mac, or send this iPhone’s camera as a "
                 + "live source (any Apple ID, same Wi‑Fi)."
@@ -606,6 +611,16 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
         case .exportMedia:
             config.text = "Export media"
             config.image = UIImage(systemName: "square.and.arrow.up")
+        case .downloadOffline:
+            guard let id = openShowId else { break }
+            let offline = Self.offlineRow(forShowId: id)
+            config.text = offline.title
+            config.secondaryText = offline.subtitle
+            config.image = UIImage(systemName: offline.systemImage)
+            cell.selectionStyle = offline.canDownload ? .default : .none
+            if !offline.canDownload {
+                config.textProperties.color = .secondaryLabel
+            }
         case .enterShareCode:
             config.text = "Enter Code"
             config.image = UIImage(systemName: "person.2.badge.key")
@@ -616,6 +631,9 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
         switch showSharingRows[row] {
         case .shareThisShow: onShareShow?()
         case .exportMedia: onExportShowMedia?()
+        case .downloadOffline:
+            guard let id = openShowId, Self.offlineRow(forShowId: id).canDownload else { return }
+            onDownloadShowOffline?()
         case .enterShareCode: onEnterShareCode?()
         }
     }

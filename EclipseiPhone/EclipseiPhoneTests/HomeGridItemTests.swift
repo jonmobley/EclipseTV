@@ -11,15 +11,6 @@ import Testing
 @MainActor
 struct HomeGridItemTests {
 
-    @Test func hasBothOrientationsRequiresOneOfEach() {
-        let landscape = LocalAlbum(name: "Wide", orientation: .landscape)
-        let vertical = LocalAlbum(name: "Tall", orientation: .portrait)
-        #expect(!HomeGridItem.hasBothOrientations(in: []))
-        #expect(!HomeGridItem.hasBothOrientations(in: [landscape]))
-        #expect(!HomeGridItem.hasBothOrientations(in: [vertical, vertical]))
-        #expect(HomeGridItem.hasBothOrientations(in: [landscape, vertical]))
-    }
-
     @Test func recentShowsUsesCreateShowWhenEmpty() {
         #expect(HomeGridItem.recentShows(from: []) == [.createShow])
     }

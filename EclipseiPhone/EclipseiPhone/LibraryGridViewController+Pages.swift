@@ -89,7 +89,6 @@ extension LibraryGridViewController {
             HomeLayoutState(
                 isShowMode: false,
                 showsSlideshowRibbon: false,
-                showsRecentFormatFilter: self?.showsHomeRecentFormatFilter ?? false,
                 hidesHero: self?.hidesHomeHero ?? false
             )
         }
