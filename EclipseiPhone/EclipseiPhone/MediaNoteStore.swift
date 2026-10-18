@@ -30,6 +30,7 @@ enum MediaNoteStore {
     /// Ids whose note the user deleted, so iCloud is told `""` instead of
     /// leaving the old text on other devices.
     private static let clearedKey = "EclipseTV.media.notesCleared"
+    private static let firstUploadKey = "EclipseTV.media.notesFirstUploadQueued"
 
     static let didChangeNotification = Notification.Name("MediaNoteStore.didChange")
 
@@ -108,6 +109,14 @@ enum MediaNoteStore {
     static func cloudValue(forId id: String) -> String? {
         if let note = note(forId: id) { return note }
         return clearedIds().contains(id) ? "" : nil
+    }
+
+    /// Ids with notes from before notes synced, returned once (later calls
+    /// return nothing).
+    static func idsNeedingFirstUpload() -> [String] {
+        guard !UserDefaults.standard.bool(forKey: firstUploadKey) else { return [] }
+        UserDefaults.standard.set(true, forKey: firstUploadKey)
+        return Array(storedNotes().keys)
     }
 
     /// Applies a note from iCloud (another device's edit).
