@@ -53,18 +53,21 @@ extension UIViewController {
         progress.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in
             cancelled = true
         })
-        present(progress, animated: true)
-
-        Task { @MainActor in
-            var failed = 0
-            for (index, id) in ids.enumerated() {
-                if cancelled { return }
-                progress.message = Self.offlineProgressText(done: index, total: ids.count)
-                if !(await Self.download(id)) { failed += 1 }
-            }
-            guard !cancelled else { return }
-            progress.dismiss(animated: true) {
-                self.presentOfflineOutcome(failed: failed, total: ids.count)
+        // Downloads start once the alert is fully on screen: a download can fail
+        // at once (no iCloud), and dismissing a half-presented alert would leave it
+        // stuck and swallow the outcome.
+        present(progress, animated: true) {
+            Task { @MainActor in
+                var failed = 0
+                for (index, id) in ids.enumerated() {
+                    if cancelled { return }
+                    progress.message = Self.offlineProgressText(done: index, total: ids.count)
+                    if !(await Self.download(id)) { failed += 1 }
+                }
+                guard !cancelled else { return }
+                progress.dismiss(animated: true) {
+                    self.presentOfflineOutcome(failed: failed, total: ids.count)
+                }
             }
         }
     }
