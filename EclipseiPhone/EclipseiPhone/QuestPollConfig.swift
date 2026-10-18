@@ -94,7 +94,7 @@ enum QuestPollConfig {
 
     /// Synthetic page so the warm web pool can attach `/present` to the hero.
     static var previewPage: WebPage {
-        WebPage(id: previewPageId, title: "Live Poll", url: presentURL)
+        WebPage(id: previewPageId, title: "QuestPoll", url: presentURL)
     }
 
     /// Projector page for an active room (falls back to unbound `/present`).
@@ -102,7 +102,7 @@ enum QuestPollConfig {
         guard let code, !code.isEmpty else { return previewPage }
         return WebPage(
             id: previewPageId,
-            title: "Live Poll",
+            title: "QuestPoll",
             url: presentURL(code: code)
         )
     }
@@ -111,7 +111,7 @@ enum QuestPollConfig {
     static func previewPage(pollId: String) -> WebPage {
         WebPage(
             id: previewPageId(pollId: pollId),
-            title: "Live Poll Practice",
+            title: "QuestPoll Practice",
             url: presentPreviewURL(pollId: pollId)
         )
     }

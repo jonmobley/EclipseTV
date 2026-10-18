@@ -145,7 +145,7 @@ extension LibraryGridViewController {
     func applyQuestPollLiveHeader() {
         let code = QuestPollSessionStore.shared.session?.code
         let page = QuestPollConfig.previewPage(code: code)
-        let title = QuestPollSessionStore.shared.session?.deckTitle ?? "Live Poll"
+        let title = QuestPollSessionStore.shared.session?.deckTitle ?? "QuestPoll"
         let canShow = !WarmWebSessionPool.shared.isAdopted(pageId: page.id)
         if canShow {
             WarmWebSessionPool.shared.warmIfNeeded(for: page)
@@ -296,7 +296,7 @@ extension LibraryGridViewController {
         children.append(arrangeAction())
         children.append(selectAction(seedId: ShowLivePollToken.token(for: item.id)))
         children.append(UIAction(
-            title: "Delete Live Poll",
+            title: "Delete QuestPoll",
             image: UIImage(systemName: "trash"),
             attributes: .destructive
         ) { [weak self] _ in
@@ -339,7 +339,7 @@ extension LibraryGridViewController {
     /// Countdown and PDF rather than removing silently like a Show member.
     private func confirmDeleteLivePoll(_ item: ShowLivePoll) {
         let alert = UIAlertController(
-            title: "Delete Live Poll?",
+            title: "Delete QuestPoll?",
             message: "“\(item.title)” is removed from this Show.",
             preferredStyle: .alert
         )
@@ -471,14 +471,14 @@ extension LibraryGridViewController {
         if canPresentQuestPollOverlay { return true }
         let message: String
         if TVLibraryStore.shared.isOnline {
-            message = "Live Poll needs AirPlay or HDMI. EclipseTV stays on the library."
+            message = "QuestPoll needs AirPlay or HDMI. EclipseTV stays on the library."
         } else {
             // Name the Settings switch, not "the phone preview" — the user has to
             // find "Practice Mode" to act on this.
-            message = "Live Poll needs AirPlay, HDMI, or Practice Mode."
+            message = "QuestPoll needs AirPlay, HDMI, or Practice Mode."
         }
         let alert = UIAlertController(
-            title: "Live Poll", message: message, preferredStyle: .alert
+            title: "QuestPoll", message: message, preferredStyle: .alert
         )
         alert.addAction(UIAlertAction(title: "OK", style: .default))
         present(alert, animated: true)

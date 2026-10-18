@@ -52,7 +52,7 @@ final class LivePollSignInViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = "Live Poll"
+        title = "QuestPoll"
         view.backgroundColor = .systemGroupedBackground
         navigationItem.leftBarButtonItem = UIBarButtonItem(
             barButtonSystemItem: .close,
@@ -71,8 +71,8 @@ final class LivePollSignInViewController: UIViewController {
         view.addSubview(scroll)
 
         messageLabel.text = showsMigrationMessage
-            ? "Host PIN sign-in has been replaced. Sign in with the email for your Live Poll account."
-            : "Sign in with the email you use on the Live Poll web editor."
+            ? "Host PIN sign-in has been replaced. Sign in with the email for your QuestPoll account."
+            : "Sign in with the email you use on questpoll.com."
         messageLabel.font = .systemFont(ofSize: 15)
         messageLabel.textColor = .secondaryLabel
         messageLabel.numberOfLines = 0

@@ -60,15 +60,15 @@ final class GettingStartedViewController: UITableViewController {
             tint: .systemGreen
         ),
         Topic(
-            title: "Live Poll",
+            title: "QuestPoll",
             body: """
-            Add Live Poll from + inside a Show — link your QuestPoll host PIN once, \
-            then pick a deck for each card. Tap a card for Practice (phone preview, \
+            Add QuestPoll from + inside a Show — sign in with your questpoll.com email \
+            once, then pick a deck for each card. Tap a card for Practice (phone preview, \
             no room) or Start (creates the room on AirPlay, HDMI, or Practice Mode). \
             EclipseTV alone cannot show the poll. Starting another poll ends the \
             current room. The ribbon under the live preview cues Join, each question, \
             and results; audience phones scan the QR on screen. Use ⋯ Edit on \
-            QuestPoll to manage decks in the browser.
+            QuestPoll to manage decks at questpoll.com.
             """,
             systemImage: "chart.bar.fill",
             tint: .systemOrange
@@ -112,7 +112,7 @@ final class GettingStartedViewController: UITableViewController {
             body: """
             Landscape (16:9) is the default; Vertical is in Settings → Display Mode. \
             Inside a Show: header Blackout blanks the display, Background sets a \
-            resting image, Screensaver loops a video, + adds media, and Live Poll \
+            resting image, Screensaver loops a video, + adds media, and QuestPoll \
             or Countdown run on AirPlay or HDMI.
             """,
             systemImage: "moon.fill",

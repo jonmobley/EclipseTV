@@ -44,7 +44,7 @@ class HelpView: UIView {
         tiles are 9:16 and fullscreen letterboxes on the TV. Fit / Fill for stills \
         is set from the phone.
         
-        Camera, websites, PDFs, countdowns, and Live Polls stay on AirPlay; when \
+        Camera, websites, PDFs, countdowns, and QuestPolls stay on AirPlay; when \
         both are linked, Eclipse parks black while AirPlay owns those overlays.
         """
         label.textColor = UIColor(white: 0.9, alpha: 1.0) // Lighter, more readable text

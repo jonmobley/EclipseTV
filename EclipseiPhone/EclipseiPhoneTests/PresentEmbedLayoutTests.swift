@@ -32,7 +32,7 @@ struct PresentEmbedLayoutTests {
         let web = UIView(frame: .zero)
         host.addSubview(web)
         let present = try #require(
-            URL(string: "https://quest.eclipseapp.com/present?code=ABCD&aspect=9x16")
+            URL(string: "https://questpoll.com/present?code=ABCD&aspect=9x16")
         )
         PresentationViewController.applyWebLayout(
             to: web,

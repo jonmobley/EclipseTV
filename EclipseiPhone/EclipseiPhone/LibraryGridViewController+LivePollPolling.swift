@@ -71,7 +71,7 @@ extension LibraryGridViewController {
         let message = (error as? LivePollError)?.userMessage
             ?? "Could not start the poll."
         let alert = UIAlertController(
-            title: "Live Poll", message: message, preferredStyle: .alert
+            title: "QuestPoll", message: message, preferredStyle: .alert
         )
         alert.addAction(UIAlertAction(title: "OK", style: .default))
         present(alert, animated: true)

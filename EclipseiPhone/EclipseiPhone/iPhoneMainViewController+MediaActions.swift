@@ -307,7 +307,7 @@ extension iPhoneMainViewController {
             countdown.attributes = .disabled
         }
         let livePoll = UIAction(
-            title: "Live Poll",
+            title: "QuestPoll",
             image: UIImage(systemName: "chart.bar.fill")
         ) { [weak self] _ in
             guard let albumId else { return }
