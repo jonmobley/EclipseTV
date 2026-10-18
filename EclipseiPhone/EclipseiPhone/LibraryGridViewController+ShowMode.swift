@@ -639,7 +639,7 @@ extension LibraryGridViewController {
             attributes: .destructive
         ) { [weak self] _ in
             guard let self, let id = self.openShowId else { return }
-            LocalAlbumStore.shared.remove(itemId: item.id, fromAlbumId: id)
+            self.removeFromShowWithUndo([item.id], showId: id)
         }
         let arrange = arrangeAction()
         var children: [UIMenuElement] = [
@@ -711,7 +711,7 @@ extension LibraryGridViewController {
             attributes: .destructive
         ) { [weak self] _ in
             guard let self, let id = self.openShowId else { return }
-            LocalAlbumStore.shared.remove(itemId: itemId, fromAlbumId: id)
+            self.removeFromShowWithUndo([itemId], showId: id)
         }
         return UIMenu(
             children: [cover, arrangeAction(), selectAction(seedId: itemId), remove] + extras
@@ -788,7 +788,7 @@ extension LibraryGridViewController {
             attributes: .destructive
         ) { [weak self] _ in
             guard let self, let id = self.openShowId else { return }
-            LocalAlbumStore.shared.hideTool(token, albumId: id)
+            self.removeFromShowWithUndo([token], showId: id)
         }
         children.append(remove)
         return UIMenu(children: children)

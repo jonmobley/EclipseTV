@@ -56,6 +56,34 @@ extension UIViewController {
         }
     }
 
+    /// Bottom toast with an Undo button, for reversible removals.
+    ///
+    /// Stays up longer than a plain toast so there's time to reach the button.
+    /// - Parameters:
+    ///   - message: What happened ("Removed 3 items").
+    ///   - undo: Puts it back; the toast dismisses itself afterward.
+    func showUndoToast(_ message: String, undo: @escaping () -> Void) {
+        removePresentationToast()
+        let toast = PresentationToastView(message: message, isCentered: false)
+        toast.setAction(title: "Undo") { [weak toast] in
+            undo()
+            Haptics.impactLight()
+            toast?.removeFromSuperview()
+        }
+        installPresentationToast(toast, in: view, centered: false)
+        UIAccessibility.post(notification: .announcement, argument: "\(message). Undo available.")
+        let token = UUID()
+        toast.dismissToken = token
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak toast] in
+            guard let toast, toast.superview != nil, toast.dismissToken == token else { return }
+            UIView.animate(withDuration: 0.2, animations: {
+                toast.alpha = 0
+            }, completion: { _ in
+                toast.removeFromSuperview()
+            })
+        }
+    }
+
     /// Clears any on-screen presentation toast (e.g. after a long download).
     func removePresentationToastIfPresent() {
         removePresentationToast()
@@ -164,5 +192,30 @@ private final class PresentationToastView: UIView {
     func setMessage(_ message: String) {
         label.text = message
         accessibilityLabel = message
+    }
+
+    /// Adds a trailing action button (Undo). The toast then exposes the label
+    /// and button separately to VoiceOver.
+    func setAction(title: String, handler: @escaping () -> Void) {
+        let button = UIButton(type: .system, primaryAction: UIAction(title: title) { _ in handler() })
+        button.titleLabel?.font = UIFontMetrics(forTextStyle: .subheadline)
+            .scaledFont(for: .systemFont(ofSize: 15, weight: .semibold))
+        button.titleLabel?.adjustsFontForContentSizeCategory = true
+        button.setContentHuggingPriority(.required, for: .horizontal)
+        button.setContentCompressionResistancePriority(.required, for: .horizontal)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(button)
+        isAccessibilityElement = false
+        label.textAlignment = .natural
+        for constraint in constraints where constraint.firstItem === label
+            && constraint.firstAttribute == .trailing {
+            constraint.isActive = false
+        }
+        NSLayoutConstraint.activate([
+            button.leadingAnchor.constraint(equalTo: label.trailingAnchor, constant: 12),
+            button.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
+            button.centerYAnchor.constraint(equalTo: centerYAnchor),
+            button.heightAnchor.constraint(greaterThanOrEqualToConstant: 44)
+        ])
     }
 }
