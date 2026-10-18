@@ -19,6 +19,12 @@
 - For 1.0, "Albums by code" / "Enter Share Code" are hidden (`AlbumConfig.offersAccountCodeEntry`);
   the TV re-syncs albums every 5 min instead of a Supabase Realtime socket (no Lovable dependency
   except the aircamtv.com manifest).
+  **Owner wants both back after 1.0 is approved** (decided 2026-10-18): instant album updates and
+  a way to create albums. They were turned off only for App Review (a code screen with no public
+  way to get a code is a dead end; realtime tied the TV to the Lovable Supabase project). Plan:
+  move albums off Lovable (e.g. the owner's iCloud, like Mac Show sync), let people create albums
+  in the iPhone app, then flip `offersAccountCodeEntry` on (both apps) and restore instant updates.
+  The old realtime code is in git before 277d4f2 (`RealtimeAlbumNotifier.swift`).
 - App Store screenshots (Apple TV, 2026-10-15): build Release for a throwaway tvOS simulator, copy media into
   `Library/Caches/Media/Landscape`, and set the library list with
   `simctl spawn <udid> defaults write <container>/Library/Preferences/com.mobleypro.eclipse.EclipseTV EclipseTV.recentImagesKey.landscape -array a.jpg …`
