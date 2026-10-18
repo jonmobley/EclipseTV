@@ -77,6 +77,8 @@ enum CloudKitSchema {
         static let framing = "framing"
         static let isLooping = "isLooping"
         static let isMuted = "isMuted"
+        /// Presenter note (`""` = deleted; absent = never set by any device).
+        static let note = "note"
     }
 
     enum PDFKey {

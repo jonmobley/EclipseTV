@@ -81,7 +81,10 @@ final class MediaNoteComposerViewController: UIViewController {
     }
 
     private func commit() {
+        let before = MediaNoteStore.note(forId: itemId)
         MediaNoteStore.setNote(textView.text, forId: itemId)
+        guard MediaNoteStore.note(forId: itemId) != before else { return }
+        EclipseSyncController.shared.backend.scheduleMediaPrefsSave(libraryId: itemId)
     }
 
     @objc private func doneTapped() {

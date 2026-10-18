@@ -116,6 +116,20 @@ struct MediaNoteStoreTests {
         #expect(MediaNoteStore.note(forId: id) == nil)
     }
 
+    @Test func existingNotesAreQueuedForUploadOnce() {
+        let id = uniqueId()
+        let key = "EclipseTV.media.notesFirstUploadQueued"
+        let previous = UserDefaults.standard.object(forKey: key)
+        defer {
+            MediaNoteStore.clear(forId: id)
+            UserDefaults.standard.set(previous, forKey: key)
+        }
+        UserDefaults.standard.removeObject(forKey: key)
+        MediaNoteStore.setNote("Before sync existed", forId: id)
+        #expect(MediaNoteStore.idsNeedingFirstUpload().contains(id))
+        #expect(MediaNoteStore.idsNeedingFirstUpload().isEmpty)
+    }
+
     private func uniqueId() -> String {
         "note-test-\(UUID().uuidString)"
     }

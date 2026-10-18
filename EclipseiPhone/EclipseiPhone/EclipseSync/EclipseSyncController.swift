@@ -46,6 +46,11 @@ final class EclipseSyncController {
     /// Boots the sync backend. Call once from `AppDelegate`.
     func start() {
         backend.start()
+        // Notes written before they synced: queue each once so they reach
+        // iCloud (and, while queued, a Mac edit can't overwrite them).
+        MediaNoteStore.idsNeedingFirstUpload().forEach {
+            backend.scheduleMediaPrefsSave(libraryId: $0)
+        }
         if statusObserver == nil {
             statusObserver = NotificationCenter.default.addObserver(
                 forName: CloudKitAccountMonitor.didChangeNotification,
