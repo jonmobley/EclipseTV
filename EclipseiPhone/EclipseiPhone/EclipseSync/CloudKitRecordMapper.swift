@@ -213,6 +213,9 @@ enum CloudKitRecordMapper {
     ) {
         record[CloudKitSchema.MediaKey.fitMode] =
             MediaFitSettings.mode(forId: libraryId).rawValue as CKRecordValue
+        if let note = MediaNoteStore.cloudValue(forId: libraryId) {
+            record[CloudKitSchema.MediaKey.note] = note as CKRecordValue
+        }
         if let framing = MediaFramingStore.framing(forId: libraryId) {
             record[CloudKitSchema.MediaKey.framing] = framing.asArray as CKRecordValue
         } else {
@@ -342,6 +345,9 @@ enum CloudKitRecordMapper {
             } else {
                 MediaFramingStore.clear(forId: libraryId)
             }
+        }
+        if let note = record[CloudKitSchema.MediaKey.note] as? String {
+            MediaNoteStore.applyRemote(note, forId: libraryId)
         }
         let isVideo = (record[CloudKitSchema.MediaKey.isVideo] as? Bool) ?? false
         guard isVideo else { return }

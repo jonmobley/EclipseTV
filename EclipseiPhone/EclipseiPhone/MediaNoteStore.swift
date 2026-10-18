@@ -20,11 +20,16 @@ enum MediaNoteVisibility: String, CaseIterable {
 
 /// Per-item presenter notes keyed by `LibraryItemDTO.id`.
 ///
-/// Phone-local only — never sent on Multipeer or written onto `LibraryItemDTO`,
-/// so TV manifest replaces cannot wipe them. Cleared when the media is deleted.
+/// Never sent on Multipeer or written onto `LibraryItemDTO`, so TV manifest
+/// replaces cannot wipe them. Synced through iCloud on the item's `MediaItem`
+/// record (`note`), so the Mac app shows them too. Cleared when the media is
+/// deleted.
 enum MediaNoteStore {
     private static let notesKey = "EclipseTV.media.notes"
     private static let visibilityKey = "EclipseTV.media.notesVisibility"
+    /// Ids whose note the user deleted, so iCloud is told `""` instead of
+    /// leaving the old text on other devices.
+    private static let clearedKey = "EclipseTV.media.notesCleared"
 
     static let didChangeNotification = Notification.Name("MediaNoteStore.didChange")
 
@@ -53,10 +58,12 @@ enum MediaNoteStore {
         let trimmed = text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if trimmed.isEmpty {
             guard notes.removeValue(forKey: id) != nil else { return }
+            setCleared(true, forId: id)
         } else if notes[id] == trimmed {
             return
         } else {
             notes[id] = trimmed
+            setCleared(false, forId: id)
         }
         UserDefaults.standard.set(notes, forKey: notesKey)
         NotificationCenter.default.post(name: didChangeNotification, object: id)
@@ -94,7 +101,33 @@ enum MediaNoteStore {
         return visibility == .always
     }
 
+    // MARK: - iCloud
+
+    /// What to write to iCloud for `id`: the note, `""` when the user deleted
+    /// it, or nil to leave the record's note alone (never had one here).
+    static func cloudValue(forId id: String) -> String? {
+        if let note = note(forId: id) { return note }
+        return clearedIds().contains(id) ? "" : nil
+    }
+
+    /// Applies a note from iCloud (another device's edit).
+    static func applyRemote(_ text: String, forId id: String) {
+        setNote(text, forId: id)
+        setCleared(false, forId: id)
+    }
+
     // MARK: - Private
+
+    private static func clearedIds() -> Set<String> {
+        Set(UserDefaults.standard.stringArray(forKey: clearedKey) ?? [])
+    }
+
+    private static func setCleared(_ cleared: Bool, forId id: String) {
+        var ids = clearedIds()
+        let changed = cleared ? ids.insert(id).inserted : ids.remove(id) != nil
+        guard changed else { return }
+        UserDefaults.standard.set(Array(ids), forKey: clearedKey)
+    }
 
     private static func storedNotes() -> [String: String] {
         UserDefaults.standard.dictionary(forKey: notesKey) as? [String: String] ?? [:]

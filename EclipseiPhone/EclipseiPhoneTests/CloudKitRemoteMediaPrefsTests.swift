@@ -91,6 +91,48 @@ struct CloudKitRemoteMediaPrefsTests {
 
     // MARK: - Helpers
 
+    @Test func notesTravelOnTheMediaRecordAndDeletesAreSent() {
+        let id = uniqueId()
+        defer {
+            reset(id)
+            MediaNoteStore.clear(forId: id)
+        }
+        let outgoing = mediaRecord(framing: nil, fitMode: .fit)
+        CloudKitRecordMapper.applyMediaPrefs(to: outgoing, libraryId: id, isVideo: false)
+        #expect(outgoing[CloudKitSchema.MediaKey.note] == nil)
+
+        CloudKitRecordMapper.applyRemoteMediaPrefs(
+            from: noteRecord("Wait for the laugh"), libraryId: id
+        )
+        #expect(MediaNoteStore.note(forId: id) == "Wait for the laugh")
+
+        MediaNoteStore.setNote("", forId: id)
+        CloudKitRecordMapper.applyMediaPrefs(to: outgoing, libraryId: id, isVideo: false)
+        #expect(outgoing[CloudKitSchema.MediaKey.note] as? String == "")
+
+        CloudKitRecordMapper.applyRemoteMediaPrefs(from: noteRecord("Back"), libraryId: id)
+        #expect(MediaNoteStore.cloudValue(forId: id) == "Back")
+    }
+
+    @Test func recordWithoutANoteLeavesTheLocalNote() {
+        let id = uniqueId()
+        defer {
+            reset(id)
+            MediaNoteStore.clear(forId: id)
+        }
+        MediaNoteStore.setNote("Mine", forId: id)
+        CloudKitRecordMapper.applyRemoteMediaPrefs(
+            from: mediaRecord(framing: nil, fitMode: .fit), libraryId: id
+        )
+        #expect(MediaNoteStore.note(forId: id) == "Mine")
+    }
+
+    private func noteRecord(_ note: String) -> CKRecord {
+        let record = mediaRecord(framing: nil, fitMode: .fit)
+        record[CloudKitSchema.MediaKey.note] = note as CKRecordValue
+        return record
+    }
+
     private func mediaRecord(
         framing: MediaFraming?,
         fitMode: MediaFitMode
