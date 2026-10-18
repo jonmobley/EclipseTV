@@ -88,7 +88,7 @@ extension LibraryGridViewController {
         ) { [weak self] _ in
             context.afterClosing {
                 guard let self, let id = self.openShowId else { return }
-                LocalAlbumStore.shared.remove(itemId: item.id, fromAlbumId: id)
+                self.removeFromShowWithUndo([item.id], showId: id)
             }
         }
         return [cover, remove]

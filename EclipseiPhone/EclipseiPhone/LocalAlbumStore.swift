@@ -213,6 +213,19 @@ final class LocalAlbumStore {
         }
     }
 
+    /// Puts a Show's membership back as it was in `snapshot` (Undo after
+    /// Remove): items, tools, grid order, cover, and the sync tombstones.
+    func restoreMembership(from snapshot: LocalAlbum) {
+        guard let index = albums.firstIndex(where: { $0.id == snapshot.id }) else { return }
+        albums[index].itemIds = snapshot.itemIds
+        albums[index].surfaceIds = snapshot.surfaceIds
+        albums[index].coverId = snapshot.coverId
+        albums[index].deletedItemIds = snapshot.deletedItemIds
+        albums[index].deletedSurfaceIds = snapshot.deletedSurfaceIds
+        persist(changedAlbumId: snapshot.id)
+        scheduleShowSaveIfNeeded(snapshot.id)
+    }
+
     /// Replaces the album's ordered membership.
     func reorder(itemIds: [String], inAlbumId albumId: UUID) {
         guard let index = albums.firstIndex(where: { $0.id == albumId }) else { return }

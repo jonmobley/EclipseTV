@@ -84,6 +84,17 @@ extension LibraryGridViewController {
         guard isSelecting, let showId = openShowId else { return }
         let ids = Array(selectedShowItemIds)
         guard !ids.isEmpty else { return }
+        // Plain media and tools only leave the Show, so Undo replaces the
+        // confirmation. Countdowns and polls are deleted outright: confirm.
+        let deletesCards = ids.contains {
+            ShowCountdownToken.countdownId(from: $0) != nil
+                || ShowLivePollToken.livePollId(from: $0) != nil
+        }
+        guard deletesCards else {
+            endSelectMode()
+            removeFromShowWithUndo(ids, showId: showId)
+            return
+        }
         let count = ids.count
         let alert = UIAlertController(
             title: count == 1 ? "Remove Item?" : "Remove \(count) Items?",
