@@ -346,10 +346,17 @@ class iPhoneConnectionManager: NSObject {
            PeerPairing.isValidDeviceKey(existing) {
             return existing
         }
+        // If the Keychain refuses the write (unsigned test hosts), keep using
+        // the same key for this launch instead of minting one per call.
+        if let cachedPairingDeviceKey { return cachedPairingDeviceKey }
         let fresh = PeerPairing.generateDeviceKey()
         KeychainStore.set(fresh, forKey: keychainKey)
+        cachedPairingDeviceKey = fresh
         return fresh
     }
+
+    /// In-memory copy of the pairing key for when the Keychain is unavailable.
+    private nonisolated(unsafe) static var cachedPairingDeviceKey: String?
 
     /// Supplies the TV-displayed PIN for the next first-time invite. Normalized digits only.
     func setPendingPairingPIN(_ raw: String) {
