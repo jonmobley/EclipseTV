@@ -43,6 +43,12 @@ extension LibraryGridViewController {
         }
     }
 
+    /// + menu Q&A: appends an Audience Q&A card (sign-in happens on Start).
+    func addQACard(toShowId showId: UUID) {
+        let item = LivePollStore.shared.createQA(showId: showId)
+        revealAddedShowMember(id: ShowLivePollToken.token(for: item.id))
+    }
+
     /// + menu: link if needed, pick a deck, append a named card to the Show.
     func addLivePollCard(toShowId showId: UUID) {
         presentQuestPollPickerOrLink(mode: .add(showId: showId))
@@ -208,9 +214,10 @@ extension LibraryGridViewController {
         }
         // LIVE means an external display owns the output. Phone-only / Practice
         // preview shows the projector page without the red chip.
+        let isQA = QuestPollSessionStore.shared.session?.mode == .qa
         liveHeader.configureOverlay(
             title: title,
-            systemImage: "chart.bar.fill",
+            systemImage: isQA ? "questionmark.bubble.fill" : "chart.bar.fill",
             fillColor: .mediaPlaceholder,
             keepWebPreview: canShow,
             showsLiveBadge: LiveOutputRouting.showsLivePollLiveBadge()
@@ -226,7 +233,9 @@ extension LibraryGridViewController {
     /// in Practice. A leftover room after switching to a photo does not keep
     /// the ribbon (or its red live stroke).
     var showsLivePollRibbon: Bool {
-        QuestPollRibbon.shouldShow(
+        // Q&A has no cue strip; its controls are the question list.
+        if QuestPollSessionStore.shared.session?.mode == .qa { return false }
+        return QuestPollRibbon.shouldShow(
             isShowMode: isShowMode,
             liveRoomActive: openShowId.map { isLivePollLive(inShow: $0) } ?? false,
             isPracticing: canShowLivePollPracticeChrome
@@ -312,7 +321,7 @@ extension LibraryGridViewController {
         let subtitle = session.membershipId == item.id ? session.tileSubtitle : nil
         cell.configureSpecial(
             title: item.tileTitle(subtitle: subtitle),
-            systemImage: "chart.bar.fill",
+            systemImage: item.isQA ? "questionmark.bubble.fill" : "chart.bar.fill",
             thumbnail: nil,
             fillColor: .specialTile,
             isLive: isLive,
@@ -329,6 +338,9 @@ extension LibraryGridViewController {
     func livePollContextMenu(_ item: ShowLivePoll) -> UIMenu {
         let poll = QuestPollSessionStore.shared
         let ownsRoom = poll.membershipId == item.id && poll.session != nil
+        if item.isQA {
+            return qaContextMenu(item, ownsRoom: ownsRoom)
+        }
         var children: [UIMenuElement] = []
         if let practice = livePollPracticeAction(item) {
             children.append(practice)
@@ -360,6 +372,36 @@ extension LibraryGridViewController {
         children.append(selectAction(seedId: ShowLivePollToken.token(for: item.id)))
         children.append(UIAction(
             title: "Delete QuestPoll",
+            image: UIImage(systemName: "trash"),
+            attributes: .destructive
+        ) { [weak self] _ in
+            self?.confirmDeleteLivePoll(item)
+        })
+        return UIMenu(children: children)
+    }
+
+    /// Q&A card ⋯ menu: Questions, End, Arrange, Select, Delete.
+    private func qaContextMenu(_ item: ShowLivePoll, ownsRoom: Bool) -> UIMenu {
+        var children: [UIMenuElement] = []
+        if ownsRoom {
+            children.append(UIAction(
+                title: "Questions",
+                image: UIImage(systemName: "list.bullet")
+            ) { [weak self] _ in
+                self?.presentQuestPollHostController()
+            })
+            children.append(UIAction(
+                title: "End Q&A",
+                image: UIImage(systemName: "stop.circle"),
+                attributes: .destructive
+            ) { [weak self] _ in
+                self?.confirmEndQuestPoll()
+            })
+        }
+        children.append(arrangeAction())
+        children.append(selectAction(seedId: ShowLivePollToken.token(for: item.id)))
+        children.append(UIAction(
+            title: "Delete Q&A",
             image: UIImage(systemName: "trash"),
             attributes: .destructive
         ) { [weak self] _ in
@@ -402,7 +444,7 @@ extension LibraryGridViewController {
     /// Countdown and PDF rather than removing silently like a Show member.
     private func confirmDeleteLivePoll(_ item: ShowLivePoll) {
         let alert = UIAlertController(
-            title: "Delete QuestPoll?",
+            title: item.isQA ? "Delete Q&A?" : "Delete QuestPoll?",
             message: "“\(item.title)” is removed from this Show.",
             preferredStyle: .alert
         )
@@ -449,7 +491,11 @@ extension LibraryGridViewController {
     /// Presented as a half-height undimmed sheet, so the live preview and cue
     /// ribbon above it stay visible and tappable — see `makeNavigation`.
     func presentQuestPollHostController() {
-        guard QuestPollSessionStore.shared.session != nil else { return }
+        guard let session = QuestPollSessionStore.shared.session else { return }
+        if session.mode == .qa {
+            presentQuestPollQAController()
+            return
+        }
         if presentedViewController is UINavigationController,
            (presentedViewController as? UINavigationController)?
             .viewControllers.first is QuestPollHostViewController {
@@ -457,6 +503,23 @@ extension LibraryGridViewController {
         }
         let nav = QuestPollHostViewController.makeNavigation(
             onAdvance: { [weak self] command in
+                self?.sendQuestPollCommands([command])
+            },
+            onEnd: { [weak self] in
+                self?.confirmEndQuestPoll()
+            }
+        )
+        present(nav, animated: true)
+    }
+
+    /// Opens the Q&A question list for the live room (Q&A's Controls).
+    func presentQuestPollQAController() {
+        if let nav = presentedViewController as? UINavigationController,
+           nav.viewControllers.first is QuestPollQAViewController {
+            return
+        }
+        let nav = QuestPollQAViewController.makeNavigation(
+            onCommand: { [weak self] command in
                 self?.sendQuestPollCommands([command])
             },
             onEnd: { [weak self] in

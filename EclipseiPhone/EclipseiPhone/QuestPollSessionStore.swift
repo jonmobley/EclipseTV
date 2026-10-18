@@ -99,6 +99,7 @@ final class QuestPollSessionStore {
         practiceMembershipId = nil
         practiceDeckFragment = nil
         practiceCueIndex = 0
+        seenQAQuestionIds = []
         questionCount = 1
         isControlInFlight = false
         return commitChange(from: before)
@@ -124,9 +125,33 @@ final class QuestPollSessionStore {
         QuestPollRibbon.items(questionCount: questionCount)
     }
 
+    /// Q&A question ids the operator has seen in the question list.
+    private(set) var seenQAQuestionIds: Set<String> = []
+
+    /// New Q&A questions not yet seen in the question list.
+    var unseenQACount: Int {
+        (session?.qa?.questions ?? []).filter {
+            $0.status == .new && !seenQAQuestionIds.contains($0.id)
+        }.count
+    }
+
+    /// Marks every current Q&A question as seen (question list on screen).
+    func markQAQuestionsSeen() {
+        let ids = Set((session?.qa?.questions ?? []).map(\.id))
+        guard !ids.isSubset(of: seenQAQuestionIds) else { return }
+        seenQAQuestionIds.formUnion(ids)
+        // Only the card's "N new" caption changes.
+        lastChange = .tile
+        NotificationCenter.default.post(name: Self.didChangeNotification, object: nil)
+    }
+
     /// Tile secondary line: join code and live response count.
     var tileSubtitle: String? {
         guard let session else { return nil }
+        if session.mode == .qa {
+            let unseen = unseenQACount
+            return unseen > 0 ? "\(session.code) · \(unseen) new" : session.code
+        }
         let votes = session.answeredCount
         if votes > 0 {
             return "\(session.code) · \(votes) response\(votes == 1 ? "" : "s")"

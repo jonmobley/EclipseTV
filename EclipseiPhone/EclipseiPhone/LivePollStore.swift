@@ -72,6 +72,12 @@ final class LivePollStore {
         return item
     }
 
+    /// Creates an Audience Q&A card and appends it to the Show surface.
+    @discardableResult
+    func createQA(showId: UUID) -> ShowLivePoll {
+        create(pollId: ShowLivePoll.qaPollId, title: "Q&A", questionCount: 1, showId: showId)
+    }
+
     /// Rebinds an existing card to another account deck.
     func replace(id: UUID, with summary: LivePollDeckSummary) {
         guard let index = polls.firstIndex(where: { $0.id == id }) else { return }

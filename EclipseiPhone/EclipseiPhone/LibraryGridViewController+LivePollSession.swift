@@ -56,14 +56,17 @@ extension LibraryGridViewController {
 
     /// Confirms End Poll from the tile menu.
     func confirmEndQuestPoll() {
-        guard QuestPollSessionStore.shared.session != nil else { return }
+        guard let session = QuestPollSessionStore.shared.session else { return }
+        let isQA = session.mode == .qa
         let alert = UIAlertController(
-            title: "End Poll?",
-            message: "Closes the room for everyone and takes the poll off the screen.",
+            title: isQA ? "End Q&A?" : "End Poll?",
+            message: isQA
+                ? "Closes the Q&A for everyone and takes it off the screen."
+                : "Closes the room for everyone and takes the poll off the screen.",
             preferredStyle: .alert
         )
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        alert.addAction(UIAlertAction(title: "End Poll", style: .destructive) {
+        alert.addAction(UIAlertAction(title: isQA ? "End Q&A" : "End Poll", style: .destructive) {
             [weak self] _ in
             Task { @MainActor in
                 await self?.endQuestPollSession(clearAccount: false)
@@ -174,12 +177,18 @@ extension LibraryGridViewController {
         Task { @MainActor [weak self] in
             guard let self else { return }
             let active = await self.fetchActiveQuestPoll()
-            let decision = LivePollStartDecision.decide(
-                hasLocalSession: false,
-                active: active,
-                matchingDeckId: item.pollId,
-                matchingDeckTitle: item.title
-            )
+            let decision: LivePollStartDecision
+            if let active, active.phase != .ended, active.mode == .qa || item.isQA {
+                // Q&A rooms have no deck: resume one only from a Q&A card.
+                decision = active.mode == .qa && item.isQA ? .resume(active) : .replace(running: active)
+            } else {
+                decision = LivePollStartDecision.decide(
+                    hasLocalSession: false,
+                    active: active,
+                    matchingDeckId: item.pollId,
+                    matchingDeckTitle: item.title
+                )
+            }
             switch decision {
             case .start:
                 self.startQuestPoll(item)
@@ -222,7 +231,7 @@ extension LibraryGridViewController {
     private func fetchActiveQuestPoll() async -> LivePollSession? {
         guard LivePollAccountStore.isSignedIn else { return nil }
         do {
-            return try await LivePollAccountStore.client().activeSession()
+            return try await LivePollAccountStore.client().activeSession(includeQA: true)
         } catch {
             return nil
         }
@@ -237,16 +246,20 @@ extension LibraryGridViewController {
         let busy = presentQuestPollBusy(message: "Starting…")
         Task { @MainActor [weak self] in
             do {
-                let response = try await LivePollAccountStore.client().startSession(
-                    deckId: item.pollId
-                )
+                let client = LivePollAccountStore.client()
                 let session: LivePollSession
-                if let created = response.session {
-                    session = created
-                } else {
-                    session = try await LivePollAccountStore.client().fetchSession(
-                        joinCode: response.joinCode
+                if item.isQA {
+                    let response = try await client.startQASession(title: item.title)
+                    session = try await client.fetchSession(
+                        joinCode: response.joinCode, includeInbox: true
                     )
+                } else {
+                    let response = try await client.startSession(deckId: item.pollId)
+                    if let created = response.session {
+                        session = created
+                    } else {
+                        session = try await client.fetchSession(joinCode: response.joinCode)
+                    }
                 }
                 QuestPollSessionStore.shared.adopt(
                     session,

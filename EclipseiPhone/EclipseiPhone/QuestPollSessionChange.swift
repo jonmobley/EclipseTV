@@ -47,7 +47,8 @@ extension QuestPollSessionChange {
         if isSessionChromeChange(from: old, to: new) { return .session }
         if cue(of: old) != cue(of: new) { return .cue }
         if answeredCount(of: old) != answeredCount(of: new)
-            || joinedCount(of: old) != joinedCount(of: new) {
+            || joinedCount(of: old) != joinedCount(of: new)
+            || old.session?.qa != new.session?.qa {
             return .tile
         }
         // Question payload / remainingMs can change every 2s status poll
