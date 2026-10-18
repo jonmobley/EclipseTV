@@ -64,6 +64,9 @@ jobs:
             simulator_platform: iOS Simulator
             simulator_prefix: iPhone
             needs_eclipsepro: true
+            # Device builds link the licensed NDI SDK (/Library/NDI SDK for
+            # Apple), which runners don't have; simulator build + tests still run.
+            builds_for_device: false
           - name: Apple TV
             slug: appletv
             project: EclipseAppleTV/EclipseAppleTV.xcodeproj
@@ -73,6 +76,7 @@ jobs:
             simulator_platform: tvOS Simulator
             simulator_prefix: Apple TV
             needs_eclipsepro: false
+            builds_for_device: true
 
     steps:
       - name: Checkout EclipseTV
@@ -122,6 +126,7 @@ jobs:
 
       # Catches anything that compiles for the simulator but not for real hardware.
       - name: Build for device
+        if: matrix.builds_for_device
         run: |
           xcodebuild build \
             -project "${{ matrix.project }}" \
