@@ -153,6 +153,7 @@ enum CloudKitRecordMapper {
             showIdKey: CloudKitSchema.MediaKey.showId,
             attachAsShareChild: attachAsShareChild
         )
+        keepNotePrivate(record)
         if let assetURL {
             record[CloudKitSchema.MediaKey.asset] = CKAsset(fileURL: assetURL)
         }
@@ -198,6 +199,7 @@ enum CloudKitRecordMapper {
             showIdKey: CloudKitSchema.MediaKey.showId,
             attachAsShareChild: attachAsShareChild
         )
+        keepNotePrivate(record)
         if let assetURL {
             record[CloudKitSchema.MediaKey.asset] = CKAsset(fileURL: assetURL)
         }
@@ -231,6 +233,18 @@ enum CloudKitRecordMapper {
             record[CloudKitSchema.MediaKey.isLooping] = nil
             record[CloudKitSchema.MediaKey.isMuted] = nil
         }
+    }
+
+    /// Presenter notes are private: a record riding with a shared Show (it has
+    /// a `parent`) never carries one, so collaborators can't read it.
+    static func keepNotePrivate(_ record: CKRecord) {
+        if record.parent != nil { record[CloudKitSchema.MediaKey.note] = nil }
+    }
+
+    /// Whether a fetched record is this user's own, unshared one (notes from a
+    /// Show someone shared with us are not ours to take).
+    static func isPrivateToMe(_ record: CKRecord) -> Bool {
+        record.parent == nil && record.recordID.zoneID.ownerName == CKCurrentUserDefaultName
     }
 
     /// Writes `showId` as a regular field. Sets `parent` only for share roots.
@@ -346,7 +360,7 @@ enum CloudKitRecordMapper {
                 MediaFramingStore.clear(forId: libraryId)
             }
         }
-        if let note = record[CloudKitSchema.MediaKey.note] as? String {
+        if isPrivateToMe(record), let note = record[CloudKitSchema.MediaKey.note] as? String {
             MediaNoteStore.applyRemote(note, forId: libraryId)
         }
         let isVideo = (record[CloudKitSchema.MediaKey.isVideo] as? Bool) ?? false

@@ -127,6 +127,24 @@ struct CloudKitRemoteMediaPrefsTests {
         #expect(MediaNoteStore.note(forId: id) == "Mine")
     }
 
+    @Test func notesNeverRideWithASharedShow() {
+        let id = uniqueId()
+        defer {
+            reset(id)
+            MediaNoteStore.clear(forId: id)
+        }
+        let shared = noteRecord("Private")
+        shared.parent = CKRecord.Reference(
+            recordID: CKRecord.ID(recordName: UUID().uuidString), action: .none
+        )
+        CloudKitRecordMapper.applyRemoteMediaPrefs(from: shared, libraryId: id)
+        #expect(MediaNoteStore.note(forId: id) == nil)
+
+        MediaNoteStore.setNote("Mine only", forId: id)
+        CloudKitRecordMapper.keepNotePrivate(shared)
+        #expect(shared[CloudKitSchema.MediaKey.note] == nil)
+    }
+
     private func noteRecord(_ note: String) -> CKRecord {
         let record = mediaRecord(framing: nil, fitMode: .fit)
         record[CloudKitSchema.MediaKey.note] = note as CKRecordValue
