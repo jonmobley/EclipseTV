@@ -6,7 +6,6 @@
 //
 
 import LivePollKit
-import SafariServices
 import UIKit
 
 /// Native host CONTROLS sheet for the Live Poll room.
@@ -28,9 +27,8 @@ final class QuestPollHostViewController: UIViewController {
     private let skipButton = UIButton(type: .system)
     private let projectorQRButton = UIButton(type: .system)
     private let joinQRButton = UIButton(type: .system)
-    private let projectorButton = UIButton(type: .system)
     private let endButton = UIButton(type: .system)
-    private let copyLinkButton = UIButton(type: .system)
+    private let joinedLabel = UILabel()
     private var storeObserver: NSObjectProtocol?
 
     override func viewDidLoad() {
@@ -129,29 +127,18 @@ final class QuestPollHostViewController: UIViewController {
         }, for: .touchUpInside)
         stack.addArrangedSubview(projectorQRButton)
 
-        styleSecondary(joinQRButton, title: "Join QR", systemImage: "qrcode")
+        // One place for the code, QR, and link (with Share for Copy / AirDrop).
+        styleSecondary(joinQRButton, title: "Join Code & Link", systemImage: "qrcode")
         joinQRButton.addAction(UIAction { [weak self] _ in
             self?.presentJoinQR()
         }, for: .touchUpInside)
         stack.addArrangedSubview(joinQRButton)
 
-        styleSecondary(projectorButton, title: "Audience Page", systemImage: "display")
-        projectorButton.addAction(UIAction { [weak self] _ in
-            self?.openProjector()
-        }, for: .touchUpInside)
-        stack.addArrangedSubview(projectorButton)
-
-        styleTextLink(endButton, title: "End")
+        styleTextLink(endButton, title: "End Poll")
         endButton.addAction(UIAction { [weak self] _ in
             self?.onEnd?()
         }, for: .touchUpInside)
         stack.addArrangedSubview(endButton)
-
-        styleTextLink(copyLinkButton, title: "Copy Join Link", systemImage: "link")
-        copyLinkButton.addAction(UIAction { [weak self] _ in
-            self?.copyJoinLink()
-        }, for: .touchUpInside)
-        stack.addArrangedSubview(copyLinkButton)
 
         let guide = scroll.contentLayoutGuide
         let frame = scroll.frameLayoutGuide
@@ -169,8 +156,7 @@ final class QuestPollHostViewController: UIViewController {
             extendButton.heightAnchor.constraint(equalToConstant: 48),
             skipButton.heightAnchor.constraint(equalToConstant: 48),
             projectorQRButton.heightAnchor.constraint(equalToConstant: 48),
-            joinQRButton.heightAnchor.constraint(equalToConstant: 48),
-            projectorButton.heightAnchor.constraint(equalToConstant: 48)
+            joinQRButton.heightAnchor.constraint(equalToConstant: 48)
         ])
     }
 
@@ -194,15 +180,26 @@ final class QuestPollHostViewController: UIViewController {
         responsesValue.translatesAutoresizingMaskIntoConstraints = false
         responsesValue.text = "0"
 
+        joinedLabel.font = .scaled(14, weight: .medium, relativeTo: .footnote)
+        joinedLabel.adjustsFontForContentSizeCategory = true
+        joinedLabel.textColor = UIColor.white.withAlphaComponent(0.55)
+        joinedLabel.textAlignment = .center
+        joinedLabel.numberOfLines = 0
+        joinedLabel.translatesAutoresizingMaskIntoConstraints = false
+
         card.addSubview(caption)
         card.addSubview(responsesValue)
+        card.addSubview(joinedLabel)
         NSLayoutConstraint.activate([
             caption.topAnchor.constraint(equalTo: card.topAnchor, constant: 16),
             caption.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 16),
             responsesValue.topAnchor.constraint(equalTo: caption.bottomAnchor, constant: 4),
             responsesValue.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 16),
             responsesValue.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -16),
-            responsesValue.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -18)
+            joinedLabel.topAnchor.constraint(equalTo: responsesValue.bottomAnchor, constant: 2),
+            joinedLabel.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 16),
+            joinedLabel.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -16),
+            joinedLabel.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -16)
         ])
         return card
     }
@@ -270,6 +267,10 @@ final class QuestPollHostViewController: UIViewController {
             return
         }
         responsesValue.text = "\(session.answeredCount)"
+        joinedLabel.text = Self.joinedText(
+            joined: session.players.count,
+            limit: session.playerLimit
+        )
         progressLabel.text = LivePollAdvance.progressLabel(
             questionIndex: session.questionIndex,
             questionCount: store.questionCount
@@ -381,27 +382,11 @@ final class QuestPollHostViewController: UIViewController {
         present(nav, animated: true)
     }
 
-    private func openProjector() {
-        let url: URL
-        if let code = QuestPollSessionStore.shared.session?.code, !code.isEmpty {
-            url = QuestPollConfig.presentURL(code: code)
-        } else {
-            url = QuestPollConfig.presentURL
-        }
-        present(SFSafariViewController(url: url), animated: true)
-    }
-
-    private func copyJoinLink() {
-        guard let code = QuestPollSessionStore.shared.session?.code else { return }
-        UIPasteboard.general.string = QuestPollConfig.joinURL(code: code).absoluteString
-        Haptics.success()
-        var config = copyLinkButton.configuration
-        config?.title = "Copied"
-        copyLinkButton.configuration = config
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
-            var restored = self?.copyLinkButton.configuration
-            restored?.title = "Copy Join Link"
-            self?.copyLinkButton.configuration = restored
-        }
+    /// "12 joined", or "50 of 50 joined · free plan limit" when a capped
+    /// room is full (same wording as the web host page).
+    static func joinedText(joined: Int, limit: Int?) -> String {
+        guard let limit, limit < 300 else { return "\(joined) joined" }
+        let full = joined >= limit ? " · free plan limit" : ""
+        return "\(joined) of \(limit) joined\(full)"
     }
 }

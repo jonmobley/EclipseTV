@@ -189,6 +189,7 @@ extension LibraryGridViewController {
             startQuestPollStatusPolling()
         }
         syncShowLiveSession()
+        refreshLivePollCardsFromWeb(showId: album.id)
         if !wasShowMode {
             // The Camera tile only exists once the new sections are laid out, and
             // an already-running session won't fire a start notification to retry on.

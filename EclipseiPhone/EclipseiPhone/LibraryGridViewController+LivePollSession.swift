@@ -23,9 +23,10 @@ enum QuestPollPickerMode {
 
 extension LibraryGridViewController {
 
-    /// Opens the Live Poll host editor in Safari for deck editing.
-    func presentQuestPollHostEditor() {
-        let safari = SFSafariViewController(url: QuestPollConfig.hostURL)
+    /// Opens questpoll.com in Safari: one poll's editor, or the poll list.
+    func presentQuestPollHostEditor(pollId: String? = nil) {
+        let url = pollId.map(QuestPollConfig.editURL(pollId:)) ?? QuestPollConfig.hostURL
+        let safari = SFSafariViewController(url: url)
         present(safari, animated: true)
     }
 
@@ -55,14 +56,17 @@ extension LibraryGridViewController {
 
     /// Confirms End Poll from the tile menu.
     func confirmEndQuestPoll() {
-        guard QuestPollSessionStore.shared.session != nil else { return }
+        guard let session = QuestPollSessionStore.shared.session else { return }
+        let isQA = session.mode == .qa
         let alert = UIAlertController(
-            title: "End Poll?",
-            message: "Closes the room for everyone and takes the poll off the screen.",
+            title: isQA ? "End Q&A?" : "End Poll?",
+            message: isQA
+                ? "Closes the Q&A for everyone and takes it off the screen."
+                : "Closes the room for everyone and takes the poll off the screen.",
             preferredStyle: .alert
         )
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        alert.addAction(UIAlertAction(title: "End Poll", style: .destructive) {
+        alert.addAction(UIAlertAction(title: isQA ? "End Q&A" : "End Poll", style: .destructive) {
             [weak self] _ in
             Task { @MainActor in
                 await self?.endQuestPollSession(clearAccount: false)
@@ -80,6 +84,19 @@ extension LibraryGridViewController {
             return
         }
         promptLivePollSignIn(mode: mode)
+    }
+
+    /// Email sign-in, then `action` (no poll picker).
+    func promptLivePollSignIn(then action: @escaping () -> Void) {
+        let migrate = LivePollAccountStore.prepareEmailSignInPrompt()
+        let signIn = LivePollSignInViewController(showsMigrationMessage: migrate)
+        let nav = UINavigationController(rootViewController: signIn)
+        nav.modalPresentationStyle = .formSheet
+        nav.preferredContentSize = LivePollSignInViewController.sheetSize
+        signIn.onSignedIn = { [weak nav] in
+            nav?.dismiss(animated: true, completion: action)
+        }
+        present(nav, animated: true)
     }
 
     func promptLivePollSignIn(mode: QuestPollPickerMode) {
@@ -110,16 +127,6 @@ extension LibraryGridViewController {
         mode: QuestPollPickerMode
     ) -> QuestPollPickerViewController {
         let picker = QuestPollPickerViewController()
-        picker.onSignOut = { [weak self] in
-            Task { @MainActor in
-                await self?.endQuestPollSession(clearAccount: true)
-            }
-        }
-        picker.onAccountDeleted = { [weak self] in
-            Task { @MainActor in
-                await self?.endQuestPollSession(clearAccount: true)
-            }
-        }
         picker.onEditHost = { [weak self] in
             self?.presentQuestPollHostEditor()
         }
@@ -170,11 +177,18 @@ extension LibraryGridViewController {
         Task { @MainActor [weak self] in
             guard let self else { return }
             let active = await self.fetchActiveQuestPoll()
-            let decision = LivePollStartDecision.decide(
-                hasLocalSession: false,
-                active: active,
-                matchingDeckTitle: item.title
-            )
+            let decision: LivePollStartDecision
+            if let active, active.phase != .ended, active.mode == .qa || item.isQA {
+                // Q&A rooms have no deck: resume one only from a Q&A card.
+                decision = active.mode == .qa && item.isQA ? .resume(active) : .replace(running: active)
+            } else {
+                decision = LivePollStartDecision.decide(
+                    hasLocalSession: false,
+                    active: active,
+                    matchingDeckId: item.pollId,
+                    matchingDeckTitle: item.title
+                )
+            }
             switch decision {
             case .start:
                 self.startQuestPoll(item)
@@ -217,7 +231,7 @@ extension LibraryGridViewController {
     private func fetchActiveQuestPoll() async -> LivePollSession? {
         guard LivePollAccountStore.isSignedIn else { return nil }
         do {
-            return try await LivePollAccountStore.client().activeSession()
+            return try await LivePollAccountStore.client().activeSession(includeQA: true)
         } catch {
             return nil
         }
@@ -232,16 +246,20 @@ extension LibraryGridViewController {
         let busy = presentQuestPollBusy(message: "Starting…")
         Task { @MainActor [weak self] in
             do {
-                let response = try await LivePollAccountStore.client().startSession(
-                    deckId: item.pollId
-                )
+                let client = LivePollAccountStore.client()
                 let session: LivePollSession
-                if let created = response.session {
-                    session = created
-                } else {
-                    session = try await LivePollAccountStore.client().fetchSession(
-                        joinCode: response.joinCode
+                if item.isQA {
+                    let response = try await client.startQASession(title: item.title)
+                    session = try await client.fetchSession(
+                        joinCode: response.joinCode, includeInbox: true
                     )
+                } else {
+                    let response = try await client.startSession(deckId: item.pollId)
+                    if let created = response.session {
+                        session = created
+                    } else {
+                        session = try await client.fetchSession(joinCode: response.joinCode)
+                    }
                 }
                 QuestPollSessionStore.shared.adopt(
                     session,
@@ -276,53 +294,48 @@ extension LibraryGridViewController {
 
     // MARK: - Ribbon cues
 
+    /// Moves the room to the tapped cue (LivePollKit `LivePollCues`, shared
+    /// with the Mac). Skipping ahead or reopening a question asks first.
     func cueQuestPollStage(at index: Int) {
         let store = QuestPollSessionStore.shared
-        guard store.session != nil, !store.isControlInFlight else { return }
-        let current = store.ribbonIndex
-        if index > current {
-            let commands = QuestPollRibbon.forwardCommands(
-                from: current,
-                to: index,
-                questionCount: store.questionCount
+        guard let session = store.session, !store.isControlInFlight,
+              let target = LivePollCue(index: index, questionCount: store.questionCount)
+        else { return }
+        guard let plan = LivePollCues.plan(
+            phase: session.phase,
+            questionIndex: session.questionIndex,
+            questionCount: store.questionCount,
+            to: target
+        ) else { return }
+        if plan.reopensQuestion {
+            confirmQuestPollCue(
+                title: "Reopen \(target.title)?",
+                message: "Its earlier answers will be cleared.",
+                action: "Reopen",
+                plan: plan
             )
-            guard !commands.isEmpty else { return }
-            if commands.count > 1 {
-                confirmSkipAheadQuestPoll(to: index, commands: commands)
-                return
-            }
-            sendQuestPollCommands(commands)
-            return
-        }
-        if index < current {
-            let commands = QuestPollRibbon.backwardCommands(
-                from: current,
-                to: index,
-                questionCount: store.questionCount
+        } else if plan.skipsAhead {
+            confirmQuestPollCue(
+                title: "Skip ahead?",
+                message: "Jump to \(target.title)? Cues in between are skipped.",
+                action: "Skip",
+                plan: plan
             )
-            if commands.isEmpty {
-                showPresentationToast("Already on this cue")
-                return
-            }
-            sendQuestPollCommands(commands)
-            return
+        } else {
+            sendQuestPollCommands(plan.commands)
         }
     }
 
-    private func confirmSkipAheadQuestPoll(
-        to index: Int,
-        commands: [LivePollHostCommand]
+    private func confirmQuestPollCue(
+        title: String,
+        message: String,
+        action: String,
+        plan: LivePollCuePlan
     ) {
-        let items = QuestPollSessionStore.shared.ribbonItems
-        let label = items.indices.contains(index) ? items[index].title : "that cue"
-        let alert = UIAlertController(
-            title: "Skip ahead?",
-            message: "Skip to \(label)? This will walk the cues in between.",
-            preferredStyle: .alert
-        )
+        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        alert.addAction(UIAlertAction(title: "Skip", style: .default) { [weak self] _ in
-            self?.sendQuestPollCommands(commands)
+        alert.addAction(UIAlertAction(title: action, style: .default) { [weak self] _ in
+            self?.sendQuestPollCommands(plan.commands)
         })
         present(alert, animated: true)
     }

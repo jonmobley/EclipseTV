@@ -25,7 +25,7 @@ final class QuestPollJoinQRViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = "Join QR"
+        title = "Join"
         view.backgroundColor = .black
         navigationItem.rightBarButtonItem = UIBarButtonItem(
             systemItem: .close,
@@ -33,6 +33,15 @@ final class QuestPollJoinQRViewController: UIViewController {
                 self?.dismiss(animated: true)
             }
         )
+        // Share sheet covers Copy, Messages, AirDrop — one place for the link.
+        let share = UIBarButtonItem(
+            systemItem: .action,
+            primaryAction: UIAction { [weak self] _ in
+                self?.shareLink()
+            }
+        )
+        share.accessibilityLabel = "Share Join Link"
+        navigationItem.leftBarButtonItem = share
 
         let imageView = UIImageView(image: Self.qrImage(for: joinURL.absoluteString))
         imageView.contentMode = .scaleAspectFit
@@ -83,6 +92,15 @@ final class QuestPollJoinQRViewController: UIViewController {
                 equalTo: view.trailingAnchor, constant: -20
             )
         ])
+    }
+
+    private func shareLink() {
+        let activity = UIActivityViewController(
+            activityItems: [joinURL], applicationActivities: nil
+        )
+        activity.popoverPresentationController?.barButtonItem =
+            navigationItem.leftBarButtonItem
+        present(activity, animated: true)
     }
 
     /// Renders a high-contrast QR for `string`.

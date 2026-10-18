@@ -13,15 +13,33 @@ import UIKit
 @MainActor
 struct QuestPollPickerViewControllerTests {
 
-    @Test func accountSectionOffersDelete() {
+    @Test func pickerOnlyChoosesPollsAccountActionsLiveInSettings() {
         let picker = QuestPollPickerViewController(client: quietClient())
         picker.loadViewIfNeeded()
+        #expect(picker.title == "Choose a Poll")
         #expect(picker.tableView.numberOfSections == 2)
-        let index = IndexPath(row: 0, section: 1)
-        let cell = picker.tableView(picker.tableView, cellForRowAt: index)
-        #expect(cell.accessibilityIdentifier == "livepoll.delete.account")
-        let text = cell.contentConfiguration as? UIListContentConfiguration
-        #expect(text?.text == "Delete Account")
+        // Plan row appears only once the plan loads; the stub returns 401.
+        #expect(picker.tableView.numberOfRows(inSection: 0) == 0)
+        #expect(picker.navigationItem.rightBarButtonItem?.title == "Manage")
+    }
+
+    @Test func planTextNamesTheLimitAndHowToLiftIt() {
+        let free = LivePollPlan(eclipse: false, playerLimit: 50, linkExpired: false)
+        #expect(QuestPollPlanText.title(free) == "Free plan · up to 50 people")
+        #expect(QuestPollPlanText.detail(free)?.contains("Eclipse license") == true)
+        let eclipse = LivePollPlan(eclipse: true, playerLimit: 300, linkExpired: false)
+        #expect(QuestPollPlanText.title(eclipse) == "Eclipse plan · up to 300 people")
+        #expect(QuestPollPlanText.detail(eclipse) == nil)
+    }
+
+    @Test func joinedTextShowsTheFreeLimit() {
+        #expect(QuestPollHostViewController.joinedText(joined: 12, limit: 300) == "12 joined")
+        #expect(QuestPollHostViewController.joinedText(joined: 12, limit: nil) == "12 joined")
+        #expect(QuestPollHostViewController.joinedText(joined: 12, limit: 50) == "12 of 50 joined")
+        #expect(
+            QuestPollHostViewController.joinedText(joined: 50, limit: 50)
+                == "50 of 50 joined · free plan limit"
+        )
     }
 }
 

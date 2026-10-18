@@ -316,6 +316,16 @@ extension iPhoneMainViewController {
         if albumId == nil {
             livePoll.attributes = .disabled
         }
+        let questionAndAnswer = UIAction(
+            title: "Q&A",
+            image: UIImage(systemName: "questionmark.bubble.fill")
+        ) { [weak self] _ in
+            guard let albumId else { return }
+            self?.libraryViewController.addQACard(toShowId: albumId)
+        }
+        if albumId == nil {
+            questionAndAnswer.attributes = .disabled
+        }
         let pdf = UIAction(
             title: "PDF",
             image: UIImage(systemName: "doc.richtext")
@@ -326,7 +336,7 @@ extension iPhoneMainViewController {
         let imports = UIMenu(
             title: "",
             options: .displayInline,
-            children: [image, video, website, slideshow, countdown, livePoll, pdf]
+            children: [image, video, website, slideshow, countdown, livePoll, questionAndAnswer, pdf]
         )
         // In a Show, Website opens the compose sheet (History is on that sheet).
         // Home keeps History for manage / open.

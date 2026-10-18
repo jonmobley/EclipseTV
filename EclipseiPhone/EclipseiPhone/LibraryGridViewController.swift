@@ -615,6 +615,12 @@ final class LibraryGridViewController: UIViewController {
             self?.refreshLiveHeader()
             self?.scrollLiveSlideshowRibbonToCurrentSlide()
         }
+        observe(LivePollAccountStore.didSignOutNotification) { [weak self] _ in
+            // Signed out or deleted in Settings → QuestPoll: close the room.
+            Task { @MainActor in
+                await self?.endQuestPollSession(clearAccount: false)
+            }
+        }
         observe(QuestPollSessionStore.didChangeNotification) { [weak self] _ in
             self?.handleQuestPollSessionChange()
         }

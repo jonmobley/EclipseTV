@@ -36,6 +36,12 @@ struct ShowLivePoll: Codable, Equatable, Identifiable, Hashable {
         self.createdAt = createdAt
     }
 
+    /// `pollId` marking an Audience Q&A card (no saved deck behind it).
+    static let qaPollId = "__questpoll.qa__"
+
+    /// Whether this card runs Audience Q&A instead of a saved poll.
+    var isQA: Bool { pollId == Self.qaPollId }
+
     /// Tile caption: deck title, optionally with live subtitle.
     func tileTitle(subtitle: String? = nil) -> String {
         if let subtitle, !subtitle.isEmpty {

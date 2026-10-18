@@ -32,7 +32,8 @@ extension LibraryGridViewController {
                 }
                 do {
                     let updated = try await LivePollAccountStore.client().fetchSession(
-                        joinCode: session.code
+                        joinCode: session.code,
+                        includeInbox: session.mode == .qa
                     )
                     QuestPollSessionStore.shared.adopt(updated)
                 } catch {
