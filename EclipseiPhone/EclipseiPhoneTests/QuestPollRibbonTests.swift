@@ -17,7 +17,7 @@ struct QuestPollRibbonTests {
         #expect(items.map(\.title) == [
             "Join", "Question 1", "Results 1", "Question 2", "Results 2"
         ])
-        #expect(items.map(\.kind) == [
+        #expect(items.map(\.cue) == [
             .join, .question(0), .results(0), .question(1), .results(1)
         ])
     }
@@ -51,60 +51,28 @@ struct QuestPollRibbonTests {
         )
     }
 
-    @Test func forwardFromJoinToFirstQuestionIsStart() {
+    @Test func leaderboardAndEndCountAsResults() {
         #expect(
-            QuestPollRibbon.forwardCommands(
-                from: 0, to: 1, questionCount: 2
-            ) == [.startQuestion(index: 0)]
+            QuestPollRibbon.currentIndex(
+                phase: .leaderboard, questionIndex: 1, questionCount: 3
+            ) == 4
+        )
+        #expect(
+            QuestPollRibbon.currentIndex(
+                phase: .ended, questionIndex: 2, questionCount: 3
+            ) == 6
         )
     }
 
-    @Test func forwardFromQuestionToItsResultsIsReveal() {
-        #expect(
-            QuestPollRibbon.forwardCommands(
-                from: 1, to: 2, questionCount: 2
-            ) == [.reveal]
-        )
-    }
-
-    @Test func jumpJoinToSecondQuestionChains() {
-        #expect(
-            QuestPollRibbon.forwardCommands(
-                from: 0, to: 3, questionCount: 2
-            ) == [.startQuestion(index: 0), .reveal, .next]
-        )
-    }
-
-    @Test func forwardBackwardProducesNoCommands() {
-        #expect(
-            QuestPollRibbon.forwardCommands(
-                from: 2, to: 0, questionCount: 2
-            ).isEmpty
-        )
-    }
-
-    @Test func backwardFromResultsToQuestionIsPrev() {
-        #expect(
-            QuestPollRibbon.backwardCommands(
-                from: 2, to: 1, questionCount: 2
-            ) == [.prev]
-        )
-    }
-
-    @Test func backwardFromQuestionToJoinChainsPrev() {
-        #expect(
-            QuestPollRibbon.backwardCommands(
-                from: 1, to: 0, questionCount: 2
-            ) == [.prev]
-        )
-    }
-
-    @Test func backwardOnJoinIsEmpty() {
-        #expect(
-            QuestPollRibbon.backwardCommands(
-                from: 0, to: 0, questionCount: 2
-            ).isEmpty
-        )
+    /// Regression: going back used to send one `prev` per cue, but the relay's
+    /// `prev` jumps to the previous question's results, so Results 2 → Question 2
+    /// landed on Results 1. The shared plan reopens Question 2 directly.
+    @Test func backFromResultsToTheSameQuestionReopensIt() throws {
+        let plan = try #require(LivePollCues.plan(
+            phase: .reveal, questionIndex: 1, questionCount: 3, to: .question(1)
+        ))
+        #expect(plan.commands == [.startQuestion(index: 1)])
+        #expect(plan.reopensQuestion)
     }
 
     @Test func ribbonTracksOnProgramOrPracticeNotALeftoverRoom() {

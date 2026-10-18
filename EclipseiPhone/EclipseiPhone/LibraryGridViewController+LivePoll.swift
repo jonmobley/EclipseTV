@@ -5,6 +5,7 @@
 //  Copyright © 2026 Moxie LLC. All rights reserved.
 //
 
+import LivePollKit
 import UIKit
 
 extension LibraryGridViewController {
@@ -23,6 +24,23 @@ extension LibraryGridViewController {
               let membershipId = QuestPollSessionStore.shared.membershipId
         else { return false }
         return LivePollStore.shared.poll(id: membershipId)?.showId == showId
+    }
+
+    /// Updates this Show's poll cards from questpoll.com (names and lengths
+    /// edited there). At most once a minute; silent when offline or signed out.
+    func refreshLivePollCardsFromWeb(showId: UUID) {
+        let polls = LivePollStore.shared
+        guard LivePollAccountStore.isSignedIn,
+              !polls.polls(forShowId: showId).isEmpty,
+              polls.shouldRefreshFromWeb()
+        else { return }
+        polls.didStartWebRefresh()
+        Task { @MainActor in
+            guard let decks = try? await LivePollAccountStore.client().listDecks() else {
+                return
+            }
+            LivePollStore.shared.refresh(from: decks)
+        }
     }
 
     /// + menu: link if needed, pick a deck, append a named card to the Show.
@@ -74,6 +92,31 @@ extension LibraryGridViewController {
             onStatusMessage?("End the live poll before practicing a deck.")
             return
         }
+        guard LivePollAccountStore.isSignedIn else {
+            promptLivePollSignIn { [weak self] in self?.practiceLivePoll(item) }
+            return
+        }
+        // The preview page can't sign in to questpoll.com, so the app fetches
+        // the deck and hands it to the page.
+        let busy = presentQuestPollBusy(message: "Loading poll…")
+        Task { @MainActor [weak self] in
+            do {
+                let deck = try await LivePollAccountStore.client().deck(id: item.pollId)
+                LivePollStore.shared.refresh(id: item.id, title: deck.title, questionCount: deck.questions.count)
+                busy.dismiss(animated: true) {
+                    self?.beginPractice(item, deck: deck)
+                }
+            } catch {
+                busy.dismiss(animated: true) {
+                    self?.presentQuestPollError(error)
+                }
+            }
+        }
+    }
+
+    /// Puts the fetched deck's Practice preview in the hero, on the Join cue.
+    private func beginPractice(_ item: ShowLivePoll, deck: LivePollDeck) {
+        guard !ExternalDisplayManager.shared.isQuestPollLive else { return }
         isBlackSelected = false
         isLogoSelected = false
         isScreensaverSelected = false
@@ -82,12 +125,25 @@ extension LibraryGridViewController {
         // Before clearing the library selection. That refresh runs immediately,
         // and with nothing selected Practice Mode paints the Screensaver unless
         // this card already owns the hero.
-        QuestPollSessionStore.shared.setPracticeMembershipId(item.id)
-        let page = QuestPollConfig.previewPage(pollId: item.pollId)
-        WarmWebSessionPool.shared.warmIfNeeded(for: page)
+        QuestPollSessionStore.shared.setPracticeMembershipId(
+            item.id,
+            deckFragment: QuestPollConfig.practiceFragment(for: deck),
+            questionCount: deck.questions.count
+        )
+        WarmWebSessionPool.shared.warmIfNeeded(for: practicePage(for: item))
         store.updateCurrentId(nil)
         Haptics.impactLight()
         refreshLivePollPresentation()
+    }
+
+    /// Practice page for `item` at the current Practice cue.
+    func practicePage(for item: ShowLivePoll) -> WebPage {
+        let store = QuestPollSessionStore.shared
+        return QuestPollConfig.previewPage(
+            pollId: item.pollId,
+            deckFragment: store.practiceDeckFragment,
+            cue: store.practiceCueIndex
+        )
     }
 
     /// Leaves Practice, returning the hero to whatever is on program.
@@ -220,9 +276,16 @@ extension LibraryGridViewController {
         )
     }
 
-    /// Cues the tapped Join / Question / Results stage.
+    /// Cues the tapped Join / Question / Results stage — on the room, or on
+    /// the Practice preview when rehearsing.
     func handleLivePollRibbonTap(at indexPath: IndexPath) {
-        guard QuestPollSessionStore.shared.session != nil else { return }
+        let store = QuestPollSessionStore.shared
+        if store.session == nil {
+            guard store.practiceMembershipId != nil else { return }
+            store.setPracticeCue(indexPath.item)
+            Haptics.impactLight()
+            return
+        }
         cueQuestPollStage(at: indexPath.item)
         Haptics.impactLight()
     }
@@ -281,7 +344,7 @@ extension LibraryGridViewController {
                 title: "Edit on QuestPoll",
                 image: UIImage(systemName: "safari")
             ) { [weak self] _ in
-                self?.presentQuestPollHostEditor()
+                self?.presentQuestPollHostEditor(pollId: item.pollId)
             }
         ])
         if ownsRoom {
@@ -372,6 +435,9 @@ extension LibraryGridViewController {
         if store.session != nil {
             return (store.ribbonItems, store.ribbonIndex)
         }
+        if store.practiceMembershipId != nil, store.practiceDeckFragment != nil {
+            return (store.ribbonItems, store.practiceCueIndex)
+        }
         let count = livePollRibbonCard?.questionCount ?? 1
         return (QuestPollRibbon.items(questionCount: count), 0)
     }
@@ -413,6 +479,10 @@ extension LibraryGridViewController {
         case .cue:
             reloadLivePollTilesInPlace()
             reloadLivePollRibbonThumbsForCueChange()
+            if QuestPollSessionStore.shared.session == nil {
+                // Practice cue: move the preview page to it.
+                refreshLiveHeader()
+            }
         case .session:
             refreshLivePollPresentation()
             if QuestPollSessionStore.shared.session != nil {

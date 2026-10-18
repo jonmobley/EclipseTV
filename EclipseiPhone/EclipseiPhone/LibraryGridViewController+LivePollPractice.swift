@@ -109,7 +109,7 @@ extension LibraryGridViewController {
 
     /// Phone-hero deck preview, labelled Practice and without the LIVE chip.
     private func applyLivePollPracticeHeader(_ item: ShowLivePoll) {
-        let page = QuestPollConfig.previewPage(pollId: item.pollId)
+        let page = practicePage(for: item)
         let canShow = !WarmWebSessionPool.shared.isAdopted(pageId: page.id)
         if canShow {
             WarmWebSessionPool.shared.warmIfNeeded(for: page)

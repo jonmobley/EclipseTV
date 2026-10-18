@@ -8,24 +8,24 @@
 import LivePollKit
 import UIKit
 
-/// Lists account decks (Poll and Quiz) after email sign-in.
+/// Lists the account's polls (Poll and Quiz) after email sign-in.
+///
+/// Account management (sign out, delete) lives in Settings → QuestPoll, the
+/// same place the Mac keeps it; this sheet is only for choosing a poll.
 final class QuestPollPickerViewController: UITableViewController {
 
     var onPick: ((LivePollDeckSummary) -> Void)?
-    var onSignOut: (() -> Void)?
-    /// Called after the server has deleted the account. The token is still stored.
-    var onAccountDeleted: (() -> Void)?
     var onEditHost: (() -> Void)?
 
     private let client: LivePollClient
     private var polls: [LivePollDeckSummary] = []
+    private var plan: LivePollPlan?
     private var loadError: String?
     private var isLoading = true
-    private var isDeleting = false
 
-    private enum Section: Int {
-        case decks = 0
-        case account = 1
+    private enum Section: Int, CaseIterable {
+        case plan = 0
+        case polls = 1
     }
 
     /// - Parameter client: Injected for tests; production uses the account token.
@@ -38,27 +38,19 @@ final class QuestPollPickerViewController: UITableViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = "QuestPoll"
+        title = "Choose a Poll"
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: "poll")
         navigationItem.leftBarButtonItem = UIBarButtonItem(
             barButtonSystemItem: .close,
             target: self,
             action: #selector(closeTapped)
         )
-        navigationItem.rightBarButtonItems = [
-            UIBarButtonItem(
-                title: "Sign Out",
-                style: .plain,
-                target: self,
-                action: #selector(signOutTapped)
-            ),
-            UIBarButtonItem(
-                title: "Edit",
-                style: .plain,
-                target: self,
-                action: #selector(editTapped)
-            )
-        ]
+        navigationItem.rightBarButtonItem = UIBarButtonItem(
+            title: "Manage",
+            style: .plain,
+            target: self,
+            action: #selector(editTapped)
+        )
         refreshControl = UIRefreshControl()
         refreshControl?.addTarget(
             self, action: #selector(reloadPolls), for: .valueChanged
@@ -67,11 +59,6 @@ final class QuestPollPickerViewController: UITableViewController {
     }
 
     @objc private func closeTapped() {
-        dismiss(animated: true)
-    }
-
-    @objc private func signOutTapped() {
-        onSignOut?()
         dismiss(animated: true)
     }
 
@@ -87,10 +74,13 @@ final class QuestPollPickerViewController: UITableViewController {
             guard let self else { return }
             do {
                 self.polls = try await self.client.listDecks()
+                // Cards in Shows pick up names / lengths edited on the web.
+                LivePollStore.shared.refresh(from: self.polls)
             } catch {
                 self.polls = []
                 self.loadError = Self.message(for: error)
             }
+            self.plan = try? await self.client.plan()
             self.isLoading = false
             self.refreshControl?.endRefreshing()
             self.tableView.reloadData()
@@ -98,15 +88,24 @@ final class QuestPollPickerViewController: UITableViewController {
     }
 
     override func numberOfSections(in tableView: UITableView) -> Int {
-        Section.account.rawValue + 1
+        Section.allCases.count
     }
 
     override func tableView(
         _ tableView: UITableView, numberOfRowsInSection section: Int
     ) -> Int {
-        if section == Section.account.rawValue { return 1 }
+        if section == Section.plan.rawValue { return plan == nil ? 0 : 1 }
         if loadError != nil || isLoading { return 1 }
         return max(polls.count, 1)
+    }
+
+    override func tableView(
+        _ tableView: UITableView, titleForFooterInSection section: Int
+    ) -> String? {
+        guard section == Section.polls.rawValue, !isLoading, loadError == nil else {
+            return nil
+        }
+        return "Create and edit polls at questpoll.com (Manage)."
     }
 
     override func tableView(
@@ -117,25 +116,26 @@ final class QuestPollPickerViewController: UITableViewController {
         cell.accessoryType = .none
         cell.selectionStyle = .none
         cell.accessibilityIdentifier = nil
-        if indexPath.section == Section.account.rawValue {
-            content.text = "Delete Account"
-            content.textProperties.color = .systemRed
-            cell.selectionStyle = isDeleting ? .none : .default
-            cell.accessibilityIdentifier = "livepoll.delete.account"
+        if indexPath.section == Section.plan.rawValue {
+            content.text = QuestPollPlanText.title(plan)
+            content.secondaryText = QuestPollPlanText.detail(plan)
+            content.image = UIImage(systemName: "person.3")
+            cell.accessibilityIdentifier = "questpoll.plan"
             cell.contentConfiguration = content
             return cell
         }
         if let loadError {
             content.text = loadError
         } else if isLoading {
-            content.text = "Loading decks…"
+            content.text = "Loading polls…"
         } else if polls.isEmpty {
-            content.text = "No decks on this account yet."
+            content.text = "No polls on this account yet."
         } else {
             let poll = polls[indexPath.row]
             content.text = poll.title
             let modeLabel = poll.mode == .quiz ? "Quiz" : "Poll"
-            content.secondaryText = "\(modeLabel) · \(poll.questionCount) questions"
+            let count = "\(poll.questionCount) question\(poll.questionCount == 1 ? "" : "s")"
+            content.secondaryText = "\(modeLabel) · \(count)"
             cell.accessoryType = .disclosureIndicator
             cell.selectionStyle = .default
         }
@@ -147,68 +147,38 @@ final class QuestPollPickerViewController: UITableViewController {
         _ tableView: UITableView, didSelectRowAt indexPath: IndexPath
     ) {
         tableView.deselectRow(at: indexPath, animated: true)
-        if indexPath.section == Section.account.rawValue {
-            confirmDeleteAccount()
-            return
-        }
-        guard loadError == nil, !isLoading,
+        guard indexPath.section == Section.polls.rawValue,
+              loadError == nil, !isLoading,
               polls.indices.contains(indexPath.row) else { return }
         onPick?(polls[indexPath.row])
-    }
-
-    // MARK: - Account deletion
-
-    private func confirmDeleteAccount() {
-        guard !isDeleting else { return }
-        let alert = UIAlertController(
-            title: "Delete QuestPoll Account?",
-            message: "Deletes this account and its decks. This cannot be undone.",
-            preferredStyle: .alert
-        )
-        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        alert.addAction(UIAlertAction(title: "Delete Account", style: .destructive) {
-            [weak self] _ in
-            self?.deleteAccount()
-        })
-        present(alert, animated: true)
-    }
-
-    private func deleteAccount() {
-        guard !isDeleting else { return }
-        isDeleting = true
-        tableView.reloadSections(
-            IndexSet(integer: Section.account.rawValue), with: .none
-        )
-        Task { @MainActor [weak self] in
-            guard let self else { return }
-            do {
-                try await self.client.deleteAccount()
-                self.onAccountDeleted?()
-                self.dismiss(animated: true)
-            } catch {
-                self.isDeleting = false
-                self.tableView.reloadSections(
-                    IndexSet(integer: Section.account.rawValue), with: .none
-                )
-                self.present(Self.deleteFailedAlert(for: error), animated: true)
-            }
-        }
-    }
-
-    private static func deleteFailedAlert(for error: Error) -> UIAlertController {
-        let alert = UIAlertController(
-            title: "Could Not Delete Account",
-            message: message(for: error),
-            preferredStyle: .alert
-        )
-        alert.addAction(UIAlertAction(title: "OK", style: .default))
-        return alert
     }
 
     private static func message(for error: Error) -> String {
         if let poll = error as? LivePollError {
             return poll.userMessage
         }
-        return "Could not load decks."
+        return "Could not load polls."
+    }
+}
+
+// MARK: - QuestPollPlanText
+
+/// Plan wording shared by the poll picker, Settings, and Controls.
+enum QuestPollPlanText {
+
+    /// "Free plan · up to 50 people" / "Eclipse plan · up to 300 people".
+    static func title(_ plan: LivePollPlan?) -> String {
+        guard let plan else { return "QuestPoll" }
+        let name = plan.eclipse ? "Eclipse plan" : "Free plan"
+        return "\(name) · up to \(plan.playerLimit) people"
+    }
+
+    /// How to lift the free limit, or nil on the Eclipse plan.
+    static func detail(_ plan: LivePollPlan?) -> String? {
+        guard let plan, !plan.eclipse else { return nil }
+        if plan.linkExpired == true {
+            return "Your Eclipse license needs re-checking. Add it again at questpoll.com."
+        }
+        return "Add your Eclipse license key at questpoll.com to allow 300."
     }
 }

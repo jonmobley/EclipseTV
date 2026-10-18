@@ -51,6 +51,7 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
         case showSharing
         case eclipseTV
         case eclipseMac
+        case questPoll
         case recommendations
         case help
     }
@@ -91,7 +92,7 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
         if !showSharingRows.isEmpty {
             result.append(.showSharing)
         }
-        result.append(contentsOf: [.eclipseTV, .eclipseMac, .recommendations, .help])
+        result.append(contentsOf: [.eclipseTV, .eclipseMac, .questPoll, .recommendations, .help])
         return result
     }
 
@@ -246,6 +247,7 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
         case .showSharing: return showSharingRows.count
         case .eclipseTV: return 1
         case .eclipseMac: return MacRow.allCases.count
+        case .questPoll: return 1
         case .recommendations: return 1
         case .help: return HelpRow.allCases.count
         }
@@ -264,6 +266,7 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
         case .showSharing: return "Show Sharing"
         case .eclipseTV: return "EclipseTV"
         case .eclipseMac: return "Eclipse for Mac"
+        case .questPoll: return "QuestPoll"
         case .recommendations: return GuidedAccessRecommendation.settingsHeader
         case .help: return "Help"
         }
@@ -291,6 +294,8 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
         case .eclipseMac:
             return "Control Eclipse on a Mac, or send this iPhone’s camera as a "
                 + "live source (any Apple ID, same Wi‑Fi)."
+        case .questPoll:
+            return "Live polls and Q&A. Sign in, see your plan, or manage your account."
         case .recommendations:
             return GuidedAccessRecommendation.settingsFooter
         case .playback:
@@ -361,6 +366,10 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
             case .none:
                 break
             }
+        case .questPoll:
+            config.text = "QuestPoll Account"
+            config.secondaryText = LivePollAccountStore.isSignedIn ? "Signed in" : "Not signed in"
+            config.image = UIImage(systemName: "chart.bar.fill")
         case .recommendations:
             config.text = GuidedAccessRecommendation.rowTitle
             config.secondaryText = GuidedAccessRecommendation.statusText
@@ -424,6 +433,10 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
             case .none:
                 break
             }
+        case .questPoll:
+            navigationController?.pushViewController(
+                SettingsQuestPollViewController(), animated: true
+            )
         case .recommendations:
             navigationController?.pushViewController(
                 SettingsGuidedAccessViewController(), animated: true

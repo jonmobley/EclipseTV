@@ -108,12 +108,46 @@ enum QuestPollConfig {
     }
 
     /// Practice page for a deck without creating a room.
-    static func previewPage(pollId: String) -> WebPage {
-        WebPage(
+    ///
+    /// The app's web view has no questpoll.com sign-in, so the deck itself
+    /// rides in the URL fragment with the ribbon cue (`#deck=…&cue=N`). A
+    /// fragment-only change moves the page without reloading it.
+    /// - Parameters:
+    ///   - pollId: Saved deck id (keeps one warm page per deck).
+    ///   - deckFragment: From `practiceFragment(for:)`; nil loads by id.
+    ///   - cue: Ribbon cue (0 Join, then Question / Results).
+    static func previewPage(
+        pollId: String,
+        deckFragment: String? = nil,
+        cue: Int = 0
+    ) -> WebPage {
+        var url = presentPreviewURL(pollId: pollId)
+        if let deckFragment,
+           var components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
+            components.fragment = "deck=\(deckFragment)&cue=\(cue)"
+            url = components.url ?? url
+        }
+        return WebPage(
             id: previewPageId(pollId: pollId),
             title: "QuestPoll Practice",
-            url: presentPreviewURL(pollId: pollId)
+            url: url
         )
+    }
+
+    /// Base64url JSON of `deck` for the Practice page fragment.
+    static func practiceFragment(for deck: LivePollDeck) -> String? {
+        guard let data = try? JSONEncoder().encode(deck) else { return nil }
+        return data.base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+    }
+
+    /// Web editor for one saved deck (`/host?edit=<id>`).
+    static func editURL(pollId: String) -> URL {
+        var components = URLComponents(url: hostURL, resolvingAgainstBaseURL: false)
+        components?.queryItems = [URLQueryItem(name: "edit", value: pollId)]
+        return components?.url ?? hostURL
     }
 
     /// Whether `url` is the Live Poll projector page (path may grow a slash).

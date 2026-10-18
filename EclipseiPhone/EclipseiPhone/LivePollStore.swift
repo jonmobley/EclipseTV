@@ -83,6 +83,44 @@ final class LivePollStore {
         scheduleSaveIfNeeded(id: id)
     }
 
+    /// Updates a card's cached title / length from questpoll.com (the deck
+    /// may have been edited there). No-op when nothing changed.
+    func refresh(id: UUID, title: String, questionCount: Int) {
+        guard let index = polls.firstIndex(where: { $0.id == id }) else { return }
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let newTitle = trimmed.isEmpty ? polls[index].title : trimmed
+        let newCount = max(questionCount, 1)
+        guard polls[index].title != newTitle || polls[index].questionCount != newCount else {
+            return
+        }
+        polls[index].title = newTitle
+        polls[index].questionCount = newCount
+        persist()
+        scheduleSaveIfNeeded(id: id)
+    }
+
+    private var lastWebRefreshAt: Date?
+
+    /// Whether a questpoll.com refresh is due (once a minute).
+    func shouldRefreshFromWeb(now: Date = Date()) -> Bool {
+        guard let lastWebRefreshAt else { return true }
+        return now.timeIntervalSince(lastWebRefreshAt) >= 60
+    }
+
+    /// Marks a questpoll.com refresh as started.
+    func didStartWebRefresh(now: Date = Date()) {
+        lastWebRefreshAt = now
+    }
+
+    /// Refreshes every card pointing at a deck in `summaries`.
+    func refresh(from summaries: [LivePollDeckSummary]) {
+        let byId = Dictionary(summaries.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        for poll in polls {
+            guard let summary = byId[poll.pollId] else { continue }
+            refresh(id: poll.id, title: summary.title, questionCount: summary.questionCount)
+        }
+    }
+
     /// Deletes the card with `id` when present.
     func delete(id: UUID) {
         guard let item = polls.first(where: { $0.id == id }) else { return }

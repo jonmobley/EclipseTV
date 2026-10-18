@@ -49,11 +49,15 @@ enum LivePollAccountStore {
         return !alreadyPrompted
     }
 
+    /// Posted after `signOut()` so a live room can be closed.
+    static let didSignOutNotification = Notification.Name("LivePollAccountStore.didSignOut")
+
     /// Signs out and clears any leftover legacy PIN.
     static func signOut() {
         shared.signOut()
         KeychainStore.removeValue(forKey: legacyPINKey)
         UserDefaults.standard.removeObject(forKey: legacyPINKey)
+        NotificationCenter.default.post(name: didSignOutNotification, object: nil)
     }
 
     // MARK: - Private
