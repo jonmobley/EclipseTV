@@ -109,8 +109,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
                     trailingTitle: showSeeAll ? "See All" : nil,
                     trailingHandler: showSeeAll
                         ? { [weak self] in self?.presentAllShows() }
-                        : nil,
-                    actions: homeRecentFilterActions()
+                        : nil
                 )
             } else {
                 header.configure(title: "")

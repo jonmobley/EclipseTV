@@ -285,16 +285,9 @@ final class LibraryGridViewController: UIViewController {
         homeSection(at: section, in: collectionView)
     }
 
-    /// Home Recent format filter. `nil` is both; ignored unless both formats exist.
-    var homeRecentOrientationFilter: ExternalOutputOrientation?
-
     /// Recent Shows from both Display Modes (+ New Show when empty).
     var showRibbonItems: [HomeGridItem] {
-        let albums = LocalAlbumStore.shared.albums
-        let filter = HomeGridItem.hasBothOrientations(in: albums)
-            ? homeRecentOrientationFilter
-            : nil
-        return HomeGridItem.recentShows(from: albums, orientation: filter)
+        HomeGridItem.recentShows(from: LocalAlbumStore.shared.albums, orientation: nil)
     }
 
     /// Index of the Camera tile in the open Show grid, if present.

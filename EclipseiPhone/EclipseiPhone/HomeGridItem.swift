@@ -26,12 +26,6 @@ enum HomeGridItem: Equatable {
     /// Max Shows shown on the Home Recent ribbon before See All.
     static let recentHomeLimit = 6
 
-    /// True when the library has at least one Landscape and one Vertical Show.
-    static func hasBothOrientations(in albums: [LocalAlbum]) -> Bool {
-        albums.contains { $0.orientation == .landscape }
-            && albums.contains { $0.orientation == .portrait }
-    }
-
     /// Recent Shows (typically both Display Modes, by last opened).
     ///
     /// `orientation` keeps only that format. `createShow` appears only when

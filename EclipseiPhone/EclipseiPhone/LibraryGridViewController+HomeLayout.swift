@@ -54,8 +54,6 @@ extension LibraryGridViewController {
     struct HomeLayoutState {
         var isShowMode: Bool
         var showsSlideshowRibbon: Bool
-        /// Home Recent format chips — taller header estimate when both formats exist.
-        var showsRecentFormatFilter: Bool = false
         /// iPhone landscape: no marketing carousel on Home.
         var hidesHero: Bool = false
 
@@ -124,8 +122,7 @@ extension LibraryGridViewController {
                     containerWidth: width,
                     containerHeight: environment.container.effectiveContentSize.height,
                     sectionInset: sectionInset,
-                    spacing: spacing,
-                    showsFormatFilter: live.showsRecentFormatFilter
+                    spacing: spacing
                 )
             }
         }
