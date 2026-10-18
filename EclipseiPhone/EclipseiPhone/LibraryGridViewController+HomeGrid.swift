@@ -712,6 +712,15 @@ extension LibraryGridViewController: UICollectionViewDataSource,
                 guard let self else { return }
                 self.presentShowMediaExport(forShowId: show.id, from: self.view)
             }
+            let row = Self.offlineRow(forShowId: show.id)
+            let offline = UIAction(
+                title: row.title,
+                subtitle: row.subtitle,
+                image: UIImage(systemName: row.systemImage),
+                attributes: row.canDownload ? [] : .disabled
+            ) { [weak self] _ in
+                self?.presentShowOfflineDownload(forShowId: show.id)
+            }
             let delete = UIAction(
                 title: "Delete Show",
                 image: UIImage(systemName: "trash"),
@@ -719,7 +728,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             ) { [weak self] _ in
                 self?.confirmDeleteShow(show)
             }
-            return UIMenu(children: [rename, share, export, delete])
+            return UIMenu(children: [rename, share, export, offline, delete])
         }
     }
 

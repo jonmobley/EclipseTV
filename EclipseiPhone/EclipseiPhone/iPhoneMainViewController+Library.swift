@@ -237,6 +237,13 @@ extension iPhoneMainViewController {
                 )
             }
         }
+        settings.onDownloadShowOffline = { [weak self] in
+            guard let self,
+                  let id = self.libraryViewController.openShowId else { return }
+            self.dismiss(animated: true) {
+                self.presentShowOfflineDownload(forShowId: id)
+            }
+        }
         settings.onDeleteShow = { [weak self] in
             guard let self, let id = self.libraryViewController.openShowId else { return }
             LocalAlbumStore.shared.delete(id: id)

@@ -120,9 +120,10 @@ struct ShowMediaExportSettingsTests {
             settings.tableView(table, titleForHeaderInSection: $0) == "Show Sharing"
         }
         let section = try #require(sharing)
-        // Share + Export, plus Enter Share Code only when that entry is offered.
+        // Share + Export + Download for Offline, plus Enter Share Code only when
+        // that entry is offered.
         let joinRow = AlbumConfig.offersAccountCodeEntry || AlbumBrowserStore.shared.hasAccountConfigured
-        #expect(table.numberOfRows(inSection: section) == (joinRow ? 3 : 2))
+        #expect(table.numberOfRows(inSection: section) == (joinRow ? 4 : 3))
 
         let exportCell = settings.tableView(
             table, cellForRowAt: IndexPath(row: 1, section: section)
@@ -136,5 +137,20 @@ struct ShowMediaExportSettingsTests {
             table, didSelectRowAt: IndexPath(row: 1, section: section)
         )
         #expect(exported)
+
+        let offlineCell = settings.tableView(
+            table, cellForRowAt: IndexPath(row: 2, section: section)
+        )
+        let offline = offlineCell.contentConfiguration as? UIListContentConfiguration
+        // An unknown Show has nothing waiting in iCloud: a status, not an action.
+        #expect(offline?.text == "Available Offline")
+        #expect(offline?.secondaryText == nil)
+
+        var downloaded = false
+        settings.onDownloadShowOffline = { downloaded = true }
+        settings.tableView(
+            table, didSelectRowAt: IndexPath(row: 2, section: section)
+        )
+        #expect(!downloaded)
     }
 }
