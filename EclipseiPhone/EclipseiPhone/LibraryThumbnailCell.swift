@@ -35,14 +35,13 @@ final class LibraryThumbnailCell: UICollectionViewCell {
     var cameraFreezeRevealGate: TilePreviewPaintGate?
     /// Clear overlay that hosts a pull-down menu (empty-Show Add tile).
     private let menuButton: UIButton = {
-        let button = UIButton(type: .custom)
-        button.showsMenuAsPrimaryAction = true
+        let button = ScrollSafeMenuButton(type: .custom)
         button.translatesAutoresizingMaskIntoConstraints = false
         button.isHidden = true
         return button
     }()
     /// Visible ⋯ control for Show media / Background (same idea as Recent Show tiles).
-    let moreButton = UIButton(type: .system)
+    let moreButton = ScrollSafeMenuButton(type: .system)
     /// Clears a parked mid-play leave without going live.
     let rewindButton = UIButton(type: .system)
     /// Nudged up when a caption sits under the glyph; 0 for + -only add tiles.

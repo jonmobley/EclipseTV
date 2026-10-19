@@ -18,9 +18,9 @@ final class CameraFramePickerCell: UICollectionViewCell {
     private let imageView = UIImageView()
     private let iconView = UIImageView()
     private let titleLabel = UILabel()
-    private let moreButton = UIButton(type: .system)
+    private let moreButton = ScrollSafeMenuButton(type: .system)
     /// Full-card pull-down host used by the Add tile.
-    private let menuButton = UIButton(type: .system)
+    private let menuButton = ScrollSafeMenuButton(type: .system)
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -134,7 +134,6 @@ final class CameraFramePickerCell: UICollectionViewCell {
             top: inset, leading: inset, bottom: inset, trailing: inset
         )
         moreButton.configuration = config
-        moreButton.showsMenuAsPrimaryAction = true
         moreButton.accessibilityLabel = "More"
         moreButton.translatesAutoresizingMaskIntoConstraints = false
         moreButton.isHidden = true
@@ -164,7 +163,6 @@ final class CameraFramePickerCell: UICollectionViewCell {
 
     private func installMenuButton() {
         menuButton.translatesAutoresizingMaskIntoConstraints = false
-        menuButton.showsMenuAsPrimaryAction = true
         menuButton.isHidden = true
         contentView.addSubview(menuButton)
         NSLayoutConstraint.activate([

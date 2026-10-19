@@ -20,7 +20,7 @@ final class HomeShowTileCell: UICollectionViewCell {
     private let scrimView = GradientView()
     private let titleLabel = UILabel()
     private let subtitleLabel = UILabel()
-    private let moreButton = UIButton(type: .system)
+    private let moreButton = ScrollSafeMenuButton(type: .system)
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -167,7 +167,6 @@ final class HomeShowTileCell: UICollectionViewCell {
             top: inset, leading: inset, bottom: inset, trailing: inset
         )
         moreButton.configuration = moreConfig
-        moreButton.showsMenuAsPrimaryAction = true
         moreButton.accessibilityLabel = "More"
         moreButton.translatesAutoresizingMaskIntoConstraints = false
         moreButton.isHidden = true

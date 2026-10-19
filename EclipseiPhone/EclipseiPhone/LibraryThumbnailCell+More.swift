@@ -35,7 +35,6 @@ extension LibraryThumbnailCell {
             top: inset, leading: inset, bottom: inset, trailing: inset
         )
         moreButton.configuration = config
-        moreButton.showsMenuAsPrimaryAction = true
         moreButton.accessibilityLabel = "More"
         moreButton.translatesAutoresizingMaskIntoConstraints = false
         moreButton.isHidden = true
