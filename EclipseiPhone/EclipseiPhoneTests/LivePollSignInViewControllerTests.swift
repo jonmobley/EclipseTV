@@ -17,8 +17,11 @@ struct LivePollSignInViewControllerTests {
         let signIn = LivePollSignInViewController()
         signIn.loadViewIfNeeded()
         #expect(signIn.preferredContentSize == LivePollSignInViewController.sheetSize)
-        #expect(textFields(in: signIn.view).count == 1)
+        #expect(textFields(in: signIn.view).filter { !$0.isHidden }.count == 1)
         #expect(view(in: signIn.view, id: "livepoll.signin.email") != nil)
+        let codeField = view(in: signIn.view, id: "livepoll.signin.codeField") as? UITextField
+        #expect(codeField?.isHidden == true)
+        #expect(codeField?.textContentType == .oneTimeCode)
         #expect(view(in: signIn.view, id: "questpoll.pin.pad") == nil)
     }
 
