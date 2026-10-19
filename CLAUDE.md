@@ -10,6 +10,10 @@
   EclipseiPhone target, `[sdk=iphoneos*]` only).
 - All unit tests pass (1085, 2026-10-02). `snapshotView(afterScreenUpdates:)` can return
   nil on iOS 26; LiveHeaderView falls back to a rendered still so dissolves don't hard-cut.
+- Menus on grid tiles (⋯, full-tile Add) use `ScrollSafeMenuButton`, never a plain `UIButton`
+  with `showsMenuAsPrimaryAction`: UIKit opens those on touch-down, so starting a scroll on ⋯
+  popped the menu (2026-10-19). It opens on a clean tap, ignores taps mid-glide, and lets drags
+  that start on it scroll the grid.
 - UI tests: if the iPhone simulator refuses to launch the test runner ("request was denied
   by service delegate"), run them on another simulator; it's a simulator state problem.
 - **Pairing protocol is `EclipseShare/v3`** (2026-10-15): each iPhone sends a random device key
