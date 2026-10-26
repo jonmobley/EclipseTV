@@ -30,6 +30,14 @@ extension LibraryGridViewController: TVLibraryStoreDelegate {
         pushCurrentToExternalDisplay()
         guard !isArranging else { return }
         pruneShowSelection()
+        // Going live from Camera (or any overlay) calls this *before* `present`
+        // ends that overlay. Reconfiguring now enqueues a cell update that still
+        // sees Camera as program, and that update can land after the reload that
+        // painted the incoming thumbnail live — which is how the new tile went
+        // on output with no red stroke.
+        if ExternalDisplayManager.shared.isOverlayLive {
+            return
+        }
         // Prefer visible-only repaint: go-live often coincides with video memory
         // pressure that empties NSCache; a full reloadData blanked the whole Show.
         // Fall back when Display Mode just swapped buckets — visible paths can
@@ -76,6 +84,8 @@ extension LibraryGridViewController: TVLibraryStoreDelegate {
             collectionView.reconfigureItems(at: safe)
         }
         refreshVisibleThumbnailPins()
+        syncVisibleShowTileLiveStrokes()
+        scheduleVisibleShowTileLiveStrokeSync()
     }
 
     func libraryStore(_ store: TVLibraryStore, didUpdateThumbnailFor id: String) {

@@ -107,5 +107,7 @@ extension LibraryGridViewController {
         UIView.performWithoutAnimation {
             collectionView.reconfigureItems(at: [indexPath])
         }
+        syncVisibleShowTileLiveStrokes()
+        scheduleVisibleShowTileLiveStrokeSync()
     }
 }

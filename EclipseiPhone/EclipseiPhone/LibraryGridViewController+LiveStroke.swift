@@ -20,8 +20,9 @@ extension LibraryGridViewController {
     /// still live, because the stores that own live output are updated one at a time.
     /// A cell whose partial update landed after the reload kept the stroke it was
     /// painted with, which is how a website and the slideshow that replaced it both
-    /// ended up red, and how a swap between two countdowns left the stroke on the
-    /// timer that just stopped.
+    /// ended up red, how a swap between two countdowns left the stroke on the
+    /// timer that just stopped, and how leaving Camera for another thumbnail put
+    /// the new item on output with no red stroke.
     ///
     /// Every one of those is the grid lying about what is on output, so the stroke
     /// gets a last pass that owns it outright. Visible cells only, and each one is a
@@ -38,6 +39,14 @@ extension LibraryGridViewController {
                 carriesLiveStroke(items[path.item]),
                 isLocked: isLiveOutputLocked
             )
+        }
+    }
+
+    /// Last word after a go-live turn's deferred `reconfigureItems` / Camera-tile
+    /// refresh. Those can land after `reloadData()` and paint the previous program.
+    func scheduleVisibleShowTileLiveStrokeSync() {
+        DispatchQueue.main.async { [weak self] in
+            self?.syncVisibleShowTileLiveStrokes()
         }
     }
 

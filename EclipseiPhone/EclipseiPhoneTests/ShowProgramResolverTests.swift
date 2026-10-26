@@ -120,6 +120,18 @@ struct ShowProgramResolverTests {
         #expect(liveTiles(state) == [.camera])
     }
 
+    @Test func endingCameraLeavesTheLibraryStillLive() {
+        var state = ShowProgramState()
+        state.isOverlayLive = true
+        state.isCameraTileLive = true
+        state.mediaId = still.id
+        #expect(liveTiles(state) == [.camera])
+
+        state.isOverlayLive = false
+        state.isCameraTileLive = false
+        #expect(liveTiles(state) == [.media(still)])
+    }
+
     @Test func aPollRoomOutranksItsProjectorPage() {
         // The room's projector page is a website overlay; the card is what the
         // user put live.

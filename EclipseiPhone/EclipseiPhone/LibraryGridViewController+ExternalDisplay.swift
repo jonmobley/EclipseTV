@@ -96,6 +96,7 @@ extension LibraryGridViewController {
         refreshVisibleThumbnailPins()
         // Last word on which tile is live, after the cells exist again.
         syncVisibleShowTileLiveStrokes()
+        scheduleVisibleShowTileLiveStrokeSync()
     }
 
     /// Clears home-grid live selection when a joined album item becomes the live output.
