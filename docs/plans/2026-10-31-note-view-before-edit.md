@@ -131,6 +131,41 @@ The project uses file-system-synchronized groups, so new files don't need
 Unchanged apart from one detail. Since editing is now a deliberate choice, keep the keyboard
 coming up on appear.
 
+### iPad (the target ships for iPhone and iPad, `TARGETED_DEVICE_FAMILY = "1,2"`)
+Chrome goes side by side whenever the view is wider than it is tall
+(`prefersSideBySideChrome`), so iPad landscape always docks the note under a leading
+preview of up to 58% of the width (`sideBySideRegularMaxHeroWidthFraction`). Portrait iPad
+and narrow Split View panes stack.
+- **Collapsed lines by width.** 3 lines in compact width, 5 in regular width. Make it
+  `static func collapsedLineCount(horizontalSizeClass:)` on `LiveNoteCardView`, and test it.
+  An iPad has room, and 3 lines at iPad widths still hold more text than on a phone.
+- **Cap from the view, not the screen.** Compute the cap and the minimum preview height
+  from `view.bounds` and the safe area. That way Split View, Slide Over and Stage Manager
+  resizes work. When the size class changes, recompute the line count and relayout
+  (`traitCollectionDidChange` / `registerForTraitChanges`). Keep the expanded state
+  unless the item changes.
+- **The editor must not cover the preview on iPad.** In regular width,
+  `sheetPresentationController` detents are ignored, and the sheet shows as a centered form
+  sheet over the preview. In regular width, present the composer as a **popover anchored to
+  the pencil** (`modalPresentationStyle = .popover`, `preferredContentSize` about
+  420 × 320, `popoverPresentationController.sourceItem = pencilButton`). Keep the current
+  sheet in compact width, and let `adaptivePresentationStyle` return `.none` for regular and
+  the sheet otherwise. Saving on dismiss already covers a tap outside the popover. The
+  Preview overlay and the item-menu entry points have no pencil to anchor to, so anchor to
+  the card or the menu's source view instead.
+- **Readable width on Preview.** On a big iPad, the full-width Preview card makes lines too
+  long. Pin the card to `readableContentGuide` (or a max width of about 640 pt, centered)
+  in regular width. The live card keeps matching the preview's width.
+- **Pointer and keyboard.**
+  - The pencil gets `isPointerInteractionEnabled = true`, and the card gets a
+    `UIPointerInteraction` highlight effect.
+  - In the composer, add `UIKeyCommand`s: ⌘↩ for Done, and Esc for dismiss (saves, same as
+    today).
+  - Selecting the card with an external keyboard's focus toggles it, the same as a tap.
+- **Rotation while expanded** (portrait ↔ landscape changes stacked ↔ side by side): the
+  card stays expanded and is re-measured against the new width and cap, with no jump in the
+  grid's scroll position.
+
 ## Tests (`EclipseiPhoneTests`)
 - `MediaNoteTextTests`:
   - marker detection for `•`, `-`, `*`, `1.`, `12)`, and tab after the marker
@@ -160,6 +195,11 @@ coming up on appear.
    Always setting, a tap on the empty card opens the editor.
 8. VoiceOver: the card reads its state, a double tap toggles, and the "Edit note" action works.
 9. Dynamic Type at the largest size: the pencil doesn't overlap the text, and the cap still holds.
+10. iPad, landscape and portrait: collapsed shows 5 lines, expands and collapses, and the
+    pencil opens a popover with the preview still visible. ⌘↩ saves.
+11. iPad Split View at ⅓, ½ and ⅔, and a Stage Manager window resize while expanded: the
+    layout follows, and switching to compact width falls back to 3 lines and the sheet.
+12. iPad Preview: the note card is limited to a readable width and centered.
 
 ## Out of scope
 - Rich text (bold and so on) in notes. It would need a new storage format and Mac app work.
