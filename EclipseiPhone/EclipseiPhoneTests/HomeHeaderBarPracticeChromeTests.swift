@@ -95,13 +95,13 @@ struct HomeHeaderBarPracticeChromeTests {
 struct HomeHeaderBarBackButtonTests {
 
     @Test func backHiddenOnHome() {
-        let bar = HomeHeaderBar(frame: CGRect(x: 0, y: 0, width: 390, height: 52))
+        let bar = dropdownHeaderBar()
         bar.setShowModeChrome(false)
         #expect(homeBackButton(in: bar)?.isHidden != false)
     }
 
     @Test func backShownInShowMode() {
-        let bar = HomeHeaderBar(frame: CGRect(x: 0, y: 0, width: 390, height: 52))
+        let bar = dropdownHeaderBar()
         bar.setShowModeChrome(true)
         let button = homeBackButton(in: bar)
         #expect(button?.isHidden == false)
@@ -109,14 +109,14 @@ struct HomeHeaderBarBackButtonTests {
     }
 
     @Test func backHiddenAgainAfterLeavingShowMode() {
-        let bar = HomeHeaderBar(frame: CGRect(x: 0, y: 0, width: 390, height: 52))
+        let bar = dropdownHeaderBar()
         bar.setShowModeChrome(true)
         bar.setShowModeChrome(false)
         #expect(homeBackButton(in: bar)?.isHidden != false)
     }
 
     @Test func backTapCallsOnGoBack() {
-        let bar = HomeHeaderBar(frame: CGRect(x: 0, y: 0, width: 390, height: 52))
+        let bar = dropdownHeaderBar()
         bar.setShowModeChrome(true)
         var didGoBack = false
         bar.onGoBack = { didGoBack = true }
@@ -127,11 +127,21 @@ struct HomeHeaderBarBackButtonTests {
     }
 
     @Test func backHiddenWhileArranging() {
-        let bar = HomeHeaderBar(frame: CGRect(x: 0, y: 0, width: 390, height: 52))
+        let bar = dropdownHeaderBar()
         bar.setShowModeChrome(true)
         bar.setArranging(true)
         #expect(homeBackButton(in: bar)?.isHidden != false)
     }
+}
+
+/// The chevron belongs to the dropdown header. Pinned so these tests mean the
+/// same thing on an iPad simulator, where the tabbed header hides it on purpose
+/// (`padRegularHidesBackBecauseHomeTabReturns` covers that side).
+@MainActor
+private func dropdownHeaderBar() -> HomeHeaderBar {
+    let bar = HomeHeaderBar(frame: CGRect(x: 0, y: 0, width: 390, height: 52))
+    bar.destinationTabsOverride = false
+    return bar
 }
 
 @MainActor
