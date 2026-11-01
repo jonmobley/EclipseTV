@@ -509,20 +509,25 @@ extension LibraryGridViewController {
         }
         if showsLiveNote {
             // Measure against the hero width this pass just settled on; the
-            // card spans the preview, so its height follows that column.
-            let noteHeight = measuredLiveNoteHeight(width: hero.width)
+            // card spans the preview, so its height follows that column. Always
+            // the collapsed height: expanding never shrinks the preview.
+            let noteHeight = liveNoteCard.collapsedHeight(forWidth: hero.width)
             if noteHeight > 0 {
-                availableHeight = max(
+                let columnHeight = max(
                     0,
                     availableHeight
                         - Self.liveNoteTopGap(ribbonDocked: docksLiveSlideshowRibbon)
-                        - noteHeight
                 )
+                availableHeight = max(0, columnHeight - noteHeight)
                 hero = sideBySideHeroSize(
                     availableWidth: availableWidth,
                     availableHeight: availableHeight,
                     aspect: aspect,
                     horizontalSizeClass: sizeClass
+                )
+                sideBySideLiveNoteMaxHeight = Self.sideBySideLiveNoteMaxHeight(
+                    columnHeight: columnHeight,
+                    heroHeight: hero.height
                 )
             }
         }

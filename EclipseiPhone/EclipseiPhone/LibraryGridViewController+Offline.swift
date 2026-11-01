@@ -106,9 +106,10 @@ extension LibraryGridViewController {
         }
     }
 
-    /// Opens the slide-up note composer for a still.
+    /// Opens the note composer for a still. On iPad it floats over the grid, so
+    /// the preview in the leading column stays visible.
     func presentNoteComposer(forId id: String) {
-        presentMediaNoteComposer(forId: id)
+        presentMediaNoteComposer(forId: id, anchor: gridHost, showsArrow: false)
     }
 
     /// Presents Preview for `item` among `neighbors` (images swipe; video is modal).

@@ -8,54 +8,27 @@
 import UIKit
 
 /// Welcome-style note card without the Getting Started icon badge.
-final class MediaNoteCardView: UIView {
+final class MediaNoteCardView: ExpandableNoteCardView {
 
-    private let bodyLabel = UILabel()
-
-    override init(frame: CGRect) {
-        super.init(frame: frame)
-        setup()
+    init() {
+        super.init(horizontalInset: 16, verticalInset: 16)
+        backgroundColor = .secondarySystemGroupedBackground
+        layer.cornerRadius = CornerRadii.large
+        layer.cornerCurve = .continuous
     }
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
 
+    override var collapsedLineCount: Int { 5 }
+
     /// Fills the card. Empty `note` shows the tap-to-add placeholder.
     func configure(note: String?) {
-        if let note, !note.isEmpty {
-            bodyLabel.text = note
-            bodyLabel.textColor = .secondaryLabel
-            accessibilityLabel = "Note. \(note)"
-        } else {
-            bodyLabel.text = "Tap to add a note"
-            bodyLabel.textColor = .tertiaryLabel
-            accessibilityLabel = "Note. Tap to add a note"
-        }
-    }
-
-    // MARK: - Private
-
-    private func setup() {
-        backgroundColor = .secondarySystemGroupedBackground
-        layer.cornerRadius = CornerRadii.large
-        layer.cornerCurve = .continuous
-        clipsToBounds = true
-        isAccessibilityElement = true
-        accessibilityTraits = .button
-
-        bodyLabel.font = .preferredFont(forTextStyle: .subheadline)
-        bodyLabel.adjustsFontForContentSizeCategory = true
-        bodyLabel.textColor = .secondaryLabel
-        bodyLabel.numberOfLines = 5
-        bodyLabel.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(bodyLabel)
-
-        NSLayoutConstraint.activate([
-            bodyLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
-            bodyLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
-            bodyLabel.topAnchor.constraint(equalTo: topAnchor, constant: 16),
-            bodyLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -16)
-        ])
+        fill(
+            note: note?.isEmpty == false ? note : nil,
+            textColor: .secondaryLabel,
+            placeholder: "Tap to add a note"
+        )
     }
 }

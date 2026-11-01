@@ -108,6 +108,15 @@ extension PreviewDismissDriver: UIGestureRecognizerDelegate {
         return velocity.y > 0 && velocity.y > abs(velocity.x)
     }
 
+    /// A drag through a note long enough to scroll reads the note, not the page.
+    func gestureRecognizer(
+        _ gestureRecognizer: UIGestureRecognizer,
+        shouldReceive touch: UITouch
+    ) -> Bool {
+        guard let note = touch.view as? NoteCardScrollView else { return true }
+        return !note.isScrollEnabled
+    }
+
     /// The pager's scroll view may already be tracking the touch. Recognizing
     /// alongside it lets the drag start anyway; `onDraggingChanged` then switches
     /// paging off, which cancels the scroll view's pan.

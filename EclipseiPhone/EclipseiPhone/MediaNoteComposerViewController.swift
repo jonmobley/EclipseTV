@@ -7,12 +7,23 @@
 
 import UIKit
 
-/// Slide-up sheet for adding or editing a still's presenter note.
+extension UITraitCollection {
+
+    /// True on iPad-sized panes. Plus/Max landscape is `.regular` width too, but
+    /// it's still a phone with the keyboard taking half the screen.
+    var prefersRegularNoteLayout: Bool {
+        horizontalSizeClass == .regular && verticalSizeClass != .compact
+    }
+}
+
+/// Sheet (popover on iPad) for adding or editing a still's presenter note.
 final class MediaNoteComposerViewController: UIViewController {
 
     private let itemId: String
     private let textView = UITextView()
     private var saveOnDisappear = true
+
+    private static let popoverSize = CGSize(width: 420, height: 320)
 
     /// - Parameter itemId: Library still id whose note is edited.
     init(itemId: String) {
@@ -24,16 +35,54 @@ final class MediaNoteComposerViewController: UIViewController {
         fatalError("init(coder:) has not been implemented")
     }
 
-    /// Navigation wrapper presented as a medium/large sheet with grabber.
-    static func makeNavigation(itemId: String) -> UINavigationController {
+    /// Navigation wrapper: a medium/large sheet with grabber on a phone, and on
+    /// iPad a popover, because a sheet there is a form sheet over the preview.
+    ///
+    /// - Parameters:
+    ///   - traits: The presenter's traits, which pick the style.
+    ///   - anchor: What the popover points at.
+    ///   - showsArrow: Set `false` to float centered on `anchor` instead.
+    static func makeNavigation(
+        itemId: String,
+        traits: UITraitCollection,
+        anchor: UIView,
+        showsArrow: Bool
+    ) -> UINavigationController {
         let composer = MediaNoteComposerViewController(itemId: itemId)
         let nav = UINavigationController(rootViewController: composer)
-        if let sheet = nav.sheetPresentationController {
-            sheet.detents = [.medium(), .large()]
-            sheet.selectedDetentIdentifier = .medium
-            sheet.prefersGrabberVisible = true
+        guard traits.prefersRegularNoteLayout else {
+            if let sheet = nav.sheetPresentationController {
+                configure(sheet)
+            }
+            return nav
+        }
+        nav.modalPresentationStyle = .popover
+        composer.preferredContentSize = popoverSize
+        if let popover = nav.popoverPresentationController {
+            popover.delegate = composer
+            popover.sourceView = anchor
+            popover.sourceRect = anchor.bounds
+            popover.permittedArrowDirections = showsArrow ? .any : []
+            configure(popover.adaptiveSheetPresentationController)
         }
         return nav
+    }
+
+    override var keyCommands: [UIKeyCommand]? {
+        let done = UIKeyCommand(
+            title: "Done",
+            action: #selector(doneTapped),
+            input: "\r",
+            modifierFlags: .command
+        )
+        let close = UIKeyCommand(
+            title: "Close",
+            action: #selector(closeTapped),
+            input: UIKeyCommand.inputEscape
+        )
+        done.wantsPriorityOverSystemBehavior = true
+        close.wantsPriorityOverSystemBehavior = true
+        return [done, close]
     }
 
     override func viewDidLoad() {
@@ -61,6 +110,12 @@ final class MediaNoteComposerViewController: UIViewController {
     }
 
     // MARK: - Private
+
+    private static func configure(_ sheet: UISheetPresentationController) {
+        sheet.detents = [.medium(), .large()]
+        sheet.selectedDetentIdentifier = .medium
+        sheet.prefersGrabberVisible = true
+    }
 
     private func setupTextView() {
         textView.font = .preferredFont(forTextStyle: .body)
@@ -91,5 +146,23 @@ final class MediaNoteComposerViewController: UIViewController {
         saveOnDisappear = false
         commit()
         dismiss(animated: true)
+    }
+
+    /// Esc closes the editor. `viewWillDisappear` saves, same as a swipe down.
+    @objc private func closeTapped() {
+        dismiss(animated: true)
+    }
+}
+
+// MARK: - UIPopoverPresentationControllerDelegate
+
+extension MediaNoteComposerViewController: UIPopoverPresentationControllerDelegate {
+
+    /// Follows the pane: a Split View resize to compact width turns it into the sheet.
+    func adaptivePresentationStyle(
+        for controller: UIPresentationController,
+        traitCollection: UITraitCollection
+    ) -> UIModalPresentationStyle {
+        traitCollection.prefersRegularNoteLayout ? .none : .pageSheet
     }
 }

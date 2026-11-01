@@ -54,6 +54,7 @@ final class LocalMediaPreviewPageViewController: UIViewController {
     func resetZoom() {
         zoomView.resetZoom(animated: false)
         isZoomed = false
+        noteOverlay.collapse()
         noteOverlay.reload()
         applyNoteOverlayVisibility()
     }
@@ -81,7 +82,7 @@ final class LocalMediaPreviewPageViewController: UIViewController {
 
     private func setupNoteOverlay() {
         noteOverlay.translatesAutoresizingMaskIntoConstraints = false
-        noteOverlay.onTap = { [weak self] in
+        noteOverlay.onEdit = { [weak self] in
             self?.presentNoteComposer()
         }
         view.addSubview(noteOverlay)
@@ -118,7 +119,6 @@ final class LocalMediaPreviewPageViewController: UIViewController {
     }
 
     private func presentNoteComposer() {
-        let nav = MediaNoteComposerViewController.makeNavigation(itemId: item.id)
-        present(nav, animated: true)
+        presentMediaNoteComposer(forId: item.id, anchor: noteOverlay.editAnchor)
     }
 }

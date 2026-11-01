@@ -38,8 +38,23 @@ extension UIViewController {
         }
     }
 
-    /// Slide-up note composer for a still, presented from whatever is on top.
-    func presentMediaNoteComposer(forId id: String) {
-        present(MediaNoteComposerViewController.makeNavigation(itemId: id), animated: true)
+    /// Note composer for a still, presented from whatever is on top.
+    ///
+    /// - Parameters:
+    ///   - anchor: What an iPad popover points at. Without one it floats centered
+    ///     over this controller's view.
+    ///   - showsArrow: Set `false` when `anchor` is an area rather than a control.
+    func presentMediaNoteComposer(
+        forId id: String,
+        anchor: UIView? = nil,
+        showsArrow: Bool = true
+    ) {
+        let nav = MediaNoteComposerViewController.makeNavigation(
+            itemId: id,
+            traits: traitCollection,
+            anchor: anchor ?? view,
+            showsArrow: anchor != nil && showsArrow
+        )
+        present(nav, animated: true)
     }
 }

@@ -105,8 +105,7 @@ extension MediaLibraryPickerViewController {
             title: MediaNoteStore.menuTitle(forId: id),
             image: UIImage(systemName: "note.text")
         ) { [weak self] _ in
-            let nav = MediaNoteComposerViewController.makeNavigation(itemId: id)
-            self?.present(nav, animated: true)
+            self?.presentMediaNoteComposer(forId: id)
         }
     }
 

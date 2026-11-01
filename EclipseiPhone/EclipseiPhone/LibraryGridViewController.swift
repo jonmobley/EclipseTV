@@ -397,6 +397,8 @@ final class LibraryGridViewController: UIViewController {
     var presentedLiveNoteId: String?
     /// Note text the card currently carries.
     var presentedLiveNote: String?
+    /// Room for an expanded note in the leading column, set by the side-by-side pass.
+    var sideBySideLiveNoteMaxHeight: CGFloat = 0
     /// Gap between the bottom-most live chrome and the note card (0 when parked).
     var liveNoteTopConstraint: NSLayoutConstraint?
     /// Measured note-card height (0 when parked).
@@ -521,6 +523,12 @@ final class LibraryGridViewController: UIViewController {
         }
         liveHeader.onFlipCamera = { [weak self] in
             self?.flipLiveCameraLens()
+        }
+        liveNoteCard.onEdit = { [weak self] in
+            self?.handleLiveNoteEdit()
+        }
+        liveNoteCard.onMetricsChanged = { [weak self] in
+            self?.forceChromeLayout()
         }
         liveNoteCard.addTarget(
             self, action: #selector(handleLiveNoteTap), for: .touchUpInside
