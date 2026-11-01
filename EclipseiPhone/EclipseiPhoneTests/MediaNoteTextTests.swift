@@ -52,6 +52,12 @@ struct MediaNoteTextTests {
         #expect(tabbed.tabStops.first?.location == tabbed.headIndent)
     }
 
+    /// The paragraph style overrides the label's mode, so without this a collapsed
+    /// list line is clipped mid-word instead of ending in "…".
+    @Test func listLinesTruncateWithAnEllipsis() throws {
+        #expect(try #require(style(ofLine: 0, in: "• Item")).lineBreakMode == .byTruncatingTail)
+    }
+
     @Test func keepsTheNoteTextUnchanged() {
         let note = "• One\n\n2. Two"
         #expect(MediaNoteText.attributed(note, font: font, color: .label).string == note)

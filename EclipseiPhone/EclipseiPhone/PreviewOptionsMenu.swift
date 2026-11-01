@@ -43,17 +43,17 @@ extension UIViewController {
     /// - Parameters:
     ///   - anchor: What an iPad popover points at. Without one it floats centered
     ///     over this controller's view.
-    ///   - showsArrow: Set `false` when `anchor` is an area rather than a control.
+    ///   - arrows: Sides the popover may point from; empty centers it on `anchor`.
     func presentMediaNoteComposer(
         forId id: String,
         anchor: UIView? = nil,
-        showsArrow: Bool = true
+        arrows: UIPopoverArrowDirection = []
     ) {
         let nav = MediaNoteComposerViewController.makeNavigation(
             itemId: id,
             traits: traitCollection,
             anchor: anchor ?? view,
-            showsArrow: anchor != nil && showsArrow
+            arrows: arrows
         )
         present(nav, animated: true)
     }

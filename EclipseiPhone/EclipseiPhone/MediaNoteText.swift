@@ -71,6 +71,9 @@ enum MediaNoteText {
         let style = NSMutableParagraphStyle()
         style.headIndent = indent
         style.tabStops = [NSTextTab(textAlignment: .natural, location: indent)]
+        // A paragraph style overrides the label's own mode, and the default clips
+        // the last collapsed line mid-word. Labels still wrap the earlier lines.
+        style.lineBreakMode = .byTruncatingTail
         return style
     }
 }

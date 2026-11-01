@@ -8,7 +8,7 @@
   `~/apps/CamTail/tools/build_all.sh`, which builds and tests both apps.
 - Device builds need the NDI SDK at `/Library/NDI SDK for Apple` (linker flags in the
   EclipseiPhone target, `[sdk=iphoneos*]` only).
-- All unit tests pass (1085, 2026-10-02). `snapshotView(afterScreenUpdates:)` can return
+- All unit tests pass (1127, 2026-10-31). `snapshotView(afterScreenUpdates:)` can return
   nil on iOS 26; LiveHeaderView falls back to a rendered still so dissolves don't hard-cut.
 - Menus on grid tiles (⋯, full-tile Add) use `ScrollSafeMenuButton`, never a plain `UIButton`
   with `showsMenuAsPrimaryAction`: UIKit opens those on touch-down, so starting a scroll on ⋯
@@ -40,3 +40,4 @@
 - The iPhone project reads LivePollKit / EclipsePhoneCameraClient from `../../eclipsepro/Packages` (and CamTailKit from `../../CamTail`), i.e. whatever branch `~/apps/eclipsepro` has checked out. To archive against eclipsepro `main` without touching that checkout, lay out worktrees side by side in a scratch dir (`<dir>/EclipseTV`, `<dir>/eclipsepro`, `<dir>/CamTail` symlink) and archive from there.
 - Build numbers: current scheme is `YYYYMMDDNN`; pass it explicitly (`Scripts/set_build_number.sh 2026101801`) since the script's default `YYYYMMDD.minute` sorts below it.
 - Upload from the CLI: `xcodebuild archive … -allowProvisioningUpdates`, then `xcodebuild -exportArchive` with `method=app-store-connect`, `destination=upload`, team `2YBTPD32DW`. Xcode's signed-in account is enough; the WebRTC "Upload Symbols Failed" warning is expected.
+- Note cards: tap expands or collapses, and the pencil edits (2026-10-31).

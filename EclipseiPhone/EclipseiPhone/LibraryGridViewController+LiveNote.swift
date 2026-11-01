@@ -134,7 +134,10 @@ extension LibraryGridViewController {
     /// Opens the composer for the live item's note.
     func handleLiveNoteEdit() {
         guard let id = presentedLiveNoteId else { return }
-        presentMediaNoteComposer(forId: id, anchor: liveNoteCard.editAnchor)
+        // Never `.right`: that opens toward the leading column and covers the preview.
+        presentMediaNoteComposer(
+            forId: id, anchor: liveNoteCard.editAnchor, arrows: [.left, .up]
+        )
     }
 
     /// Runs the guarded work in the chrome pass: both the landscape hero height

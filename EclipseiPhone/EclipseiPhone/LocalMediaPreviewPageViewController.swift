@@ -119,6 +119,6 @@ final class LocalMediaPreviewPageViewController: UIViewController {
     }
 
     private func presentNoteComposer() {
-        presentMediaNoteComposer(forId: item.id, anchor: noteOverlay.editAnchor)
+        presentMediaNoteComposer(forId: item.id, anchor: noteOverlay.editAnchor, arrows: .any)
     }
 }

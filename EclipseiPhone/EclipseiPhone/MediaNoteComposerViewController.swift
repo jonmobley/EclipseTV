@@ -41,12 +41,12 @@ final class MediaNoteComposerViewController: UIViewController {
     /// - Parameters:
     ///   - traits: The presenter's traits, which pick the style.
     ///   - anchor: What the popover points at.
-    ///   - showsArrow: Set `false` to float centered on `anchor` instead.
+    ///   - arrows: Sides the popover may point from; empty centers it on `anchor`.
     static func makeNavigation(
         itemId: String,
         traits: UITraitCollection,
         anchor: UIView,
-        showsArrow: Bool
+        arrows: UIPopoverArrowDirection
     ) -> UINavigationController {
         let composer = MediaNoteComposerViewController(itemId: itemId)
         let nav = UINavigationController(rootViewController: composer)
@@ -62,7 +62,7 @@ final class MediaNoteComposerViewController: UIViewController {
             popover.delegate = composer
             popover.sourceView = anchor
             popover.sourceRect = anchor.bounds
-            popover.permittedArrowDirections = showsArrow ? .any : []
+            popover.permittedArrowDirections = arrows
             configure(popover.adaptiveSheetPresentationController)
         }
         return nav
