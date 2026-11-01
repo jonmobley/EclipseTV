@@ -41,3 +41,4 @@
 - Build numbers: current scheme is `YYYYMMDDNN`; pass it explicitly (`Scripts/set_build_number.sh 2026101801`) since the script's default `YYYYMMDD.minute` sorts below it.
 - Upload from the CLI: `xcodebuild archive … -allowProvisioningUpdates`, then `xcodebuild -exportArchive` with `method=app-store-connect`, `destination=upload`, team `2YBTPD32DW`. Xcode's signed-in account is enough; the WebRTC "Upload Symbols Failed" warning is expected.
 - Note cards: tap expands or collapses, and the pencil edits (2026-10-31).
+- Note editor on iPhone is a full-height sheet only: a medium detent gets pushed to large by the keyboard, which looks like a stall halfway up (2026-11-01). The text stops at `keyboardLayoutGuide`, and Hide Keyboard shows while editing because Done closes the editor.

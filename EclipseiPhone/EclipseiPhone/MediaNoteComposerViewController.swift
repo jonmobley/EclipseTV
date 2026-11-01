@@ -35,7 +35,7 @@ final class MediaNoteComposerViewController: UIViewController {
         fatalError("init(coder:) has not been implemented")
     }
 
-    /// Navigation wrapper: a medium/large sheet with grabber on a phone, and on
+    /// Navigation wrapper: a full-height sheet with grabber on a phone, and on
     /// iPad a popover, because a sheet there is a form sheet over the preview.
     ///
     /// - Parameters:
@@ -112,8 +112,9 @@ final class MediaNoteComposerViewController: UIViewController {
     // MARK: - Private
 
     private static func configure(_ sheet: UISheetPresentationController) {
-        sheet.detents = [.medium(), .large()]
-        sheet.selectedDetentIdentifier = .medium
+        // Full height from the start: the keyboard forces a medium sheet to
+        // large, which reads as the sheet stalling halfway up.
+        sheet.detents = [.large()]
         sheet.prefersGrabberVisible = true
     }
 
@@ -124,15 +125,31 @@ final class MediaNoteComposerViewController: UIViewController {
         textView.backgroundColor = .clear
         textView.textContainerInset = UIEdgeInsets(top: 12, left: 12, bottom: 12, right: 12)
         textView.alwaysBounceVertical = true
+        textView.keyboardDismissMode = .interactive
+        textView.delegate = self
         textView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(textView)
+        view.keyboardLayoutGuide.usesBottomSafeArea = false
         NSLayoutConstraint.activate([
             textView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             textView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             textView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            textView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+            textView.bottomAnchor.constraint(equalTo: view.keyboardLayoutGuide.topAnchor)
         ])
         textView.accessibilityLabel = "Note"
+    }
+
+    /// Done closes the editor, so reading a long note needs its own way to
+    /// lower the keyboard. Tapping the text brings it back.
+    private func makeHideKeyboardButton() -> UIBarButtonItem {
+        let item = UIBarButtonItem(
+            image: UIImage(systemName: "keyboard.chevron.compact.down"),
+            style: .plain,
+            target: self,
+            action: #selector(hideKeyboardTapped)
+        )
+        item.accessibilityLabel = "Hide Keyboard"
+        return item
     }
 
     private func commit() {
@@ -148,9 +165,26 @@ final class MediaNoteComposerViewController: UIViewController {
         dismiss(animated: true)
     }
 
+    @objc private func hideKeyboardTapped() {
+        textView.resignFirstResponder()
+    }
+
     /// Esc closes the editor. `viewWillDisappear` saves, same as a swipe down.
     @objc private func closeTapped() {
         dismiss(animated: true)
+    }
+}
+
+// MARK: - UITextViewDelegate
+
+extension MediaNoteComposerViewController: UITextViewDelegate {
+
+    func textViewDidBeginEditing(_ textView: UITextView) {
+        navigationItem.leftBarButtonItem = makeHideKeyboardButton()
+    }
+
+    func textViewDidEndEditing(_ textView: UITextView) {
+        navigationItem.leftBarButtonItem = nil
     }
 }
 
