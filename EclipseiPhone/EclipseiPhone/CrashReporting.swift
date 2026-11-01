@@ -46,13 +46,17 @@ enum CrashReporting {
     /// Keeps only known-safe fields. Exception and log text can quote file names,
     /// links and note text, so it is dropped rather than filtered.
     static func scrub(_ event: Event) -> Event? {
-        event.user = nil
+        // With no address of its own, Sentry reads a city from the connection.
+        let user = User()
+        user.ipAddress = "0.0.0.0"
+        event.user = user
         event.serverName = nil
         event.message = nil
         event.breadcrumbs = nil
         event.extra = nil
         event.tags = nil
         event.context?["device"]?["name"] = nil
+        event.context?["device"]?["locale"] = nil
         event.context?["app"]?["device_app_hash"] = nil
         event.context?["culture"] = nil
         event.exceptions?.forEach { exception in

@@ -35,7 +35,8 @@ struct CrashReportingTests {
 
         let scrubbed = try #require(CrashReporting.scrub(event))
 
-        #expect(scrubbed.user == nil)
+        #expect(scrubbed.user?.userId == nil)
+        #expect(scrubbed.user?.ipAddress == "0.0.0.0")
         #expect(scrubbed.message == nil)
         #expect(scrubbed.extra == nil)
         #expect(scrubbed.tags == nil)
