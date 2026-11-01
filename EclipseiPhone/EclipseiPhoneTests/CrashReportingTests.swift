@@ -21,7 +21,11 @@ struct CrashReportingTests {
         crumb.message = "Opened Spring Recital"
         crumb.data = ["title": "Spring Recital"]
         event.breadcrumbs = [crumb]
-        event.context = ["device": ["name": "Jo's iPhone", "model": "iPhone18,1"]]
+        event.context = [
+            "device": ["name": "Jo's iPhone", "model": "iPhone18,1"],
+            "app": ["device_app_hash": "abc123", "app_version": "1.0"],
+            "culture": ["timezone": "America/Indiana/Indianapolis"]
+        ]
         let exception = Exception(value: "cannot open /var/mobile/Spring Recital.mov", type: "NSException")
         let mechanism = Mechanism(type: "signal")
         mechanism.data = ["reason": "Spring Recital"]
@@ -38,6 +42,9 @@ struct CrashReportingTests {
         #expect(scrubbed.breadcrumbs == nil)
         #expect(scrubbed.context?["device"]?["name"] == nil)
         #expect(scrubbed.context?["device"]?["model"] as? String == "iPhone18,1")
+        #expect(scrubbed.context?["app"]?["device_app_hash"] == nil)
+        #expect(scrubbed.context?["app"]?["app_version"] as? String == "1.0")
+        #expect(scrubbed.context?["culture"] == nil)
         #expect(scrubbed.exceptions?.first?.type == "NSException")
         #expect(scrubbed.exceptions?.first?.value == nil)
         #expect(scrubbed.exceptions?.first?.mechanism?.data == nil)

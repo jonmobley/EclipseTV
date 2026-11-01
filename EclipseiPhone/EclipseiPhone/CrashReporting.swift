@@ -53,6 +53,8 @@ enum CrashReporting {
         event.extra = nil
         event.tags = nil
         event.context?["device"]?["name"] = nil
+        event.context?["app"]?["device_app_hash"] = nil
+        event.context?["culture"] = nil
         event.exceptions?.forEach { exception in
             exception.value = nil
             exception.mechanism?.data = nil
