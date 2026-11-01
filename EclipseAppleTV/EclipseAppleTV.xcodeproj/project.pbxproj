@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		E2C5B0000000000000000001 /* Sentry in Frameworks */ = {isa = PBXBuildFile; productRef = E2C5B0000000000000000002 /* Sentry */; };
 		E2A9294F2E5750800056C5F9 /* video1.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = E2A9294E2E5750800056C5F9 /* video1.mp4 */; };
 /* End PBXBuildFile section */
 
@@ -57,6 +58,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E2C5B0000000000000000001 /* Sentry in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -143,6 +145,7 @@
 			);
 			name = EclipseAppleTV;
 			packageProductDependencies = (
+				E2C5B0000000000000000002 /* Sentry */,
 			);
 			productName = EclipseAppleTV;
 			productReference = E24EA2CE2D89ED30002DB63F /* EclipseAppleTV.app */;
@@ -228,6 +231,7 @@
 			mainGroup = E24EA2C52D89ED30002DB63F;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				E2C5B0000000000000000003 /* XCRemoteSwiftPackageReference "sentry-cocoa" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = E24EA2CF2D89ED30002DB63F /* Products */;
@@ -619,6 +623,25 @@
 		};
 /* End XCConfigurationList section */
 
+
+/* Begin XCRemoteSwiftPackageReference section */
+		E2C5B0000000000000000003 /* XCRemoteSwiftPackageReference "sentry-cocoa" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/getsentry/sentry-cocoa";
+			requirement = {
+				kind = exactVersion;
+				version = 9.23.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		E2C5B0000000000000000002 /* Sentry */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E2C5B0000000000000000003 /* XCRemoteSwiftPackageReference "sentry-cocoa" */;
+			productName = Sentry;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = E24EA2C62D89ED30002DB63F /* Project object */;
 }

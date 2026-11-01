@@ -31,6 +31,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     ///   - launchOptions: Dictionary of options specified at launch
     /// - Returns: Success indicator for app launch
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+        CrashReporting.start()
         logger.info("Application did finish launching")
         // Sweep media files the library no longer references (interrupted receives,
         // legacy leftovers) so the Caches/Media directory can't grow unbounded.

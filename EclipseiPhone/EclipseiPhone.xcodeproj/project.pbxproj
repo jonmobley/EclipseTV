@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		E2C5A0000000000000000001 /* Sentry in Frameworks */ = {isa = PBXBuildFile; productRef = E2C5A0000000000000000002 /* Sentry */; };
 		E2F51CF32F1FDBB500B87D90 /* EclipsePhoneCameraClient in Frameworks */ = {isa = PBXBuildFile; productRef = E2F51CF42F1FDBB500B87D90 /* EclipsePhoneCameraClient */; };
 		LP0000000000000000000B2 /* LivePollKit in Frameworks */ = {isa = PBXBuildFile; productRef = LP0000000000000000000B1 /* LivePollKit */; };
 		CT0000000000000000000B2 /* CamTailKit in Frameworks */ = {isa = PBXBuildFile; productRef = CT0000000000000000000B1 /* CamTailKit */; };
@@ -72,6 +73,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E2C5A0000000000000000001 /* Sentry in Frameworks */,
 				E2F51CF32F1FDBB500B87D90 /* EclipsePhoneCameraClient in Frameworks */,
 				LP0000000000000000000B2 /* LivePollKit in Frameworks */,
 				CT0000000000000000000B2 /* CamTailKit in Frameworks */,
@@ -138,6 +140,7 @@
 			);
 			name = EclipseiPhone;
 			packageProductDependencies = (
+				E2C5A0000000000000000002 /* Sentry */,
 				E2F51CF42F1FDBB500B87D90 /* EclipsePhoneCameraClient */,
 				LP0000000000000000000B1 /* LivePollKit */,
 				CT0000000000000000000B1 /* CamTailKit */,
@@ -227,6 +230,7 @@
 			mainGroup = E24EA3862D8A64E7002DB63F;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				E2C5A0000000000000000003 /* XCRemoteSwiftPackageReference "sentry-cocoa" */,
 				E2F51CF52F1FDBB500B87D90 /* XCLocalSwiftPackageReference "../../eclipsepro/Packages/EclipsePhoneCameraClient" */,
 				LP0000000000000000000B0 /* XCLocalSwiftPackageReference "../../eclipsepro/Packages/LivePollKit" */,
 				CT0000000000000000000B0 /* XCLocalSwiftPackageReference "../../CamTail/Packages/CamTailKit" */,
@@ -702,7 +706,23 @@
 		};
 /* End XCLocalSwiftPackageReference section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		E2C5A0000000000000000003 /* XCRemoteSwiftPackageReference "sentry-cocoa" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/getsentry/sentry-cocoa";
+			requirement = {
+				kind = exactVersion;
+				version = 9.23.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
+		E2C5A0000000000000000002 /* Sentry */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E2C5A0000000000000000003 /* XCRemoteSwiftPackageReference "sentry-cocoa" */;
+			productName = Sentry;
+		};
 		E2F51CF42F1FDBB500B87D90 /* EclipsePhoneCameraClient */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = E2F51CF52F1FDBB500B87D90 /* XCLocalSwiftPackageReference "../../eclipsepro/Packages/EclipsePhoneCameraClient" */;
