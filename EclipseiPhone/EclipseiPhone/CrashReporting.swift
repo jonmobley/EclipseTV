@@ -9,7 +9,8 @@ import Foundation
 import Sentry
 
 /// Sends crash and freeze reports to Sentry. Nothing else: no analytics, no
-/// screenshots, no network addresses, no account details.
+/// screenshots, no activity trail, and no free text. A report keeps the crash
+/// type, where in the code it happened, and basic device details.
 ///
 /// Off in Debug builds and tests, so development never reaches the project.
 enum CrashReporting {
@@ -29,6 +30,7 @@ enum CrashReporting {
             options.environment = isTestFlight ? "testflight" : "production"
             options.sendDefaultPii = false
             options.enableAutoPerformanceTracing = false
+            options.enableAutoBreadcrumbTracking = false
             options.enableNetworkBreadcrumbs = false
             options.enableCaptureFailedRequests = false
             options.attachStacktrace = true
@@ -41,29 +43,21 @@ enum CrashReporting {
         Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt"
     }
 
-    /// Removes anything that could name a person's file, link or device.
+    /// Keeps only known-safe fields. Exception and log text can quote file names,
+    /// links and note text, so it is dropped rather than filtered.
     static func scrub(_ event: Event) -> Event? {
         event.user = nil
         event.serverName = nil
-        event.breadcrumbs = event.breadcrumbs?.filter { !containsSensitiveText($0.message) }
-        if let message = event.message?.formatted {
-            event.message = SentryMessage(formatted: redact(message))
-        }
+        event.message = nil
+        event.breadcrumbs = nil
+        event.extra = nil
+        event.tags = nil
+        event.context?["device"]?["name"] = nil
         event.exceptions?.forEach { exception in
-            exception.value = exception.value.map(redact)
+            exception.value = nil
+            exception.mechanism?.data = nil
+            exception.mechanism?.desc = nil
         }
         return event
-    }
-
-    private static func containsSensitiveText(_ text: String?) -> Bool {
-        guard let text else { return false }
-        return text != redact(text)
-    }
-
-    /// Links and file paths can carry names of shows, media and people.
-    static func redact(_ text: String) -> String {
-        text
-            .replacingOccurrences(of: #"[a-zA-Z][a-zA-Z0-9+.-]*://\S+"#, with: "<url>", options: .regularExpression)
-            .replacingOccurrences(of: #"(/[^/\s]+){2,}/?"#, with: "<path>", options: .regularExpression)
     }
 }
