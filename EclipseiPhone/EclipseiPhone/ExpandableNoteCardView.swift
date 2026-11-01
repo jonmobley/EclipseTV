@@ -38,6 +38,8 @@ class ExpandableNoteCardView: UIControl {
     private static let pencilVisibleSide: CGFloat = 28
     /// Text column room for the pencil: its margin in the corner plus a small gap.
     private static let pencilReservedWidth: CGFloat = 40
+    /// Deepest fade over the bottom edge while more of the note is below.
+    private static let maxFadeDepth: CGFloat = 32
 
     /// Asks the host to open the editor.
     var onEdit: (() -> Void)?
@@ -60,8 +62,15 @@ class ExpandableNoteCardView: UIControl {
 
     let pencilButton = UIButton(type: .system)
 
+    /// How far the bottom edge fades, in points. It shrinks to zero over the last
+    /// of the note, so it reads as "there's more" and never pops off at the end.
+    private(set) var fadeDepth: CGFloat = 0
+
     private let horizontalInset: CGFloat
     private let verticalInset: CGFloat
+    /// Holds the fade: a mask on the scroll view itself would slide with its content.
+    private let scrollClip = UIView()
+    private let fadeMask = CAGradientLayer()
     private let scrollView = NoteCardScrollView()
     private let bodyLabel = UILabel()
     private lazy var bodyElement = NoteCardBodyElement(accessibilityContainer: self)
@@ -143,7 +152,8 @@ class ExpandableNoteCardView: UIControl {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        scrollView.frame = bounds
+        scrollClip.frame = bounds
+        scrollView.frame = scrollClip.bounds
         pencilButton.frame = CGRect(
             x: bounds.width - Self.pencilHitSide,
             y: 0,
@@ -171,6 +181,7 @@ class ExpandableNoteCardView: UIControl {
             height: bodyLabel.frame.height + verticalInset * 2
         )
         scrollView.isScrollEnabled = isExpanded && needed > room + 0.5
+        updateFade()
 
         bodyElement.accessibilityFrameInContainerSpace = bounds
         refreshAccessibility()
@@ -194,7 +205,10 @@ class ExpandableNoteCardView: UIControl {
 
         scrollView.showsHorizontalScrollIndicator = false
         scrollView.isScrollEnabled = false
-        addSubview(scrollView)
+        scrollView.delegate = self
+        fadeMask.colors = [UIColor.black.cgColor, UIColor.clear.cgColor]
+        scrollClip.addSubview(scrollView)
+        addSubview(scrollClip)
 
         // The label is display only, so touches land on the scroll view: a UIControl
         // would stop Preview's pager from taking a slow swipe that starts on the card.
@@ -265,6 +279,24 @@ class ExpandableNoteCardView: UIControl {
         return (height + verticalInset * 2).rounded(.up)
     }
 
+    private func updateFade() {
+        let height = scrollView.bounds.height
+        let hidden = scrollView.contentSize.height - scrollView.contentOffset.y - height
+        fadeDepth = scrollView.isScrollEnabled && height > 0
+            ? max(0, min(hidden, Self.maxFadeDepth))
+            : 0
+        guard fadeDepth > 0 else {
+            scrollClip.layer.mask = nil
+            return
+        }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        fadeMask.frame = scrollClip.bounds
+        fadeMask.locations = [NSNumber(value: Double(1 - fadeDepth / height)), 1]
+        scrollClip.layer.mask = fadeMask
+        CATransaction.commit()
+    }
+
     /// Rebuilds the text. It's attributed for the list indents, so its font has
     /// to be re-resolved by hand when the Dynamic Type size changes.
     private func applyText() {
@@ -296,6 +328,15 @@ class ExpandableNoteCardView: UIControl {
 
     @objc private func pencilTapped() {
         onEdit?()
+    }
+}
+
+// MARK: - UIScrollViewDelegate
+
+extension ExpandableNoteCardView: UIScrollViewDelegate {
+
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        updateFade()
     }
 }
 
