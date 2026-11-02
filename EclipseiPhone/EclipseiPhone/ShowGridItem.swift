@@ -52,6 +52,21 @@ enum ShowGridItem: Equatable {
         }
     }
 
+    /// Key and kind for this tile's Show / Hide Title choice, or nil for tiles
+    /// whose title is fixed (Screensaver, Background, cameras) or absent.
+    var cardTitle: (id: String, kind: ThumbnailTypeIcon)? {
+        switch self {
+        case .slideshow(let show): return (show.id.uuidString, .slideshow)
+        case .livePoll(let item): return (item.id.uuidString, .livePoll)
+        case .countdown(let item): return (item.id.uuidString, .countdown)
+        case .media(let media): return (media.id, .media(isVideo: media.isVideo))
+        case .website(let page):
+            return (page.id.uuidString, page.videoLink != nil ? .webVideo : .website)
+        case .pdf(let doc): return (doc.id.uuidString, .pdf)
+        case .screensaver, .logo, .camera, .ptzCamera, .unresolved, .add: return nil
+        }
+    }
+
     /// Multi-select id (nil for slideshow / Add).
     var selectionId: String? {
         switch self {

@@ -218,6 +218,8 @@ enum CloudKitRecordMapper {
         if let note = MediaNoteStore.cloudValue(forId: libraryId) {
             record[CloudKitSchema.MediaKey.note] = note as CKRecordValue
         }
+        MediaTitleStore.write(to: record, id: libraryId)
+        CardTitleVisibility.write(to: record, id: libraryId)
         if let framing = MediaFramingStore.framing(forId: libraryId) {
             record[CloudKitSchema.MediaKey.framing] = framing.asArray as CKRecordValue
         } else {
@@ -363,6 +365,11 @@ enum CloudKitRecordMapper {
         if isPrivateToMe(record), let note = record[CloudKitSchema.MediaKey.note] as? String {
             MediaNoteStore.applyRemote(note, forId: libraryId)
         }
+        // Titles are not private: a shared Show's collaborators see the same names.
+        if let title = record[CloudKitSchema.MediaKey.displayName] as? String {
+            MediaTitleStore.applyRemote(title, forId: libraryId)
+        }
+        CardTitleVisibility.applyRemote(from: record, id: libraryId)
         let isVideo = (record[CloudKitSchema.MediaKey.isVideo] as? Bool) ?? false
         guard isVideo else { return }
         let looping = record[CloudKitSchema.MediaKey.isLooping] as? Bool
@@ -373,6 +380,16 @@ enum CloudKitRecordMapper {
             isLooping: looping,
             isMuted: muted
         )
+    }
+
+    /// The local id a record's Show / Hide Title choice is kept under: the
+    /// library file name for photos and videos, the record name otherwise.
+    static func cardTitleId(for record: CKRecord) -> String {
+        guard record.recordType == CloudKitSchema.RecordType.mediaItem else {
+            return record.recordID.recordName
+        }
+        if let imported = importedMedia(from: record) { return imported.libraryId }
+        return capture(from: record)?.libraryFileName ?? record.recordID.recordName
     }
 
     static func mediaAssetURL(from record: CKRecord) -> URL? {

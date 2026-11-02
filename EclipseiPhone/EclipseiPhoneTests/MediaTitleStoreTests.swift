@@ -64,7 +64,7 @@ struct MediaTitleStoreTests {
         #expect(MediaTitleStore.menuTitle(forId: id) == "Add title")
     }
 
-    @Test func thumbnailShowsCenteredTitle() {
+    @Test func thumbnailShowsTitleWhenShown() {
         let id = uniqueId()
         defer { MediaTitleStore.clear(forId: id) }
 
@@ -79,7 +79,12 @@ struct MediaTitleStoreTests {
         cell.configure(with: item, thumbnail: swatch(), isLive: false)
         #expect(cell.captionLabel.isHidden)
 
+        // A photo's title shows once Show Title is on (photos start untitled).
+        defer { CardTitleVisibility.clear(forId: id) }
         MediaTitleStore.setTitle("Welcome slide", forId: id)
+        cell.configure(with: item, thumbnail: swatch(), isLive: false)
+        #expect(cell.captionLabel.isHidden)
+        CardTitleVisibility.setShown(true, forId: id)
         cell.configure(with: item, thumbnail: swatch(), isLive: false)
         cell.layoutIfNeeded()
         #expect(cell.captionLabel.isHidden == false)

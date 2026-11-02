@@ -51,6 +51,11 @@ final class EclipseSyncController {
         MediaNoteStore.idsNeedingFirstUpload().forEach {
             backend.scheduleMediaPrefsSave(libraryId: $0)
         }
+        // Same for photo / video titles: they were phone-only before, and stay
+        // shown on the card (the Mac now sees both name and choice).
+        CardTitleVisibility.idsNeedingFirstUpload().forEach {
+            backend.scheduleMediaPrefsSave(libraryId: $0)
+        }
         if statusObserver == nil {
             statusObserver = NotificationCenter.default.addObserver(
                 forName: CloudKitAccountMonitor.didChangeNotification,

@@ -47,6 +47,7 @@ extension CloudKitRecordMapper {
         if let assetURL {
             record[CloudKitSchema.PDFKey.asset] = CKAsset(fileURL: assetURL)
         }
+        CardTitleVisibility.write(to: record, id: doc.id.uuidString)
         return record
     }
 

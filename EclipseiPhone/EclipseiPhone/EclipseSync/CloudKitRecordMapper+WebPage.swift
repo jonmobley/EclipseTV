@@ -26,6 +26,7 @@ extension CloudKitRecordMapper {
         record[CloudKitSchema.WebPageKey.url] = page.url.absoluteString as CKRecordValue
         record[CloudKitSchema.WebPageKey.createdAt] = page.createdAt as CKRecordValue
         record[CloudKitSchema.WebPageKey.modifiedAt] = modifiedAt as CKRecordValue
+        CardTitleVisibility.write(to: record, id: page.id.uuidString)
         return record
     }
 

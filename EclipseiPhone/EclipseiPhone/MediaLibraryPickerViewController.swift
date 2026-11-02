@@ -197,6 +197,12 @@ final class MediaLibraryPickerViewController: UIViewController {
             name: MediaTitleStore.didChangeNotification,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(reload),
+            name: CardTitleVisibility.didChangeNotification,
+            object: nil
+        )
         reload()
     }
 

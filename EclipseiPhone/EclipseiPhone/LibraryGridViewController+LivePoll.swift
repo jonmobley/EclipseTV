@@ -328,6 +328,9 @@ extension LibraryGridViewController {
             isLocked: isLiveOutputLocked,
             typeIcon: .livePoll
         )
+        cell.applyTitleVisibility(
+            CardTitleVisibility.isShown(forId: item.id.uuidString, kind: .livePoll)
+        )
     }
 
     /// Card ⋯ menu: Practice, Replace Poll, Edit, End, Remove.
@@ -368,6 +371,7 @@ extension LibraryGridViewController {
                 self?.confirmEndQuestPoll()
             })
         }
+        children.append(ShowGridItem.livePoll(item).titleVisibilityAction())
         children.append(arrangeAction())
         children.append(selectAction(seedId: ShowLivePollToken.token(for: item.id)))
         children.append(UIAction(
@@ -398,6 +402,7 @@ extension LibraryGridViewController {
                 self?.confirmEndQuestPoll()
             })
         }
+        children.append(ShowGridItem.livePoll(item).titleVisibilityAction())
         children.append(arrangeAction())
         children.append(selectAction(seedId: ShowLivePollToken.token(for: item.id)))
         children.append(UIAction(
@@ -573,6 +578,9 @@ extension LibraryGridViewController {
                 isLive: isShowGridItemLive(item),
                 isLocked: isLiveOutputLocked,
                 typeIcon: .livePoll
+            )
+            cell.applyTitleVisibility(
+                CardTitleVisibility.isShown(forId: poll.id.uuidString, kind: .livePoll)
             )
         }
     }

@@ -50,6 +50,7 @@ extension CloudKitRecordMapper {
             showIdKey: CloudKitSchema.SlideshowKey.showId,
             attachAsShareChild: attachAsShareChild
         )
+        CardTitleVisibility.write(to: record, id: show.id.uuidString)
         return record
     }
 

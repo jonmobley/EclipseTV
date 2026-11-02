@@ -38,6 +38,9 @@ enum CloudKitSchema {
         static let cameraFrame = "CameraFrame"
         static let cameraSettings = "CameraSettings"
         static let cutawayStill = "CutawayStill"
+
+        /// Non-media records whose tile has a Show / Hide Title choice.
+        static let titledTools: Set<String> = [pdfDoc, webPage, slideshow, countdown, livePoll]
     }
 
     enum ShowKey {
@@ -80,6 +83,11 @@ enum CloudKitSchema {
         /// Presenter note (`""` = deleted; absent = never set by any device).
         static let note = "note"
     }
+
+    /// Card title Show / Hide choice on MediaItem, PDFDoc, WebPage, Slideshow,
+    /// Countdown and LivePoll records (absent = never chosen, use the default
+    /// for the kind). Shared with the Mac app; not private like `note`.
+    static let titleShownKey = "titleShown"
 
     enum PDFKey {
         static let title = "title"

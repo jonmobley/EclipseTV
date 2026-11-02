@@ -87,6 +87,14 @@ extension LibraryThumbnailCell {
         }
     }
 
+    /// Hides the title of a tile whose Show Title is off. The name stays in
+    /// the VoiceOver label.
+    func applyTitleVisibility(_ shown: Bool) {
+        guard !shown, !captionLabel.isHidden else { return }
+        captionLabel.isHidden = true
+        updateCaptionScrim()
+    }
+
     /// Updates a special-tile caption without resetting ⋯ chrome.
     func applySpecialTitle(
         _ title: String,

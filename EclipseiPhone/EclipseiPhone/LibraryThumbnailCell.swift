@@ -283,7 +283,7 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         }
 
         unavailableBadge.isHidden = !isUnavailable
-        applyOverlayTitle(forId: item.id)
+        applyOverlayTitle(for: item)
         setLive(isLive && !isUnavailable, isLocked: isLocked)
         var a11y = MediaTitleStore.title(forId: item.id) ?? item.name
         if item.isVideo {
@@ -301,10 +301,13 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         isAccessibilityElement = true
     }
 
-    /// Bottom-centered overlay from `MediaTitleStore`, if the item has one.
-    func applyOverlayTitle(forId id: String) {
-        guard let title = MediaTitleStore.title(forId: id) else { return }
-        captionLabel.text = title
+    /// Bottom-left title when Show Title is on for the item: its name from
+    /// `MediaTitleStore`, else "Photo" / "Video" (what the Mac card says).
+    func applyOverlayTitle(for item: LibraryItemDTO) {
+        let kind = ThumbnailTypeIcon.media(isVideo: item.isVideo)
+        guard CardTitleVisibility.isShown(forId: item.id, kind: kind) else { return }
+        captionLabel.text = MediaTitleStore.title(forId: item.id)
+            ?? (item.isVideo ? "Video" : "Photo")
         captionLabel.isHidden = false
         updateCaptionScrim()
     }

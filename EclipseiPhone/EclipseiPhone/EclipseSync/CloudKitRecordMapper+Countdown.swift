@@ -43,6 +43,7 @@ extension CloudKitRecordMapper {
             showIdKey: CloudKitSchema.CountdownKey.showId,
             attachAsShareChild: attachAsShareChild
         )
+        CardTitleVisibility.write(to: record, id: item.id.uuidString)
         return record
     }
 

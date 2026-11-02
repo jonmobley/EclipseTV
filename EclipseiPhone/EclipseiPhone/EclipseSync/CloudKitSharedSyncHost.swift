@@ -123,6 +123,7 @@ final class CloudKitSharedSyncHost: NSObject, CKSyncEngineDelegate {
                         )
                     )
                 case CloudKitSchema.RecordType.pdfDoc:
+                    CardTitleVisibility.applyRemote(from: record, id: record.recordID.recordName)
                     if let doc = CloudKitRecordMapper.savedPDF(from: record) {
                         PDFStore.shared.applyRemote(
                             doc,

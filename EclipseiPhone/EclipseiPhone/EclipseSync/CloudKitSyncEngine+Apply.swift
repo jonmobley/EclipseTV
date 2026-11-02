@@ -35,6 +35,12 @@ extension CloudKitSyncEngine {
     }
 
     func applyChildRecord(_ record: CKRecord) {
+        if CloudKitSchema.RecordType.titledTools.contains(record.recordType) {
+            CardTitleVisibility.applyRemote(
+                from: record,
+                id: CloudKitRecordMapper.cardTitleId(for: record)
+            )
+        }
         switch record.recordType {
         case CloudKitSchema.RecordType.mediaItem:
             applyRemoteMedia(record)
@@ -151,6 +157,7 @@ extension CloudKitSyncEngine {
     func noteSavedRecord(_ saved: CKRecord) {
         rememberLastKnown(saved)
         markLocalRecordSynced(saved)
+        CardTitleVisibility.noteSaved(id: CloudKitRecordMapper.cardTitleId(for: saved))
         account.clearQuotaPause()
     }
 }

@@ -101,6 +101,9 @@ extension LibraryGridViewController {
             endHint: item.endAction.tileHint,
             background: CountdownBackground.resolved(for: item).tileImage
         )
+        cell.applyTitleVisibility(
+            CardTitleVisibility.isShown(forId: item.id.uuidString, kind: .countdown)
+        )
     }
 
     /// Pauses and drops the clock when this countdown is deleted, live or held.
@@ -168,6 +171,7 @@ extension LibraryGridViewController {
         ) { [weak self] _ in
             self?.promptRenameCountdown(item)
         })
+        children.append(ShowGridItem.countdown(item).titleVisibilityAction())
         children.append(arrangeAction())
         children.append(selectAction(seedId: token))
         children.append(UIAction(

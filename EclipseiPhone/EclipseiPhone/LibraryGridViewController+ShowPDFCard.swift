@@ -38,7 +38,9 @@ extension LibraryGridViewController {
             in: album,
             extras: [delete]
         )
-        return UIMenu(children: [preview, rename] + rest.children)
+        return UIMenu(
+            children: [preview, rename, ShowGridItem.pdf(doc).titleVisibilityAction()] + rest.children
+        )
     }
 
     /// Deleting drops the file, so warn that every Show loses the card.

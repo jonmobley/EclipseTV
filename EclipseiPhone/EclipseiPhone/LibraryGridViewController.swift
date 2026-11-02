@@ -587,6 +587,16 @@ final class LibraryGridViewController: UIViewController {
             self?.reloadGridIfSafe()
             self?.updateEmptyState()
         }
+        // A sync can rename many cards at once: one reload per run-loop turn.
+        for name in [MediaTitleStore.didChangeNotification, CardTitleVisibility.didChangeNotification] {
+            observe(name) { [weak self] _ in
+                guard let self else { return }
+                NSObject.cancelPreviousPerformRequests(
+                    withTarget: self, selector: #selector(self.reloadGridForTitleChange), object: nil
+                )
+                self.perform(#selector(self.reloadGridForTitleChange), with: nil, afterDelay: 0)
+            }
+        }
         observe(MediaNoteStore.didChangeNotification) { [weak self] _ in
             self?.syncLiveNoteChrome()
         }

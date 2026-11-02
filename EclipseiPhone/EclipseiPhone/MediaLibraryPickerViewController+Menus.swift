@@ -34,7 +34,8 @@ extension MediaLibraryPickerViewController {
         }
         var children: [UIMenuElement] = [
             previewAction { [weak self] in self?.previewMedia(item) },
-            titleAction(forId: item.id)
+            titleAction(forId: item.id),
+            ShowGridItem.media(item).titleVisibilityAction()
         ]
         if item.isVideo {
             children.append(contentsOf: videoLibraryActions(for: item))

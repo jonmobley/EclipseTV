@@ -803,7 +803,8 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             ) { [weak self] _ in
                 self?.presentLocalPreview(for: item)
             },
-            titleAction(for: item)
+            titleAction(for: item),
+            ShowGridItem.media(item).titleVisibilityAction()
         ]
         if item.isVideo {
             children.append(contentsOf: videoOptionActions(for: item))

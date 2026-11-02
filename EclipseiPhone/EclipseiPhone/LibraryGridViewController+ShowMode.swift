@@ -284,6 +284,7 @@ extension LibraryGridViewController {
                     : .scaleAspectFit,
                 typeIcon: .slideshow
             )
+            cell.applyTitleVisibility(gridItem.isTitleShown)
             cell.setMoreMenu(
                 (isArranging || isSelecting) ? nil : slideshowContextMenu(show)
             )
@@ -382,6 +383,7 @@ extension LibraryGridViewController {
                 isLocked: isLiveOutputLocked,
                 typeIcon: isVideoLink ? .webVideo : .website
             )
+            cell.applyTitleVisibility(gridItem.isTitleShown)
             if isArranging || isSelecting {
                 cell.clearMoreMenu()
             } else if let album = openShow {
@@ -398,6 +400,7 @@ extension LibraryGridViewController {
                 titleNumberOfLines: 1,
                 typeIcon: .pdf
             )
+            cell.applyTitleVisibility(gridItem.isTitleShown)
             if isArranging || isSelecting {
                 cell.clearMoreMenu()
             } else if let album = openShow {
@@ -609,7 +612,10 @@ extension LibraryGridViewController {
         ) { [weak self] _ in
             self?.confirmDeleteSlideshow(show)
         }
-        return UIMenu(children: [edit, screenFitMenu(for: show), rename, arrangeAction(), delete])
+        return UIMenu(children: [
+            edit, screenFitMenu(for: show), rename, ShowGridItem.slideshow(show).titleVisibilityAction(),
+            arrangeAction(), delete
+        ])
     }
 
     /// Opens the pan/zoom cropper for a video. Stills use Screen Fit → Custom.
@@ -649,7 +655,8 @@ extension LibraryGridViewController {
             ) { [weak self] _ in
                 self?.presentLocalPreview(for: item, in: items)
             },
-            titleAction(for: item)
+            titleAction(for: item),
+            ShowGridItem.media(item).titleVisibilityAction()
         ]
         if item.isVideo {
             children.append(contentsOf: videoOptionActions(for: item))
@@ -686,7 +693,7 @@ extension LibraryGridViewController {
             self?.presentWebPage(page)
         }
         let rest = memberContextMenu(itemId: page.id.uuidString, in: album)
-        return UIMenu(children: [preview] + rest.children)
+        return UIMenu(children: [preview, ShowGridItem.website(page).titleVisibilityAction()] + rest.children)
     }
 
     /// Cover / Arrange / Remove for a Show member (media, website, or PDF id).

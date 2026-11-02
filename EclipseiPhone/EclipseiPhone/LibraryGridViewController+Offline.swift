@@ -46,6 +46,7 @@ extension LibraryGridViewController {
             MediaFramingStore.clear(forId: id)
             MediaNoteStore.clear(forId: id)
             MediaTitleStore.clear(forId: id)
+            CardTitleVisibility.clear(forId: id)
             Haptics.impactLight()
         } else {
             presentNotConnectedAlert()

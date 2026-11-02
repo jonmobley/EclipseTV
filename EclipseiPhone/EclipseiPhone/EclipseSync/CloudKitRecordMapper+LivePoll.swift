@@ -35,6 +35,7 @@ extension CloudKitRecordMapper {
             showIdKey: CloudKitSchema.LivePollKey.showId,
             attachAsShareChild: attachAsShareChild
         )
+        CardTitleVisibility.write(to: record, id: item.id.uuidString)
         return record
     }
 
