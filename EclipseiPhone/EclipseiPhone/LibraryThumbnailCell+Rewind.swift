@@ -54,14 +54,12 @@ extension LibraryThumbnailCell {
         rewindButton.configuration?.baseForegroundColor = .white
         guard let handler else {
             rewindButton.isHidden = true
-            refreshTypeIconVisibility()
             updateCaptionScrim()
             return
         }
         rewindButton.isHidden = false
         rewindButton.addAction(UIAction { _ in handler() }, for: .touchUpInside)
         cardView.bringSubviewToFront(rewindButton)
-        refreshTypeIconVisibility()
         updateCaptionScrim()
     }
 

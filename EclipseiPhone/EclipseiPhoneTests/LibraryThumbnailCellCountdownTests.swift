@@ -23,8 +23,6 @@ struct LibraryThumbnailCellCountdownTests {
         #expect(cell.countdownTimeLabel.text == "1:30")
         #expect(cell.captionLabel.text == "Break")
         #expect(cell.captionLabel.numberOfLines == 1)
-        #expect(cell.typeIconOverlay.appliedIcon == .countdown)
-        #expect(cell.typeIconOverlay.isHidden == false)
         #expect(cell.placeholderIcon.isHidden)
     }
 
@@ -46,7 +44,6 @@ struct LibraryThumbnailCellCountdownTests {
         cell.applyCountdownTime(45, isExpired: false)
         #expect(cell.countdownTimeLabel.text == "0:45")
         #expect(cell.captionLabel.text == "Break")
-        #expect(cell.typeIconOverlay.appliedIcon == .countdown)
     }
 
     @Test func armedEndingAddsASecondCaptionLineAndSpeaksIt() {

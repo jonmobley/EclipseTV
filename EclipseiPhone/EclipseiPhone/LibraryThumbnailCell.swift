@@ -21,10 +21,6 @@ final class LibraryThumbnailCell: UICollectionViewCell {
     let captionLabel = UILabel()
     /// Bottom fade under on-card titles (tools, Shows, websites).
     let captionScrimView = GradientView()
-    /// Top-leading photo / video / slideshow / website / PDF glyph.
-    let typeIconOverlay = ThumbnailTypeIconView()
-    /// Last content type applied; visibility can hide the overlay without clearing this.
-    var contentTypeIcon: ThumbnailTypeIcon?
     let durationLabel = PaddedLabel()
     /// Large monospaced clock for Countdown tiles (set duration / remaining).
     let countdownTimeLabel = UILabel()
@@ -155,7 +151,6 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         cardView.addSubview(menuButton)
         installMoreButton()
         installRewindButton()
-        installTypeIcon()
 
         NSLayoutConstraint.activate([
             cardView.topAnchor.constraint(equalTo: contentView.topAnchor),
@@ -234,7 +229,6 @@ final class LibraryThumbnailCell: UICollectionViewCell {
     // MARK: - Configuration
 
     /// - Parameter isLocked: Live lock uses amber chrome.
-    /// - Parameter showsTypeIcon: False for the live-slideshow ribbon (all stills).
     /// - Parameter thumbnailContentMode: Framing for the tile. Defaults to the
     ///   item's Screen Fit. Video honours Fit / Fill but never a custom crop.
     func configure(
@@ -242,7 +236,6 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         thumbnail: UIImage?,
         isLive: Bool,
         isLocked: Bool = false,
-        showsTypeIcon: Bool = true,
         thumbnailContentMode: UIView.ContentMode? = nil
     ) {
         // Under memory pressure `thumbnail(for:)` can briefly return nil after a
@@ -279,10 +272,6 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         placeholderIcon.isHidden = image != nil
         placeholderIcon.image = UIImage(systemName: item.isVideo ? "film" : "photo")
         placeholderIcon.tintColor = .tertiaryLabel
-
-        if showsTypeIcon, !isUnavailable {
-            setTypeIcon(.media(isVideo: item.isVideo))
-        }
 
         if !isUnavailable, item.isVideo, item.duration > 0 {
             durationLabel.text = Self.formatDuration(item.duration)
@@ -344,7 +333,8 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         }
         if imageView.alpha == 0 { imageView.alpha = 1 }
         placeholderIcon.isHidden = true
-        refreshTypeIconVisibility()
+        raiseDurationOverlay()
+        updateCaptionLayout()
     }
 
     /// Soft “add” tile (New Show / Add media) — quiet fill, blue glyph.
@@ -394,8 +384,7 @@ final class LibraryThumbnailCell: UICollectionViewCell {
     ///   disappear into the grid background.
     /// - Parameter thumbnailContentMode: `.scaleAspectFit` suits favicons; fill for snapshots.
     /// - Parameter titleNumberOfLines: Caption wrap; PDFs use 1 (tail ellipsis).
-    /// - Parameter typeIcon: Top-leading content glyph. Tool tiles keep it
-    ///   even without a poster.
+    /// - Parameter typeIcon: Content kind, spoken by VoiceOver (titles show no glyph).
     func configureSpecial(
         title: String,
         systemImage: String?,
@@ -425,7 +414,6 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         captionLabel.numberOfLines = titleNumberOfLines
         captionLabel.lineBreakMode = .byTruncatingTail
         captionLabel.isHidden = false
-        setTypeIcon(typeIcon)
         updateCaptionScrim()
         setLive(isLive, isLocked: isLocked)
         if outlined {
@@ -483,11 +471,10 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         durationLabel.isHidden ? nil : durationLabel.text
     }
 
-    /// Clears duration / unavailable / type-icon chrome used only by media cells.
+    /// Clears duration / unavailable chrome used only by media cells.
     func hideMediaBadges() {
         durationLabel.isHidden = true
         unavailableBadge.isHidden = true
-        setTypeIcon(nil)
     }
 
     /// Keeps the duration pill above thumbnail art and caption fade.

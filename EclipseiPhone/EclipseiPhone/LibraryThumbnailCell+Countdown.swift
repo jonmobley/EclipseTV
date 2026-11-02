@@ -41,15 +41,11 @@ extension LibraryThumbnailCell {
         captionLabel.numberOfLines = endHint == nil ? 1 : 2
         captionLabel.lineBreakMode = .byTruncatingTail
         captionLabel.isHidden = false
-        setTypeIcon(.countdown)
         updateCaptionScrim()
         setLive(isLive, isLocked: isLocked)
         cardView.bringSubviewToFront(countdownTimeLabel)
         cardView.bringSubviewToFront(captionScrimView)
         cardView.bringSubviewToFront(captionLabel)
-        if !typeIconOverlay.isHidden {
-            cardView.bringSubviewToFront(typeIconOverlay)
-        }
 
         var spoken = isHeld
             ? "\(name), paused at \(clock), countdown"

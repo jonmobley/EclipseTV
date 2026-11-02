@@ -22,7 +22,6 @@ extension LibraryThumbnailCell {
         cardView.backgroundColor = .mediaPlaceholder
         captionLabel.text = "PTZ Camera"
         captionLabel.isHidden = false
-        setTypeIcon(.ptzCamera)
         placeholderIcon.isHidden = true
         updateCaptionScrim()
         setLive(isLive, isLocked: isLocked)

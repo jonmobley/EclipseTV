@@ -13,7 +13,7 @@ extension LibraryThumbnailCell {
 
     /// Centered title by default; swapped to sit beside Rewind.
     func installCaptionLayoutConstraints() {
-        let gap = ThumbnailTypeIconView.titleSpacing
+        let gap: CGFloat = 6
         captionLeadingToCard = captionLabel.leadingAnchor.constraint(
             equalTo: cardView.leadingAnchor, constant: 8
         )
@@ -38,7 +38,7 @@ extension LibraryThumbnailCell {
     }
 
     /// Pins a visible title next to Rewind and stops before the duration pill.
-    /// Untitled / + tiles, and titles with the type disc up top, stay centered.
+    /// Untitled / + tiles stay centered.
     func updateCaptionLayout() {
         let show = !captionLabel.isHidden
         let hanging = show && !rewindButton.isHidden
@@ -75,9 +75,6 @@ extension LibraryThumbnailCell {
         // Thumbnail → fade → title → chrome (⋯ stays readable on top).
         cardView.bringSubviewToFront(captionScrimView)
         cardView.bringSubviewToFront(captionLabel)
-        if !typeIconOverlay.isHidden {
-            cardView.bringSubviewToFront(typeIconOverlay)
-        }
         raiseDurationOverlay()
         if !moreButton.isHidden {
             cardView.bringSubviewToFront(moreButton)
