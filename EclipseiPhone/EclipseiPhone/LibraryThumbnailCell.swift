@@ -110,7 +110,7 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         captionScrimView.translatesAutoresizingMaskIntoConstraints = false
         cardView.addSubview(captionScrimView)
 
-        captionLabel.font = .systemFont(ofSize: 12, weight: .semibold)
+        captionLabel.font = .systemFont(ofSize: 14, weight: .semibold)
         captionLabel.textColor = .white
         captionLabel.textAlignment = .left
         captionLabel.numberOfLines = 1

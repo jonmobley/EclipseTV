@@ -11,14 +11,17 @@ import UIKit
 
 extension LibraryThumbnailCell {
 
+    /// Space between the card edge and its title.
+    static let captionSideInset: CGFloat = 12
+
     /// Left-aligned title by default; swapped to sit beside Rewind.
     func installCaptionLayoutConstraints() {
         let gap: CGFloat = 6
         captionLeadingToCard = captionLabel.leadingAnchor.constraint(
-            equalTo: cardView.leadingAnchor, constant: 8
+            equalTo: cardView.leadingAnchor, constant: Self.captionSideInset
         )
         captionTrailingToCard = captionLabel.trailingAnchor.constraint(
-            equalTo: cardView.trailingAnchor, constant: -8
+            equalTo: cardView.trailingAnchor, constant: -Self.captionSideInset
         )
         captionBottomToCard = captionLabel.bottomAnchor.constraint(
             equalTo: cardView.bottomAnchor, constant: -10

@@ -102,7 +102,7 @@ struct ThumbnailTypeIconTests {
         #expect(cell.captionLabel.textAlignment == .left)
         #expect(cell.captionLabel.frame.midY > cell.cardView.bounds.midY)
         let trailingInset = cell.cardView.bounds.width - cell.captionLabel.frame.maxX
-        #expect(abs(trailingInset - 8) < 0.5)
+        #expect(abs(trailingInset - LibraryThumbnailCell.captionSideInset) < 0.5)
     }
 
     @Test func newShowTileKeepsCenteredLabel() {
