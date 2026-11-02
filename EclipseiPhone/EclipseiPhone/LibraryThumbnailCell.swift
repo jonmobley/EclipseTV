@@ -113,7 +113,7 @@ final class LibraryThumbnailCell: UICollectionViewCell {
 
         captionLabel.font = .systemFont(ofSize: 13, weight: .semibold)
         captionLabel.textColor = .white
-        captionLabel.textAlignment = .center
+        captionLabel.textAlignment = .natural
         captionLabel.numberOfLines = 2
         captionLabel.lineBreakMode = .byTruncatingTail
         captionLabel.isHidden = true
@@ -309,7 +309,7 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         isAccessibilityElement = true
     }
 
-    /// Bottom-centered overlay from `MediaTitleStore`, if the item has one.
+    /// Bottom-left overlay from `MediaTitleStore`, if the item has one.
     func applyOverlayTitle(forId id: String) {
         guard let title = MediaTitleStore.title(forId: id) else { return }
         captionLabel.text = title
@@ -457,7 +457,7 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         captionLabel.isHidden = true
         captionLabel.text = nil
         captionLabel.textColor = .white
-        captionLabel.textAlignment = .center
+        captionLabel.textAlignment = .natural
         captionLabel.numberOfLines = 2
         captionLabel.lineBreakMode = .byTruncatingTail
         captionScrimView.isHidden = true
