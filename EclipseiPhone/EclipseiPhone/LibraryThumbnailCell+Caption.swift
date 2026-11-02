@@ -11,7 +11,7 @@ import UIKit
 
 extension LibraryThumbnailCell {
 
-    /// Centered title by default; swapped to sit beside Rewind.
+    /// Left-aligned title by default; swapped to sit beside Rewind.
     func installCaptionLayoutConstraints() {
         let gap: CGFloat = 6
         captionLeadingToCard = captionLabel.leadingAnchor.constraint(
@@ -38,13 +38,13 @@ extension LibraryThumbnailCell {
     }
 
     /// Pins a visible title next to Rewind and stops before the duration pill.
-    /// Untitled / + tiles stay centered.
+    /// Titles are left-aligned (Add / New Show labels stay centered).
     func updateCaptionLayout() {
         let show = !captionLabel.isHidden
         let hanging = show && !rewindButton.isHidden
         let dodgeDuration = show && !durationLabel.isHidden
 
-        captionLabel.textAlignment = hanging ? .left : .center
+        captionLabel.textAlignment = centersCaption && !hanging ? .center : .left
         if hanging {
             captionLabel.numberOfLines = 1
             captionLabel.lineBreakMode = .byTruncatingTail

@@ -88,7 +88,7 @@ struct ThumbnailTypeIconTests {
         #expect(cell.placeholderIcon.isHidden)
     }
 
-    @Test func titledCaptionStaysAtBottomCentered() {
+    @Test func titledCaptionIsLeftAlignedAtBottom() {
         let cell = makeCell()
         cell.configureSpecial(
             title: "Example",
@@ -99,10 +99,21 @@ struct ThumbnailTypeIconTests {
             typeIcon: .website
         )
         cell.layoutIfNeeded()
-        #expect(cell.captionLabel.textAlignment == .center)
+        #expect(cell.captionLabel.textAlignment == .left)
         #expect(cell.captionLabel.frame.midY > cell.cardView.bounds.midY)
         let trailingInset = cell.cardView.bounds.width - cell.captionLabel.frame.maxX
         #expect(abs(trailingInset - 8) < 0.5)
+    }
+
+    @Test func newShowTileKeepsCenteredLabel() {
+        let cell = makeCell()
+        cell.configureActionTile(title: "New Show")
+        #expect(cell.captionLabel.textAlignment == .center)
+        cell.configure(with: makeItem(isVideo: false), thumbnail: swatch(), isLive: false)
+        cell.captionLabel.text = "Slide"
+        cell.captionLabel.isHidden = false
+        cell.updateCaptionScrim()
+        #expect(cell.captionLabel.textAlignment == .left)
     }
 
     @Test func captionStopsBeforeDurationPill() {
@@ -112,7 +123,7 @@ struct ThumbnailTypeIconTests {
         cell.captionLabel.isHidden = false
         cell.updateCaptionScrim()
         cell.layoutIfNeeded()
-        #expect(cell.captionLabel.textAlignment == .center)
+        #expect(cell.captionLabel.textAlignment == .left)
         #expect(cell.captionLabel.frame.maxX <= cell.durationLabel.frame.minX - 6 + 0.5)
     }
 

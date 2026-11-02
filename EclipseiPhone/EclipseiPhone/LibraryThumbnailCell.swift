@@ -48,6 +48,9 @@ final class LibraryThumbnailCell: UICollectionViewCell {
     var captionTrailingToDuration: NSLayoutConstraint!
     var captionBottomToCard: NSLayoutConstraint!
     var captionCenterYToRewind: NSLayoutConstraint!
+    /// Add / New Show tiles keep their label centred under the glyph; every
+    /// other title is left-aligned like the Mac cards (2026-11-02).
+    var centersCaption = false
     /// Last media id painted; keeps art when a reload hits a transient cache miss.
     private var configuredMediaId: String?
 
@@ -363,6 +366,7 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         captionLabel.isHidden = title.isEmpty
         // Keep the title readable on the light fill without a dark scrim.
         captionScrimView.isHidden = true
+        centersCaption = true
         updateCaptionLayout()
         self.accessibilityLabel = voice
         isAccessibilityElement = true
@@ -445,7 +449,8 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         captionLabel.isHidden = true
         captionLabel.text = nil
         captionLabel.textColor = .white
-        captionLabel.textAlignment = .center
+        captionLabel.textAlignment = .left
+        centersCaption = false
         captionLabel.numberOfLines = 2
         captionLabel.lineBreakMode = .byTruncatingTail
         captionScrimView.isHidden = true

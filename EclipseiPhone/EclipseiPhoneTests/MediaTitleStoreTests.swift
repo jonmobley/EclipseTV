@@ -84,7 +84,7 @@ struct MediaTitleStoreTests {
         cell.layoutIfNeeded()
         #expect(cell.captionLabel.isHidden == false)
         #expect(cell.captionLabel.text == "Welcome slide")
-        #expect(cell.captionLabel.textAlignment == .center)
+        #expect(cell.captionLabel.textAlignment == .left)
         #expect(cell.accessibilityLabel?.contains("Welcome slide") == true)
     }
 
