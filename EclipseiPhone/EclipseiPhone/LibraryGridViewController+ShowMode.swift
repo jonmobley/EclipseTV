@@ -395,6 +395,7 @@ extension LibraryGridViewController {
                 fillColor: .specialTile,
                 isLive: live,
                 isLocked: isLiveOutputLocked,
+                titleNumberOfLines: 1,
                 typeIcon: .pdf
             )
             if isArranging || isSelecting {

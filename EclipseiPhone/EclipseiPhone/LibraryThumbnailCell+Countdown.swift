@@ -37,12 +37,15 @@ extension LibraryThumbnailCell {
         let clock = CountdownController.displayString(seconds: seconds)
         applyCountdownTime(seconds, isExpired: isExpired, isHeld: isHeld)
 
-        captionLabel.text = endHint.map { "\(name) · \($0)" } ?? name
+        captionLabel.text = endHint.map { "\(name)\n\($0)" } ?? name
+        captionLabel.numberOfLines = endHint == nil ? 1 : 2
+        captionLabel.lineBreakMode = .byTruncatingTail
         captionLabel.isHidden = false
-        updateTitleStrip()
+        updateCaptionScrim()
         setLive(isLive, isLocked: isLocked)
         cardView.bringSubviewToFront(countdownTimeLabel)
-        cardView.bringSubviewToFront(titleStrip)
+        cardView.bringSubviewToFront(captionScrimView)
+        cardView.bringSubviewToFront(captionLabel)
 
         var spoken = isHeld
             ? "\(name), paused at \(clock), countdown"

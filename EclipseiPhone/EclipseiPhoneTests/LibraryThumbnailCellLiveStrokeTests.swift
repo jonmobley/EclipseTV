@@ -56,23 +56,21 @@ struct LibraryThumbnailCellLiveStrokeTests {
         #expect(cell.cardView.layer.borderWidth == 1)
     }
 
-    @Test func aPlainTileGoesBackToTheFaintIdleRing() {
+    @Test func aTileWithNoIdleEdgeGoesBackToNoBorder() {
         let cell = makeCell()
         cell.setLive(true)
         cell.setLive(false)
-        #expect(cell.cardView.layer.borderWidth == LibraryThumbnailCell.defaultIdleBorderWidth)
-        #expect(cell.cardView.layer.borderColor == LibraryThumbnailCell.defaultIdleBorderColor.cgColor)
+        #expect(cell.cardView.layer.borderWidth == 0)
     }
 
-    @Test func resetChromeGoesBackToTheDefaultIdleRing() {
+    @Test func resetChromeDropsTheIdleEdgeWithTheRestOfTheChrome() {
         let cell = makeCell()
-        cell.setIdleBorder(width: 2, color: .separator)
+        cell.setIdleBorder(width: 1, color: .separator)
         cell.resetChrome()
-        #expect(cell.cardView.layer.borderWidth == LibraryThumbnailCell.defaultIdleBorderWidth)
+        #expect(cell.cardView.layer.borderWidth == 0)
 
         cell.setLive(false)
-        #expect(cell.cardView.layer.borderWidth == LibraryThumbnailCell.defaultIdleBorderWidth)
-        #expect(cell.cardView.layer.borderColor == LibraryThumbnailCell.defaultIdleBorderColor.cgColor)
+        #expect(cell.cardView.layer.borderWidth == 0)
     }
 
     /// A checked tile in select mode is never live, so reconciliation clears it —

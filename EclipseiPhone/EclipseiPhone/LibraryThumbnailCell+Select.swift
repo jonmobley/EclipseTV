@@ -45,9 +45,6 @@ extension LibraryThumbnailCell {
         // reconciliation clears live state by restoring whatever idle edge the
         // tile registered. A direct write here was erased the next time a tick or
         // a reload reconciled the grid.
-        setIdleBorder(
-            width: isSelected ? 3 : Self.defaultIdleBorderWidth,
-            color: isSelected ? .accent : Self.defaultIdleBorderColor
-        )
+        setIdleBorder(width: isSelected ? 3 : 0, color: isSelected ? .accent : .clear)
     }
 }

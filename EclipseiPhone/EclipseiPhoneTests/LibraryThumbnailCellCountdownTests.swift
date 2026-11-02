@@ -54,8 +54,8 @@ struct LibraryThumbnailCellCountdownTests {
             isLive: false,
             endHint: CountdownEndAction.next.tileHint
         )
-        #expect(cell.captionLabel.text == "Pre-Service · Then next")
-        #expect(cell.captionLabel.numberOfLines == 1)
+        #expect(cell.captionLabel.text == "Pre-Service\nThen next")
+        #expect(cell.captionLabel.numberOfLines == 2)
         #expect(cell.accessibilityLabel == "Pre-Service, 5:00, countdown, then next")
     }
 
@@ -82,7 +82,7 @@ struct LibraryThumbnailCellCountdownTests {
         )
         cell.applyCountdownTime(12, isExpired: false)
         #expect(cell.countdownTimeLabel.text == "0:12")
-        #expect(cell.captionLabel.text == "Pre-Service · Then black")
+        #expect(cell.captionLabel.text == "Pre-Service\nThen black")
     }
 
     @Test func resetChromeHidesCountdownClock() {
