@@ -175,7 +175,7 @@ final class LocalAlbumStore {
         guard let index = albums.firstIndex(where: { $0.id == albumId }) else { return }
         guard !albums[index].itemIds.contains(itemId) else { return }
         albums[index].itemIds.append(itemId)
-        albums[index].deletedItemIds.removeAll { $0 == itemId }
+        SyncTombstones.markAdded(itemId, in: &albums[index].deletedItemIds)
         if var surface = albums[index].surfaceIds {
             if !surface.contains(itemId) { surface.append(itemId) }
             albums[index].surfaceIds = LocalAlbum.sanitizedSurface(
@@ -203,8 +203,8 @@ final class LocalAlbumStore {
         if albums[index].coverId == itemId {
             albums[index].coverId = albums[index].itemIds.first
         }
-        if hadMember, !albums[index].deletedItemIds.contains(itemId) {
-            albums[index].deletedItemIds.append(itemId)
+        if hadMember {
+            SyncTombstones.markRemoved(itemId, in: &albums[index].deletedItemIds)
         }
         persist(changedAlbumId: albumId)
         scheduleShowSaveIfNeeded(albumId)
@@ -214,14 +214,24 @@ final class LocalAlbumStore {
     }
 
     /// Puts a Show's membership back as it was in `snapshot` (Undo after
-    /// Remove): items, tools, grid order, cover, and the sync tombstones.
+    /// Remove): items, tools, grid order and cover. Anything removed since is
+    /// marked re-added now, so the Undo beats a removal that already synced.
     func restoreMembership(from snapshot: LocalAlbum) {
         guard let index = albums.firstIndex(where: { $0.id == snapshot.id }) else { return }
+        var deletedItems = albums[index].deletedItemIds
+        for id in snapshot.itemIds where SyncTombstones.isRemoved(id, in: deletedItems) {
+            SyncTombstones.markAdded(id, in: &deletedItems)
+        }
+        var deletedSurface = albums[index].deletedSurfaceIds
+        for token in snapshot.resolvedSurfaceIds
+        where SyncTombstones.isRemoved(token, in: deletedSurface) {
+            SyncTombstones.markAdded(token, in: &deletedSurface)
+        }
         albums[index].itemIds = snapshot.itemIds
         albums[index].surfaceIds = snapshot.surfaceIds
         albums[index].coverId = snapshot.coverId
-        albums[index].deletedItemIds = snapshot.deletedItemIds
-        albums[index].deletedSurfaceIds = snapshot.deletedSurfaceIds
+        albums[index].deletedItemIds = deletedItems
+        albums[index].deletedSurfaceIds = deletedSurface
         persist(changedAlbumId: snapshot.id)
         scheduleShowSaveIfNeeded(snapshot.id)
     }
@@ -254,9 +264,7 @@ final class LocalAlbumStore {
         albums[index].surfaceIds = LocalAlbum.sanitizedSurface(
             surface, itemIds: albums[index].itemIds
         )
-        if !albums[index].deletedSurfaceIds.contains(token) {
-            albums[index].deletedSurfaceIds.append(token)
-        }
+        SyncTombstones.markRemoved(token, in: &albums[index].deletedSurfaceIds)
         persist(changedAlbumId: albumId)
         scheduleShowSaveIfNeeded(albumId)
     }
@@ -269,7 +277,7 @@ final class LocalAlbumStore {
         var surface = albums[index].surfaceIds ?? []
         guard !surface.contains(token) else { return }
         surface.append(token)
-        albums[index].deletedSurfaceIds.removeAll { $0 == token }
+        SyncTombstones.markAdded(token, in: &albums[index].deletedSurfaceIds)
         albums[index].surfaceIds = LocalAlbum.sanitizedSurface(
             surface, itemIds: albums[index].itemIds
         )
@@ -318,9 +326,7 @@ final class LocalAlbumStore {
         guard var surface = albums[index].surfaceIds,
               surface.contains(token) else { return }
         surface.removeAll { $0 == token }
-        if !albums[index].deletedSurfaceIds.contains(token) {
-            albums[index].deletedSurfaceIds.append(token)
-        }
+        SyncTombstones.markRemoved(token, in: &albums[index].deletedSurfaceIds)
         albums[index].surfaceIds = LocalAlbum.sanitizedSurface(
             surface, itemIds: albums[index].itemIds
         )
@@ -343,9 +349,7 @@ final class LocalAlbumStore {
         guard var surface = albums[index].surfaceIds,
               surface.contains(token) else { return }
         surface.removeAll { $0 == token }
-        if !albums[index].deletedSurfaceIds.contains(token) {
-            albums[index].deletedSurfaceIds.append(token)
-        }
+        SyncTombstones.markRemoved(token, in: &albums[index].deletedSurfaceIds)
         albums[index].surfaceIds = LocalAlbum.sanitizedSurface(
             surface, itemIds: albums[index].itemIds
         )
@@ -363,9 +367,8 @@ final class LocalAlbumStore {
         if !surface.contains(token) {
             surface.append(token)
         }
-        albums[index].deletedSurfaceIds.removeAll {
-            $0 == ShowCountdownToken.legacyTool || $0 == token
-        }
+        SyncTombstones.markRemoved(ShowCountdownToken.legacyTool, in: &albums[index].deletedSurfaceIds)
+        SyncTombstones.markAdded(token, in: &albums[index].deletedSurfaceIds)
         albums[index].surfaceIds = LocalAlbum.sanitizedSurface(
             surface, itemIds: albums[index].itemIds
         )
@@ -388,9 +391,7 @@ final class LocalAlbumStore {
         guard var surface = albums[index].surfaceIds,
               surface.contains(token) else { return }
         surface.removeAll { $0 == token }
-        if !albums[index].deletedSurfaceIds.contains(token) {
-            albums[index].deletedSurfaceIds.append(token)
-        }
+        SyncTombstones.markRemoved(token, in: &albums[index].deletedSurfaceIds)
         albums[index].surfaceIds = LocalAlbum.sanitizedSurface(
             surface, itemIds: albums[index].itemIds
         )
@@ -404,9 +405,7 @@ final class LocalAlbumStore {
         guard var surface = albums[index].surfaceIds,
               surface.contains(ShowLivePollToken.legacyTool) else { return }
         surface.removeAll { $0 == ShowLivePollToken.legacyTool }
-        if !albums[index].deletedSurfaceIds.contains(ShowLivePollToken.legacyTool) {
-            albums[index].deletedSurfaceIds.append(ShowLivePollToken.legacyTool)
-        }
+        SyncTombstones.markRemoved(ShowLivePollToken.legacyTool, in: &albums[index].deletedSurfaceIds)
         albums[index].surfaceIds = LocalAlbum.sanitizedSurface(
             surface, itemIds: albums[index].itemIds
         )
@@ -422,7 +421,7 @@ final class LocalAlbumStore {
         if !surface.contains(token) {
             surface.append(token)
         }
-        albums[index].deletedSurfaceIds.removeAll { $0 == token }
+        SyncTombstones.markAdded(token, in: &albums[index].deletedSurfaceIds)
         albums[index].surfaceIds = LocalAlbum.sanitizedSurface(
             surface, itemIds: albums[index].itemIds
         )
