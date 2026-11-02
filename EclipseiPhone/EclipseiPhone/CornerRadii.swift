@@ -15,6 +15,8 @@ enum CornerRadii {
     static let standard: CGFloat = 12
     /// Home tiles and medium cards.
     static let card: CGFloat = 16
+    /// Grid media / Show tiles (picture + title strip), close to the Mac's 8.
+    static let tile: CGFloat = 10
     /// Large hero / drawer surfaces.
     static let large: CGFloat = 22
 }

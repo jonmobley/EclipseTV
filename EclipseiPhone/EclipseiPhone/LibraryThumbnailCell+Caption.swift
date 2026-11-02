@@ -7,80 +7,70 @@
 
 import UIKit
 
-// MARK: - Caption Scrim
+// MARK: - Title Strip
 
 extension LibraryThumbnailCell {
 
-    /// Left-aligned title by default; swapped to sit beside Rewind.
-    func installCaptionLayoutConstraints() {
-        let gap: CGFloat = 6
-        captionLeadingToCard = captionLabel.leadingAnchor.constraint(
-            equalTo: cardView.leadingAnchor, constant: 8
-        )
-        captionTrailingToCard = captionLabel.trailingAnchor.constraint(
-            equalTo: cardView.trailingAnchor, constant: -8
-        )
-        captionBottomToCard = captionLabel.bottomAnchor.constraint(
-            equalTo: cardView.bottomAnchor, constant: -10
-        )
-        captionLeadingToRewind = captionLabel.leadingAnchor.constraint(
-            equalTo: rewindButton.trailingAnchor, constant: gap
-        )
-        captionTrailingToDuration = captionLabel.trailingAnchor.constraint(
-            equalTo: durationLabel.leadingAnchor, constant: -gap
-        )
-        captionCenterYToRewind = captionLabel.centerYAnchor.constraint(
-            equalTo: rewindButton.centerYAnchor
-        )
-        captionLeadingToCard.isActive = true
-        captionTrailingToCard.isActive = true
-        captionBottomToCard.isActive = true
+    /// Strip height under the picture; grids add it to the tile height.
+    static let titleStripHeight: CGFloat = 32
+
+    /// Title colour on the strip (Mac: 90% primary).
+    static let titleColor = UIColor.label.withAlphaComponent(0.9)
+
+    /// Strip fill: a step lighter than the card in dark mode, darker in light.
+    static let titleStripFill = UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(white: 0.17, alpha: 1)
+            : UIColor(white: 0.9, alpha: 1)
     }
 
-    /// Pins a visible title next to Rewind and stops before the duration pill.
-    /// Titles are left-aligned (Add / New Show labels stay centered).
-    func updateCaptionLayout() {
-        let show = !captionLabel.isHidden
-        let hanging = show && !rewindButton.isHidden
-        let dodgeDuration = show && !durationLabel.isHidden
+    /// One-line title in a strip pinned under the picture (Mac `MediaCardTitleBar`).
+    func installTitleStrip() {
+        titleStrip.backgroundColor = Self.titleStripFill
+        titleStrip.isHidden = true
+        titleStrip.isUserInteractionEnabled = false
+        titleStrip.translatesAutoresizingMaskIntoConstraints = false
+        cardView.addSubview(titleStrip)
 
-        captionLabel.textAlignment = centersCaption && !hanging ? .center : .left
-        if hanging {
-            captionLabel.numberOfLines = 1
-            captionLabel.lineBreakMode = .byTruncatingTail
-        }
+        captionLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        captionLabel.textColor = Self.titleColor
+        captionLabel.textAlignment = .left
+        captionLabel.numberOfLines = 1
+        captionLabel.lineBreakMode = .byTruncatingTail
+        captionLabel.isHidden = true
+        captionLabel.translatesAutoresizingMaskIntoConstraints = false
+        captionLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        titleStrip.addSubview(captionLabel)
 
-        captionLeadingToCard.isActive = false
-        captionLeadingToRewind.isActive = false
-        captionCenterYToRewind.isActive = false
-        captionBottomToCard.isActive = false
-        captionTrailingToDuration.isActive = false
-        captionTrailingToCard.isActive = false
-
-        captionLeadingToRewind.isActive = hanging
-        captionLeadingToCard.isActive = !hanging
-        captionCenterYToRewind.isActive = hanging
-        captionBottomToCard.isActive = !hanging
-        captionTrailingToDuration.isActive = dodgeDuration
-        captionTrailingToCard.isActive = !dodgeDuration
+        imageBottomToStrip = imageView.bottomAnchor.constraint(equalTo: titleStrip.topAnchor)
+        imageBottomToCard = imageView.bottomAnchor.constraint(equalTo: cardView.bottomAnchor)
+        imageBottomToCard.isActive = true
+        NSLayoutConstraint.activate([
+            titleStrip.leadingAnchor.constraint(equalTo: cardView.leadingAnchor),
+            titleStrip.trailingAnchor.constraint(equalTo: cardView.trailingAnchor),
+            titleStrip.bottomAnchor.constraint(equalTo: cardView.bottomAnchor),
+            titleStrip.heightAnchor.constraint(equalToConstant: Self.titleStripHeight),
+            captionLabel.leadingAnchor.constraint(equalTo: titleStrip.leadingAnchor, constant: 10),
+            captionLabel.trailingAnchor.constraint(equalTo: titleStrip.trailingAnchor, constant: -10),
+            captionLabel.centerYAnchor.constraint(equalTo: titleStrip.centerYAnchor)
+        ])
     }
 
-    /// Bottom fade under any title drawn on the thumbnail.
-    func updateCaptionScrim() {
-        let showScrim = !captionLabel.isHidden
-        captionScrimView.isHidden = !showScrim
-        captionLabel.textColor = .white
-        updateCaptionLayout()
-        guard showScrim else { return }
-        // Thumbnail → fade → title → chrome (⋯ stays readable on top).
-        cardView.bringSubviewToFront(captionScrimView)
-        cardView.bringSubviewToFront(captionLabel)
-        raiseDurationOverlay()
+    /// Shows the strip under the picture when there is a title; with none, the
+    /// picture fills the card. Add / New Show labels stay centred.
+    func updateTitleStrip() {
+        let show = showsTitleStrip && !captionLabel.isHidden
+            && !(captionLabel.text ?? "").isEmpty
+        titleStrip.isHidden = !show
+        captionLabel.textAlignment = centersCaption ? .center : .left
+        imageBottomToStrip.isActive = false
+        imageBottomToCard.isActive = false
+        imageBottomToStrip.isActive = show
+        imageBottomToCard.isActive = !show
+        guard show else { return }
+        cardView.bringSubviewToFront(titleStrip)
         if !moreButton.isHidden {
             cardView.bringSubviewToFront(moreButton)
-        }
-        if !rewindButton.isHidden {
-            cardView.bringSubviewToFront(rewindButton)
         }
     }
 
@@ -103,6 +93,6 @@ extension LibraryThumbnailCell {
             }
         }
         accessibilityLabel = label
-        updateCaptionScrim()
+        updateTitleStrip()
     }
 }

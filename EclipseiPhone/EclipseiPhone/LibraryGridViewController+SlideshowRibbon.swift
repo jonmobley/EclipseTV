@@ -70,7 +70,8 @@ extension LibraryGridViewController {
                 isAvailable: true
             ),
             thumbnail: store.thumbnail(for: id),
-            isLive: indexPath.item == SlideshowPlaybackController.shared.currentSlideIndex
+            isLive: indexPath.item == SlideshowPlaybackController.shared.currentSlideIndex,
+            showsTitle: false
         )
     }
 

@@ -23,9 +23,8 @@ extension LibraryThumbnailCell {
         captionLabel.text = "PTZ Camera"
         captionLabel.isHidden = false
         placeholderIcon.isHidden = true
-        updateCaptionScrim()
+        updateTitleStrip()
         setLive(isLive, isLocked: isLocked)
-        setIdleBorder(width: 1, color: UIColor.white.withAlphaComponent(0.3))
 
         if cardView.viewWithTag(Self.ptzPreviewTag) == nil {
             let live = CamTailLiveVideoView()

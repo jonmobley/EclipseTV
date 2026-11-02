@@ -37,9 +37,8 @@ extension LibraryThumbnailCell {
         captionLabel.text = "Camera"
         captionLabel.isHidden = false
         placeholderIcon.isHidden = true
-        updateCaptionScrim()
+        updateTitleStrip()
         setLive(isLive, isLocked: isLocked)
-        setIdleBorder(width: 1, color: UIColor.white.withAlphaComponent(0.3))
 
         placeholderIcon.image = UIImage(systemName: "camera.fill")
         placeholderIcon.tintColor = UIColor.white.withAlphaComponent(0.85)
@@ -125,7 +124,7 @@ extension LibraryThumbnailCell {
             imageView.alpha = 0
             placeholderIcon.isHidden = false
             cardView.bringSubviewToFront(placeholderIcon)
-            updateCaptionScrim()
+            updateTitleStrip()
             return
         }
         if !warmPreview {
@@ -167,7 +166,7 @@ extension LibraryThumbnailCell {
         preview.syncPhoneViewerOrientation(phoneInterfaceOrientation)
         cardView.bringSubviewToFront(imageView)
         cardView.bringSubviewToFront(placeholderIcon)
-        updateCaptionScrim()
+        updateTitleStrip()
         if !moreButton.isHidden {
             cardView.bringSubviewToFront(moreButton)
         }

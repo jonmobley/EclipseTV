@@ -41,7 +41,7 @@ extension LibraryThumbnailCell {
                 equalTo: cardView.leadingAnchor, constant: 8
             ),
             rewindButton.bottomAnchor.constraint(
-                equalTo: cardView.bottomAnchor, constant: -8
+                equalTo: imageView.bottomAnchor, constant: -8
             )
         ])
     }
@@ -54,13 +54,13 @@ extension LibraryThumbnailCell {
         rewindButton.configuration?.baseForegroundColor = .white
         guard let handler else {
             rewindButton.isHidden = true
-            updateCaptionScrim()
+            updateTitleStrip()
             return
         }
         rewindButton.isHidden = false
         rewindButton.addAction(UIAction { _ in handler() }, for: .touchUpInside)
         cardView.bringSubviewToFront(rewindButton)
-        updateCaptionScrim()
+        updateTitleStrip()
     }
 
     /// Hides Rewind (called from `resetChrome`).

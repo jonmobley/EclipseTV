@@ -42,7 +42,7 @@ extension CameraLiveViewController {
     /// Gap between tiles — matches `LibraryGridViewController.interitemSpacing`.
     static let thumbGridSpacing: CGFloat = 12
     /// Tile corner radius — matches `LibraryThumbnailCell`.
-    static let thumbGridCornerRadius: CGFloat = 14
+    static let thumbGridCornerRadius: CGFloat = CornerRadii.tile
     /// Space between the header band and the panel below it.
     static let stackedHeaderGap: CGFloat = 12
     /// Extra band height under the LIVE pill so the recording timer pill fits in

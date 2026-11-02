@@ -236,7 +236,10 @@ final class MediaLibraryPickerViewController: UIViewController {
             1
         )
         let aspect = orientation.gridCellHeightOverWidth
-        layout.itemSize = CGSize(width: side, height: side * aspect)
+        layout.itemSize = CGSize(
+            width: side,
+            height: side * aspect + LibraryThumbnailCell.titleStripHeight
+        )
     }
 
     // MARK: - Actions
@@ -446,7 +449,6 @@ extension MediaLibraryPickerViewController: UICollectionViewDataSource {
                     thumbnail: PDFThumbnailStore.shared.image(for: id),
                     fillColor: .darkGray,
                     isLive: false,
-                    titleNumberOfLines: 1,
                     typeIcon: .pdf
                 )
                 if !isAddToShowMode {

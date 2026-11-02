@@ -225,7 +225,7 @@ extension LibraryGridViewController {
             sectionInset: sectionInset,
             spacing: spacing
         )
-        let card = homeTileSize(
+        let card = homeCardSize(
             containerWidth: containerWidth,
             sectionInset: sectionInset,
             spacing: spacing
@@ -298,6 +298,26 @@ extension LibraryGridViewController {
             (width * orientation.gridCellHeightOverWidth).rounded(.down), minimumTileSide
         )
         return CGSize(width: width, height: height)
+    }
+
+    /// Grid card size: the 16:9 / 9:16 picture plus the title strip under it
+    /// (Mac card layout). A card with no title lets its picture fill the strip.
+    static func homeCardSize(
+        containerWidth: CGFloat,
+        sectionInset: CGFloat,
+        spacing: CGFloat,
+        orientation: ExternalOutputOrientation = ExternalOutputSettings.orientation
+    ) -> CGSize {
+        let picture = homeTileSize(
+            containerWidth: containerWidth,
+            sectionInset: sectionInset,
+            spacing: spacing,
+            orientation: orientation
+        )
+        return CGSize(
+            width: picture.width,
+            height: picture.height + LibraryThumbnailCell.titleStripHeight
+        )
     }
 
     /// Largest Home Recent tile on a phone turned sideways.
@@ -500,7 +520,7 @@ extension LibraryGridViewController {
             sectionInset: sectionInset,
             spacing: spacing
         )
-        let tile = homeTileSize(
+        let tile = homeCardSize(
             containerWidth: containerWidth,
             sectionInset: sectionInset,
             spacing: spacing

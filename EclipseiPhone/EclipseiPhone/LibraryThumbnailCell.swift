@@ -19,8 +19,8 @@ final class LibraryThumbnailCell: UICollectionViewCell {
     let imageView = UIImageView()
     let placeholderIcon = UIImageView()
     let captionLabel = UILabel()
-    /// Bottom fade under on-card titles (tools, Shows, websites).
-    let captionScrimView = GradientView()
+    /// Strip under the picture holding the title (Mac `MediaCardTitleBar`).
+    let titleStrip = UIView()
     let durationLabel = PaddedLabel()
     /// Large monospaced clock for Countdown tiles (set duration / remaining).
     let countdownTimeLabel = UILabel()
@@ -41,13 +41,12 @@ final class LibraryThumbnailCell: UICollectionViewCell {
     /// Clears a parked mid-play leave without going live.
     let rewindButton = UIButton(type: .system)
     /// Nudged up when a caption sits under the glyph; 0 for + -only add tiles.
-    private var placeholderCenterY: NSLayoutConstraint!
-    var captionLeadingToCard: NSLayoutConstraint!
-    var captionLeadingToRewind: NSLayoutConstraint!
-    var captionTrailingToCard: NSLayoutConstraint!
-    var captionTrailingToDuration: NSLayoutConstraint!
-    var captionBottomToCard: NSLayoutConstraint!
-    var captionCenterYToRewind: NSLayoutConstraint!
+    /// Picture stops at the title strip when there is a title...
+    var imageBottomToStrip: NSLayoutConstraint!
+    /// ...and fills the card when there is none.
+    var imageBottomToCard: NSLayoutConstraint!
+    /// False for the live-slideshow ribbon, whose slides never show a title.
+    var showsTitleStrip = true
     /// Add / New Show tiles keep their label centred under the glyph; every
     /// other title is left-aligned like the Mac cards (2026-11-02).
     var centersCaption = false
@@ -63,8 +62,12 @@ final class LibraryThumbnailCell: UICollectionViewCell {
 
     /// Whether the card currently carries the live stroke.
     private var isLiveStroked = false
-    private var idleBorderWidth: CGFloat = 0
-    private var idleBorderColor: UIColor = .clear
+    private var idleBorderWidth: CGFloat = LibraryThumbnailCell.defaultIdleBorderWidth
+    private var idleBorderColor: UIColor = LibraryThumbnailCell.defaultIdleBorderColor
+
+    /// Faint ring every idle card keeps, like the Mac cards.
+    static let defaultIdleBorderWidth: CGFloat = 1
+    static let defaultIdleBorderColor = UIColor.label.withAlphaComponent(0.1)
 
     // MARK: - Init
 
@@ -85,7 +88,7 @@ final class LibraryThumbnailCell: UICollectionViewCell {
 
         cardView.backgroundColor = .secondarySystemBackground
         // Same radius as HomeShowTileCell so the two grid tiles read as one family.
-        cardView.layer.applyContinuousCorner(radius: CornerRadii.card)
+        cardView.layer.applyContinuousCorner(radius: CornerRadii.tile)
         cardView.clipsToBounds = true
         cardView.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(cardView)
@@ -100,24 +103,7 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         placeholderIcon.translatesAutoresizingMaskIntoConstraints = false
         cardView.addSubview(placeholderIcon)
 
-        captionScrimView.colors = [
-            UIColor.clear,
-            UIColor.black.withAlphaComponent(0.72)
-        ]
-        captionScrimView.locations = [0, 1]
-        captionScrimView.isHidden = true
-        captionScrimView.isUserInteractionEnabled = false
-        captionScrimView.translatesAutoresizingMaskIntoConstraints = false
-        cardView.addSubview(captionScrimView)
-
-        captionLabel.font = .systemFont(ofSize: 13, weight: .semibold)
-        captionLabel.textColor = .white
-        captionLabel.textAlignment = .center
-        captionLabel.numberOfLines = 2
-        captionLabel.lineBreakMode = .byTruncatingTail
-        captionLabel.isHidden = true
-        captionLabel.translatesAutoresizingMaskIntoConstraints = false
-        cardView.addSubview(captionLabel)
+        installTitleStrip()
 
         countdownTimeLabel.font = .monospacedDigitSystemFont(ofSize: 28, weight: .semibold)
         countdownTimeLabel.textColor = .white
@@ -162,7 +148,6 @@ final class LibraryThumbnailCell: UICollectionViewCell {
             cardView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
 
             imageView.topAnchor.constraint(equalTo: cardView.topAnchor),
-            imageView.bottomAnchor.constraint(equalTo: cardView.bottomAnchor),
             imageView.leadingAnchor.constraint(equalTo: cardView.leadingAnchor),
             imageView.trailingAnchor.constraint(equalTo: cardView.trailingAnchor),
 
@@ -171,9 +156,7 @@ final class LibraryThumbnailCell: UICollectionViewCell {
             placeholderIcon.heightAnchor.constraint(equalToConstant: 36),
 
             countdownTimeLabel.centerXAnchor.constraint(equalTo: cardView.centerXAnchor),
-            countdownTimeLabel.centerYAnchor.constraint(
-                equalTo: cardView.centerYAnchor, constant: -8
-            ),
+            countdownTimeLabel.centerYAnchor.constraint(equalTo: imageView.centerYAnchor),
             countdownTimeLabel.leadingAnchor.constraint(
                 greaterThanOrEqualTo: cardView.leadingAnchor, constant: 8
             ),
@@ -181,22 +164,15 @@ final class LibraryThumbnailCell: UICollectionViewCell {
                 lessThanOrEqualTo: cardView.trailingAnchor, constant: -8
             ),
 
-            captionScrimView.leadingAnchor.constraint(equalTo: cardView.leadingAnchor),
-            captionScrimView.trailingAnchor.constraint(equalTo: cardView.trailingAnchor),
-            captionScrimView.bottomAnchor.constraint(equalTo: cardView.bottomAnchor),
-            captionScrimView.heightAnchor.constraint(
-                equalTo: cardView.heightAnchor, multiplier: 0.42
-            ),
-
             durationLabel.trailingAnchor.constraint(
                 equalTo: cardView.trailingAnchor, constant: -8
             ),
             durationLabel.bottomAnchor.constraint(
-                equalTo: cardView.bottomAnchor, constant: -8
+                equalTo: imageView.bottomAnchor, constant: -8
             ),
 
             unavailableBadge.centerXAnchor.constraint(equalTo: cardView.centerXAnchor),
-            unavailableBadge.bottomAnchor.constraint(equalTo: cardView.bottomAnchor, constant: -8),
+            unavailableBadge.bottomAnchor.constraint(equalTo: imageView.bottomAnchor, constant: -8),
 
             selectionBadge.trailingAnchor.constraint(
                 equalTo: cardView.trailingAnchor, constant: -8
@@ -210,14 +186,8 @@ final class LibraryThumbnailCell: UICollectionViewCell {
             menuButton.leadingAnchor.constraint(equalTo: cardView.leadingAnchor),
             menuButton.trailingAnchor.constraint(equalTo: cardView.trailingAnchor)
         ])
-        placeholderCenterY = placeholderIcon.centerYAnchor.constraint(
-            equalTo: cardView.centerYAnchor, constant: -10
-        )
-        placeholderCenterY.isActive = true
-        captionLabel.setContentCompressionResistancePriority(
-            .defaultLow, for: .horizontal
-        )
-        installCaptionLayoutConstraints()
+        // Centred in the picture, which already stops above the title strip.
+        placeholderIcon.centerYAnchor.constraint(equalTo: imageView.centerYAnchor).isActive = true
     }
 
     private func configurePill(_ label: PaddedLabel, background: UIColor, textColor: UIColor) {
@@ -232,6 +202,7 @@ final class LibraryThumbnailCell: UICollectionViewCell {
     // MARK: - Configuration
 
     /// - Parameter isLocked: Live lock uses amber chrome.
+    /// - Parameter showsTitle: False for the live-slideshow ribbon (no title strip).
     /// - Parameter thumbnailContentMode: Framing for the tile. Defaults to the
     ///   item's Screen Fit. Video honours Fit / Fill but never a custom crop.
     func configure(
@@ -239,7 +210,8 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         thumbnail: UIImage?,
         isLive: Bool,
         isLocked: Bool = false,
-        thumbnailContentMode: UIView.ContentMode? = nil
+        thumbnailContentMode: UIView.ContentMode? = nil,
+        showsTitle: Bool = true
     ) {
         // Under memory pressure `thumbnail(for:)` can briefly return nil after a
         // reload — keep the previous bitmap for the same item instead of flashing
@@ -283,6 +255,7 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         }
 
         unavailableBadge.isHidden = !isUnavailable
+        showsTitleStrip = showsTitle
         applyOverlayTitle(forId: item.id)
         setLive(isLive && !isUnavailable, isLocked: isLocked)
         var a11y = MediaTitleStore.title(forId: item.id) ?? item.name
@@ -301,12 +274,12 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         isAccessibilityElement = true
     }
 
-    /// Bottom-centered overlay from `MediaTitleStore`, if the item has one.
+    /// Title from `MediaTitleStore`, if the item has one, in the strip under the picture.
     func applyOverlayTitle(forId id: String) {
         guard let title = MediaTitleStore.title(forId: id) else { return }
         captionLabel.text = title
         captionLabel.isHidden = false
-        updateCaptionScrim()
+        updateTitleStrip()
     }
 
     /// True when the card is still showing the mountain / film placeholder.
@@ -337,7 +310,7 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         if imageView.alpha == 0 { imageView.alpha = 1 }
         placeholderIcon.isHidden = true
         raiseDurationOverlay()
-        updateCaptionLayout()
+        updateTitleStrip()
     }
 
     /// Soft “add” tile (New Show / Add media) — quiet fill, blue glyph.
@@ -358,16 +331,12 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         placeholderIcon.image = UIImage(systemName: systemImage, withConfiguration: symbol)
         placeholderIcon.tintColor = .accent
         placeholderIcon.isHidden = false
-        // + alone is dead-center; titled tiles (New Show) keep the caption offset.
-        placeholderCenterY.constant = title.isEmpty ? 0 : -10
         let voice = accessibilityLabel ?? (title.isEmpty ? "Add" : title)
         captionLabel.text = title
         captionLabel.textColor = .accent
         captionLabel.isHidden = title.isEmpty
-        // Keep the title readable on the light fill without a dark scrim.
-        captionScrimView.isHidden = true
         centersCaption = true
-        updateCaptionLayout()
+        updateTitleStrip()
         self.accessibilityLabel = voice
         isAccessibilityElement = true
         setPrimaryMenu(menu, accessibilityLabel: voice)
@@ -387,7 +356,6 @@ final class LibraryThumbnailCell: UICollectionViewCell {
     /// - Parameter outlined: When true, draws a light stroke so a dark fill doesn't
     ///   disappear into the grid background.
     /// - Parameter thumbnailContentMode: `.scaleAspectFit` suits favicons; fill for snapshots.
-    /// - Parameter titleNumberOfLines: Caption wrap; PDFs use 1 (tail ellipsis).
     /// - Parameter typeIcon: Content kind, spoken by VoiceOver (titles show no glyph).
     func configureSpecial(
         title: String,
@@ -398,7 +366,6 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         isLocked: Bool = false,
         outlined: Bool = false,
         thumbnailContentMode: UIView.ContentMode = .scaleAspectFill,
-        titleNumberOfLines: Int = 2,
         typeIcon: ThumbnailTypeIcon? = nil
     ) {
         resetChrome()
@@ -415,10 +382,8 @@ final class LibraryThumbnailCell: UICollectionViewCell {
             placeholderIcon.isHidden = true
         }
         captionLabel.text = title
-        captionLabel.numberOfLines = titleNumberOfLines
-        captionLabel.lineBreakMode = .byTruncatingTail
         captionLabel.isHidden = false
-        updateCaptionScrim()
+        updateTitleStrip()
         setLive(isLive, isLocked: isLocked)
         if outlined {
             setIdleBorder(width: 1, color: .separator)
@@ -442,24 +407,22 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         imageView.alpha = 1.0
         imageView.contentMode = .scaleAspectFill
         placeholderIcon.isHidden = false
-        placeholderCenterY.constant = -10
         countdownTimeLabel.isHidden = true
         countdownTimeLabel.text = nil
         countdownTimeLabel.textColor = .white
         captionLabel.isHidden = true
         captionLabel.text = nil
-        captionLabel.textColor = .white
-        captionLabel.textAlignment = .left
+        captionLabel.textColor = Self.titleColor
         centersCaption = false
-        captionLabel.numberOfLines = 2
-        captionLabel.lineBreakMode = .byTruncatingTail
-        captionScrimView.isHidden = true
+        showsTitleStrip = true
+        updateTitleStrip()
         hideMediaBadges()
         selectionBadge.isHidden = true
         isLiveStroked = false
-        idleBorderWidth = 0
-        idleBorderColor = .clear
-        cardView.layer.borderWidth = 0
+        idleBorderWidth = Self.defaultIdleBorderWidth
+        idleBorderColor = Self.defaultIdleBorderColor
+        cardView.layer.borderWidth = idleBorderWidth
+        cardView.layer.borderColor = idleBorderColor.cgColor
         menuButton.menu = nil
         menuButton.isHidden = true
         menuButton.isAccessibilityElement = false
@@ -499,7 +462,10 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         selectionBadge.tintColor = .accent
         selectionBadge.backgroundColor = .white
         selectionBadge.isHidden = !isSelected
-        setIdleBorder(width: isSelected ? 3 : 0, color: isSelected ? .accent : .clear)
+        setIdleBorder(
+            width: isSelected ? 3 : Self.defaultIdleBorderWidth,
+            color: isSelected ? .accent : Self.defaultIdleBorderColor
+        )
     }
 
     /// - Parameter isLocked: When live is locked, the stroke uses amber.
@@ -514,8 +480,8 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         cardView.layer.borderColor = (isLocked ? UIColor.systemOrange : .systemRed).cgColor
     }
 
-    /// Edge a tile keeps when it is *not* live (Camera's hairline, the outlined
-    /// "Syncing…" placeholder).
+    /// Edge a tile keeps when it is *not* live (the select-mode check ring, the
+    /// outlined "Syncing…" placeholder); every other tile keeps the faint default.
     ///
     /// Registered here rather than written straight onto the layer so `setLive` stays
     /// the only owner of the card border. Stroke reconciliation re-asserts live state

@@ -88,7 +88,8 @@ struct ThumbnailTypeIconTests {
         #expect(cell.placeholderIcon.isHidden)
     }
 
-    @Test func titledCaptionIsLeftAlignedAtBottom() {
+    /// Mac card layout: one-line, left-aligned title in a strip under the picture.
+    @Test func titleSitsInStripUnderPicture() {
         let cell = makeCell()
         cell.configureSpecial(
             title: "Example",
@@ -99,10 +100,54 @@ struct ThumbnailTypeIconTests {
             typeIcon: .website
         )
         cell.layoutIfNeeded()
+        #expect(cell.titleStrip.isHidden == false)
+        #expect(cell.captionLabel.superview === cell.titleStrip)
         #expect(cell.captionLabel.textAlignment == .left)
-        #expect(cell.captionLabel.frame.midY > cell.cardView.bounds.midY)
-        let trailingInset = cell.cardView.bounds.width - cell.captionLabel.frame.maxX
-        #expect(abs(trailingInset - 8) < 0.5)
+        #expect(cell.captionLabel.numberOfLines == 1)
+        #expect(abs(cell.titleStrip.frame.height - LibraryThumbnailCell.titleStripHeight) < 0.5)
+        #expect(abs(cell.titleStrip.frame.maxY - cell.cardView.bounds.maxY) < 0.5)
+        // The picture stops at the strip, so the title never covers it.
+        #expect(abs(cell.imageView.frame.maxY - cell.titleStrip.frame.minY) < 0.5)
+    }
+
+    @Test func untitledPictureFillsTheCard() {
+        let cell = makeCell()
+        cell.configure(with: makeItem(isVideo: true), thumbnail: swatch(), isLive: false)
+        cell.layoutIfNeeded()
+        #expect(cell.titleStrip.isHidden)
+        #expect(abs(cell.imageView.frame.maxY - cell.cardView.bounds.maxY) < 0.5)
+        // Duration pill sits on the picture.
+        #expect(cell.durationLabel.frame.maxY <= cell.imageView.frame.maxY)
+    }
+
+    @Test func durationPillStaysOnThePictureAboveTheTitle() {
+        let cell = makeCell()
+        cell.configure(with: makeItem(isVideo: true), thumbnail: swatch(), isLive: false)
+        cell.captionLabel.text = "Opening hymn of the morning service"
+        cell.captionLabel.isHidden = false
+        cell.updateTitleStrip()
+        cell.layoutIfNeeded()
+        #expect(cell.durationLabel.frame.maxY <= cell.titleStrip.frame.minY)
+    }
+
+    @Test func slideshowRibbonShowsNoTitleStrip() {
+        let cell = makeCell()
+        cell.configure(
+            with: makeItem(isVideo: false), thumbnail: swatch(), isLive: false, showsTitle: false
+        )
+        cell.captionLabel.text = "Slide"
+        cell.captionLabel.isHidden = false
+        cell.updateTitleStrip()
+        #expect(cell.titleStrip.isHidden)
+    }
+
+    @Test func idleCardsKeepAFaintRing() {
+        let cell = makeCell()
+        cell.configure(with: makeItem(isVideo: false), thumbnail: swatch(), isLive: false)
+        #expect(cell.cardView.layer.borderWidth == LibraryThumbnailCell.defaultIdleBorderWidth)
+        #expect(cell.cardView.layer.cornerRadius == CornerRadii.tile)
+        cell.setLive(true)
+        #expect(cell.cardView.layer.borderWidth == 3)
     }
 
     @Test func newShowTileKeepsCenteredLabel() {
@@ -112,19 +157,8 @@ struct ThumbnailTypeIconTests {
         cell.configure(with: makeItem(isVideo: false), thumbnail: swatch(), isLive: false)
         cell.captionLabel.text = "Slide"
         cell.captionLabel.isHidden = false
-        cell.updateCaptionScrim()
+        cell.updateTitleStrip()
         #expect(cell.captionLabel.textAlignment == .left)
-    }
-
-    @Test func captionStopsBeforeDurationPill() {
-        let cell = makeCell()
-        cell.configure(with: makeItem(isVideo: true), thumbnail: swatch(), isLive: false)
-        cell.captionLabel.text = "Opening hymn of the morning service"
-        cell.captionLabel.isHidden = false
-        cell.updateCaptionScrim()
-        cell.layoutIfNeeded()
-        #expect(cell.captionLabel.textAlignment == .left)
-        #expect(cell.captionLabel.frame.maxX <= cell.durationLabel.frame.minX - 6 + 0.5)
     }
 
     @Test func videoThumbnailShowsDurationOverlay() {
