@@ -228,6 +228,8 @@ extension PresentationViewController {
         incomingCountdownBackground = nil
         incomingCountdownLabel?.removeFromSuperview()
         incomingCountdownLabel = nil
+        incomingPrompterStage?.removeFromSuperview()
+        incomingPrompterStage = nil
 
         incomingCameraPreview?.detach()
         incomingCameraPreview?.removeFromSuperview()

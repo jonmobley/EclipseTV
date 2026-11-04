@@ -26,6 +26,7 @@ final class ExternalDisplayManager {
         case webVideo(WebVideoLink)
         case pdf(URL)
         case countdown
+        case prompter
     }
 
     /// Shared instance; started once from the main scene delegate.
@@ -46,6 +47,9 @@ final class ExternalDisplayManager {
 
     /// Posted when PDF presentation ends so the phone reader can dismiss.
     static let pdfDidEndNotification = Notification.Name("ExternalDisplayManager.pdfDidEnd")
+    /// Posted when the Prompter overlay is torn down (another item went live, display
+    /// disconnected, or Stop Live). The controller keeps its position.
+    static let prompterDidEndNotification = Notification.Name("ExternalDisplayManager.prompterDidEnd")
 
     /// Whether an external display scene is attached and showing app content.
     private(set) var isConnected = false
@@ -124,6 +128,12 @@ final class ExternalDisplayManager {
     /// Whether the countdown clock is the active presentation source.
     var isCountdownLive: Bool {
         if case .countdown = overlaySource { return true }
+        return false
+    }
+
+    /// Whether the Prompter script is the active presentation source.
+    var isPrompterLive: Bool {
+        if case .prompter = overlaySource { return true }
         return false
     }
 
@@ -358,6 +368,9 @@ final class ExternalDisplayManager {
         if overlaySource == .camera {
             dropCameraOverlayAfterDisconnect()
         } else if overlaySource != nil {
+            if overlaySource == .prompter {
+                PrompterController.shared.endLive()
+            }
             if overlaySource == .countdown {
                 CountdownController.shared.endLive()
             }
@@ -605,6 +618,8 @@ final class ExternalDisplayManager {
             beginOverlay(.pdf(url), liveId: liveOverlayId)
         case .countdown:
             beginOverlay(.countdown, liveId: nil)
+        case .prompter:
+            beginOverlay(.prompter, liveId: nil)
         default:
             // A direct-file web video is plain video, not an overlay, but the card
             // that owns it is still program — so it adopts the id as part of the
@@ -660,6 +675,11 @@ final class ExternalDisplayManager {
     /// Starts presenting the countdown clock (AirPlay when a display is attached).
     func presentCountdown() {
         present(.countdown)
+    }
+
+    /// Starts presenting the Prompter script (AirPlay when a display is attached).
+    func presentPrompter() {
+        present(.prompter)
     }
 
     /// Parks on a still without ending camera mode or stopping the session.
@@ -927,6 +947,8 @@ final class ExternalDisplayManager {
             present(.pdf(url))
         case .countdown:
             present(.countdown)
+        case .prompter:
+            present(.prompter)
         case .none:
             if let source = resolvedPresentationSource() {
                 present(source)
@@ -1088,7 +1110,7 @@ final class ExternalDisplayManager {
     private static func isSameOverlayKind(_ a: OverlaySource, _ b: OverlaySource) -> Bool {
         switch (a, b) {
         case (.web, .web), (.webVideo, .webVideo), (.pdf, .pdf),
-             (.camera, .camera), (.countdown, .countdown):
+             (.camera, .camera), (.countdown, .countdown), (.prompter, .prompter):
             return true
         default:
             return false
@@ -1122,7 +1144,7 @@ final class ExternalDisplayManager {
             liveWebVideoPageId = id
         case .pdf:
             livePDFDocumentId = id
-        case .camera, .countdown:
+        case .camera, .countdown, .prompter:
             break
         }
     }
@@ -1135,7 +1157,7 @@ final class ExternalDisplayManager {
             liveWebVideoPageId = nil
         case .pdf:
             livePDFDocumentId = nil
-        case .camera, .countdown:
+        case .camera, .countdown, .prompter:
             break
         }
     }
@@ -1151,6 +1173,9 @@ final class ExternalDisplayManager {
         case .countdown:
             CountdownController.shared.endLive()
             presentationVC?.hideCountdown()
+        case .prompter:
+            PrompterController.shared.endLive()
+            presentationVC?.hidePrompter()
         }
     }
 
@@ -1164,6 +1189,8 @@ final class ExternalDisplayManager {
             NotificationCenter.default.post(name: Self.pdfDidEndNotification, object: self)
         case .countdown:
             break
+        case .prompter:
+            NotificationCenter.default.post(name: Self.prompterDidEndNotification, object: self)
         }
     }
 

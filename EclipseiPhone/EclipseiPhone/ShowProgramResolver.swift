@@ -25,6 +25,8 @@ struct ShowProgramState {
     /// The network PTZ camera's picture is on program.
     var isPTZCameraLive = false
     var countdownId: UUID?
+    /// The Prompter script is on program.
+    var isPrompterLive = false
     /// Live Poll card whose room is on program.
     var questPollMembershipId: UUID?
     var webPageId: UUID?
@@ -78,6 +80,9 @@ enum ShowProgramResolver {
         }
         if let id = state.countdownId {
             return ShowProgram(kind: .countdown, itemId: id.uuidString)
+        }
+        if state.isPrompterLive {
+            return ShowProgram(kind: .prompter)
         }
         // Before the generic web page: the projector page is a website overlay,
         // and the poll card is the tile the user thinks of as live.

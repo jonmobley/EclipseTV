@@ -37,6 +37,8 @@ struct PresentationSource: Equatable {
         case black
         /// Full-screen countdown clock (AirPlay / Practice).
         case countdown
+        /// The Show's scrolling Prompter script (AirPlay / Practice).
+        case prompter
         /// The full-resolution file isn't on this device; show `thumbnail` (if any) with a
         /// short explanatory caption instead.
         case unavailable(thumbnail: UIImage?, message: String)
@@ -136,6 +138,11 @@ struct PresentationSource: Equatable {
     /// Solid black output for the external display.
     static var black: PresentationSource {
         PresentationSource(content: .black)
+    }
+
+    /// Scrolling Prompter script for AirPlay presentation.
+    static var prompter: PresentationSource {
+        PresentationSource(content: .prompter)
     }
 
     /// Full-screen countdown clock for AirPlay presentation.

@@ -212,6 +212,7 @@ extension LibraryGridViewController {
         case ShowToolToken.logo: return .logo
         case ShowToolToken.camera: return .camera
         case ShowToolToken.ptzCamera: return .ptzCamera
+        case ShowToolToken.prompter: return .prompter
         default:
             if let uuid = ShowLivePollToken.livePollId(from: id) {
                 if let item = LivePollStore.shared.poll(id: uuid),
@@ -348,6 +349,11 @@ extension LibraryGridViewController {
             cell.setMoreMenu(
                 (isArranging || isSelecting) ? nil : livePollContextMenu(item)
             )
+        case .prompter:
+            configurePrompterTile(cell, isLive: live)
+            cell.setMoreMenu(
+                (isArranging || isSelecting) ? nil : prompterContextMenu()
+            )
         case .countdown(let item):
             configureCountdownTile(cell, item: item, isLive: live)
             cell.setMoreMenu(
@@ -457,6 +463,8 @@ extension LibraryGridViewController {
             presentPTZCameraFromTile()
         case .livePoll(let item):
             selectLivePoll(item)
+        case .prompter:
+            presentPrompterOperator()
         case .countdown(let item):
             isLogoSelected = false
             isScreensaverSelected = false

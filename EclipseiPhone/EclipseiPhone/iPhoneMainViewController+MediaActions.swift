@@ -306,6 +306,19 @@ extension iPhoneMainViewController {
         if albumId == nil {
             countdown.attributes = .disabled
         }
+        let prompterPresent = albumId
+            .flatMap { LocalAlbumStore.shared.album(id: $0) }?
+            .resolvedSurfaceIds.contains(ShowToolToken.prompter) ?? false
+        let prompter = UIAction(
+            title: "Prompter",
+            image: UIImage(systemName: "text.alignleft")
+        ) { [weak self] _ in
+            guard let albumId else { return }
+            self?.addPrompter(toShowId: albumId)
+        }
+        if albumId == nil || prompterPresent {
+            prompter.attributes = .disabled
+        }
         let livePoll = UIAction(
             title: "QuestPoll",
             image: UIImage(systemName: "chart.bar.fill")
@@ -336,7 +349,7 @@ extension iPhoneMainViewController {
         let imports = UIMenu(
             title: "",
             options: .displayInline,
-            children: [image, video, website, slideshow, countdown, livePoll, questionAndAnswer, pdf]
+            children: [image, video, website, slideshow, countdown, prompter, livePoll, questionAndAnswer, pdf]
         )
         // In a Show, Website opens the compose sheet (History is on that sheet).
         // Home keeps History for manage / open.
@@ -347,7 +360,9 @@ extension iPhoneMainViewController {
         ]
         if let albumId,
            let album = LocalAlbumStore.shared.album(id: albumId) {
-            let missing = album.missingToolTokens + album.addableOptionalToolTokens
+            // The Prompter has its own entry above, beside Countdown.
+            let missing = (album.missingToolTokens + album.addableOptionalToolTokens)
+                .filter { $0 != ShowToolToken.prompter }
             if !missing.isEmpty {
                 let restoreActions: [UIAction] = missing.compactMap { token in
                     guard let title = ShowToolToken.title(for: token),
@@ -565,6 +580,13 @@ extension iPhoneMainViewController {
 
     /// Configure-first Countdown add: duration, size & placement, background, and
     /// ending are chosen on a sheet; Add appends the tile to this Show.
+    /// Adds the Prompter tile to the Show and opens it so the script can be written.
+    func addPrompter(toShowId showId: UUID) {
+        LocalAlbumStore.shared.showTool(ShowToolToken.prompter, albumId: showId)
+        libraryViewController.revealAddedShowMember(id: ShowToolToken.prompter)
+        libraryViewController.presentPrompterOperator()
+    }
+
     func addCountdown(toShowId showId: UUID) {
         guard !isAlreadyOpen(AddCountdownViewController.self) else { return }
         let compose = AddCountdownViewController(showId: showId)

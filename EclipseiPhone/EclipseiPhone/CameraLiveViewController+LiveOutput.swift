@@ -90,6 +90,8 @@ extension CameraLiveViewController {
             return LiveOutputArt(
                 image: nil, symbol: "moon.fill", fill: .black, title: "Blackout"
             )
+        case .prompter:
+            return LiveOutputArt(image: nil, symbol: "text.alignleft", fill: dim, title: "Prompter")
         case .countdown:
             return LiveOutputArt(
                 image: nil,

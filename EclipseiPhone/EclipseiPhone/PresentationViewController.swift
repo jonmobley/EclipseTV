@@ -178,6 +178,20 @@ final class PresentationViewController: UIViewController {
     var countdownLayoutObserver: NSObjectProtocol?
     var countdownPreviewObserver: NSObjectProtocol?
 
+    /// Host for the Prompter script; rotated for vertically mounted TVs.
+    let prompterContainer: UIView = {
+        let view = UIView()
+        view.backgroundColor = .black
+        view.isHidden = true
+        view.clipsToBounds = true
+        view.translatesAutoresizingMaskIntoConstraints = false
+        return view
+    }()
+    /// The script stage, built while the Prompter is on output and dropped after.
+    var prompterStage: PrompterStageView?
+    var prompterObserver: NSObjectProtocol?
+    var prompterOffsetObserver: NSObjectProtocol?
+
     /// Incoming dual-layer host — next content builds here while underlay stays live.
     let transitionOverlayContainer: UIView = {
         let view = UIView()
@@ -237,6 +251,8 @@ final class PresentationViewController: UIViewController {
     /// Countdown composed in the transition overlay: background plus frozen digits.
     var incomingCountdownBackground: CountdownBackgroundView?
     var incomingCountdownLabel: UILabel?
+    /// Prompter composed in the transition overlay.
+    var incomingPrompterStage: PrompterStageView?
     var imageRequest: RemoteImageRequest?
     var imageLoadGeneration = 0
     var settingsObserver: NSObjectProtocol?
@@ -273,6 +289,7 @@ final class PresentationViewController: UIViewController {
         view.addSubview(webContainer)
         view.addSubview(pdfContainer)
         view.addSubview(countdownContainer)
+        view.addSubview(prompterContainer)
         view.addSubview(transitionOverlayContainer)
         cameraContainer.addSubview(cameraPreviewView)
         cameraContainer.addSubview(cameraFrameOverlayView)
@@ -335,6 +352,10 @@ final class PresentationViewController: UIViewController {
             countdownContainer.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             countdownContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             countdownContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            prompterContainer.topAnchor.constraint(equalTo: view.topAnchor),
+            prompterContainer.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            prompterContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            prompterContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor),
 
             transitionOverlayContainer.topAnchor.constraint(equalTo: view.topAnchor),
             transitionOverlayContainer.bottomAnchor.constraint(equalTo: view.bottomAnchor),
@@ -352,6 +373,7 @@ final class PresentationViewController: UIViewController {
             self?.applyWebLayout()
             self?.applyPDFLayout()
             self?.applyCountdownLayout()
+            self?.applyPrompterLayout()
             self?.layoutIncomingOverlayContent()
         }
 
@@ -385,6 +407,9 @@ final class PresentationViewController: UIViewController {
         if !countdownContainer.isHidden {
             applyCountdownLayout()
         }
+        if !prompterContainer.isHidden {
+            applyPrompterLayout()
+        }
         if !transitionOverlayContainer.isHidden {
             layoutIncomingOverlayContent()
         }
@@ -417,6 +442,12 @@ final class PresentationViewController: UIViewController {
         }
         if let countdownPreviewObserver {
             NotificationCenter.default.removeObserver(countdownPreviewObserver)
+        }
+        if let prompterObserver {
+            NotificationCenter.default.removeObserver(prompterObserver)
+        }
+        if let prompterOffsetObserver {
+            NotificationCenter.default.removeObserver(prompterOffsetObserver)
         }
     }
 
@@ -474,6 +505,7 @@ final class PresentationViewController: UIViewController {
         }
 
         if source.content != .ptzCamera { hidePTZCamera() }
+        if source.content != .prompter { hidePrompter() }
         switch source.content {
         case .image(let url, let fill, let framing):
             hideCountdown()
@@ -521,6 +553,9 @@ final class PresentationViewController: UIViewController {
             showPDF(url: url)
         case .countdown:
             showCountdown()
+        case .prompter:
+            hideCountdown()
+            showPrompter()
         case .black:
             hideCountdown()
             showBlack()
@@ -543,6 +578,7 @@ final class PresentationViewController: UIViewController {
         teardownWeb()
         teardownPDF()
         hideCountdown()
+        hidePrompter()
         imageRequest?.cancel()
         imageRequest = nil
         imageView.image = nil
@@ -568,6 +604,7 @@ final class PresentationViewController: UIViewController {
         teardownWeb()
         teardownPDF()
         hideCountdown()
+        hidePrompter()
         imageRequest?.cancel()
         imageRequest = nil
         imageView.image = nil

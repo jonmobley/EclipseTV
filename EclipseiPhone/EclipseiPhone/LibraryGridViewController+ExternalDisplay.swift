@@ -30,6 +30,8 @@ extension LibraryGridViewController {
             return .pdf(url)
         case .countdown:
             return .countdown
+        case .prompter:
+            return .prompter
         case .none:
             break
         }

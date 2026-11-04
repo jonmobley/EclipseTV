@@ -27,6 +27,8 @@ final class LiveHeaderView: UIView {
     let subtitleLabel = UILabel()
     /// Large remaining-time clock while Countdown owns the hero.
     let countdownClockLabel = UILabel()
+    /// Script lines for a live Prompter (installed on first use).
+    let prompterLinesView = PrompterHeroLinesView()
 
     /// Remote transport controls, shown only when the live item is a video.
     let controls = PlaybackControlsView()
@@ -399,6 +401,7 @@ final class LiveHeaderView: UIView {
                 self.clearLibraryVideoPreview()
             }
             self.hideCountdownClock()
+            self.hidePrompterLines()
             let showControls = item.isVideo && (isOnline || showsLocalTransport)
             if usesRemoteVideoMonitor {
                 // Match the black stage behind the card — a grey fill + film glyph
@@ -499,6 +502,7 @@ final class LiveHeaderView: UIView {
             }
             self.clearLibraryVideoPreview()
             self.hideCountdownClock()
+            self.hidePrompterLines()
             self.backgroundColor = fillColor
             // Background / website / camera art always fills the hero.
             self.imageView.contentMode = .scaleAspectFill
@@ -591,6 +595,7 @@ final class LiveHeaderView: UIView {
         clearCameraPreview()
         clearLibraryVideoPreview()
         hideCountdownClock()
+        hidePrompterLines()
         resetTapAffordances()
         backgroundColor = .secondarySystemBackground
         imageView.image = nil

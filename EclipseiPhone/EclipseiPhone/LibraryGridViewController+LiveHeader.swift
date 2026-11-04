@@ -172,6 +172,10 @@ extension LibraryGridViewController {
             liveHeader.updatePlayback(PlaybackState())
             return
         }
+        if mgr.isPrompterLive {
+            applyPrompterLiveHeader()
+            return
+        }
         if mgr.isCountdownLive {
             applyCountdownLiveHeader()
             return

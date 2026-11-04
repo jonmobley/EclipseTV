@@ -24,7 +24,7 @@ enum AudioAmbientPolicy {
         case .webVideo:
             // YouTube / Vimeo embeds are audible by default.
             return true
-        case .image, .screensaver, .camera, .ptzCamera, .web, .pdf, .black, .countdown, .unavailable:
+        case .image, .screensaver, .camera, .ptzCamera, .web, .pdf, .black, .countdown, .prompter, .unavailable:
             // Web yields later, when HTML5 media actually plays unmuted.
             return false
         }

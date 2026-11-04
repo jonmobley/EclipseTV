@@ -18,6 +18,9 @@ extension LibraryGridViewController {
     /// director snapshot and Home Show cards use. Camera, Background, Screensaver,
     /// and Blackout are global tools (no owner).
     var liveOwningShowId: UUID? {
+        if outputOwningShowProgram?.kind == .prompter {
+            return PrompterController.shared.liveShowId
+        }
         guard let program = outputOwningShowProgram, let itemId = program.itemId else {
             return nil
         }
@@ -33,7 +36,7 @@ extension LibraryGridViewController {
         case .livePoll:
             return UUID(uuidString: itemId)
                 .flatMap { LivePollStore.shared.poll(id: $0) }?.showId
-        case .camera, .ptzCamera, .logo, .screensaver, .black:
+        case .camera, .ptzCamera, .logo, .screensaver, .black, .prompter:
             return nil
         }
     }
@@ -132,6 +135,15 @@ extension LibraryGridViewController {
 
     private func configureForeignLiveContent() {
         let mgr = ExternalDisplayManager.shared
+        if mgr.isPrompterLive {
+            foreignLiveHeader.configureOverlay(
+                title: "Prompter",
+                systemImage: "text.alignleft",
+                fillColor: .mediaPlaceholder
+            )
+            pinForeignLiveChrome()
+            return
+        }
         if mgr.isCountdownLive {
             let countdown = CountdownController.shared.liveCountdownId
                 .flatMap { CountdownStore.shared.countdown(id: $0) }

@@ -50,6 +50,8 @@ extension PresentationViewController {
             notifyIfCurrent(generation)
         case .countdown:
             installIncomingCountdown(generation: generation)
+        case .prompter:
+            installIncomingPrompter(generation: generation)
         case .unavailable(let thumbnail, _):
             installIncomingImage(uiImage: thumbnail, generation: generation)
         }
@@ -387,6 +389,7 @@ extension PresentationViewController {
     func layoutIncomingOverlayContent() {
         layoutIncomingMediaHost()
         layoutIncomingCountdown()
+        layoutIncomingPrompter()
         layoutIncomingCamera()
         layoutIncomingWeb()
         layoutIncomingPDF()

@@ -19,6 +19,7 @@ enum ThumbnailTypeIcon: Equatable {
     case ptzCamera
     case livePoll
     case countdown
+    case prompter
 
     /// SF Symbol used on the overlay (matches existing Show-grid placeholders).
     var systemName: String {
@@ -33,6 +34,7 @@ enum ThumbnailTypeIcon: Equatable {
         case .ptzCamera: return "web.camera"
         case .livePoll: return "chart.bar.fill"
         case .countdown: return "timer"
+        case .prompter: return "text.alignleft"
         }
     }
 
@@ -49,12 +51,14 @@ enum ThumbnailTypeIcon: Equatable {
         case .ptzCamera: return "PTZ camera"
         case .livePoll: return "QuestPoll"
         case .countdown: return "countdown"
+        case .prompter: return "prompter"
         }
     }
 
     /// Camera / Live Poll / Countdown keep the disc with no still so the tile reads.
     var showsWithoutThumbnail: Bool {
         self == .camera || self == .ptzCamera || self == .livePoll || self == .countdown
+            || self == .prompter
     }
 
     /// Camera and Countdown fill the card centre themselves (preview / clock), so

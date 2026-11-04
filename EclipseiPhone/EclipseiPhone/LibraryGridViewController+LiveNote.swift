@@ -35,7 +35,8 @@ extension LibraryGridViewController {
         }
         let manager = ExternalDisplayManager.shared
         guard !manager.isWebLive, !manager.isPDFLive, !manager.isCameraLive,
-              !manager.isParkedOnQuickChangeStill, !manager.isCountdownLive else {
+              !manager.isParkedOnQuickChangeStill, !manager.isCountdownLive,
+              !manager.isPrompterLive else {
             return nil
         }
         guard let id = store.currentId, MediaNoteStore.hasNote(forId: id) else {

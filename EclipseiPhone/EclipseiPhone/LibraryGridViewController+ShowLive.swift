@@ -56,6 +56,9 @@ extension LibraryGridViewController {
         case .ptzCamera:
             // Operators don't send PTZ Camera yet (its Show Live support is a later step).
             break
+        case .prompter:
+            // Same for the Prompter: operators read along locally in v1.
+            break
         case .countdown:
             guard let itemId, let uuid = UUID(uuidString: itemId),
                   let item = CountdownStore.shared.countdown(id: uuid) else { return }
@@ -169,7 +172,7 @@ extension LibraryGridViewController {
         // without the caller re-deriving which one is on program.
         // PTZ Camera isn't part of Show Live yet, and a peer on an older build can't
         // decode the new kind: send it as "nothing live" rather than break the session.
-        let sharedProgram = program?.kind == .ptzCamera ? nil : program
+        let sharedProgram = (program?.kind == .ptzCamera || program?.kind == .prompter) ? nil : program
         return ShowLiveSnapshot(
             showId: showId,
             liveItemId: sharedProgram?.itemId,
@@ -217,6 +220,8 @@ extension LibraryGridViewController {
             applyRemoteOverlayHeader(title: "Camera", systemImage: "camera.fill")
         case .ptzCamera:
             applyRemoteOverlayHeader(title: "PTZ Camera", systemImage: "web.camera")
+        case .prompter:
+            applyRemoteOverlayHeader(title: "Prompter", systemImage: "text.alignleft")
         case .countdown:
             applyRemoteCountdownHeader(snap)
         case .slideshow:

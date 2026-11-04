@@ -18,6 +18,8 @@ enum ShowGridItem: Equatable {
     /// Network PTZ camera (CamTailKit): live NDI picture, steer / track / presets.
     case ptzCamera
     case countdown(ShowCountdown)
+    /// The Show's teleprompter script (one per Show); tap opens the operator view.
+    case prompter
     case media(LibraryItemDTO)
     case website(WebPage)
     case pdf(SavedPDF)
@@ -47,7 +49,7 @@ enum ShowGridItem: Equatable {
         switch self {
         case .slideshow, .screensaver, .logo, .media, .website, .pdf:
             return true
-        case .camera, .ptzCamera, .livePoll, .countdown, .unresolved, .add:
+        case .camera, .ptzCamera, .livePoll, .countdown, .prompter, .unresolved, .add:
             return false
         }
     }
@@ -59,6 +61,7 @@ enum ShowGridItem: Equatable {
         case .logo: return ShowToolToken.logo
         case .camera: return ShowToolToken.camera
         case .ptzCamera: return ShowToolToken.ptzCamera
+        case .prompter: return ShowToolToken.prompter
         case .livePoll(let item): return ShowLivePollToken.token(for: item.id)
         case .countdown(let item): return ShowCountdownToken.token(for: item.id)
         case .media(let media): return media.id

@@ -33,6 +33,7 @@ extension LiveHeaderView {
             self.clearScreensaverPreview()
             self.clearCameraPreview()
             self.clearLibraryVideoPreview()
+            self.hidePrompterLines()
             self.backgroundColor = UIColor(white: 0.08, alpha: 1)
             self.imageView.image = nil
             self.imageView.isHidden = true

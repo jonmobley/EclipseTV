@@ -80,6 +80,9 @@ enum ShowLiveItemKind: String, Codable, Equatable {
     /// Network PTZ camera. Not sent to Show Live peers yet (older builds can't decode it).
     case ptzCamera
     case countdown
+    /// The Show's Prompter script. Not sent to Show Live peers yet (older builds
+    /// can't decode it); the director filters it like `ptzCamera`.
+    case prompter
     case slideshow
     case logo
     case screensaver

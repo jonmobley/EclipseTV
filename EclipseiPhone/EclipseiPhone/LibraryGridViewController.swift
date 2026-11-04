@@ -635,6 +635,16 @@ final class LibraryGridViewController: UIViewController {
         observe(CountdownController.didExpireNotification) { [weak self] _ in
             self?.handleCountdownExpiry()
         }
+        observe(PrompterScriptStore.didChangeNotification) { [weak self] _ in
+            // The tile shows the script's first line.
+            self?.reloadGridIfSafe()
+        }
+        observe(PrompterController.didChangeNotification) { [weak self] _ in
+            self?.refreshPrompterChrome()
+        }
+        observe(PrompterController.offsetDidChangeNotification) { [weak self] _ in
+            self?.updatePrompterHeroIfLineChanged()
+        }
         observe(SlideshowPlaybackController.didChangeNotification) { [weak self] _ in
             self?.refreshSlideshowRibbonPresentation()
             self?.refreshLiveHeader()

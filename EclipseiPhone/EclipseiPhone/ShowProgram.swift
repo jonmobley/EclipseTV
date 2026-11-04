@@ -76,6 +76,8 @@ extension ShowProgram {
             return kind == .camera
         case .ptzCamera:
             return kind == .ptzCamera
+        case .prompter:
+            return kind == .prompter
         case .unresolved, .add:
             return false
         }

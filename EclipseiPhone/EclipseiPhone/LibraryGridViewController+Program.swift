@@ -44,6 +44,7 @@ extension LibraryGridViewController {
         state.countdownId = mgr.isCountdownLive
             ? CountdownController.shared.liveCountdownId
             : nil
+        state.isPrompterLive = mgr.isPrompterLive
         state.questPollMembershipId = mgr.isQuestPollLive ? poll.membershipId : nil
         state.webPageId = mgr.isWebLive ? mgr.liveWebPageId : nil
         state.webVideoPageId = mgr.isWebVideoLive ? mgr.liveWebVideoPageId : nil
@@ -64,6 +65,10 @@ extension LibraryGridViewController {
     /// Show. Media, pages, and PDFs are members by id; slideshows, countdowns, and polls
     /// record their Show on the model, since their tokens live on the surface only.
     func showOwnsLiveProgram(_ show: LocalAlbum) -> Bool {
+        // The Prompter has no member id; the controller knows whose script is out.
+        if outputOwningShowProgram?.kind == .prompter {
+            return PrompterController.shared.liveShowId == show.id
+        }
         guard let program = outputOwningShowProgram, let itemId = program.itemId else {
             return false
         }
@@ -79,7 +84,7 @@ extension LibraryGridViewController {
         case .livePoll:
             return UUID(uuidString: itemId)
                 .flatMap { LivePollStore.shared.poll(id: $0) }?.showId == show.id
-        case .camera, .ptzCamera, .logo, .screensaver, .black:
+        case .camera, .ptzCamera, .logo, .screensaver, .black, .prompter:
             return false
         }
     }
