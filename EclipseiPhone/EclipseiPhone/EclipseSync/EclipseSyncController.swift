@@ -124,6 +124,10 @@ final class EclipseSyncController {
         if recordName.hasPrefix("eclipse.cameraSettings.") {
             return
         }
+        if let showId = CloudKitSchema.prompterShowId(fromRecordName: recordName) {
+            PrompterScriptStore.shared.purgeRemote(showId: showId)
+            return
+        }
 
         if let uuid = UUID(uuidString: recordName) {
             if LocalAlbumStore.shared.album(id: uuid) != nil {

@@ -16,6 +16,8 @@ enum ShowToolToken {
     static let camera = "__eclipse.tool.camera"
     /// A network PTZ camera (OBSBOT Tail 2) shown and controlled via CamTailKit.
     static let ptzCamera = "__eclipse.tool.ptzCamera"
+    /// The Show's teleprompter: a scrolling script for the presenter (one per Show).
+    static let prompter = "__eclipse.tool.prompter"
 
     /// Every reserved tool id starts with this. Unknown ids with it (tools added by a
     /// newer Eclipse) are kept through sync, so an older build never strips them —
@@ -33,7 +35,7 @@ enum ShowToolToken {
     static let addable: [String] = all
 
     /// Opt-in tools (not on new Shows) offered in the + menu until added.
-    static let optional: [String] = [ptzCamera]
+    static let optional: [String] = [prompter, ptzCamera]
 
     /// Display title for + menu / accessibility.
     static func title(for token: String) -> String? {
@@ -42,6 +44,7 @@ enum ShowToolToken {
         case logo: return "Background"
         case camera: return "Camera"
         case ptzCamera: return "PTZ Camera"
+        case prompter: return "Prompter"
         default: return nil
         }
     }
@@ -53,11 +56,13 @@ enum ShowToolToken {
         case logo: return "seal.fill"
         case camera: return "camera.fill"
         case ptzCamera: return "web.camera"
+        case prompter: return "text.alignleft"
         default: return nil
         }
     }
 
     static func isTool(_ id: String) -> Bool {
         id == screensaver || id == logo || id == camera || id == ptzCamera
+            || id == prompter
     }
 }

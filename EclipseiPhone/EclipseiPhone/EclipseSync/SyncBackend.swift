@@ -77,6 +77,12 @@ protocol SyncBackend: AnyObject {
     /// Schedules deletion of a Live Poll card record.
     func scheduleLivePollDelete(id: UUID)
 
+    /// Schedules a Show's Prompter script upload.
+    func schedulePrompterSave(showId: UUID)
+
+    /// Schedules deletion of a Show's Prompter script record.
+    func schedulePrompterDelete(showId: UUID)
+
     /// Schedules the account-global Background custom image upload (or clear).
     func scheduleBackgroundSave()
 

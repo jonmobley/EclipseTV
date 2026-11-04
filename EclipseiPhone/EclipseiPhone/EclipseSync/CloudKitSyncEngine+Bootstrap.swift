@@ -136,6 +136,8 @@ extension CloudKitSyncEngine {
         ImportedMediaStore.shared.markAllNeedsUpload()
         CameraFrameStore.shared.markAllNeedsUpload()
         CameraAlternateStillStore.shared.markAllNeedsUpload()
+        // Scripts are text-only, so a re-upload into the new zone is cheap.
+        PrompterScriptStore.shared.markAllNeedsUpload()
         engine.state.add(pendingDatabaseChanges: [
             .saveZone(CKRecordZone(zoneID: CloudKitSchema.zoneID))
         ])

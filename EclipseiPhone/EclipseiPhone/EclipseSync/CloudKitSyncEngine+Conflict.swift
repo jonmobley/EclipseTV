@@ -47,6 +47,10 @@ extension CloudKitSyncEngine {
             if let uuid = UUID(uuidString: name) {
                 LivePollStore.shared.markSynced(id: uuid)
             }
+        case CloudKitSchema.RecordType.prompter:
+            if let showId = CloudKitSchema.prompterShowId(fromRecordName: name) {
+                PrompterScriptStore.shared.markSynced(showId: showId)
+            }
         case CloudKitSchema.RecordType.cameraFrame:
             if let uuid = UUID(uuidString: name) {
                 CameraFrameStore.shared.markFrameSynced(id: uuid)
@@ -128,6 +132,10 @@ extension CloudKitSyncEngine {
             if let uuid = UUID(uuidString: name) { scheduleCountdownSave(id: uuid) }
         case CloudKitSchema.RecordType.livePoll:
             if let uuid = UUID(uuidString: name) { scheduleLivePollSave(id: uuid) }
+        case CloudKitSchema.RecordType.prompter:
+            if let showId = CloudKitSchema.prompterShowId(fromRecordName: name) {
+                schedulePrompterSave(showId: showId)
+            }
         case CloudKitSchema.RecordType.background:
             scheduleBackgroundSave()
         case CloudKitSchema.RecordType.screensaver:

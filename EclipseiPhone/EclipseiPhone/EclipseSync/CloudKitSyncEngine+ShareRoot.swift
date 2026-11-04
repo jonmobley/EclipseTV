@@ -37,6 +37,8 @@ extension CloudKitSyncEngine {
 
     /// Re-enqueues children that belong to `showId`.
     func enqueueShareChildren(of showId: UUID) {
+        // Never list the Show's Prompter record here: it stays unparented so the
+        // script is private to the owner's devices, like presenter notes.
         guard let engine else { return }
         let itemIds = shareChildItemIds(for: showId)
         var changes: [CKSyncEngine.PendingRecordZoneChange] = []

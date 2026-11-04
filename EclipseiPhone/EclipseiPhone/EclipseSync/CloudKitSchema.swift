@@ -38,6 +38,8 @@ enum CloudKitSchema {
         static let cameraFrame = "CameraFrame"
         static let cameraSettings = "CameraSettings"
         static let cutawayStill = "CutawayStill"
+        /// Per-Show Prompter script. Never parented, so it stays off shared Shows.
+        static let prompter = "Prompter"
     }
 
     enum ShowKey {
@@ -166,6 +168,14 @@ enum CloudKitSchema {
         static let modifiedAt = "modifiedAt"
     }
 
+    enum PrompterKey {
+        static let showId = "showId"
+        /// `""` = cleared; no record = never written by any device.
+        static let script = "script"
+        /// The script's own last-writer-wins clock (independent of the Show's).
+        static let modifiedAt = "modifiedAt"
+    }
+
     /// `UserDefaults` key holding a Show's last-modified LWW clock.
     ///
     /// Both the sync engine and `LocalAlbumStore` read and write this, so the prefix
@@ -242,5 +252,25 @@ enum CloudKitSchema {
     /// Record ID for a camera cutaway still.
     static func cutawayRecordID(for id: UUID) -> CKRecord.ID {
         CKRecord.ID(recordName: id.uuidString, zoneID: zoneID)
+    }
+
+    /// Prompter records are named `prompter-<showId>`. Tombstones carry no record
+    /// type, so the prefix is how a deletion finds its store (like camera settings).
+    static let prompterRecordNamePrefix = "prompter-"
+
+    /// Record name of the Prompter record for `showId`.
+    static func prompterRecordName(for showId: UUID) -> String {
+        prompterRecordNamePrefix + showId.uuidString
+    }
+
+    /// Record ID for a Show's Prompter script in the library zone.
+    static func prompterRecordID(for showId: UUID) -> CKRecord.ID {
+        CKRecord.ID(recordName: prompterRecordName(for: showId), zoneID: zoneID)
+    }
+
+    /// The Show id in a `prompter-<showId>` record name, or nil for any other name.
+    static func prompterShowId(fromRecordName name: String) -> UUID? {
+        guard name.hasPrefix(prompterRecordNamePrefix) else { return nil }
+        return UUID(uuidString: String(name.dropFirst(prompterRecordNamePrefix.count)))
     }
 }

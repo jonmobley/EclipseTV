@@ -114,6 +114,14 @@ extension CloudKitSyncEngine {
         scheduleDelete(CloudKitSchema.livePollRecordID(for: id))
     }
 
+    func schedulePrompterSave(showId: UUID) {
+        scheduleSave(CloudKitSchema.prompterRecordID(for: showId))
+    }
+
+    func schedulePrompterDelete(showId: UUID) {
+        scheduleDelete(CloudKitSchema.prompterRecordID(for: showId))
+    }
+
     func scheduleBackgroundSave() {
         scheduleSave(CloudKitSchema.backgroundRecordID)
     }

@@ -154,6 +154,7 @@ final class LocalAlbumStore {
         SlideshowStore.shared.deleteAll(forShowId: id)
         CountdownStore.shared.deleteAll(forShowId: id)
         LivePollStore.shared.deleteAll(forShowId: id)
+        PrompterScriptStore.shared.deleteAll(forShowId: id)
         for itemId in removed?.itemIds ?? [] {
             if let pageId = UUID(uuidString: itemId) {
                 WebPageStore.shared.purgeRetainedIfUnused(id: pageId)

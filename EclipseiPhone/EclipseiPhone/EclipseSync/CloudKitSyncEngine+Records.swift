@@ -30,6 +30,11 @@ extension CloudKitSyncEngine {
         if name.hasPrefix("eclipse.cameraSettings.") {
             return makeCameraSettingsRecordToSave(name: name, existing: existing)
         }
+        if let showId = CloudKitSchema.prompterShowId(fromRecordName: name) {
+            guard let entry = PrompterScriptStore.shared.entry(forShowId: showId)
+            else { return nil }
+            return CloudKitRecordMapper.makePrompterRecord(from: entry, existing: existing)
+        }
 
         if let uuid = UUID(uuidString: name) {
             if let album = LocalAlbumStore.shared.album(id: uuid) {
@@ -96,6 +101,11 @@ extension CloudKitSyncEngine {
         for id in LivePollStore.shared.idsNeedingUpload {
             changes.append(
                 .saveRecord(CloudKitSchema.livePollRecordID(for: id))
+            )
+        }
+        for showId in PrompterScriptStore.shared.idsNeedingUpload {
+            changes.append(
+                .saveRecord(CloudKitSchema.prompterRecordID(for: showId))
             )
         }
         if LogoStore.shared.hasCustomImage {

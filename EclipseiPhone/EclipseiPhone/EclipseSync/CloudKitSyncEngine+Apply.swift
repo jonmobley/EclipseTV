@@ -61,6 +61,13 @@ extension CloudKitSyncEngine {
             if let item = CloudKitRecordMapper.livePoll(from: record) {
                 LivePollStore.shared.applyRemote(item)
             }
+        case CloudKitSchema.RecordType.prompter:
+            // Only this user's own unparented record: a script never arrives through
+            // a share, and a parented one would mean a newer build broke the rule.
+            if CloudKitRecordMapper.isPrivateToMe(record),
+               let entry = CloudKitRecordMapper.prompterScript(from: record) {
+                PrompterScriptStore.shared.applyRemote(entry)
+            }
         case CloudKitSchema.RecordType.background:
             LogoStore.shared.applyRemote(
                 assetURL: CloudKitRecordMapper.backgroundAssetURL(from: record)
