@@ -120,3 +120,24 @@ struct WebAutoScrollerTests {
         #expect(WebAutoScroller.speedOptions.contains(1))
     }
 }
+
+@MainActor
+struct WebAutoScrollSpeedBarTests {
+
+    @Test func snapsToQuarterStepsWithinRange() {
+        #expect(WebAutoScrollSpeedBar.snappedSpeed(1.1) == 1)
+        #expect(WebAutoScrollSpeedBar.snappedSpeed(1.13) == 1.25)
+        #expect(WebAutoScrollSpeedBar.snappedSpeed(0.1) == 0.25)
+        #expect(WebAutoScrollSpeedBar.snappedSpeed(5) == 3)
+    }
+
+    @Test func applyMovesThumbAndLabelWithoutFiring() {
+        let bar = WebAutoScrollSpeedBar()
+        var fired = 0
+        bar.onSpeedChange = { _ in fired += 1 }
+        bar.apply(speed: 1.5)
+        #expect(bar.slider.value == 1.5)
+        #expect(bar.valueLabel.text == "1.5×")
+        #expect(fired == 0)
+    }
+}

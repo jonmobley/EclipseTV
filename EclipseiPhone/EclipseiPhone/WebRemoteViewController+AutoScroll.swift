@@ -71,7 +71,42 @@ extension WebRemoteViewController {
         }
         // Only while Auto Scroll is on does a tap belong to it; otherwise links work.
         autoScrollTap?.isEnabled = autoScroller.isActive
+        showAutoScrollSpeedBar(autoScroller.isActive)
+        autoScrollSpeedBar?.apply(speed: autoScroller.speed)
         refreshBookmarksMenu()
+    }
+
+    /// Slides the speed bar in over the page, or away, as Auto Scroll turns on / off.
+    func showAutoScrollSpeedBar(_ visible: Bool) {
+        if visible, autoScrollSpeedBar == nil {
+            let bar = WebAutoScrollSpeedBar()
+            bar.onSpeedChange = { [weak self] speed in self?.autoScroller.setSpeed(speed) }
+            bar.alpha = 0
+            view.addSubview(bar)
+            autoScrollSpeedBar = bar
+            layoutAutoScrollSpeedBar()
+        }
+        guard let bar = autoScrollSpeedBar, bar.isHidden == visible || bar.alpha != (visible ? 1 : 0) else { return }
+        bar.isHidden = false
+        UIView.animate(withDuration: 0.2, animations: {
+            bar.alpha = visible ? 1 : 0
+        }, completion: { _ in
+            if !visible, !self.autoScroller.isActive { bar.isHidden = true }
+        })
+    }
+
+    /// Pins the bar to the bottom of the page card, inside the safe area.
+    func layoutAutoScrollSpeedBar() {
+        guard let bar = autoScrollSpeedBar else { return }
+        let host = webPanelView ?? webStageView
+        let card = host.map { $0.convert($0.bounds, to: view) } ?? view.bounds
+        let width = min(WebAutoScrollSpeedBar.maximumWidth, card.width - 32)
+        let bottomLimit = view.bounds.maxY - view.safeAreaInsets.bottom - 12
+        let y = min(card.maxY - 12, bottomLimit) - WebAutoScrollSpeedBar.height
+        bar.frame = CGRect(
+            x: card.midX - width / 2, y: y, width: width, height: WebAutoScrollSpeedBar.height
+        )
+        view.bringSubviewToFront(bar)
     }
 
     /// Installs the page tap that pauses / resumes Auto Scroll, once the stage exists,
