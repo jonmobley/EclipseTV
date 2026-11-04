@@ -60,7 +60,7 @@ final class WebRemoteViewController: UIViewController {
     /// Page tap that pauses / resumes Auto Scroll; enabled only while it is on.
     var autoScrollTap: UITapGestureRecognizer?
     /// Floating speed slider over the page while Auto Scroll is on.
-    var autoScrollSpeedBar: WebAutoScrollSpeedBar?
+    var autoScrollSpeedBar: ScrollSpeedSlider?
     /// Drives the active tab's page down at the chosen speed.
     lazy var autoScroller: WebAutoScroller = {
         let scroller = WebAutoScroller(scrollView: { [weak self] in self?.webView?.scrollView })

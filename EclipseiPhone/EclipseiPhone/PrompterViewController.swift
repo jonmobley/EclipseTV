@@ -30,9 +30,7 @@ final class PrompterViewController: UIViewController {
     let stage = PrompterStageView()
     let playButton = UIButton(configuration: .filled())
     let resetButton = UIButton(configuration: .plain())
-    let speedDownButton = UIButton(configuration: .plain())
-    let speedUpButton = UIButton(configuration: .plain())
-    let speedLabel = UILabel()
+    let speedSlider = ScrollSpeedSlider()
     let sizeDownButton = UIButton(configuration: .plain())
     let sizeUpButton = UIButton(configuration: .plain())
     let liveButton = UIButton(configuration: .tinted())
@@ -141,28 +139,20 @@ final class PrompterViewController: UIViewController {
         liveButton.configuration?.title = "Go Live"
         liveButton.configuration?.imagePadding = 6
 
-        configure(speedDownButton, symbol: "minus", label: "Slower", action: #selector(speedDown))
-        configure(speedUpButton, symbol: "plus", label: "Faster", action: #selector(speedUp))
-        speedLabel.font = .monospacedDigitSystemFont(ofSize: 15, weight: .semibold)
-        speedLabel.textColor = .white
-        speedLabel.textAlignment = .center
-        speedLabel.setContentHuggingPriority(.required, for: .horizontal)
-        speedLabel.accessibilityLabel = "Speed"
+        speedSlider.translatesAutoresizingMaskIntoConstraints = false
+        speedSlider.onSpeedChange = { [weak self] speed in self?.controller.setSpeed(speed) }
 
         configure(sizeDownButton, symbol: "textformat.size.smaller", label: "Smaller Text", action: #selector(sizeDown))
         configure(sizeUpButton, symbol: "textformat.size.larger", label: "Larger Text", action: #selector(sizeUp))
 
-        let speedGroup = UIStackView(arrangedSubviews: [speedDownButton, speedLabel, speedUpButton])
-        speedGroup.spacing = 2
-        speedGroup.alignment = .center
         let sizeGroup = UIStackView(arrangedSubviews: [sizeDownButton, sizeUpButton])
         sizeGroup.spacing = 2
         let topRow = UIStackView(arrangedSubviews: [resetButton, playButton, liveButton])
         topRow.spacing = 20
         topRow.alignment = .center
         topRow.distribution = .equalCentering
-        let bottomRow = UIStackView(arrangedSubviews: [speedGroup, sizeGroup])
-        bottomRow.spacing = 24
+        let bottomRow = UIStackView(arrangedSubviews: [speedSlider, sizeGroup])
+        bottomRow.spacing = 16
         bottomRow.alignment = .center
         bottomRow.distribution = .equalCentering
 
@@ -184,8 +174,15 @@ final class PrompterViewController: UIViewController {
             rows.trailingAnchor.constraint(lessThanOrEqualTo: transport.contentView.safeAreaLayoutGuide.trailingAnchor, constant: -16),
             rows.bottomAnchor.constraint(equalTo: transport.contentView.safeAreaLayoutGuide.bottomAnchor, constant: -10),
             topRow.widthAnchor.constraint(equalTo: rows.widthAnchor),
-            bottomRow.widthAnchor.constraint(equalTo: rows.widthAnchor)
+            bottomRow.widthAnchor.constraint(equalTo: rows.widthAnchor),
+            speedSlider.widthAnchor.constraint(greaterThanOrEqualToConstant: 200),
+            speedSlider.widthAnchor.constraint(lessThanOrEqualToConstant: ScrollSpeedSlider.maximumWidth)
         ])
+        // As wide as the website's bar when the screen allows; narrower phones
+        // squeeze it toward the minimum through the row's edge constraints.
+        let preferred = speedSlider.widthAnchor.constraint(equalToConstant: ScrollSpeedSlider.maximumWidth)
+        preferred.priority = .defaultLow
+        preferred.isActive = true
     }
 
     private func configure(_ button: UIButton, symbol: String, label: String, action: Selector) {
@@ -263,9 +260,7 @@ final class PrompterViewController: UIViewController {
         resetButton.isEnabled = !empty
         playButton.configuration?.image = UIImage(systemName: controller.isPlaying ? "pause.fill" : "play.fill")
         playButton.accessibilityLabel = controller.isPlaying ? "Pause" : "Play"
-        speedLabel.text = Self.speedText(controller.speedMultiplier)
-        speedDownButton.isEnabled = controller.speedMultiplier > PrompterScrollEngine.minimumSpeed
-        speedUpButton.isEnabled = controller.speedMultiplier < PrompterScrollEngine.maximumSpeed
+        speedSlider.apply(speed: controller.speedMultiplier)
         sizeDownButton.isEnabled = controller.fontSize > PrompterStageMetrics.operatorFontRange.lowerBound
         sizeUpButton.isEnabled = controller.fontSize < PrompterStageMetrics.operatorFontRange.upperBound
         refreshLiveButton()
@@ -327,14 +322,6 @@ final class PrompterViewController: UIViewController {
 
     @objc private func lineUp() { controller.nudge(lines: -1) }
     @objc private func lineDown() { controller.nudge(lines: 1) }
-
-    @objc private func speedDown() {
-        controller.setSpeed(controller.speedMultiplier - PrompterStageMetrics.speedStep)
-    }
-
-    @objc private func speedUp() {
-        controller.setSpeed(controller.speedMultiplier + PrompterStageMetrics.speedStep)
-    }
 
     @objc private func sizeDown() {
         controller.setFontSize(controller.fontSize - PrompterStageMetrics.operatorFontStep)

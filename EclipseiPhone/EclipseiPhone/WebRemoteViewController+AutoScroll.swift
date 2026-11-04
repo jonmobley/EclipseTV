@@ -79,7 +79,7 @@ extension WebRemoteViewController {
     /// Slides the speed bar in over the page, or away, as Auto Scroll turns on / off.
     func showAutoScrollSpeedBar(_ visible: Bool) {
         if visible, autoScrollSpeedBar == nil {
-            let bar = WebAutoScrollSpeedBar()
+            let bar = ScrollSpeedSlider()
             bar.onSpeedChange = { [weak self] speed in self?.autoScroller.setSpeed(speed) }
             bar.alpha = 0
             view.addSubview(bar)
@@ -100,11 +100,11 @@ extension WebRemoteViewController {
         guard let bar = autoScrollSpeedBar else { return }
         let host = webPanelView ?? webStageView
         let card = host.map { $0.convert($0.bounds, to: view) } ?? view.bounds
-        let width = min(WebAutoScrollSpeedBar.maximumWidth, card.width - 32)
+        let width = min(ScrollSpeedSlider.maximumWidth, card.width - 32)
         let bottomLimit = view.bounds.maxY - view.safeAreaInsets.bottom - 12
-        let y = min(card.maxY - 12, bottomLimit) - WebAutoScrollSpeedBar.height
+        let y = min(card.maxY - 12, bottomLimit) - ScrollSpeedSlider.height
         bar.frame = CGRect(
-            x: card.midX - width / 2, y: y, width: width, height: WebAutoScrollSpeedBar.height
+            x: card.midX - width / 2, y: y, width: width, height: ScrollSpeedSlider.height
         )
         view.bringSubviewToFront(bar)
     }

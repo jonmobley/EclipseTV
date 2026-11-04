@@ -1,5 +1,5 @@
 //
-//  WebAutoScrollSpeedBar.swift
+//  ScrollSpeedSlider.swift
 //  Eclipse
 //
 //  Copyright © 2026 Moxie LLC. All rights reserved.
@@ -7,10 +7,14 @@
 
 import UIKit
 
-/// Floating pill over the page while Auto Scroll is on: a slider from 0.25× to 3×
-/// with the current speed beside it. Slides in quarter steps so the label reads
-/// cleanly and matches the menu's choices.
-final class WebAutoScrollSpeedBar: UIView {
+/// Speed pill shared by website Auto Scroll and the Prompter: a slider from 0.25×
+/// to 3× with the current speed beside it. Slides in steps of 0.05, so any pace
+/// in between is reachable and the label still reads cleanly.
+///
+/// Frame-based by default (the browser floats it over the page); set
+/// `translatesAutoresizingMaskIntoConstraints = false` and it sizes itself to
+/// `height` for a stack.
+final class ScrollSpeedSlider: UIView {
 
     static let height: CGFloat = 48
     static let maximumWidth: CGFloat = 360
@@ -62,6 +66,9 @@ final class WebAutoScrollSpeedBar: UIView {
             icon.widthAnchor.constraint(equalToConstant: 20)
         ])
         isAccessibilityElement = false
+        let height = heightAnchor.constraint(equalToConstant: Self.height)
+        height.priority = .defaultHigh
+        height.isActive = true
     }
 
     required init?(coder: NSCoder) {
@@ -77,10 +84,12 @@ final class WebAutoScrollSpeedBar: UIView {
         slider.accessibilityValue = WebAutoScroller.speedLabel(speed)
     }
 
-    /// Nearest quarter step inside the allowed range.
+    /// Finest step the slider moves in.
+    static let step: Double = 0.05
+
+    /// Nearest step inside the allowed range, rounded so `1.1` stays `1.1`.
     static func snappedSpeed(_ value: Double) -> Double {
-        let step = PrompterStageMetrics.speedStep
-        let snapped = (value / step).rounded() * step
+        let snapped = ((value / step).rounded() * step * 100).rounded() / 100
         return PrompterStageMetrics.clampedSpeed(snapped)
     }
 
