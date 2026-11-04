@@ -519,7 +519,7 @@ final class LibraryThumbnailCell: UICollectionViewCell {
             return
         }
         cardView.layer.borderWidth = 3
-        cardView.layer.borderColor = (isLocked ? UIColor.systemOrange : .systemRed).cgColor
+        cardView.layer.borderColor = (isLocked ? UIColor.systemOrange : .liveStroke).cgColor
     }
 
     /// Edge a tile keeps when it is *not* live (Camera's hairline, the outlined

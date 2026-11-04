@@ -84,7 +84,7 @@ final class HomeShowTileCell: UICollectionViewCell {
         applyMoreButtonForeground(.white)
         cardView.layer.borderWidth = isLive ? 3 : 0
         cardView.layer.borderColor = isLive
-            ? UIColor.systemRed.cgColor
+            ? UIColor.liveStroke.cgColor
             : UIColor.clear.cgColor
         moreButton.menu = moreMenu
         moreButton.isHidden = moreMenu == nil

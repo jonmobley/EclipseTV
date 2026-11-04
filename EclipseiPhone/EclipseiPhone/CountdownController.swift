@@ -99,7 +99,7 @@ final class CountdownController {
     /// bind first repainted the Show grid from the *previous* program, and while a
     /// countdown was already live that repaint was the last one the tiles got —
     /// `refreshCountdownChrome` deliberately skips the grid once the clock owns
-    /// output, so the outgoing timer kept the red stroke and the incoming one never
+    /// output, so the outgoing timer kept the blue stroke and the incoming one never
     /// took it.
     func prepare(_ item: ShowCountdown) {
         // Read before holding, so re-binding the countdown already on output

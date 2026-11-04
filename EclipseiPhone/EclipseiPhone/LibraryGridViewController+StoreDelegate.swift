@@ -46,7 +46,7 @@ extension LibraryGridViewController: TVLibraryStoreDelegate {
     /// a transitional state that the follow-up `reloadLibraryGrid()` corrects in
     /// the same turn. Both the update and its animation are suppressed so that
     /// correction lands: the animated `reloadItems` this replaced was still
-    /// crossfading old cells in when `reloadData()` ran, and the stale red stroke
+    /// crossfading old cells in when `reloadData()` ran, and the stale blue stroke
     /// on the website tile outlived the reload. `reconfigureItems` animates by
     /// default too, which reopened the same window.
     ///

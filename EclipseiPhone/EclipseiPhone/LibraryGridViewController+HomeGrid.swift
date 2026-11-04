@@ -484,7 +484,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
     /// Opens the phone browser for a saved website (card tap, ⋯ Preview, live hero tap).
     ///
     /// Marks it live when a destination exists and output is unlocked; otherwise this
-    /// is on-device Preview without a red live stroke.
+    /// is on-device Preview without a blue live stroke.
     ///
     /// A second browser must never open on top of the first — that left the loser with
     /// an empty stage and leaked the warm web view. If one is already up, navigate it
@@ -540,7 +540,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
     /// Opens the phone PDF reader (card tap, ⋯ Preview, live hero tap).
     ///
     /// Marks it live under the same gate as websites: a destination exists and output
-    /// is unlocked. Otherwise this is on-device Preview without a red live stroke.
+    /// is unlocked. Otherwise this is on-device Preview without a blue live stroke.
     ///
     /// One viewer at a time, checked before the side effects: a second open would
     /// restart the AirPlay overlay for a viewer UIKit then refuses to present.

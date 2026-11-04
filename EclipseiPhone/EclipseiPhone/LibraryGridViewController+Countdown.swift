@@ -269,7 +269,7 @@ extension LibraryGridViewController {
     /// While a countdown owns output this is the only pass the tiles get —
     /// `refreshCountdownChrome` skips the grid reload so a once-a-second tick does
     /// not rebuild it. So it has to reconcile the whole tile, not just the live
-    /// one's digits: a timer that stopped being live keeps the red stroke and the
+    /// one's digits: a timer that stopped being live keeps the blue stroke and the
     /// running clock otherwise, which is how two countdowns ended up looking like
     /// they shared one live state. Idle tiles are repainted too — their digits are
     /// a held remainder that a Reset elsewhere in the Show can drop while another

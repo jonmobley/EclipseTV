@@ -11,7 +11,7 @@ import UIKit
 
 extension LibraryGridViewController {
 
-    /// Re-asserts the red live stroke on every visible Show tile from the one
+    /// Re-asserts the blue live stroke on every visible Show tile from the one
     /// resolved program.
     ///
     /// `reloadData()` is not enough on its own. A single go-live turn also fires

@@ -9,7 +9,7 @@ import Foundation
 import Testing
 @testable import EclipseiPhone
 
-/// One resolved program, one red live stroke.
+/// One resolved program, one blue live stroke.
 ///
 /// Every case here asserts on the whole grid rather than a single tile: the bug
 /// these guard against is two thumbnails claiming live at once, which a per-tile

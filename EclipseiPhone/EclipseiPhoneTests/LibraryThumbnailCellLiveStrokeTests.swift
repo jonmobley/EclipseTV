@@ -11,18 +11,18 @@ import UIKit
 
 /// `setLive` owns the card border outright.
 ///
-/// The Show grid reconciles the red live stroke across every visible tile after a
+/// The Show grid reconciles the blue live stroke across every visible tile after a
 /// reload, which means it clears strokes on cells it did not configure. That only
 /// works if clearing restores the edge the tile registered for its idle state —
 /// the Camera hairline, a select-mode check ring — instead of erasing it.
 @MainActor
 struct LibraryThumbnailCellLiveStrokeTests {
 
-    @Test func goingLiveDrawsTheRedStroke() {
+    @Test func goingLiveDrawsTheBlueStroke() {
         let cell = makeCell()
         cell.setLive(true)
         #expect(cell.cardView.layer.borderWidth == 3)
-        #expect(cell.cardView.layer.borderColor == UIColor.systemRed.cgColor)
+        #expect(cell.cardView.layer.borderColor == UIColor.liveStroke.cgColor)
     }
 
     @Test func lockedLiveDrawsAmberInstead() {
@@ -50,7 +50,7 @@ struct LibraryThumbnailCellLiveStrokeTests {
         cell.setLive(true)
         cell.setIdleBorder(width: 1, color: .separator)
         #expect(cell.cardView.layer.borderWidth == 3)
-        #expect(cell.cardView.layer.borderColor == UIColor.systemRed.cgColor)
+        #expect(cell.cardView.layer.borderColor == UIColor.liveStroke.cgColor)
 
         cell.setLive(false)
         #expect(cell.cardView.layer.borderWidth == 1)

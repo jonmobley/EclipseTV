@@ -684,7 +684,7 @@ final class ExternalDisplayManager {
     /// Ends camera overlay and leaves Show Background as the live source.
     ///
     /// Used when the user closes Camera while parked on Background so the
-    /// Show grid's Background tile takes the red live stroke.
+    /// Show grid's Background tile takes the blue live stroke.
     func commitCameraParkToBackground() {
         guard CameraStillRibbon.shouldCommitToBackground(parked: parkedCameraStill),
               let source = LogoStore.shared.presentationSource

@@ -18,7 +18,7 @@ extension LibraryThumbnailCell {
     }
 
     /// Idle / app-open: warm live preview (last-frame until frames arrive).
-    /// While AirPlay owns the camera: centered icon + red stroke (feed is in the hero).
+    /// While AirPlay owns the camera: centered icon + blue stroke (feed is in the hero).
     /// Parked cutaway: that still fills the tile.
     /// - Parameter warmPreview: When false, shows a still only (fullscreen Camera open).
     /// - Parameter parkedStill: Quick-change still on program, shown instead of the feed.

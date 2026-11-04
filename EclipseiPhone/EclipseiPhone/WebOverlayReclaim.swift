@@ -17,7 +17,7 @@ enum WebOverlayReclaim {
     /// output can change from the grid behind it. So a late commit has to be able
     /// to restore an overlay this page still owns — after an AirPlay drop, say —
     /// without claiming program back from the still, slideshow, or tool that
-    /// replaced it, which left the website's card carrying a red live stroke
+    /// replaced it, which left the website's card carrying a blue live stroke
     /// beside the card that was really live.
     static func allowsRestore(lastContent: PresentationSource.Content?) -> Bool {
         if case .web = lastContent { return true }

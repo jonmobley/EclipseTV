@@ -59,7 +59,7 @@ final class CameraStillRibbonCell: UICollectionViewCell {
         imageView.layer.cornerCurve = .continuous
     }
 
-    /// Configures art, red live stroke, and VoiceOver for a ribbon item.
+    /// Configures art, blue live stroke, and VoiceOver for a ribbon item.
     func configure(
         image: UIImage?,
         symbolName: String?,
@@ -83,7 +83,7 @@ final class CameraStillRibbonCell: UICollectionViewCell {
             : .black
         contentView.layer.borderWidth = isLive ? 3 : 1
         contentView.layer.borderColor = isLive
-            ? UIColor.systemRed.cgColor
+            ? UIColor.liveStroke.cgColor
             : UIColor.white.withAlphaComponent(0.35).cgColor
         self.accessibilityLabel = accessibilityLabel
         accessibilityValue = isLive ? "On program" : "Off"

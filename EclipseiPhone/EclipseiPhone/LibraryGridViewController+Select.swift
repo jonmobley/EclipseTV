@@ -167,7 +167,7 @@ extension LibraryGridViewController {
         return !isShowGridItemLive(item)
     }
 
-    /// Whether this tile carries the red live stroke.
+    /// Whether this tile carries the blue live stroke.
     ///
     /// One resolved program, one stroke: an operator matches the director's
     /// snapshot, every other device matches the program resolved from its own

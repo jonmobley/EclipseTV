@@ -108,7 +108,7 @@ struct OverlaySwapProgramTests {
     /// navigation committing on the way out asks `loadWeb` whether it may restore
     /// the page. Once a still is taking program the answer is no — otherwise the
     /// website reclaims output from the slideshow that just replaced it, and both
-    /// cards end up carrying a red stroke.
+    /// cards end up carrying a blue stroke.
     @Test func aLateBrowserCommitCannotReclaimOutputFromTheStillThatReplacedIt() {
         let mgr = ExternalDisplayManager.shared
         clearOverlays()

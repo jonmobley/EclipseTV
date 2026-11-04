@@ -231,7 +231,7 @@ extension LibraryGridViewController {
 
     /// Join / Question / Results strip while this Show's poll is on program or
     /// in Practice. A leftover room after switching to a photo does not keep
-    /// the ribbon (or its red live stroke).
+    /// the ribbon (or its blue live stroke).
     var showsLivePollRibbon: Bool {
         // Q&A has no cue strip; its controls are the question list.
         if QuestPollSessionStore.shared.session?.mode == .qa { return false }
@@ -299,7 +299,7 @@ extension LibraryGridViewController {
         Haptics.impactLight()
     }
 
-    /// Red stroke on the current cue only while this poll is on program or Practice.
+    /// Blue stroke on the current cue only while this poll is on program or Practice.
     func livePollRibbonCueIsLive(at index: Int) -> Bool {
         QuestPollRibbon.cueIsLive(
             index: index,

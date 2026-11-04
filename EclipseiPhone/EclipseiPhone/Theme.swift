@@ -18,6 +18,12 @@ import UIKit
 /// global tint.
 extension UIColor {
 
+    /// Outline on a tile (or thumbnail) that is on program right now.
+    ///
+    /// System blue, matching the Eclipse Mac app's live stroke so both apps read the
+    /// same; a locked tile still uses amber.
+    static let liveStroke = UIColor.systemBlue
+
     /// Fill behind media while it loads, and behind hero / overlay placeholders.
     static let mediaPlaceholder = UIColor(white: 0.12, alpha: 1)
 

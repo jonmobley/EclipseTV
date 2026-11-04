@@ -228,7 +228,7 @@ final class CameraLiveOutputThumbView: UIView {
         clipsToBounds = true
         layer.cornerRadius = 10
         layer.borderWidth = 2
-        layer.borderColor = UIColor.systemRed.cgColor
+        layer.borderColor = UIColor.liveStroke.cgColor
         backgroundColor = .mediaPlaceholder
         isUserInteractionEnabled = false
         isHidden = true
