@@ -143,7 +143,7 @@ struct LocalAlbumStoreNameTests {
         store.dropLegacyLivePollTool(albumId: show.id)
         album = try #require(store.album(id: show.id))
         #expect(album.surfaceIds?.contains(ShowLivePollToken.legacyTool) != true)
-        #expect(album.deletedSurfaceIds.contains(ShowLivePollToken.legacyTool))
+        #expect(SyncTombstones.isRemoved(ShowLivePollToken.legacyTool, in: album.deletedSurfaceIds))
     }
 
     @Test func replaceLegacyCountdownToolSwapsSingletonInPlace() throws {
@@ -165,7 +165,7 @@ struct LocalAlbumStoreNameTests {
         #expect(album.surfaceIds?.filter { $0 == token }.count == 1)
         // The retired token must not linger in the tombstone list, or the swap
         // would be undone the next time the surface is sanitized.
-        #expect(!album.deletedSurfaceIds.contains(token))
+        #expect(!SyncTombstones.isRemoved(token, in: album.deletedSurfaceIds))
     }
 
     @Test func addCountdownAppendsWhenSurfaceMaterialized() throws {

@@ -38,7 +38,7 @@ struct CloudKitConflictResolverTests {
             remoteModified: older
         )
         #expect(merged.itemIds == ["keep", "added"])
-        #expect(merged.deletedItemIds.contains("gone"))
+        #expect(SyncTombstones.isRemoved("gone", in: merged.deletedItemIds))
     }
 
     @Test func surfaceTombstonesRemoveTools() {
