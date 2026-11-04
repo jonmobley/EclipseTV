@@ -126,7 +126,7 @@ final class WebPagesViewController: UITableViewController {
     /// a second one that would fight over the warm web view.
     private func presentPage(_ page: WebPage) {
         if let open = openController(ofType: WebRemoteViewController.self) {
-            open.loadBrowserURL(page.url, pageId: page.id)
+            open.openSavedPage(page)
             return
         }
         WarmWebSessionPool.shared.warmIfNeeded(for: page)

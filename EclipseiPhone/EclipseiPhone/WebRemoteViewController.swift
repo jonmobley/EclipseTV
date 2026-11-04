@@ -11,13 +11,21 @@ import WebKit
 /// Phone-side Safari-like browser for a page presented on AirPlay.
 ///
 /// Stages a 9:16 (Vertical) or 16:9 (Landscape) panel matching the AirPlay
-/// viewport. Vertical chrome: Back · host title · ⋯ · Close. Landscape hides the
-/// URL bar and puts Back / ⋯ / Close in a trailing column beside the 16:9 card.
+/// viewport. Vertical chrome: Back · host title · Refresh · ⊕ · ⋯ · Close in the nav
+/// bar. Landscape hides the URL bar and puts the same buttons in a column beside the
+/// 16:9 card (a row beneath it on an upright iPad). Every website of the open Show is
+/// a tab in a strip above the card; the TV follows the active tab, except windows a
+/// site opened, which stay on the phone until sent over.
 final class WebRemoteViewController: UIViewController {
 
     // MARK: - Properties
 
-    let page: WebPage
+    /// Website the browser opened on. Session tabs keep its Show tile live.
+    let initialPage: WebPage
+    /// Open tabs: the Show's websites, plus ⊕ tabs and windows sites opened.
+    var tabs: BrowserTabList
+    var activeTab: BrowserTab { tabs.active }
+    /// Web view of the active tab while it is on the stage.
     var webView: WKWebView?
     /// Full-bleed host behind the aspect-fitted web panel.
     var webStageView: UIView?
@@ -39,14 +47,24 @@ final class WebRemoteViewController: UIViewController {
     private var didFinishClose = false
 
     var backButton: UIBarButtonItem!
+    var refreshBarButton: UIBarButtonItem!
+    var newTabBarButton: UIBarButtonItem!
+    /// Shown only while the active tab is phone-only.
+    var sendToTVBarButton: UIBarButtonItem!
     var bookmarksButton: UIBarButtonItem!
     var closeButton: UIBarButtonItem!
-    /// Landscape overlay Back — the nav bar (and URL title) is hidden.
+    /// Landscape overlay Back — shown only once there is history to go back to.
     var overlayBackButton: UIButton!
+    var overlayRefreshButton: UIButton!
+    var overlayNewTabButton: UIButton!
+    /// Landscape overlay Send to TV, for a phone-only tab.
+    var overlaySendToTVButton: UIButton!
     /// Landscape overlay Close.
     var overlayCloseButton: UIButton!
-    /// Landscape overlay ⋯ (Refresh / New / saved).
+    /// Landscape overlay ⋯ (saved websites).
     var overlayBookmarksButton: UIButton!
+    /// Tab chips above the card; hidden while there is a single tab.
+    var tabStripView: BrowserTabStripView!
     /// Vertical: stage sits under the URL nav bar.
     var verticalStageTopConstraint: NSLayoutConstraint?
     /// Landscape: stage is full-bleed so the 16:9 card can fill the height.
@@ -57,14 +75,19 @@ final class WebRemoteViewController: UIViewController {
         !ExternalOutputSettings.isVerticalMode
     }
 
-    /// Opening-load history depth; recaptured until the user navigates.
-    var sessionBackRoot = BrowserSessionBackRoot()
+    /// Opening-load history depth of the active tab; recaptured until the user navigates.
+    var sessionBackRoot: BrowserSessionBackRoot {
+        get { activeTab.backRoot }
+        set { activeTab.backRoot = newValue }
+    }
 
     // MARK: - Init
 
-    /// Creates a presenting browser for the given saved page.
-    init(page: WebPage) {
-        self.page = page
+    /// Creates a presenting browser for `page`, with a tab for every website of the Show.
+    /// - Parameter showPages: The open Show's websites in Show order (may omit `page`).
+    init(page: WebPage, showPages: [WebPage] = []) {
+        initialPage = page
+        tabs = BrowserTabList(pages: showPages, active: page)
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -148,8 +171,8 @@ final class WebRemoteViewController: UIViewController {
         guard isBeingDismissed || isMovingFromParent else { return }
         isLeaving = true
         webURLObservation = nil
-        // Park the warm session (home LiveHeader reclaims it if still live).
-        WarmWebSessionPool.shared.relinquish(pageId: page.id, from: self)
+        // Park the warm sessions (home LiveHeader reclaims the live one).
+        relinquishAllTabs()
         webView = nil
     }
 
@@ -230,7 +253,17 @@ final class WebRemoteViewController: UIViewController {
 
     @objc func reloadTapped() {
         webView?.reload()
-        ExternalDisplayManager.shared.reloadWeb()
+        if mirrorsActiveTab {
+            ExternalDisplayManager.shared.reloadWeb()
+        }
+    }
+
+    @objc func newTabTapped() {
+        presentNewURLAlert()
+    }
+
+    @objc func sendToTVTapped() {
+        sendActiveTabToTV()
     }
 
     @objc func webEndedExternally() {
@@ -242,7 +275,9 @@ final class WebRemoteViewController: UIViewController {
         applyBrowserChromeMode()
         layoutPhoneWebViewport()
         webView?.reload()
-        ExternalDisplayManager.shared.reloadWeb()
+        if mirrorsActiveTab {
+            ExternalDisplayManager.shared.reloadWeb()
+        }
     }
 
     @objc func bookmarksStoreChanged() {

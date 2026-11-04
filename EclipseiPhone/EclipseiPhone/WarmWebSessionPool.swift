@@ -126,12 +126,18 @@ final class WarmWebSessionPool {
     ///
     /// The user asked for this page, so it always succeeds — room is made first, and the
     /// cap may be exceeded by one if every other live session is pinned.
-    func adopt(page: WebPage, into remote: WebRemoteViewController) -> WKWebView {
+    /// - Parameter url: Page to be on once adopted; defaults to the saved address. A tab
+    ///   coming back to the front passes the address it had navigated to.
+    func adopt(
+        page: WebPage,
+        into remote: WebRemoteViewController,
+        url: URL? = nil
+    ) -> WKWebView {
         let session = session(for: page)
         if !session.hasWebView {
             _ = makeRoomForNewWebView(retaining: page.id)
         }
-        return session.adopt(into: remote, url: page.url)
+        return session.adopt(into: remote, url: url ?? page.url)
     }
 
     /// Parks a session after the phone browser closes.

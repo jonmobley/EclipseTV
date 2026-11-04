@@ -509,7 +509,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
                 ExternalDisplayManager.shared.presentWeb(page.url, pageId: page.id)
                 announceAirPlayOverlayIfLinked()
             }
-            open.loadBrowserURL(page.url, pageId: page.id)
+            open.openSavedPage(page)
             reloadLibraryGrid()
             refreshLiveHeader()
             return
@@ -524,7 +524,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             ExternalDisplayManager.shared.presentWeb(page.url, pageId: page.id)
             announceAirPlayOverlayIfLinked()
         }
-        let remote = WebRemoteViewController(page: page)
+        let remote = WebRemoteViewController(page: page, showPages: openShowBrowserTabPages)
         // Landscape Display Mode rotates the browser; a plain nav controller would not.
         let nav = DisplayModeNavigationController(rootViewController: remote)
         nav.modalPresentationStyle = .fullScreen
@@ -535,6 +535,16 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         reloadLibraryGrid()
         // After adopt: hero shows a static thumb (live preview is in the browser).
         refreshLiveHeader()
+    }
+
+    /// The open Show's website cards in grid order, for the browser's tabs.
+    ///
+    /// Video links play fullscreen rather than in the browser, so they get no tab.
+    var openShowBrowserTabPages: [WebPage] {
+        openShowGridItems.compactMap { item in
+            guard case .website(let page) = item, page.videoLink == nil else { return nil }
+            return page
+        }
     }
 
     /// Opens the phone PDF reader (card tap, ⋯ Preview, live hero tap).

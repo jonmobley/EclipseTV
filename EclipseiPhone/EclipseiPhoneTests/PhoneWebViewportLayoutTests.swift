@@ -90,6 +90,109 @@ struct PhoneWebViewportLayoutTests {
         #expect(frames.more.maxY <= frames.close.minY + 0.5)
     }
 
+    @Test func iPadUsesATopBarAndPhonesTheColumn() {
+        #expect(
+            PhoneWebViewportLayout.chromePlacement(
+                for: CGSize(width: 820, height: 1180), isVertical: false, idiom: .pad
+            ) == .topRow
+        )
+        #expect(
+            PhoneWebViewportLayout.chromePlacement(
+                for: CGSize(width: 1180, height: 820), isVertical: false, idiom: .pad
+            ) == .topRow
+        )
+        #expect(
+            PhoneWebViewportLayout.chromePlacement(
+                for: CGSize(width: 852, height: 393), isVertical: false, idiom: .phone
+            ) == .trailingColumn
+        )
+        #expect(
+            PhoneWebViewportLayout.chromePlacement(
+                for: CGSize(width: 820, height: 1180), isVertical: true, idiom: .pad
+            ) == .trailingColumn
+        )
+    }
+
+    @Test func topBarPutsButtonsInTheCornerAndChipsOnTheLeft() {
+        let stage = CGRect(x: 0, y: 0, width: 1180, height: 820)
+        let safe = UIEdgeInsets(top: 24, left: 0, bottom: 20, right: 0)
+        let panel = PhoneWebViewportLayout.panelRect(
+            in: stage,
+            isVertical: false,
+            safeInsets: safe,
+            aspect: landscapeAspect,
+            placement: .topRow
+        )
+        let barTop = max(safe.top, PhoneWebViewportLayout.sideInset)
+        #expect(abs(panel.minY - (barTop + PhoneWebViewportLayout.topBarHeight)) < 0.5)
+        #expect(abs(panel.midX - stage.midX) < 0.5)
+        #expect(abs(panel.width / panel.height - landscapeAspect) < 0.01)
+
+        let frames = PhoneWebViewportLayout.overlayFrames(
+            panel: panel, in: stage, safeInsets: safe, placement: .topRow, count: 4
+        )
+        #expect(frames.count == 4)
+        // First button (Close) in the corner; the rest march left.
+        #expect(abs(frames[0].maxX - (stage.maxX - PhoneWebViewportLayout.sideInset)) < 0.5)
+        #expect(frames[1].maxX < frames[0].minX)
+        for frame in frames {
+            #expect(abs(frame.minY - barTop) < 0.5)
+            #expect(frame.maxY <= panel.minY + 0.5)
+        }
+
+        let strip = PhoneWebViewportLayout.tabStripFrame(
+            panel: panel, in: stage, safeInsets: safe, placement: .topRow, buttonCount: 4
+        )
+        #expect(abs(strip.minX - panel.minX) < 0.5)
+        #expect(strip.maxX < frames[3].minX)
+        #expect(strip.minY >= barTop)
+        #expect(strip.maxY <= panel.minY + 0.5)
+    }
+
+    @Test func topBarCardIsNotTallerThanAnUprightiPad() {
+        let stage = CGRect(x: 0, y: 0, width: 820, height: 1180)
+        let safe = UIEdgeInsets(top: 24, left: 0, bottom: 20, right: 0)
+        let panel = PhoneWebViewportLayout.panelRect(
+            in: stage, isVertical: false, safeInsets: safe,
+            aspect: landscapeAspect, placement: .topRow
+        )
+        #expect(abs(panel.width - (stage.width - 2 * PhoneWebViewportLayout.sideInset)) < 0.5)
+        #expect(panel.maxY < stage.midY)
+    }
+
+    @Test func tabStripSitsAboveTheCard() {
+        let stage = CGRect(x: 0, y: 0, width: 844, height: 390)
+        let safe = UIEdgeInsets(top: 0, left: 59, bottom: 0, right: 21)
+        let withStrip = PhoneWebViewportLayout.panelRect(
+            in: stage, isVertical: false, safeInsets: safe,
+            aspect: landscapeAspect, showsTabStrip: true
+        )
+        let without = PhoneWebViewportLayout.panelRect(
+            in: stage, isVertical: false, safeInsets: safe, aspect: landscapeAspect
+        )
+        #expect(withStrip.height < without.height)
+        let strip = PhoneWebViewportLayout.tabStripFrame(above: withStrip)
+        #expect(strip.maxY <= withStrip.minY)
+        #expect(strip.minY >= 0)
+        #expect(abs(strip.width - withStrip.width) < 0.5)
+        let column = PhoneWebViewportLayout.overlayFrames(
+            panel: withStrip, in: stage, safeInsets: safe, showsTabStrip: true, count: 4
+        )
+        #expect(abs(column[0].minY - strip.minY) < 0.5)
+    }
+
+    @Test func columnHoldsSixButtonsOnTheShortestPhone() {
+        // iPhone SE landscape: 667 × 375.
+        let stage = CGRect(x: 0, y: 0, width: 667, height: 375)
+        let panel = PhoneWebViewportLayout.panelRect(
+            in: stage, isVertical: false, safeInsets: .zero, aspect: landscapeAspect
+        )
+        let frames = PhoneWebViewportLayout.overlayFrames(
+            panel: panel, in: stage, safeInsets: .zero, count: 6
+        )
+        #expect(frames.last!.maxY <= stage.maxY)
+    }
+
     @Test func verticalPanelStaysNineBySixteen() {
         let stage = CGRect(x: 0, y: 0, width: 390, height: 720)
         let panel = PhoneWebViewportLayout.panelRect(
@@ -120,8 +223,44 @@ struct LandscapeBrowserChromeTests {
             #expect(browser.usesOverlayBrowserChrome)
             #expect(browser.navigationItem.title == nil)
             #expect(nav.isNavigationBarHidden)
-            #expect(browser.overlayBackButton.isHidden == false)
+            // Back waits for in-session history; Refresh and ⊕ are always there.
+            #expect(browser.overlayBackButton.isHidden)
+            #expect(browser.overlayRefreshButton.isHidden == false)
+            #expect(browser.overlayNewTabButton.isHidden == false)
             #expect(browser.overlayBookmarksButton.isHidden == false)
+            #expect(browser.overlaySendToTVButton.isHidden)
+        }
+    }
+
+    @Test func verticalBarShowsRefreshAndNewTab() {
+        ExternalOutputOrientationFixture.with(.portrait) {
+            let browser = WebRemoteViewController(page: Self.samplePage)
+            browser.loadViewIfNeeded()
+            let items = browser.navigationItem.rightBarButtonItems ?? []
+            #expect(items.contains { $0 === browser.refreshBarButton })
+            #expect(items.contains { $0 === browser.newTabBarButton })
+            #expect(!items.contains { $0 === browser.sendToTVBarButton })
+        }
+    }
+
+    @Test func singleTabHidesTheStrip() {
+        ExternalOutputOrientationFixture.with(.landscape) {
+            let browser = WebRemoteViewController(page: Self.samplePage)
+            browser.loadViewIfNeeded()
+            #expect(browser.tabStripView.isHidden)
+        }
+    }
+
+    @Test func showWebsitesBecomeTabs() {
+        let other = WebPage(title: "Other", url: URL(string: "https://other.example")!)
+        ExternalOutputOrientationFixture.with(.landscape) {
+            let browser = WebRemoteViewController(
+                page: other, showPages: [Self.samplePage, other]
+            )
+            browser.loadViewIfNeeded()
+            #expect(browser.tabs.tabs.count == 2)
+            #expect(browser.tabs.active.page?.id == other.id)
+            #expect(browser.tabStripView.isHidden == false)
         }
     }
 

@@ -13,17 +13,23 @@ import WebKit
 
 extension WebRemoteViewController: WKUIDelegate {
 
-    /// Presents a phone-only sheet for `window.open` / `target=_blank`.
+    /// Opens a phone-only tab for `window.open` / `target=_blank`.
     ///
-    /// AirPlay is not updated; login UI stays on the phone. Session cookies
-    /// flow back to the main page via the shared default data store.
+    /// AirPlay is not updated; login UI stays on the phone until the user sends the
+    /// tab over. Session cookies flow back to the opener via the shared data store.
     func webView(
         _ webView: WKWebView,
         createWebViewWith configuration: WKWebViewConfiguration,
         for navigationAction: WKNavigationAction,
         windowFeatures: WKWindowFeatures
     ) -> WKWebView? {
-        WebPopupViewController.present(from: self, configuration: configuration)
+        openPopupTab(configuration: configuration)
+    }
+
+    /// Closes the tab of a window the site closed itself (`window.close()` after sign-in).
+    func webViewDidClose(_ webView: WKWebView) {
+        guard let tab = tab(for: webView), tab.ownWebView != nil else { return }
+        closeTab(id: tab.id)
     }
 
     /// Grants site mic/camera once Eclipse already has (or gets) system access.

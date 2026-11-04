@@ -41,9 +41,7 @@ extension WebRemoteViewController {
             isVertical: ExternalOutputSettings.isVerticalMode,
             idiom: traitCollection.userInterfaceIdiom
         )
-        let covered: [UIView?] = [
-            webStageView, overlayBackButton, overlayBookmarksButton, overlayCloseButton
-        ]
+        let covered: [UIView?] = [webStageView] + allOverlayChromeButtons
         let target: CGFloat = fits ? 1 : 0
         guard covered.contains(where: { $0 != nil && $0?.alpha != target }) else { return }
         let apply = { covered.forEach { $0?.alpha = target } }
