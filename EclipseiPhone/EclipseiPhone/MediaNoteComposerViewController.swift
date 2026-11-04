@@ -132,8 +132,14 @@ final class MediaNoteComposerViewController: UIViewController {
         view.keyboardLayoutGuide.usesBottomSafeArea = false
         NSLayoutConstraint.activate([
             textView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            textView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            textView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            // Safe area: in landscape the view runs under the notch, which hid the
+            // start of every line.
+            textView.leadingAnchor.constraint(
+                equalTo: view.safeAreaLayoutGuide.leadingAnchor
+            ),
+            textView.trailingAnchor.constraint(
+                equalTo: view.safeAreaLayoutGuide.trailingAnchor
+            ),
             textView.bottomAnchor.constraint(equalTo: view.keyboardLayoutGuide.topAnchor)
         ])
         textView.accessibilityLabel = "Note"

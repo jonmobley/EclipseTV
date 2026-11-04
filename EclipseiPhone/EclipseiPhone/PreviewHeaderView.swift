@@ -174,13 +174,17 @@ final class PreviewHeaderView: UIView {
             closeButton.topAnchor.constraint(
                 equalTo: safeAreaLayoutGuide.topAnchor, constant: 12
             ),
+            // Buttons follow the safe area so landscape keeps them clear of the
+            // notch; the scrim behind them still spans the full width.
             closeButton.trailingAnchor.constraint(
-                equalTo: trailingAnchor, constant: -16
+                equalTo: safeAreaLayoutGuide.trailingAnchor, constant: -16
             ),
             bottomAnchor.constraint(equalTo: closeButton.bottomAnchor, constant: 12),
 
             shareButton.centerYAnchor.constraint(equalTo: closeButton.centerYAnchor),
-            shareButton.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
+            shareButton.leadingAnchor.constraint(
+                equalTo: safeAreaLayoutGuide.leadingAnchor, constant: 16
+            ),
 
             moreButton.centerYAnchor.constraint(equalTo: closeButton.centerYAnchor),
             moreButton.trailingAnchor.constraint(

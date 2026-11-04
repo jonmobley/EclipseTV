@@ -14,6 +14,9 @@ import UIKit
 /// a code to show instead, and the sheet falls back to the emailed-link flow.
 final class LivePollSignInViewController: UIViewController {
 
+    /// Widest the content column grows (landscape phone, iPad).
+    private static let maxContentWidth: CGFloat = 560
+
     /// Called after an account token is stored in the Keychain.
     var onSignedIn: (() -> Void)?
 
@@ -174,16 +177,31 @@ final class LivePollSignInViewController: UIViewController {
 
         let guide = scroll.contentLayoutGuide
         let frame = scroll.frameLayoutGuide
+        let fillWidth = stack.widthAnchor.constraint(
+            equalTo: frame.widthAnchor, constant: -40
+        )
+        fillWidth.priority = .defaultHigh
         NSLayoutConstraint.activate([
             scroll.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            scroll.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            scroll.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            // Safe area: in landscape the view runs under the notch.
+            scroll.leadingAnchor.constraint(
+                equalTo: view.safeAreaLayoutGuide.leadingAnchor
+            ),
+            scroll.trailingAnchor.constraint(
+                equalTo: view.safeAreaLayoutGuide.trailingAnchor
+            ),
             scroll.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             stack.topAnchor.constraint(equalTo: guide.topAnchor, constant: 12),
-            stack.leadingAnchor.constraint(equalTo: guide.leadingAnchor, constant: 20),
-            stack.trailingAnchor.constraint(equalTo: guide.trailingAnchor, constant: -20),
+            // Centered column, capped so landscape and iPad don't stretch the
+            // form and its buttons across the whole screen.
+            guide.widthAnchor.constraint(equalTo: frame.widthAnchor),
+            stack.centerXAnchor.constraint(equalTo: guide.centerXAnchor),
+            stack.leadingAnchor.constraint(
+                greaterThanOrEqualTo: guide.leadingAnchor, constant: 20
+            ),
+            stack.widthAnchor.constraint(lessThanOrEqualToConstant: Self.maxContentWidth),
             stack.bottomAnchor.constraint(equalTo: guide.bottomAnchor, constant: -24),
-            stack.widthAnchor.constraint(equalTo: frame.widthAnchor, constant: -40),
+            fillWidth,
             emailField.heightAnchor.constraint(equalToConstant: 44),
             codeField.heightAnchor.constraint(equalToConstant: 52),
             sendButton.heightAnchor.constraint(equalToConstant: 52)

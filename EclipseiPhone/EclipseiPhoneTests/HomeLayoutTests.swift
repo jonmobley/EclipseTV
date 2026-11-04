@@ -113,6 +113,28 @@ struct HomeLayoutTests {
         #expect(width - used < CGFloat(columns))
     }
 
+    /// iPad landscape packs Recent tighter than portrait so Home fits on screen.
+    @Test func iPadLandscapeRecentTilesStayModerate() {
+        let landscape = LibraryGridViewController.homeRecentTileSize(
+            containerWidth: 1210,
+            sectionInset: inset,
+            spacing: spacing,
+            containerHeight: 760
+        )
+        let portrait = LibraryGridViewController.homeRecentTileSize(
+            containerWidth: 834,
+            sectionInset: inset,
+            spacing: spacing,
+            containerHeight: 1130
+        )
+        #expect(landscape.width <= LibraryGridViewController.wideLandscapeRecentMaxTile)
+        #expect(landscape.width > LibraryGridViewController.phoneLandscapeRecentMaxTile)
+        // Portrait iPad keeps Display Mode's own column count.
+        #expect(portrait == LibraryGridViewController.homeRecentTileSize(
+            containerWidth: 834, sectionInset: inset, spacing: spacing
+        ))
+    }
+
     /// The Home collection view itself must emit the compact tile, not only the helper.
     @Test func phoneLandscapeRecentCellsMatchTheCompactTile() {
         let width: CGFloat = 780

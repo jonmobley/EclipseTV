@@ -11,6 +11,9 @@ import UIKit
 /// Native host CONTROLS sheet for the Live Poll room.
 final class QuestPollHostViewController: UIViewController {
 
+    /// Widest the content column grows (landscape phone, iPad).
+    private static let maxContentWidth: CGFloat = 560
+
     /// One-step advance / QR / extend / skip command.
     var onAdvance: ((LivePollHostCommand) -> Void)?
     /// Ends the room after the host confirms.
@@ -142,16 +145,31 @@ final class QuestPollHostViewController: UIViewController {
 
         let guide = scroll.contentLayoutGuide
         let frame = scroll.frameLayoutGuide
+        let fillWidth = stack.widthAnchor.constraint(
+            equalTo: frame.widthAnchor, constant: -40
+        )
+        fillWidth.priority = .defaultHigh
         NSLayoutConstraint.activate([
             scroll.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            scroll.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            scroll.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            // Safe area: in landscape the view runs under the notch.
+            scroll.leadingAnchor.constraint(
+                equalTo: view.safeAreaLayoutGuide.leadingAnchor
+            ),
+            scroll.trailingAnchor.constraint(
+                equalTo: view.safeAreaLayoutGuide.trailingAnchor
+            ),
             scroll.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             stack.topAnchor.constraint(equalTo: guide.topAnchor, constant: 20),
-            stack.leadingAnchor.constraint(equalTo: guide.leadingAnchor, constant: 20),
-            stack.trailingAnchor.constraint(equalTo: guide.trailingAnchor, constant: -20),
+            // Centered column, capped so landscape and iPad don't stretch the
+            // form and its buttons across the whole screen.
+            guide.widthAnchor.constraint(equalTo: frame.widthAnchor),
+            stack.centerXAnchor.constraint(equalTo: guide.centerXAnchor),
+            stack.leadingAnchor.constraint(
+                greaterThanOrEqualTo: guide.leadingAnchor, constant: 20
+            ),
+            stack.widthAnchor.constraint(lessThanOrEqualToConstant: Self.maxContentWidth),
             stack.bottomAnchor.constraint(equalTo: guide.bottomAnchor, constant: -28),
-            stack.widthAnchor.constraint(equalTo: frame.widthAnchor, constant: -40),
+            fillWidth,
             primaryButton.heightAnchor.constraint(equalToConstant: 52),
             extendButton.heightAnchor.constraint(equalToConstant: 48),
             skipButton.heightAnchor.constraint(equalToConstant: 48),

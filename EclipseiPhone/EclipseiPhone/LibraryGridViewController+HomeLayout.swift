@@ -307,6 +307,10 @@ extension LibraryGridViewController {
     /// the screen. This cap adds columns until the tile fits.
     static let phoneLandscapeRecentMaxTile: CGFloat = 128
 
+    /// Largest Home Recent tile on a wide landscape pane that isn't a phone
+    /// (iPad full screen or a wide Split View pane).
+    static let wideLandscapeRecentMaxTile: CGFloat = 200
+
     /// Columns for Home Recent. Display Mode's count, plus extra on phone landscape.
     static func homeRecentColumnCount(
         containerWidth: CGFloat,
@@ -319,12 +323,21 @@ extension LibraryGridViewController {
             sectionInset: sectionInset,
             spacing: spacing
         )
-        guard StackedHeroMetrics.isPhoneLandscapePane(
+        let maxTile: CGFloat
+        if StackedHeroMetrics.isPhoneLandscapePane(
             width: containerWidth, height: containerHeight
-        ) else { return base }
+        ) {
+            maxTile = phoneLandscapeRecentMaxTile
+        } else if containerHeight > 0, containerWidth > containerHeight * 1.15 {
+            // iPad (or any wide pane) turned sideways: the portrait column count
+            // left 250pt+ squares that pushed the rest of Home below the fold.
+            maxTile = wideLandscapeRecentMaxTile
+        } else {
+            return base
+        }
         let available = containerWidth - sectionInset * 2
         guard available > 0 else { return base }
-        let slot = phoneLandscapeRecentMaxTile + spacing
+        let slot = maxTile + spacing
         let fitted = Int(ceil((available + spacing) / slot))
         return min(max(base, fitted), 8)
     }

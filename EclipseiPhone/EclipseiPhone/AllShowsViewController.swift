@@ -92,10 +92,10 @@ final class AllShowsViewController: UIViewController, UIAdaptivePresentationCont
                 equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8
             ),
             filterBar.leadingAnchor.constraint(
-                equalTo: view.leadingAnchor, constant: 20
+                equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 20
             ),
             filterBar.trailingAnchor.constraint(
-                equalTo: view.trailingAnchor, constant: -20
+                equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -20
             ),
             tableView.topAnchor.constraint(
                 equalTo: filterBar.bottomAnchor, constant: 4

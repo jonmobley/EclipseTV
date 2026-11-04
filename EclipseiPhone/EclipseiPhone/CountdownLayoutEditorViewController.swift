@@ -139,10 +139,10 @@ final class CountdownLayoutEditorViewController: UIViewController,
                 equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -12
             ),
             instructionLabel.leadingAnchor.constraint(
-                equalTo: view.leadingAnchor, constant: 20
+                equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 20
             ),
             instructionLabel.trailingAnchor.constraint(
-                equalTo: view.trailingAnchor, constant: -20
+                equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -20
             ),
             instructionLabel.bottomAnchor.constraint(
                 equalTo: resetButton.topAnchor, constant: -8

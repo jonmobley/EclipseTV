@@ -267,11 +267,18 @@ extension iPhoneMainViewController {
         cancelButton.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(cancelButton)
 
+        // Full width on a portrait phone, capped so it isn't a screen-wide bar in
+        // landscape or on iPad; kept inside the safe area clear of the notch.
+        let safe = view.safeAreaLayoutGuide
+        let fillWidth = cancelButton.widthAnchor.constraint(
+            equalTo: safe.widthAnchor, constant: -80
+        )
+        fillWidth.priority = .defaultHigh
         NSLayoutConstraint.activate([
-            cancelButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            cancelButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -24),
-            cancelButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 40),
-            cancelButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -40),
+            cancelButton.centerXAnchor.constraint(equalTo: safe.centerXAnchor),
+            cancelButton.bottomAnchor.constraint(equalTo: safe.bottomAnchor, constant: -24),
+            cancelButton.widthAnchor.constraint(lessThanOrEqualToConstant: 360),
+            fillWidth,
             cancelButton.heightAnchor.constraint(equalToConstant: 50)
         ])
 

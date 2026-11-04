@@ -207,6 +207,21 @@ extension LibraryGridViewController {
         return max(0, collectionView.contentSize.height - viewport)
     }
 
+    /// Re-measures the floating banner stack and gives the grid matching scroll room.
+    ///
+    /// Without it the sync banner sat on top of the last row with no way to scroll
+    /// those tiles clear — in phone landscape that is a third of the visible grid.
+    func syncBottomChromeReserve() {
+        var reserve: CGFloat = 0
+        if let bottomChrome,
+           bottomChrome.arrangedSubviews.contains(where: { !$0.isHidden && $0.alpha > 0.01 }) {
+            reserve = bottomChrome.bounds.height + 8
+        }
+        guard abs(reserve - bottomChromeReserve) > 0.5 else { return }
+        bottomChromeReserve = reserve
+        syncHeroOverlayInsets(preservingProgress: currentHeroScrollProgress())
+    }
+
     /// Top content inset so the grid starts below the pinned hero (0 in landscape).
     ///
     /// The inset stays at the expanded footprint so tiles scroll under the card.
@@ -220,9 +235,9 @@ extension LibraryGridViewController {
         // Home already pads via section insets + safe area; the extra sectionInset
         // on contentInset.bottom was a ~16pt dead scroll bump. Show mode still
         // wants that breathing room under the last media row.
-        let bottom = isShowMode
+        let bottom = (isShowMode
             ? miniPlayerBottomInset + sectionInset
-            : miniPlayerBottomInset
+            : miniPlayerBottomInset) + bottomChromeReserve
 
         var inset = collectionView.contentInset
         let topChanged = abs(inset.top - top) > 0.5

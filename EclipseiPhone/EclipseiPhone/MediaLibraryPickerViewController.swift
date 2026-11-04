@@ -146,30 +146,37 @@ final class MediaLibraryPickerViewController: UIViewController {
         view.addSubview(emptyLabel)
 
         NSLayoutConstraint.activate([
+            // Safe area, not the view: in landscape the view runs under the notch.
+            // The extra top gap clears the glass bar buttons, which hang below a
+            // landscape navigation bar.
             filterControl.topAnchor.constraint(
-                equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8
+                equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12
             ),
             filterControl.leadingAnchor.constraint(
-                equalTo: view.leadingAnchor, constant: 16
+                equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 16
             ),
             filterControl.trailingAnchor.constraint(
-                equalTo: view.trailingAnchor, constant: -16
+                equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16
             ),
 
             collectionView.topAnchor.constraint(
                 equalTo: filterControl.bottomAnchor, constant: 8
             ),
-            collectionView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            collectionView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            collectionView.leadingAnchor.constraint(
+                equalTo: view.safeAreaLayoutGuide.leadingAnchor
+            ),
+            collectionView.trailingAnchor.constraint(
+                equalTo: view.safeAreaLayoutGuide.trailingAnchor
+            ),
             collectionView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
 
             emptyLabel.centerXAnchor.constraint(equalTo: collectionView.centerXAnchor),
             emptyLabel.centerYAnchor.constraint(equalTo: collectionView.centerYAnchor),
             emptyLabel.leadingAnchor.constraint(
-                greaterThanOrEqualTo: view.leadingAnchor, constant: 32
+                greaterThanOrEqualTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 32
             ),
             emptyLabel.trailingAnchor.constraint(
-                lessThanOrEqualTo: view.trailingAnchor, constant: -32
+                lessThanOrEqualTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -32
             )
         ])
 

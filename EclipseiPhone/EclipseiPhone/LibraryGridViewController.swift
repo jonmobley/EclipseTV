@@ -312,6 +312,7 @@ final class LibraryGridViewController: UIViewController {
             guard miniPlayerBottomInset != oldValue else { return }
             syncHeroOverlayInsets(preservingProgress: currentHeroScrollProgress())
             bottomChromeBottomConstraint?.constant = -(miniPlayerBottomInset + 20)
+            bottomChromeTrailingConstraint?.constant = -bottomChromeTrailingInset
             updateHomeVerticalScrollPolicy()
         }
     }
@@ -455,6 +456,21 @@ final class LibraryGridViewController: UIViewController {
 
     var emptyTopConstraint: NSLayoutConstraint?
     var bottomChromeBottomConstraint: NSLayoutConstraint?
+    var bottomChromeTrailingConstraint: NSLayoutConstraint?
+    /// Sync banner + Music swipe hint stack floating over the bottom of the grid.
+    weak var bottomChrome: UIStackView?
+    /// Grid scroll room taken by `bottomChrome` while it shows, so the last row
+    /// can scroll clear of the banner instead of sitting under it.
+    var bottomChromeReserve: CGFloat = 0
+
+    /// Trailing gap for the banner stack. Clears the Music circle while it sits
+    /// alone at the bottom corner; with the mini player up, the stack rides
+    /// above the card and only needs the normal inset.
+    var bottomChromeTrailingInset: CGFloat {
+        guard miniPlayerBottomInset == 0 else { return sectionInset }
+        return AudioMiniPlayerView.compactTrailingInset
+            + AudioMiniPlayerBubbleView.side + 8
+    }
 
     // MARK: - Init
 
@@ -551,13 +567,19 @@ final class LibraryGridViewController: UIViewController {
             equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -20
         )
         bottomChromeBottomConstraint = bottomChromeBottom
+        self.bottomChrome = bottomChrome
+        // Follows the grid column, not the view: in landscape Show the grid sits beside
+        // the preview, and a full-width banner covered the preview and sat under the notch.
+        let bottomChromeTrailing = bottomChrome.trailingAnchor.constraint(
+            equalTo: view.safeAreaLayoutGuide.trailingAnchor,
+            constant: -bottomChromeTrailingInset
+        )
+        bottomChromeTrailingConstraint = bottomChromeTrailing
         NSLayoutConstraint.activate([
             bottomChrome.leadingAnchor.constraint(
-                equalTo: view.leadingAnchor, constant: sectionInset
+                equalTo: gridHost.leadingAnchor, constant: sectionInset
             ),
-            bottomChrome.trailingAnchor.constraint(
-                equalTo: view.trailingAnchor, constant: -sectionInset
-            ),
+            bottomChromeTrailing,
             bottomChromeBottom
         ])
         installChromeLayout()
@@ -767,6 +789,7 @@ final class LibraryGridViewController: UIViewController {
         // rotation / Display Mode changes land on the right transform.
         updateHeroCollapse()
         layoutForeignLivePreview()
+        syncBottomChromeReserve()
         // Phone turn: keep the Camera tile upright without rebuilding the freeze still.
         syncVisibleCameraTileOrientation()
         liveHeader.layoutCameraPreviewIfNeeded()

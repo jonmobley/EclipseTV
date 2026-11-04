@@ -15,10 +15,19 @@ final class EclipseSyncStatusBanner: UIView {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        backgroundColor = UIColor.systemOrange.withAlphaComponent(0.15)
+        // Opaque base under the orange tint: the banner floats over the grid, and a
+        // see-through one let tiles scrolling beneath show through the text.
+        backgroundColor = .systemBackground
         layer.cornerRadius = 10
         clipsToBounds = true
         isHidden = true
+
+        let tint = UIView()
+        tint.backgroundColor = UIColor.systemOrange.withAlphaComponent(0.15)
+        tint.isUserInteractionEnabled = false
+        tint.frame = bounds
+        tint.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        addSubview(tint)
 
         label.font = .preferredFont(forTextStyle: .footnote)
         label.adjustsFontForContentSizeCategory = true

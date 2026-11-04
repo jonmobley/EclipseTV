@@ -65,33 +65,55 @@ final class QuestPollJoinQRViewController: UIViewController {
         hint.numberOfLines = 2
         hint.translatesAutoresizingMaskIntoConstraints = false
 
-        view.addSubview(imageView)
-        view.addSubview(codeLabel)
-        view.addSubview(hint)
+        // Code + link read as one block; the QR sits above it in portrait and
+        // beside it in landscape, where 240pt plus the text was taller than the screen.
+        let textStack = UIStackView(arrangedSubviews: [codeLabel, hint])
+        textStack.axis = .vertical
+        textStack.spacing = 8
+        textStack.alignment = .fill
+
+        let contentStack = UIStackView(arrangedSubviews: [imageView, textStack])
+        contentStack.alignment = .center
+        contentStack.translatesAutoresizingMaskIntoConstraints = false
+        self.contentStack = contentStack
+        view.addSubview(contentStack)
+
+        let safe = view.safeAreaLayoutGuide
+        // Full 240pt when it fits; otherwise the QR shrinks to the safe height.
+        let preferredSide = imageView.widthAnchor.constraint(equalToConstant: 240)
+        preferredSide.priority = .defaultHigh
         NSLayoutConstraint.activate([
-            imageView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            imageView.centerYAnchor.constraint(
-                equalTo: view.centerYAnchor, constant: -40
+            imageView.widthAnchor.constraint(equalTo: imageView.heightAnchor),
+            imageView.widthAnchor.constraint(lessThanOrEqualToConstant: 240),
+            imageView.heightAnchor.constraint(
+                lessThanOrEqualTo: safe.heightAnchor, constant: -32
             ),
-            imageView.widthAnchor.constraint(equalToConstant: 240),
-            imageView.heightAnchor.constraint(equalToConstant: 240),
-            codeLabel.topAnchor.constraint(
-                equalTo: imageView.bottomAnchor, constant: 20
+            preferredSide,
+            textStack.widthAnchor.constraint(lessThanOrEqualToConstant: 360),
+            contentStack.centerXAnchor.constraint(equalTo: safe.centerXAnchor),
+            contentStack.centerYAnchor.constraint(equalTo: safe.centerYAnchor),
+            contentStack.leadingAnchor.constraint(
+                greaterThanOrEqualTo: safe.leadingAnchor, constant: 20
             ),
-            codeLabel.leadingAnchor.constraint(
-                equalTo: view.leadingAnchor, constant: 20
-            ),
-            codeLabel.trailingAnchor.constraint(
-                equalTo: view.trailingAnchor, constant: -20
-            ),
-            hint.topAnchor.constraint(equalTo: codeLabel.bottomAnchor, constant: 8),
-            hint.leadingAnchor.constraint(
-                equalTo: view.leadingAnchor, constant: 20
-            ),
-            hint.trailingAnchor.constraint(
-                equalTo: view.trailingAnchor, constant: -20
+            contentStack.trailingAnchor.constraint(
+                lessThanOrEqualTo: safe.trailingAnchor, constant: -20
             )
         ])
+        applyContentAxis()
+        registerForTraitChanges([UITraitVerticalSizeClass.self]) {
+            (self: Self, _: UITraitCollection) in
+            self.applyContentAxis()
+        }
+    }
+
+    private var contentStack: UIStackView?
+
+    /// Stacks the QR over the code, or side by side when the screen is short.
+    private func applyContentAxis() {
+        guard let contentStack else { return }
+        let isShort = traitCollection.verticalSizeClass == .compact
+        contentStack.axis = isShort ? .horizontal : .vertical
+        contentStack.spacing = isShort ? 32 : 20
     }
 
     private func shareLink() {

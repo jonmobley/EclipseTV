@@ -66,7 +66,7 @@ final class DisplayModeMediaPreviewViewController: UIViewController {
                 equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12
             ),
             closeButton.trailingAnchor.constraint(
-                equalTo: view.trailingAnchor, constant: -16
+                equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16
             )
         ])
     }
