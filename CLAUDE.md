@@ -44,3 +44,10 @@
 - Upload from the CLI: `xcodebuild archive … -allowProvisioningUpdates`, then `xcodebuild -exportArchive` with `method=app-store-connect`, `destination=upload`, team `2YBTPD32DW`. Xcode's signed-in account is enough; the WebRTC "Upload Symbols Failed" warning is expected.
 - Note cards: tap expands or collapses, and the pencil edits (2026-10-31).
 - Note editor on iPhone is a full-height sheet only: a medium detent gets pushed to large by the keyboard, which looks like a stall halfway up (2026-11-01). The text stops at `keyboardLayoutGuide`, and Hide Keyboard shows while editing because Done closes the editor.
+- Live preview (hero) takes pinch and drag directly (2026-11-04, `LiveHeaderView+DirectAdjust`):
+  countdown pinch resizes / drag on the clock moves it (live through `CountdownClockLayoutPreview`,
+  saved on lift); stills pinch-zoom into a crop (`StillFramingGesture`, saved via `applyFraming`
+  when fingers lift, snapping to Fill/Fit within 3%). Like Photos: at plain Fit/Fill a swipe browses,
+  once cropped a one-finger drag pans. The Fit/Fill corner button turns into ↺ (reset) while adjusted.
+  Browse swipes and the home pager `require(toFail:)` the adjust pan, which fails at once when
+  there's nothing to drag. Off for video, overlays, locked output, remote operators.

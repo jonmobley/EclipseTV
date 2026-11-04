@@ -537,6 +537,12 @@ final class LibraryGridViewController: UIViewController {
         liveHeader.onToggleScreenFit = { [weak self] in
             self?.toggleLiveScreenFit()
         }
+        liveHeader.onAdjustCountdown = { [weak self] id, layout, isFinal in
+            self?.handleHeroCountdownAdjust(id: id, layout: layout, isFinal: isFinal)
+        }
+        liveHeader.onAdjustStill = { [weak self] id, outcome in
+            self?.handleHeroStillAdjust(id: id, outcome: outcome)
+        }
         liveHeader.onFlipCamera = { [weak self] in
             self?.flipLiveCameraLens()
         }

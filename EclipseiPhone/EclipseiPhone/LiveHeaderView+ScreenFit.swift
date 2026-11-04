@@ -16,7 +16,13 @@ extension LiveHeaderView {
     /// - Parameters:
     ///   - visible: Still or slideshow owns live output (not video / overlays).
     ///   - mode: Current framing; the icon reflects this mode.
-    func setScreenFitToggleVisible(_ visible: Bool, mode: MediaFitMode) {
+    ///   - showsReset: The live item was pinched or dragged, so the circle undoes
+    ///     that instead of switching Fit / Fill.
+    func setScreenFitToggleVisible(
+        _ visible: Bool,
+        mode: MediaFitMode,
+        showsReset: Bool = false
+    ) {
         guard visible else {
             screenFitButton?.removeFromSuperview()
             screenFitButton = nil
@@ -27,7 +33,7 @@ extension LiveHeaderView {
         if screenFitButton == nil {
             installScreenFitButton()
         }
-        applyScreenFitButtonAppearance(mode: mode)
+        applyScreenFitButtonAppearance(mode: mode, showsReset: showsReset)
         bringScreenFitChromeToFront()
         layoutSlideshowCountdownRing()
         applyInteractionForPresentation()
@@ -58,11 +64,11 @@ extension LiveHeaderView {
         screenFitButton = button
     }
 
-    private func applyScreenFitButtonAppearance(mode: MediaFitMode) {
+    private func applyScreenFitButtonAppearance(mode: MediaFitMode, showsReset: Bool) {
         guard let button = screenFitButton else { return }
         var config = button.configuration ?? .plain()
         config.image = UIImage(
-            systemName: mode.iconName,
+            systemName: showsReset ? "arrow.counterclockwise" : mode.iconName,
             withConfiguration: UIImage.SymbolConfiguration(
                 pointSize: 13, weight: .semibold
             )
@@ -72,6 +78,12 @@ extension LiveHeaderView {
             top: 8, leading: 8, bottom: 8, trailing: 8
         )
         button.configuration = config
+        if showsReset {
+            button.accessibilityLabel = "Reset Size and Position"
+            button.accessibilityValue = nil
+            button.accessibilityHint = nil
+            return
+        }
         button.accessibilityLabel = "Screen Fit"
         button.accessibilityValue = mode.rawValue
         button.accessibilityHint = mode == .fill

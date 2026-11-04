@@ -365,6 +365,11 @@ extension iPhoneMainViewController: UIScrollViewDelegate {
         for swipe in libraryViewController.liveHeader.browseSwipeRecognizers {
             homePagerScrollView.panGestureRecognizer.require(toFail: swipe)
         }
+        // Dragging a zoomed still or the countdown clock on the hero must not page
+        // to Music either; the drag fails at once when there is nothing to move.
+        if let adjustPan = libraryViewController.liveHeader.directAdjustPan {
+            homePagerScrollView.panGestureRecognizer.require(toFail: adjustPan)
+        }
     }
 
     private func embedMusicPage() {

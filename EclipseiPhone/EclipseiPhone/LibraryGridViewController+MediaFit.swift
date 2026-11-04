@@ -155,10 +155,11 @@ extension LibraryGridViewController {
     ///
     /// The circle appears only when the two framings it switches between are
     /// different pictures, so a still already shaped like the panel doesn't get a
-    /// button that changes nothing. That includes a still the user has positioned by
-    /// hand: the circle means Fit ↔ Fill, and pressing it into service as "undo my
-    /// crop" would be a second verb wearing the same icon. Resetting a matching
-    /// still's position lives in the ⋯ Screen Fit menu instead.
+    /// button that changes nothing.
+    ///
+    /// Once a still or the countdown clock has been pinched or dragged, the circle
+    /// turns into a reset arrow (its own icon, so it is never mistaken for Fit /
+    /// Fill) that puts it back. That shows even for a panel-shaped still.
     ///
     /// A slideshow keeps the circle whatever its slides look like — the aspect
     /// changes from slide to slide, so the choice still means something.
@@ -167,8 +168,17 @@ extension LibraryGridViewController {
     /// yet either, and `didUpdateThumbnailFor` re-runs this once one lands. A button
     /// that appears late beats one that vanishes under a finger.
     func syncLiveScreenFitChrome() {
+        let target = liveHeroAdjustTarget()
+        liveHeader.directAdjustTarget = target
         guard showsLiveHero, !isLiveFromOtherShow else {
             liveHeader.setScreenFitToggleVisible(false, mode: .fit)
+            return
+        }
+        if case .countdown(let id) = target {
+            let layout = CountdownStore.shared.countdown(id: id)?.layout ?? .default
+            liveHeader.setScreenFitToggleVisible(
+                layout != .default, mode: .fit, showsReset: true
+            )
             return
         }
         let mgr = ExternalDisplayManager.shared
@@ -192,12 +202,20 @@ extension LibraryGridViewController {
         // scrubber and duration label.
         guard let id = store.currentId,
               let item = store.items.first(where: { $0.id == id }),
-              !item.isVideo,
-              MediaFitAvailability.fitDiffersFromFill(forId: item.id) == true else {
+              !item.isVideo else {
             liveHeader.setScreenFitToggleVisible(false, mode: .fit)
             return
         }
-        liveHeader.setScreenFitToggleVisible(true, mode: liveScreenFitMode(forId: item.id))
+        let isFramed = MediaFramingStore.hasFraming(forId: item.id)
+        guard isFramed || MediaFitAvailability.fitDiffersFromFill(forId: item.id) == true else {
+            liveHeader.setScreenFitToggleVisible(false, mode: .fit)
+            return
+        }
+        liveHeader.setScreenFitToggleVisible(
+            true,
+            mode: liveScreenFitMode(forId: item.id),
+            showsReset: isFramed
+        )
     }
 
     /// Framing the hero circle advertises for `id`: a custom position reads as Fill,
@@ -213,8 +231,17 @@ extension LibraryGridViewController {
 
     /// Flips Fit / Fill for the live item or slideshow (hero shortcut).
     ///
-    /// Also clears any custom position so the toggle always lands on Fit or Fill.
+    /// When the live still or countdown clock has been pinched or dragged, the
+    /// circle is a reset instead: the still goes back to its Fit / Fill and the
+    /// clock to its default size and place.
     func toggleLiveScreenFit() {
+        if case .countdown(let id) = liveHeader.directAdjustTarget {
+            CountdownStore.shared.setLayout(id: id, layout: .default)
+            CountdownClockLayoutPreview.set(nil, for: id)
+            Haptics.selection()
+            syncLiveScreenFitChrome()
+            return
+        }
         if let slideshow = activeLiveSlideshow() {
             applyScreenFit(slideshow.isFill ? .fit : .fill, to: slideshow)
             return
@@ -222,7 +249,83 @@ extension LibraryGridViewController {
         guard let id = store.currentId,
               let item = store.items.first(where: { $0.id == id }),
               !item.isVideo else { return }
+        if MediaFramingStore.hasFraming(forId: item.id) {
+            clearFraming(for: item)
+            return
+        }
         let next: MediaFitMode = liveScreenFitMode(forId: item.id) == .fill ? .fit : .fill
         applyScreenFit(next, to: item)
+    }
+
+    // MARK: - Direct Adjust (pinch / drag on the hero)
+
+    /// What a pinch or drag on the hero may change right now, if anything.
+    ///
+    /// Only the open Show's own live still or countdown, and never while output is
+    /// locked, while following a director, or while a slideshow owns the hero (its
+    /// swipes step slides, and its framing is per slideshow, not per still).
+    func liveHeroAdjustTarget() -> DirectAdjustTarget? {
+        guard showsLiveHero,
+              !isLiveFromOtherShow,
+              !isLiveOutputLocked,
+              !ShowLiveSession.shared.isRemoteOperator,
+              !showsLivePollPracticeHeader else { return nil }
+        let mgr = ExternalDisplayManager.shared
+        if mgr.isCountdownLive, let id = CountdownController.shared.liveCountdownId {
+            return .countdown(id)
+        }
+        guard !mgr.isOverlayLive,
+              !mgr.isParkedOnQuickChangeStill,
+              !mgr.isJoinedLive,
+              !isBlackSelected,
+              !isLogoSelected,
+              !isScreensaverSelected,
+              activeLiveSlideshow() == nil,
+              let id = store.currentId,
+              let item = store.items.first(where: { $0.id == id }),
+              !item.isVideo else { return nil }
+        return .still(
+            id: id,
+            mode: MediaFitSettings.mode(forId: id),
+            isAdjusted: MediaFramingStore.hasFraming(forId: id)
+        )
+    }
+
+    /// Countdown clock pinched or dragged on the hero: the output follows while the
+    /// fingers move, and the layout is saved when they lift.
+    func handleHeroCountdownAdjust(
+        id: UUID,
+        layout: CountdownClockLayout,
+        isFinal: Bool
+    ) {
+        guard isFinal else {
+            CountdownClockLayoutPreview.set(layout, for: id)
+            return
+        }
+        CountdownStore.shared.setLayout(id: id, layout: layout)
+        CountdownClockLayoutPreview.set(nil, for: id)
+        syncLiveScreenFitChrome()
+    }
+
+    /// Still pinched or dragged on the hero: save the position (or go back to plain
+    /// Fit / Fill), send it to every screen, and repaint the hero.
+    func handleHeroStillAdjust(id: String, outcome: StillFramingGesture.Outcome) {
+        guard let item = store.items.first(where: { $0.id == id }) else {
+            refreshLiveHeader()
+            return
+        }
+        switch outcome {
+        case .custom(let framing):
+            applyFraming(framing, to: item)
+        case .mode(let mode):
+            if MediaFramingStore.hasFraming(forId: id)
+                || MediaFitSettings.mode(forId: id) != mode {
+                applyScreenFit(mode, to: item)
+            } else {
+                // Pinched and let go without changing anything: just put the hero
+                // back from what is saved.
+                refreshLiveHeader()
+            }
+        }
     }
 }

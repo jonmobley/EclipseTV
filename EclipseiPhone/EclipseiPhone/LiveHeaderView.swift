@@ -70,6 +70,26 @@ final class LiveHeaderView: UIView {
     var cameraPreviewHost: UIView?
     /// In-hero live camera, fed by `CameraManager`'s frame tap.
     var cameraPreview: CameraMirrorView?
+    /// What a pinch or drag on the expanded hero adjusts, if anything. Set by the
+    /// host controller; see `LiveHeaderView+DirectAdjust`.
+    var directAdjustTarget: DirectAdjustTarget? {
+        didSet {
+            guard directAdjustTarget != oldValue else { return }
+            applyInteractionForPresentation()
+        }
+    }
+    /// Unframed source of the still on the hero, for re-cropping under a pinch.
+    var directAdjustStill: (id: String, image: UIImage)?
+    /// Pinch / drag progress while a direct adjustment is under way.
+    var directAdjustSession: DirectAdjustSession?
+    /// One-finger drag that moves the countdown clock or a zoomed still.
+    var directAdjustPan: UIPanGestureRecognizer?
+    /// Pinch that sizes the countdown clock or zooms a still.
+    var directAdjustPinch: UIPinchGestureRecognizer?
+    /// Live layout while the countdown clock is pinched or dragged; `isFinal` on lift.
+    var onAdjustCountdown: ((_ id: UUID, _ layout: CountdownClockLayout, _ isFinal: Bool) -> Void)?
+    /// What to save once the fingers lift from a pinched or dragged still.
+    var onAdjustStill: ((_ id: String, _ outcome: StillFramingGesture.Outcome) -> Void)?
 
     /// Identity of the last applied live content; used to skip no-op crossfades.
     private var presentedContentKey: String?
@@ -188,6 +208,7 @@ final class LiveHeaderView: UIView {
         translatesAutoresizingMaskIntoConstraints = false
         setupViews()
         installHeroBrowseGestures()
+        installDirectAdjustGestures()
     }
 
     required init?(coder: NSCoder) {
@@ -426,6 +447,7 @@ final class LiveHeaderView: UIView {
                     )
                     self.imageView.contentMode = framed.contentMode
                     self.imageView.image = framed.image
+                    self.directAdjustStill = thumbnail.map { (item.id, $0) }
                 }
                 self.imageView.isHidden = false
                 self.imageView.alpha = 1
@@ -632,6 +654,7 @@ final class LiveHeaderView: UIView {
             || slideshowRibbonButton != nil
             || screenFitButton != nil
             || cameraFlipButton != nil
+            || directAdjustTarget != nil
     }
 
     /// Opens whatever fullscreen surface the expanded hero stands in for.
@@ -724,6 +747,14 @@ final class LiveHeaderView: UIView {
                 self?.transitionSnapshot = nil
             }
         }
+    }
+
+    /// Makes the next `applyContent` repaint even if its key matches.
+    ///
+    /// A pinch draws the still straight into `imageView`, so the content the key
+    /// names is no longer what is on screen.
+    func forgetPresentedContent() {
+        presentedContentKey = nil
     }
 
     /// The hero as it looks now, drawn into a still (fallback for `snapshotView`).
