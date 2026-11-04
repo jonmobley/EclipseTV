@@ -124,7 +124,7 @@ struct ThumbnailTypeIconTests {
             typeIcon: .website
         )
         cell.layoutIfNeeded()
-        #expect(cell.captionLabel.textAlignment == .center)
+        #expect(cell.captionLabel.textAlignment == .left)
         #expect(abs(cell.typeIconOverlay.frame.minY - ThumbnailTypeIconView.inset) < 0.5)
         #expect(cell.captionLabel.frame.minY > cell.typeIconOverlay.frame.maxY)
         let trailingInset = cell.cardView.bounds.width - cell.captionLabel.frame.maxX
@@ -138,7 +138,7 @@ struct ThumbnailTypeIconTests {
         cell.captionLabel.isHidden = false
         cell.updateCaptionScrim()
         cell.layoutIfNeeded()
-        #expect(cell.captionLabel.textAlignment == .center)
+        #expect(cell.captionLabel.textAlignment == .left)
         #expect(
             cell.captionLabel.frame.maxX
                 <= cell.durationLabel.frame.minX - ThumbnailTypeIconView.titleSpacing + 0.5
@@ -183,7 +183,7 @@ struct ThumbnailTypeIconTests {
         cell.configureCamera(isLive: false, lastFrame: nil, warmPreview: false)
         #expect(cell.typeIconOverlay.appliedIcon == .camera)
         #expect(cell.typeIconOverlay.isHidden == false)
-        #expect(cell.captionLabel.textAlignment == .center)
+        #expect(cell.captionLabel.textAlignment == .left)
 
         cell.configureSpecial(
             title: "QuestPoll",
@@ -212,7 +212,7 @@ struct ThumbnailTypeIconTests {
 
         cell.configureActionTile(title: "New Show")
         #expect(cell.typeIconOverlay.isHidden)
-        #expect(cell.captionLabel.textAlignment == .center)
+        #expect(cell.captionLabel.textAlignment == .left)
     }
 
     @Test func videoThumbnailShowsDurationOverlay() {
