@@ -47,6 +47,7 @@ extension WebRemoteViewController {
 
     /// Takes the active tab's web view off the stage; the tab keeps it.
     func detachActiveTab() {
+        autoScroller.stop()
         webURLObservation = nil
         webView?.removeFromSuperview()
         webView = nil

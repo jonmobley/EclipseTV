@@ -53,6 +53,16 @@ final class WebRemoteViewController: UIViewController {
     var sendToTVBarButton: UIBarButtonItem!
     var bookmarksButton: UIBarButtonItem!
     var closeButton: UIBarButtonItem!
+    /// Starts / stops the page scrolling by itself; long-press picks the speed.
+    var autoScrollBarButton: UIBarButtonItem!
+    /// Landscape overlay Auto Scroll.
+    var overlayAutoScrollButton: UIButton!
+    /// Drives the active tab's page down at the chosen speed.
+    lazy var autoScroller: WebAutoScroller = {
+        let scroller = WebAutoScroller(scrollView: { [weak self] in self?.webView?.scrollView })
+        scroller.onChange = { [weak self] in self?.updateAutoScrollChrome() }
+        return scroller
+    }()
     /// Landscape overlay Back — shown only once there is history to go back to.
     var overlayBackButton: UIButton!
     var overlayRefreshButton: UIButton!
@@ -170,6 +180,7 @@ final class WebRemoteViewController: UIViewController {
         }
         guard isBeingDismissed || isMovingFromParent else { return }
         isLeaving = true
+        autoScroller.stop()
         webURLObservation = nil
         // Park the warm sessions (home LiveHeader reclaims the live one).
         relinquishAllTabs()

@@ -379,6 +379,12 @@ extension WebRemoteViewController: UIScrollViewDelegate,
         pushWebScrollProgress()
     }
 
+    /// A finger on the page takes over from Auto Scroll.
+    func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+        guard scrollView === webView?.scrollView else { return }
+        autoScroller.stop()
+    }
+
     // MARK: - WKNavigationDelegate
 
     func webView(
@@ -399,6 +405,8 @@ extension WebRemoteViewController: UIScrollViewDelegate,
         }
         refreshTabStrip()
         guard webView === self.webView else { return }
+        // A new page starts from its top, by hand.
+        autoScroller.stop()
         captureBrowserSessionRootIfNeeded()
         updateBrowserChrome()
         guard let url = webView.url else { return }

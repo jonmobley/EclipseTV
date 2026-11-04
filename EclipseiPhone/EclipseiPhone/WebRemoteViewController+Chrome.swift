@@ -63,13 +63,16 @@ extension WebRemoteViewController {
         )
         closeButton.accessibilityHint =
             "Closes the browser. The TV keeps showing this site."
+        autoScrollBarButton = makeAutoScrollBarButton()
         navigationItem.rightBarButtonItems = barTrailingItems(showsSendToTV: false)
         setupOverlayChrome()
     }
 
     /// Right-to-left order of the nav bar's trailing items.
     private func barTrailingItems(showsSendToTV: Bool) -> [UIBarButtonItem] {
-        var items: [UIBarButtonItem] = [closeButton, bookmarksButton, refreshBarButton, newTabBarButton]
+        var items: [UIBarButtonItem] = [
+            closeButton, bookmarksButton, autoScrollBarButton, refreshBarButton, newTabBarButton
+        ]
         if showsSendToTV {
             items.append(sendToTVBarButton)
         }
@@ -104,6 +107,7 @@ extension WebRemoteViewController {
             action: nil
         )
         overlayBookmarksButton.showsMenuAsPrimaryAction = true
+        overlayAutoScrollButton = makeOverlayAutoScrollButton()
         overlayCloseButton = UIButton(type: .system)
         overlayCloseButton.applyPreviewCloseAppearance()
         overlayCloseButton.translatesAutoresizingMaskIntoConstraints = true
@@ -123,8 +127,8 @@ extension WebRemoteViewController {
     /// Every overlay button.
     var allOverlayChromeButtons: [UIButton] {
         [
-            overlayCloseButton, overlayBookmarksButton, overlayRefreshButton,
-            overlayNewTabButton, overlaySendToTVButton, overlayBackButton
+            overlayCloseButton, overlayBookmarksButton, overlayAutoScrollButton,
+            overlayRefreshButton, overlayNewTabButton, overlaySendToTVButton, overlayBackButton
         ]
     }
 
@@ -173,7 +177,8 @@ extension WebRemoteViewController {
     /// then Send to TV and Back only while they apply, so the fixed four never move.
     var visibleOverlayChromeButtons: [UIButton] {
         var buttons: [UIButton] = [
-            overlayCloseButton, overlayBookmarksButton, overlayRefreshButton, overlayNewTabButton
+            overlayCloseButton, overlayBookmarksButton, overlayAutoScrollButton,
+            overlayRefreshButton, overlayNewTabButton
         ]
         if activeTab.isPhoneOnly {
             buttons.append(overlaySendToTVButton)
@@ -236,7 +241,7 @@ extension WebRemoteViewController {
         overlayBookmarksButton?.menu = menu
     }
 
-    private func makeOverlayChromeButton(
+    func makeOverlayChromeButton(
         systemName: String,
         accessibilityLabel: String,
         action: Selector?
@@ -316,12 +321,13 @@ extension WebRemoteViewController {
                 UIAction(
                     title: "No saved websites",
                     attributes: .disabled
-                ) { _ in }
+                ) { _ in },
+                UIMenu(title: "", options: .displayInline, children: [autoScrollSpeedMenu()])
             ])
         }
 
         let currentURL = webView?.url
-        let children: [UIMenuElement] = pages.map { bookmark in
+        var children: [UIMenuElement] = pages.map { bookmark in
             let state: UIMenuElement.State =
                 isCurrentBookmark(bookmark, currentURL: currentURL) ? .on : .off
             return UIAction(
@@ -332,6 +338,7 @@ extension WebRemoteViewController {
                 self?.openSavedPage(bookmark)
             }
         }
+        children.append(UIMenu(title: "", options: .displayInline, children: [autoScrollSpeedMenu()]))
         return UIMenu(children: children)
     }
 
