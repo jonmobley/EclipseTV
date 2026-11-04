@@ -16,7 +16,7 @@
                         <rect key="frame" x="0.0" y="0.0" width="393" height="852"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
-                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" image="EclipseLogo" translatesAutoresizingMaskIntoConstraints="NO" id="logo-iv">
+                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" image="EclipseSplashMark" translatesAutoresizingMaskIntoConstraints="NO" id="logo-iv">
                                 <rect key="frame" x="96.5" y="326" width="200" height="200"/>
                                 <constraints>
                                     <constraint firstAttribute="width" secondItem="logo-iv" secondAttribute="height" multiplier="1:1" id="logo-aspect"/>
@@ -38,6 +38,6 @@
         </scene>
     </scenes>
     <resources>
-        <image name="EclipseLogo" width="1024" height="1024"/>
+        <image name="EclipseSplashMark" width="1024" height="1024"/>
     </resources>
 </document>

@@ -19,7 +19,7 @@ final class LaunchSplashView: UIView {
     // MARK: - Subviews
 
     private let logoView: UIImageView = {
-        let view = UIImageView(image: UIImage(named: "EclipseLogo"))
+        let view = UIImageView(image: UIImage(named: "EclipseSplashMark"))
         view.contentMode = .scaleAspectFit
         view.translatesAutoresizingMaskIntoConstraints = false
         return view
