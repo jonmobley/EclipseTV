@@ -72,4 +72,15 @@ extension LiveHeaderView: UIGestureRecognizerDelegate {
         guard let view = touch.view else { return true }
         return !(view is UIControl)
     }
+
+    /// Lets the pinch / drag start only when there is something to adjust; other
+    /// recognizers are unaffected. (UIView's own hook and the delegate method share
+    /// this selector, so one override answers both.)
+    override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        guard gestureRecognizer === directAdjustPan
+                || gestureRecognizer === directAdjustPinch else {
+            return super.gestureRecognizerShouldBegin(gestureRecognizer)
+        }
+        return directAdjustShouldBegin(gestureRecognizer)
+    }
 }

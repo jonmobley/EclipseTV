@@ -16,7 +16,13 @@ extension LiveHeaderView {
     /// - Parameters:
     ///   - visible: Still or slideshow owns live output (not video / overlays).
     ///   - mode: Current framing; the button shows this mode's name.
-    func setScreenFitToggleVisible(_ visible: Bool, mode: MediaFitMode) {
+    ///   - showsReset: The live item was pinched or dragged, so the circle undoes
+    ///     that instead of switching Fit / Fill.
+    func setScreenFitToggleVisible(
+        _ visible: Bool,
+        mode: MediaFitMode,
+        showsReset: Bool = false
+    ) {
         guard visible else {
             screenFitButton?.removeFromSuperview()
             screenFitButton = nil
@@ -27,7 +33,7 @@ extension LiveHeaderView {
         if screenFitButton == nil {
             installScreenFitButton()
         }
-        applyScreenFitButtonAppearance(mode: mode)
+        applyScreenFitButtonAppearance(mode: mode, showsReset: showsReset)
         bringScreenFitChromeToFront()
         layoutSlideshowCountdownRing()
         applyInteractionForPresentation()
@@ -58,18 +64,34 @@ extension LiveHeaderView {
         screenFitButton = button
     }
 
-    private func applyScreenFitButtonAppearance(mode: MediaFitMode) {
+    private func applyScreenFitButtonAppearance(mode: MediaFitMode, showsReset: Bool) {
         guard let button = screenFitButton else { return }
         // The word, not an icon: no symbol read clearly as "Fit" vs "Fill" at this size.
         var config = button.configuration ?? .plain()
-        config.image = nil
-        var title = AttributedString(mode.rawValue)
-        title.font = UIFont.systemFont(ofSize: 13, weight: .semibold)
-        config.attributedTitle = title
-        config.titleLineBreakMode = .byClipping
+        // While the live item is pinched or dragged the circle is a reset, and ↺
+        // reads clearly at this size.
+        if showsReset {
+            config.attributedTitle = nil
+            config.image = UIImage(
+                systemName: "arrow.counterclockwise",
+                withConfiguration: UIImage.SymbolConfiguration(pointSize: 13, weight: .semibold)
+            )
+        } else {
+            config.image = nil
+            var title = AttributedString(mode.rawValue)
+            title.font = UIFont.systemFont(ofSize: 13, weight: .semibold)
+            config.attributedTitle = title
+            config.titleLineBreakMode = .byClipping
+        }
         config.baseForegroundColor = .white
         config.contentInsets = .zero
         button.configuration = config
+        if showsReset {
+            button.accessibilityLabel = "Reset Size and Position"
+            button.accessibilityValue = nil
+            button.accessibilityHint = nil
+            return
+        }
         button.accessibilityLabel = "Screen Fit"
         button.accessibilityValue = mode.rawValue
         button.accessibilityHint = mode == .fill

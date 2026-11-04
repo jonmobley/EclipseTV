@@ -175,3 +175,10 @@
   view then pinches on *from the held zoom*, so a slow pinch stayed caught for good (found 2026-11-19). Once a pinch has
   held, the reader drives the zoom from finger spread (`PDFZoomSnap.fingerScale`). Only snap sizes inside the reader's
   zoom range count: a portrait page in a 16:9 frame only gets the fill-width catch.
+- Live preview (hero) takes pinch and drag directly (2026-11-04, `LiveHeaderView+DirectAdjust`):
+  countdown pinch resizes / drag on the clock moves it (live through `CountdownClockLayoutPreview`,
+  saved on lift); stills pinch-zoom into a crop (`StillFramingGesture`, saved via `applyFraming`
+  when fingers lift, snapping to Fill/Fit within 3%). Like Photos: at plain Fit/Fill a swipe browses,
+  once cropped a one-finger drag pans. The Fit/Fill corner button turns into ↺ (reset) while adjusted.
+  Browse swipes and the home pager `require(toFail:)` the adjust pan, which fails at once when
+  there's nothing to drag. Off for video, overlays, locked output, remote operators.
