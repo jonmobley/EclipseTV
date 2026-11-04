@@ -65,7 +65,12 @@ final class CameraPreviewView: UIView {
     func detach() {
         invalidateRotationObservations()
         rotationCoordinator = nil
+        // The simulator has no camera: its stub session never registered the
+        // observers the layer removes here, and clearing it throws (crash on leaving
+        // a Show). Leaving the stub attached is harmless.
+        #if !targetEnvironment(simulator)
         videoPreviewLayer.session = nil
+        #endif
     }
 
     /// Syncs program rotation so subjects stay upright however the phone is held.

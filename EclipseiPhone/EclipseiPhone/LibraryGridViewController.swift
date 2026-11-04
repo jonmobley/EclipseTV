@@ -109,7 +109,9 @@ final class LibraryGridViewController: UIViewController {
     var isLiveOutputLocked = false
 
     /// Open Show id while in Show mode; `nil` means Home (Recent ribbon).
-    var openShowId: UUID?
+    var openShowId: UUID? {
+        didSet { syncStatusBanner.isOnHome = openShowId == nil }
+    }
     /// Surface ids of the open Show as of the last album-store change. Anything new
     /// on the next change is a just-added tile the grid snaps to.
     var revealedShowSurface: (showId: UUID, ids: Set<String>)?
