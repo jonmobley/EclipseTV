@@ -62,3 +62,31 @@ Do not send captures over Multipeer. Do not expect CloudKit to populate the Appl
 9. **Tool libraries roam**
    - On device A: set a custom Background and Screensaver; import a camera frame and a cutaway still.
    - On device B: expect the same custom Background / Screensaver / frames / cutaways (account-global).
+
+10. **Prompter script follows the Show (Mac ⇄ iPad)**
+    - On the Mac, type a script in the Prompt window for Show A; within a minute the iPad's Prompter tile for Show A shows its first line, and the operator view shows the text. And back: edit on the iPad, the Mac's Prompt window updates.
+    - Code gate: Prompter records are unparented; `enqueueShareChildren` never lists them.
+
+11. **Clear propagates**
+    - Empty the script on one device; the other goes blank (not stale).
+
+12. **Concurrent edit**
+    - Airplane mode on both; edit the script on each; reconnect. The later edit wins on both devices, with no mixed text.
+
+13. **Typing while a remote edit lands**
+    - An iPad edit arrives while the Mac editor has focus: the Mac text does not jump; once the cursor leaves, the newer of the two is shown.
+
+14. **Show switch on the Mac**
+    - Switching Shows swaps scripts; the Media Library tab keeps the last Show's script.
+
+15. **Migration**
+    - A Mac updated from the single-script build shows its old script in the Show that was open, once.
+
+16. **Shared Show stays private**
+    - Owner's script never appears on a participant's device; a participant can keep their own script for that Show.
+
+17. **Delete Show**
+    - Delete on either device: the other drops the script; CloudKit Console shows no orphan `prompter-<id>` record.
+
+18. **Older builds ignore the record**
+    - An older build on a third device keeps syncing Shows unaffected by the Prompter record.
