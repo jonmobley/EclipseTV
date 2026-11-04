@@ -131,7 +131,7 @@ struct LivePreviewView: View {
             .foregroundStyle(.white)
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
-            .background(Color.red)
+            .background(Color(uiColor: .liveStroke))
             .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
     }
 }

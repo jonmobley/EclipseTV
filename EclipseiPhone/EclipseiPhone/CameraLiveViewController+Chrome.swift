@@ -393,9 +393,9 @@ extension CameraLiveViewController {
         config.baseForegroundColor = .white
         let practice = state == .practice
         config.title = practice ? "PRACTICE" : "LIVE"
-        config.baseBackgroundColor = practice ? .systemGray : .systemRed
+        config.baseBackgroundColor = practice ? .systemGray : .liveStroke
         if !practice {
-            // The pulsing red dot is the on-air tell; rehearsal does not earn it.
+            // The pulsing dot is the on-air tell; rehearsal does not earn it.
             let dot = UIImage.SymbolConfiguration(pointSize: 5, weight: .bold)
             config.image = UIImage(systemName: "circle.fill", withConfiguration: dot)
             config.imagePadding = 4

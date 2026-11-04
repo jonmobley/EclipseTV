@@ -664,7 +664,7 @@ final class LiveHeaderView: UIView {
             liveBadge.text = "LIVE LOCKED"
         } else {
             layer.borderColor = UIColor.separator.cgColor
-            liveBadge.backgroundColor = .systemRed
+            liveBadge.backgroundColor = .liveStroke
             liveBadge.text = "LIVE"
         }
         // Width is owned by collapse chrome (counter-scales with the hero transform).

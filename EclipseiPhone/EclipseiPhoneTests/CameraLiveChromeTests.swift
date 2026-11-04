@@ -19,7 +19,7 @@ struct CameraLiveChromeTests {
     }
 
     /// The feed can be the output with nobody watching it, so Practice Mode gets
-    /// its own pill rather than claiming an audience with red LIVE.
+    /// its own pill rather than claiming an audience with a LIVE pill.
     @Test func practiceFeedGetsAPracticePillNotLive() {
         #expect(
             CameraLiveBadgeState.resolve(

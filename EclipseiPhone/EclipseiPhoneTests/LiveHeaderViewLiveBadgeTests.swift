@@ -96,7 +96,7 @@ struct LiveHeaderViewLiveBadgeTests {
 
         header.setOutputLocked(false)
         #expect(header.liveBadge.text == "LIVE")
-        #expect(header.liveBadge.backgroundColor == UIColor.systemRed)
+        #expect(header.liveBadge.backgroundColor == UIColor.liveStroke)
     }
 
     private func makeHeader() -> LiveHeaderView {

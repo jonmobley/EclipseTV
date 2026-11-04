@@ -216,7 +216,7 @@ final class CameraLiveOutputThumbView: UIView {
         label.font = .systemFont(ofSize: 11, weight: .bold)
         label.textColor = .white
         label.textAlignment = .center
-        label.backgroundColor = .systemRed
+        label.backgroundColor = .liveStroke
         label.layer.cornerRadius = 3
         label.layer.masksToBounds = true
         label.translatesAutoresizingMaskIntoConstraints = false

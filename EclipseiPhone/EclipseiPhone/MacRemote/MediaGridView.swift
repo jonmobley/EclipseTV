@@ -87,7 +87,7 @@ struct MediaGridView: View {
                             .foregroundStyle(.white)
                             .padding(.horizontal, 7)
                             .padding(.vertical, 3)
-                            .background(item.isLive ? Color.red : Color.accentColor)
+                            .background(item.isLive ? Color(uiColor: .liveStroke) : Color.accentColor)
                             .clipShape(
                                 RoundedRectangle(cornerRadius: 6, style: .continuous)
                             )
