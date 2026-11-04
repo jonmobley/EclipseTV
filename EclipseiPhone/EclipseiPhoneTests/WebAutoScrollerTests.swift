@@ -62,6 +62,27 @@ struct WebAutoScrollerTests {
         #expect(!idle.isRunning)
     }
 
+    @Test func tapPausesAndResumesWhileDragOnlyPauses() throws {
+        let scroll = makeScrollView()
+        let frames = PrompterControllerTests.FakeFrames()
+        let scroller = try makeScroller(scroll: scroll, frames: frames)
+        scroller.start()
+        scroller.togglePlayPause()
+        #expect(scroller.state == .paused)
+        #expect(scroller.isActive)
+        #expect(!frames.isRunning)
+        frames.step(1)
+        #expect(scroll.contentOffset.y == 0)
+        scroller.togglePlayPause()
+        #expect(scroller.isRunning)
+        scroller.pause()
+        #expect(scroller.state == .paused)
+        scroller.toggle()
+        #expect(scroller.state == .off)
+        scroller.togglePlayPause()
+        #expect(scroller.isRunning)
+    }
+
     @Test func toggleAndStopNotifyAndPersistSpeed() throws {
         let scroll = makeScrollView()
         let suite = "WebAutoScroll.\(UUID().uuidString)"

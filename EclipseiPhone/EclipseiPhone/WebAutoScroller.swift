@@ -10,11 +10,18 @@ import UIKit
 /// Scrolls the phone browser's page down by itself at a chosen speed.
 ///
 /// It moves the page's own scroll view, so the existing scroll mirroring carries
-/// the position to AirPlay / HDMI. Stops at the bottom, when the user drags, and
-/// when the page or tab changes. Speed is a per-device setting shared with the
+/// the position to AirPlay / HDMI. The button turns it on and off; while on, a tap
+/// on the page pauses and resumes it and a drag pauses it. It turns off at the
+/// bottom and when the page or tab changes. Speed is a per-device setting on the
 /// Prompter's scale (40 pt/s × multiplier).
 @MainActor
 final class WebAutoScroller {
+
+    enum State: Equatable {
+        case off
+        case running
+        case paused
+    }
 
     static let speedKey = "EclipseTV.web.autoScrollSpeed"
 
@@ -27,8 +34,14 @@ final class WebAutoScroller {
     /// Called when running state or speed changes, for the chrome to repaint.
     var onChange: (() -> Void)?
 
-    private(set) var isRunning = false
+    private(set) var state: State = .off
     private(set) var speed: Double
+
+    /// Moving right now.
+    var isRunning: Bool { state == .running }
+
+    /// On, whether moving or paused: taps on the page then toggle it.
+    var isActive: Bool { state != .off }
 
     private let defaults: UserDefaults
     private let frames: PrompterFrameSource
@@ -52,22 +65,38 @@ final class WebAutoScroller {
         return Self.maxOffsetY(of: scroll) - scroll.contentOffset.y > 0.5
     }
 
+    /// Turns Auto Scroll on (or resumes it) when there is page left to scroll.
     func start() {
         guard !isRunning, canScroll else { return }
-        isRunning = true
+        state = .running
         frames.start()
         onChange?()
     }
 
-    func stop() {
+    /// Holds the page where it is; still on, so a tap resumes.
+    func pause() {
         guard isRunning else { return }
-        isRunning = false
+        state = .paused
         frames.stop()
         onChange?()
     }
 
+    /// Turns Auto Scroll off.
+    func stop() {
+        guard isActive else { return }
+        state = .off
+        frames.stop()
+        onChange?()
+    }
+
+    /// The button: on ↔ off.
     func toggle() {
-        isRunning ? stop() : start()
+        isActive ? stop() : start()
+    }
+
+    /// A tap on the page: running ↔ paused (and on, when off).
+    func togglePlayPause() {
+        isRunning ? pause() : start()
     }
 
     func setSpeed(_ multiplier: Double) {

@@ -379,10 +379,10 @@ extension WebRemoteViewController: UIScrollViewDelegate,
         pushWebScrollProgress()
     }
 
-    /// A finger on the page takes over from Auto Scroll.
+    /// A finger on the page holds Auto Scroll; a tap resumes it.
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
         guard scrollView === webView?.scrollView else { return }
-        autoScroller.stop()
+        autoScroller.pause()
     }
 
     // MARK: - WKNavigationDelegate

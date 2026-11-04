@@ -39,6 +39,7 @@ extension WebRemoteViewController {
             (webPanelView ?? stage).addSubview(web)
         }
         webView = web
+        installAutoScrollTapIfNeeded()
         observeSameDocumentNavigation(web)
         captureBrowserSessionRootIfNeeded()
         layoutPhoneWebViewport()

@@ -57,6 +57,8 @@ final class WebRemoteViewController: UIViewController {
     var autoScrollBarButton: UIBarButtonItem!
     /// Landscape overlay Auto Scroll.
     var overlayAutoScrollButton: UIButton!
+    /// Page tap that pauses / resumes Auto Scroll; enabled only while it is on.
+    var autoScrollTap: UITapGestureRecognizer?
     /// Drives the active tab's page down at the chosen speed.
     lazy var autoScroller: WebAutoScroller = {
         let scroller = WebAutoScroller(scrollView: { [weak self] in self?.webView?.scrollView })
