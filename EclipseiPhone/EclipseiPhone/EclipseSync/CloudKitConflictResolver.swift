@@ -11,8 +11,9 @@ import Foundation
 ///
 /// Scalars (name, cover, orientation, practice preview) are last-writer-wins
 /// by `modifiedAt`.
-/// Membership is union-then-reorder minus tombstones so an item added on one
-/// device is never lost, and a remove is not resurrected by the other side.
+/// Membership is union-then-reorder minus ids whose latest tombstone event is a
+/// removal (`SyncTombstones`), so an add is never lost, a remove is not
+/// resurrected by an older copy, and Undo / re-add after a synced remove holds.
 enum CloudKitConflictResolver {
 
     /// Merged membership: union of both sides, preferring `preferredOrder` sequence,
@@ -32,17 +33,12 @@ enum CloudKitConflictResolver {
         return result
     }
 
-    /// Union of two tombstone lists (order preserved, unique).
-    static func unionTombstones(_ a: [String], _ b: [String]) -> [String] {
-        unionMembership(preferredOrder: a, other: b)
-    }
-
-    /// Drops ids present in `tombstones`.
+    /// Drops ids whose latest tombstone event is a removal.
     static func subtractingTombstones(
         _ ids: [String],
         tombstones: [String]
     ) -> [String] {
-        let dead = Set(tombstones)
+        let dead = SyncTombstones.removedIds(tombstones)
         return ids.filter { !dead.contains($0) }
     }
 
@@ -57,10 +53,10 @@ enum CloudKitConflictResolver {
         let base = preferRemote ? remote : local
         let other = preferRemote ? local : remote
         var merged = base
-        let deletedItems = unionTombstones(
+        let deletedItems = SyncTombstones.merge(
             base.deletedItemIds, other.deletedItemIds
         )
-        let deletedSurface = unionTombstones(
+        let deletedSurface = SyncTombstones.merge(
             base.deletedSurfaceIds, other.deletedSurfaceIds
         )
         merged.deletedItemIds = deletedItems
