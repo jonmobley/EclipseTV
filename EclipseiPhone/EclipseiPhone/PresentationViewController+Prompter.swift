@@ -50,9 +50,7 @@ extension PresentationViewController {
         guard !prompterContainer.isHidden, let stage = prompterStage else { return }
         applyRotatedLayout(to: stage, in: prompterContainer, scale: 1)
         stage.layoutIfNeeded()
-        let canvas = stage.bounds.size
-        stage.horizontalInset = PrompterStageMetrics.outputTextInset(for: canvas)
-        stage.setFont(PrompterStageMetrics.font(ofSize: PrompterStageMetrics.outputFontSize(in: canvas)))
+        stage.setCanvasFontSize(PrompterController.shared.fontSize, isVertical: ExternalOutputSettings.isVerticalMode)
         stage.layoutIfNeeded()
         stage.apply(anchor: PrompterController.shared.readingAnchor)
     }
@@ -93,6 +91,7 @@ extension PresentationViewController {
     private func refreshPrompterScript() {
         guard let stage = prompterStage else { return }
         let controller = PrompterController.shared
+        stage.setCanvasFontSize(controller.fontSize, isVertical: ExternalOutputSettings.isVerticalMode)
         guard stage.script != controller.script else { return }
         stage.setScript(controller.script, anchor: controller.readingAnchor)
     }

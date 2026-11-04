@@ -24,7 +24,8 @@ extension LibraryGridViewController {
                 stopLive: { [weak self] in self?.stopPrompterLive() }
             )
         }
-        let nav = UINavigationController(rootViewController: prompter)
+        // Forwards orientation to the Prompter, which holds the Display Mode shape.
+        let nav = DisplayModeNavigationController(rootViewController: prompter)
         nav.modalPresentationStyle = .fullScreen
         present(nav, animated: true)
     }

@@ -7,8 +7,8 @@
 
 import UIKit
 
-/// Per-device Prompter preferences. Never synced: an iPad on a stand and a phone in
-/// hand want different text sizes, and the Mac keeps its own.
+/// Per-device Prompter preferences. Never synced: the Mac keeps its own, and the
+/// script is what travels between devices.
 @MainActor
 struct PrompterLocalSettings {
 
@@ -16,11 +16,9 @@ struct PrompterLocalSettings {
     static let fontSizeKey = "EclipseTV.prompter.fontSize"
 
     private let defaults: UserDefaults
-    private let isPad: Bool
 
-    init(defaults: UserDefaults = .standard, isPad: Bool? = nil) {
+    init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        self.isPad = isPad ?? (UIDevice.current.userInterfaceIdiom == .pad)
     }
 
     var scrollSpeed: Double {
@@ -33,14 +31,15 @@ struct PrompterLocalSettings {
         }
     }
 
+    /// Text size in canvas points (see `PrompterStageMetrics`).
     var fontSize: CGFloat {
         get {
             let stored = defaults.object(forKey: Self.fontSizeKey) as? Double
-            let fallback = PrompterStageMetrics.defaultOperatorFontSize(isPad: isPad)
-            return PrompterStageMetrics.clampedOperatorFontSize(stored.map { CGFloat($0) } ?? fallback)
+            let value = stored.map { CGFloat($0) } ?? PrompterStageMetrics.defaultCanvasFontSize
+            return PrompterStageMetrics.clampedCanvasFontSize(value)
         }
         nonmutating set {
-            defaults.set(Double(PrompterStageMetrics.clampedOperatorFontSize(newValue)), forKey: Self.fontSizeKey)
+            defaults.set(Double(PrompterStageMetrics.clampedCanvasFontSize(newValue)), forKey: Self.fontSizeKey)
         }
     }
 }

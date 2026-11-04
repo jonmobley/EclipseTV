@@ -117,7 +117,11 @@ final class PrompterController {
         self.engine.speed = settings.scrollSpeed
         self.layout = PrompterTextLayout(
             script: "",
-            font: PrompterStageMetrics.font(ofSize: settings.fontSize),
+            font: PrompterStageMetrics.font(ofSize: PrompterStageMetrics.stageFontSize(
+                canvasFontSize: settings.fontSize,
+                textWidth: Self.defaultStageWidth,
+                isVertical: false
+            )),
             width: Self.defaultStageWidth
         )
         frames.onFrame = { [weak self] dt in self?.tick(deltaTime: dt) }
@@ -204,8 +208,9 @@ final class PrompterController {
         postChange()
     }
 
+    /// Text size in canvas points; the operator card and the display scale it alike.
     func setFontSize(_ size: CGFloat) {
-        let next = PrompterStageMetrics.clampedOperatorFontSize(size)
+        let next = PrompterStageMetrics.clampedCanvasFontSize(size)
         guard next != fontSize else { return }
         let anchor = readingAnchor
         fontSize = next
@@ -311,9 +316,14 @@ final class PrompterController {
     }
 
     private func rebuildLayout(preserving anchor: PrompterReadingAnchor?) {
+        let pointSize = PrompterStageMetrics.stageFontSize(
+            canvasFontSize: fontSize,
+            textWidth: stageWidth,
+            isVertical: ExternalOutputSettings.isVerticalMode
+        )
         layout = PrompterTextLayout(
             script: script,
-            font: PrompterStageMetrics.font(ofSize: fontSize),
+            font: PrompterStageMetrics.font(ofSize: pointSize),
             width: stageWidth
         )
         if let anchor {

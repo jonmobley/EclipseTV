@@ -30,10 +30,8 @@ extension PresentationViewController {
     func layoutIncomingPrompter() {
         guard let stage = incomingPrompterStage, let host = incomingMediaHost else { return }
         stage.frame = host.bounds
-        let canvas = host.bounds.size
-        stage.horizontalInset = PrompterStageMetrics.outputTextInset(for: canvas)
-        stage.setFont(PrompterStageMetrics.font(ofSize: PrompterStageMetrics.outputFontSize(in: canvas)))
         let controller = PrompterController.shared
+        stage.setCanvasFontSize(controller.fontSize, isVertical: ExternalOutputSettings.isVerticalMode)
         stage.setScript(controller.script, anchor: controller.readingAnchor)
     }
 }

@@ -41,6 +41,17 @@ final class PrompterViewController: UIViewController {
     private let transport = UIVisualEffectView(effect: UIBlurEffect(style: .systemThickMaterialDark))
     private var observers: [NSObjectProtocol] = []
     private var panStartOffset: CGFloat = 0
+    private var transportRows: UIStackView?
+    private var verticalRowConstraints: [NSLayoutConstraint] = []
+
+    /// Card inset from the screen edges.
+    static let cardInset: CGFloat = 12
+
+    /// True once this screen covers the grid and holds the phone to the Display Mode
+    /// orientation (the browser does the same): a 16:9 card on a turned phone, not a
+    /// strip across a portrait one. iPad keeps whatever orientation it is in.
+    var holdsDisplayModeOrientation = false
+    private var isLeaving = false
 
     init(showId: UUID, controller: PrompterController? = nil) {
         self.showId = showId
@@ -86,12 +97,78 @@ final class PrompterViewController: UIViewController {
         super.viewDidAppear(animated)
         // A prompter must not dim or lock mid-speech.
         UIApplication.shared.isIdleTimerDisabled = true
+        // Turn only now that this screen covers the grid.
+        holdsDisplayModeOrientation = true
+        requestDisplayModeSceneGeometry()
     }
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         UIApplication.shared.isIdleTimerDisabled = false
+        if isBeingDismissed || isMovingFromParent { isLeaving = true }
     }
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        guard isLeaving else { return }
+        restoreUprightSceneGeometry()
+    }
+
+    override func viewWillLayoutSubviews() {
+        super.viewWillLayoutSubviews()
+        // One row when the phone is on its side, so the card keeps its height.
+        let compact = traitCollection.verticalSizeClass == .compact
+        if let rows = transportRows, rows.axis != (compact ? .horizontal : .vertical) {
+            rows.axis = compact ? .horizontal : .vertical
+            rows.spacing = compact ? 24 : 8
+            verticalRowConstraints.forEach { $0.isActive = !compact }
+        }
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        layoutStageCard()
+    }
+
+    /// The show-format card (16:9, or 9:16 in Vertical mode) between the bar and the
+    /// transport, centred. What the display shows, at the card's size.
+    private func layoutStageCard() {
+        let top = view.safeAreaInsets.top
+        let bottom = transport.frame.minY > 0 ? transport.frame.minY : view.bounds.maxY
+        let available = CGRect(
+            x: view.safeAreaInsets.left,
+            y: top,
+            width: view.bounds.width - view.safeAreaInsets.left - view.safeAreaInsets.right,
+            height: bottom - top
+        ).insetBy(dx: Self.cardInset, dy: Self.cardInset)
+        guard available.width > 1, available.height > 1 else { return }
+        stage.frame = ExternalOutputSettings.displayModePanelRect(in: available)
+        stage.layer.cornerRadius = 24
+        // A faint edge so the show's frame reads on the black background.
+        stage.layer.borderWidth = 1
+        stage.layer.borderColor = UIColor.white.withAlphaComponent(0.22).cgColor
+        // Hidden until a phone has turned to the Display Mode orientation, so a 16:9
+        // card never flashes as a strip across a portrait screen.
+        let fits = BrowserOrientationFit.matches(
+            bounds: view.bounds.size,
+            isVertical: ExternalOutputSettings.isVerticalMode,
+            idiom: traitCollection.userInterfaceIdiom
+        )
+        stage.alpha = fits ? 1 : 0
+        emptyStack?.alpha = fits ? 1 : 0
+    }
+
+    override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
+        holdsDisplayModeOrientation ? ExternalOutputSettings.phoneOrientationMask : .allButUpsideDown
+    }
+
+    override var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation {
+        guard !holdsDisplayModeOrientation else { return ExternalOutputSettings.preferredPhoneOrientation }
+        let current = view.phoneInterfaceOrientation
+        return current == .portraitUpsideDown ? .portrait : current
+    }
+
+    override var shouldAutorotate: Bool { true }
 
     override var prefersStatusBarHidden: Bool { false }
 
@@ -112,19 +189,12 @@ final class PrompterViewController: UIViewController {
     // MARK: - Setup
 
     private func setupStage() {
-        stage.translatesAutoresizingMaskIntoConstraints = false
-        stage.maximumTextWidth = PrompterStageMetrics.maximumOperatorTextWidth
-        stage.horizontalInset = 24
-        stage.setFont(PrompterStageMetrics.font(ofSize: controller.fontSize))
+        stage.translatesAutoresizingMaskIntoConstraints = true
+        stage.setCanvasFontSize(controller.fontSize, isVertical: ExternalOutputSettings.isVerticalMode)
         stage.onMetricsChange = { [weak self] size in
             self?.controller.updateStage(width: size.width, viewportHeight: size.height)
         }
         view.addSubview(stage)
-        NSLayoutConstraint.activate([
-            stage.topAnchor.constraint(equalTo: view.topAnchor),
-            stage.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            stage.trailingAnchor.constraint(equalTo: view.trailingAnchor)
-        ])
     }
 
     private func setupTransport() {
@@ -162,19 +232,22 @@ final class PrompterViewController: UIViewController {
         rows.alignment = .center
         rows.translatesAutoresizingMaskIntoConstraints = false
         transport.contentView.addSubview(rows)
+        transportRows = rows
+        verticalRowConstraints = [
+            topRow.widthAnchor.constraint(equalTo: rows.widthAnchor),
+            bottomRow.widthAnchor.constraint(equalTo: rows.widthAnchor)
+        ]
+        NSLayoutConstraint.activate(verticalRowConstraints)
 
         NSLayoutConstraint.activate([
             transport.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             transport.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             transport.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            stage.bottomAnchor.constraint(equalTo: transport.topAnchor),
             rows.topAnchor.constraint(equalTo: transport.contentView.topAnchor, constant: 10),
             rows.centerXAnchor.constraint(equalTo: transport.contentView.centerXAnchor),
             rows.leadingAnchor.constraint(greaterThanOrEqualTo: transport.contentView.safeAreaLayoutGuide.leadingAnchor, constant: 16),
             rows.trailingAnchor.constraint(lessThanOrEqualTo: transport.contentView.safeAreaLayoutGuide.trailingAnchor, constant: -16),
             rows.bottomAnchor.constraint(equalTo: transport.contentView.safeAreaLayoutGuide.bottomAnchor, constant: -10),
-            topRow.widthAnchor.constraint(equalTo: rows.widthAnchor),
-            bottomRow.widthAnchor.constraint(equalTo: rows.widthAnchor),
             speedSlider.widthAnchor.constraint(greaterThanOrEqualToConstant: 200),
             speedSlider.widthAnchor.constraint(lessThanOrEqualToConstant: ScrollSpeedSlider.maximumWidth)
         ])
@@ -252,7 +325,7 @@ final class PrompterViewController: UIViewController {
             lastScript = controller.script
             stage.setScript(controller.script, anchor: controller.readingAnchor)
         }
-        stage.setFont(PrompterStageMetrics.font(ofSize: controller.fontSize))
+        stage.setCanvasFontSize(controller.fontSize, isVertical: ExternalOutputSettings.isVerticalMode)
         let empty = !controller.canPlay
         emptyStack?.isHidden = !empty
         stage.showsReadingGuide = !empty
@@ -261,8 +334,8 @@ final class PrompterViewController: UIViewController {
         playButton.configuration?.image = UIImage(systemName: controller.isPlaying ? "pause.fill" : "play.fill")
         playButton.accessibilityLabel = controller.isPlaying ? "Pause" : "Play"
         speedSlider.apply(speed: controller.speedMultiplier)
-        sizeDownButton.isEnabled = controller.fontSize > PrompterStageMetrics.operatorFontRange.lowerBound
-        sizeUpButton.isEnabled = controller.fontSize < PrompterStageMetrics.operatorFontRange.upperBound
+        sizeDownButton.isEnabled = controller.fontSize > PrompterStageMetrics.canvasFontRange.lowerBound
+        sizeUpButton.isEnabled = controller.fontSize < PrompterStageMetrics.canvasFontRange.upperBound
         refreshLiveButton()
         applyAnchor()
     }
@@ -324,11 +397,11 @@ final class PrompterViewController: UIViewController {
     @objc private func lineDown() { controller.nudge(lines: 1) }
 
     @objc private func sizeDown() {
-        controller.setFontSize(controller.fontSize - PrompterStageMetrics.operatorFontStep)
+        controller.setFontSize(controller.fontSize - PrompterStageMetrics.canvasFontStep)
     }
 
     @objc private func sizeUp() {
-        controller.setFontSize(controller.fontSize + PrompterStageMetrics.operatorFontStep)
+        controller.setFontSize(controller.fontSize + PrompterStageMetrics.canvasFontStep)
     }
 
     @objc func liveTapped() {
@@ -351,6 +424,7 @@ final class PrompterViewController: UIViewController {
             let translation = pan.translation(in: stage).y
             // The engine wants the delta since the last event, in stage points
             // scaled into the canonical layout's line height.
+            // Card points → canonical layout points (both are the same canvas).
             let scale = controller.lineHeight / max(1, PrompterStageMetrics.lineHeight(for: stage.font))
             controller.scrub(by: (translation - panStartOffset) * scale)
             panStartOffset = translation

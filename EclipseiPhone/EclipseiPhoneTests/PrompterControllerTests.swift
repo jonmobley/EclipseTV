@@ -40,7 +40,7 @@ struct PrompterControllerTests {
         defaults.removePersistentDomain(forName: suite)
         return PrompterController(
             scriptStore: store ?? FakeStore(),
-            settings: PrompterLocalSettings(defaults: defaults, isPad: true),
+            settings: PrompterLocalSettings(defaults: defaults),
             frames: frames ?? FakeFrames()
         )
     }
@@ -55,7 +55,7 @@ struct PrompterControllerTests {
         #expect(controller.offset == 0)
         #expect(controller.canPlay)
         #expect(controller.maxOffset > 0)
-        #expect(controller.fontSize == 56)
+        #expect(controller.fontSize == 60)
     }
 
     @Test func playAdvancesAndPauseStopsFrames() throws {
@@ -122,17 +122,17 @@ struct PrompterControllerTests {
         let suite = "PrompterController.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suite))
         defaults.removePersistentDomain(forName: suite)
-        let settings = PrompterLocalSettings(defaults: defaults, isPad: false)
+        let settings = PrompterLocalSettings(defaults: defaults)
         let controller = PrompterController(scriptStore: FakeStore(), settings: settings, frames: FakeFrames())
         controller.setSpeed(9)
         controller.setFontSize(4)
         #expect(controller.speedMultiplier == 3)
-        #expect(controller.fontSize == 20)
+        #expect(controller.fontSize == 24)
         #expect(settings.scrollSpeed == 3)
-        #expect(settings.fontSize == 20)
+        #expect(settings.fontSize == 24)
         let again = PrompterController(scriptStore: FakeStore(), settings: settings, frames: FakeFrames())
         #expect(again.speedMultiplier == 3)
-        #expect(again.fontSize == 20)
+        #expect(again.fontSize == 24)
     }
 
     @Test func fontChangeKeepsTheReadingLine() throws {

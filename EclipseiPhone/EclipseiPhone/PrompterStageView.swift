@@ -8,26 +8,22 @@
 import UIKit
 
 /// The scrolling script on black, with a reading guide at the centre and fades top
-/// and bottom. Used by the operator view and the output display alike; each sets its
-/// own font and inset and follows the controller's reading anchor.
+/// and bottom. Used by the operator card and the output display alike: both are the
+/// show's canvas at different sizes, so the same canvas text size wraps the same way
+/// on each, and both follow the controller's reading anchor.
 final class PrompterStageView: UIView {
 
-    /// Called when the text area changes size (width, height of the text column).
+    /// Called when the text column changes size (width, height).
     var onMetricsChange: ((CGSize) -> Void)?
-
-    /// Side inset of the text column.
-    var horizontalInset: CGFloat = 24 {
-        didSet { if horizontalInset != oldValue { setNeedsLayout() } }
-    }
-
-    /// Widest the text column runs; `nil` for the full width.
-    var maximumTextWidth: CGFloat?
 
     var showsReadingGuide = true {
         didSet { guideTop.isHidden = !showsReadingGuide; guideBottom.isHidden = !showsReadingGuide }
     }
 
-    private(set) var font = PrompterStageMetrics.font(ofSize: 32)
+    /// Text size in canvas points (see `PrompterStageMetrics`).
+    private(set) var canvasFontSize = PrompterStageMetrics.defaultCanvasFontSize
+    private(set) var isVertical = false
+    private(set) var font = PrompterStageMetrics.font(ofSize: PrompterStageMetrics.defaultCanvasFontSize)
     private(set) var script = ""
     private(set) var layout: PrompterTextLayout?
     private var lastAnchor: PrompterReadingAnchor = .start
@@ -85,12 +81,13 @@ final class PrompterStageView: UIView {
         apply(anchor: anchor)
     }
 
-    /// Changes the text size and re-centres on the last anchor.
-    func setFont(_ font: UIFont) {
-        guard font != self.font else { return }
-        self.font = font
-        rebuildText()
-        apply(anchor: lastAnchor)
+    /// Changes the canvas text size (and show format); the stage re-wraps on layout.
+    func setCanvasFontSize(_ size: CGFloat, isVertical: Bool) {
+        guard size != canvasFontSize || isVertical != self.isVertical else { return }
+        canvasFontSize = size
+        self.isVertical = isVertical
+        setNeedsLayout()
+        layoutIfNeeded()
     }
 
     /// Scrolls so the character at `anchor` sits on the reading guide.
@@ -106,12 +103,17 @@ final class PrompterStageView: UIView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
+        let inset = PrompterStageMetrics.textInset(for: bounds.size)
+        let textWidth = PrompterStageMetrics.textWidth(forStageWidth: bounds.width)
+        let pointSize = PrompterStageMetrics.stageFontSize(
+            canvasFontSize: canvasFontSize, textWidth: textWidth, isVertical: isVertical
+        )
+        let fontChanged = abs(pointSize - font.pointSize) > 0.01
+        if fontChanged { font = PrompterStageMetrics.font(ofSize: pointSize) }
         let lineHeight = PrompterStageMetrics.lineHeight(for: font)
         let topInset = PrompterStageMetrics.topInset(viewportHeight: bounds.height, lineHeight: lineHeight)
-        let width = min(bounds.width - 2 * horizontalInset, maximumTextWidth ?? .greatestFiniteMagnitude)
-        let side = max(horizontalInset, (bounds.width - max(1, width)) / 2)
         textView.frame = bounds
-        textView.textContainerInset = UIEdgeInsets(top: topInset, left: side, bottom: topInset, right: side)
+        textView.textContainerInset = UIEdgeInsets(top: topInset, left: inset, bottom: topInset, right: inset)
 
         let fadeHeight = bounds.height * PrompterStageMetrics.fadeFraction
         CATransaction.begin()
@@ -124,8 +126,8 @@ final class PrompterStageView: UIView {
         guideTop.frame = CGRect(x: 0, y: guideY - lineHeight / 2 - 1, width: bounds.width, height: 2)
         guideBottom.frame = CGRect(x: 0, y: guideY + lineHeight / 2 - 1, width: bounds.width, height: 2)
 
-        let metrics = CGSize(width: max(1, width), height: bounds.height)
-        if metrics != lastMetrics {
+        let metrics = CGSize(width: textWidth, height: bounds.height)
+        if metrics != lastMetrics || fontChanged {
             lastMetrics = metrics
             rebuildText()
             onMetricsChange?(metrics)

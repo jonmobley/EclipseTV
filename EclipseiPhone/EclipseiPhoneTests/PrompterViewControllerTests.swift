@@ -22,7 +22,7 @@ struct PrompterViewControllerTests {
         defaults.removePersistentDomain(forName: suite)
         let controller = PrompterController(
             scriptStore: store,
-            settings: PrompterLocalSettings(defaults: defaults, isPad: false),
+            settings: PrompterLocalSettings(defaults: defaults),
             frames: PrompterControllerTests.FakeFrames()
         )
         controller.bind(showId: showId)

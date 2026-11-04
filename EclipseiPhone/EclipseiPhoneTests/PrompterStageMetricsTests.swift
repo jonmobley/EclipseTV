@@ -22,19 +22,20 @@ struct PrompterStageMetricsTests {
         #expect(PrompterStageMetrics.maxOffset(contentHeight: 30, lineHeight: 40) == 0)
     }
 
-    @Test func outputFontScalesWithTheShorterSideAndFloors() {
-        let hd = PrompterStageMetrics.outputFontSize(in: CGSize(width: 1920, height: 1080))
-        #expect(abs(hd - 1080 * 0.068) < 0.001)
-        let vertical = PrompterStageMetrics.outputFontSize(in: CGSize(width: 1080, height: 1920))
-        #expect(vertical == hd)
-        #expect(PrompterStageMetrics.outputFontSize(in: CGSize(width: 320, height: 200)) == 40)
+    @Test func canvasFontScalesWithTheStageWidth() {
+        let full = PrompterStageMetrics.textWidth(forStageWidth: 1920)
+        #expect(PrompterStageMetrics.stageFontSize(canvasFontSize: 60, textWidth: full, isVertical: false) == 60)
+        let half = PrompterStageMetrics.textWidth(forStageWidth: 960)
+        #expect(abs(PrompterStageMetrics.stageFontSize(canvasFontSize: 60, textWidth: half, isVertical: false) - 30) < 0.001)
+        let verticalFull = PrompterStageMetrics.textWidth(forStageWidth: 1080)
+        #expect(PrompterStageMetrics.stageFontSize(canvasFontSize: 60, textWidth: verticalFull, isVertical: true) == 60)
+        #expect(PrompterStageMetrics.textInset(for: CGSize(width: 1000, height: 500)) == 80)
     }
 
-    @Test func operatorDefaultsDifferByDevice() {
-        #expect(PrompterStageMetrics.defaultOperatorFontSize(isPad: true) == 56)
-        #expect(PrompterStageMetrics.defaultOperatorFontSize(isPad: false) == 32)
-        #expect(PrompterStageMetrics.clampedOperatorFontSize(5) == 20)
-        #expect(PrompterStageMetrics.clampedOperatorFontSize(500) == 120)
+    @Test func canvasDefaultsMatchTheMac() {
+        #expect(PrompterStageMetrics.defaultCanvasFontSize == 60)
+        #expect(PrompterStageMetrics.clampedCanvasFontSize(5) == 24)
+        #expect(PrompterStageMetrics.clampedCanvasFontSize(500) == 160)
         #expect(PrompterStageMetrics.clampedSpeed(0) == 0.25)
         #expect(PrompterStageMetrics.clampedSpeed(9) == 3)
     }
