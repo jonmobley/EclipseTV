@@ -30,6 +30,13 @@ final class WebRemoteViewController: UIViewController {
     /// True once the browser is on its way out, so the orientation is restored after the
     /// dismissal rather than while this screen still owns it.
     private var isLeaving = false
+    /// True once the browser is on screen and holds the phone to the Display Mode
+    /// orientation. Before that (and while closing) it accepts the phone as it is,
+    /// so the grid behind it is never asked to lay out for a turn it would show.
+    var holdsDisplayModeOrientation = false
+    /// Set while Close waits for the phone to turn upright before dismissing.
+    var isClosingAfterTurn = false
+    private var didFinishClose = false
 
     var backButton: UIBarButtonItem!
     var bookmarksButton: UIBarButtonItem!
@@ -79,10 +86,18 @@ final class WebRemoteViewController: UIViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        requestDisplayModeSceneGeometry()
         applyBrowserChromeMode(animated: animated)
         ExternalDisplayManager.shared.refreshConnection()
         refreshBookmarksMenu()
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        // Turn only now that this screen covers the grid; turning during the
+        // presentation re-laid the grid out sideways on a still-upright screen.
+        guard !isClosingAfterTurn else { return }
+        holdsDisplayModeOrientation = true
+        requestDisplayModeSceneGeometry()
     }
 
     /// Landscape Display Mode → landscape browser; Vertical → portrait.
@@ -90,11 +105,18 @@ final class WebRemoteViewController: UIViewController {
     /// The card is the AirPlay viewport, so in Landscape the user turns the phone and
     /// reads, scrolls, and taps the same 16:9 frame the TV is showing.
     override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
-        ExternalOutputSettings.phoneOrientationMask
+        holdsDisplayModeOrientation
+            ? ExternalOutputSettings.phoneOrientationMask
+            : .allButUpsideDown
     }
 
     override var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation {
-        ExternalOutputSettings.preferredPhoneOrientation
+        guard !holdsDisplayModeOrientation else {
+            return ExternalOutputSettings.preferredPhoneOrientation
+        }
+        // Open in whatever way the phone is held; viewDidAppear turns it.
+        let current = view.phoneInterfaceOrientation
+        return current == .portraitUpsideDown ? .portrait : current
     }
 
     override var shouldAutorotate: Bool { true }
@@ -107,13 +129,20 @@ final class WebRemoteViewController: UIViewController {
         coordinator.animate(alongsideTransition: { [weak self] _ in
             self?.layoutPhoneWebViewport()
         }, completion: { [weak self] _ in
-            self?.resyncExternalWeb()
+            guard let self else { return }
+            if self.isClosingAfterTurn {
+                self.finishClose()
+                return
+            }
+            self.resyncExternalWeb()
         })
     }
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
-        if usesOverlayBrowserChrome {
+        // Leaving with the whole stack: keep the bar hidden, or the vertical
+        // Back / ⋯ / Close bar shows on the black cover while it slides away.
+        if usesOverlayBrowserChrome, navigationController?.isBeingDismissed != true {
             navigationController?.setNavigationBarHidden(false, animated: animated)
         }
         guard isBeingDismissed || isMovingFromParent else { return }
@@ -151,6 +180,30 @@ final class WebRemoteViewController: UIViewController {
     // MARK: - Actions
 
     @objc func closeTapped() {
+        guard !isClosingAfterTurn else { return }
+        let isPushed = (navigationController?.viewControllers.count ?? 0) > 1
+        // A turned phone stands upright first, behind the black cover, so the grid
+        // is uncovered already upright instead of sideways and then turning.
+        if !isPushed,
+           traitCollection.userInterfaceIdiom == .phone,
+           view.bounds.width > view.bounds.height {
+            isClosingAfterTurn = true
+            holdsDisplayModeOrientation = false
+            setNeedsUpdateOfSupportedInterfaceOrientations()
+            restoreUprightSceneGeometry()
+            // Fallback when the scene does not turn (e.g. iOS declines the request).
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+                self?.finishClose()
+            }
+            return
+        }
+        finishClose()
+    }
+
+    /// Pops or dismisses the browser; runs once even when called twice.
+    private func finishClose() {
+        guard !didFinishClose else { return }
+        didFinishClose = true
         if let nav = navigationController, nav.viewControllers.count > 1 {
             nav.popViewController(animated: true)
         } else {

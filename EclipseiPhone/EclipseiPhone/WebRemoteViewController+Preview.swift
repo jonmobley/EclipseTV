@@ -142,6 +142,7 @@ extension WebRemoteViewController: UIScrollViewDelegate,
     /// The card's size changes with the device orientation but its logical viewport does
     /// not, so rotating never reflows the page or moves it out of step with the TV.
     func layoutPhoneWebViewport() {
+        updateOrientationCover()
         guard let stage = webStageView, let web = webView else { return }
         let bounds = stage.bounds
         guard bounds.width > 0, bounds.height > 0 else { return }
