@@ -32,8 +32,8 @@ extension LibraryGridViewController {
     }
 
     /// Live hero on an open Show: a real destination, Practice Mode, a Live
-    /// Poll the phone is hosting with no display attached, or Camera live
-    /// (tile tap always goes live; the controller opens from this preview).
+    /// Poll the phone is hosting with no display attached, or Camera still
+    /// live after the destination went away (controller opens from this hero).
     var showsLiveHero: Bool {
         isShowMode && LiveOutputRouting.showsLiveHero(
             hasOutputDestination: hasLiveOutputDestination,

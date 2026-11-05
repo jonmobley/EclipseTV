@@ -59,8 +59,8 @@ enum LiveOutputRouting {
 
     /// Open-Show live hero: a destination, a phone-hosted Live Poll, or Camera live.
     ///
-    /// Camera tile tap always goes live, even with no AirPlay / Practice
-    /// destination, so the hero has to appear for the preview → controller tap.
+    /// Camera can still own the overlay after a display drops or Practice turns
+    /// off, and the hero has to stay so the controller remains one tap away.
     static func showsLiveHero(
         hasOutputDestination: Bool,
         isLivePollPhoneHeroActive: Bool,

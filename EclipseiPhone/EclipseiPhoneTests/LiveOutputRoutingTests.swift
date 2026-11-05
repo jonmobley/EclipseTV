@@ -45,6 +45,7 @@ struct LiveOutputRoutingTests {
     }
 
     @Test func cameraLiveShowsHeroWithoutOutputDestination() {
+        // Overlay can outlive the destination (display dropped, Practice off).
         #expect(
             LiveOutputRouting.showsLiveHero(
                 hasOutputDestination: false,
