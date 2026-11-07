@@ -160,9 +160,7 @@ final class LibraryGridViewController: UIViewController {
     /// Media belonging to the open Show (resolved against the library store).
     var openShowItems: [LibraryItemDTO] {
         guard let album = openShow else { return [] }
-        return album.itemIds.compactMap { id in
-            store.items.first(where: { $0.id == id })
-        }
+        return album.itemIds.compactMap { store.item(id: $0) }
     }
 
     /// Websites belonging to the open Show (resolved against the page store).
@@ -181,7 +179,7 @@ final class LibraryGridViewController: UIViewController {
     var openShowMembershipIds: [String] {
         guard let album = openShow else { return [] }
         return album.itemIds.filter { id in
-            if store.items.contains(where: { $0.id == id }) { return true }
+            if store.containsItem(id: id) { return true }
             guard let uuid = UUID(uuidString: id) else { return false }
             return WebPageStore.shared.page(id: uuid) != nil
                 || PDFStore.shared.documents.contains(where: { $0.id == uuid })

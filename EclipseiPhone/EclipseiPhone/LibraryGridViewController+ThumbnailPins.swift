@@ -18,8 +18,9 @@ extension LibraryGridViewController {
         if visible.isEmpty {
             ids.formUnion(fallbackOnScreenThumbnailIds())
         } else {
+            let showRows = isShowMode ? openShowGridItems : nil
             for path in visible {
-                if let id = thumbnailPinId(at: path, in: collectionView) {
+                if let id = thumbnailPinId(at: path, in: collectionView, showRows: showRows) {
                     ids.insert(id)
                 }
             }
@@ -78,8 +79,9 @@ extension LibraryGridViewController {
         at indexPaths: [IndexPath],
         in collectionView: UICollectionView
     ) {
+        let showRows = isShowMode ? openShowGridItems : nil
         for path in indexPaths {
-            guard let id = thumbnailPinId(at: path, in: collectionView) else {
+            guard let id = thumbnailPinId(at: path, in: collectionView, showRows: showRows) else {
                 continue
             }
             _ = store.thumbnail(for: id)
@@ -109,11 +111,14 @@ extension LibraryGridViewController {
         return ids
     }
 
+    /// Runs once per landed thumb, so the Show rows are resolved once here rather
+    /// than once per visible tile: each `openShowGridItems` read walks the whole Show.
     private func paintVisibleCells(showing id: String, in view: UICollectionView) {
+        let showRows = isShowMode ? openShowGridItems : nil
         for path in view.indexPathsForVisibleItems {
-            guard thumbnailPinId(at: path, in: view) == id,
+            guard thumbnailPinId(at: path, in: view, showRows: showRows) == id,
                   let cell = view.cellForItem(at: path) else { continue }
-            applyLoadedThumbnailIfNeeded(to: cell, at: path, in: view)
+            applyLoadedThumbnail(id, to: cell)
         }
     }
 
@@ -123,6 +128,10 @@ extension LibraryGridViewController {
         in collectionView: UICollectionView
     ) {
         guard let id = thumbnailPinId(at: indexPath, in: collectionView) else { return }
+        applyLoadedThumbnail(id, to: cell)
+    }
+
+    private func applyLoadedThumbnail(_ id: String, to cell: UICollectionViewCell) {
         guard let image = store.thumbnail(for: id) else { return }
         if let thumbCell = cell as? LibraryThumbnailCell, thumbCell.isShowingPlaceholder {
             thumbCell.applyLoadedThumbnail(image)
@@ -131,9 +140,12 @@ extension LibraryGridViewController {
         }
     }
 
+    /// - Parameter showRows: `openShowGridItems` already resolved by a caller that
+    ///   walks many paths; nil reads it fresh.
     private func thumbnailPinId(
         at path: IndexPath,
-        in collectionView: UICollectionView
+        in collectionView: UICollectionView,
+        showRows: [ShowGridItem]? = nil
     ) -> String? {
         if isDockedSlideshowRibbon(collectionView) {
             let slideIds = SlideshowPlaybackController.shared.activeSlideIds
@@ -146,8 +158,9 @@ extension LibraryGridViewController {
             guard slideIds.indices.contains(path.item) else { return nil }
             return slideIds[path.item]
         case .shows where isShowMode:
-            guard openShowGridItems.indices.contains(path.item) else { return nil }
-            return openShowGridItems[path.item].libraryThumbnailId
+            let rows = showRows ?? openShowGridItems
+            guard rows.indices.contains(path.item) else { return nil }
+            return rows[path.item].libraryThumbnailId
         case .shows:
             guard showRibbonItems.indices.contains(path.item),
                   case .show(let show) = showRibbonItems[path.item] else { return nil }
