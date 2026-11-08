@@ -240,7 +240,7 @@ extension LibraryGridViewController {
                item.showId == openShowId {
                 return .livePoll(item)
             }
-            if let item = store.items.first(where: { $0.id == id }) {
+            if let item = store.item(id: id) {
                 return .media(item)
             }
             if let imported = ImportedMediaStore.shared.record(id: id) {
@@ -631,7 +631,6 @@ extension LibraryGridViewController {
     }
 
     private func mediaContextMenu(_ item: LibraryItemDTO, in album: LocalAlbum) -> UIMenu {
-        let items = openShowItems
         let isCover = album.resolvedCoverId == item.id
         let cover = UIAction(
             title: isCover ? "Show Cover" : "Set as Show Cover",
@@ -655,7 +654,10 @@ extension LibraryGridViewController {
                 title: "Preview",
                 image: UIImage(systemName: "eye")
             ) { [weak self] _ in
-                self?.presentLocalPreview(for: item, in: items)
+                // Read the Show's media on tap: this menu is built for every tile
+                // as it scrolls in, and resolving the whole Show there hitched.
+                guard let self else { return }
+                self.presentLocalPreview(for: item, in: self.openShowItems)
             },
             titleAction(for: item)
         ]

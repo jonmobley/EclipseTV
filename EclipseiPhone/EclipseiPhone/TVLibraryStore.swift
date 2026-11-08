@@ -45,8 +45,16 @@ final class TVLibraryStore {
 
     // MARK: - State
 
-    private(set) var items: [LibraryItemDTO] = []
+    private(set) var items: [LibraryItemDTO] = [] {
+        // Any write (append, remove, element replace, whole-array swap) drops the index.
+        didSet { itemIndexById = nil }
+    }
     private(set) var currentId: String?
+
+    /// Position of each id in `items`, built on first `item(id:)` after a change.
+    /// The Show grid resolves every tile by id several times per tile while
+    /// scrolling; a linear `items.first(where:)` there made big Shows hitch.
+    private var itemIndexById: [String: Int]?
 
     /// Active Landscape / Vertical bucket (tracks `ExternalOutputSettings.libraryMode`).
     private(set) var activeLibraryMode: EclipseShareProtocol.LibraryMode = .landscape
@@ -178,6 +186,29 @@ final class TVLibraryStore {
     }
 
     // MARK: - Reads
+
+    /// The library item with this id, same as `items.first { $0.id == id }` but O(1).
+    func item(id: String) -> LibraryItemDTO? {
+        let index: [String: Int]
+        if let built = itemIndexById {
+            index = built
+        } else {
+            var built = [String: Int](minimumCapacity: items.count)
+            // Keep the first match on a duplicate id, as `first(where:)` did.
+            for (offset, item) in items.enumerated() where built[item.id] == nil {
+                built[item.id] = offset
+            }
+            itemIndexById = built
+            index = built
+        }
+        guard let offset = index[id], items.indices.contains(offset) else { return nil }
+        return items[offset]
+    }
+
+    /// Whether the library has an item with this id.
+    func containsItem(id: String) -> Bool {
+        item(id: id) != nil
+    }
 
     func thumbnail(for id: String) -> UIImage? {
         if let cached = thumbnails[id] { return cached }
