@@ -23,26 +23,35 @@
 
 set -uo pipefail
 
-if [[ -z "${BUILT_PRODUCTS_DIR:-}" || -z "${FRAMEWORKS_FOLDER_PATH:-}" ]]; then
+if [[ -z "${TARGET_BUILD_DIR:-}" || -z "${FRAMEWORKS_FOLDER_PATH:-}" \
+      || -z "${DWARF_DSYM_FOLDER_PATH:-}" ]]; then
     echo "warning: generate_webrtc_dsym.sh expects to run as an Xcode build phase"
     exit 0
 fi
 
-FRAMEWORK_BINARY="${BUILT_PRODUCTS_DIR}/${FRAMEWORKS_FOLDER_PATH}/WebRTC.framework/WebRTC"
-DSYM_OUTPUT="${BUILT_PRODUCTS_DIR}/WebRTC.framework.dSYM"
+# Read the app from TARGET_BUILD_DIR, not BUILT_PRODUCTS_DIR. In an archive the copy under
+# BUILT_PRODUCTS_DIR is only a symlink into InstallationBuildProductsLocation, and the user
+# script sandbox checks the resolved path, which isn't a declared input: dsymutil got
+# "Operation not permitted", no dSYM was written, and the Organizer warning came back
+# (build 2026110801). TARGET_BUILD_DIR is the real location in archive and plain builds.
+FRAMEWORK_BINARY="${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/WebRTC.framework/WebRTC"
+# Next to EclipseiPhone.app.dSYM, which is where the archive collects dSYMs from.
+DSYM_OUTPUT="${DWARF_DSYM_FOLDER_PATH}/WebRTC.framework.dSYM"
 
 if [[ ! -f "$FRAMEWORK_BINARY" ]]; then
     echo "warning: WebRTC.framework not found at ${FRAMEWORK_BINARY}; skipping dSYM generation"
     exit 0
 fi
 
-# dsymutil writes "error:" to stderr when the stripped binary's debug map is not
-# readable (user-script sandbox: "Operation not permitted"). Xcode promotes any
-# line that starts with "error:" into a failed build phase even when this script
-# exits 0. Swallow that output: the pinned WebRTC binary is stripped anyway
-# (see Scripts/WebRTCUploadSymbols.md), so a missing dSYM must not fail the archive.
+# dsymutil writes "error:" lines on failure, and Xcode turns any line starting with
+# "error:" into a failed build phase even when this script exits 0. Capture its output
+# and re-report the first line as a warning: a missing WebRTC dSYM must never fail the
+# archive, but it shouldn't fail silently either (it did, until build 2026110801).
 dsym_log="$(mktemp)"
-if ! xcrun dsymutil "$FRAMEWORK_BINARY" -o "$DSYM_OUTPUT" >"$dsym_log" 2>&1; then
+if ! xcrun dsymutil "$FRAMEWORK_BINARY" -o "$DSYM_OUTPUT" >"$dsym_log" 2>&1 \
+        || [[ ! -d "$DSYM_OUTPUT" ]]; then
+    reason="$(sed -e 's/^[[:space:]]*error:[[:space:]]*//' "$dsym_log" | head -n 1)"
+    echo "warning: WebRTC dSYM not generated; App Store Connect will warn on upload (${reason:-no output})"
     rm -f "$dsym_log"
     exit 0
 fi
