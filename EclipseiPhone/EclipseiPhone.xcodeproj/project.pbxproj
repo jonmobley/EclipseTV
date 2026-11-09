@@ -317,7 +317,8 @@
 			outputFileListPaths = (
 			);
 			outputPaths = (
-				"$(DWARF_DSYM_FOLDER_PATH)/WebRTC.framework.dSYM",
+				"$(DWARF_DSYM_FOLDER_PATH)/WebRTC.framework.dSYM/Contents/Info.plist",
+				"$(DWARF_DSYM_FOLDER_PATH)/WebRTC.framework.dSYM/Contents/Resources/DWARF/WebRTC",
 			);
 			runOnlyForDeploymentPostprocessing = 1;
 			shellPath = /bin/bash;
