@@ -311,13 +311,13 @@
 			);
 			inputPaths = (
 				"$(SRCROOT)/../Scripts/generate_webrtc_dsym.sh",
-				"$(BUILT_PRODUCTS_DIR)/$(FRAMEWORKS_FOLDER_PATH)/WebRTC.framework/WebRTC",
+				"$(TARGET_BUILD_DIR)/$(FRAMEWORKS_FOLDER_PATH)/WebRTC.framework/WebRTC",
 			);
 			name = "Generate WebRTC dSYM";
 			outputFileListPaths = (
 			);
 			outputPaths = (
-				"$(BUILT_PRODUCTS_DIR)/WebRTC.framework.dSYM",
+				"$(DWARF_DSYM_FOLDER_PATH)/WebRTC.framework.dSYM",
 			);
 			runOnlyForDeploymentPostprocessing = 1;
 			shellPath = /bin/bash;
