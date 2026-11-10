@@ -291,6 +291,11 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         }
 
         unavailableBadge.isHidden = !isUnavailable
+        if isUnavailable {
+            unavailableBadge.text = UnavailableMediaReason.of(item) == .waitingForICloud
+                ? "Downloading…"
+                : "Unavailable"
+        }
         applyOverlayTitle(forId: item.id)
         setLive(isLive && !isUnavailable, isLocked: isLocked)
         var a11y = MediaTitleStore.title(forId: item.id) ?? item.name

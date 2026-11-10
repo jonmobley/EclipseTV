@@ -235,6 +235,27 @@ final class SlideshowDetailViewController: UITableViewController {
         return proposed
     }
 
+    /// Edit mode's red minus → Remove (same unlink as the swipe action).
+    override func tableView(
+        _ tableView: UITableView,
+        commit editingStyle: UITableViewCell.EditingStyle,
+        forRowAt indexPath: IndexPath
+    ) {
+        guard editingStyle == .delete,
+              Section(rawValue: indexPath.section) == .slides,
+              slides.indices.contains(indexPath.row) else { return }
+        SlideshowStore.shared.remove(
+            itemId: slides[indexPath.row].id, fromSlideshowId: slideshowId
+        )
+    }
+
+    override func tableView(
+        _ tableView: UITableView,
+        titleForDeleteConfirmationButtonForRowAt indexPath: IndexPath
+    ) -> String? {
+        "Remove"
+    }
+
     override func tableView(
         _ tableView: UITableView,
         trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath

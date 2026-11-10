@@ -5,15 +5,19 @@ The owner wants the iPhone/iPad app treated as a **standalone media & show playe
 
 **Repro limitation:** this session is a Linux container — no Xcode, no simulators. Everything below is traced from code (paths relative to `EclipseiPhone/EclipseiPhone/` unless noted). "Confirmed in code" = the mechanism is unambiguous; "needs device repro" = plausible, must be checked on iPhone/iPad before fixing. CamTailKit (PTZ) is not in this checkout, so PTZ findings are host-side only. Live polls render from the questpoll.com web page (`eclipsepro/quest-relay/public/present.js`, `styles.css`) in a WKWebView, not native UIKit.
 
-## Status (2026-11-10, first pass)
-Done in this branch (not yet built or run: no Xcode in the session; run the iPhone tests on a Mac):
-- Phase 1.1: History opens a site **phone-only** (nothing live changes); Send to TV is an explicit go-live and now takes output even when a still is live. A phone-only browser no longer closes when some other website output ends.
-- Phase 1.2: sync keeps this phone's `lastOpenedAt`; captions read "Opened 3hrs ago" / "Created 2 months ago".
-- Phase 1.4 (server part): QuestPoll confirm page now uses `referrer-policy: same-origin`, so its form POST carries a real Origin and no longer gets 403 Forbidden (eclipsepro `quest-relay`, needs a deploy).
-- Phase 1.6 (search part): the Media Library search field focuses on the first tap.
-- Phase 1.7: iPhone no longer asks "Skip ahead?" on a forward poll cue jump; "Reopen question" still asks. The Mac strip (`StageQuestCueStrip.swift`) is unchanged.
+## Status (2026-11-10)
+Phase 1 is done in this branch. Swift is built and unit-tested by CI (macOS); this session had no Xcode.
+- 1.1 History opens a site **phone-only** (nothing live changes); Send to TV is the explicit go-live and now takes output even when a still is live. A phone-only browser no longer closes when some other website output ends.
+- 1.2 Sync keeps this phone's `lastOpenedAt`; captions read "Opened 3hrs ago" / "Created 2 months ago".
+- 1.3 iCloud items still downloading say "Downloading…" (tile badge, menus, tap) instead of "no longer on the Apple TV" / "Re-send from Photos" (`UnavailableMediaReason`).
+- 1.4 Server: confirm page uses `referrer-policy: same-origin`, ending the 403 Forbidden (eclipsepro `quest-relay`, needs a deploy). App: Start resumes the tapped poll after sign-in instead of opening the picker; a sign-in the server rejects (deck list also 401) signs out and re-prompts instead of "Sign in required." Still open: "Manage on QuestPoll" web sign-in (needs a one-time login link from the server).
+- 1.5 Camera Live restarts its preview when the AirPlay camera ends while a Settings/Frame sheet is open. The home tile already recovers in the grid's `viewDidAppear`.
+- 1.6 Search focuses on the first tap. A docked ribbon appearing/hiding no longer swaps the Show layout and reloads the grid (the scroll jump). Slideshow editor Edit-mode minus removes the slide.
+- 1.7 iPhone no longer asks "Skip ahead?"; "Reopen question" still asks. The Mac strip (`StageQuestCueStrip.swift`) is unchanged.
+- Ribbon-toggle loss on sync conflict: not fixed. It is moot under D3 (no per-slideshow switch); conflict handling applies the server copy for every field, which is a sync-wide change.
 
-Still to do from Phase 1: TV-message split (1.3), in-app poll sign-in follow-ups (1.4), camera resume (1.5), grid scroll anchor and slideshow editor delete (1.6).
+## Decisions (approved 2026-11-10)
+D1–D7 go with the recommendations below. D3 had no recommendation; it follows the owner's leaning (ribbon on by default, per-slideshow switch removed). D8 (PTZ setup) still needs CamTailKit and a device walkthrough.
 
 ---
 
@@ -86,7 +90,7 @@ Still to do from Phase 1: TV-message split (1.3), in-app poll sign-in follow-ups
 **Phase 3 — UI changes after decisions are approved**
 Home Continue card; TV controls moved to Settings; slideshow drawer redesign + per-slide Fit/Fill + master removal/migration; website layout centering & control regrouping; poll drawer compaction, poll display options (timer/duration/persistent QR — needs eclipsepro quest-relay + both apps), answer gap, ring direction; PTZ disconnected/setup UX in CamTailKit.
 
-## Open decisions (not requirements yet)
+## Decisions (D1–D7 approved; D8 open)
 - **D1** Home banner content: Continue-last-Show card (recommended) vs remove the banner vs tips.
 - **D2** Where TV status lives: Settings only + chip while connected (recommended) vs a Home indicator.
 - **D3** Show ribbons when live: default on and remove the per-slideshow switch (your leaning) vs keep switch with default on.

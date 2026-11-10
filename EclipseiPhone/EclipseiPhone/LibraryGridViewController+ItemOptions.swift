@@ -16,6 +16,18 @@ extension LibraryGridViewController {
 
         let sheet = UIAlertController(title: nil, message: nil, preferredStyle: .actionSheet)
 
+        // An iCloud item still downloading has nothing to do with an Apple TV.
+        if UnavailableMediaReason.of(item) == .waitingForICloud {
+            let alert = UIAlertController(
+                title: UnavailableMediaReason.iCloudTitle,
+                message: UnavailableMediaReason.iCloudMessage,
+                preferredStyle: .alert
+            )
+            alert.addAction(UIAlertAction(title: "OK", style: .default))
+            present(alert, animated: true)
+            return
+        }
+
         // Purged items can't play; only offer to re-send from Photos or remove them.
         if item.isAvailable == false {
             sheet.title = item.name

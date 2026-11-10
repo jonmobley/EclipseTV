@@ -497,7 +497,14 @@ final class CameraLiveViewController: UIViewController {
     }
 
     @objc private func cameraEndedExternally() {
-        guard presentedViewController == nil else { return }
+        guard presentedViewController == nil else {
+            // A Settings / Frame sheet is up, so stay open, but the end stopped the
+            // shared session; restart the phone preview or it stays black after the
+            // sheet closes (no viewWillAppear fires for a page sheet).
+            startCameraPreviewIfNeeded()
+            refreshLiveChrome()
+            return
+        }
         if isCommittingParkOnClose || isBeingDismissed || isMovingFromParent {
             return
         }
