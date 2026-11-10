@@ -295,7 +295,9 @@ extension LibraryGridViewController {
     // MARK: - Ribbon cues
 
     /// Moves the room to the tapped cue (LivePollKit `LivePollCues`, shared
-    /// with the Mac). Skipping ahead or reopening a question asks first.
+    /// with the Mac). Only reopening a question asks first, since that clears its
+    /// answers. Jumping ahead goes straight there: it loses nothing (the open
+    /// question is revealed first), and a prompt mid-show only slows the operator.
     func cueQuestPollStage(at index: Int) {
         let store = QuestPollSessionStore.shared
         guard let session = store.session, !store.isControlInFlight,
@@ -312,13 +314,6 @@ extension LibraryGridViewController {
                 title: "Reopen \(target.title)?",
                 message: "Its earlier answers will be cleared.",
                 action: "Reopen",
-                plan: plan
-            )
-        } else if plan.skipsAhead {
-            confirmQuestPollCue(
-                title: "Skip ahead?",
-                message: "Jump to \(target.title)? Cues in between are skipped.",
-                action: "Skip",
                 plan: plan
             )
         } else {

@@ -55,5 +55,8 @@
 - Show grid scrolling (2026-11-07): `openShowGridItems` is rebuilt on every read and is read several
   times per tile, so anything it calls must be cheap. Look up library items with `store.item(id:)`
   (O(1) index), never `store.items.first(where:)`, and resolve the rows once before looping over paths.
+- Adding content never changes live output (2026-11-10). History opens a website phone-only
+  (`WebRemoteViewController(previewOnly:)`); Send to TV is the explicit go-live. Feedback review and
+  phased plan: `docs/reviews/2026-11-10-iphone-feedback-review.md`.
 - Note cards: tap expands or collapses, and the pencil edits (2026-10-31).
 - Note editor on iPhone is a full-height sheet only: a medium detent gets pushed to large by the keyboard, which looks like a stall halfway up (2026-11-01). The text stops at `keyboardLayoutGuide`, and Hide Keyboard shows while editing because Done closes the editor.

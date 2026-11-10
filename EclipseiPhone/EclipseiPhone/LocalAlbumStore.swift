@@ -545,6 +545,13 @@ final class LocalAlbumStore {
         var incoming = album
         incoming.name = uniquifiedName(album.name, excluding: album.id)
         if let index = albums.firstIndex(where: { $0.id == incoming.id }) {
+            // When this phone last opened a Show is local: it is not in the iCloud
+            // record, so a remote copy arrives without it. Keep ours, or Recents
+            // falls back to the creation date ("2 months ago") on a Show just opened.
+            incoming.lastOpenedAt = LocalAlbum.latest(
+                albums[index].lastOpenedAt,
+                incoming.lastOpenedAt
+            )
             albums[index] = incoming
         } else {
             albums.insert(incoming, at: 0)
