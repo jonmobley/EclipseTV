@@ -716,10 +716,11 @@ final class LiveHeaderView: UIView {
         bringSubviewToFront(controls)
         transitionSnapshot = snapshot
 
-        // Brief hold so thumbnail/layout can settle under the snapshot.
+        // No hold before the fade: the new content is already laid out under the
+        // snapshot, and the 0.08 s pause read as lag after a tap.
         UIView.animate(
             withDuration: ContentTransitionStyle.crossfadeDuration,
-            delay: 0.08,
+            delay: 0,
             options: [.curveEaseInOut, .allowUserInteraction]
         ) {
             snapshot.alpha = 0

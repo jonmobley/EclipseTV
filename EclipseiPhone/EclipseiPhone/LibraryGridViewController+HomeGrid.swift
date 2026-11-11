@@ -660,6 +660,8 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             PresentationPrewarmer.shared.clear()
         }
 
+        let signposter = PerformanceSignposts.signposter
+        let tapInterval = signposter.beginInterval("TapToPreview")
         let startAt = item.isVideo ? (VideoResumeStore.shared.position(for: item.id) ?? 0) : 0
         if connectionManager.sendPlayRequest(id: item.id, startAt: startAt) {
             Haptics.impactLight()
@@ -675,7 +677,13 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         } else {
             presentOfflineLive(for: item)
         }
-        reloadLibraryGrid()
+        // `updateCurrentId` already repainted the hero and visible tiles; `present`
+        // has now ended any previous overlay, so settle the strokes before this frame
+        // draws, then let the full reload follow it.
+        syncVisibleShowTileLiveStrokes()
+        scheduleGridReloadAfterFrame {
+            signposter.endInterval("TapToPreview", tapInterval)
+        }
     }
 
     /// Downloads (if needed) then presents a capture via phone AirPlay.
