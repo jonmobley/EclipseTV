@@ -173,13 +173,17 @@ extension WebRemoteViewController {
         }
     }
 
-    /// Overlay buttons that currently earn a slot, top to bottom: Close · ⋯ · Refresh · ⊕,
-    /// then Send to TV and Back only while they apply, so the fixed four never move.
+    /// Overlay buttons that currently earn a slot, top to bottom: Close · ⋯ · Refresh,
+    /// then Auto Scroll (only while it runs, so one tap stops it), Send to TV and Back
+    /// only while they apply. The fixed three never move. New Tab and starting Auto
+    /// Scroll live in ⋯, which kept the column short beside the 16:9 card.
     var visibleOverlayChromeButtons: [UIButton] {
         var buttons: [UIButton] = [
-            overlayCloseButton, overlayBookmarksButton, overlayAutoScrollButton,
-            overlayRefreshButton, overlayNewTabButton
+            overlayCloseButton, overlayBookmarksButton, overlayRefreshButton
         ]
+        if autoScroller.isActive {
+            buttons.append(overlayAutoScrollButton)
+        }
         if activeTab.isPhoneOnly {
             buttons.append(overlaySendToTVButton)
         }
@@ -313,7 +317,8 @@ extension WebRemoteViewController {
 
     // MARK: - Bookmarks Menu
 
-    /// Saved websites from the library; each opens in its own tab.
+    /// Saved websites from the library (each opens in its own tab), then the browser's
+    /// own actions: New Tab, Auto Scroll and its speed.
     private func makeBookmarksMenu() -> UIMenu {
         let pages = WebPageStore.shared.pages
         if pages.isEmpty {
@@ -322,7 +327,7 @@ extension WebRemoteViewController {
                     title: "No saved websites",
                     attributes: .disabled
                 ) { _ in },
-                UIMenu(title: "", options: .displayInline, children: [autoScrollSpeedMenu()])
+                browserActionsMenu()
             ])
         }
 
@@ -338,8 +343,30 @@ extension WebRemoteViewController {
                 self?.openSavedPage(bookmark)
             }
         }
-        children.append(UIMenu(title: "", options: .displayInline, children: [autoScrollSpeedMenu()]))
+        children.append(browserActionsMenu())
         return UIMenu(children: children)
+    }
+
+    /// New Tab, Auto Scroll on/off and its speed, as one section of ⋯.
+    private func browserActionsMenu() -> UIMenu {
+        let newTab = UIAction(
+            title: "New Tab…",
+            image: UIImage(systemName: "plus.square.on.square")
+        ) { [weak self] _ in
+            self?.presentNewURLAlert()
+        }
+        let running = autoScroller.isActive
+        let autoScroll = UIAction(
+            title: running ? "Stop Auto Scroll" : "Auto Scroll",
+            image: UIImage(systemName: running ? "stop.circle" : "arrow.down.circle")
+        ) { [weak self] _ in
+            self?.autoScrollTapped()
+        }
+        return UIMenu(
+            title: "",
+            options: .displayInline,
+            children: [newTab, autoScroll, autoScrollSpeedMenu()]
+        )
     }
 
     /// Whether `bookmark` should show a checkmark for the active tab.
