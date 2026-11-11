@@ -76,7 +76,9 @@ struct BrowserTabList {
     ///
     /// `active` is added in front when it is not one of `pages` (a site opened from
     /// Home or the Websites list rather than from a Show).
-    init(pages: [WebPage], active: WebPage) {
+    /// - Parameter previewOnly: Opens `active` on the phone only, with nothing on the
+    ///   TV, until the user sends it (History browses; it never takes output).
+    init(pages: [WebPage], active: WebPage, previewOnly: Bool = false) {
         var seen = Set<UUID>()
         var list = pages.filter { seen.insert($0.id).inserted }.map(BrowserTab.saved)
         var activeTab = list.first { $0.page?.id == active.id }
@@ -87,7 +89,12 @@ struct BrowserTabList {
         }
         tabs = list
         activeId = activeTab!.id
-        tvTabId = activeTab!.id
+        if previewOnly {
+            activeTab!.isPhoneOnly = true
+            tvTabId = nil
+        } else {
+            tvTabId = activeTab!.id
+        }
     }
 
     var active: BrowserTab {

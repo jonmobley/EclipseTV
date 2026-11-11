@@ -16,13 +16,17 @@ extension LibraryGridViewController {
         var inGrid: Bool
         var docked: Bool
 
-        /// True when the Show layout must be rebuilt (ribbon appears, hides, or moves).
+        /// True when the Show layout must be rebuilt: the ribbon enters or leaves the grid.
+        ///
+        /// A docked ribbon lives outside the grid (only the top inset moves, handled by
+        /// the chrome pass), so docking or undocking must not swap the layout and
+        /// reload: that reset the grid's scroll position whenever a slideshow went live.
         static func needsLayoutRebuild(
             from previous: SlideshowRibbonChrome?,
             to next: SlideshowRibbonChrome
         ) -> Bool {
             guard let previous else { return true }
-            return previous != next
+            return previous.inGrid != next.inGrid
         }
     }
 
@@ -124,9 +128,9 @@ extension LibraryGridViewController {
             inGrid: showsInGridSlideshowRibbon,
             docked: docksLiveSlideshowRibbon
         )
-        if SlideshowRibbonChrome.needsLayoutRebuild(
-            from: lastSlideshowRibbonChrome, to: chrome
-        ) {
+        // Any placement change (docking included) needs the presentation pass;
+        // only `needsLayoutRebuild` decides whether that pass touches the grid.
+        if lastSlideshowRibbonChrome != chrome {
             refreshSlideshowRibbonPresentation()
         } else {
             syncLiveSlideshowRibbonChrome()

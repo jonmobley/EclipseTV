@@ -779,6 +779,17 @@ extension LibraryGridViewController: UICollectionViewDataSource,
     func optionsMenu(for item: LibraryItemDTO) -> UIMenu {
         let id = item.id
 
+        if UnavailableMediaReason.of(item) == .waitingForICloud {
+            return UIMenu(
+                title: UnavailableMediaReason.iCloudMessage,
+                children: [UIAction(
+                    title: UnavailableMediaReason.iCloudTitle,
+                    image: UIImage(systemName: "icloud.and.arrow.down"),
+                    attributes: .disabled
+                ) { _ in }]
+            )
+        }
+
         if item.isAvailable == false {
             let resend = UIAction(
                 title: "Re-send from Photos",
