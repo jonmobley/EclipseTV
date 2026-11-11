@@ -151,6 +151,10 @@ extension LibraryGridViewController {
                 HomeHeroCarouselCell.self,
                 forCellWithReuseIdentifier: HomeHeroCarouselCell.reuseIdentifier
             )
+            view.register(
+                HomeContinueCell.self,
+                forCellWithReuseIdentifier: HomeContinueCell.reuseIdentifier
+            )
         }
         view.dataSource = self
         view.delegate = self

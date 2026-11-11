@@ -74,6 +74,10 @@ extension WebRemoteViewController {
         showAutoScrollSpeedBar(autoScroller.isActive)
         autoScrollSpeedBar?.apply(speed: autoScroller.speed)
         refreshBookmarksMenu()
+        // The column shows Auto Scroll only while it runs.
+        if usesOverlayBrowserChrome {
+            layoutOverlayChrome()
+        }
     }
 
     /// Slides the speed bar in over the page, or away, as Auto Scroll turns on / off.

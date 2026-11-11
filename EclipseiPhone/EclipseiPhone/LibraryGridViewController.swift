@@ -247,7 +247,7 @@ final class LibraryGridViewController: UIViewController {
               let id = SlideshowPlaybackController.shared.activeSlideshowId,
               let show = SlideshowStore.shared.slideshow(id: id),
               show.showId == openShowId,
-              show.showRibbonWhenLive else { return false }
+              !ribbonHiddenSlideshowIds.contains(show.id) else { return false }
         return !SlideshowPlaybackController.shared.activeSlideIds.isEmpty
     }
 
@@ -407,6 +407,13 @@ final class LibraryGridViewController: UIViewController {
 
     /// A full grid reload is queued for after the current frame (`scheduleGridReloadAfterFrame`).
     var isGridReloadScheduled = false
+
+    /// Slideshows whose live ribbon the operator hid from the hero, this session.
+    ///
+    /// The ribbon shows for every live slideshow; hiding it is a choice for the
+    /// current session, not a saved per-slideshow switch (the old "Show Ribbon When
+    /// Live" setting defaulted to off and was easy to lose track of).
+    var ribbonHiddenSlideshowIds: Set<UUID> = []
 
     /// Last in-grid / docked ribbon placement. Slide advances must not rebuild this.
     var lastSlideshowRibbonChrome: SlideshowRibbonChrome?
