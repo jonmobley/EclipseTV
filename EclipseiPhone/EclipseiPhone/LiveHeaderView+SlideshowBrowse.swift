@@ -15,7 +15,7 @@ extension LiveHeaderView {
     ///
     /// - Parameters:
     ///   - visible: When true, the slideshow owns live output for this Show.
-    ///   - isOn: Current `showRibbonWhenLive` preference.
+    ///   - isOn: Whether the ribbon is showing (not hidden this session).
     func setSlideshowRibbonToggleVisible(_ visible: Bool, isOn: Bool) {
         guard visible else {
             slideshowRibbonButton?.removeFromSuperview()

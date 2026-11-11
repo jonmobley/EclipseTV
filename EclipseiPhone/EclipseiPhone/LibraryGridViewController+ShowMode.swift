@@ -280,9 +280,9 @@ extension LibraryGridViewController {
                 fillColor: .darkGray,
                 isLive: live,
                 isLocked: isLiveOutputLocked,
-                thumbnailContentMode: show.isFill
-                    ? .scaleAspectFill
-                    : .scaleAspectFit,
+                thumbnailContentMode: show.resolvedCoverId
+                    .map { MediaFitSettings.mode(forId: $0).contentMode }
+                    ?? .scaleAspectFit,
                 typeIcon: .slideshow
             )
             cell.setMoreMenu(
@@ -583,6 +583,9 @@ extension LibraryGridViewController {
     /// Opens the slideshow editor (preferences + reorder).
     func presentSlideshowEditor(_ slideshowId: UUID) {
         let detail = SlideshowDetailViewController(slideshowId: slideshowId)
+        detail.onApplyScreenFit = { [weak self] mode, item in
+            self?.applyScreenFit(mode, to: item)
+        }
         let nav = UINavigationController(rootViewController: detail)
         nav.modalPresentationStyle = .formSheet
         let close = UIBarButtonItem(
@@ -617,7 +620,8 @@ extension LibraryGridViewController {
         ) { [weak self] _ in
             self?.confirmDeleteSlideshow(show)
         }
-        return UIMenu(children: [edit, screenFitMenu(for: show), rename, arrangeAction(), delete])
+        // Fit / Fill is per slide now, set in the editor (Edit).
+        return UIMenu(children: [edit, rename, arrangeAction(), delete])
     }
 
     /// Opens the pan/zoom cropper for a video. Stills use Screen Fit → Custom.
