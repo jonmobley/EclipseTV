@@ -36,7 +36,7 @@ extension LibraryGridViewController {
             return
         }
         Task { @MainActor [weak self] in
-            let url = await Self.signedInWebURL(landingOn: page) ?? page
+            let url = await LibraryGridViewController.signedInWebURL(landingOn: page) ?? page
             self?.present(SFSafariViewController(url: url), animated: true)
         }
     }
