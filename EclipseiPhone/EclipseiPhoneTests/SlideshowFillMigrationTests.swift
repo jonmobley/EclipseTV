@@ -9,6 +9,7 @@ import Foundation
 import Testing
 @testable import EclipseiPhone
 
+@MainActor
 struct SlideshowFillMigrationTests {
 
     @Test func onlyFillSlideshowsHandTheirSlidesFill() {
