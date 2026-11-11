@@ -337,6 +337,34 @@ extension iPhoneMainViewController: VideoThumbnailPreviewDelegate {
         }
     }
 
+    /// `saveCustomThumbnail` with the JPEG encode and write off the main thread.
+    ///
+    /// Batch import used to call the synchronous version once per video with a
+    /// full-size frame, stalling the grid as the import finished. Awaiting this keeps
+    /// the main thread free and still has the file in place before anything sends.
+    func saveCustomThumbnailInBackground(_ thumbnail: UIImage, for videoURL: URL) async {
+        let fileName = videoURL.lastPathComponent
+        let thumbnailURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("thumbnail_\(fileName).jpg")
+        let written: Bool = await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                guard let data = thumbnail.jpegData(compressionQuality: 0.8) else {
+                    continuation.resume(returning: false)
+                    return
+                }
+                continuation.resume(returning: (try? data.write(to: thumbnailURL)) != nil)
+            }
+        }
+        guard written else {
+            logger.error("Failed to save custom thumbnail for \(fileName, privacy: .public)")
+            return
+        }
+        UserDefaults.standard.set(
+            thumbnailURL.path,
+            forKey: DefaultsKeys.customThumbnail(fileName: fileName)
+        )
+    }
+
     func saveCustomThumbnail(_ thumbnail: UIImage, for videoURL: URL) {
         // Save the custom thumbnail to a temporary location
         // We'll use this when the video is received on the Apple TV side
