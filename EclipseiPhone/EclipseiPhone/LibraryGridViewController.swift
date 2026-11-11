@@ -405,6 +405,9 @@ final class LibraryGridViewController: UIViewController {
     /// Measured note-card height (0 when parked).
     var liveNoteHeightConstraint: NSLayoutConstraint?
 
+    /// A full grid reload is queued for after the current frame (`scheduleGridReloadAfterFrame`).
+    var isGridReloadScheduled = false
+
     /// Slideshows whose live ribbon the operator hid from the hero, this session.
     ///
     /// The ribbon shows for every live slideshow; hiding it is a choice for the
