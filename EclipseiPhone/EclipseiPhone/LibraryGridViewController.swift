@@ -405,6 +405,9 @@ final class LibraryGridViewController: UIViewController {
     /// Measured note-card height (0 when parked).
     var liveNoteHeightConstraint: NSLayoutConstraint?
 
+    /// A full grid reload is queued for after the current frame (`scheduleGridReloadAfterFrame`).
+    var isGridReloadScheduled = false
+
     /// Last in-grid / docked ribbon placement. Slide advances must not rebuild this.
     var lastSlideshowRibbonChrome: SlideshowRibbonChrome?
     /// Hero + ribbon presentation the last chrome pass applied (`nil` before the first).

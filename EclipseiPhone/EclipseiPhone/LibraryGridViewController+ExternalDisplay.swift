@@ -85,6 +85,28 @@ extension LibraryGridViewController {
         reloadLibraryGrid()
     }
 
+    /// Runs `reloadLibraryGrid()` once, after the current frame has drawn.
+    ///
+    /// For a tile tap: the hero and the visible tiles are already repainted in place,
+    /// so the full reload of all three grids (plus a forced layout) only needs to
+    /// catch up off-screen state. Doing it inside the tap made the preview wait for
+    /// it. Rapid taps share one reload.
+    func scheduleGridReloadAfterFrame(then completion: (() -> Void)? = nil) {
+        guard !isGridReloadScheduled else {
+            completion?()
+            return
+        }
+        isGridReloadScheduled = true
+        // A timer fires on a later run-loop pass, after Core Animation has committed
+        // the frame this turn produced (a plain `main.async` can run before it).
+        DispatchQueue.main.asyncAfter(deadline: .now()) { [weak self] in
+            guard let self else { return }
+            self.isGridReloadScheduled = false
+            self.reloadLibraryGrid()
+            completion?()
+        }
+    }
+
     /// Reloads the collection view while keeping on-screen thumbnail pins warm.
     ///
     /// Prefer this over bare `reloadData()` on go-live / live-chrome paths: video decode

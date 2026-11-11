@@ -80,8 +80,21 @@ final class TVLibraryStore {
     /// Miss retries while LocalMedia / JPEG writes are still landing.
     private var diskLoadAttempts: [String: Int] = [:]
 
-    /// Serial queue for thumbnail disk I/O.
+    /// Serial queue for thumbnail writes and pruning (order matters there).
     private let ioQueue = DispatchQueue(label: "com.eclipseapp.ios.TVLibraryStore.io", qos: .utility)
+
+    /// Thumbnail reads, several at once. Reads used to share the serial `ioQueue`, so
+    /// one slow file held every tile behind it (5–10 s waits on a fresh import).
+    private let decodeQueue: OperationQueue = {
+        let queue = OperationQueue()
+        queue.name = "com.eclipseapp.ios.TVLibraryStore.decode"
+        queue.maxConcurrentOperationCount = 4
+        queue.qualityOfService = .userInitiated
+        return queue
+    }()
+
+    /// Video poster frames decode video, so only two run at a time; photos never wait on them.
+    private let posterLimiter = AsyncLimiter(limit: 2)
 
     weak var delegate: TVLibraryStoreDelegate?
 
@@ -230,6 +243,10 @@ final class TVLibraryStore {
     }
 
     /// Loads a cached thumb, or rebuilds one from LocalMedia / the other mode's cache.
+    ///
+    /// Cached JPEGs and photos decode on `decodeQueue`; a video with no usable cached
+    /// thumb gets its poster built separately (`posterLimiter`), so it never holds up
+    /// the tiles around it.
     private func loadThumbnailFromDisk(_ id: String) {
         guard !pendingDiskLoads.contains(id) else { return }
         pendingDiskLoads.insert(id)
@@ -243,10 +260,12 @@ final class TVLibraryStore {
                 mode: mode == .landscape ? .vertical : .landscape
             )
         ].compactMap { $0 }
-        let isVideo = items.first(where: { $0.id == id })?.isVideo
-            ?? Self.isVideoFilename(id)
+        let isVideo = item(id: id)?.isVideo ?? Self.isVideoFilename(id)
+        let signposter = PerformanceSignposts.signposter
+        let signpostID = signposter.makeSignpostID()
+        let interval = signposter.beginInterval("Thumbnail", id: signpostID)
 
-        ioQueue.async {
+        decodeQueue.addOperation {
             var image: UIImage?
             // Only a thumb rebuilt from another location needs writing back; the active
             // mode's own cache file would otherwise be re-encoded on every single load.
@@ -262,35 +281,65 @@ final class TVLibraryStore {
                     break
                 }
             }
-            if image == nil {
+            if image == nil, !isVideo {
                 for url in mediaURLs {
-                    if isVideo {
-                        image = VideoPosterFrame.image(at: url)
-                    } else {
-                        image = ThumbnailDecoder.decode(fileURL: url)
-                    }
+                    image = ThumbnailDecoder.decode(fileURL: url)
                     if image != nil { break }
                 }
             }
+            let decoded = image
+            let persist = needsPersist
 
             Task { @MainActor in
-                self.pendingDiskLoads.remove(id)
-                guard self.activeTVName == tvName,
-                      self.activeLibraryMode == mode else { return }
-                // Miss / failure: leave pending clear so the next configure can retry.
-                guard let image else {
-                    self.scheduleThumbnailRetry(id: id, tvName: tvName, mode: mode)
-                    return
+                if decoded == nil, isVideo, !mediaURLs.isEmpty {
+                    let poster = await self.posterLimiter.run {
+                        await Self.firstPoster(from: mediaURLs)
+                    }
+                    self.finishThumbnailLoad(
+                        id: id, image: poster, needsPersist: true,
+                        tvName: tvName, mode: mode
+                    )
+                } else {
+                    self.finishThumbnailLoad(
+                        id: id, image: decoded, needsPersist: persist,
+                        tvName: tvName, mode: mode
+                    )
                 }
-                self.diskLoadAttempts.removeValue(forKey: id)
-                // Always re-insert — refills NSCache after a memory-pressure purge.
-                self.thumbnails[id] = image
-                if needsPersist {
-                    self.persistThumbnail(image, forId: id)
-                }
-                self.notifyThumbnailUpdated(for: id)
+                signposter.endInterval("Thumbnail", interval)
             }
         }
+    }
+
+    /// First usable poster among `urls` (active mode's file, then the other mode's).
+    private nonisolated static func firstPoster(from urls: [URL]) async -> UIImage? {
+        for url in urls {
+            if let poster = await VideoPosterFrame.poster(at: url) { return poster }
+        }
+        return nil
+    }
+
+    /// Main-actor tail of a thumbnail load: cache, persist, notify, or retry on a miss.
+    private func finishThumbnailLoad(
+        id: String,
+        image: UIImage?,
+        needsPersist: Bool,
+        tvName: String?,
+        mode: EclipseShareProtocol.LibraryMode
+    ) {
+        pendingDiskLoads.remove(id)
+        guard activeTVName == tvName, activeLibraryMode == mode else { return }
+        // Miss / failure: leave pending clear so the next configure can retry.
+        guard let image else {
+            scheduleThumbnailRetry(id: id, tvName: tvName, mode: mode)
+            return
+        }
+        diskLoadAttempts.removeValue(forKey: id)
+        // Always re-insert — refills NSCache after a memory-pressure purge.
+        thumbnails[id] = image
+        if needsPersist {
+            persistThumbnail(image, forId: id)
+        }
+        notifyThumbnailUpdated(for: id)
     }
 
     /// Thumbnail paths: active mode, other mode, then legacy flat `<tvHash>/<idHash>.jpg`.
@@ -554,13 +603,21 @@ final class TVLibraryStore {
             return
         }
         diskLoadAttempts[id] = attempt
-        let delay = 0.35 * Double(attempt)
+        let delay = Self.thumbnailRetryDelay(attempt: attempt)
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
             guard let self,
                   self.activeTVName == tvName,
                   self.activeLibraryMode == mode else { return }
             self.loadThumbnailFromDisk(id)
         }
+    }
+
+    /// Seconds before retry `attempt` (1...3): 0.35, 0.7, then 2.0.
+    ///
+    /// The last wait is long enough for a large video still being copied into the
+    /// library; the old 1.05 s gave up on those and left the tile blank.
+    nonisolated static func thumbnailRetryDelay(attempt: Int) -> TimeInterval {
+        attempt >= 3 ? 2.0 : 0.35 * Double(max(attempt, 1))
     }
 
     private static let localLibraryName = "My Library"
