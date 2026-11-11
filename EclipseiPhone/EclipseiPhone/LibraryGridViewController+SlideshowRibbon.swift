@@ -152,7 +152,7 @@ extension LibraryGridViewController {
             return
         }
         liveHeader.setSlideshowRibbonToggleVisible(
-            true, isOn: slideshow.showRibbonWhenLive
+            true, isOn: !ribbonHiddenSlideshowIds.contains(slideshow.id)
         )
         liveHeader.allowsSlideshowBrowse = showsLiveSlideshowRibbon
     }
@@ -171,14 +171,16 @@ extension LibraryGridViewController {
         )
     }
 
-    /// Flips `showRibbonWhenLive` for the active slideshow (hero control).
+    /// Hides or shows the active slideshow's ribbon for this session (hero control).
     func toggleLiveSlideshowRibbon() {
         guard let slideshow = activeLiveSlideshow() else { return }
-        SlideshowStore.shared.updatePreferences(
-            id: slideshow.id,
-            showRibbonWhenLive: !slideshow.showRibbonWhenLive
-        )
+        if ribbonHiddenSlideshowIds.contains(slideshow.id) {
+            ribbonHiddenSlideshowIds.remove(slideshow.id)
+        } else {
+            ribbonHiddenSlideshowIds.insert(slideshow.id)
+        }
         Haptics.impactLight()
+        refreshSlideshowRibbonPresentation()
     }
 
     /// Cue-only Live Poll refresh: update highlights; nudge the strip only if needed.

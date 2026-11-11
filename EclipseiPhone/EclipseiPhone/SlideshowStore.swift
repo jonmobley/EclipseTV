@@ -40,6 +40,30 @@ final class SlideshowStore {
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         load()
+        migrateSlideshowFillToSlidesIfNeeded()
+    }
+
+    // MARK: - Fit / Fill migration
+
+    private let fillMigrationKey = "EclipseTV.slideshows.fillMovedToSlides"
+
+    /// Slide ids a slideshow-wide Fill used to cover.
+    ///
+    /// Fit / Fill is now chosen per slide (the slide's own Screen Fit, as for any
+    /// still). A slideshow that was set to Fill keeps looking the same by giving each
+    /// of its slides Fill. `Slideshow.isFill` itself is left as it was: the Mac still
+    /// reads it for its own slideshow card.
+    static func slideIdsCoveredBySlideshowFill(_ slideshows: [Slideshow]) -> Set<String> {
+        Set(slideshows.filter(\.isFill).flatMap(\.itemIds))
+    }
+
+    /// Runs the per-slide Fill move once per device.
+    private func migrateSlideshowFillToSlidesIfNeeded() {
+        guard !defaults.bool(forKey: fillMigrationKey) else { return }
+        defaults.set(true, forKey: fillMigrationKey)
+        for id in Self.slideIdsCoveredBySlideshowFill(slideshows) {
+            MediaFitSettings.setMode(.fill, forId: id)
+        }
     }
 
     // MARK: - Queries

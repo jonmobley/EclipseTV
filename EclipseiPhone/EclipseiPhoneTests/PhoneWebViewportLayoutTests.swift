@@ -5,8 +5,7 @@
 //  Copyright © 2026 Moxie LLC. All rights reserved.
 //
 //  Landscape browser hides the URL nav bar so the 16:9 preview can use the
-//  full stage height, left-aligned, with Back / ⋯ / Close in a trailing
-//  column. Vertical still leaves room for the URL bar above the stage.
+//  full stage height, centred together with its trailing button column. Vertical still leaves room for the URL bar above the stage.
 //
 
 import Testing
@@ -52,21 +51,26 @@ struct PhoneWebViewportLayoutTests {
     }
 
 
-    @Test func landscapePanelIsLeadingAligned() {
-        let stage = CGRect(x: 0, y: 0, width: 844, height: 390)
-        let safe = UIEdgeInsets(top: 0, left: 59, bottom: 0, right: 21)
+    @Test func landscapeCardAndColumnAreCentredTogether() {
+        let stage = CGRect(x: 0, y: 0, width: 852, height: 393)
+        let safe = UIEdgeInsets(top: 0, left: 59, bottom: 21, right: 59)
         let panel = PhoneWebViewportLayout.panelRect(
             in: stage,
             isVertical: false,
             safeInsets: safe,
             aspect: landscapeAspect
         )
-        let leading = max(safe.left, PhoneWebViewportLayout.sideInset)
-        #expect(abs(panel.minX - leading) < 0.5)
-        #expect(
-            panel.maxX
-                <= stage.maxX - PhoneWebViewportLayout.landscapeChromeColumn + 0.5
-        )
+        let column = PhoneWebViewportLayout.overlayFrames(
+            panel: panel, in: stage, safeInsets: safe, count: 1
+        )[0]
+        let leftGap = panel.minX - max(safe.left, PhoneWebViewportLayout.sideInset)
+        let groupMaxX = panel.maxX + PhoneWebViewportLayout.landscapeChromeColumn
+        let rightGap = stage.maxX - max(safe.right, PhoneWebViewportLayout.sideInset) - groupMaxX
+        #expect(abs(leftGap - rightGap) < 0.5)
+        #expect(leftGap >= -0.5)
+        // The column sits right beside the card, inside the group.
+        #expect(column.minX >= panel.maxX - 0.5)
+        #expect(column.maxX <= groupMaxX + 0.5)
     }
 
     @Test func landscapeOverlayButtonsSitOutsideThePanel() {
@@ -223,10 +227,12 @@ struct LandscapeBrowserChromeTests {
             #expect(browser.usesOverlayBrowserChrome)
             #expect(browser.navigationItem.title == nil)
             #expect(nav.isNavigationBarHidden)
-            // Back waits for in-session history; Refresh and ⊕ are always there.
+            // Back waits for in-session history; Refresh and ⋯ are always there.
+            // New Tab lives in ⋯; Auto Scroll shows only while it runs.
             #expect(browser.overlayBackButton.isHidden)
             #expect(browser.overlayRefreshButton.isHidden == false)
-            #expect(browser.overlayNewTabButton.isHidden == false)
+            #expect(browser.overlayNewTabButton.isHidden)
+            #expect(browser.overlayAutoScrollButton.isHidden)
             #expect(browser.overlayBookmarksButton.isHidden == false)
             #expect(browser.overlaySendToTVButton.isHidden)
         }
