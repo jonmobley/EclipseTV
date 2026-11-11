@@ -141,7 +141,7 @@ enum ExternalOutputSettings {
     private static let alwaysRecordWhenLiveKey = "EclipseTV.camera.alwaysRecordWhenLive"
     private static let pauseMusicForVideoKey = "EclipseTV.audio.pauseMusicForVideo"
 
-    /// Posted when orientation, rotation, text size, transition,
+    /// Posted when orientation, rotation, custom sizes, text size, transition,
     /// frame-in-captures, always-record-when-live, or pause-music-for-video changes.
     static let didChangeNotification = Notification.Name("ExternalOutputSettings.didChange")
 
@@ -272,18 +272,18 @@ enum ExternalOutputSettings {
     }
 
     /// Shared web CSS viewport for phone preview and AirPlay TV.
-    /// Vertical → 9:16; Landscape → 16:9. Width from `webTextSize`.
+    /// Vertical → 9:16; Landscape → 16:9, or the active custom size. Width from `webTextSize`.
     static var webLogicalSize: CGSize {
         let width = webTextSize.logicalWidth
-        let height = width / orientation.aspectRatio
+        let height = width / outputAspectRatio
         return CGSize(width: width, height: height)
     }
 
-    /// Largest centered rect of the active Display Mode aspect that fits in `bounds`.
+    /// Largest centered rect of the output aspect (`outputAspectRatio`) that fits in `bounds`.
     /// Used by phone camera / Pages stages so framing matches the AirPlay panel.
     static func displayModePanelRect(in bounds: CGRect) -> CGRect {
         guard bounds.width > 0, bounds.height > 0 else { return .zero }
-        let aspect = orientation.aspectRatio
+        let aspect = outputAspectRatio
         var width = bounds.width
         var height = width / aspect
         if height > bounds.height {

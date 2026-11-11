@@ -189,12 +189,12 @@ extension PresentationViewController {
     func ensureTransitionOverlay() {
         if transitionOverlayContainer.superview == nil {
             transitionOverlayContainer.translatesAutoresizingMaskIntoConstraints = false
-            view.addSubview(transitionOverlayContainer)
+            stageView.addSubview(transitionOverlayContainer)
             NSLayoutConstraint.activate([
-                transitionOverlayContainer.topAnchor.constraint(equalTo: view.topAnchor),
-                transitionOverlayContainer.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-                transitionOverlayContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-                transitionOverlayContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor)
+                transitionOverlayContainer.topAnchor.constraint(equalTo: stageView.topAnchor),
+                transitionOverlayContainer.bottomAnchor.constraint(equalTo: stageView.bottomAnchor),
+                transitionOverlayContainer.leadingAnchor.constraint(equalTo: stageView.leadingAnchor),
+                transitionOverlayContainer.trailingAnchor.constraint(equalTo: stageView.trailingAnchor)
             ])
         }
     }

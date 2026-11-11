@@ -252,7 +252,7 @@ extension CameraLiveViewController {
 
     func stillRibbonThumbSize() -> CGSize {
         let short = Self.alternateStillThumbShortSide
-        let aspect = ExternalOutputSettings.orientation.aspectRatio
+        let aspect = ExternalOutputSettings.outputAspectRatio
         let width = aspect >= 1 ? short * aspect : short
         return CGSize(width: width, height: width / aspect)
     }

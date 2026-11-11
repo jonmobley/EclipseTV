@@ -163,7 +163,7 @@ final class CountdownLayoutEditorViewController: UIViewController,
                 - 16
         )
         guard maxRect.width > 1, maxRect.height > 1 else { return }
-        let aspect = ExternalOutputSettings.orientation.aspectRatio
+        let aspect = ExternalOutputSettings.outputAspectRatio
         let fitted = Self.aspectFitted(aspect, in: maxRect)
         canvas.frame = fitted
     }

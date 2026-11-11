@@ -643,6 +643,9 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
     private func displayModeSummary() -> String {
         let orientation = ExternalOutputSettings.orientation
         guard ExternalOutputSettings.isVerticalMode else {
+            if let custom = ExternalOutputSettings.activeCustomSize {
+                return "\(orientation.rawValue) · \(custom.displayLabel)"
+            }
             return orientation.rawValue
         }
         return "\(orientation.rawValue) · \(ExternalOutputSettings.rotationDirection.rawValue)"

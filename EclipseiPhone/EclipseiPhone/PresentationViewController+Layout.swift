@@ -67,6 +67,16 @@ extension PresentationViewController {
         return container
     }
 
+    /// Sizes `stageView` to the output shape and settles its children so the
+    /// apply*Layout passes read final container bounds.
+    func updateStageFrame() {
+        let target = ExternalOutputSettings.outputStageRect(in: view.bounds)
+        if stageView.frame != target {
+            stageView.frame = target
+        }
+        stageView.layoutIfNeeded()
+    }
+
     /// Instance wrapper for call sites on the presentation controller.
     func applyRotatedLayout(to content: UIView, in container: UIView, scale: CGFloat) {
         Self.applyRotatedLayout(to: content, in: container, scale: scale)

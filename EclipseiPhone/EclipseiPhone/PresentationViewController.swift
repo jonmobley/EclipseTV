@@ -22,6 +22,18 @@ final class PresentationViewController: UIViewController {
     // MARK: - Subviews
 
     /// Fullscreen host for library image/video; content inside is rotated in Vertical.
+    /// Hosts every content container. Full screen in Landscape / Vertical; with a
+    /// custom size, the centered rect of that shape (`ExternalOutputSettings
+    /// .outputStageRect`) so the picture is letterboxed to the real surface.
+    let stageView: UIView = {
+        let view = UIView()
+        view.backgroundColor = .black
+        view.clipsToBounds = true
+        // Frame-driven from viewDidLayoutSubviews; children constrain to it.
+        view.translatesAutoresizingMaskIntoConstraints = true
+        return view
+    }()
+
     let mediaContainer: UIView = {
         let view = UIView()
         view.backgroundColor = .black
@@ -279,18 +291,20 @@ final class PresentationViewController: UIViewController {
         // External is output-only; transport lives on the phone hero.
         view.isUserInteractionEnabled = false
 
-        view.addSubview(mediaContainer)
+        view.addSubview(stageView)
+        stageView.frame = view.bounds
+        stageView.addSubview(mediaContainer)
         mediaContainer.addSubview(mediaContentView)
         mediaContentView.addSubview(imageView)
         view.addSubview(idleBrandView)
         view.addSubview(messageLabel)
         view.addSubview(activityIndicator)
-        view.addSubview(cameraContainer)
-        view.addSubview(webContainer)
-        view.addSubview(pdfContainer)
-        view.addSubview(countdownContainer)
-        view.addSubview(prompterContainer)
-        view.addSubview(transitionOverlayContainer)
+        stageView.addSubview(cameraContainer)
+        stageView.addSubview(webContainer)
+        stageView.addSubview(pdfContainer)
+        stageView.addSubview(countdownContainer)
+        stageView.addSubview(prompterContainer)
+        stageView.addSubview(transitionOverlayContainer)
         cameraContainer.addSubview(cameraPreviewView)
         cameraContainer.addSubview(cameraFrameOverlayView)
         // Frame-driven via applyRotatedLayout — Auto Layout size constraints
@@ -308,10 +322,10 @@ final class PresentationViewController: UIViewController {
         }
 
         NSLayoutConstraint.activate([
-            mediaContainer.topAnchor.constraint(equalTo: view.topAnchor),
-            mediaContainer.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            mediaContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            mediaContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            mediaContainer.topAnchor.constraint(equalTo: stageView.topAnchor),
+            mediaContainer.bottomAnchor.constraint(equalTo: stageView.bottomAnchor),
+            mediaContainer.leadingAnchor.constraint(equalTo: stageView.leadingAnchor),
+            mediaContainer.trailingAnchor.constraint(equalTo: stageView.trailingAnchor),
 
             imageView.topAnchor.constraint(equalTo: mediaContentView.topAnchor),
             imageView.bottomAnchor.constraint(equalTo: mediaContentView.bottomAnchor),
@@ -333,34 +347,34 @@ final class PresentationViewController: UIViewController {
             activityIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             activityIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor),
 
-            cameraContainer.topAnchor.constraint(equalTo: view.topAnchor),
-            cameraContainer.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            cameraContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            cameraContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            cameraContainer.topAnchor.constraint(equalTo: stageView.topAnchor),
+            cameraContainer.bottomAnchor.constraint(equalTo: stageView.bottomAnchor),
+            cameraContainer.leadingAnchor.constraint(equalTo: stageView.leadingAnchor),
+            cameraContainer.trailingAnchor.constraint(equalTo: stageView.trailingAnchor),
 
-            webContainer.topAnchor.constraint(equalTo: view.topAnchor),
-            webContainer.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            webContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            webContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            webContainer.topAnchor.constraint(equalTo: stageView.topAnchor),
+            webContainer.bottomAnchor.constraint(equalTo: stageView.bottomAnchor),
+            webContainer.leadingAnchor.constraint(equalTo: stageView.leadingAnchor),
+            webContainer.trailingAnchor.constraint(equalTo: stageView.trailingAnchor),
 
-            pdfContainer.topAnchor.constraint(equalTo: view.topAnchor),
-            pdfContainer.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            pdfContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            pdfContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            pdfContainer.topAnchor.constraint(equalTo: stageView.topAnchor),
+            pdfContainer.bottomAnchor.constraint(equalTo: stageView.bottomAnchor),
+            pdfContainer.leadingAnchor.constraint(equalTo: stageView.leadingAnchor),
+            pdfContainer.trailingAnchor.constraint(equalTo: stageView.trailingAnchor),
 
-            countdownContainer.topAnchor.constraint(equalTo: view.topAnchor),
-            countdownContainer.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            countdownContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            countdownContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            prompterContainer.topAnchor.constraint(equalTo: view.topAnchor),
-            prompterContainer.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            prompterContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            prompterContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            countdownContainer.topAnchor.constraint(equalTo: stageView.topAnchor),
+            countdownContainer.bottomAnchor.constraint(equalTo: stageView.bottomAnchor),
+            countdownContainer.leadingAnchor.constraint(equalTo: stageView.leadingAnchor),
+            countdownContainer.trailingAnchor.constraint(equalTo: stageView.trailingAnchor),
+            prompterContainer.topAnchor.constraint(equalTo: stageView.topAnchor),
+            prompterContainer.bottomAnchor.constraint(equalTo: stageView.bottomAnchor),
+            prompterContainer.leadingAnchor.constraint(equalTo: stageView.leadingAnchor),
+            prompterContainer.trailingAnchor.constraint(equalTo: stageView.trailingAnchor),
 
-            transitionOverlayContainer.topAnchor.constraint(equalTo: view.topAnchor),
-            transitionOverlayContainer.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            transitionOverlayContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            transitionOverlayContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor)
+            transitionOverlayContainer.topAnchor.constraint(equalTo: stageView.topAnchor),
+            transitionOverlayContainer.bottomAnchor.constraint(equalTo: stageView.bottomAnchor),
+            transitionOverlayContainer.leadingAnchor.constraint(equalTo: stageView.leadingAnchor),
+            transitionOverlayContainer.trailingAnchor.constraint(equalTo: stageView.trailingAnchor)
         ])
 
         settingsObserver = NotificationCenter.default.addObserver(
@@ -368,6 +382,7 @@ final class PresentationViewController: UIViewController {
             object: nil,
             queue: .main
         ) { [weak self] _ in
+            self?.updateStageFrame()
             self?.applyMediaLayout()
             self?.applyCameraLayout()
             self?.applyWebLayout()
@@ -392,6 +407,7 @@ final class PresentationViewController: UIViewController {
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
+        updateStageFrame()
         if !mediaContainer.isHidden {
             applyMediaLayout()
         }
