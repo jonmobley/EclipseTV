@@ -21,17 +21,16 @@ final class QuestPollHostViewController: UIViewController {
 
     private let scroll = UIScrollView()
     private let stack = UIStackView()
-    private let responsesValue = UILabel()
-    private let countdownLabel = UILabel()
     private let progressLabel = UILabel()
+    private let joinedTile = StatTile(caption: "Joined")
+    private let responsesTile = StatTile(caption: "Responses")
+    private let timeTile = StatTile(caption: "Time left")
     private let resultsStack = UIStackView()
     private let primaryButton = UIButton(type: .system)
     private let extendButton = UIButton(type: .system)
-    private let skipButton = UIButton(type: .system)
     private let projectorQRButton = UIButton(type: .system)
     private let joinQRButton = UIButton(type: .system)
-    private let endButton = UIButton(type: .system)
-    private let joinedLabel = UILabel()
+    private let moreButton = UIButton(type: .system)
     private var storeObserver: NSObjectProtocol?
 
     override func viewDidLoad() {
@@ -63,92 +62,78 @@ final class QuestPollHostViewController: UIViewController {
 
     // MARK: - Layout
 
+    /// Compact, so most of it fits the half-height sheet:
+    /// question N of M · counts row · [+15s] [Next] · results · QR / Join / ⋯.
+    /// Skip and End live in ⋯; they are rarely needed and easy to mis-tap mid-show.
     private func buildLayout() {
         scroll.translatesAutoresizingMaskIntoConstraints = false
         scroll.alwaysBounceVertical = true
         view.addSubview(scroll)
 
         stack.axis = .vertical
-        stack.spacing = 16
+        stack.spacing = 12
         stack.alignment = .fill
         stack.translatesAutoresizingMaskIntoConstraints = false
         scroll.addSubview(stack)
 
-        let heading = UILabel()
-        heading.text = "CONTROLS"
-        heading.font = .scaled(12, weight: .semibold, relativeTo: .caption1)
-        heading.adjustsFontForContentSizeCategory = true
-        heading.textColor = UIColor.white.withAlphaComponent(0.45)
-        heading.textAlignment = .left
-
-        stack.addArrangedSubview(heading)
-        stack.addArrangedSubview(makeResponsesCard())
-
-        countdownLabel.font = .scaledMonospacedDigit(15, weight: .semibold, relativeTo: .subheadline)
-        countdownLabel.adjustsFontForContentSizeCategory = true
-        countdownLabel.textColor = UIColor.white.withAlphaComponent(0.7)
-        countdownLabel.textAlignment = .center
-        countdownLabel.isHidden = true
-        stack.addArrangedSubview(countdownLabel)
-
-        progressLabel.font = .scaled(14, weight: .medium, relativeTo: .footnote)
+        progressLabel.font = .scaled(13, weight: .semibold, relativeTo: .footnote)
         progressLabel.adjustsFontForContentSizeCategory = true
         progressLabel.textColor = UIColor.white.withAlphaComponent(0.55)
-        progressLabel.textAlignment = .center
         stack.addArrangedSubview(progressLabel)
 
-        resultsStack.axis = .vertical
-        resultsStack.spacing = 8
-        resultsStack.isHidden = true
-        stack.addArrangedSubview(resultsStack)
+        let counts = UIStackView(arrangedSubviews: [joinedTile, responsesTile, timeTile])
+        counts.axis = .horizontal
+        counts.spacing = 8
+        counts.distribution = .fillEqually
+        stack.addArrangedSubview(counts)
 
         stylePrimary(primaryButton)
         primaryButton.addAction(UIAction { [weak self] _ in
             self?.handleAdvance()
         }, for: .touchUpInside)
-        stack.addArrangedSubview(primaryButton)
-
-        let row = UIStackView(arrangedSubviews: [extendButton, skipButton])
-        row.axis = .horizontal
-        row.spacing = 10
-        row.distribution = .fillEqually
-        styleSecondary(extendButton, title: "Extend +15s", systemImage: "plus.circle")
+        styleExtend(extendButton)
         extendButton.addAction(UIAction { [weak self] _ in
             self?.onAdvance?(.extend)
         }, for: .touchUpInside)
-        styleSecondary(skipButton, title: "Skip", systemImage: "forward.end")
-        skipButton.addAction(UIAction { [weak self] _ in
-            self?.onAdvance?(.skip)
-        }, for: .touchUpInside)
-        stack.addArrangedSubview(row)
+        let actions = UIStackView(arrangedSubviews: [extendButton, primaryButton])
+        actions.axis = .horizontal
+        actions.spacing = 10
+        stack.addArrangedSubview(actions)
 
-        styleSecondary(
-            projectorQRButton, title: "Show QR", systemImage: "qrcode.viewfinder"
-        )
+        resultsStack.axis = .vertical
+        resultsStack.spacing = 6
+        resultsStack.isHidden = true
+        stack.addArrangedSubview(resultsStack)
+
+        styleChip(projectorQRButton, title: "Show QR", systemImage: "qrcode.viewfinder")
         projectorQRButton.addAction(UIAction { [weak self] _ in
             self?.handleProjectorQR()
         }, for: .touchUpInside)
-        stack.addArrangedSubview(projectorQRButton)
-
         // One place for the code, QR, and link (with Share for Copy / AirDrop).
-        styleSecondary(joinQRButton, title: "Join Code & Link", systemImage: "qrcode")
+        styleChip(joinQRButton, title: "Join Code", systemImage: "qrcode")
         joinQRButton.addAction(UIAction { [weak self] _ in
             self?.presentJoinQR()
         }, for: .touchUpInside)
-        stack.addArrangedSubview(joinQRButton)
-
-        styleTextLink(endButton, title: "End Poll")
-        endButton.addAction(UIAction { [weak self] _ in
-            self?.onEnd?()
-        }, for: .touchUpInside)
-        stack.addArrangedSubview(endButton)
+        styleChip(moreButton, title: nil, systemImage: "ellipsis")
+        moreButton.accessibilityLabel = "More"
+        moreButton.showsMenuAsPrimaryAction = true
+        let chips = UIStackView(arrangedSubviews: [projectorQRButton, joinQRButton, moreButton])
+        chips.axis = .horizontal
+        chips.spacing = 8
+        stack.addArrangedSubview(chips)
 
         let guide = scroll.contentLayoutGuide
         let frame = scroll.frameLayoutGuide
         let fillWidth = stack.widthAnchor.constraint(
-            equalTo: frame.widthAnchor, constant: -40
+            equalTo: frame.widthAnchor, constant: -32
         )
         fillWidth.priority = .defaultHigh
+        // +15s is the action people reach for mid-question: big, but Next is wider.
+        // Not required, so the stack can collapse it while no question is timing.
+        let extendWidth = extendButton.widthAnchor.constraint(
+            equalTo: primaryButton.widthAnchor, multiplier: 0.5
+        )
+        extendWidth.priority = .defaultHigh
         NSLayoutConstraint.activate([
             scroll.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             // Safe area: in landscape the view runs under the notch.
@@ -159,77 +144,78 @@ final class QuestPollHostViewController: UIViewController {
                 equalTo: view.safeAreaLayoutGuide.trailingAnchor
             ),
             scroll.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            stack.topAnchor.constraint(equalTo: guide.topAnchor, constant: 20),
+            stack.topAnchor.constraint(equalTo: guide.topAnchor, constant: 12),
             // Centered column, capped so landscape and iPad don't stretch the
             // form and its buttons across the whole screen.
             guide.widthAnchor.constraint(equalTo: frame.widthAnchor),
             stack.centerXAnchor.constraint(equalTo: guide.centerXAnchor),
             stack.leadingAnchor.constraint(
-                greaterThanOrEqualTo: guide.leadingAnchor, constant: 20
+                greaterThanOrEqualTo: guide.leadingAnchor, constant: 16
             ),
             stack.widthAnchor.constraint(lessThanOrEqualToConstant: Self.maxContentWidth),
-            stack.bottomAnchor.constraint(equalTo: guide.bottomAnchor, constant: -28),
+            stack.bottomAnchor.constraint(equalTo: guide.bottomAnchor, constant: -24),
             fillWidth,
-            primaryButton.heightAnchor.constraint(equalToConstant: 52),
-            extendButton.heightAnchor.constraint(equalToConstant: 48),
-            skipButton.heightAnchor.constraint(equalToConstant: 48),
-            projectorQRButton.heightAnchor.constraint(equalToConstant: 48),
-            joinQRButton.heightAnchor.constraint(equalToConstant: 48)
+            primaryButton.heightAnchor.constraint(equalToConstant: 64),
+            extendButton.heightAnchor.constraint(equalTo: primaryButton.heightAnchor),
+            extendWidth,
+            projectorQRButton.heightAnchor.constraint(equalToConstant: 40),
+            joinQRButton.heightAnchor.constraint(equalTo: projectorQRButton.heightAnchor),
+            moreButton.heightAnchor.constraint(equalTo: projectorQRButton.heightAnchor),
+            moreButton.widthAnchor.constraint(equalToConstant: 48)
         ])
     }
 
-    private func makeResponsesCard() -> UIView {
-        let card = UIView()
-        card.backgroundColor = UIColor(white: 0.14, alpha: 1)
-        card.layer.cornerRadius = CornerRadii.card
-        card.layer.masksToBounds = true
-
-        let caption = UILabel()
-        caption.text = "Responses"
-        caption.font = .scaled(14, weight: .medium, relativeTo: .footnote)
-        caption.adjustsFontForContentSizeCategory = true
-        caption.textColor = UIColor.white.withAlphaComponent(0.55)
-        caption.translatesAutoresizingMaskIntoConstraints = false
-
-        responsesValue.font = .scaled(56, weight: .bold, relativeTo: .largeTitle)
-        responsesValue.adjustsFontForContentSizeCategory = true
-        responsesValue.textColor = .white
-        responsesValue.textAlignment = .center
-        responsesValue.translatesAutoresizingMaskIntoConstraints = false
-        responsesValue.text = "0"
-
-        joinedLabel.font = .scaled(14, weight: .medium, relativeTo: .footnote)
-        joinedLabel.adjustsFontForContentSizeCategory = true
-        joinedLabel.textColor = UIColor.white.withAlphaComponent(0.55)
-        joinedLabel.textAlignment = .center
-        joinedLabel.numberOfLines = 0
-        joinedLabel.translatesAutoresizingMaskIntoConstraints = false
-
-        card.addSubview(caption)
-        card.addSubview(responsesValue)
-        card.addSubview(joinedLabel)
-        NSLayoutConstraint.activate([
-            caption.topAnchor.constraint(equalTo: card.topAnchor, constant: 16),
-            caption.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 16),
-            responsesValue.topAnchor.constraint(equalTo: caption.bottomAnchor, constant: 4),
-            responsesValue.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 16),
-            responsesValue.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -16),
-            joinedLabel.topAnchor.constraint(equalTo: responsesValue.bottomAnchor, constant: 2),
-            joinedLabel.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 16),
-            joinedLabel.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -16),
-            joinedLabel.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -16)
-        ])
-        return card
-    }
-
+    /// "Next", with what it will do underneath ("Show results", "Next question"…).
     private func stylePrimary(_ button: UIButton) {
         var config = UIButton.Configuration.filled()
+        config.title = "Next"
+        config.image = UIImage(systemName: "forward.fill")
+        config.imagePlacement = .trailing
+        config.imagePadding = 8
+        config.titleAlignment = .center
         config.baseBackgroundColor = .accent
         config.baseForegroundColor = .white
         config.cornerStyle = .large
         config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer {
             var attrs = $0
-            attrs.font = .scaled(17, weight: .semibold, maximumPointSize: Self.buttonFontCap)
+            attrs.font = .scaled(18, weight: .bold, maximumPointSize: Self.buttonFontCap)
+            return attrs
+        }
+        config.subtitleTextAttributesTransformer = UIConfigurationTextAttributesTransformer {
+            var attrs = $0
+            attrs.font = .scaled(13, weight: .medium, maximumPointSize: 18)
+            attrs.foregroundColor = UIColor.white.withAlphaComponent(0.8)
+            return attrs
+        }
+        button.configuration = config
+    }
+
+    private func styleExtend(_ button: UIButton) {
+        var config = UIButton.Configuration.filled()
+        config.title = "+15s"
+        config.baseBackgroundColor = UIColor(white: 0.2, alpha: 1)
+        config.baseForegroundColor = .white
+        config.cornerStyle = .large
+        config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer {
+            var attrs = $0
+            attrs.font = .scaledMonospacedDigit(20, weight: .bold, relativeTo: .title3)
+            return attrs
+        }
+        button.configuration = config
+        button.accessibilityLabel = "Add 15 seconds"
+    }
+
+    private func styleChip(_ button: UIButton, title: String?, systemImage: String) {
+        var config = UIButton.Configuration.plain()
+        config.title = title
+        config.image = UIImage(systemName: systemImage)
+        config.imagePadding = 6
+        config.baseForegroundColor = .white
+        config.background.backgroundColor = UIColor(white: 0.14, alpha: 1)
+        config.background.cornerRadius = 12
+        config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer {
+            var attrs = $0
+            attrs.font = .scaled(14, weight: .semibold, maximumPointSize: 20)
             return attrs
         }
         button.configuration = config
@@ -237,44 +223,6 @@ final class QuestPollHostViewController: UIViewController {
 
     /// Buttons here have fixed heights, so their titles grow only up to this.
     private static let buttonFontCap: CGFloat = 24
-
-    private func styleSecondary(_ button: UIButton, title: String, systemImage: String) {
-        var config = UIButton.Configuration.plain()
-        config.title = title
-        config.image = UIImage(systemName: systemImage)
-        config.imagePadding = 10
-        config.baseForegroundColor = .white
-        config.background.backgroundColor = UIColor(white: 0.14, alpha: 1)
-        config.background.strokeColor = UIColor.white.withAlphaComponent(0.18)
-        config.background.strokeWidth = 1
-        config.background.cornerRadius = 14
-        config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer {
-            var attrs = $0
-            attrs.font = .scaled(16, weight: .semibold, maximumPointSize: Self.buttonFontCap)
-            return attrs
-        }
-        button.configuration = config
-    }
-
-    private func styleTextLink(
-        _ button: UIButton,
-        title: String,
-        systemImage: String? = nil
-    ) {
-        var config = UIButton.Configuration.plain()
-        config.title = title
-        if let systemImage {
-            config.image = UIImage(systemName: systemImage)
-            config.imagePadding = 6
-        }
-        config.baseForegroundColor = UIColor.white.withAlphaComponent(0.55)
-        config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer {
-            var attrs = $0
-            attrs.font = .scaled(16, weight: .medium, maximumPointSize: Self.buttonFontCap)
-            return attrs
-        }
-        button.configuration = config
-    }
 
     // MARK: - Bind
 
@@ -284,15 +232,20 @@ final class QuestPollHostViewController: UIViewController {
             dismiss(animated: true)
             return
         }
-        responsesValue.text = "\(session.answeredCount)"
-        joinedLabel.text = Self.joinedText(
-            joined: session.players.count,
-            limit: session.playerLimit
-        )
         progressLabel.text = LivePollAdvance.progressLabel(
             questionIndex: session.questionIndex,
             questionCount: store.questionCount
+        ).uppercased()
+        joinedTile.value = Self.joinedValue(
+            joined: session.players.count,
+            limit: session.playerLimit
         )
+        joinedTile.accessibilityValue = Self.joinedText(
+            joined: session.players.count,
+            limit: session.playerLimit
+        )
+        responsesTile.value = "\(session.answeredCount)"
+
         let mode = session.mode ?? .quiz
         let advance = LivePollAdvance.primary(
             phase: session.phase,
@@ -302,44 +255,69 @@ final class QuestPollHostViewController: UIViewController {
         )
         primaryButton.isHidden = advance == nil
         if var config = primaryButton.configuration {
-            config.title = advance?.title ?? ""
+            config.subtitle = advance?.title
             primaryButton.configuration = config
         }
-        let showTimerControls = session.phase == .questionOpen
-            || session.phase == .locked
-        extendButton.superview?.isHidden = !showTimerControls
-        refreshCountdown(session)
+        primaryButton.accessibilityLabel = advance.map { "Next: \($0.title)" } ?? "Next"
+
+        let timerRunning = session.phase == .questionOpen || session.phase == .locked
+        extendButton.isHidden = !timerRunning
+        timeTile.value = Self.timeLeftText(timerRunning ? session.remainingMs : nil)
         refreshResults(session)
+
         let qrToggle = LivePollAdvance.joinQRToggle(
             phase: session.phase,
             isVisible: session.showsJoinQR
         )
         projectorQRButton.isHidden = qrToggle == nil
         if var config = projectorQRButton.configuration {
-            config.title = qrToggle?.title ?? "Show QR"
+            config.title = session.showsJoinQR ? "Hide QR" : "Show QR"
             config.image = UIImage(
                 systemName: session.showsJoinQR ? "eye.slash" : "qrcode.viewfinder"
             )
             projectorQRButton.configuration = config
         }
+        projectorQRButton.accessibilityHint = "Shows or hides the join QR on the screen."
+
         let busy = store.isControlInFlight
         primaryButton.isEnabled = !busy && advance != nil
-        extendButton.isEnabled = !busy && showTimerControls
-        skipButton.isEnabled = !busy && showTimerControls
+        extendButton.isEnabled = !busy && timerRunning
         projectorQRButton.isEnabled = !busy && qrToggle != nil
-        endButton.isEnabled = !busy
+        moreButton.isEnabled = !busy
+        moreButton.menu = makeMoreMenu(canSkip: timerRunning && !busy)
     }
 
-    private func refreshCountdown(_ session: LivePollSession) {
-        guard session.phase == .questionOpen || session.phase == .locked,
-              let remaining = session.remainingMs, remaining > 0
-        else {
-            countdownLabel.isHidden = true
-            return
+    /// Skip (rarely wanted, and it shows no results) and End Poll.
+    private func makeMoreMenu(canSkip: Bool) -> UIMenu {
+        let skip = UIAction(
+            title: "Skip Question",
+            subtitle: "Moves on without showing results",
+            image: UIImage(systemName: "forward.end"),
+            attributes: canSkip ? [] : .disabled
+        ) { [weak self] _ in
+            self?.onAdvance?(.skip)
         }
-        let seconds = Int(ceil(remaining / 1000))
-        countdownLabel.text = "\(seconds)s remaining"
-        countdownLabel.isHidden = false
+        let end = UIAction(
+            title: "End Poll",
+            image: UIImage(systemName: "stop.circle"),
+            attributes: .destructive
+        ) { [weak self] _ in
+            self?.onEnd?()
+        }
+        return UIMenu(children: [skip, UIMenu(options: .displayInline, children: [end])])
+    }
+
+    /// "0:12", or "—" when no question is timing.
+    static func timeLeftText(_ remainingMs: Double?) -> String {
+        guard let remainingMs, remainingMs > 0 else { return "—" }
+        let seconds = Int(ceil(remainingMs / 1000))
+        return String(format: "%d:%02d", seconds / 60, seconds % 60)
+    }
+
+    /// "12", or "12/50" for a capped room.
+    static func joinedValue(joined: Int, limit: Int?) -> String {
+        guard let limit, limit < 300 else { return "\(joined)" }
+        return "\(joined)/\(limit)"
     }
 
     private func refreshResults(_ session: LivePollSession) {
@@ -350,7 +328,7 @@ final class QuestPollHostViewController: UIViewController {
         }
         resultsStack.isHidden = false
         let heading = UILabel()
-        heading.text = "Results · \(results.total) total"
+        heading.text = "RESULTS · \(results.total) TOTAL"
         heading.font = .scaled(13, weight: .semibold, relativeTo: .footnote)
         heading.adjustsFontForContentSizeCategory = true
         heading.textColor = UIColor.white.withAlphaComponent(0.55)
@@ -406,5 +384,57 @@ final class QuestPollHostViewController: UIViewController {
         guard let limit, limit < 300 else { return "\(joined) joined" }
         let full = joined >= limit ? " · free plan limit" : ""
         return "\(joined) of \(limit) joined\(full)"
+    }
+}
+
+/// A small count tile: big number, caption underneath.
+private final class StatTile: UIView {
+    private let valueLabel = UILabel()
+    private let captionLabel = UILabel()
+
+    var value: String {
+        get { valueLabel.text ?? "" }
+        set {
+            valueLabel.text = newValue
+            accessibilityValue = newValue
+        }
+    }
+
+    init(caption: String) {
+        super.init(frame: .zero)
+        backgroundColor = UIColor(white: 0.14, alpha: 1)
+        layer.cornerRadius = 14
+        isAccessibilityElement = true
+        accessibilityLabel = caption
+
+        valueLabel.font = .scaledMonospacedDigit(26, weight: .bold, relativeTo: .title2)
+        valueLabel.adjustsFontForContentSizeCategory = true
+        valueLabel.textColor = .white
+        valueLabel.textAlignment = .center
+        valueLabel.adjustsFontSizeToFitWidth = true
+        valueLabel.minimumScaleFactor = 0.6
+        valueLabel.text = "0"
+
+        captionLabel.text = caption
+        captionLabel.font = .scaled(12, weight: .medium, relativeTo: .caption1)
+        captionLabel.adjustsFontForContentSizeCategory = true
+        captionLabel.textColor = UIColor.white.withAlphaComponent(0.55)
+        captionLabel.textAlignment = .center
+
+        let column = UIStackView(arrangedSubviews: [valueLabel, captionLabel])
+        column.axis = .vertical
+        column.spacing = 2
+        column.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(column)
+        NSLayoutConstraint.activate([
+            column.topAnchor.constraint(equalTo: topAnchor, constant: 10),
+            column.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -10),
+            column.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 6),
+            column.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6)
+        ])
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
     }
 }
