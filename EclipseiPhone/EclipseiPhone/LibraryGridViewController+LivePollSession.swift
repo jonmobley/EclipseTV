@@ -24,10 +24,33 @@ enum QuestPollPickerMode {
 extension LibraryGridViewController {
 
     /// Opens questpoll.com in Safari: one poll's editor, or the poll list.
+    ///
+    /// Signed in, it first asks for a one-time link that opens the website already
+    /// signed in as this account; the website has its own cookie, so without it
+    /// people were asked to sign in a second time. Any failure falls back to the
+    /// plain page, which shows the website's own sign-in.
     func presentQuestPollHostEditor(pollId: String? = nil) {
-        let url = pollId.map(QuestPollConfig.editURL(pollId:)) ?? QuestPollConfig.hostURL
-        let safari = SFSafariViewController(url: url)
-        present(safari, animated: true)
+        let page = pollId.map(QuestPollConfig.editURL(pollId:)) ?? QuestPollConfig.hostURL
+        guard LivePollAccountStore.isSignedIn else {
+            present(SFSafariViewController(url: page), animated: true)
+            return
+        }
+        Task { @MainActor [weak self] in
+            let url = await Self.signedInWebURL(landingOn: page) ?? page
+            self?.present(SFSafariViewController(url: url), animated: true)
+        }
+    }
+
+    /// One-time signed-in link to `page`, or nil when the server can't make one.
+    private static func signedInWebURL(landingOn page: URL) async -> URL? {
+        guard let link = try? await LivePollAccountStore.client().webSignInLink(),
+              var components = URLComponents(url: link, resolvingAgainstBaseURL: false)
+        else { return nil }
+        var next = page.path
+        if let query = page.query { next += "?" + query }
+        components.queryItems = (components.queryItems ?? [])
+            + [URLQueryItem(name: "next", value: next)]
+        return components.url
     }
 
     /// Ends the active room (best-effort), clears local state, drops the overlay.
