@@ -16,6 +16,12 @@ Phase 1 is done in this branch. Swift is built and unit-tested by CI (macOS); th
 - 1.7 iPhone no longer asks "Skip ahead?"; "Reopen question" still asks. The Mac strip (`StageQuestCueStrip.swift`) is unchanged.
 - Ribbon-toggle loss on sync conflict: not fixed. It is moot under D3 (no per-slideshow switch); conflict handling applies the server copy for every field, which is a sync-wide change.
 
+## Status (2026-11-11)
+- Phase 2 (EclipseTV PR 87): thumbnails decode four at a time with video posters built separately (two at a time, no 8 s block); picked files are renamed, not copied, on the main thread; tap to preview repaints at once and defers the full grid reload. Signposts `Thumbnail`, `VideoPoster`, `TapToPreview` in Instruments → Points of Interest.
+- Phase 3 (EclipseTV PR 88): Continue card (D1), Apple TV status in Settings (D2), slideshow editor with per-slide Fit/Fill and session-only ribbon hide (D3, D4), compact poll drawer (D5), centred website card (D6), PTZ status-aware tile/hero and setup-on-tap (D8, host-only, no CamTailKit change).
+- Poll page and server (eclipsepro PR 56): answers under the question, clockwise ring (D7), `setDisplay` (timer, corner QR, time per question), one-time website sign-in link (migration 0005). iPhone side in EclipseTV PR 89, which builds once PR 56 is on eclipsepro main.
+- Open: Mac still uses a slideshow-wide Fit/Fill (`isFill`); CamTailKit gaps (no "picture is live" flag, Local Network denial merged with "network down", permission prompt with no lead-in, `.notResponding` drops out of the controls) need changes in CamTail.
+
 ## Decisions (approved 2026-11-10)
 D1–D7 go with the recommendations below. D3 had no recommendation; it follows the owner's leaning (ribbon on by default, per-slideshow switch removed). D8 (PTZ setup) still needs CamTailKit and a device walkthrough.
 
