@@ -284,11 +284,19 @@ final class QuestPollHostViewController: UIViewController {
         extendButton.isEnabled = !busy && timerRunning
         projectorQRButton.isEnabled = !busy && qrToggle != nil
         moreButton.isEnabled = !busy
-        moreButton.menu = makeMoreMenu(canSkip: timerRunning && !busy)
+        moreButton.menu = makeMoreMenu(
+            canSkip: timerRunning && !busy,
+            display: session.effectiveDisplay,
+            canChangeDisplay: !busy && session.phase != .ended
+        )
     }
 
-    /// Skip (rarely wanted, and it shows no results) and End Poll.
-    private func makeMoreMenu(canSkip: Bool) -> UIMenu {
+    /// Screen options, Skip (rarely wanted, and it shows no results), and End Poll.
+    private func makeMoreMenu(
+        canSkip: Bool,
+        display: LivePollDisplay,
+        canChangeDisplay: Bool
+    ) -> UIMenu {
         let skip = UIAction(
             title: "Skip Question",
             subtitle: "Moves on without showing results",
@@ -304,8 +312,60 @@ final class QuestPollHostViewController: UIViewController {
         ) { [weak self] _ in
             self?.onEnd?()
         }
-        return UIMenu(children: [skip, UIMenu(options: .displayInline, children: [end])])
+        return UIMenu(children: [
+            makeScreenMenu(display: display, enabled: canChangeDisplay),
+            skip,
+            UIMenu(options: .displayInline, children: [end])
+        ])
     }
+
+    /// What the big screen shows: the timer, a join QR kept in the corner, and
+    /// how long each question stays open.
+    private func makeScreenMenu(display: LivePollDisplay, enabled: Bool) -> UIMenu {
+        let attributes: UIMenuElement.Attributes = enabled ? [] : .disabled
+        let timer = UIAction(
+            title: "Show Timer",
+            image: UIImage(systemName: "timer"),
+            attributes: attributes,
+            state: display.showTimer ? .on : .off
+        ) { [weak self] _ in
+            self?.onAdvance?(.setDisplay(.init(showTimer: !display.showTimer)))
+        }
+        let qr = UIAction(
+            title: "Keep Join QR Up",
+            subtitle: "Small QR in the corner during the poll",
+            image: UIImage(systemName: "qrcode"),
+            attributes: attributes,
+            state: display.keepJoinQR ? .on : .off
+        ) { [weak self] _ in
+            self?.onAdvance?(.setDisplay(.init(keepJoinQR: !display.keepJoinQR)))
+        }
+        let times: [Int?] = [nil] + Self.timePerQuestionChoices
+        let timeActions = times.map { seconds in
+            UIAction(
+                title: seconds.map { "\($0) seconds" } ?? "Each Question's Own",
+                attributes: attributes,
+                state: display.voteSeconds == seconds ? .on : .off
+            ) { [weak self] _ in
+                self?.onAdvance?(.setDisplay(.init(voteSeconds: .some(seconds))))
+            }
+        }
+        let time = UIMenu(
+            title: "Time per Question",
+            subtitle: display.voteSeconds.map { "\($0) s, from the next question" }
+                ?? "Each question's own",
+            image: UIImage(systemName: "hourglass"),
+            children: timeActions
+        )
+        return UIMenu(
+            title: "Screen",
+            options: .displayInline,
+            children: [timer, qr, time]
+        )
+    }
+
+    /// Times offered for every question, in seconds.
+    static let timePerQuestionChoices: [Int] = [15, 30, 45, 60, 90]
 
     /// "0:12", or "—" when no question is timing.
     static func timeLeftText(_ remainingMs: Double?) -> String {
