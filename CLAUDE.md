@@ -41,7 +41,8 @@
   `ExternalOutputSettings.outputStageRect` (full screen unless a custom size is active) and every content
   container is constrained to it, so new TV overlays must attach to `stageView`, not `view`. Anything that
   mirrors the TV picture (phone camera / web / prompter stages, `webLogicalSize`, `displayModePanelRect`)
-  and `MediaAspect.activeTarget` (Fit/Fill, Reframe) read `ExternalOutputSettings.outputAspectRatio`; grid tiles, media buckets and the Apple TV protocol still
+  and `MediaAspect.activeTarget` (Fit/Fill, still Reframe) read `ExternalOutputSettings.outputAspectRatio`; anything that
+  rewrites a file (video re-crop) uses `MediaAspect.libraryTarget`. Grid tiles, media buckets and the Apple TV protocol still
   use `orientation` and know nothing about custom sizes.
 - Crash reports: `CrashReporting.swift` in each app sends crashes and freezes to Sentry projects `eclipse-iphone` and `eclipse-appletv` (Release builds only; `scrub` keeps crash type, code location and device model, and drops all free text and activity trails; the `0.0.0.0` user address is what stops Sentry reading a city from the connection, since neither its IP setting nor `infer_ip` did). Upload symbols after each archive so reports are readable. App Privacy answers must list Crash Data and Other Diagnostic Data, not linked to the user, no tracking.
 

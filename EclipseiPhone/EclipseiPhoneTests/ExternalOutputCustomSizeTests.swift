@@ -147,6 +147,7 @@ struct ExternalOutputCustomSizeTests {
 
             ExternalOutputSettings.addCustomSize(name: "Wall", width: 512, height: 786)
             #expect(abs(MediaAspect.activeTarget - 512.0 / 786.0) < 0.0001)
+            #expect(abs(MediaAspect.libraryTarget - 16.0 / 9.0) < 0.0001)
             #expect(MediaFitAvailability.fitDiffersFromFill(forSize: wide))
             #expect(!MediaFitAvailability.fitDiffersFromFill(
                 forSize: CGSize(width: 512, height: 786)))

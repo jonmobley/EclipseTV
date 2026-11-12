@@ -50,8 +50,10 @@ extension iPhoneMainViewController {
 
     /// Opens the aspect cropper so the user can re-frame an existing library item.
     ///
-    /// Stills arrive from Screen Fit → Custom (the original file is left alone).
-    /// Videos still permanently crop via `VideoCropExporter`.
+    /// Stills arrive from Screen Fit → Custom (the original file is left alone), so
+    /// they frame to the output picture, custom screen size included. Videos still
+    /// permanently crop via `VideoCropExporter`, so they keep the library shape: the
+    /// file outlives the display setting and is what Apple TV plays.
     func beginEditCrop(forItemId id: String) {
         guard let item = TVLibraryStore.shared.items.first(where: { $0.id == id }) else { return }
         let target = MediaAspect.activeTarget
@@ -61,7 +63,7 @@ extension iPhoneMainViewController {
         if item.isVideo {
             beginVideoEditCrop(
                 itemId: id,
-                target: target,
+                target: MediaAspect.libraryTarget,
                 instruction: instruction
             )
             return
