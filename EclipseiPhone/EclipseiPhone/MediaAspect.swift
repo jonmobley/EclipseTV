@@ -15,9 +15,11 @@ enum MediaAspect {
     /// Width ÷ height for Landscape library media.
     static let landscape: CGFloat = 16.0 / 9.0
 
-    /// Target aspect for the active Display Mode.
+    /// Target aspect of the output picture: 9:16 in Vertical, else the active
+    /// custom screen size or 16:9. Fit / Fill, the Reframe cropper and stored
+    /// framings all measure against this so they agree with the AirPlay stage.
     static var activeTarget: CGFloat {
-        ExternalOutputSettings.isVerticalMode ? vertical : landscape
+        ExternalOutputSettings.outputAspectRatio
     }
 
     /// Whether Vertical mode requires a crop step for non-matching media.

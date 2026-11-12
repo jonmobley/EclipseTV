@@ -140,6 +140,19 @@ struct ExternalOutputCustomSizeTests {
         }
     }
 
+    @Test @MainActor func fitFillMeasuresAgainstTheCustomSize() {
+        withCleanCustomSizes {
+            let wide = CGSize(width: 1920, height: 1080)
+            #expect(!MediaFitAvailability.fitDiffersFromFill(forSize: wide))
+
+            ExternalOutputSettings.addCustomSize(name: "Wall", width: 512, height: 786)
+            #expect(abs(MediaAspect.activeTarget - 512.0 / 786.0) < 0.0001)
+            #expect(MediaFitAvailability.fitDiffersFromFill(forSize: wide))
+            #expect(!MediaFitAvailability.fitDiffersFromFill(
+                forSize: CGSize(width: 512, height: 786)))
+        }
+    }
+
     @Test func editorParsesWholeNumbersOfAtLeastTwo() {
         let parsed = SettingsDisplayModeViewController.parsedSize(" 512 ", "786")
         #expect(parsed?.0 == 512)

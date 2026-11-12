@@ -24,6 +24,11 @@ final class SettingsDisplayModeViewController: UITableViewController {
         case add
     }
 
+    /// Set while this controller applies its own row edit, so the settings
+    /// notification that edit posts does not reload the table mid-update
+    /// (UIKit throws when a reload lands inside a swipe-to-delete commit).
+    private var isApplyingRowEdit = false
+
     init() {
         super.init(style: .insetGrouped)
     }
@@ -50,6 +55,7 @@ final class SettingsDisplayModeViewController: UITableViewController {
     }
 
     @objc private func reload() {
+        guard !isApplyingRowEdit else { return }
         tableView.reloadData()
     }
 
@@ -227,7 +233,17 @@ final class SettingsDisplayModeViewController: UITableViewController {
     ) {
         guard editingStyle == .delete,
               case .custom(let size)? = screenSizeRow(at: indexPath.row) else { return }
+        let wasActive = ExternalOutputSettings.activeCustomSize?.id == size.id
+        isApplyingRowEdit = true
         ExternalOutputSettings.removeCustomSize(id: size.id)
+        isApplyingRowEdit = false
+        tableView.deleteRows(at: [indexPath], with: .automatic)
+        if wasActive {
+            // Full Screen takes the checkmark back.
+            tableView.reloadRows(
+                at: [IndexPath(row: 0, section: indexPath.section)], with: .none
+            )
+        }
     }
 
     // MARK: - Editor

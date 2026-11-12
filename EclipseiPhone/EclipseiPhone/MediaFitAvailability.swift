@@ -10,8 +10,8 @@ import UIKit
 /// Whether Fit and Fill are two different pictures for a given still.
 ///
 /// `.scaleAspectFit` and `.scaleAspectFill` resolve to the same rectangle once the
-/// source already shares the destination's shape, and the destination is always
-/// exactly the Display Mode aspect — `ExternalOutputSettings.displayModePanelRect`
+/// source already shares the destination’s shape, and the destination is always
+/// exactly the output aspect (Display Mode, or the custom screen size) — `ExternalOutputSettings.displayModePanelRect`
 /// letterboxes the panel to it whatever the screen is, and opening a Show flips the
 /// mode to that Show's orientation. So a still matching `MediaAspect.activeTarget`
 /// looks identical either way, and the controls that switch between them are hidden
