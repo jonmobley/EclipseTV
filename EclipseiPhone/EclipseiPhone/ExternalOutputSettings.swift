@@ -282,8 +282,12 @@ enum ExternalOutputSettings {
     /// Largest centered rect of the output aspect (`outputAspectRatio`) that fits in `bounds`.
     /// Used by phone camera / Pages stages so framing matches the AirPlay panel.
     static func displayModePanelRect(in bounds: CGRect) -> CGRect {
-        guard bounds.width > 0, bounds.height > 0 else { return .zero }
-        let aspect = outputAspectRatio
+        panelRect(in: bounds, aspect: outputAspectRatio)
+    }
+
+    /// Largest centered rect of `aspect` (width ÷ height) that fits in `bounds`.
+    static func panelRect(in bounds: CGRect, aspect: CGFloat) -> CGRect {
+        guard bounds.width > 0, bounds.height > 0, aspect > 0 else { return .zero }
         var width = bounds.width
         var height = width / aspect
         if height > bounds.height {

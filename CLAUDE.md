@@ -44,6 +44,18 @@
   and `MediaAspect.activeTarget` (Fit/Fill, still Reframe) read `ExternalOutputSettings.outputAspectRatio`; anything that
   rewrites a file (video re-crop) uses `MediaAspect.libraryTarget`. Grid tiles, media buckets and the Apple TV protocol still
   use `orientation` and know nothing about custom sizes.
+- Settings notifications are expensive and reach the camera (2026-11-12): `ExternalOutputSettings.didChangeNotification`
+  observers re-sync the library, refresh the camera tile (start/stop of the capture session) and re-lay-out every
+  `PresentationViewController`. `CameraPreviewView.layoutSubviews` talks to the capture connection, so never force a
+  layout pass (`layoutIfNeeded`) from that notification unless a frame really changed; doing so on every post made the
+  camera suites crash (`AVCaptureSession.stopRunning` throws on the simulator) or hang under CI's parallel test mode.
+  Setters that post it should post only on a real change. CI runs the iPhone unit tests in the default parallel mode,
+  which is far more sensitive than the local `-parallel-testing-enabled NO` runs; before pushing anything that touches
+  settings observers or test fixtures, run the suite once the CI way (`xcodebuild test … -quiet`, no parallel flag).
+  Root cause of those hangs/crashes: on the simulator `AVCaptureVideoPreviewLayer.session = stubSession` waits in a
+  nested run loop inside `commitConfiguration`, so other main-actor tests run *inside* a camera test (UIKit animation
+  state crashes, `stopRunning` exceptions, or a wait that never ends). `CameraPreviewView.attach` therefore never binds
+  the session on the simulator (same as `detach`); keep it that way.
 - Crash reports: `CrashReporting.swift` in each app sends crashes and freezes to Sentry projects `eclipse-iphone` and `eclipse-appletv` (Release builds only; `scrub` keeps crash type, code location and device model, and drops all free text and activity trails; the `0.0.0.0` user address is what stops Sentry reading a city from the connection, since neither its IP setting nor `infer_ip` did). Upload symbols after each archive so reports are readable. App Privacy answers must list Crash Data and Other Diagnostic Data, not linked to the user, no tracking.
 
 ## TestFlight builds
