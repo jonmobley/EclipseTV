@@ -100,9 +100,9 @@ People who run screens at small and medium live events without a dedicated AV cr
 They are usually one person, sometimes two, operating from a phone or iPad near the
 stage or at the back of the room, with an Apple TV or AirPlay screen already there.
 
-[OWNER] Add one or two sentences about who you built it for. For example: "Eclipse
-was built by a working performer and emcee to run the screen at his own shows, and
-is used at [venues/events]." This is the most persuasive thing you can add.
+Eclipse began as the tool our founder, a working performer and emcee, built to
+run the screen at our own shows. Every feature has been used live on stage. We
+now offer it to anyone in the same position: one person, a phone and a screen.
 
 **3. The gap it fills**
 
@@ -123,9 +123,9 @@ company" for an operator with only a phone.
 **4. Beta testing and feedback applied**
 
 Eclipse has been in development since February 2025. It has gone through 42
-TestFlight builds of the iPhone/iPad app, used at rehearsals and live events.
-[OWNER] Say who tested it: yourself at your own shows, plus anyone else (crew,
-venue staff, friends).
+TestFlight builds of the iPhone/iPad app. Our founder did the testing, at
+rehearsals and at real shows. Each build was used in the same conditions the app
+is made for, and the problems found there shaped the next build.
 
 Examples of feedback that changed the production build:
 - Venues with LED walls that aren't 16:9 asked for the picture to fit their screen.
@@ -156,12 +156,13 @@ camera remote) and Glideshow Photos (a photo slideshow). Neither was released, a
 we will not release them as separate apps. Their useful parts, PTZ camera control
 and slideshows, are now features inside Eclipse.
 
+EclipseCam, an early camera experiment, will not be released either.
+
 Our other apps are separate consumer products for different audiences. None of
 them builds or runs a live show:
-- Videos: Video Library: a personal video library.
-- AirCam and EclipseCam: camera capture apps.
-
-[OWNER] Confirm these one-line descriptions.
+- Videos: Video Library: a personal video library ("Your videos, beautifully kept").
+- AirCam: a shared event camera where guests' photos collect in one place
+  ("Everyone's shots in one place").
 
 **6. Could it be an add-on to another app?**
 
