@@ -309,7 +309,11 @@ extension WebRemoteViewController: UIScrollViewDelegate,
             let panelView = UIView(frame: panel)
             panelView.backgroundColor = .black
             panelView.clipsToBounds = true
-            panelView.layer.cornerRadius = 32
+            // Same card treatment as the hero preview: 16pt corners, 1pt grey hairline.
+            panelView.layer.cornerRadius = 16
+            panelView.layer.borderWidth = 1
+            panelView.layer.borderColor = UIColor.separator
+                .resolvedColor(with: traitCollection).cgColor
             panelView.layer.maskedCorners = [
                 .layerMinXMinYCorner, .layerMaxXMinYCorner,
                 .layerMinXMaxYCorner, .layerMaxXMaxYCorner
