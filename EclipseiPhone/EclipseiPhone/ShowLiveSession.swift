@@ -6,6 +6,7 @@
 //
 
 import CloudKit
+import CryptoKit
 import Foundation
 import MultipeerConnectivity
 import os.log
@@ -49,6 +50,10 @@ final class ShowLiveSession: NSObject {
     private(set) var snapshot: ShowLiveSnapshot?
     private(set) var directorDeviceName: String?
     private(set) var userHash: String?
+    /// Key proving the iCloud account to the director; memory only.
+    private(set) var userKey: SymmetricKey?
+    /// Challenge in this director's current discovery info.
+    var advertisedChallenge: String?
 
     /// Updates role from advertising / browsing extensions in this module.
     func setRole(_ role: Role) {
@@ -178,6 +183,7 @@ final class ShowLiveSession: NSObject {
             do {
                 let recordID = try await container.userRecordID()
                 self.userHash = ShowLiveRouting.hashedUserId(recordID.recordName)
+                self.userKey = ShowLiveInviteProof.key(forRecordName: recordID.recordName)
             } catch {
                 self.logger.error(
                     "Show live user id failed: \(error.localizedDescription)"

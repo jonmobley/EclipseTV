@@ -22,7 +22,10 @@ extension ShowLiveSession {
         openingShowId = showId
         setRole(.director)
         setDirectorDeviceName(UIDevice.current.name)
+        let challenge = ShowLiveInviteProof.newChallenge()
+        advertisedChallenge = challenge
         let info: [String: String] = [
+            ShowLiveProtocol.discoveryChallenge: challenge,
             ShowLiveProtocol.discoveryShowId: showId.uuidString,
             ShowLiveProtocol.discoveryUserHash: userHash,
             ShowLiveProtocol.discoveryDeviceName: ShowLiveRouting.shortDeviceName(
@@ -48,11 +51,13 @@ extension ShowLiveSession {
         advertiser?.stopAdvertisingPeer()
         advertiser = nil
         isAdvertising = false
+        advertisedChallenge = nil
     }
 
     func shouldAcceptInvitation(context: Data?) -> Bool {
         guard role == .director || isAdvertising,
-              let userHash, let showId = openingShowId,
+              let userHash, let userKey, let showId = openingShowId,
+              let challenge = advertisedChallenge,
               let context,
               let invite = try? JSONDecoder().decode(
                 ShowLiveInvitation.self, from: context
@@ -63,6 +68,8 @@ extension ShowLiveSession {
             advertisedUserHash: invite.userHash,
             localShowId: showId,
             localUserHash: userHash
+        ) && ShowLiveInviteProof.isValid(
+            proof: invite.proof, challenge: challenge, showId: showId, key: userKey
         )
     }
 }

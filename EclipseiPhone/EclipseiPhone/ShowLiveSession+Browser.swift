@@ -65,7 +65,8 @@ extension ShowLiveSession {
     }
 
     func inviteDirector(_ peer: MCPeerID, info: [String: String]) {
-        guard let userHash, let showId = openingShowId, role != .director else {
+        guard let userHash, let userKey, let showId = openingShowId, role != .director,
+              let challenge = info[ShowLiveProtocol.discoveryChallenge] else {
             return
         }
         let advertisedShow = UUID(uuidString: info[ShowLiveProtocol.discoveryShowId] ?? "")
@@ -78,7 +79,11 @@ extension ShowLiveSession {
         ) else { return }
         foundDirector = true
         stopElection()
-        let invite = ShowLiveInvitation(showId: showId, userHash: userHash)
+        let invite = ShowLiveInvitation(
+            showId: showId,
+            userHash: userHash,
+            proof: ShowLiveInviteProof.answer(challenge: challenge, showId: showId, key: userKey)
+        )
         guard let context = try? JSONEncoder().encode(invite) else { return }
         setDirectorDeviceName(
             info[ShowLiveProtocol.discoveryDeviceName] ?? peer.displayName
