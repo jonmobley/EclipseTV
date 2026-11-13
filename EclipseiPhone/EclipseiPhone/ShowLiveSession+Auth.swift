@@ -72,8 +72,12 @@ extension ShowLiveSession {
         case .reply(let proof):
             peerHandshakes[peer] = handshake
             sendSecure(proof, to: peer)
+        case .sameRole where role == .director:
+            // Only operators join a director; another "director" is refused.
+            rejectPeer(peer, reason: "second director")
         case .sameRole:
-            // Another operator in the mesh: never trusted, but not dropped.
+            // Another operator in the director's mesh: never trusted or sent
+            // anything, but not dropped (that would cut the mesh link).
             peerHandshakes[peer] = nil
         case .refused:
             rejectPeer(peer, reason: "bad hello")
