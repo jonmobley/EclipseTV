@@ -66,8 +66,10 @@
 - Website fullscreen on iPhone/iPad (`WebRemoteViewController`, 2026-11-04): every website card of the
   open Show is a tab (`BrowserTabList`, strip above the card, shown with 2+ tabs); the TV follows the
   active tab. Windows a site opens (`window.open`, sign-in) are phone-only tabs until "Send to TV".
-  Landscape buttons (Close · ⋯ · Refresh · ⊕, then Send to TV / Back only when they apply) sit in a
-  column beside the card on a phone; iPad gets a browser-style top bar (chips left, buttons top right)
+  Landscape buttons (Close · history · Refresh, then ⊕ only with a single tab, Send to TV / Back only
+  when they apply) sit in a column beside the card on a phone; with 2+ tabs ⊕ ends the tab chips
+  instead (`BrowserTabStripView.newTabButton`). The history clock opens the saved-websites list.
+  Website Auto Scroll was removed (2026-11-13); `ScrollSpeedSlider` now serves only the Prompter. iPad gets a browser-style top bar (chips left, buttons top right)
   in both orientations, since iPadOS ignores the orientation lock while the app supports Split View.
 - Seeding a simulator with websites/Shows for a visual check: the stores are JSON blobs in
   UserDefaults (`EclipseTV.pages.items`, `EclipseTV.localAlbums.items`); write them with

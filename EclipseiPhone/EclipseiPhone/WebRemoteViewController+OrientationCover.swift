@@ -11,7 +11,7 @@ import UIKit
 ///
 /// The browser opens from a portrait grid and then asks the scene to turn. Until
 /// that turn lands, a Landscape stage would lay its 16:9 card and trailing
-/// Back / ⋯ / Close column out across a portrait screen for a moment.
+/// Back / history / Close column out across a portrait screen for a moment.
 enum BrowserOrientationFit {
 
     /// False while a phone view is still the wrong shape for the Display Mode.

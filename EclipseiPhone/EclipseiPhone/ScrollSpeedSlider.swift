@@ -7,11 +7,11 @@
 
 import UIKit
 
-/// Speed pill shared by website Auto Scroll and the Prompter: a slider from 0.25×
+/// Prompter speed pill: a slider from 0.25×
 /// to 3× with the current speed beside it. Slides in steps of 0.05, so any pace
 /// in between is reachable and the label still reads cleanly.
 ///
-/// Frame-based by default (the browser floats it over the page); set
+/// Frame-based by default; set
 /// `translatesAutoresizingMaskIntoConstraints = false` and it sizes itself to
 /// `height` for a stack.
 final class ScrollSpeedSlider: UIView {
@@ -80,8 +80,8 @@ final class ScrollSpeedSlider: UIView {
         if !slider.isTracking {
             slider.setValue(Float(speed), animated: false)
         }
-        valueLabel.text = WebAutoScroller.speedLabel(speed)
-        slider.accessibilityValue = WebAutoScroller.speedLabel(speed)
+        valueLabel.text = PrompterViewController.speedText(speed)
+        slider.accessibilityValue = PrompterViewController.speedText(speed)
     }
 
     /// Finest step the slider moves in.
@@ -95,7 +95,7 @@ final class ScrollSpeedSlider: UIView {
 
     @objc private func sliderMoved() {
         let speed = Self.snappedSpeed(Double(slider.value))
-        valueLabel.text = WebAutoScroller.speedLabel(speed)
+        valueLabel.text = PrompterViewController.speedText(speed)
         onSpeedChange?(speed)
     }
 }

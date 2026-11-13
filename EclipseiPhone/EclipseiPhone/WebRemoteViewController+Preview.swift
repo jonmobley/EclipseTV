@@ -190,7 +190,7 @@ enum PhoneWebViewportLayout {
         }
     }
 
-    /// Back · ⋯ · Close stacked in the trailing strip, outside `panel`.
+    /// Back · history · Close stacked in the trailing strip, outside `panel`.
     static func landscapeOverlayFrames(
         panel: CGRect,
         in bounds: CGRect,
@@ -238,6 +238,7 @@ extension WebRemoteViewController: UIScrollViewDelegate,
         strip.isHidden = true
         strip.onSelect = { [weak self] id in self?.activateTab(id: id) }
         strip.onClose = { [weak self] id in self?.closeTab(id: id) }
+        strip.onNewTab = { [weak self] in self?.newTabTapped() }
         stage.addSubview(strip)
         tabStripView = strip
 
@@ -379,12 +380,6 @@ extension WebRemoteViewController: UIScrollViewDelegate,
         pushWebScrollProgress()
     }
 
-    /// A finger on the page holds Auto Scroll; a tap resumes it.
-    func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
-        guard scrollView === webView?.scrollView else { return }
-        autoScroller.pause()
-    }
-
     // MARK: - WKNavigationDelegate
 
     func webView(
@@ -405,8 +400,6 @@ extension WebRemoteViewController: UIScrollViewDelegate,
         }
         refreshTabStrip()
         guard webView === self.webView else { return }
-        // A new page starts from its top, by hand.
-        autoScroller.stop()
         captureBrowserSessionRootIfNeeded()
         updateBrowserChrome()
         guard let url = webView.url else { return }

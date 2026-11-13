@@ -11,7 +11,7 @@ import WebKit
 /// Phone-side Safari-like browser for a page presented on AirPlay.
 ///
 /// Stages a 9:16 (Vertical) or 16:9 (Landscape) panel matching the AirPlay
-/// viewport. Vertical chrome: Back · host title · Refresh · ⊕ · ⋯ · Close in the nav
+/// viewport. Vertical chrome: Back · host title · ⊕ · Refresh · history · Close in the nav
 /// bar. Landscape hides the URL bar and puts the same buttons in a column beside the
 /// 16:9 card (a row beneath it on an upright iPad). Every website of the open Show is
 /// a tab in a strip above the card; the TV follows the active tab, except windows a
@@ -53,20 +53,6 @@ final class WebRemoteViewController: UIViewController {
     var sendToTVBarButton: UIBarButtonItem!
     var bookmarksButton: UIBarButtonItem!
     var closeButton: UIBarButtonItem!
-    /// Starts / stops the page scrolling by itself; long-press picks the speed.
-    var autoScrollBarButton: UIBarButtonItem!
-    /// Landscape overlay Auto Scroll.
-    var overlayAutoScrollButton: UIButton!
-    /// Page tap that pauses / resumes Auto Scroll; enabled only while it is on.
-    var autoScrollTap: UITapGestureRecognizer?
-    /// Floating speed slider over the page while Auto Scroll is on.
-    var autoScrollSpeedBar: ScrollSpeedSlider?
-    /// Drives the active tab's page down at the chosen speed.
-    lazy var autoScroller: WebAutoScroller = {
-        let scroller = WebAutoScroller(scrollView: { [weak self] in self?.webView?.scrollView })
-        scroller.onChange = { [weak self] in self?.updateAutoScrollChrome() }
-        return scroller
-    }()
     /// Landscape overlay Back — shown only once there is history to go back to.
     var overlayBackButton: UIButton!
     var overlayRefreshButton: UIButton!
@@ -75,7 +61,7 @@ final class WebRemoteViewController: UIViewController {
     var overlaySendToTVButton: UIButton!
     /// Landscape overlay Close.
     var overlayCloseButton: UIButton!
-    /// Landscape overlay ⋯ (saved websites).
+    /// Landscape overlay history button (saved websites).
     var overlayBookmarksButton: UIButton!
     /// Tab chips above the card; hidden while there is a single tab.
     var tabStripView: BrowserTabStripView!
@@ -178,13 +164,12 @@ final class WebRemoteViewController: UIViewController {
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         // Leaving with the whole stack: keep the bar hidden, or the vertical
-        // Back / ⋯ / Close bar shows on the black cover while it slides away.
+        // Back / history / Close bar shows on the black cover while it slides away.
         if usesOverlayBrowserChrome, navigationController?.isBeingDismissed != true {
             navigationController?.setNavigationBarHidden(false, animated: animated)
         }
         guard isBeingDismissed || isMovingFromParent else { return }
         isLeaving = true
-        autoScroller.stop()
         webURLObservation = nil
         // Park the warm sessions (home LiveHeader reclaims the live one).
         relinquishAllTabs()
@@ -202,7 +187,6 @@ final class WebRemoteViewController: UIViewController {
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         layoutPhoneWebViewport()
-        layoutAutoScrollSpeedBar()
     }
 
     // Closing the phone browser does not stop AirPlay — the site stays live.

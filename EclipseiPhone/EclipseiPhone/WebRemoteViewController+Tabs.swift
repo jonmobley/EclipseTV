@@ -39,7 +39,6 @@ extension WebRemoteViewController {
             (webPanelView ?? stage).addSubview(web)
         }
         webView = web
-        installAutoScrollTapIfNeeded()
         observeSameDocumentNavigation(web)
         captureBrowserSessionRootIfNeeded()
         layoutPhoneWebViewport()
@@ -48,7 +47,6 @@ extension WebRemoteViewController {
 
     /// Takes the active tab's web view off the stage; the tab keeps it.
     func detachActiveTab() {
-        autoScroller.stop()
         webURLObservation = nil
         webView?.removeFromSuperview()
         webView = nil
@@ -189,7 +187,8 @@ extension WebRemoteViewController {
         tabs.tab(webView: webView)
     }
 
-    /// Rebuilds the chips; the strip shows only with two or more tabs.
+    /// Rebuilds the chips; the strip shows only with two or more tabs. Showing or
+    /// hiding it also moves ⊕ between the button bar and the end of the chips.
     func refreshTabStrip() {
         guard let strip = tabStripView else { return }
         let showsStrip = tabs.showsStrip
@@ -197,6 +196,7 @@ extension WebRemoteViewController {
         strip.isHidden = !showsStrip
         strip.update(tabs: tabs.tabs, activeId: tabs.activeId, tvTabId: tabs.tvTabId)
         if changed {
+            updateBrowserChrome()
             layoutPhoneWebViewport()
         }
     }
