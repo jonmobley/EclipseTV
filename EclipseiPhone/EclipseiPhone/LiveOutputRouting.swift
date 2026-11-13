@@ -49,12 +49,17 @@ enum LiveOutputRouting {
         )
     }
 
-    /// Tap opens on-device Preview when live is locked or there is no destination.
+    /// Tap opens on-device Preview when live is locked, Blackout is holding the
+    /// screen, or there is no destination.
+    ///
+    /// Blackout is a hold: the audience keeps seeing black while the operator looks
+    /// ahead on the phone, and only ending Blackout changes what is on screen.
     static func prefersPhonePreviewOnTap(
         isLiveOutputLocked: Bool,
-        hasOutputDestination: Bool
+        hasOutputDestination: Bool,
+        isBlackoutHolding: Bool = false
     ) -> Bool {
-        isLiveOutputLocked || !hasOutputDestination
+        isLiveOutputLocked || isBlackoutHolding || !hasOutputDestination
     }
 
     /// Open-Show live hero: a destination, a phone-hosted Live Poll, or Camera live.

@@ -101,6 +101,11 @@ final class LibraryGridViewController: UIViewController {
 
     /// True while Black is the selected presentation source.
     var isBlackSelected = false
+    /// What goes live when Blackout ends, picked from ⋯ › Show After Blackout.
+    /// Nil brings back whatever was live before Blackout.
+    var blackoutCue: ShowGridItem?
+    /// Slideshow that was running when Blackout started, resumed when it ends.
+    var blackoutHeldSlideshow: BlackoutHeldSlideshow?
     /// True while Background is the selected presentation source.
     var isLogoSelected = false
     /// True while Screensaver is the selected presentation source.

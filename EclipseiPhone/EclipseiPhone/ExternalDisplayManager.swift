@@ -843,8 +843,24 @@ final class ExternalDisplayManager {
         present(.black, asJoined: false, preservingCameraOverlay: true)
     }
 
+    /// What ending Blackout would bring back (nil when nothing was live before it).
+    var blackoutHeldSource: PresentationSource? {
+        blackoutRestore?.source
+    }
+
+    /// Forgets what Blackout would restore, so something else can follow it.
+    ///
+    /// A cued item goes live straight from black; restoring the old source first
+    /// would flash it on the projector for a frame.
+    func discardBlackoutRestore() {
+        blackoutRestore = nil
+    }
+
     /// Restores the source captured by `beginBlackout()`, or clears to idle.
-    func endBlackout() {
+    ///
+    /// - Parameter videoStartAt: Where a held library video comes back (paused),
+    ///   when the operator scrubbed it on the phone during Blackout.
+    func endBlackout(videoStartAt: TimeInterval? = nil) {
         let restore = blackoutRestore
         blackoutRestore = nil
         guard let restore else {
@@ -860,6 +876,10 @@ final class ExternalDisplayManager {
             presentPDF(url, documentId: restore.pdfDocumentId)
         case .black:
             clear()
+        case .video:
+            let source = videoStartAt.map { restore.source.pausingVideo(at: $0) }
+                ?? parkedVideoSource(restore.source)
+            present(source, asJoined: restore.joined)
         default:
             present(parkedVideoSource(restore.source), asJoined: restore.joined)
         }

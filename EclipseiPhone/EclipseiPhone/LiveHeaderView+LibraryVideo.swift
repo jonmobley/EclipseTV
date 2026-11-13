@@ -37,7 +37,8 @@ extension LiveHeaderView {
         itemId: String,
         isMuted: Bool,
         isLooping: Bool,
-        startAt: TimeInterval = 0
+        startAt: TimeInterval = 0,
+        autoplay: Bool = true
     ) {
         if libraryVideoItemId == itemId, libraryVideoPlayer != nil {
             libraryVideoPlayer?.isMuted = isMuted
@@ -101,7 +102,9 @@ extension LiveHeaderView {
         setLibraryVideoFullscreenAvailable(true)
         bringLibraryVideoChromeToFront()
         VideoFocusCoordinator.shared.register(self)
-        player.play()
+        if autoplay {
+            player.play()
+        }
         pushLibraryVideoPlaybackToControls()
     }
 

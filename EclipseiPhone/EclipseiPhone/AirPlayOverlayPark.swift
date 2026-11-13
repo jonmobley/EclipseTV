@@ -14,6 +14,11 @@ enum AirPlayOverlayPark {
     @MainActor
     private(set) static var shouldBeParked = false
 
+    /// Blackout parked the TV itself (with or without AirPlay), so a reconnect must
+    /// re-send black even when no AirPlay overlay is involved.
+    @MainActor
+    private(set) static var isParkedForBlackout = false
+
     /// Park only when EclipseTV is linked and AirPlay / HDMI is actually connected.
     static func shouldParkTV(
         eclipseTVOnline: Bool,
@@ -30,6 +35,22 @@ enum AirPlayOverlayPark {
     ) -> Bool {
         shouldBeParked = true
         return connectionManager.sendSetIdleMode(black: true)
+    }
+
+    /// Blackout: every synced TV goes black, AirPlay or not.
+    @MainActor
+    @discardableResult
+    static func parkForBlackout(
+        using connectionManager: iPhoneConnectionManager
+    ) -> Bool {
+        isParkedForBlackout = true
+        return park(using: connectionManager)
+    }
+
+    /// Blackout ended; whoever ends it decides how the TV comes back.
+    @MainActor
+    static func noteBlackoutEnded() {
+        isParkedForBlackout = false
     }
 
     /// Clears park on every synced TV and forgets the desire.
@@ -58,10 +79,11 @@ enum AirPlayOverlayPark {
         airPlayConnected: Bool
     ) {
         guard shouldBeParked,
-              shouldParkTV(
-                eclipseTVOnline: eclipseTVOnline,
-                airPlayConnected: airPlayConnected
-              ) else { return }
+              eclipseTVOnline && isParkedForBlackout
+                || shouldParkTV(
+                    eclipseTVOnline: eclipseTVOnline,
+                    airPlayConnected: airPlayConnected
+                ) else { return }
         _ = connectionManager.sendSetIdleMode(black: true)
     }
 }
