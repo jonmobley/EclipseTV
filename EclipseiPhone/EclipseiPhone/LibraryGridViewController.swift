@@ -29,7 +29,7 @@ final class LibraryGridViewController: UIViewController {
     var onRequestEdit: ((String) -> Void)?
     /// Invoked when the user chooses Thumbnail — host opens the video frame picker.
     var onRequestVideoThumbnail: ((String) -> Void)?
-    /// Invoked when the Camera phone viewer should open (⋯ Open Controller).
+    /// Invoked when the Camera phone viewer should open (⋯ Camera Controls).
     var onPresentCamera: (() -> Void)?
     /// True while fullscreen Camera is opening/open — keep the tile on a still.
     var homeCameraWarmPreviewSuspended = false
