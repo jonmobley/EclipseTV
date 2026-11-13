@@ -18,10 +18,9 @@ enum MediaFitMode: String, CaseIterable {
         self == .fill ? .scaleAspectFill : .scaleAspectFit
     }
 
+    /// Fit: a small picture inside the frame (letterboxed). Fill: the frame fully covered.
     var iconName: String {
-        self == .fill
-            ? "rectangle.arrowtriangle.2.outward"
-            : "rectangle.arrowtriangle.2.inward"
+        self == .fill ? "rectangle.fill" : "rectangle.center.inset.filled"
     }
 }
 
