@@ -6,6 +6,7 @@
 //
 
 import CamTailKit
+import SwiftUI
 import UIKit
 
 // MARK: - In-App PTZ Camera Preview
@@ -21,10 +22,10 @@ extension LiveHeaderView {
         clearScreensaverPreview()
         clearCameraPreview()
         if viewWithTag(Self.ptzPreviewTag) == nil {
-            let live = CamTailLiveVideoView()
+            // The operator's preview shows the camera's state when there's no picture;
+            // AirPlay output stays plain black (PresentationViewController+PTZCamera).
+            let live = CamTailPreviewHost.makeView(compact: false)
             live.tag = Self.ptzPreviewTag
-            live.fillsView = true
-            live.isUserInteractionEnabled = false
             live.translatesAutoresizingMaskIntoConstraints = false
             insertSubview(live, at: 0)
             NSLayoutConstraint.activate([
@@ -40,7 +41,7 @@ extension LiveHeaderView {
     /// Removes the PTZ picture from the hero.
     func clearPTZPreview() {
         guard let live = viewWithTag(Self.ptzPreviewTag) else { return }
-        live.removeFromSuperview()
+        CamTailPreviewHost.remove(live)
         setStaticPreviewHidden(false)
     }
 }

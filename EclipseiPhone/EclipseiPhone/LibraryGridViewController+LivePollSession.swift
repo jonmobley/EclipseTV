@@ -24,10 +24,33 @@ enum QuestPollPickerMode {
 extension LibraryGridViewController {
 
     /// Opens questpoll.com in Safari: one poll's editor, or the poll list.
+    ///
+    /// Signed in, it first asks for a one-time link that opens the website already
+    /// signed in as this account; the website has its own cookie, so without it
+    /// people were asked to sign in a second time. Any failure falls back to the
+    /// plain page, which shows the website's own sign-in.
     func presentQuestPollHostEditor(pollId: String? = nil) {
-        let url = pollId.map(QuestPollConfig.editURL(pollId:)) ?? QuestPollConfig.hostURL
-        let safari = SFSafariViewController(url: url)
-        present(safari, animated: true)
+        let page = pollId.map(QuestPollConfig.editURL(pollId:)) ?? QuestPollConfig.hostURL
+        guard LivePollAccountStore.isSignedIn else {
+            present(SFSafariViewController(url: page), animated: true)
+            return
+        }
+        Task { @MainActor [weak self] in
+            let url = await LibraryGridViewController.signedInWebURL(landingOn: page) ?? page
+            self?.present(SFSafariViewController(url: url), animated: true)
+        }
+    }
+
+    /// One-time signed-in link to `page`, or nil when the server can't make one.
+    private static func signedInWebURL(landingOn page: URL) async -> URL? {
+        guard let link = try? await LivePollAccountStore.client().webSignInLink(),
+              var components = URLComponents(url: link, resolvingAgainstBaseURL: false)
+        else { return nil }
+        var next = page.path
+        if let query = page.query { next += "?" + query }
+        components.queryItems = (components.queryItems ?? [])
+            + [URLQueryItem(name: "next", value: next)]
+        return components.url
     }
 
     /// Ends the active room (best-effort), clears local state, drops the overlay.
@@ -240,7 +263,11 @@ extension LibraryGridViewController {
     func startQuestPoll(_ item: ShowLivePoll) {
         guard ensureQuestPollDestination() else { return }
         guard LivePollAccountStore.isSignedIn else {
-            promptLivePollSignIn(mode: .start(item))
+            // Carry on with this card once signed in, rather than landing on the
+            // poll picker and making the user choose the deck again.
+            promptLivePollSignIn { [weak self] in
+                self?.confirmStartOrReplaceQuestPoll(item)
+            }
             return
         }
         let busy = presentQuestPollBusy(message: "Starting…")
@@ -269,11 +296,41 @@ extension LibraryGridViewController {
                 busy.dismiss(animated: true) {
                     self?.presentQuestPollLive()
                 }
+            } catch LivePollError.unauthorized {
+                // A saved sign-in the server no longer accepts used to end in
+                // "Sign in required." with no way to sign in. Re-prompt instead.
+                let stale = await LibraryGridViewController.isQuestPollSignInStale()
+                busy.dismiss(animated: true) {
+                    guard let self else { return }
+                    guard stale else {
+                        self.presentQuestPollError(LivePollError.unauthorized)
+                        return
+                    }
+                    LivePollAccountStore.signOut()
+                    self.promptLivePollSignIn { [weak self] in
+                        self?.confirmStartOrReplaceQuestPoll(item)
+                    }
+                }
             } catch {
                 busy.dismiss(animated: true) {
                     self?.presentQuestPollError(error)
                 }
             }
+        }
+    }
+
+    /// True when the saved account token is rejected outright.
+    ///
+    /// 403s also come from rooms owned by another account, so a failed start alone
+    /// doesn't prove the sign-in is bad; the deck list needs only a valid account.
+    private static func isQuestPollSignInStale() async -> Bool {
+        do {
+            _ = try await LivePollAccountStore.client().listDecks()
+            return false
+        } catch LivePollError.unauthorized {
+            return true
+        } catch {
+            return false
         }
     }
 
@@ -295,7 +352,9 @@ extension LibraryGridViewController {
     // MARK: - Ribbon cues
 
     /// Moves the room to the tapped cue (LivePollKit `LivePollCues`, shared
-    /// with the Mac). Skipping ahead or reopening a question asks first.
+    /// with the Mac). Only reopening a question asks first, since that clears its
+    /// answers. Jumping ahead goes straight there: it loses nothing (the open
+    /// question is revealed first), and a prompt mid-show only slows the operator.
     func cueQuestPollStage(at index: Int) {
         let store = QuestPollSessionStore.shared
         guard let session = store.session, !store.isControlInFlight,
@@ -312,13 +371,6 @@ extension LibraryGridViewController {
                 title: "Reopen \(target.title)?",
                 message: "Its earlier answers will be cleared.",
                 action: "Reopen",
-                plan: plan
-            )
-        } else if plan.skipsAhead {
-            confirmQuestPollCue(
-                title: "Skip ahead?",
-                message: "Jump to \(target.title)? Cues in between are skipped.",
-                action: "Skip",
                 plan: plan
             )
         } else {

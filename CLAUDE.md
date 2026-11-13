@@ -4,7 +4,9 @@
   (also used by the CamTail app). All camera-control feature code belongs there, never in
   Eclipse; Eclipse only hosts it (tile `LibraryThumbnailCell+PTZCamera`, hero
   `LiveHeaderView+PTZPreview`, AirPlay `PresentationViewController+PTZCamera`, controls
-  `LibraryGridViewController+PTZCamera`). After any CamTailKit change run
+  `LibraryGridViewController+PTZCamera`). Tile and hero host CamTailKit's status-aware
+  `CamTailLivePreview` via `CamTailPreviewHost` (AirPlay keeps the plain picture); a tile tap
+  with no camera connected opens the controls, which are CamTailKit's setup screen (2026-11-11). After any CamTailKit change run
   `~/apps/CamTail/tools/build_all.sh`, which builds and tests both apps.
 - Device builds need the NDI SDK at `/Library/NDI SDK for Apple` (linker flags in the
   EclipseiPhone target, `[sdk=iphoneos*]` only).
@@ -76,5 +78,8 @@
 - Show grid scrolling (2026-11-07): `openShowGridItems` is rebuilt on every read and is read several
   times per tile, so anything it calls must be cheap. Look up library items with `store.item(id:)`
   (O(1) index), never `store.items.first(where:)`, and resolve the rows once before looping over paths.
+- Adding content never changes live output (2026-11-10). History opens a website phone-only
+  (`WebRemoteViewController(previewOnly:)`); Send to TV is the explicit go-live. Feedback review and
+  phased plan: `docs/reviews/2026-11-10-iphone-feedback-review.md`.
 - Note cards: tap expands or collapses, and the pencil edits (2026-10-31).
 - Note editor on iPhone is a full-height sheet only: a medium detent gets pushed to large by the keyboard, which looks like a stall halfway up (2026-11-01). The text stops at `keyboardLayoutGuide`, and Hide Keyboard shows while editing because Done closes the editor.

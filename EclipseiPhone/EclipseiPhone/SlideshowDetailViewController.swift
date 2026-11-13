@@ -7,17 +7,30 @@
 
 import UIKit
 
-/// Edits slideshow name, preferences, and ordered slides (images only).
-final class SlideshowDetailViewController: UITableViewController {
+/// Edits a slideshow: its name, playback preferences, and the ordered slides.
+///
+/// Built so a whole slideshow can be prepared before it goes live:
+/// - The name is its own row, edited in place.
+/// - Each slide shows its thumbnail, an editable name, and its own Fit / Fill.
+/// - Slides reorder by dragging and remove by swiping, without an Edit mode.
+final class SlideshowDetailViewController: UITableViewController,
+    UITableViewDragDelegate, UITableViewDropDelegate, UITextFieldDelegate {
 
     private enum Section: Int, CaseIterable {
+        case title
         case preferences
         case slides
     }
 
+    /// Applies Fit / Fill to a slide the way the grid does (saves, syncs, tells the
+    /// Apple TV, and reframes it if it is live). Set by the presenter.
+    var onApplyScreenFit: ((MediaFitMode, LibraryItemDTO) -> Void)?
+
     private let slideshowId: UUID
-    private let slideReuseId = "slideshowSlideCell"
+    private let titleReuseId = "slideshowTitleCell"
     private let prefReuseId = "slideshowPrefCell"
+    private let emptyReuseId = "slideshowEmptyCell"
+    private let titleField = UITextField()
 
     private var slideshow: Slideshow? {
         SlideshowStore.shared.slideshow(id: slideshowId)
@@ -25,8 +38,10 @@ final class SlideshowDetailViewController: UITableViewController {
 
     private var slides: [LibraryItemDTO] {
         guard let slideshow else { return [] }
+        let store = TVLibraryStore.shared
         return slideshow.itemIds.compactMap { id in
-            TVLibraryStore.shared.items.first(where: { $0.id == id && !$0.isVideo })
+            guard let item = store.item(id: id), !item.isVideo else { return nil }
+            return item
         }
     }
 
@@ -42,31 +57,31 @@ final class SlideshowDetailViewController: UITableViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = slideshow?.name ?? "Slideshow"
-        navigationItem.rightBarButtonItems = [
-            editButtonItem,
-            UIBarButtonItem(
-                image: UIImage(systemName: "pencil"),
-                style: .plain,
-                target: self,
-                action: #selector(renameTapped)
-            )
-        ]
-        tableView.register(UITableViewCell.self, forCellReuseIdentifier: slideReuseId)
+        navigationItem.title = "Slideshow"
+        tableView.register(UITableViewCell.self, forCellReuseIdentifier: titleReuseId)
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: prefReuseId)
+        tableView.register(UITableViewCell.self, forCellReuseIdentifier: emptyReuseId)
+        tableView.register(SlideshowSlideCell.self, forCellReuseIdentifier: SlideshowSlideCell.reuseId)
         tableView.rowHeight = UITableView.automaticDimension
+        tableView.keyboardDismissMode = .interactive
+        // Reorder by dragging a slide, no Edit mode needed.
+        tableView.dragInteractionEnabled = true
+        tableView.dragDelegate = self
+        tableView.dropDelegate = self
+        configureTitleField()
 
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(reload),
-            name: SlideshowStore.didChangeNotification,
-            object: nil
+        let center = NotificationCenter.default
+        center.addObserver(
+            self, selector: #selector(reload),
+            name: SlideshowStore.didChangeNotification, object: nil
         )
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(thumbnailDidChange(_:)),
-            name: TVLibraryStore.thumbnailDidChangeNotification,
-            object: nil
+        center.addObserver(
+            self, selector: #selector(thumbnailDidChange(_:)),
+            name: TVLibraryStore.thumbnailDidChangeNotification, object: nil
+        )
+        center.addObserver(
+            self, selector: #selector(reloadSlides),
+            name: MediaTitleStore.didChangeNotification, object: nil
         )
     }
 
@@ -81,12 +96,26 @@ final class SlideshowDetailViewController: UITableViewController {
     }
 
     @objc private func reload() {
-        title = slideshow?.name ?? "Slideshow"
-        pinSlideThumbnails()
-        tableView.reloadData()
-        if slideshow == nil {
+        guard slideshow != nil else {
             navigationController?.popViewController(animated: true)
+            return
         }
+        if !titleField.isFirstResponder {
+            titleField.text = slideshow?.name
+        }
+        pinSlideThumbnails()
+        // Don't reload under a name being typed: it would end the edit.
+        guard !isEditingText else { return }
+        tableView.reloadData()
+    }
+
+    @objc private func reloadSlides() {
+        guard !isEditingText else { return }
+        tableView.reloadSections(IndexSet(integer: Section.slides.rawValue), with: .none)
+    }
+
+    private var isEditingText: Bool {
+        view.window != nil && tableView.findFirstResponder() != nil
     }
 
     /// Batch import can purge `NSCache` before this screen paints; reload when a
@@ -101,7 +130,10 @@ final class SlideshowDetailViewController: UITableViewController {
             tableView.reloadData()
             return
         }
-        tableView.reloadRows(at: [path], with: .none)
+        // Repaint only the thumbnail, so a name being typed in that row survives.
+        if let cell = tableView.cellForRow(at: path) as? SlideshowSlideCell {
+            configure(cell, for: slides[row], position: row + 1)
+        }
     }
 
     /// Keeps slide previews pinned while this editor is on screen.
@@ -109,28 +141,38 @@ final class SlideshowDetailViewController: UITableViewController {
         TVLibraryStore.shared.setVisibleThumbnailIds(Set(slides.map(\.id)))
     }
 
-    @objc private func renameTapped() {
-        guard let slideshow else { return }
-        let alert = UIAlertController(
-            title: "Rename Slideshow", message: nil, preferredStyle: .alert
-        )
-        alert.addTextField { field in
-            field.text = slideshow.name
-            field.autocapitalizationType = .words
-            UserDisplayName.configureTextField(field)
+    // MARK: - Title
+
+    private func configureTitleField() {
+        titleField.font = .preferredFont(forTextStyle: .title2).bold()
+        titleField.adjustsFontForContentSizeCategory = true
+        titleField.placeholder = "Slideshow name"
+        titleField.text = slideshow?.name
+        titleField.returnKeyType = .done
+        titleField.autocapitalizationType = .words
+        titleField.clearButtonMode = .whileEditing
+        titleField.accessibilityLabel = "Slideshow name"
+        titleField.delegate = self
+        titleField.translatesAutoresizingMaskIntoConstraints = false
+        UserDisplayName.configureTextField(titleField)
+    }
+
+    func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+        textField.resignFirstResponder()
+        return true
+    }
+
+    func textFieldDidEndEditing(_ textField: UITextField) {
+        guard textField === titleField, let slideshow else { return }
+        let name = textField.text ?? ""
+        guard name != slideshow.name else { return }
+        do {
+            try SlideshowStore.shared.rename(id: slideshow.id, to: name)
+        } catch {
+            // Put the old name back rather than leave an unsaved one on screen.
+            textField.text = slideshow.name
+            presentRenameFailure(error)
         }
-        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        alert.addAction(UIAlertAction(title: "Save", style: .default) { [weak self] _ in
-            let name = alert.textFields?.first?.text ?? ""
-            do {
-                try SlideshowStore.shared.rename(id: slideshow.id, to: name)
-            } catch {
-                // An empty name used to fail silently, leaving the user believing the
-                // rename had taken effect.
-                self?.presentRenameFailure(error)
-            }
-        })
-        present(alert, animated: true)
     }
 
     private func presentRenameFailure(_ error: Error) {
@@ -151,10 +193,12 @@ final class SlideshowDetailViewController: UITableViewController {
 
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         switch Section(rawValue: section)! {
+        case .title:
+            return 1
         case .preferences:
             guard let s = slideshow else { return 0 }
-            // Autoplay, (Duration), (Loop), Crossfade, Screen Fit, Live Ribbon
-            return s.autoplay ? 6 : 4
+            // Autoplay, (Duration), (Loop), Crossfade
+            return s.autoplay ? 4 : 2
         case .slides:
             return max(slides.count, 1)
         }
@@ -165,9 +209,20 @@ final class SlideshowDetailViewController: UITableViewController {
         titleForHeaderInSection section: Int
     ) -> String? {
         switch Section(rawValue: section)! {
-        case .preferences: return "Preferences"
-        case .slides: return "Images"
+        case .title: return nil
+        case .preferences: return "Playback"
+        case .slides:
+            let count = slides.count
+            return count == 1 ? "1 Slide" : "\(count) Slides"
         }
+    }
+
+    override func tableView(
+        _ tableView: UITableView,
+        titleForFooterInSection section: Int
+    ) -> String? {
+        guard Section(rawValue: section) == .slides, slides.count > 1 else { return nil }
+        return "Drag to reorder. Swipe left to remove a slide from this slideshow."
     }
 
     override func tableView(
@@ -175,6 +230,8 @@ final class SlideshowDetailViewController: UITableViewController {
         cellForRowAt indexPath: IndexPath
     ) -> UITableViewCell {
         switch Section(rawValue: indexPath.section)! {
+        case .title:
+            return titleCell(at: indexPath)
         case .preferences:
             return preferenceCell(at: indexPath)
         case .slides:
@@ -185,15 +242,9 @@ final class SlideshowDetailViewController: UITableViewController {
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
         guard Section(rawValue: indexPath.section) == .preferences,
-              let slideshow else { return }
-        switch preferenceKind(at: indexPath.row) {
-        case .duration:
-            presentDurationPicker(for: slideshow)
-        case .screenFit:
-            presentScreenFitPicker(for: slideshow, from: indexPath)
-        default:
-            break
-        }
+              let slideshow,
+              preferenceKind(at: indexPath.row) == .duration else { return }
+        presentDurationPicker(for: slideshow, from: indexPath)
     }
 
     override func tableView(
@@ -207,7 +258,7 @@ final class SlideshowDetailViewController: UITableViewController {
         _ tableView: UITableView,
         canMoveRowAt indexPath: IndexPath
     ) -> Bool {
-        Section(rawValue: indexPath.section) == .slides && !slides.isEmpty
+        Section(rawValue: indexPath.section) == .slides && slides.count > 1
     }
 
     override func tableView(
@@ -219,8 +270,9 @@ final class SlideshowDetailViewController: UITableViewController {
               Section(rawValue: sourceIndexPath.section) == .slides,
               Section(rawValue: destinationIndexPath.section) == .slides else { return }
         var ids = slides.map(\.id)
+        guard ids.indices.contains(sourceIndexPath.row) else { return }
         let item = ids.remove(at: sourceIndexPath.row)
-        ids.insert(item, at: destinationIndexPath.row)
+        ids.insert(item, at: min(destinationIndexPath.row, ids.count))
         SlideshowStore.shared.reorder(itemIds: ids, inSlideshowId: slideshowId)
     }
 
@@ -229,10 +281,32 @@ final class SlideshowDetailViewController: UITableViewController {
         targetIndexPathForMoveFromRowAt sourceIndexPath: IndexPath,
         toProposedIndexPath proposed: IndexPath
     ) -> IndexPath {
-        guard Section(rawValue: proposed.section) == .slides else {
-            return IndexPath(row: 0, section: Section.slides.rawValue)
+        let slidesSection = Section.slides.rawValue
+        if proposed.section < slidesSection {
+            return IndexPath(row: 0, section: slidesSection)
         }
         return proposed
+    }
+
+    /// Edit-style minus → Remove (same unlink as the swipe action).
+    override func tableView(
+        _ tableView: UITableView,
+        commit editingStyle: UITableViewCell.EditingStyle,
+        forRowAt indexPath: IndexPath
+    ) {
+        guard editingStyle == .delete,
+              Section(rawValue: indexPath.section) == .slides,
+              slides.indices.contains(indexPath.row) else { return }
+        SlideshowStore.shared.remove(
+            itemId: slides[indexPath.row].id, fromSlideshowId: slideshowId
+        )
+    }
+
+    override func tableView(
+        _ tableView: UITableView,
+        titleForDeleteConfirmationButtonForRowAt indexPath: IndexPath
+    ) -> String? {
+        "Remove"
     }
 
     override func tableView(
@@ -259,28 +333,114 @@ final class SlideshowDetailViewController: UITableViewController {
         return UISwipeActionsConfiguration(actions: [remove])
     }
 
-    // MARK: - Preference rows
+    // MARK: - Drag to reorder
+
+    func tableView(
+        _ tableView: UITableView,
+        itemsForBeginning session: UIDragSession,
+        at indexPath: IndexPath
+    ) -> [UIDragItem] {
+        guard Section(rawValue: indexPath.section) == .slides,
+              slides.count > 1,
+              slides.indices.contains(indexPath.row) else { return [] }
+        let item = UIDragItem(itemProvider: NSItemProvider())
+        item.localObject = slides[indexPath.row].id
+        return [item]
+    }
+
+    func tableView(
+        _ tableView: UITableView,
+        dropSessionDidUpdate session: UIDropSession,
+        withDestinationIndexPath destinationIndexPath: IndexPath?
+    ) -> UITableViewDropProposal {
+        // Only slides moving within this list; the table calls `moveRowAt`.
+        guard session.localDragSession != nil,
+              let destinationIndexPath,
+              Section(rawValue: destinationIndexPath.section) == .slides else {
+            return UITableViewDropProposal(operation: .forbidden)
+        }
+        return UITableViewDropProposal(operation: .move, intent: .insertAtDestinationIndexPath)
+    }
+
+    func tableView(_ tableView: UITableView, performDropWith coordinator: UITableViewDropCoordinator) {
+        // Local reorders are applied through `moveRowAt`.
+    }
+
+    // MARK: - Rows
+
+    private func titleCell(at indexPath: IndexPath) -> UITableViewCell {
+        let cell = tableView.dequeueReusableCell(withIdentifier: titleReuseId, for: indexPath)
+        cell.selectionStyle = .none
+        if titleField.superview !== cell.contentView {
+            titleField.removeFromSuperview()
+            cell.contentView.addSubview(titleField)
+            let margins = cell.contentView.layoutMarginsGuide
+            NSLayoutConstraint.activate([
+                titleField.leadingAnchor.constraint(equalTo: margins.leadingAnchor),
+                titleField.trailingAnchor.constraint(equalTo: margins.trailingAnchor),
+                titleField.topAnchor.constraint(equalTo: margins.topAnchor, constant: 4),
+                titleField.bottomAnchor.constraint(equalTo: margins.bottomAnchor, constant: -4)
+            ])
+        }
+        if !titleField.isFirstResponder {
+            titleField.text = slideshow?.name
+        }
+        return cell
+    }
+
+    private func slideCell(at indexPath: IndexPath) -> UITableViewCell {
+        guard !slides.isEmpty else {
+            let cell = tableView.dequeueReusableCell(withIdentifier: emptyReuseId, for: indexPath)
+            var config = cell.defaultContentConfiguration()
+            config.text = "No slides"
+            config.secondaryText = "Delete this Slideshow or create a new one."
+            config.textProperties.color = .secondaryLabel
+            cell.contentConfiguration = config
+            cell.selectionStyle = .none
+            return cell
+        }
+        let cell = tableView.dequeueReusableCell(
+            withIdentifier: SlideshowSlideCell.reuseId, for: indexPath
+        ) as! SlideshowSlideCell
+        configure(cell, for: slides[indexPath.row], position: indexPath.row + 1)
+        return cell
+    }
+
+    private func configure(_ cell: SlideshowSlideCell, for item: LibraryItemDTO, position: Int) {
+        // Fit and Fill are the same picture on a slide already shaped like the screen,
+        // so the control is hidden there. An unmeasured slide keeps it.
+        let differs = MediaFitAvailability.fitDiffersFromFill(forId: item.id) ?? true
+        cell.configure(
+            thumbnail: TVLibraryStore.shared.thumbnail(for: item.id),
+            name: MediaTitleStore.title(forId: item.id),
+            position: position,
+            fitMode: differs ? MediaFitSettings.mode(forId: item.id) : nil,
+            hasCustomFraming: MediaFramingStore.hasFraming(forId: item.id)
+        )
+        cell.onRename = { text in
+            MediaTitleStore.setTitle(text, forId: item.id)
+        }
+        cell.onSelectFit = { [weak self] mode in
+            self?.onApplyScreenFit?(mode, item)
+            self?.reloadSlides()
+        }
+    }
+
+    // MARK: - Preferences
 
     private enum PrefKind {
-        case autoplay, duration, loop, crossfade, screenFit, liveRibbon
+        case autoplay, duration, loop, crossfade
     }
 
     private func preferenceKind(at row: Int) -> PrefKind {
         guard let s = slideshow, s.autoplay else {
-            switch row {
-            case 0: return .autoplay
-            case 1: return .crossfade
-            case 2: return .screenFit
-            default: return .liveRibbon
-            }
+            return row == 0 ? .autoplay : .crossfade
         }
         switch row {
         case 0: return .autoplay
         case 1: return .duration
         case 2: return .loop
-        case 3: return .crossfade
-        case 4: return .screenFit
-        default: return .liveRibbon
+        default: return .crossfade
         }
     }
 
@@ -320,44 +480,7 @@ final class SlideshowDetailViewController: UITableViewController {
                 isOn: slideshow.crossfade,
                 action: #selector(crossfadeChanged(_:))
             )
-        case .screenFit:
-            config.text = "Screen Fit"
-            config.secondaryText = slideshow.isFill
-                ? MediaFitMode.fill.rawValue
-                : MediaFitMode.fit.rawValue
-            cell.contentConfiguration = config
-            cell.accessoryType = .disclosureIndicator
-            cell.selectionStyle = .default
-        case .liveRibbon:
-            config.text = "Show Ribbon When Live"
-            config.secondaryText = "Thumbnails to jump between slides"
-            cell.contentConfiguration = config
-            cell.accessoryView = makeSwitch(
-                isOn: slideshow.showRibbonWhenLive,
-                action: #selector(liveRibbonChanged(_:))
-            )
         }
-        return cell
-    }
-
-    private func slideCell(at indexPath: IndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCell(withIdentifier: slideReuseId, for: indexPath)
-        var config = cell.defaultContentConfiguration()
-        if slides.isEmpty {
-            config.text = "No images"
-            config.secondaryText = "Delete this Slideshow or create a new one."
-            config.textProperties.color = .secondaryLabel
-            cell.selectionStyle = .none
-            cell.accessoryType = .none
-        } else {
-            let item = slides[indexPath.row]
-            config.text = "Image \(indexPath.row + 1)"
-            config.image = TVLibraryStore.shared.thumbnail(for: item.id)
-            config.imageProperties.maximumSize = CGSize(width: 44, height: 44)
-            config.imageProperties.cornerRadius = 6
-            cell.selectionStyle = .none
-        }
-        cell.contentConfiguration = config
         return cell
     }
 
@@ -368,7 +491,7 @@ final class SlideshowDetailViewController: UITableViewController {
         return toggle
     }
 
-    private func presentDurationPicker(for slideshow: Slideshow) {
+    private func presentDurationPicker(for slideshow: Slideshow, from indexPath: IndexPath) {
         let sheet = UIAlertController(
             title: "Duration", message: nil, preferredStyle: .actionSheet
         )
@@ -379,32 +502,6 @@ final class SlideshowDetailViewController: UITableViewController {
             sheet.addAction(UIAlertAction(title: title, style: .default) { _ in
                 SlideshowStore.shared.updatePreferences(
                     id: slideshow.id, autoplaySeconds: value
-                )
-            })
-        }
-        sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        if let popover = sheet.popoverPresentationController {
-            popover.sourceView = tableView
-            popover.sourceRect = tableView.rectForRow(
-                at: IndexPath(row: 1, section: Section.preferences.rawValue)
-            )
-        }
-        present(sheet, animated: true)
-    }
-
-    private func presentScreenFitPicker(for slideshow: Slideshow, from indexPath: IndexPath) {
-        let current: MediaFitMode = slideshow.isFill ? .fill : .fit
-        let sheet = UIAlertController(
-            title: "Screen Fit", message: nil, preferredStyle: .actionSheet
-        )
-        for mode in MediaFitMode.allCases {
-            let title = mode == current ? "\(mode.rawValue) ✓" : mode.rawValue
-            sheet.addAction(UIAlertAction(title: title, style: .default) { _ in
-                SlideshowStore.shared.updatePreferences(
-                    id: slideshow.id, isFill: mode == .fill
-                )
-                SlideshowPlaybackController.shared.refreshPresentationIfLive(
-                    slideshowId: slideshow.id
                 )
             })
         }
@@ -427,10 +524,23 @@ final class SlideshowDetailViewController: UITableViewController {
     @objc private func crossfadeChanged(_ sender: UISwitch) {
         SlideshowStore.shared.updatePreferences(id: slideshowId, crossfade: sender.isOn)
     }
+}
 
-    @objc private func liveRibbonChanged(_ sender: UISwitch) {
-        SlideshowStore.shared.updatePreferences(
-            id: slideshowId, showRibbonWhenLive: sender.isOn
-        )
+private extension UIView {
+    /// The first responder in this view's subtree, if any.
+    func findFirstResponder() -> UIView? {
+        if isFirstResponder { return self }
+        for subview in subviews {
+            if let responder = subview.findFirstResponder() { return responder }
+        }
+        return nil
+    }
+}
+
+private extension UIFont {
+    /// This font at bold weight, keeping its size and Dynamic Type style.
+    func bold() -> UIFont {
+        guard let descriptor = fontDescriptor.withSymbolicTraits(.traitBold) else { return self }
+        return UIFont(descriptor: descriptor, size: 0)
     }
 }

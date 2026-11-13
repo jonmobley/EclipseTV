@@ -50,6 +50,33 @@ struct ShowListSubtitleTests {
         )
     }
 
+    @Test func captionNamesTheEventItMeasures() {
+        let opened = LocalAlbum(
+            name: "Opened",
+            orientation: .landscape,
+            lastOpenedAt: Date().addingTimeInterval(-6 * 3600)
+        )
+        #expect(opened.lastOpenedSubtitle.hasPrefix("Opened "))
+
+        let neverOpened = LocalAlbum(name: "Synced", orientation: .landscape)
+        #expect(neverOpened.lastOpenedSubtitle.hasPrefix("Created "))
+    }
+
+    @Test func eventCaptionLowercasesWordyTimes() {
+        #expect(LocalAlbum.eventSubtitle("Opened", "Just now") == "Opened just now")
+        #expect(LocalAlbum.eventSubtitle("Opened", "Yesterday") == "Opened yesterday")
+        #expect(LocalAlbum.eventSubtitle("Created", "2 months ago") == "Created 2 months ago")
+    }
+
+    @Test func syncKeepsTheLaterOpenTime() {
+        let earlier = Date(timeIntervalSince1970: 1_000)
+        let later = Date(timeIntervalSince1970: 2_000)
+        #expect(LocalAlbum.latest(later, nil) == later)
+        #expect(LocalAlbum.latest(nil, earlier) == earlier)
+        #expect(LocalAlbum.latest(earlier, later) == later)
+        #expect(LocalAlbum.latest(nil, nil) == nil)
+    }
+
     @Test func pickerGlyphDiffersByOrientation() {
         let vertical = LocalAlbum(name: "Tall", orientation: .portrait)
         let landscape = LocalAlbum(name: "Wide", orientation: .landscape)

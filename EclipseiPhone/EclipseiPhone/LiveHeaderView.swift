@@ -109,7 +109,7 @@ final class LiveHeaderView: UIView {
     var onSlideshowSwipe: ((Int) -> Void)?
     /// Swipe on the hero while a Show still is live: `+1` next, `-1` previous.
     var onLibraryBrowse: ((Int) -> Void)?
-    /// Toggles `showRibbonWhenLive` for the active Slideshow from the hero.
+    /// Hides or shows the active Slideshow's ribbon for this session, from the hero.
     var onToggleSlideshowRibbon: (() -> Void)?
     /// Toggles Fit / Fill for the live still or slideshow from the hero.
     var onToggleScreenFit: (() -> Void)?
@@ -716,10 +716,11 @@ final class LiveHeaderView: UIView {
         bringSubviewToFront(controls)
         transitionSnapshot = snapshot
 
-        // Brief hold so thumbnail/layout can settle under the snapshot.
+        // No hold before the fade: the new content is already laid out under the
+        // snapshot, and the 0.08 s pause read as lag after a tap.
         UIView.animate(
             withDuration: ContentTransitionStyle.crossfadeDuration,
-            delay: 0.08,
+            delay: 0,
             options: [.curveEaseInOut, .allowUserInteraction]
         ) {
             snapshot.alpha = 0

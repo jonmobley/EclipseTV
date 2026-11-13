@@ -19,9 +19,15 @@ extension LibraryGridViewController {
 
     /// Tile tap: put the PTZ picture on program, or open the controls when it's already
     /// live (or there's no output to send it to, or this phone is a Show Live operator).
+    ///
+    /// With no camera connected the controls open instead: they are CamTailKit's setup
+    /// screen in that state (find, connect, enter an address), and going live would only
+    /// have put a black picture on the screen.
     func presentPTZCameraFromTile() {
         let mgr = ExternalDisplayManager.shared
-        if mgr.isPTZCameraLive || prefersPhonePreviewOnTap || ShowLiveSession.shared.isRemoteOperator {
+        let cameraReady = CamTailSession.shared.linkState == .connected
+        if !cameraReady || mgr.isPTZCameraLive || prefersPhonePreviewOnTap
+            || ShowLiveSession.shared.isRemoteOperator {
             Haptics.impactLight()
             presentPTZCameraControls()
             return

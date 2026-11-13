@@ -132,7 +132,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         }
         switch homeSection(at: indexPath.section, in: collectionView) {
         case .hero:
-            break
+            performHomeContinueAction()
         case .slideshowRibbon:
             handleLiveSlideshowRibbonTap(at: indexPath)
         case .shows where !isHomePage(collectionView):
@@ -211,18 +211,63 @@ extension LibraryGridViewController: UICollectionViewDataSource,
 
     // MARK: - Hero
 
+    /// The Continue card: the last opened Show, or "Create your first Show".
     private func dequeueHomeHeroCell(
         in collectionView: UICollectionView,
         at indexPath: IndexPath
     ) -> UICollectionViewCell {
         guard let cell = collectionView.dequeueReusableCell(
-            withReuseIdentifier: HomeHeroCarouselCell.reuseIdentifier,
+            withReuseIdentifier: HomeContinueCell.reuseIdentifier,
             for: indexPath
-        ) as? HomeHeroCarouselCell else {
+        ) as? HomeContinueCell else {
             return UICollectionViewCell()
         }
-        cell.reload()
+        cell.configure(
+            Self.homeContinueContent(
+                albums: LocalAlbumStore.shared.albums,
+                cover: { [weak self] album in self?.homeShowCover(album) }
+            )
+        )
+        cell.onPrimaryAction = { [weak self] in
+            self?.performHomeContinueAction()
+        }
         return cell
+    }
+
+    /// What the Continue card shows. Recents order is the store's order (opening
+    /// a Show moves it first), so the first Show is the one to continue.
+    static func homeContinueContent(
+        albums: [LocalAlbum],
+        cover: (LocalAlbum) -> UIImage?
+    ) -> HomeContinueCell.Content {
+        guard let album = albums.first else { return .firstShow }
+        let count = album.itemIds.count
+        let items = count == 1 ? "1 item" : "\(count) items"
+        return .show(
+            id: album.id,
+            name: album.name,
+            detail: "\(album.lastOpenedSubtitle) · \(items)",
+            cover: cover(album)
+        )
+    }
+
+    /// Opens the Show on the Continue card, or starts a new one.
+    func performHomeContinueAction() {
+        if let album = LocalAlbumStore.shared.albums.first {
+            openLocalAlbum(id: album.id)
+        } else {
+            onCreateShow?()
+        }
+    }
+
+    /// A Show's cover image: library media, else a website or PDF thumbnail.
+    private func homeShowCover(_ show: LocalAlbum) -> UIImage? {
+        show.resolvedCoverId.flatMap { id -> UIImage? in
+            if let media = store.thumbnail(for: id) { return media }
+            guard let uuid = UUID(uuidString: id) else { return nil }
+            return WebThumbnailStore.shared.image(for: uuid)
+                ?? PDFThumbnailStore.shared.image(for: uuid)
+        }
     }
 
     // MARK: - Home Show Tiles
@@ -615,6 +660,8 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             PresentationPrewarmer.shared.clear()
         }
 
+        let signposter = PerformanceSignposts.signposter
+        let tapInterval = signposter.beginInterval("TapToPreview")
         let startAt = item.isVideo ? (VideoResumeStore.shared.position(for: item.id) ?? 0) : 0
         if connectionManager.sendPlayRequest(id: item.id, startAt: startAt) {
             Haptics.impactLight()
@@ -630,7 +677,13 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         } else {
             presentOfflineLive(for: item)
         }
-        reloadLibraryGrid()
+        // `updateCurrentId` already repainted the hero and visible tiles; `present`
+        // has now ended any previous overlay, so settle the strokes before this frame
+        // draws, then let the full reload follow it.
+        syncVisibleShowTileLiveStrokes()
+        scheduleGridReloadAfterFrame {
+            signposter.endInterval("TapToPreview", tapInterval)
+        }
     }
 
     /// Downloads (if needed) then presents a capture via phone AirPlay.
@@ -778,6 +831,17 @@ extension LibraryGridViewController: UICollectionViewDataSource,
     /// Builds the per-item options menu shown via long-press context menu.
     func optionsMenu(for item: LibraryItemDTO) -> UIMenu {
         let id = item.id
+
+        if UnavailableMediaReason.of(item) == .waitingForICloud {
+            return UIMenu(
+                title: UnavailableMediaReason.iCloudMessage,
+                children: [UIAction(
+                    title: UnavailableMediaReason.iCloudTitle,
+                    image: UIImage(systemName: "icloud.and.arrow.down"),
+                    attributes: .disabled
+                ) { _ in }]
+            )
+        }
 
         if item.isAvailable == false {
             let resend = UIAction(

@@ -29,7 +29,22 @@ extension MediaLibraryPickerViewController: UISearchResultsUpdating, UISearchCon
         navigationItem.searchController = search
         navigationItem.hidesSearchBarWhenScrolling = false
         updateRightBarButtons(searchActive: true)
-        search.isActive = true
+        // Activate on the next turn, once the nav bar has laid the field out:
+        // activating in the same turn as installing it often leaves the field
+        // unfocused, so the user had to tap it again to get the keyboard.
+        DispatchQueue.main.async {
+            if search.isActive {
+                search.searchBar.becomeFirstResponder()
+            } else {
+                search.isActive = true
+            }
+        }
+    }
+
+    func didPresentSearchController(_ searchController: UISearchController) {
+        DispatchQueue.main.async {
+            searchController.searchBar.becomeFirstResponder()
+        }
     }
 
     func updateSearchResults(for searchController: UISearchController) {

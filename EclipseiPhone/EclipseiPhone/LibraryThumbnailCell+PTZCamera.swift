@@ -6,6 +6,7 @@
 //
 
 import CamTailKit
+import SwiftUI
 import UIKit
 
 // MARK: - PTZ Camera Tile
@@ -29,10 +30,10 @@ extension LibraryThumbnailCell {
         setIdleBorder(width: 1, color: UIColor.white.withAlphaComponent(0.3))
 
         if cardView.viewWithTag(Self.ptzPreviewTag) == nil {
-            let live = CamTailLiveVideoView()
+            // CamTailKit's preview says why there's no picture ("Camera not connected",
+            // "Looking for the camera…") instead of a silent black tile.
+            let live = CamTailPreviewHost.makeView(compact: true)
             live.tag = Self.ptzPreviewTag
-            live.fillsView = true
-            live.isUserInteractionEnabled = false
             live.translatesAutoresizingMaskIntoConstraints = false
             cardView.insertSubview(live, aboveSubview: imageView)
             NSLayoutConstraint.activate([
@@ -48,7 +49,7 @@ extension LibraryThumbnailCell {
 
     /// Detaches the live picture (cell reuse / other content).
     func removePTZPreview() {
-        cardView.viewWithTag(Self.ptzPreviewTag)?.removeFromSuperview()
+        CamTailPreviewHost.remove(cardView.viewWithTag(Self.ptzPreviewTag))
         imageView.isHidden = false
     }
 }

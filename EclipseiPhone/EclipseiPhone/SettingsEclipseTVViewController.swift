@@ -58,7 +58,11 @@ final class SettingsEclipseTVViewController: UITableViewController {
     func setConnectionState(_ state: ConnectionDisplayState) {
         connectionState = state
         guard isViewLoaded else { return }
-        tableView.reloadSections(IndexSet(integer: Section.connection.rawValue), with: .none)
+        // The Apple TVs list says which one is connected, so it follows the link too.
+        tableView.reloadSections(
+            IndexSet([Section.connection.rawValue, Section.appleTVs.rawValue]),
+            with: .none
+        )
     }
 
     private func reloadKnownTVs() {
@@ -207,11 +211,19 @@ final class SettingsEclipseTVViewController: UITableViewController {
             cell.accessoryType = .none
         } else {
             let tv = knownTVs[indexPath.row]
+            let isActive = tv.name == activeName
             config.text = tv.name
-            config.secondaryText = "Last seen "
-                + tv.lastSeen.formatted(date: .abbreviated, time: .shortened)
+            // Say plainly whether this TV is connected now; the checkmark only marks
+            // whose library is selected, and read as "connected" when it was not.
+            if isActive, connectionState == .connected {
+                config.secondaryText = "Connected"
+                config.secondaryTextProperties.color = .systemGreen
+            } else {
+                config.secondaryText = "Not connected · last seen "
+                    + tv.lastSeen.formatted(date: .abbreviated, time: .shortened)
+            }
             cell.selectionStyle = .default
-            cell.accessoryType = tv.name == activeName ? .checkmark : .none
+            cell.accessoryType = isActive ? .checkmark : .none
         }
 
         cell.contentConfiguration = config

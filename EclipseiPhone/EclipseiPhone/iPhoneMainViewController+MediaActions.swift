@@ -741,12 +741,19 @@ extension iPhoneMainViewController {
         if localURL.lastPathComponent != id {
             let renamed = FileManager.default.temporaryDirectory.appendingPathComponent(id)
             try? FileManager.default.removeItem(at: renamed)
-            do {
-                try FileManager.default.copyItem(at: localURL, to: renamed)
-                cleanupTempFile(at: localURL)
+            // A move within the temp directory is a rename. This used to copy, on the
+            // main thread, so adding a large video stalled the UI for the whole copy;
+            // the original was deleted straight after, so nothing relied on it.
+            if (try? FileManager.default.moveItem(at: localURL, to: renamed)) != nil {
                 namedURL = renamed
-            } catch {
-                // Fall back to the original temp path; LocalMediaStore still keys by `id`.
+            } else {
+                do {
+                    try FileManager.default.copyItem(at: localURL, to: renamed)
+                    cleanupTempFile(at: localURL)
+                    namedURL = renamed
+                } catch {
+                    // Fall back to the original temp path; LocalMediaStore still keys by `id`.
+                }
             }
         }
 

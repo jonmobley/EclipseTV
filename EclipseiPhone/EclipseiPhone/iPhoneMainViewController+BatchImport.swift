@@ -66,7 +66,7 @@ extension iPhoneMainViewController {
             || photoImportSession.isCancelled
         endImportProgress()
 
-        let addedIds = ingest(
+        let addedIds = await ingest(
             outcome.preparedInPickOrder,
             albumId: makingSlideshow ? nil : albumId,
             ownerShowId: makingSlideshow ? slideshowShowId : nil
@@ -157,12 +157,13 @@ extension iPhoneMainViewController {
         _ prepared: [PhotoImportPrepared],
         albumId: UUID?,
         ownerShowId: UUID?
-    ) -> [String] {
-        prepared.map { pick in
+    ) async -> [String] {
+        var ids: [String] = []
+        for pick in prepared {
             if pick.isVideo, let thumbnail = pick.thumbnail {
-                saveCustomThumbnail(thumbnail, for: pick.localURL)
+                await saveCustomThumbnailInBackground(thumbnail, for: pick.localURL)
             }
-            return addMedia(
+            ids.append(addMedia(
                 localURL: pick.localURL,
                 isVideo: pick.isVideo,
                 thumbnail: pick.thumbnail,
@@ -170,8 +171,9 @@ extension iPhoneMainViewController {
                 toAlbumId: albumId,
                 sendIfConnected: false,
                 ownerShowId: ownerShowId
-            )
+            ))
         }
+        return ids
     }
 
     // MARK: - Slideshow finish

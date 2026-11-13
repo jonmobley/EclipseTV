@@ -222,9 +222,29 @@ struct LocalAlbum: Codable, Equatable, Identifiable, Hashable {
         try c.encode(deletedSurfaceIds, forKey: .deletedSurfaceIds)
     }
 
-    /// Compact relative open time for Home tiles and Show lists (`3hrs ago`).
+    /// Recency caption for Home tiles and Show lists, naming the event it measures:
+    /// `Opened 3hrs ago`, or `Created 2 months ago` for a Show never opened here.
     var lastOpenedSubtitle: String {
-        Self.compactRelativeOpenString(for: lastOpenedAt ?? createdAt)
+        if let lastOpenedAt {
+            return Self.eventSubtitle("Opened", Self.compactRelativeOpenString(for: lastOpenedAt))
+        }
+        return Self.eventSubtitle("Created", Self.compactRelativeOpenString(for: createdAt))
+    }
+
+    /// `Opened` + `3hrs ago` → `Opened 3hrs ago`; `Just now` / `Yesterday` read lowercased.
+    static func eventSubtitle(_ event: String, _ relative: String) -> String {
+        let reads = relative == "Just now" || relative == "Yesterday"
+            ? relative.lowercased()
+            : relative
+        return "\(event) \(reads)"
+    }
+
+    /// The later of two optional dates (nil only when both are nil).
+    static func latest(_ a: Date?, _ b: Date?) -> Date? {
+        switch (a, b) {
+        case let (a?, b?): return max(a, b)
+        default: return a ?? b
+        }
     }
 
     /// Formats `date` as a short relative string for Home/Show lists.
