@@ -53,6 +53,13 @@ struct ShowLiveInviteProofTests {
         #expect(!ShowLiveInviteProof.isValid(proof: answer, challenge: challenge, showId: showId, nonce: nil, key: ownKey))
     }
 
+    @Test func onlyRealNoncesAreWellFormed() {
+        #expect(ShowLiveInviteProof.isWellFormedNonce(ShowLiveInviteProof.newChallenge()))
+        #expect(!ShowLiveInviteProof.isWellFormedNonce(""))
+        #expect(!ShowLiveInviteProof.isWellFormedNonce(String(repeating: "a", count: 5000)))
+        #expect(!ShowLiveInviteProof.isWellFormedNonce(String(repeating: "z", count: 32)))
+    }
+
     @Test func challengesAreFreshEachTime() {
         let first = ShowLiveInviteProof.newChallenge()
         #expect(first.count == 32)

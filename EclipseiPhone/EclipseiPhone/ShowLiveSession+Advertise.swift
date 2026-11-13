@@ -63,9 +63,10 @@ extension ShowLiveSession {
                 ShowLiveInvitation.self, from: context
               ),
               let nonce = invite.nonce,
-              usedInviteNonces.insert(nonce).inserted
+              ShowLiveInviteProof.isWellFormedNonce(nonce),
+              !usedInviteNonces.contains(nonce)
         else { return false }
-        return ShowLiveRouting.canAutoJoin(
+        let valid = ShowLiveRouting.canAutoJoin(
             advertisedShowId: invite.showId,
             advertisedUserHash: invite.userHash,
             localShowId: showId,
@@ -74,6 +75,9 @@ extension ShowLiveSession {
             proof: invite.proof, challenge: challenge, showId: showId,
             nonce: nonce, key: userKey
         )
+        // Remember only proven nonces, so strangers cannot grow the set.
+        if valid { usedInviteNonces.insert(nonce) }
+        return valid
     }
 }
 

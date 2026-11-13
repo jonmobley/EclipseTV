@@ -54,7 +54,7 @@ final class ShowLiveSession: NSObject {
     private(set) var userKey: SymmetricKey?
     /// Challenge in this director's current discovery info.
     var advertisedChallenge: String? { didSet { usedInviteNonces = [] } }
-    /// Invitation nonces already accepted or refused for that challenge.
+    /// Invitation nonces already accepted for that challenge.
     var usedInviteNonces: Set<String> = []
 
     /// Updates role from advertising / browsing extensions in this module.

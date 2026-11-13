@@ -65,6 +65,15 @@ enum ShowLiveInviteProof {
         return HMAC<SHA256>.isValidAuthenticationCode(given, authenticating: message, using: key)
     }
 
+    /// Whether a nonce has the shape ``newChallenge()`` makes: 32 hex digits.
+    /// - Parameter nonce: Value from an invitation.
+    /// - Returns: False for anything else, before any other work.
+    static func isWellFormedNonce(_ nonce: String) -> Bool {
+        nonce.count == nonceLength && nonce.allSatisfy(\.isHexDigit)
+    }
+
+    private static let nonceLength = 32
+
     private static func signedMessage(challenge: String, showId: UUID, nonce: String) -> Data {
         Data("\(showId.uuidString)|\(challenge)|\(nonce)".utf8)
     }
