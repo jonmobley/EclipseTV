@@ -1,7 +1,7 @@
 # Eclipse build 2026111301 (iPhone and iPad only)
 
 Built from EclipseTV branch release/testflight-20261113: feature/airplay-custom-screen-size at
-db7b5f2 merged with main 8e5f149 (merge 4dedaf9). Everything in 2026110801 (main 9ca1a63) is
+8511a24 merged with main 8e5f149 (merges 4dedaf9, 741f573). Everything in 2026110801 (main 9ca1a63) is
 kept. New since 2026110801:
 
 - Screen Size (Settings → Display Mode): save named width×height shapes for a screen that is
