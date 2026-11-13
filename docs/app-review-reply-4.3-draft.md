@@ -38,11 +38,11 @@ Questions 5–7 are aimed at exactly this, so the answers have to be frank about
    Apple TV under one purchase ("universal purchase"). Moving to that is a bigger
    change: the Apple TV app would have to join the iPhone record.
    - Recommended for now: keep them separate and explain it in Q5.
-2. **Overlapping apps.** The strongest answer to Q6 is that PTZ Pilot and Glideshow
-   serve other people (a standalone camera remote, a personal photo slideshow) and
-   that Eclipse is the professional show tool. If you don't plan to ship PTZ Pilot
-   or Glideshow on their own, say so. Apple then sees one product, not a family of
-   variants.
+2. **Overlapping apps (decided 2026-11-13: Eclipse only).** PTZ Pilot and Glideshow
+   Photos won't be released on their own, and the reply says so. Optional extra
+   step: remove those two app records in App Store Connect (App Information >
+   Remove App). This is allowed because neither was ever released. It can't be
+   undone, so it's your click.
 3. **How Eclipse was built.** Moxie LLC wrote it and owns it. No template or
    app-builder service was used. If you want to mention that AI coding assistants
    helped, that's your call. Guideline 4.2.6 is about template and app-generation
@@ -151,28 +151,32 @@ Eclipse is one product that runs on three platforms, each with its own job:
 - **Eclipse Mac**: a desktop production app for multi-screen events that can take
   the iPhone camera and be driven by the iPhone remote.
 
-Other apps on our account are separate consumer products for different audiences.
-None of them builds or runs a live show:
-- PTZ Pilot: a single-purpose remote for one PTZ camera.
-- Glideshow Photos: a personal photo slideshow app.
+Two earlier projects on our account overlapped with Eclipse: PTZ Pilot (a PTZ
+camera remote) and Glideshow Photos (a photo slideshow). Neither was released, and
+we will not release them as separate apps. Their useful parts, PTZ camera control
+and slideshows, are now features inside Eclipse.
+
+Our other apps are separate consumer products for different audiences. None of
+them builds or runs a live show:
 - Videos: Video Library: a personal video library.
 - AirCam and EclipseCam: camera capture apps.
 
-[OWNER] Confirm each one-line description and whether each app is still planned
-for release.
+[OWNER] Confirm these one-line descriptions.
 
 **6. Could it be an add-on to another app?**
 
 No. Eclipse is the core product, and its Apple TV and Mac companions depend on it.
 None of our other apps runs a show, so there is nothing for it to be an add-on to.
-PTZ camera control is one feature inside Eclipse. PTZ Pilot exists separately for
-people who only need a camera remote and no screen or show.
+We have already consolidated: PTZ camera control and photo slideshows were started
+as separate apps (PTZ Pilot, Glideshow Photos). Both now live only inside Eclipse,
+and those separate apps will not be released.
 
 **7. Code shared with our other apps**
 
 Eclipse shares these components with apps on our account:
-- **CamTailKit**: the network PTZ camera control library. It is also used by PTZ
-  Pilot. In Eclipse it drives the camera tile and voice control.
+- **CamTailKit**: the network PTZ camera control library. In Eclipse it drives the
+  camera tile and voice control. It was first written for PTZ Pilot, which will not
+  be released.
 - **LivePollKit**: the client for our QuestPoll polling service. It is also used by
   Eclipse Mac. It signs the host in and runs the poll on the big screen.
 - **EclipsePhoneCameraClient**: sends the iPhone camera to Eclipse Mac on the local
