@@ -35,11 +35,11 @@ extension PresentationViewController {
         ensureTransitionOverlay()
         transitionOverlayContainer.alpha = 0
         transitionOverlayContainer.isHidden = false
-        view.bringSubviewToFront(transitionOverlayContainer)
+        stageView.bringSubviewToFront(transitionOverlayContainer)
         view.bringSubviewToFront(messageLabel)
         view.bringSubviewToFront(activityIndicator)
         if let badge = audioNowPlayingBadge {
-            view.bringSubviewToFront(badge)
+            stageView.bringSubviewToFront(badge)
         }
         installIncoming(source, generation: generation)
 
