@@ -1120,15 +1120,22 @@ final class ExternalDisplayManager {
     /// - Parameter adoptingWebVideoId: Card that owns the direct-file video replacing
     ///   this overlay. Adopted before `notify`, so an observer repainting the grid
     ///   never sees output with nothing claiming it.
+    ///
+    /// Output state moves on before `tearDown`, same as `beginOverlay`. Tearing
+    /// down a countdown or Prompter posts its controller's change synchronously,
+    /// and the grid repaints the hero from `isCountdownLive` / `isPrompterLive`
+    /// right there. With the overlay still published it painted the frozen clock
+    /// back, and countdown posts no end notice to repaint it again, so the hero
+    /// stayed on the clock after a photo or video replaced it.
     private func endOverlay(notify: Bool, adoptingWebVideoId: UUID? = nil) {
         guard let current = overlaySource else { return }
-        tearDown(current)
         overlaySource = nil
         parkedCameraStill = nil
         clearLiveOverlayId(for: current)
         if let adoptingWebVideoId {
             liveWebVideoPageId = adoptingWebVideoId
         }
+        tearDown(current)
         if notify {
             notifyOverlayEnd(current)
         }
