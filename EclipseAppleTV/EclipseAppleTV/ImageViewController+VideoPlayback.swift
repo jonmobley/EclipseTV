@@ -55,7 +55,10 @@ extension ImageViewController {
     /// decoded before we reveal the player (avoids AVPlayerViewController's spinner).
     private func startWhenReady(_ player: AVPlayer, reveal: @escaping () -> Void) {
         let startAt = pendingVideoStartAt
+        let startsPaused = pendingVideoStartsPaused
         pendingVideoStartAt = nil
+        pendingVideoStartsPaused = false
+        let start = { if !startsPaused { player.play() } }
         // KVO readiness and the timeout fallback both clear `token`; without this
         // latch both can invoke `begin()` and double preroll/play.
         var didBegin = false
@@ -65,7 +68,7 @@ extension ImageViewController {
             didBegin = true
             let playAndReveal = {
                 player.preroll(atRate: 1.0) { _ in
-                    player.play()
+                    start()
                     reveal()
                 }
             }
@@ -83,11 +86,11 @@ extension ImageViewController {
             if let startAt, startAt > 0 {
                 let time = CMTime(seconds: startAt, preferredTimescale: 600)
                 player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero) { _ in
-                    player.play()
+                    start()
                     reveal()
                 }
             } else {
-                player.play()
+                start()
                 reveal()
             }
             return

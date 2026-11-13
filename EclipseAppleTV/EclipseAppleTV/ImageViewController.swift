@@ -237,6 +237,9 @@ class ImageViewController: ManagedViewController, ConnectionManagerDelegate, UIG
     /// Absolute seconds to seek when the next video starts (companion resume). Cleared
     /// after `startWhenReady` consumes it.
     internal var pendingVideoStartAt: Double?
+    /// The next video shows its first frame and waits (the companion's Blackout
+    /// ended on it). Cleared with `pendingVideoStartAt`.
+    internal var pendingVideoStartsPaused = false
     /// Bumped on every video install so overlapping display Tasks ignore stale work.
     internal var videoDisplayGeneration: UInt64 = 0
 
