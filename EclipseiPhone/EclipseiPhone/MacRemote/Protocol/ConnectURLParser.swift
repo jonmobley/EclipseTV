@@ -5,6 +5,7 @@
 //  Copyright © 2026 Moxie LLC. All rights reserved.
 //
 
+import EclipsePhoneCameraProtocol
 import Foundation
 
 // MARK: - ConnectURLParser
@@ -61,19 +62,24 @@ enum ConnectURLParser {
     }
 
     /// Parses a typed, scanned, or deep-linked connect string.
+    ///
+    /// Only hosts on the local network are accepted (private, link-local and
+    /// loopback addresses, `.local` names, single-label LAN names). Eclipse on
+    /// the Mac is always on the same Wi-Fi; anything else would let a link or
+    /// QR code point the remote, and the PIN typed into it, at an outside
+    /// server (AUDIT_2026-11-02 P-1). Same rule as the Phone Camera app.
     /// - Parameter raw: Deep link, URL, host, or `host:port`.
     /// - Returns: Normalized origin + optional bootstrap token, or nil.
     static func parse(_ raw: String) -> RemoteConnectInfo? {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
 
-        if let fromApp = parseAppDeepLink(trimmed) {
-            return fromApp
-        }
-        if let fromURL = parseAbsoluteHTTPURL(trimmed) {
-            return fromURL
-        }
-        return parseHostPort(trimmed)
+        let parsed = parseAppDeepLink(trimmed)
+            ?? parseAbsoluteHTTPURL(trimmed)
+            ?? parseHostPort(trimmed)
+        guard let parsed, let host = parsed.baseURL.host,
+              PhoneCameraLocalHost.isLocal(host) else { return nil }
+        return parsed
     }
 
     // MARK: - Private Helpers
