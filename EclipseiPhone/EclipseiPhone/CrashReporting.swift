@@ -33,6 +33,9 @@ enum CrashReporting {
             options.enableAutoBreadcrumbTracking = false
             options.enableNetworkBreadcrumbs = false
             options.enableCaptureFailedRequests = false
+            // No session pings: they carry a per-install ID, which App Privacy
+            // would have to list as an identifier (AUDIT_2026-11-02 B-2).
+            options.enableAutoSessionTracking = false
             options.attachStacktrace = true
             options.beforeSend = { scrub($0) }
         }
