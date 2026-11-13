@@ -79,10 +79,14 @@ extension ShowLiveSession {
         ) else { return }
         foundDirector = true
         stopElection()
+        let nonce = ShowLiveInviteProof.newChallenge()
         let invite = ShowLiveInvitation(
             showId: showId,
             userHash: userHash,
-            proof: ShowLiveInviteProof.answer(challenge: challenge, showId: showId, key: userKey)
+            proof: ShowLiveInviteProof.answer(
+                challenge: challenge, showId: showId, nonce: nonce, key: userKey
+            ),
+            nonce: nonce
         )
         guard let context = try? JSONEncoder().encode(invite) else { return }
         setDirectorDeviceName(

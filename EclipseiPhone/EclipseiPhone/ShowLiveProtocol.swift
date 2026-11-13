@@ -100,11 +100,14 @@ struct ShowLiveInvitation: Codable, Equatable {
     /// name (see ``ShowLiveInviteProof``). Nil from builds before 2026-11-13,
     /// which the director now refuses.
     var proof: String?
+    /// The joiner's one-time random value, covered by `proof`.
+    var nonce: String?
 
     enum CodingKeys: String, CodingKey {
         case showId = "s"
         case userHash = "u"
         case proof = "p"
+        case nonce = "n"
     }
 }
 

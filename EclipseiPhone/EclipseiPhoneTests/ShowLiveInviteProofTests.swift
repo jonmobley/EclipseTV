@@ -19,31 +19,38 @@ struct ShowLiveInviteProofTests {
 
     @Test func sameAccountAnswerIsAccepted() {
         let challenge = ShowLiveInviteProof.newChallenge()
-        let answer = ShowLiveInviteProof.answer(challenge: challenge, showId: showId, key: ownKey)
-        #expect(ShowLiveInviteProof.isValid(proof: answer, challenge: challenge, showId: showId, key: ownKey))
+        let answer = ShowLiveInviteProof.answer(challenge: challenge, showId: showId, nonce: "n1", key: ownKey)
+        #expect(ShowLiveInviteProof.isValid(proof: answer, challenge: challenge, showId: showId, nonce: "n1", key: ownKey))
     }
 
     @Test func otherAccountIsRefused() {
         let challenge = ShowLiveInviteProof.newChallenge()
         let stranger = ShowLiveInviteProof.key(forRecordName: "_someone-else")
-        let answer = ShowLiveInviteProof.answer(challenge: challenge, showId: showId, key: stranger)
-        #expect(!ShowLiveInviteProof.isValid(proof: answer, challenge: challenge, showId: showId, key: ownKey))
+        let answer = ShowLiveInviteProof.answer(challenge: challenge, showId: showId, nonce: "n1", key: stranger)
+        #expect(!ShowLiveInviteProof.isValid(proof: answer, challenge: challenge, showId: showId, nonce: "n1", key: ownKey))
     }
 
     @Test func missingOrMalformedProofIsRefused() {
         let challenge = ShowLiveInviteProof.newChallenge()
-        #expect(!ShowLiveInviteProof.isValid(proof: nil, challenge: challenge, showId: showId, key: ownKey))
-        #expect(!ShowLiveInviteProof.isValid(proof: "zz", challenge: challenge, showId: showId, key: ownKey))
-        #expect(!ShowLiveInviteProof.isValid(proof: "abc", challenge: challenge, showId: showId, key: ownKey))
+        #expect(!ShowLiveInviteProof.isValid(proof: nil, challenge: challenge, showId: showId, nonce: "n1", key: ownKey))
+        #expect(!ShowLiveInviteProof.isValid(proof: "zz", challenge: challenge, showId: showId, nonce: "n1", key: ownKey))
+        #expect(!ShowLiveInviteProof.isValid(proof: "abc", challenge: challenge, showId: showId, nonce: "n1", key: ownKey))
     }
 
     @Test func answerForAnOldChallengeOrOtherShowIsRefused() {
         let old = ShowLiveInviteProof.newChallenge()
-        let answer = ShowLiveInviteProof.answer(challenge: old, showId: showId, key: ownKey)
+        let answer = ShowLiveInviteProof.answer(challenge: old, showId: showId, nonce: "n1", key: ownKey)
         #expect(!ShowLiveInviteProof.isValid(
-            proof: answer, challenge: ShowLiveInviteProof.newChallenge(), showId: showId, key: ownKey
+            proof: answer, challenge: ShowLiveInviteProof.newChallenge(), showId: showId, nonce: "n1", key: ownKey
         ))
-        #expect(!ShowLiveInviteProof.isValid(proof: answer, challenge: old, showId: UUID(), key: ownKey))
+        #expect(!ShowLiveInviteProof.isValid(proof: answer, challenge: old, showId: UUID(), nonce: "n1", key: ownKey))
+    }
+
+    @Test func proofIsTiedToItsNonce() {
+        let challenge = ShowLiveInviteProof.newChallenge()
+        let answer = ShowLiveInviteProof.answer(challenge: challenge, showId: showId, nonce: "n1", key: ownKey)
+        #expect(!ShowLiveInviteProof.isValid(proof: answer, challenge: challenge, showId: showId, nonce: "n2", key: ownKey))
+        #expect(!ShowLiveInviteProof.isValid(proof: answer, challenge: challenge, showId: showId, nonce: nil, key: ownKey))
     }
 
     @Test func challengesAreFreshEachTime() {
@@ -53,7 +60,7 @@ struct ShowLiveInviteProofTests {
     }
 
     @Test func invitationCarriesTheProof() throws {
-        let invite = ShowLiveInvitation(showId: showId, userHash: "0011223344556677", proof: "ab12")
+        let invite = ShowLiveInvitation(showId: showId, userHash: "0011223344556677", proof: "ab12", nonce: "n1")
         let decoded = try JSONDecoder().decode(
             ShowLiveInvitation.self, from: JSONEncoder().encode(invite)
         )

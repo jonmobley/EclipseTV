@@ -16,7 +16,9 @@ import Foundation
 /// device join and send commands (AUDIT_2026-11-02 P-3). Now the director also
 /// advertises a fresh random challenge, and the joiner answers with an HMAC of
 /// it keyed by the record name itself, which never leaves the account's
-/// devices. Pure functions so tests need no Multipeer.
+/// devices. Each invitation also carries the joiner's own random nonce inside
+/// the HMAC, and the director accepts each nonce once, so a copied invitation
+/// cannot be sent again. Pure functions so tests need no Multipeer.
 enum ShowLiveInviteProof {
 
     /// Key both phones derive from the iCloud user record name.
@@ -38,10 +40,11 @@ enum ShowLiveInviteProof {
     /// - Parameters:
     ///   - challenge: Value from the director's discovery info.
     ///   - showId: Show both phones have open.
+    ///   - nonce: The joiner's fresh ``newChallenge()`` for this invitation.
     ///   - key: ``key(forRecordName:)``.
     /// - Returns: Hex HMAC-SHA256.
-    static func answer(challenge: String, showId: UUID, key: SymmetricKey) -> String {
-        let message = Data("\(showId.uuidString)|\(challenge)".utf8)
+    static func answer(challenge: String, showId: UUID, nonce: String, key: SymmetricKey) -> String {
+        let message = signedMessage(challenge: challenge, showId: showId, nonce: nonce)
         let mac = HMAC<SHA256>.authenticationCode(for: message, using: key)
         return Data(mac).map { String(format: "%02x", $0) }.joined()
     }
@@ -51,12 +54,19 @@ enum ShowLiveInviteProof {
     ///   - proof: Answer from the invitation, if any.
     ///   - challenge: The challenge this director is advertising.
     ///   - showId: The director's open Show.
+    ///   - nonce: Nonce from the invitation, if any.
     ///   - key: The director's own ``key(forRecordName:)``.
     /// - Returns: True only for a correct answer; compared in constant time.
-    static func isValid(proof: String?, challenge: String, showId: UUID, key: SymmetricKey) -> Bool {
-        guard let proof, let given = Data(hex: proof) else { return false }
-        let message = Data("\(showId.uuidString)|\(challenge)".utf8)
+    static func isValid(
+        proof: String?, challenge: String, showId: UUID, nonce: String?, key: SymmetricKey
+    ) -> Bool {
+        guard let proof, let nonce, !nonce.isEmpty, let given = Data(hex: proof) else { return false }
+        let message = signedMessage(challenge: challenge, showId: showId, nonce: nonce)
         return HMAC<SHA256>.isValidAuthenticationCode(given, authenticating: message, using: key)
+    }
+
+    private static func signedMessage(challenge: String, showId: UUID, nonce: String) -> Data {
+        Data("\(showId.uuidString)|\(challenge)|\(nonce)".utf8)
     }
 }
 

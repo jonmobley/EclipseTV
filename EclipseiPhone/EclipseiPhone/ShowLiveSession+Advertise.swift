@@ -61,7 +61,9 @@ extension ShowLiveSession {
               let context,
               let invite = try? JSONDecoder().decode(
                 ShowLiveInvitation.self, from: context
-              )
+              ),
+              let nonce = invite.nonce,
+              usedInviteNonces.insert(nonce).inserted
         else { return false }
         return ShowLiveRouting.canAutoJoin(
             advertisedShowId: invite.showId,
@@ -69,7 +71,8 @@ extension ShowLiveSession {
             localShowId: showId,
             localUserHash: userHash
         ) && ShowLiveInviteProof.isValid(
-            proof: invite.proof, challenge: challenge, showId: showId, key: userKey
+            proof: invite.proof, challenge: challenge, showId: showId,
+            nonce: nonce, key: userKey
         )
     }
 }

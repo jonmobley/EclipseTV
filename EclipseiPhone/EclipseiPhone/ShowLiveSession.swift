@@ -53,7 +53,9 @@ final class ShowLiveSession: NSObject {
     /// Key proving the iCloud account to the director; memory only.
     private(set) var userKey: SymmetricKey?
     /// Challenge in this director's current discovery info.
-    var advertisedChallenge: String?
+    var advertisedChallenge: String? { didSet { usedInviteNonces = [] } }
+    /// Invitation nonces already accepted or refused for that challenge.
+    var usedInviteNonces: Set<String> = []
 
     /// Updates role from advertising / browsing extensions in this module.
     func setRole(_ role: Role) {
