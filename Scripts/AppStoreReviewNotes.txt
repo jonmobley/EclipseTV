@@ -35,10 +35,18 @@ These are optional. Everything above works without them.
 
 Live Poll (QuestPoll)
 ---------------------
-Optional audience polls, under Settings > QuestPoll. Sign-in uses a 6-digit
-code emailed to the address entered.
-Demo account: [OWNER TO FILL IN, or remove this section]
-Settings > QuestPoll > Delete Account removes the account and its polls.
+Optional audience polls, under Settings > QuestPoll. Sign-in normally uses
+a 6-digit code emailed to the address entered.
+Demo account (no email is sent to it; use the fixed code instead):
+  Email: appreview@moxieapps.io
+  Code:  the 6-digit code in the "Password" field of Sign-In Information
+1. Settings > QuestPoll > Sign In..., enter the email, then the code.
+2. Open or create a Show, tap +, choose QuestPoll, and pick
+   "Sample Event Poll". It is added to the Show as a card.
+3. Tap the card to start the poll. Voters join by scanning the QR code
+   it shows with another phone's camera.
+Settings > QuestPoll > Delete Account removes the account and its polls
+(please don't, so the next reviewer can use it).
 
 Permissions used
 ----------------
