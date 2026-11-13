@@ -409,6 +409,9 @@ extension WebRemoteViewController: UIScrollViewDelegate,
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         if let url = webView.url, !isBlankBrowserURL(url) {
             tab(for: webView)?.hostTitle = displayHost(for: url)
+            if tab(for: webView) != nil {
+                WebHistoryStore.shared.record(url: url, title: webView.title)
+            }
         }
         refreshTabStrip()
         guard webView === self.webView else { return }

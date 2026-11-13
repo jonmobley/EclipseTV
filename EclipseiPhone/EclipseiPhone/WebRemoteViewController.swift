@@ -61,8 +61,10 @@ final class WebRemoteViewController: UIViewController {
     var overlaySendToTVButton: UIButton!
     /// Landscape overlay Close.
     var overlayCloseButton: UIButton!
-    /// Landscape overlay history button (saved websites).
+    /// Landscape overlay history button (saved websites and recent pages).
     var overlayBookmarksButton: UIButton!
+    /// History drawer while it is open (iPhone; iPad uses a menu).
+    var historyDrawer: WebHistoryDrawerView?
     /// Tab chips above the card; hidden while there is a single tab.
     var tabStripView: BrowserTabStripView!
     /// Vertical: stage sits under the URL nav bar.

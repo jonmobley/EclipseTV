@@ -68,7 +68,10 @@
   active tab. Windows a site opens (`window.open`, sign-in) are phone-only tabs until "Send to TV".
   Landscape buttons (Close · history · Refresh, then ⊕ only with a single tab, Send to TV / Back only
   when they apply) sit in a column beside the card on a phone; with 2+ tabs ⊕ ends the tab chips
-  instead (`BrowserTabStripView.newTabButton`). The history clock opens the saved-websites list.
+  instead (`BrowserTabStripView.newTabButton`). The history clock opens History: on iPhone a drawer (`WebHistoryDrawerView`, from the right in Landscape, from the
+  bottom in Vertical) with Saved and Recent; on iPad a pop-up menu with the same two sections. Recent is the last 30 pages
+  the phone finished loading in a tab (`WebHistoryStore`, UserDefaults `EclipseTV.web.recentPages`, phone only), and
+  picking one loads it in the active tab. The overlay buttons are re-raised on every layout, so the drawer is re-raised after them.
   Website Auto Scroll was removed (2026-11-13); `ScrollSpeedSlider` now serves only the Prompter. iPad gets a browser-style top bar (chips left, buttons top right)
   in both orientations, since iPadOS ignores the orientation lock while the app supports Split View.
 - Seeding a simulator with websites/Shows for a visual check: the stores are JSON blobs in
