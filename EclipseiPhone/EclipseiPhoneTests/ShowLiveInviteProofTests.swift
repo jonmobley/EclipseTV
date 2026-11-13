@@ -15,7 +15,7 @@ import Testing
 struct ShowLiveInviteProofTests {
 
     private let showId = UUID()
-    private let ownKey = ShowLiveInviteProof.key(forRecordName: "_owner-record")
+    private let ownKey = ShowLiveInviteProof.key(forAccountSecret: Data(repeating: 1, count: 32))
 
     @Test func sameAccountAnswerIsAccepted() {
         let challenge = ShowLiveInviteProof.newChallenge()
@@ -25,7 +25,7 @@ struct ShowLiveInviteProofTests {
 
     @Test func otherAccountIsRefused() {
         let challenge = ShowLiveInviteProof.newChallenge()
-        let stranger = ShowLiveInviteProof.key(forRecordName: "_someone-else")
+        let stranger = ShowLiveInviteProof.key(forAccountSecret: Data(repeating: 2, count: 32))
         let answer = ShowLiveInviteProof.answer(challenge: challenge, showId: showId, nonce: "n1", key: stranger)
         #expect(!ShowLiveInviteProof.isValid(proof: answer, challenge: challenge, showId: showId, nonce: "n1", key: ownKey))
     }

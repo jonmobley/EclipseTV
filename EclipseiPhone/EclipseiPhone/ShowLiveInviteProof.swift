@@ -15,25 +15,30 @@ import Foundation
 /// record name, which anyone nearby can read. Matching those alone let any
 /// device join and send commands (AUDIT_2026-11-02 P-3). Now the director also
 /// advertises a fresh random challenge, and the joiner answers with an HMAC of
-/// it keyed by the record name itself, which never leaves the account's
-/// devices. Each invitation also carries the joiner's own random nonce inside
-/// the HMAC, and the director accepts each nonce once, so a copied invitation
-/// cannot be sent again. Pure functions so tests need no Multipeer.
+/// it keyed by the account secret (``ShowLiveAccountSecret``), which only the
+/// owner's iCloud Keychain holds. Each invitation also carries the joiner's own
+/// random nonce inside the HMAC, and the director accepts each nonce once, so a
+/// copied invitation cannot be sent again. After connecting, both phones prove
+/// the same key again over the session (``ShowLivePeerHandshake``), which stops
+/// a nearby device from relaying a real phone's invitation. Pure functions so
+/// tests need no Multipeer.
 enum ShowLiveInviteProof {
 
-    /// Key both phones derive from the iCloud user record name.
-    /// - Parameter recordName: `CKRecord.ID.recordName` of the current user.
+    /// Key every device on the account derives from the shared account secret.
+    /// - Parameter secret: ``ShowLiveAccountSecret/loadOrCreate(store:)``.
     /// - Returns: A key that stays in memory only.
-    static func key(forRecordName recordName: String) -> SymmetricKey {
-        let digest = SHA256.hash(data: Data("EclipseShowLive.v1|\(recordName)".utf8))
-        return SymmetricKey(data: Data(digest))
+    static func key(forAccountSecret secret: Data) -> SymmetricKey {
+        HKDF<SHA256>.deriveKey(
+            inputKeyMaterial: SymmetricKey(data: secret),
+            info: Data("EclipseShowLive.v2".utf8),
+            outputByteCount: 32
+        )
     }
 
     /// A new random challenge for one advertising run.
     /// - Returns: 32 hex characters (128 bits).
     static func newChallenge() -> String {
-        let bytes = SymmetricKey(size: .bits128).withUnsafeBytes { Data($0) }
-        return bytes.map { String(format: "%02x", $0) }.joined()
+        SymmetricKey(size: .bits128).withUnsafeBytes { Data($0) }.hexString
     }
 
     /// The joiner's answer to a challenge for one Show.
@@ -41,12 +46,12 @@ enum ShowLiveInviteProof {
     ///   - challenge: Value from the director's discovery info.
     ///   - showId: Show both phones have open.
     ///   - nonce: The joiner's fresh ``newChallenge()`` for this invitation.
-    ///   - key: ``key(forRecordName:)``.
+    ///   - key: ``key(forAccountSecret:)``.
     /// - Returns: Hex HMAC-SHA256.
     static func answer(challenge: String, showId: UUID, nonce: String, key: SymmetricKey) -> String {
         let message = signedMessage(challenge: challenge, showId: showId, nonce: nonce)
         let mac = HMAC<SHA256>.authenticationCode(for: message, using: key)
-        return Data(mac).map { String(format: "%02x", $0) }.joined()
+        return Data(mac).hexString
     }
 
     /// Whether an invitation's answer matches this director's challenge.
@@ -55,7 +60,7 @@ enum ShowLiveInviteProof {
     ///   - challenge: The challenge this director is advertising.
     ///   - showId: The director's open Show.
     ///   - nonce: Nonce from the invitation, if any.
-    ///   - key: The director's own ``key(forRecordName:)``.
+    ///   - key: The director's own ``key(forAccountSecret:)``.
     /// - Returns: True only for a correct answer; compared in constant time.
     static func isValid(
         proof: String?, challenge: String, showId: UUID, nonce: String?, key: SymmetricKey
@@ -81,7 +86,12 @@ enum ShowLiveInviteProof {
 
 // MARK: - Hex
 
-private extension Data {
+extension Data {
+    /// Lowercase hex, two digits per byte.
+    var hexString: String {
+        map { String(format: "%02x", $0) }.joined()
+    }
+
     /// Decodes lowercase or uppercase hex; nil for odd length or a bad digit.
     init?(hex: String) {
         guard hex.count.isMultiple(of: 2) else { return nil }

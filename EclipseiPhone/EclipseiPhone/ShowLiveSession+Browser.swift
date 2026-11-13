@@ -13,7 +13,7 @@ import MultipeerConnectivity
 extension ShowLiveSession {
     /// Browses for a director of the open Show.
     func startBrowsing(showId: UUID) {
-        guard userHash != nil else { return }
+        guard userHash != nil, userKey != nil else { return }
         if isBrowsing, openingShowId == showId { return }
         stopBrowsing()
         openingShowId = showId

@@ -14,7 +14,7 @@ import UIKit
 extension ShowLiveSession {
     /// Starts advertising this device as director for `showId`.
     func startAdvertising(showId: UUID) {
-        guard let userHash else { return }
+        guard let userHash, userKey != nil else { return }
         stopBrowsing()
         stopElection()
         if isAdvertising, openingShowId == showId { return }
