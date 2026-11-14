@@ -840,14 +840,14 @@ extension LibraryGridViewController: UICollectionViewDataSource,
     func optionsMenu(for item: LibraryItemDTO) -> UIMenu {
         let id = item.id
 
-        if UnavailableMediaReason.of(item) == .waitingForICloud {
+        if let reason = UnavailableMediaReason.of(item), reason.isICloud {
             return UIMenu(
-                title: UnavailableMediaReason.iCloudMessage,
-                children: [UIAction(
-                    title: UnavailableMediaReason.iCloudTitle,
-                    image: UIImage(systemName: "icloud.and.arrow.down"),
-                    attributes: .disabled
-                ) { _ in }]
+                title: reason == .downloading
+                    ? UnavailableMediaReason.downloadingMessage
+                    : UnavailableMediaReason.inICloudMessage,
+                children: [iCloudDownloadAction(for: item, reason: reason) { [weak self] in
+                    self?.requestUnresolvedDownloadIfNeeded(id: id)
+                }]
             )
         }
 

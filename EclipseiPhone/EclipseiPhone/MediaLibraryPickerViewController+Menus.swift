@@ -60,15 +60,18 @@ extension MediaLibraryPickerViewController {
     }
 
     private func unavailableMediaMenu(for item: LibraryItemDTO) -> UIMenu {
-        if UnavailableMediaReason.of(item) == .waitingForICloud {
-            return UIMenu(title: UnavailableMediaReason.iCloudMessage, children: [
-                UIAction(
-                    title: UnavailableMediaReason.iCloudTitle,
-                    image: UIImage(systemName: "icloud.and.arrow.down"),
-                    attributes: .disabled
-                ) { _ in },
-                deleteMediaAction(item)
-            ])
+        if let reason = UnavailableMediaReason.of(item), reason.isICloud {
+            return UIMenu(
+                title: reason == .downloading
+                    ? UnavailableMediaReason.downloadingMessage
+                    : UnavailableMediaReason.inICloudMessage,
+                children: [
+                    iCloudDownloadAction(for: item, reason: reason) { [weak self] in
+                        self?.downloadFromICloud(id: item.id)
+                    },
+                    deleteMediaAction(item)
+                ]
+            )
         }
         return UIMenu(children: [
             UIAction(

@@ -507,39 +507,62 @@ final class TVLibraryStore {
     }
 
     /// Merges phone-owned captures into the display list (never sent to Apple TV).
-    private func mergeCaptures() {
-        let existing = Set(items.map { $0.id })
+    @discardableResult
+    private func mergeCaptures() -> Bool {
         let mode = ExternalOutputSettings.orientation
-        for capture in CaptureStore.shared.capturesForCurrentMode
-        where capture.orientation == mode {
-            let dto = capture.asLibraryItem
-            guard !existing.contains(dto.id) else { continue }
-            items.append(dto)
-        }
+        let dtos = CaptureStore.shared.capturesForCurrentMode
+            .filter { $0.orientation == mode }
+            .map(\.asLibraryItem)
+        return mergeCloudItems(dtos)
     }
 
     /// Merges CloudKit-synced imports that are not yet in the TV manifest.
-    private func mergeImportedMedia() {
-        let existing = Set(items.map { $0.id })
+    @discardableResult
+    private func mergeImportedMedia() -> Bool {
         let mode = ExternalOutputSettings.orientation
-        for imported in ImportedMediaStore.shared.allActive
-        where imported.orientation == mode {
-            let dto = imported.asLibraryItem
-            guard !existing.contains(dto.id) else { continue }
-            items.append(dto)
+        let dtos = ImportedMediaStore.shared.allActive
+            .filter { $0.orientation == mode }
+            .map(\.asLibraryItem)
+        return mergeCloudItems(dtos)
+    }
+
+    /// Adds iCloud rows the list doesn't have and refreshes `isAvailable` on the
+    /// ones it does. Returns whether anything changed.
+    ///
+    /// Availability has to follow the record: rows merged while their file was still
+    /// in iCloud kept `isAvailable == false` after the download finished, so the
+    /// tile said "Downloading…" forever and a tap never played it.
+    private func mergeCloudItems(_ dtos: [LibraryItemDTO]) -> Bool {
+        var indexById: [String: Int] = [:]
+        for (index, item) in items.enumerated() where indexById[item.id] == nil {
+            indexById[item.id] = index
         }
+        var changed = false
+        for dto in dtos {
+            if let index = indexById[dto.id] {
+                if items[index].isAvailable != dto.isAvailable {
+                    items[index].isAvailable = dto.isAvailable
+                    changed = true
+                }
+            } else {
+                indexById[dto.id] = items.count
+                items.append(dto)
+                changed = true
+            }
+        }
+        return changed
     }
 
     /// Re-merges captures after CloudKit fetch / local capture changes.
     func refreshMergedCaptures() {
-        mergeCaptures()
+        guard mergeCaptures() else { return }
         persistManifest()
         delegate?.libraryStoreDidUpdateItems(self)
     }
 
-    /// Re-merges imported CloudKit media after a remote apply.
+    /// Re-merges imported CloudKit media after a remote apply or a download.
     func refreshMergedImports() {
-        mergeImportedMedia()
+        guard mergeImportedMedia() else { return }
         persistManifest()
         delegate?.libraryStoreDidUpdateItems(self)
     }

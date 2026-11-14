@@ -23,23 +23,43 @@ struct UnavailableMediaReasonTests {
     }
 
     @Test func availableItemsHaveNoReason() {
-        #expect(UnavailableMediaReason.of(item("a.jpg", available: nil), isSyncedThroughICloud: { _ in true }) == nil)
-        #expect(UnavailableMediaReason.of(item("a.jpg", available: true), isSyncedThroughICloud: { _ in true }) == nil)
+        #expect(UnavailableMediaReason.of(item("a.jpg", available: nil), iCloudState: { _ in .remoteOnly }) == nil)
+        #expect(UnavailableMediaReason.of(item("a.jpg", available: true), iCloudState: { _ in .remoteOnly }) == nil)
     }
 
-    @Test func iCloudItemIsDownloadingNotMissingOnTV() {
+    /// Not on the phone and nothing fetching it: the tile must not claim a download.
+    @Test func iCloudItemNotDownloadingIsInICloud() {
         let reason = UnavailableMediaReason.of(
             item("cloud.jpg", available: false),
-            isSyncedThroughICloud: { $0 == "cloud.jpg" }
+            iCloudState: { $0 == "cloud.jpg" ? .remoteOnly : nil }
         )
-        #expect(reason == .waitingForICloud)
+        #expect(reason == .inICloud)
+        #expect(reason?.pillTitle == "In iCloud")
+    }
+
+    @Test func iCloudItemInFlightIsDownloading() {
+        let reason = UnavailableMediaReason.of(
+            item("cloud.jpg", available: false),
+            iCloudState: { _ in .downloading }
+        )
+        #expect(reason == .downloading)
+        #expect(reason?.pillTitle == "Downloading…")
     }
 
     @Test func purgedTVItemIsMissingOnTV() {
         let reason = UnavailableMediaReason.of(
             item("tv.jpg", available: false),
-            isSyncedThroughICloud: { _ in false }
+            iCloudState: { _ in nil }
         )
         #expect(reason == .missingOnAppleTV)
+        #expect(reason?.isICloud == false)
+    }
+
+    @Test func downloadingHasNoLocalFile() {
+        #expect(!CaptureSyncState.downloading.hasLocalFile)
+        #expect(!CaptureSyncState.remoteOnly.hasLocalFile)
+        #expect(CaptureSyncState.synced.hasLocalFile)
+        #expect(CaptureSyncState.pendingUpload.hasLocalFile)
+        #expect(CaptureSyncState.localOnly.hasLocalFile)
     }
 }

@@ -718,6 +718,13 @@ final class LibraryGridViewController: UIViewController {
             self?.reloadGridIfSafe()
             self?.updateEmptyState()
         }
+        // Imported photos and videos change state when they download from iCloud
+        // ("In iCloud" → "Downloading…" → playable); without this the tile kept its
+        // old pill until something else redrew the grid.
+        observe(ImportedMediaStore.didChangeNotification) { [weak self] _ in
+            TVLibraryStore.shared.refreshMergedImports()
+            self?.reloadGridIfSafe()
+        }
         observe(EclipseSyncController.statusDidChangeNotification) { [weak self] _ in
             self?.syncStatusBanner.reload()
         }

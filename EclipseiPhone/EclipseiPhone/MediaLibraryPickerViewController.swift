@@ -204,6 +204,12 @@ final class MediaLibraryPickerViewController: UIViewController {
             name: MediaTitleStore.didChangeNotification,
             object: nil
         )
+        // iCloud downloads flip tiles from "In iCloud" to "Downloading…" to playable.
+        for name in [ImportedMediaStore.didChangeNotification, CaptureStore.didChangeNotification] {
+            NotificationCenter.default.addObserver(
+                self, selector: #selector(cloudMediaDidChange), name: name, object: nil
+            )
+        }
         reload()
     }
 
@@ -330,6 +336,14 @@ final class MediaLibraryPickerViewController: UIViewController {
     }
 
     // MARK: - Data
+
+    /// Brings the library's availability up to date before redrawing, so a tile
+    /// never reads a stale "In iCloud" after its download finished.
+    @objc private func cloudMediaDidChange() {
+        TVLibraryStore.shared.refreshMergedImports()
+        TVLibraryStore.shared.refreshMergedCaptures()
+        reload()
+    }
 
     @objc func reload() {
         let media = TVLibraryStore.shared.items
