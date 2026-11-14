@@ -84,6 +84,9 @@ extension LibraryGridViewController {
         if let flip = cameraFlipAction() {
             actions.append(flip)
         }
+        if let savePreset = cameraPresetSaveMenu() {
+            actions.append(savePreset)
+        }
         return actions
     }
 

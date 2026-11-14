@@ -489,6 +489,7 @@ final class LibraryGridViewController: UIViewController {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
         installHomeCameraPreviewObservers()
+        installCameraPresetObservers()
         observe(WarmWebSession.didRelinquishNotification) { [weak self] _ in
             self?.refreshLiveHeader()
         }

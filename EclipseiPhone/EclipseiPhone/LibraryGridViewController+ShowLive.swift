@@ -52,7 +52,13 @@ extension LibraryGridViewController {
             else { return }
             presentPDFLive(doc)
         case .camera:
-            presentCameraLiveOnOutput()
+            // An operator's Camera Preset names its frame; the plain tile sends none.
+            if let frameId = itemId.flatMap(UUID.init(uuidString:)) {
+                presentCameraPreset(frameId: frameId, opensControllerWhenLive: false)
+            } else {
+                clearCameraPresetFrameForPlainCamera()
+                presentCameraLiveOnOutput()
+            }
         case .ptzCamera:
             // Operators don't send PTZ Camera yet (its Show Live support is a later step).
             break
@@ -97,7 +103,7 @@ extension LibraryGridViewController {
     func isShowGridItemLiveRemotely(_ item: ShowGridItem) -> Bool {
         guard let snap = ShowLiveSession.shared.snapshot,
               let program = ShowProgram(snapshot: snap) else { return false }
-        return program.matches(item)
+        return program.matches(item, cameraPresetFrameIds: cameraPresetFrameIds(for: item))
     }
 
     /// Follow-monitor hero for an operator (no local camera / web / video player).

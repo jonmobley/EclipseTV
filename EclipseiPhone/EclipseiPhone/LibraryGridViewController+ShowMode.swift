@@ -214,6 +214,12 @@ extension LibraryGridViewController {
         case ShowToolToken.ptzCamera: return .ptzCamera
         case ShowToolToken.prompter: return .prompter
         default:
+            if let frameId = ShowCameraPresetToken.frameId(from: id) {
+                // The frame syncs separately; until it lands the tile waits.
+                return CameraFrameStore.shared.frame(id: frameId) != nil
+                    ? .cameraPreset(frameId: frameId)
+                    : .unresolved(id: id)
+            }
             if let uuid = ShowLivePollToken.livePollId(from: id) {
                 if let item = LivePollStore.shared.poll(id: uuid),
                    item.showId == openShowId {
@@ -337,6 +343,25 @@ extension LibraryGridViewController {
                     ? nil
                     : toolContextMenu(token: ShowToolToken.camera)
             )
+        case .cameraPreset(let frameId):
+            cell.recycleCameraPreview()
+            cell.configureSpecial(
+                title: "Camera Preset",
+                systemImage: "camera.fill",
+                thumbnail: CameraPresetThumbnail.image(
+                    frameId: frameId,
+                    backdrop: CameraManager.shared.lastFrame
+                ),
+                fillColor: .mediaPlaceholder,
+                isLive: live,
+                isLocked: isLiveOutputLocked,
+                typeIcon: .camera
+            )
+            cell.setMoreMenu(
+                (isArranging || isSelecting)
+                    ? nil
+                    : toolContextMenu(token: ShowCameraPresetToken.token(for: frameId))
+            )
         case .ptzCamera:
             cell.configurePTZCamera(isLive: live, isLocked: isLiveOutputLocked)
             cell.setMoreMenu(
@@ -459,6 +484,8 @@ extension LibraryGridViewController {
             presentLogoLive()
         case .camera:
             presentCameraFromTile()
+        case .cameraPreset(let frameId):
+            presentCameraPreset(frameId: frameId)
         case .ptzCamera:
             presentPTZCameraFromTile()
         case .livePoll(let item):
@@ -788,7 +815,9 @@ extension LibraryGridViewController {
                 })
             }
         default:
-            break
+            if ShowCameraPresetToken.isCameraPreset(token) {
+                children.append(contentsOf: cameraToolActions())
+            }
         }
         children.append(arrangeAction())
         children.append(selectAction(seedId: token))

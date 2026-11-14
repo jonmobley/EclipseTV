@@ -40,6 +40,7 @@ extension LibraryGridViewController {
         state.isBlackSelected = isBlackSelected
         state.isOverlayLive = mgr.isOverlayLive
         state.isCameraTileLive = mgr.isCameraTileLive
+        state.cameraFrameId = mgr.isCameraTileLive ? CameraFrameStore.shared.selectedId : nil
         state.isPTZCameraLive = mgr.isPTZCameraLive
         state.countdownId = mgr.isCountdownLive
             ? CountdownController.shared.liveCountdownId

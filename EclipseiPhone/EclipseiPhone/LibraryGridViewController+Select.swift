@@ -178,7 +178,17 @@ extension LibraryGridViewController {
         if ShowLiveSession.shared.isRemoteOperator {
             return isShowGridItemLiveRemotely(item)
         }
-        return resolvedShowProgram?.matches(item) == true
+        return resolvedShowProgram?.matches(
+            item, cameraPresetFrameIds: cameraPresetFrameIds(for: item)
+        ) == true
+    }
+
+    /// Preset frames on the open Show, needed only to decide the plain Camera tile.
+    ///
+    /// Every other tile skips the surface walk: this runs per cell while scrolling.
+    func cameraPresetFrameIds(for item: ShowGridItem) -> Set<String> {
+        guard case .camera = item, let openShow else { return [] }
+        return ShowCameraPresetToken.frameIds(in: openShow.surfaceIds ?? [])
     }
 
     // MARK: - Private
