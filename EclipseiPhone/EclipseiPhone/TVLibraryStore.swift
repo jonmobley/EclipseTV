@@ -526,12 +526,14 @@ final class TVLibraryStore {
         return mergeCloudItems(dtos)
     }
 
-    /// Adds iCloud rows the list doesn't have and refreshes `isAvailable` on the
-    /// ones it does. Returns whether anything changed.
+    /// Adds iCloud rows the list doesn't have and marks existing rows playable once
+    /// this phone has their file. Returns whether anything changed.
     ///
-    /// Availability has to follow the record: rows merged while their file was still
-    /// in iCloud kept `isAvailable == false` after the download finished, so the
-    /// tile said "Downloading…" forever and a tap never played it.
+    /// Rows merged while their file was still in iCloud kept `isAvailable == false`
+    /// after the download finished, so the tile said "Downloading…" forever and a tap
+    /// never played it. Availability is only ever turned on here, never off: a row
+    /// with the same id may come from the Apple TV's manifest, and the TV playing a
+    /// file says nothing about whether this phone has a copy.
     private func mergeCloudItems(_ dtos: [LibraryItemDTO]) -> Bool {
         var indexById: [String: Int] = [:]
         for (index, item) in items.enumerated() where indexById[item.id] == nil {
@@ -540,7 +542,7 @@ final class TVLibraryStore {
         var changed = false
         for dto in dtos {
             if let index = indexById[dto.id] {
-                if items[index].isAvailable != dto.isAvailable {
+                if items[index].isAvailable == false, dto.isAvailable != false {
                     items[index].isAvailable = dto.isAvailable
                     changed = true
                 }
