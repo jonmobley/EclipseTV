@@ -204,7 +204,25 @@ final class MediaLibraryPickerViewController: UIViewController {
             name: MediaTitleStore.didChangeNotification,
             object: nil
         )
+        // Thumbs load from disk in the background, often after the one-off retry
+        // reload below, so fill each tile in as its thumb arrives.
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(mediaThumbnailDidChange(_:)),
+            name: TVLibraryStore.thumbnailDidChangeNotification,
+            object: nil
+        )
         reload()
+    }
+
+    /// Re-draws the one tile whose thumbnail just became available.
+    @objc func mediaThumbnailDidChange(_ note: Notification) {
+        guard let id = note.userInfo?[TVLibraryStore.thumbnailIdKey] as? String,
+              let index = items.firstIndex(of: .media(id))
+        else { return }
+        let indexPath = IndexPath(item: index, section: 0)
+        guard collectionView.indexPathsForVisibleItems.contains(indexPath) else { return }
+        collectionView.reconfigureItems(at: [indexPath])
     }
 
     deinit {
