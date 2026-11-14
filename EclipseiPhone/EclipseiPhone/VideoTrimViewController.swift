@@ -34,6 +34,9 @@ final class VideoTrimViewController: UIViewController {
     private let saveButton = UIButton(type: .system)
     private let spinner = UIActivityIndicatorView(style: .medium)
     private var didLoadThumbnails = false
+    private let buttonStack = UIStackView()
+    private var portraitConstraints: [NSLayoutConstraint] = []
+    private var landscapeConstraints: [NSLayoutConstraint] = []
 
     init(sourceURL: URL, duration: Double) {
         self.sourceURL = sourceURL
@@ -124,49 +127,78 @@ final class VideoTrimViewController: UIViewController {
         spinner.translatesAutoresizingMaskIntoConstraints = false
         saveButton.addSubview(spinner)
 
-        let buttons = UIStackView(arrangedSubviews: [cancelButton, resetButton, saveButton])
-        buttons.axis = .horizontal
-        buttons.spacing = 12
-        buttons.distribution = .fillEqually
+        buttonStack.addArrangedSubview(cancelButton)
+        buttonStack.addArrangedSubview(resetButton)
+        buttonStack.addArrangedSubview(saveButton)
+        buttonStack.distribution = .fillEqually
 
         let barRow = UIStackView(arrangedSubviews: [playButton, trimBar])
         barRow.axis = .horizontal
         barRow.spacing = 8
         barRow.alignment = .fill
 
-        for sub in [titleLabel, playerView, timeLabel, barRow, buttons] as [UIView] {
+        for sub in [titleLabel, playerView, timeLabel, barRow, buttonStack] as [UIView] {
             sub.translatesAutoresizingMaskIntoConstraints = false
             view.addSubview(sub)
         }
 
         let guide = view.safeAreaLayoutGuide
         NSLayoutConstraint.activate([
+            timeLabel.leadingAnchor.constraint(equalTo: guide.leadingAnchor, constant: 20),
+            timeLabel.trailingAnchor.constraint(equalTo: guide.trailingAnchor, constant: -20),
+            barRow.leadingAnchor.constraint(equalTo: guide.leadingAnchor, constant: 12),
+            barRow.trailingAnchor.constraint(equalTo: guide.trailingAnchor, constant: -16),
+            playButton.widthAnchor.constraint(equalToConstant: 44),
+            spinner.centerXAnchor.constraint(equalTo: saveButton.centerXAnchor),
+            spinner.centerYAnchor.constraint(equalTo: saveButton.centerYAnchor)
+        ])
+
+        // Tall screens: title, video, times, film strip, then a row of buttons.
+        portraitConstraints = [
             titleLabel.topAnchor.constraint(equalTo: guide.topAnchor, constant: 12),
             titleLabel.centerXAnchor.constraint(equalTo: guide.centerXAnchor),
-
             playerView.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 12),
             playerView.leadingAnchor.constraint(equalTo: guide.leadingAnchor),
             playerView.trailingAnchor.constraint(equalTo: guide.trailingAnchor),
             playerView.bottomAnchor.constraint(equalTo: timeLabel.topAnchor, constant: -16),
-
-            timeLabel.leadingAnchor.constraint(equalTo: guide.leadingAnchor, constant: 20),
-            timeLabel.trailingAnchor.constraint(equalTo: guide.trailingAnchor, constant: -20),
             timeLabel.bottomAnchor.constraint(equalTo: barRow.topAnchor, constant: -12),
-
-            barRow.leadingAnchor.constraint(equalTo: guide.leadingAnchor, constant: 12),
-            barRow.trailingAnchor.constraint(equalTo: guide.trailingAnchor, constant: -16),
             barRow.heightAnchor.constraint(equalToConstant: 56),
-            barRow.bottomAnchor.constraint(equalTo: buttons.topAnchor, constant: -24),
-            playButton.widthAnchor.constraint(equalToConstant: 44),
+            barRow.bottomAnchor.constraint(equalTo: buttonStack.topAnchor, constant: -24),
+            buttonStack.leadingAnchor.constraint(equalTo: guide.leadingAnchor, constant: 20),
+            buttonStack.trailingAnchor.constraint(equalTo: guide.trailingAnchor, constant: -20),
+            buttonStack.bottomAnchor.constraint(equalTo: guide.bottomAnchor, constant: -16),
+            buttonStack.heightAnchor.constraint(equalToConstant: 50)
+        ]
 
-            buttons.leadingAnchor.constraint(equalTo: guide.leadingAnchor, constant: 20),
-            buttons.trailingAnchor.constraint(equalTo: guide.trailingAnchor, constant: -20),
-            buttons.bottomAnchor.constraint(equalTo: guide.bottomAnchor, constant: -16),
-            buttons.heightAnchor.constraint(equalToConstant: 50),
+        // Short (landscape) screens: no title, and the buttons stack beside the video so
+        // the picture keeps most of the height.
+        landscapeConstraints = [
+            playerView.topAnchor.constraint(equalTo: guide.topAnchor, constant: 8),
+            playerView.leadingAnchor.constraint(equalTo: guide.leadingAnchor, constant: 12),
+            playerView.trailingAnchor.constraint(equalTo: buttonStack.leadingAnchor, constant: -16),
+            playerView.bottomAnchor.constraint(equalTo: timeLabel.topAnchor, constant: -10),
+            timeLabel.bottomAnchor.constraint(equalTo: barRow.topAnchor, constant: -8),
+            barRow.heightAnchor.constraint(equalToConstant: 48),
+            barRow.bottomAnchor.constraint(equalTo: guide.bottomAnchor, constant: -8),
+            buttonStack.trailingAnchor.constraint(equalTo: guide.trailingAnchor, constant: -20),
+            buttonStack.widthAnchor.constraint(equalToConstant: 150),
+            buttonStack.centerYAnchor.constraint(equalTo: playerView.centerYAnchor),
+            buttonStack.heightAnchor.constraint(equalToConstant: 152)
+        ]
 
-            spinner.centerXAnchor.constraint(equalTo: saveButton.centerXAnchor),
-            spinner.centerYAnchor.constraint(equalTo: saveButton.centerYAnchor)
-        ])
+        applyLayoutForSizeClass()
+        registerForTraitChanges([UITraitVerticalSizeClass.self]) { (self: Self, _) in
+            self.applyLayoutForSizeClass()
+        }
+    }
+
+    private func applyLayoutForSizeClass() {
+        let isShort = traitCollection.verticalSizeClass == .compact
+        NSLayoutConstraint.deactivate(isShort ? portraitConstraints : landscapeConstraints)
+        titleLabel.isHidden = isShort
+        buttonStack.axis = isShort ? .vertical : .horizontal
+        buttonStack.spacing = isShort ? 10 : 12
+        NSLayoutConstraint.activate(isShort ? landscapeConstraints : portraitConstraints)
     }
 
     private func styleButton(_ button: UIButton, title: String, titleColor: UIColor, background: UIColor) {
