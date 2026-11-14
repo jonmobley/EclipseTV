@@ -39,6 +39,9 @@ final class WebHistoryDrawerView: UIView {
     private let closeButton = UIButton(type: .system)
     let tableView = UITableView(frame: .zero, style: .insetGrouped)
     private var isShown = false
+    /// While the panel slides in, layout leaves its frame to the animation; otherwise a
+    /// layout pass mid-slide (rotation, host resize) would snap it into place.
+    private var isSlidingIn = false
 
     static let trailingWidth: CGFloat = 360
     static let bottomHeightFraction: CGFloat = 0.62
@@ -132,11 +135,17 @@ final class WebHistoryDrawerView: UIView {
             self.panel.frame = shown
         }
         if animated, window != nil {
+            isSlidingIn = true
             UIView.animate(
                 withDuration: 0.32, delay: 0, usingSpringWithDamping: 0.92,
                 initialSpringVelocity: 0, options: [.beginFromCurrentState],
                 animations: animations
-            )
+            ) { [weak self] _ in
+                guard let self else { return }
+                self.isSlidingIn = false
+                // Catch up with any size change that happened during the slide.
+                self.setNeedsLayout()
+            }
         } else {
             animations()
         }
@@ -147,6 +156,7 @@ final class WebHistoryDrawerView: UIView {
     func dismiss(animated: Bool = true) {
         guard isShown else { return }
         isShown = false
+        isSlidingIn = false
         let finish = { [weak self] in
             guard let self else { return }
             self.removeFromSuperview()
@@ -179,8 +189,8 @@ final class WebHistoryDrawerView: UIView {
     override func layoutSubviews() {
         super.layoutSubviews()
         dimmer.frame = bounds
-        // While sliding away the panel keeps its animated frame.
-        guard isShown else { return }
+        // While sliding in or away the panel keeps its animated frame.
+        guard isShown, !isSlidingIn else { return }
         panel.frame = Self.panelFrame(placement: placement, in: bounds, safe: safeAreaInsets)
         layoutPanelContents()
     }
