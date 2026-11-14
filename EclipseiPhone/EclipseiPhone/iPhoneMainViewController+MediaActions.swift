@@ -209,7 +209,7 @@ extension iPhoneMainViewController {
         do {
             try FileManager.default.copyItem(at: croppedURL, to: namedURL)
         } catch {
-            showPresentationToast("Couldn't save the cropped video.")
+            showPresentationToast("Couldn't save the edited video.")
             cleanupTempFile(at: croppedURL)
             return
         }

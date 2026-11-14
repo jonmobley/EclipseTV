@@ -890,7 +890,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         if item.isVideo {
             children.append(contentsOf: videoOptionActions(for: item))
             children.append(screenFitMenu(for: item))
-            children.append(editAction(for: item))
+            children.append(contentsOf: videoEditActions(for: item))
         } else {
             children.append(noteAction(for: item))
             children.append(screenFitMenu(for: item))

@@ -249,6 +249,9 @@ extension iPhoneMainViewController: UIScrollViewDelegate {
         libraryViewController.onRequestEdit = { [weak self] id in
             self?.beginEditCrop(forItemId: id)
         }
+        libraryViewController.onRequestTrim = { [weak self] id in
+            self?.beginTrimVideo(forItemId: id)
+        }
         libraryViewController.onRequestVideoThumbnail = { [weak self] id in
             self?.beginChangeVideoThumbnail(forItemId: id)
         }

@@ -111,3 +111,8 @@
   `Prompter` type, so no iCloud schema or Mac change. `PrompterScript.showId` is really the script
   key. Copy to Show makes a new Prompter with a copy of the text. There is one `PrompterController`,
   so the TV shows whatever script is bound; opening a different Prompter while one is live asks first.
+- Prompter shape (2026-11-13): the Prompter screen has its own Landscape / Vertical menu (`PrompterLocalSettings.prefersVertical`,
+  this phone only). Vertical while Display Mode is Landscape makes the card 9:16, turns the phone upright, and shows an upright
+  9:16 column on the TV (`PrompterController.isVerticalOnLandscapeDisplay`); the menu is hidden in Vertical Display Mode.
+  Use `PrompterController.isVertical` / `canvasAspectRatio` for prompter layout, never `ExternalOutputSettings.isVerticalMode`.
+  The blue reading-guide lines were removed (2026-11-13, owner found them confusing); the line read sits mid-stage.

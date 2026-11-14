@@ -47,6 +47,8 @@ final class MediaLibraryPickerViewController: UIViewController {
     var onAddToShow: (([String], [UUID]) -> Void)?
     /// Crop a video, or Custom framing for a still (same flow as Screen Fit).
     var onRequestEdit: ((String) -> Void)?
+    /// Cut a video's start and end.
+    var onRequestTrim: ((String) -> Void)?
     /// Replace a video’s poster frame.
     var onRequestVideoThumbnail: ((String) -> Void)?
     /// Persist Fit / Fill and sync to EclipseTV when linked.
@@ -204,7 +206,25 @@ final class MediaLibraryPickerViewController: UIViewController {
             name: MediaTitleStore.didChangeNotification,
             object: nil
         )
+        // Thumbs load from disk in the background, often after the one-off retry
+        // reload below, so fill each tile in as its thumb arrives.
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(mediaThumbnailDidChange(_:)),
+            name: TVLibraryStore.thumbnailDidChangeNotification,
+            object: nil
+        )
         reload()
+    }
+
+    /// Re-draws the one tile whose thumbnail just became available.
+    @objc func mediaThumbnailDidChange(_ note: Notification) {
+        guard let id = note.userInfo?[TVLibraryStore.thumbnailIdKey] as? String,
+              let index = items.firstIndex(of: .media(id))
+        else { return }
+        let indexPath = IndexPath(item: index, section: 0)
+        guard collectionView.indexPathsForVisibleItems.contains(indexPath) else { return }
+        collectionView.reconfigureItems(at: [indexPath])
     }
 
     deinit {

@@ -45,6 +45,10 @@ final class PrompterViewController: UIViewController {
     private var transportRows: UIStackView?
     private var verticalRowConstraints: [NSLayoutConstraint] = []
 
+    /// Landscape / Vertical switch for the Prompter's own shape. Hidden while Display
+    /// Mode is Vertical, which already makes it 9:16.
+    let shapeItem = UIBarButtonItem()
+
     /// Card inset from the screen edges.
     static let cardInset: CGFloat = 12
 
@@ -83,7 +87,7 @@ final class PrompterViewController: UIViewController {
             target: self, action: #selector(editTapped)
         )
         edit.accessibilityLabel = "Edit Script"
-        navigationItem.rightBarButtonItem = edit
+        navigationItem.rightBarButtonItems = [edit, shapeItem]
 
         controller.bind(scriptId: scriptId)
         setupStage()
@@ -100,7 +104,19 @@ final class PrompterViewController: UIViewController {
         UIApplication.shared.isIdleTimerDisabled = true
         // Turn only now that this screen covers the grid.
         holdsDisplayModeOrientation = true
-        requestDisplayModeSceneGeometry()
+        requestPrompterSceneGeometry()
+    }
+
+    /// Orientations that match the Prompter's shape (Vertical or Landscape).
+    private var prompterOrientationMask: UIInterfaceOrientationMask {
+        controller.isVertical ? .portrait : .landscape
+    }
+
+    /// Turns the phone to the Prompter's shape, like `requestDisplayModeSceneGeometry`.
+    private func requestPrompterSceneGeometry() {
+        setNeedsUpdateOfSupportedInterfaceOrientations()
+        guard traitCollection.userInterfaceIdiom == .phone, let scene = view.window?.windowScene else { return }
+        scene.requestGeometryUpdate(.iOS(interfaceOrientations: prompterOrientationMask)) { _ in }
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -143,7 +159,7 @@ final class PrompterViewController: UIViewController {
             height: bottom - top
         ).insetBy(dx: Self.cardInset, dy: Self.cardInset)
         guard available.width > 1, available.height > 1 else { return }
-        stage.frame = ExternalOutputSettings.displayModePanelRect(in: available)
+        stage.frame = ExternalOutputSettings.panelRect(in: available, aspect: controller.canvasAspectRatio)
         stage.layer.cornerRadius = 24
         // A faint edge so the show's frame reads on the black background.
         stage.layer.borderWidth = 1
@@ -152,7 +168,7 @@ final class PrompterViewController: UIViewController {
         // card never flashes as a strip across a portrait screen.
         let fits = BrowserOrientationFit.matches(
             bounds: view.bounds.size,
-            isVertical: ExternalOutputSettings.isVerticalMode,
+            isVertical: controller.isVertical,
             idiom: traitCollection.userInterfaceIdiom
         )
         stage.alpha = fits ? 1 : 0
@@ -160,11 +176,11 @@ final class PrompterViewController: UIViewController {
     }
 
     override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
-        holdsDisplayModeOrientation ? ExternalOutputSettings.phoneOrientationMask : .allButUpsideDown
+        holdsDisplayModeOrientation ? prompterOrientationMask : .allButUpsideDown
     }
 
     override var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation {
-        guard !holdsDisplayModeOrientation else { return ExternalOutputSettings.preferredPhoneOrientation }
+        guard !holdsDisplayModeOrientation else { return controller.isVertical ? .portrait : .landscapeRight }
         let current = view.phoneInterfaceOrientation
         return current == .portraitUpsideDown ? .portrait : current
     }
@@ -191,7 +207,7 @@ final class PrompterViewController: UIViewController {
 
     private func setupStage() {
         stage.translatesAutoresizingMaskIntoConstraints = true
-        stage.setCanvasFontSize(controller.fontSize, isVertical: ExternalOutputSettings.isVerticalMode)
+        stage.setCanvasFontSize(controller.fontSize, isVertical: controller.isVertical)
         stage.onMetricsChange = { [weak self] size in
             self?.controller.updateStage(width: size.width, viewportHeight: size.height)
         }
@@ -209,6 +225,8 @@ final class PrompterViewController: UIViewController {
         configure(liveButton, symbol: "antenna.radiowaves.left.and.right", label: "Go Live", action: #selector(liveTapped))
         liveButton.configuration?.title = "Go Live"
         liveButton.configuration?.imagePadding = 6
+        // Keep "Go Live" on one line in the upright bar, where the row is narrow.
+        liveButton.setContentCompressionResistancePriority(.required, for: .horizontal)
 
         speedSlider.translatesAutoresizingMaskIntoConstraints = false
         speedSlider.onSpeedChange = { [weak self] speed in self?.controller.setSpeed(speed) }
@@ -221,7 +239,9 @@ final class PrompterViewController: UIViewController {
         let topRow = UIStackView(arrangedSubviews: [resetButton, playButton, liveButton])
         topRow.spacing = 20
         topRow.alignment = .center
-        topRow.distribution = .equalCentering
+        // Even gaps, not even centres: centring Play squeezed "Go Live" into a
+        // column of letters on an upright phone.
+        topRow.distribution = .equalSpacing
         let bottomRow = UIStackView(arrangedSubviews: [speedSlider, sizeGroup])
         bottomRow.spacing = 16
         bottomRow.alignment = .center
@@ -326,10 +346,9 @@ final class PrompterViewController: UIViewController {
             lastScript = controller.script
             stage.setScript(controller.script, anchor: controller.readingAnchor)
         }
-        stage.setCanvasFontSize(controller.fontSize, isVertical: ExternalOutputSettings.isVerticalMode)
+        stage.setCanvasFontSize(controller.fontSize, isVertical: controller.isVertical)
         let empty = !controller.canPlay
         emptyStack?.isHidden = !empty
-        stage.showsReadingGuide = !empty
         playButton.isEnabled = !empty
         resetButton.isEnabled = !empty
         playButton.configuration?.image = UIImage(systemName: controller.isPlaying ? "pause.fill" : "play.fill")
@@ -338,7 +357,33 @@ final class PrompterViewController: UIViewController {
         sizeDownButton.isEnabled = controller.fontSize > PrompterStageMetrics.canvasFontRange.lowerBound
         sizeUpButton.isEnabled = controller.fontSize < PrompterStageMetrics.canvasFontRange.upperBound
         refreshLiveButton()
+        refreshShapeItem()
         applyAnchor()
+    }
+
+    private var lastShapeIsVertical: Bool?
+
+    private func refreshShapeItem() {
+        let vertical = controller.isVertical
+        shapeItem.isHidden = ExternalOutputSettings.isVerticalMode
+        shapeItem.image = UIImage(systemName: vertical ? "rectangle.portrait" : "rectangle")
+        shapeItem.accessibilityLabel = "Prompter Shape"
+        shapeItem.accessibilityValue = vertical ? "Vertical" : "Landscape"
+        shapeItem.menu = UIMenu(title: "Prompter Shape", options: .singleSelection, children: [
+            UIAction(
+                title: "Landscape", image: UIImage(systemName: "rectangle"),
+                state: vertical ? .off : .on
+            ) { [weak self] _ in self?.controller.setPrefersVertical(false) },
+            UIAction(
+                title: "Vertical", image: UIImage(systemName: "rectangle.portrait"),
+                state: vertical ? .on : .off
+            ) { [weak self] _ in self?.controller.setPrefersVertical(true) }
+        ])
+        // On a change, turn the phone and re-fit the card to the new shape.
+        defer { lastShapeIsVertical = vertical }
+        guard let last = lastShapeIsVertical, last != vertical else { return }
+        view.setNeedsLayout()
+        if holdsDisplayModeOrientation { requestPrompterSceneGeometry() }
     }
 
     private func refreshLiveButton() {

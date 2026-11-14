@@ -350,6 +350,9 @@ extension iPhoneMainViewController {
         picker.onRequestEdit = { [weak self] id in
             self?.beginEditCrop(forItemId: id)
         }
+        picker.onRequestTrim = { [weak self] id in
+            self?.beginTrimVideo(forItemId: id)
+        }
         picker.onApplyScreenFit = { [weak self] item, mode in
             self?.libraryViewController.applyScreenFit(mode, to: item)
         }

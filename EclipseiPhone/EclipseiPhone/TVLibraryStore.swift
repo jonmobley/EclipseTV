@@ -843,13 +843,15 @@ final class TVLibraryStore {
     }
 
     /// Writes known file durations onto video items that were ingested with `0`.
-    func applyVideoDurations(_ durations: [String: Double]) {
+    /// - Parameter replacingExisting: Overwrite a known length too (after a Trim);
+    ///   by default only videos with no length yet are filled in.
+    func applyVideoDurations(_ durations: [String: Double], replacingExisting: Bool = false) {
         var changed = false
         for (id, seconds) in durations {
             guard seconds > 0.05,
                   let index = items.firstIndex(where: { $0.id == id }) else { continue }
             let item = items[index]
-            guard item.isVideo, item.duration <= 0 else { continue }
+            guard item.isVideo, replacingExisting || item.duration <= 0 else { continue }
             let updated = LibraryItemDTO(
                 id: item.id,
                 name: item.name,
