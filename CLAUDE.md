@@ -46,6 +46,13 @@
   and `MediaAspect.activeTarget` (Fit/Fill, still Reframe) read `ExternalOutputSettings.outputAspectRatio`; anything that
   rewrites a file (video re-crop) uses `MediaAspect.libraryTarget`. Grid tiles, media buckets and the Apple TV protocol still
   use `orientation` and know nothing about custom sizes.
+  Z-order on the TV picture goes through `stageView.bringSubviewToFront` (transition overlay, audio badge);
+  `view.bringSubviewToFront` on a stage subview is a no-op.
+- Leaving a live countdown (2026-11-13): `endOverlay` moves output state on *before* tearing the overlay down,
+  same order as `beginOverlay`. Ending the clock posts its change synchronously, and if `overlaySource` still says
+  countdown the grid repaints the hero back onto the frozen clock (countdown posts no end notice to fix it).
+- iPhone UI from the AirPlay branch (2026-11-13): the hero's Fit / Fill toggle shows the words, not an icon (menus keep
+  icons); tile menus say "Camera Controls" and "PTZ Controls"; Home Recent Shows uses two columns in panes under 500pt.
 - Settings notifications are expensive and reach the camera (2026-11-12): `ExternalOutputSettings.didChangeNotification`
   observers re-sync the library, refresh the camera tile (start/stop of the capture session) and re-lay-out every
   `PresentationViewController`. `CameraPreviewView.layoutSubviews` talks to the capture connection, so never force a
@@ -76,6 +83,7 @@
   picking one loads it in the active tab. The overlay buttons are re-raised on every layout, so the drawer is re-raised after them.
   Website Auto Scroll was removed (2026-11-13); `ScrollSpeedSlider` now serves only the Prompter. iPad gets a browser-style top bar (chips left, buttons top right)
   in both orientations, since iPadOS ignores the orientation lock while the app supports Split View.
+  The website card matches the hero preview: 16pt corners and a 1pt `separator` hairline (2026-11-13).
 - Seeding a simulator with websites/Shows for a visual check: the stores are JSON blobs in
   UserDefaults (`EclipseTV.pages.items`, `EclipseTV.localAlbums.items`); write them with
   `simctl spawn <udid> defaults write <container>/Library/Preferences/com.mobleypro.eclipse.EclipseiPhone.plist <key> -data <hex-json>`
