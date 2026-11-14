@@ -534,6 +534,7 @@ extension LibraryGridViewController {
     /// Identical 2s status polls post nothing. Vote-count ticks patch the card
     /// caption in place so ⋯ menus stay up. Cue or room changes refresh thumbs.
     func handleQuestPollSessionChange() {
+        announceNewQAQuestionsIfListClosed()
         switch QuestPollSessionStore.shared.lastChange {
         case .none:
             return
@@ -554,6 +555,22 @@ extension LibraryGridViewController {
                 stopQuestPollStatusPolling()
             }
         }
+    }
+
+    /// Toast + tap when audience questions arrive while the Questions sheet
+    /// is closed; the card's "N new" caption is often off screen mid-show.
+    private func announceNewQAQuestionsIfListClosed() {
+        let store = QuestPollSessionStore.shared
+        guard store.session?.mode == .qa else { return }
+        let listIsOpen = (presentedViewController as? UINavigationController)?
+            .viewControllers.first is QuestPollQAViewController
+        // While the list is open it marks them seen itself.
+        guard !listIsOpen else { return }
+        guard let message = QuestPollSessionStore.newQuestionsAnnouncement(
+            store.takeUnannouncedQAQuestions()
+        ) else { return }
+        showPresentationToast(message, duration: 3.5)
+        Haptics.impactLight()
     }
 
     /// Patches visible Live Poll captions without recycling cells (keeps ⋯ menus).
