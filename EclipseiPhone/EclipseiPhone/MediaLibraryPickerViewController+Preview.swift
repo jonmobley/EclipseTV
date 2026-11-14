@@ -41,7 +41,7 @@ extension MediaLibraryPickerViewController {
         if let nav = navigationController {
             nav.pushViewController(remote, animated: true)
         } else {
-            let wrapped = UINavigationController(rootViewController: remote)
+            let wrapped = DisplayModeNavigationController(rootViewController: remote)
             wrapped.modalPresentationStyle = .fullScreen
             present(wrapped, animated: true)
         }

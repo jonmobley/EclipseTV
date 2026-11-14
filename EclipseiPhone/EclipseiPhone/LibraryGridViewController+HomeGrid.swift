@@ -615,7 +615,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             announceAirPlayOverlayIfLinked()
         }
         let remote = PDFRemoteViewController(document: doc, fileURL: url)
-        let nav = UINavigationController(rootViewController: remote)
+        let nav = DisplayModeNavigationController(rootViewController: remote)
         nav.modalPresentationStyle = .fullScreen
         present(nav, animated: true)
         reloadLibraryGrid()
