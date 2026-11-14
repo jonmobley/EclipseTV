@@ -49,4 +49,27 @@ struct ExpandableNoteCardFadeTests {
     @Test func noFadeWhenTheNoteFits() {
         #expect(card(note: "Short note", expanded: true).fadeDepth == 0)
     }
+
+    /// The text keeps its place while the card grows, so it isn't stretched
+    /// from the collapsed drawing to the expanded one.
+    @Test func textDoesNotAnimateWhenTheCardToggles() throws {
+        let card = card(note: longNote, expanded: false)
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 400, height: 800))
+        window.addSubview(card)
+        window.isHidden = false
+        let text = try #require(bodyLabel(in: card))
+        card.setExpanded(true)
+        UIView.animate(withDuration: 0.25) {
+            card.frame.size.height = 400
+            card.layoutIfNeeded()
+        }
+        #expect(text.layer.animationKeys()?.isEmpty ?? true)
+        #expect(text.frame.height > 200)
+        window.isHidden = true
+    }
+
+    private func bodyLabel(in root: UIView) -> UILabel? {
+        if let found = root as? UILabel { return found }
+        return root.subviews.lazy.compactMap { bodyLabel(in: $0) }.first
+    }
 }
