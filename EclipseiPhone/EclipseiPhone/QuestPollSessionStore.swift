@@ -119,6 +119,7 @@ final class QuestPollSessionStore {
         practiceDeckFragment = nil
         practiceCueIndex = 0
         seenQAQuestionIds = []
+        announcedQAQuestionIds = []
         questionCount = 1
         isControlInFlight = false
         return commitChange(from: before)
@@ -152,6 +153,36 @@ final class QuestPollSessionStore {
         (session?.qa?.questions ?? []).filter {
             $0.status == .new && !seenQAQuestionIds.contains($0.id)
         }.count
+    }
+
+    /// Q&A questions already announced with a toast while the list was closed.
+    private(set) var announcedQAQuestionIds: Set<String> = []
+
+    /// New, unseen questions not announced yet, oldest first; marks them
+    /// announced so each question alerts the host once.
+    func takeUnannouncedQAQuestions() -> [LivePollQAQuestion] {
+        guard session?.mode == .qa else { return [] }
+        let fresh = (session?.qa?.questions ?? [])
+            .filter {
+                $0.status == .new
+                    && !seenQAQuestionIds.contains($0.id)
+                    && !announcedQAQuestionIds.contains($0.id)
+            }
+            .sorted { $0.askedAt < $1.askedAt }
+        announcedQAQuestionIds.formUnion(fresh.map(\.id))
+        return fresh
+    }
+
+    /// Toast wording for newly arrived questions, or nil for none.
+    static func newQuestionsAnnouncement(_ questions: [LivePollQAQuestion]) -> String? {
+        switch questions.count {
+        case 0: return nil
+        case 1:
+            let text = questions[0].text
+            let short = text.count > 60 ? String(text.prefix(57)) + "…" : text
+            return "New question: “\(short)”"
+        default: return "\(questions.count) new questions"
+        }
     }
 
     /// Marks every current Q&A question as seen (question list on screen).

@@ -120,4 +120,40 @@ struct QuestPollQATests {
         #expect(!QuestPollStatusPoll.roomIsGone(.failure(LivePollError.transport)))
         #expect(!QuestPollStatusPoll.roomIsGone(.success(try qaSession(""))))
     }
+
+    @Test func newQuestionsAreAnnouncedOnce() throws {
+        // Own store: the running app's grid announces (and so takes) the
+        // shared store's questions as soon as they arrive.
+        let store = QuestPollSessionStore()
+        store.adopt(try qaSession(#"{"id":"a","text":"First?","from":null,"askedAt":1,"status":"new"}"#))
+        let first = store.takeUnannouncedQAQuestions()
+        #expect(QuestPollSessionStore.newQuestionsAnnouncement(first) == "New question: “First?”")
+        #expect(store.takeUnannouncedQAQuestions().isEmpty)
+        store.adopt(try qaSession("""
+            {"id":"a","text":"First?","from":null,"askedAt":1,"status":"new"},
+            {"id":"b","text":"Second?","from":null,"askedAt":2,"status":"new"},
+            {"id":"c","text":"Third?","from":null,"askedAt":3,"status":"new"}
+            """))
+        let more = store.takeUnannouncedQAQuestions()
+        #expect(more.map(\.id) == ["b", "c"])
+        #expect(QuestPollSessionStore.newQuestionsAnnouncement(more) == "2 new questions")
+    }
+
+    @Test func questionsAlreadySeenInTheListAreNotAnnounced() throws {
+        // Own store: the running app's grid announces (and so takes) the
+        // shared store's questions as soon as they arrive.
+        let store = QuestPollSessionStore()
+        store.adopt(try qaSession(#"{"id":"a","text":"First?","from":null,"askedAt":1,"status":"new"}"#))
+        store.markQAQuestionsSeen()
+        #expect(store.takeUnannouncedQAQuestions().isEmpty)
+    }
+
+    @Test func longQuestionsAreShortenedInTheToast() {
+        let long = LivePollQAQuestion(
+            id: "x", text: String(repeating: "a", count: 100), from: nil, askedAt: 1, status: .new
+        )
+        let message = QuestPollSessionStore.newQuestionsAnnouncement([long]) ?? ""
+        #expect(message.hasSuffix("…”"))
+        #expect(message.count < 80)
+    }
 }
