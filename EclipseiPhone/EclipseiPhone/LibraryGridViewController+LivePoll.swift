@@ -380,7 +380,7 @@ extension LibraryGridViewController {
         return UIMenu(children: children)
     }
 
-    /// Q&A card ⋯ menu: Questions, End, Arrange, Select, Delete.
+    /// Q&A card ⋯ menu: Questions, End, Arrange, Select, Remove.
     private func qaContextMenu(_ item: ShowLivePoll, ownsRoom: Bool) -> UIMenu {
         var children: [UIMenuElement] = []
         if ownsRoom {
@@ -401,7 +401,7 @@ extension LibraryGridViewController {
         children.append(arrangeAction())
         children.append(selectAction(seedId: ShowLivePollToken.token(for: item.id)))
         children.append(UIAction(
-            title: "Delete Q&A",
+            title: "Remove Q&A",
             image: UIImage(systemName: "trash"),
             attributes: .destructive
         ) { [weak self] _ in
@@ -444,12 +444,12 @@ extension LibraryGridViewController {
     /// Countdown and PDF rather than removing silently like a Show member.
     private func confirmDeleteLivePoll(_ item: ShowLivePoll) {
         let alert = UIAlertController(
-            title: item.isQA ? "Delete Q&A?" : "Remove Poll?",
+            title: item.isQA ? "Remove Q&A?" : "Remove Poll?",
             message: "“\(item.title)” is removed from this Show.",
             preferredStyle: .alert
         )
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        alert.addAction(UIAlertAction(title: item.isQA ? "Delete" : "Remove", style: .destructive) {
+        alert.addAction(UIAlertAction(title: "Remove", style: .destructive) {
             [weak self] _ in
             self?.endQuestPollIfRemovingMembership(item.id)
             LivePollStore.shared.delete(id: item.id)
