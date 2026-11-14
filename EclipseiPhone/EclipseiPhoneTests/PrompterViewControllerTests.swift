@@ -46,7 +46,6 @@ struct PrompterViewControllerTests {
         #expect(!vc.emptyLabel.isHidden)
         #expect(vc.emptyLabel.text == PrompterViewController.emptyStateText)
         #expect(!vc.playButton.isEnabled)
-        #expect(!vc.stage.showsReadingGuide)
     }
 
     @Test func liveButtonHiddenWithoutActionsAndTogglesWithThem() throws {

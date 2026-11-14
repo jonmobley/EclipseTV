@@ -348,7 +348,6 @@ final class PrompterViewController: UIViewController {
         stage.setCanvasFontSize(controller.fontSize, isVertical: controller.isVertical)
         let empty = !controller.canPlay
         emptyStack?.isHidden = !empty
-        stage.showsReadingGuide = !empty
         playButton.isEnabled = !empty
         resetButton.isEnabled = !empty
         playButton.configuration?.image = UIImage(systemName: controller.isPlaying ? "pause.fill" : "play.fill")

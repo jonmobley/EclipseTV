@@ -87,4 +87,4 @@
   this phone only). Vertical while Display Mode is Landscape makes the card 9:16, turns the phone upright, and shows an upright
   9:16 column on the TV (`PrompterController.isVerticalOnLandscapeDisplay`); the menu is hidden in Vertical Display Mode.
   Use `PrompterController.isVertical` / `canvasAspectRatio` for prompter layout, never `ExternalOutputSettings.isVerticalMode`.
-  The blue lines are the reading guide (the line being read), on purpose.
+  The blue reading-guide lines were removed (2026-11-13, owner found them confusing); the line read sits mid-stage.
