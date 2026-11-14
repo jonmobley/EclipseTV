@@ -356,7 +356,7 @@ extension LibraryGridViewController {
         case .cameraPreset(let frameId):
             cell.recycleCameraPreview()
             cell.configureSpecial(
-                title: "Camera Preset",
+                title: cameraPresetTitle(frameId: frameId),
                 systemImage: "camera.fill",
                 thumbnail: CameraPresetThumbnail.image(
                     frameId: frameId,
@@ -848,7 +848,8 @@ extension LibraryGridViewController {
                 })
             }
         default:
-            if ShowCameraPresetToken.isCameraPreset(token) {
+            if let frameId = ShowCameraPresetToken.frameId(from: token) {
+                children.append(cameraPresetRenameAction(frameId: frameId))
                 children.append(contentsOf: cameraToolActions())
             }
         }

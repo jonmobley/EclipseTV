@@ -29,6 +29,11 @@ extension CameraFrameStore {
         }
     }
 
+    /// Whether `id` has a local change the server hasn't acknowledged yet.
+    func frameNeedsUpload(id: UUID) -> Bool {
+        !syncedFrameIdStrings.contains(id.uuidString)
+    }
+
     /// Records that CloudKit accepted this frame's upload (or it arrived remotely).
     func markFrameSynced(id: UUID) {
         var ids = syncedFrameIdStrings

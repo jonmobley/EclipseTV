@@ -126,3 +126,8 @@
   While the camera is live, `ShowProgram.itemId` carries the selected frame id so the matching preset (not the plain
   Camera tile) gets the live stroke; the plain Camera tile drops a preset's frame when tapped. Deleting a frame removes its
   presets. Tiles show a still (last camera picture + frame): the one live preview layer belongs to the Camera tile.
+- Frame names (2026-11-14): `CameraFrame.name` (optional, ≤40 chars); `CameraFrameStore.displayName(for:)` falls back to
+  "Frame N" by creation order. Renamed from a preset tile's ⋯ → Rename Frame or by holding a frame in full-screen Camera.
+  Preset tiles show the name (or "Camera Preset"). Syncs as CloudKit field `CameraFrame.name`, written only when a frame
+  has a name: **the field must be deployed Development → Production in the CloudKit Console** before names sync in
+  TestFlight/App Store builds (until then a renamed frame's save is refused there; unnamed frames are unaffected).

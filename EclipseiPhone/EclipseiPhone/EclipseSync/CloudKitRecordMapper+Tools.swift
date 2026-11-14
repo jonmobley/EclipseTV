@@ -83,6 +83,7 @@ extension CloudKitRecordMapper {
         id: UUID,
         orientation: ExternalOutputOrientation,
         createdAt: Date,
+        name: String? = nil,
         existing: CKRecord? = nil,
         assetURL: URL? = nil,
         modifiedAt: Date = Date()
@@ -94,6 +95,11 @@ extension CloudKitRecordMapper {
         record[CloudKitSchema.CameraFrameKey.orientation] =
             orientation.rawValue as CKRecordValue
         record[CloudKitSchema.CameraFrameKey.createdAt] = createdAt as CKRecordValue
+        // Clear an old name on the record, but never add the field for unnamed
+        // frames (see `CameraFrameKey.name`).
+        if name != nil || record[CloudKitSchema.CameraFrameKey.name] != nil {
+            record[CloudKitSchema.CameraFrameKey.name] = name as CKRecordValue?
+        }
         record[CloudKitSchema.CameraFrameKey.modifiedAt] = modifiedAt as CKRecordValue
         if let assetURL {
             record[CloudKitSchema.CameraFrameKey.asset] = CKAsset(fileURL: assetURL)
@@ -109,6 +115,10 @@ extension CloudKitRecordMapper {
         guard let raw = record[CloudKitSchema.CameraFrameKey.orientation] as? String
         else { return nil }
         return ExternalOutputOrientation.resolved(fromStored: raw)
+    }
+
+    static func cameraFrameName(from record: CKRecord) -> String? {
+        CameraFrame.cleanedName(record[CloudKitSchema.CameraFrameKey.name] as? String)
     }
 
     static func cameraFrameCreatedAt(from record: CKRecord) -> Date {
