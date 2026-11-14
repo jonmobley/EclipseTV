@@ -91,8 +91,7 @@ extension MediaLibraryPickerViewController {
         let preview = LocalVideoPreviewViewController(
             fileURL: fileURL,
             isMuted: item.isMuted ?? false,
-            isLooping: item.isLooping ?? false,
-            overlayTitle: MediaTitleStore.displayTitle(for: item)
+            isLooping: item.isLooping ?? false
         )
         present(preview, animated: true)
     }
