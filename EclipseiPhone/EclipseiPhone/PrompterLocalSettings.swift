@@ -14,7 +14,6 @@ struct PrompterLocalSettings {
 
     static let speedKey = "EclipseTV.prompter.scrollSpeed"
     static let fontSizeKey = "EclipseTV.prompter.fontSize"
-    static let verticalKey = "EclipseTV.prompter.vertical"
 
     private let defaults: UserDefaults
 
@@ -42,12 +41,5 @@ struct PrompterLocalSettings {
         nonmutating set {
             defaults.set(Double(PrompterStageMetrics.clampedCanvasFontSize(newValue)), forKey: Self.fontSizeKey)
         }
-    }
-
-    /// The Prompter's own Vertical (9:16) shape, chosen on the Prompter screen. Only
-    /// matters while Display Mode is Landscape: a Vertical Display Mode is already 9:16.
-    var prefersVertical: Bool {
-        get { defaults.bool(forKey: Self.verticalKey) }
-        nonmutating set { defaults.set(newValue, forKey: Self.verticalKey) }
     }
 }

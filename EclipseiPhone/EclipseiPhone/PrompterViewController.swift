@@ -44,10 +44,6 @@ final class PrompterViewController: UIViewController {
     private var transportRows: UIStackView?
     private var verticalRowConstraints: [NSLayoutConstraint] = []
 
-    /// Landscape / Vertical switch for the Prompter's own shape. Hidden while Display
-    /// Mode is Vertical, which already makes it 9:16.
-    let shapeItem = UIBarButtonItem()
-
     /// Card inset from the screen edges.
     static let cardInset: CGFloat = 12
 
@@ -86,7 +82,7 @@ final class PrompterViewController: UIViewController {
             target: self, action: #selector(editTapped)
         )
         edit.accessibilityLabel = "Edit Script"
-        navigationItem.rightBarButtonItems = [edit, shapeItem]
+        navigationItem.rightBarButtonItem = edit
 
         controller.bind(showId: showId)
         setupStage()
@@ -103,19 +99,7 @@ final class PrompterViewController: UIViewController {
         UIApplication.shared.isIdleTimerDisabled = true
         // Turn only now that this screen covers the grid.
         holdsDisplayModeOrientation = true
-        requestPrompterSceneGeometry()
-    }
-
-    /// Orientations that match the Prompter's shape (Vertical or Landscape).
-    private var prompterOrientationMask: UIInterfaceOrientationMask {
-        controller.isVertical ? .portrait : .landscape
-    }
-
-    /// Turns the phone to the Prompter's shape, like `requestDisplayModeSceneGeometry`.
-    private func requestPrompterSceneGeometry() {
-        setNeedsUpdateOfSupportedInterfaceOrientations()
-        guard traitCollection.userInterfaceIdiom == .phone, let scene = view.window?.windowScene else { return }
-        scene.requestGeometryUpdate(.iOS(interfaceOrientations: prompterOrientationMask)) { _ in }
+        requestDisplayModeSceneGeometry()
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -158,7 +142,7 @@ final class PrompterViewController: UIViewController {
             height: bottom - top
         ).insetBy(dx: Self.cardInset, dy: Self.cardInset)
         guard available.width > 1, available.height > 1 else { return }
-        stage.frame = ExternalOutputSettings.panelRect(in: available, aspect: controller.canvasAspectRatio)
+        stage.frame = ExternalOutputSettings.displayModePanelRect(in: available)
         stage.layer.cornerRadius = 24
         // A faint edge so the show's frame reads on the black background.
         stage.layer.borderWidth = 1
@@ -167,7 +151,7 @@ final class PrompterViewController: UIViewController {
         // card never flashes as a strip across a portrait screen.
         let fits = BrowserOrientationFit.matches(
             bounds: view.bounds.size,
-            isVertical: controller.isVertical,
+            isVertical: ExternalOutputSettings.isVerticalMode,
             idiom: traitCollection.userInterfaceIdiom
         )
         stage.alpha = fits ? 1 : 0
@@ -175,11 +159,11 @@ final class PrompterViewController: UIViewController {
     }
 
     override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
-        holdsDisplayModeOrientation ? prompterOrientationMask : .allButUpsideDown
+        holdsDisplayModeOrientation ? ExternalOutputSettings.phoneOrientationMask : .allButUpsideDown
     }
 
     override var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation {
-        guard !holdsDisplayModeOrientation else { return controller.isVertical ? .portrait : .landscapeRight }
+        guard !holdsDisplayModeOrientation else { return ExternalOutputSettings.preferredPhoneOrientation }
         let current = view.phoneInterfaceOrientation
         return current == .portraitUpsideDown ? .portrait : current
     }
@@ -206,7 +190,7 @@ final class PrompterViewController: UIViewController {
 
     private func setupStage() {
         stage.translatesAutoresizingMaskIntoConstraints = true
-        stage.setCanvasFontSize(controller.fontSize, isVertical: controller.isVertical)
+        stage.setCanvasFontSize(controller.fontSize, isVertical: ExternalOutputSettings.isVerticalMode)
         stage.onMetricsChange = { [weak self] size in
             self?.controller.updateStage(width: size.width, viewportHeight: size.height)
         }
@@ -345,7 +329,7 @@ final class PrompterViewController: UIViewController {
             lastScript = controller.script
             stage.setScript(controller.script, anchor: controller.readingAnchor)
         }
-        stage.setCanvasFontSize(controller.fontSize, isVertical: controller.isVertical)
+        stage.setCanvasFontSize(controller.fontSize, isVertical: ExternalOutputSettings.isVerticalMode)
         let empty = !controller.canPlay
         emptyStack?.isHidden = !empty
         playButton.isEnabled = !empty
@@ -356,33 +340,7 @@ final class PrompterViewController: UIViewController {
         sizeDownButton.isEnabled = controller.fontSize > PrompterStageMetrics.canvasFontRange.lowerBound
         sizeUpButton.isEnabled = controller.fontSize < PrompterStageMetrics.canvasFontRange.upperBound
         refreshLiveButton()
-        refreshShapeItem()
         applyAnchor()
-    }
-
-    private var lastShapeIsVertical: Bool?
-
-    private func refreshShapeItem() {
-        let vertical = controller.isVertical
-        shapeItem.isHidden = ExternalOutputSettings.isVerticalMode
-        shapeItem.image = UIImage(systemName: vertical ? "rectangle.portrait" : "rectangle")
-        shapeItem.accessibilityLabel = "Prompter Shape"
-        shapeItem.accessibilityValue = vertical ? "Vertical" : "Landscape"
-        shapeItem.menu = UIMenu(title: "Prompter Shape", options: .singleSelection, children: [
-            UIAction(
-                title: "Landscape", image: UIImage(systemName: "rectangle"),
-                state: vertical ? .off : .on
-            ) { [weak self] _ in self?.controller.setPrefersVertical(false) },
-            UIAction(
-                title: "Vertical", image: UIImage(systemName: "rectangle.portrait"),
-                state: vertical ? .on : .off
-            ) { [weak self] _ in self?.controller.setPrefersVertical(true) }
-        ])
-        // On a change, turn the phone and re-fit the card to the new shape.
-        defer { lastShapeIsVertical = vertical }
-        guard let last = lastShapeIsVertical, last != vertical else { return }
-        view.setNeedsLayout()
-        if holdsDisplayModeOrientation { requestPrompterSceneGeometry() }
     }
 
     private func refreshLiveButton() {
