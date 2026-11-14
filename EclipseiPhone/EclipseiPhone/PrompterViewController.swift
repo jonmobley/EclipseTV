@@ -47,10 +47,17 @@ final class PrompterViewController: UIViewController {
     /// Card inset from the screen edges.
     static let cardInset: CGFloat = 12
 
-    /// True once this screen covers the grid and holds the phone to the Display Mode
-    /// orientation (the browser does the same): a 16:9 card on a turned phone, not a
-    /// strip across a portrait one. iPad keeps whatever orientation it is in.
+    /// True once this screen covers the grid. A Vertical Show then holds the phone
+    /// upright; a widescreen Show follows the phone either way (a 16:9 card across an
+    /// upright phone, controls below). iPad keeps whatever orientation it is in.
     var holdsDisplayModeOrientation = false
+
+    /// Whether this screen pins the phone to the Show format. Only a Vertical Show
+    /// does: a 9:16 card on a phone on its side would be a sliver.
+    static var pinsPhoneOrientation: Bool { ExternalOutputSettings.isVerticalMode }
+
+    /// Set when this screen turned the phone, so closing turns it back.
+    private var turnedScene = false
     private var isLeaving = false
 
     init(showId: UUID, controller: PrompterController? = nil) {
@@ -99,7 +106,12 @@ final class PrompterViewController: UIViewController {
         UIApplication.shared.isIdleTimerDisabled = true
         // Turn only now that this screen covers the grid.
         holdsDisplayModeOrientation = true
-        requestDisplayModeSceneGeometry()
+        if Self.pinsPhoneOrientation {
+            turnedScene = true
+            requestDisplayModeSceneGeometry()
+        } else {
+            setNeedsUpdateOfSupportedInterfaceOrientations()
+        }
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -110,7 +122,7 @@ final class PrompterViewController: UIViewController {
 
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
-        guard isLeaving else { return }
+        guard isLeaving, turnedScene else { return }
         restoreUprightSceneGeometry()
     }
 
@@ -142,16 +154,22 @@ final class PrompterViewController: UIViewController {
             height: bottom - top
         ).insetBy(dx: Self.cardInset, dy: Self.cardInset)
         guard available.width > 1, available.height > 1 else { return }
-        stage.frame = ExternalOutputSettings.displayModePanelRect(in: available)
+        var card = ExternalOutputSettings.displayModePanelRect(in: available)
+        // A widescreen card on an upright phone sits under the title, near the camera,
+        // where reading it keeps the speaker's eyes up.
+        if !Self.pinsPhoneOrientation, view.bounds.height > view.bounds.width {
+            card.origin.y = available.minY
+        }
+        stage.frame = card
         stage.layer.cornerRadius = 24
         // A faint edge so the show's frame reads on the black background.
         stage.layer.borderWidth = 1
         stage.layer.borderColor = UIColor.white.withAlphaComponent(0.22).cgColor
-        // Hidden until a phone has turned to the Display Mode orientation, so a 16:9
-        // card never flashes as a strip across a portrait screen.
-        let fits = BrowserOrientationFit.matches(
+        // In a Vertical Show, hidden until the phone has turned upright, so the 9:16
+        // card never flashes as a sliver on a phone on its side.
+        let fits = !Self.pinsPhoneOrientation || BrowserOrientationFit.matches(
             bounds: view.bounds.size,
-            isVertical: ExternalOutputSettings.isVerticalMode,
+            isVertical: true,
             idiom: traitCollection.userInterfaceIdiom
         )
         stage.alpha = fits ? 1 : 0
@@ -159,11 +177,11 @@ final class PrompterViewController: UIViewController {
     }
 
     override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
-        holdsDisplayModeOrientation ? ExternalOutputSettings.phoneOrientationMask : .allButUpsideDown
+        holdsDisplayModeOrientation && Self.pinsPhoneOrientation ? .portrait : .allButUpsideDown
     }
 
     override var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation {
-        guard !holdsDisplayModeOrientation else { return ExternalOutputSettings.preferredPhoneOrientation }
+        guard !(holdsDisplayModeOrientation && Self.pinsPhoneOrientation) else { return .portrait }
         let current = view.phoneInterfaceOrientation
         return current == .portraitUpsideDown ? .portrait : current
     }

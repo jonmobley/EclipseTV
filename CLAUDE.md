@@ -88,4 +88,6 @@
 - Note editor on iPhone is a full-height sheet only: a medium detent gets pushed to large by the keyboard, which looks like a stall halfway up (2026-11-01). The text stops at `keyboardLayoutGuide`, and Hide Keyboard shows while editing because Done closes the editor.
 - Prompter shape (2026-11-14): always follows the Show format (Display Mode: Landscape, Vertical or a custom screen size).
   A separate Landscape / Vertical menu on the Prompter screen was tried on 2026-11-13 and removed; the owner wants no
-  per-Prompter shape choice. The blue reading-guide lines were removed too (owner found them confusing); the line read sits mid-stage.
+  per-Prompter shape choice. On iPhone a widescreen Show's Prompter follows the phone (upright: 16:9 card under the
+  title, controls below; sideways: one-row bar); only a Vertical Show holds the phone upright
+  (`PrompterViewController.pinsPhoneOrientation`). The blue reading-guide lines were removed too (owner found them confusing); the line read sits mid-stage.

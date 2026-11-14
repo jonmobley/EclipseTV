@@ -39,6 +39,18 @@ struct PrompterViewControllerTests {
         #expect(inputs.contains(UIKeyCommand.inputDownArrow))
     }
 
+    @Test func widescreenShowFollowsThePhoneAndVerticalShowHoldsItUpright() throws {
+        let controller = try makeController(script: "Hello")
+        let vc = PrompterViewController(showId: controller.boundShowId!, controller: controller)
+        vc.holdsDisplayModeOrientation = true
+        ExternalOutputOrientationFixture.withSwitching { set in
+            set(.landscape)
+            #expect(vc.supportedInterfaceOrientations == .allButUpsideDown)
+            set(.portrait)
+            #expect(vc.supportedInterfaceOrientations == .portrait)
+        }
+    }
+
     @Test func emptyScriptShowsTheEmptyStateAndDisablesPlay() throws {
         let controller = try makeController(script: "")
         let vc = PrompterViewController(showId: controller.boundShowId!, controller: controller)
