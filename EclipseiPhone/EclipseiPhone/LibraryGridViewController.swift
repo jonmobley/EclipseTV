@@ -25,8 +25,10 @@ final class LibraryGridViewController: UIViewController {
     /// Invoked when the user chooses to re-send a purged item from Photos. The host VC
     /// owns the picker flow and the `pendingRestoreId` handshake.
     var onRequestResend: ((String) -> Void)?
-    /// Invoked when the user chooses Edit — host opens the crop tool for that item.
+    /// Invoked when the user chooses Crop — host opens the crop tool for that item.
     var onRequestEdit: ((String) -> Void)?
+    /// Invoked when the user chooses Trim — host opens the video trimmer.
+    var onRequestTrim: ((String) -> Void)?
     /// Invoked when the user chooses Thumbnail — host opens the video frame picker.
     var onRequestVideoThumbnail: ((String) -> Void)?
     /// Invoked when the Camera phone viewer should open (⋯ Camera Controls).

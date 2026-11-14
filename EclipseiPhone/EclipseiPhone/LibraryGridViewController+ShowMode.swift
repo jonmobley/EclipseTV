@@ -621,13 +621,28 @@ extension LibraryGridViewController {
     }
 
     /// Opens the pan/zoom cropper for a video. Stills use Screen Fit → Custom.
-    func editAction(for item: LibraryItemDTO) -> UIAction {
+    func cropAction(for item: LibraryItemDTO) -> UIAction {
         UIAction(
-            title: "Edit",
+            title: "Crop",
             image: UIImage(systemName: "crop")
         ) { [weak self] _ in
             self?.onRequestEdit?(item.id)
         }
+    }
+
+    /// Opens the trimmer, which cuts a video's start and end.
+    func trimAction(for item: LibraryItemDTO) -> UIAction {
+        UIAction(
+            title: "Trim",
+            image: UIImage(systemName: "scissors")
+        ) { [weak self] _ in
+            self?.onRequestTrim?(item.id)
+        }
+    }
+
+    /// Trim then Crop: the two permanent edits a video offers.
+    func videoEditActions(for item: LibraryItemDTO) -> [UIMenuElement] {
+        [trimAction(for: item), cropAction(for: item)]
     }
 
     private func mediaContextMenu(_ item: LibraryItemDTO, in album: LocalAlbum) -> UIMenu {
@@ -669,7 +684,7 @@ extension LibraryGridViewController {
             children.append(screenFitMenu(for: item))
         }
         if item.isAvailable != false, item.isVideo {
-            children.append(editAction(for: item))
+            children.append(contentsOf: videoEditActions(for: item))
         }
         if let capture = CaptureStore.shared.record(id: item.id),
            LocalMediaStore.shared.hasMedia(

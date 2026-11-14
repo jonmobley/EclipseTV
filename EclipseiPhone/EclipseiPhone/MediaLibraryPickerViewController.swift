@@ -47,6 +47,8 @@ final class MediaLibraryPickerViewController: UIViewController {
     var onAddToShow: (([String], [UUID]) -> Void)?
     /// Crop a video, or Custom framing for a still (same flow as Screen Fit).
     var onRequestEdit: ((String) -> Void)?
+    /// Cut a video's start and end.
+    var onRequestTrim: ((String) -> Void)?
     /// Replace a video’s poster frame.
     var onRequestVideoThumbnail: ((String) -> Void)?
     /// Persist Fit / Fill and sync to EclipseTV when linked.
