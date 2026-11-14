@@ -103,3 +103,11 @@
   on its slide). Operators are never held. Tools with no private Preview (camera, poll, countdown, prompter, slideshows)
   show a toast instead. Apple TV gets paused video via the optional `startsPaused` field on `play_request`; older TV
   builds ignore it and just play, so ship iPhone and Apple TV together.
+- Several Prompters per Show (2026-11-13): the first keeps token `__eclipse.tool.prompter` and the
+  Show-id script (`prompter-<showId>`, which the Mac reads too); extras are
+  `__eclipse.tool.prompter.<nonce>` whose script id is `ShowToolToken.extraPrompterScriptId(nonce:showId:)`
+  (SHA-256 of Show id + nonce, shaped as a version-8 UUID). So a token only ever reaches its own
+  Show's scripts, wherever it is planted, and never a Show's own (version-4) id. Records reuse the
+  `Prompter` type, so no iCloud schema or Mac change. `PrompterScript.showId` is really the script
+  key. Copy to Show makes a new Prompter with a copy of the text. There is one `PrompterController`,
+  so the TV shows whatever script is bound; opening a different Prompter while one is live asks first.

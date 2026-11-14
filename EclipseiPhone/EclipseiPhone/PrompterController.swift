@@ -48,11 +48,15 @@ final class PrompterController {
 
     // MARK: - State
 
-    /// Show whose script the operator is working with.
-    private(set) var boundShowId: UUID?
+    /// Script the operator is working with (`PrompterScriptStore` key: the Show id
+    /// for a Show's first Prompter, the tile's own id for an extra one).
+    private(set) var boundScriptId: UUID?
 
-    /// Show whose script is on the output display, while `isLive`.
+    /// Show whose Prompter is on the output display, while `isLive`.
     private(set) var liveShowId: UUID?
+
+    /// Script on the output display, while `isLive`.
+    private(set) var liveScriptId: UUID?
 
     private(set) var isLive = false
 
@@ -132,7 +136,7 @@ final class PrompterController {
         ) { [weak self] note in
             guard let self, let id = note.object as? UUID else { return }
             MainActor.assumeIsolated {
-                guard id == self.boundShowId else { return }
+                guard id == self.boundScriptId else { return }
                 self.reloadScript()
             }
         }
@@ -140,12 +144,15 @@ final class PrompterController {
 
     // MARK: - Binding
 
-    /// Points the Prompter at `showId`'s script. Switching Shows starts from the top.
-    func bind(showId: UUID) {
-        guard boundShowId != showId else { return }
-        boundShowId = showId
-        if isLive { liveShowId = showId }
-        script = scriptStore.script(forShowId: showId)
+    /// Points the Prompter at a script. Switching scripts starts from the top.
+    ///
+    /// While live, the output follows: it shows whatever script is bound. A switch to
+    /// another Show's Prompter goes through `prepareLive` so `liveShowId` moves too.
+    func bind(scriptId: UUID) {
+        guard boundScriptId != scriptId else { return }
+        boundScriptId = scriptId
+        if isLive { liveScriptId = scriptId }
+        script = scriptStore.script(forShowId: scriptId)
         engine.reset()
         rebuildLayout(preserving: nil)
         postChange()
@@ -155,8 +162,8 @@ final class PrompterController {
     /// Re-reads the bound Show's script (after an edit here or a synced one),
     /// keeping the reading position where it was.
     func reloadScript() {
-        guard let boundShowId else { return }
-        let next = scriptStore.script(forShowId: boundShowId)
+        guard let boundScriptId else { return }
+        let next = scriptStore.script(forShowId: boundScriptId)
         guard next != script else { return }
         let anchor = readingAnchor
         script = next
@@ -260,10 +267,11 @@ final class PrompterController {
 
     // MARK: - Live
 
-    /// The output display is about to show this Show's script.
-    func prepareLive(showId: UUID) {
-        bind(showId: showId)
+    /// The output display is about to show `scriptId`, one of `showId`'s Prompters.
+    func prepareLive(showId: UUID, scriptId: UUID) {
+        bind(scriptId: scriptId)
         liveShowId = showId
+        liveScriptId = scriptId
         isLive = true
         postChange()
     }
@@ -274,6 +282,7 @@ final class PrompterController {
         guard isLive else { return }
         isLive = false
         liveShowId = nil
+        liveScriptId = nil
         postChange()
     }
 

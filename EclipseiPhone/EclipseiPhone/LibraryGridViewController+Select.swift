@@ -226,8 +226,21 @@ extension LibraryGridViewController {
     private func copySelection(_ ids: [String], toAlbumId albumId: UUID) {
         endSelectMode()
         for id in ids {
-            if ShowToolToken.isTool(id) {
+            if let sourceShowId = openShowId,
+               let sourceScriptId = ShowToolToken.prompterScriptId(from: id, showId: sourceShowId) {
+                // A copied Prompter gets its own script with the same text, so editing
+                // one Show's copy never changes the other's.
+                let text = PrompterScriptStore.shared.script(forShowId: sourceScriptId)
+                if let added = LocalAlbumStore.shared.addPrompter(
+                    toShowId: albumId, reuseKeptScript: text.isEmpty
+                ), !text.isEmpty {
+                    PrompterScriptStore.shared.setScript(text, forShowId: added.scriptId)
+                }
+            } else if ShowToolToken.isTool(id) {
                 LocalAlbumStore.shared.showTool(id, albumId: albumId)
+            } else if id.hasPrefix(ShowToolToken.prefix) {
+                // A tool this build doesn't know (or a malformed one): never a media member.
+                continue
             } else if let countdownId = ShowCountdownToken.countdownId(from: id),
                       let source = CountdownStore.shared.countdown(id: countdownId) {
                 _ = try? CountdownStore.shared.create(

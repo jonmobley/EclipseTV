@@ -154,7 +154,11 @@ final class LocalAlbumStore {
         SlideshowStore.shared.deleteAll(forShowId: id)
         CountdownStore.shared.deleteAll(forShowId: id)
         LivePollStore.shared.deleteAll(forShowId: id)
-        PrompterScriptStore.shared.deleteAll(forShowId: id)
+        PrompterScriptStore.shared.deleteAll(
+            forShowId: id,
+            // Derived from this Show's id, so every one is this Show's own script.
+            extraScriptIds: ShowToolToken.prompterScriptIds(in: removed?.surfaceIds ?? [], showId: id)
+        )
         for itemId in removed?.itemIds ?? [] {
             if let pageId = UUID(uuidString: itemId) {
                 WebPageStore.shared.purgeRetainedIfUnused(id: pageId)
@@ -530,6 +534,24 @@ final class LocalAlbumStore {
     }
 
     /// Album with `id`, if any.
+    /// Adds a Prompter tile to Show `showId` and returns its token and script id.
+    ///
+    /// Uses the Show's first-Prompter slot when it is free and its kept script (from a
+    /// removed tile) is empty or `reuseKeptScript`; otherwise a new extra Prompter
+    /// with its own empty script.
+    @discardableResult
+    func addPrompter(toShowId showId: UUID, reuseKeptScript: Bool = true) -> (token: String, scriptId: UUID)? {
+        guard let album = album(id: showId) else { return nil }
+        let firstFree = !album.resolvedSurfaceIds.contains(ShowToolToken.prompter)
+        let keptScript = PrompterScriptStore.shared.hasScript(forShowId: showId)
+        let token = firstFree && (reuseKeptScript || !keptScript)
+            ? ShowToolToken.prompter
+            : ShowToolToken.newExtraPrompterToken()
+        guard let scriptId = ShowToolToken.prompterScriptId(from: token, showId: showId) else { return nil }
+        showTool(token, albumId: showId)
+        return (token, scriptId)
+    }
+
     func album(id: UUID) -> LocalAlbum? {
         albums.first { $0.id == id }
     }

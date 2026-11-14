@@ -25,13 +25,13 @@ struct PrompterViewControllerTests {
             settings: PrompterLocalSettings(defaults: defaults),
             frames: PrompterControllerTests.FakeFrames()
         )
-        controller.bind(showId: showId)
+        controller.bind(scriptId: showId)
         return controller
     }
 
     @Test func keyCommandsCoverSpaceEscapeAndReset() throws {
         let controller = try makeController(script: "Hello")
-        let vc = PrompterViewController(showId: controller.boundShowId!, controller: controller)
+        let vc = PrompterViewController(scriptId: controller.boundScriptId!, controller: controller)
         let inputs = Set(vc.keyCommands?.map(\.input) ?? [])
         #expect(inputs.contains(" "))
         #expect(inputs.contains(UIKeyCommand.inputEscape))
@@ -41,7 +41,7 @@ struct PrompterViewControllerTests {
 
     @Test func emptyScriptShowsTheEmptyStateAndDisablesPlay() throws {
         let controller = try makeController(script: "")
-        let vc = PrompterViewController(showId: controller.boundShowId!, controller: controller)
+        let vc = PrompterViewController(scriptId: controller.boundScriptId!, controller: controller)
         vc.loadViewIfNeeded()
         #expect(!vc.emptyLabel.isHidden)
         #expect(vc.emptyLabel.text == PrompterViewController.emptyStateText)
@@ -51,12 +51,12 @@ struct PrompterViewControllerTests {
 
     @Test func liveButtonHiddenWithoutActionsAndTogglesWithThem() throws {
         let controller = try makeController(script: "Hello")
-        let vc = PrompterViewController(showId: controller.boundShowId!, controller: controller)
+        let vc = PrompterViewController(scriptId: controller.boundScriptId!, controller: controller)
         vc.loadViewIfNeeded()
         #expect(vc.liveButton.isHidden)
         var wentLive = false
         vc.liveActions = .init(
-            goLive: { wentLive = true; controller.prepareLive(showId: controller.boundShowId!); return true },
+            goLive: { wentLive = true; controller.prepareLive(showId: controller.boundScriptId!, scriptId: controller.boundScriptId!); return true },
             stopLive: { controller.endLive() }
         )
         vc.refreshFromController()

@@ -8,7 +8,12 @@
 import Foundation
 import os.log
 
-/// One Show's Prompter script, with its own last-writer-wins clock.
+/// One Prompter's script, with its own last-writer-wins clock.
+///
+/// `showId` is the script's key: the Show's id for a Show's first Prompter (the
+/// `prompter-<showId>` record the Mac reads too), or the tile's own id for any extra
+/// Prompter in that Show (`ShowToolToken.extraPrompterScriptId(nonce:showId:)`). The name stays
+/// `showId` because it is the stored and synced field name.
 ///
 /// `script == ""` means someone cleared it; no entry at all means no device has
 /// written one yet. The clock is stamped only on a real local edit.
@@ -18,7 +23,7 @@ struct PrompterScript: Codable, Equatable {
     var modifiedAt: Date
 }
 
-/// Persists per-Show Prompter scripts in UserDefaults and syncs them through iCloud
+/// Persists Prompter scripts (keyed as described on `PrompterScript`) in UserDefaults and syncs them through iCloud
 /// as `Prompter` records.
 ///
 /// The record is never given a CloudKit `parent`, so sharing a Show never carries the
@@ -127,6 +132,27 @@ final class PrompterScriptStore {
         entries.removeAll { $0.showId == showId }
         syncedIds.remove(showId.uuidString)
         persist(changedShowId: showId)
+    }
+
+    /// Removes every Prompter script of a deleted Show: its first Prompter's (keyed
+    /// by the Show id) and the extra ones in `extraScriptIds`.
+    ///
+    /// Only extra-shaped ids are touched (never a Show's first-Prompter script). Like
+    /// the first Prompter, nothing is deleted from iCloud while applying a remote
+    /// deletion: the device that deleted the Show does that. (A Show deleted on the
+    /// Mac, which doesn't know extra Prompters, leaves their small records behind.)
+    func deleteAll(forShowId showId: UUID, extraScriptIds: [UUID]) {
+        deleteAll(forShowId: showId)
+        for scriptId in extraScriptIds
+        where scriptId != showId && ShowToolToken.isExtraPrompterScriptId(scriptId) {
+            if entries.contains(where: { $0.showId == scriptId }) {
+                entries.removeAll { $0.showId == scriptId }
+                syncedIds.remove(scriptId.uuidString)
+                persist(changedShowId: scriptId)
+            }
+            guard !EclipseSyncController.shared.isApplyingRemote else { continue }
+            EclipseSyncController.shared.backend.schedulePrompterDelete(showId: scriptId)
+        }
     }
 
     /// Removes the script when its Show is deleted (locally or by a remote tombstone).
