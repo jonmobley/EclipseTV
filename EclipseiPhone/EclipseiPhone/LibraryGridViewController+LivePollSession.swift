@@ -31,9 +31,13 @@ extension LibraryGridViewController {
     }
 
     /// Ends the active room (best-effort), clears local state, drops the overlay.
-    func endQuestPollSession(clearAccount: Bool) async {
+    ///
+    /// - Parameter notifyServer: false when the room is already gone (ended on
+    ///   the Mac or website), so only the phone's state is cleared.
+    func endQuestPollSession(clearAccount: Bool, notifyServer: Bool = true) async {
         stopQuestPollStatusPolling()
-        if let session = QuestPollSessionStore.shared.session,
+        if notifyServer,
+           let session = QuestPollSessionStore.shared.session,
            LivePollAccountStore.isSignedIn {
             do {
                 _ = try await LivePollAccountStore.client().control(
@@ -204,15 +208,19 @@ extension LibraryGridViewController {
         for item: ShowLivePoll,
         running: LivePollSession?
     ) {
+        let runningSession = running ?? QuestPollSessionStore.shared.session
         let message: String
         if let running {
-            message = "\(running.deckTitle) is live in room \(running.code), "
+            let runningName = running.mode == .qa ? "A Q&A" : running.deckTitle
+            message = "\(runningName) is live in room \(running.code), "
                 + "possibly from another device. End it and start \(item.title)?"
         } else {
-            message = "Ends the current room and starts \(item.title)."
+            let current = runningSession?.mode == .qa ? "Q&A" : "room"
+            message = "Ends the current \(current) and starts \(item.title)."
         }
+        let involvesQA = item.isQA || runningSession?.mode == .qa
         let alert = UIAlertController(
-            title: "Replace Poll?",
+            title: involvesQA ? "Replace Q&A?" : "Replace Poll?",
             message: message,
             preferredStyle: .alert
         )
@@ -290,6 +298,16 @@ extension LibraryGridViewController {
         )
         presentQuestPollLive()
         showPresentationToast("Rejoined room \(session.code)")
+        if session.mode == .qa {
+            // The active-room lookup leaves out the question list.
+            Task { @MainActor in
+                if let full = try? await LivePollAccountStore.client().fetchSession(
+                    joinCode: session.code, includeInbox: true
+                ), QuestPollSessionStore.shared.session?.code == full.code {
+                    QuestPollSessionStore.shared.adopt(full)
+                }
+            }
+        }
     }
 
     // MARK: - Ribbon cues
@@ -358,7 +376,10 @@ extension LibraryGridViewController {
                         membershipId: QuestPollSessionStore.shared.membershipId
                     )
                 } catch {
-                    self?.presentQuestPollError(error)
+                    self?.presentQuestPollError(
+                        error,
+                        fallback: "That didn’t go through. Check the connection and try again."
+                    )
                     return
                 }
             }

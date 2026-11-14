@@ -41,7 +41,7 @@ final class QuestPollSessionStore {
         membershipId: UUID? = nil
     ) -> QuestPollSessionChange {
         let before = snapshot
-        self.session = session
+        self.session = Self.keepingQAQuestions(of: self.session, in: session)
         if let membershipId {
             self.membershipId = membershipId
         }
@@ -56,6 +56,25 @@ final class QuestPollSessionStore {
             self.questionCount = max(questionCount, 1)
         }
         return commitChange(from: before)
+    }
+
+    /// `incoming`, keeping the Q&A question list from `current` when the
+    /// incoming snapshot left it out (tap replies and the active-room lookup
+    /// carry only the featured question and count; the list comes with
+    /// `inbox=1` refreshes). Without this the list blanked after every tap.
+    static func keepingQAQuestions(
+        of current: LivePollSession?,
+        in incoming: LivePollSession
+    ) -> LivePollSession {
+        guard incoming.mode == .qa,
+              var qa = incoming.qa, qa.questions == nil,
+              let current, current.code == incoming.code,
+              let kept = current.qa?.questions
+        else { return incoming }
+        qa.questions = kept
+        var merged = incoming
+        merged.qa = qa
+        return merged
     }
 
     /// Marks a card as practicing in the hero without a Live Poll room.

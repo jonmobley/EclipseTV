@@ -65,4 +65,59 @@ struct QuestPollQATests {
         )
         #expect(QuestPollSessionChange.classify(from: before, to: after) == .tile)
     }
+
+    private func session(json: String) throws -> LivePollSession {
+        try JSONDecoder().decode(LivePollSession.self, from: Data(json.utf8))
+    }
+
+    @Test func tapRepliesWithoutTheListKeepTheQuestions() throws {
+        let store = QuestPollSessionStore.shared
+        store.clear()
+        defer { store.clear() }
+        store.adopt(try qaSession("""
+            {"id":"a","text":"First?","from":null,"askedAt":1,"status":"new"},
+            {"id":"b","text":"Second?","from":null,"askedAt":2,"status":"new"}
+            """))
+        // A command reply: featured question and count, no list.
+        store.adopt(try session(json: """
+            {"phase":"lobby","joinCode":"QA1234","mode":"qa","deckTitle":"Q&A","players":[],
+             "qa":{"featured":{"id":"a","text":"First?","from":null},"count":2}}
+            """))
+        #expect(store.session?.qa?.featured?.id == "a")
+        #expect(store.session?.qa?.questions?.map(\.id) == ["a", "b"])
+    }
+
+    @Test func aDifferentRoomDoesNotInheritTheList() throws {
+        let current = try qaSession(#"{"id":"a","text":"First?","from":null,"askedAt":1,"status":"new"}"#)
+        let other = try session(json: """
+            {"phase":"lobby","joinCode":"OTHER1","mode":"qa","deckTitle":"Q&A","players":[],
+             "qa":{"featured":null,"count":0}}
+            """)
+        let merged = QuestPollSessionStore.keepingQAQuestions(of: current, in: other)
+        #expect(merged.qa?.questions == nil)
+    }
+
+    @Test func listsAreNewestFirstAndAStrayFeaturedQuestionIsShown() throws {
+        let questions = try qaSession("""
+            {"id":"old","text":"Old?","from":null,"askedAt":1,"status":"new"},
+            {"id":"newer","text":"Newer?","from":null,"askedAt":5,"status":"new"},
+            {"id":"stray","text":"Stray?","from":null,"askedAt":3,"status":"featured"},
+            {"id":"live","text":"Live?","from":null,"askedAt":4,"status":"featured"},
+            {"id":"h","text":"Hidden?","from":null,"askedAt":2,"status":"hidden"}
+            """).qa?.questions ?? []
+        let sections = QuestPollQAViewController.sections(questions: questions, featuredId: "live")
+        #expect(sections.new.map(\.id) == ["newer", "old"])
+        #expect(sections.shown.map(\.id) == ["stray"])
+        #expect(sections.hidden.map(\.id) == ["h"])
+    }
+
+    @Test func refreshNoticesARoomEndedElsewhere() throws {
+        let ended = try session(json: """
+            {"phase":"ended","joinCode":"QA1234","mode":"qa","deckTitle":"Q&A","players":[]}
+            """)
+        #expect(QuestPollStatusPoll.roomIsGone(.success(ended)))
+        #expect(QuestPollStatusPoll.roomIsGone(.failure(LivePollError.server("Session not found"))))
+        #expect(!QuestPollStatusPoll.roomIsGone(.failure(LivePollError.transport)))
+        #expect(!QuestPollStatusPoll.roomIsGone(.success(try qaSession(""))))
+    }
 }

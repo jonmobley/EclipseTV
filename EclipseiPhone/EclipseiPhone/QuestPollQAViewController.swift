@@ -35,7 +35,8 @@ final class QuestPollQAViewController: UITableViewController {
     }
 
     private var featured: LivePollQAFeatured?
-    private var rows: [Section: [LivePollQAQuestion]] = [:]
+    private var rows: (new: [LivePollQAQuestion], shown: [LivePollQAQuestion], hidden: [LivePollQAQuestion])
+        = ([], [], [])
     private var newSinceLastLook: Set<String> = []
     private var storeObserver: NSObjectProtocol?
 
@@ -58,13 +59,17 @@ final class QuestPollQAViewController: UITableViewController {
             primaryAction: UIAction { [weak self] _ in self?.onEnd?() }
         )
         navigationItem.leftBarButtonItem?.tintColor = .systemRed
+        // Icon and words: a bare QR glyph didn't say what it opens.
+        var joinConfig = UIButton.Configuration.plain()
+        joinConfig.title = "Join Code & Link"
+        joinConfig.image = UIImage(systemName: "qrcode")
+        joinConfig.imagePadding = 8
+        let joinButton = UIButton(configuration: joinConfig, primaryAction: UIAction { [weak self] _ in
+            self?.presentJoinQR()
+        })
         toolbarItems = [
             UIBarButtonItem(systemItem: .flexibleSpace),
-            UIBarButtonItem(
-                title: "Join Code & Link",
-                image: UIImage(systemName: "qrcode"),
-                primaryAction: UIAction { [weak self] _ in self?.presentJoinQR() }
-            ),
+            UIBarButtonItem(customView: joinButton),
             UIBarButtonItem(systemItem: .flexibleSpace)
         ]
         refresh()
@@ -98,11 +103,7 @@ final class QuestPollQAViewController: UITableViewController {
         }
         let questions = session.qa?.questions ?? []
         featured = session.qa?.featured
-        rows = [
-            .new: questions.filter { $0.status == .new },
-            .shown: questions.filter { $0.status == .answered },
-            .hidden: questions.filter { $0.status == .hidden }
-        ]
+        rows = Self.sections(questions: questions, featuredId: featured?.id)
         newSinceLastLook.formUnion(
             questions
                 .filter { $0.status == .new && !store.seenQAQuestionIds.contains($0.id) }
@@ -114,8 +115,30 @@ final class QuestPollQAViewController: UITableViewController {
         tableView.reloadData()
     }
 
+    /// New / Shown / Hidden lists, newest first (as on the Mac). A question
+    /// the server still marks featured but that isn't on screen counts as
+    /// Shown instead of vanishing from every list.
+    static func sections(
+        questions: [LivePollQAQuestion],
+        featuredId: String?
+    ) -> (new: [LivePollQAQuestion], shown: [LivePollQAQuestion], hidden: [LivePollQAQuestion]) {
+        let sorted = questions.sorted { $0.askedAt > $1.askedAt }
+        return (
+            sorted.filter { $0.status == .new },
+            sorted.filter {
+                $0.status == .answered || ($0.status == .featured && $0.id != featuredId)
+            },
+            sorted.filter { $0.status == .hidden }
+        )
+    }
+
     private func questions(in section: Section) -> [LivePollQAQuestion] {
-        rows[section] ?? []
+        switch section {
+        case .onScreen: return []
+        case .new: return rows.new
+        case .shown: return rows.shown
+        case .hidden: return rows.hidden
+        }
     }
 
     // MARK: - Table
@@ -140,9 +163,17 @@ final class QuestPollQAViewController: UITableViewController {
     }
 
     override func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
-        guard Section(rawValue: section) == .new, !questions(in: .new).isEmpty else { return nil }
-        return "Tap a question to put it on screen. Swipe to hide it."
+        guard let kind = Section(rawValue: section), !questions(in: kind).isEmpty else { return nil }
+        switch kind {
+        case .new: return "Tap a question to put it on screen. Swipe to hide it."
+        case .hidden: return "Tap a hidden question to bring it back."
+        case .onScreen, .shown: return nil
+        }
     }
+
+    /// One command at a time: overlapping taps raced, and an older reply
+    /// could put the wrong question back on screen.
+    private var isBusy: Bool { QuestPollSessionStore.shared.isControlInFlight }
 
     override func tableView(
         _ tableView: UITableView, cellForRowAt indexPath: IndexPath
@@ -191,7 +222,7 @@ final class QuestPollQAViewController: UITableViewController {
 
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
-        guard let kind = Section(rawValue: indexPath.section),
+        guard !isBusy, let kind = Section(rawValue: indexPath.section),
               kind != .onScreen,
               questions(in: kind).indices.contains(indexPath.row) else { return }
         let question = questions(in: kind)[indexPath.row]
@@ -212,7 +243,8 @@ final class QuestPollQAViewController: UITableViewController {
               questions(in: kind).indices.contains(indexPath.row) else { return nil }
         let question = questions(in: kind)[indexPath.row]
         let hide = UIContextualAction(style: .destructive, title: "Hide") { [weak self] _, _, done in
-            self?.onCommand?(.qaHide(id: question.id))
+            guard let self, !self.isBusy else { return done(false) }
+            self.onCommand?(.qaHide(id: question.id))
             done(true)
         }
         return UISwipeActionsConfiguration(actions: [hide])
@@ -226,7 +258,8 @@ final class QuestPollQAViewController: UITableViewController {
         config.cornerStyle = .capsule
         config.buttonSize = .small
         let button = UIButton(configuration: config, primaryAction: UIAction { [weak self] _ in
-            self?.onCommand?(.qaDone)
+            guard let self, !self.isBusy else { return }
+            self.onCommand?(.qaDone)
         })
         button.accessibilityHint = "Takes the question off screen and shows the join code"
         button.sizeToFit()
