@@ -578,6 +578,12 @@ final class LocalAlbumStore {
         return listings[scriptId]?.contains { $0 != showId } ?? false
     }
 
+    /// Whether the Prompter script `scriptId` on Show `showId` belongs to another
+    /// Show: the one gate for every path that reads, edits or copies it.
+    func isForeignPrompterScript(_ scriptId: UUID, showId: UUID) -> Bool {
+        scriptId != showId && isExtraPrompterListedElsewhere(scriptId, showId: showId)
+    }
+
     /// Adds a Prompter tile to Show `showId` and returns its token and script id.
     ///
     /// Uses the Show's first-Prompter slot when it is free and its kept script (from a

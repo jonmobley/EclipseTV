@@ -217,8 +217,7 @@ extension LibraryGridViewController {
                let scriptId = ShowToolToken.prompterScriptId(from: id, showId: showId) {
                 // An extra Prompter another Show also lists would edit that Show's
                 // script; only a synced/shared surface could hold one.
-                if scriptId != showId,
-                   LocalAlbumStore.shared.isExtraPrompterListedElsewhere(scriptId, showId: showId) {
+                if LocalAlbumStore.shared.isForeignPrompterScript(scriptId, showId: showId) {
                     return .unresolved(id: id)
                 }
                 return .prompter(token: id, scriptId: scriptId)

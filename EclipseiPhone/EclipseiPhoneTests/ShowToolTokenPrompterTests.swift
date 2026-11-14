@@ -216,5 +216,7 @@ struct ShowToolTokenPrompterTests {
         store.showTool(extra.token, albumId: b.id)
         #expect(store.isExtraPrompterListedElsewhere(extra.scriptId, showId: a.id))
         #expect(store.isExtraPrompterListedElsewhere(extra.scriptId, showId: b.id))
+        #expect(store.isForeignPrompterScript(extra.scriptId, showId: b.id))
+        #expect(!store.isForeignPrompterScript(a.id, showId: a.id))
     }
 }
