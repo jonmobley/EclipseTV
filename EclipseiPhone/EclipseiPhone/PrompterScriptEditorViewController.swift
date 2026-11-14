@@ -14,14 +14,15 @@ import UIKit
 /// Done closes and saves, swiping down saves too.
 final class PrompterScriptEditorViewController: UIViewController {
 
-    private let showId: UUID
+    /// Script being edited (`PrompterScriptStore` key).
+    private let scriptId: UUID
     private let textView = UITextView()
     private var saveOnDisappear = true
 
     private static let popoverSize = CGSize(width: 520, height: 600)
 
-    init(showId: UUID) {
-        self.showId = showId
+    init(scriptId: UUID) {
+        self.scriptId = scriptId
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -31,12 +32,12 @@ final class PrompterScriptEditorViewController: UIViewController {
 
     /// Navigation wrapper picked by the presenter's traits.
     static func makeNavigation(
-        showId: UUID,
+        scriptId: UUID,
         traits: UITraitCollection,
         anchor: UIView?,
         arrows: UIPopoverArrowDirection
     ) -> UINavigationController {
-        let editor = PrompterScriptEditorViewController(showId: showId)
+        let editor = PrompterScriptEditorViewController(scriptId: scriptId)
         let nav = UINavigationController(rootViewController: editor)
         guard traits.prefersRegularNoteLayout, let anchor else {
             if let sheet = nav.sheetPresentationController {
@@ -71,12 +72,12 @@ final class PrompterScriptEditorViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
-        title = PrompterScriptStore.shared.hasScript(forShowId: showId) ? "Edit Script" : "Write Script"
+        title = PrompterScriptStore.shared.hasScript(forShowId: scriptId) ? "Edit Script" : "Write Script"
         navigationItem.rightBarButtonItem = UIBarButtonItem(
             barButtonSystemItem: .done, target: self, action: #selector(doneTapped)
         )
         setupTextView()
-        textView.text = PrompterScriptStore.shared.script(forShowId: showId)
+        textView.text = PrompterScriptStore.shared.script(forShowId: scriptId)
     }
 
     override func viewDidAppear(_ animated: Bool) {
@@ -131,7 +132,7 @@ final class PrompterScriptEditorViewController: UIViewController {
     }
 
     private func commit() {
-        PrompterScriptStore.shared.setScript(textView.text ?? "", forShowId: showId)
+        PrompterScriptStore.shared.setScript(textView.text ?? "", forShowId: scriptId)
     }
 
     @objc private func doneTapped() {

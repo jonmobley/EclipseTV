@@ -59,7 +59,7 @@ struct BlackoutHoldTests {
     @Test func onlyUnattendedTilesCanBeCued() {
         #expect(ShowGridItem.logo.canAutoPresentLive)
         #expect(ShowGridItem.camera.canAutoPresentLive == false)
-        #expect(ShowGridItem.prompter.canAutoPresentLive == false)
+        #expect(ShowGridItem.prompter(token: ShowToolToken.prompter, scriptId: UUID()).canAutoPresentLive == false)
     }
 
     @Test func cueTitlesNameTools() {

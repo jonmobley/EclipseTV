@@ -68,4 +68,80 @@ struct ShowToolTokenPrompterTests {
         )
         #expect(merged.resolvedSurfaceIds.contains(ShowToolToken.prompter))
     }
+
+    // MARK: - Several Prompters in one Show
+
+    @Test func firstPrompterUsesShowIdAndExtrasUseTheirOwn() {
+        let showId = UUID()
+        let extraId = UUID()
+        let extra = ShowToolToken.extraPrompterToken(scriptId: extraId)
+        #expect(extra.hasPrefix(ShowToolToken.prefix))
+        #expect(ShowToolToken.isTool(extra))
+        #expect(ShowToolToken.isPrompter(extra))
+        #expect(ShowToolToken.isPrompter(ShowToolToken.prompter))
+        #expect(!ShowToolToken.isPrompter(ShowToolToken.camera))
+        #expect(!ShowToolToken.isPrompter(ShowToolToken.extraPrompterPrefix + "nope"))
+        #expect(ShowToolToken.prompterScriptId(from: ShowToolToken.prompter, showId: showId) == showId)
+        #expect(ShowToolToken.prompterScriptId(from: extra, showId: showId) == extraId)
+        #expect(ShowToolToken.prompterToken(scriptId: showId, showId: showId) == ShowToolToken.prompter)
+        #expect(ShowToolToken.prompterToken(scriptId: extraId, showId: showId) == extra)
+        #expect(
+            ShowToolToken.prompterScriptIds(
+                in: [ShowToolToken.camera, ShowToolToken.prompter, "a.jpg", extra], showId: showId
+            ) == [showId, extraId]
+        )
+    }
+
+    @Test func showHoldsSeveralPrompters() throws {
+        let store = try makeStore()
+        let show = try store.create(name: "Talk", orientation: .landscape)
+        let extra = ShowToolToken.extraPrompterToken(scriptId: UUID())
+        store.showTool(ShowToolToken.prompter, albumId: show.id)
+        store.showTool(extra, albumId: show.id)
+        var album = try #require(store.album(id: show.id))
+        #expect(Array(album.resolvedSurfaceIds.suffix(2)) == [ShowToolToken.prompter, extra])
+
+        store.hideTool(extra, albumId: show.id)
+        album = try #require(store.album(id: show.id))
+        #expect(album.resolvedSurfaceIds.contains(ShowToolToken.prompter))
+        #expect(!album.resolvedSurfaceIds.contains(extra))
+    }
+
+    @Test func sanitizedSurfaceKeepsExtraPrompterTokens() {
+        let extra = ShowToolToken.extraPrompterToken(scriptId: UUID())
+        let surface = [ShowToolToken.prompter, extra, "photo.jpg"]
+        #expect(LocalAlbum.sanitizedSurface(surface, itemIds: ["photo.jpg"]) == surface)
+    }
+
+    @Test func liveProgramLightsOnlyThePrompterOnScreen() {
+        let showId = UUID()
+        let extraId = UUID()
+        let first = ShowGridItem.prompter(token: ShowToolToken.prompter, scriptId: showId)
+        let second = ShowGridItem.prompter(
+            token: ShowToolToken.extraPrompterToken(scriptId: extraId), scriptId: extraId
+        )
+        let program = ShowProgram(kind: .prompter, itemId: extraId.uuidString)
+        #expect(program.matches(second))
+        #expect(!program.matches(first))
+        // An older director sends no id: both read as live rather than neither.
+        let legacy = ShowProgram(kind: .prompter)
+        #expect(legacy.matches(first) && legacy.matches(second))
+    }
+
+    @Test func deletingAShowRemovesEveryPrompterScript() throws {
+        let suite = "PrompterScripts.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defaults.removePersistentDomain(forName: suite)
+        let scripts = PrompterScriptStore(defaults: defaults)
+        let showId = UUID()
+        let extraId = UUID()
+        let otherId = UUID()
+        scripts.setScript("Opening", forShowId: showId)
+        scripts.setScript("Keynote", forShowId: extraId)
+        scripts.setScript("Other show", forShowId: otherId)
+        scripts.deleteAll(forShowId: showId, extraScriptIds: [showId, extraId])
+        #expect(!scripts.hasScript(forShowId: showId))
+        #expect(!scripts.hasScript(forShowId: extraId))
+        #expect(scripts.script(forShowId: otherId) == "Other show")
+    }
 }

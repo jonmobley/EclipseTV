@@ -308,9 +308,7 @@ extension iPhoneMainViewController {
         if albumId == nil {
             countdown.attributes = .disabled
         }
-        let prompterPresent = albumId
-            .flatMap { LocalAlbumStore.shared.album(id: $0) }?
-            .resolvedSurfaceIds.contains(ShowToolToken.prompter) ?? false
+        // A Show can hold any number of Prompters, each with its own script.
         let prompter = UIAction(
             title: "Prompter",
             image: UIImage(systemName: "text.alignleft")
@@ -318,7 +316,7 @@ extension iPhoneMainViewController {
             guard let albumId else { return }
             self?.addPrompter(toShowId: albumId)
         }
-        if albumId == nil || prompterPresent {
+        if albumId == nil {
             prompter.attributes = .disabled
         }
         let livePoll = UIAction(
@@ -580,15 +578,22 @@ extension iPhoneMainViewController {
         present(alert, animated: true)
     }
 
-    /// Configure-first Countdown add: duration, size & placement, background, and
-    /// ending are chosen on a sheet; Add appends the tile to this Show.
-    /// Adds the Prompter tile to the Show and opens it so the script can be written.
+    /// Adds a Prompter tile to the Show and opens it so the script can be written.
+    ///
+    /// The first Prompter uses the Show's own script (shared with the Mac, and kept
+    /// if the tile was removed earlier); each further one gets a fresh, empty script.
     func addPrompter(toShowId showId: UUID) {
-        LocalAlbumStore.shared.showTool(ShowToolToken.prompter, albumId: showId)
-        libraryViewController.revealAddedShowMember(id: ShowToolToken.prompter)
-        libraryViewController.presentPrompterOperator()
+        let hasFirst = LocalAlbumStore.shared.album(id: showId)?
+            .resolvedSurfaceIds.contains(ShowToolToken.prompter) ?? false
+        let scriptId = hasFirst ? UUID() : showId
+        let token = ShowToolToken.prompterToken(scriptId: scriptId, showId: showId)
+        LocalAlbumStore.shared.showTool(token, albumId: showId)
+        libraryViewController.revealAddedShowMember(id: token)
+        libraryViewController.presentPrompterOperator(scriptId: scriptId)
     }
 
+    /// Configure-first Countdown add: duration, size & placement, background, and
+    /// ending are chosen on a sheet; Add appends the tile to this Show.
     func addCountdown(toShowId showId: UUID) {
         guard !isAlreadyOpen(AddCountdownViewController.self) else { return }
         let compose = AddCountdownViewController(showId: showId)

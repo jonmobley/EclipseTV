@@ -24,7 +24,8 @@ final class PrompterViewController: UIViewController {
 
     static let emptyStateText = "Write your script to begin."
 
-    let showId: UUID
+    /// Script shown here (`PrompterScriptStore` key).
+    let scriptId: UUID
     var liveActions: LiveActions?
 
     let stage = PrompterStageView()
@@ -53,8 +54,8 @@ final class PrompterViewController: UIViewController {
     var holdsDisplayModeOrientation = false
     private var isLeaving = false
 
-    init(showId: UUID, controller: PrompterController? = nil) {
-        self.showId = showId
+    init(scriptId: UUID, controller: PrompterController? = nil) {
+        self.scriptId = scriptId
         self.controller = controller ?? .shared
         super.init(nibName: nil, bundle: nil)
     }
@@ -84,7 +85,7 @@ final class PrompterViewController: UIViewController {
         edit.accessibilityLabel = "Edit Script"
         navigationItem.rightBarButtonItem = edit
 
-        controller.bind(showId: showId)
+        controller.bind(scriptId: scriptId)
         setupStage()
         setupTransport()
         setupEmptyState()
@@ -377,7 +378,7 @@ final class PrompterViewController: UIViewController {
 
     @objc func editTapped() {
         let nav = PrompterScriptEditorViewController.makeNavigation(
-            showId: showId,
+            scriptId: scriptId,
             traits: traitCollection,
             anchor: navigationItem.rightBarButtonItem?.value(forKey: "view") as? UIView,
             arrows: [.up]

@@ -11,16 +11,37 @@ extension LibraryGridViewController {
 
     // MARK: - Operator view
 
-    /// Opens the full-screen Prompter for the open Show. Never puts it live by itself.
-    func presentPrompterOperator() {
-        guard let showId = openShowId else { return }
+    /// Opens one of the open Show's Prompters full screen. Never puts it live by itself.
+    ///
+    /// There is one Prompter engine, and the output shows whatever script it holds, so
+    /// opening a different Prompter while one is on screen asks before switching.
+    func presentPrompterOperator(scriptId: UUID) {
         guard !isAlreadyOpen(PrompterViewController.self) else { return }
-        let prompter = PrompterViewController(showId: showId)
+        let controller = PrompterController.shared
+        if ExternalDisplayManager.shared.isPrompterLive,
+           let liveScriptId = controller.liveScriptId, liveScriptId != scriptId {
+            let alert = UIAlertController(
+                title: "Switch Prompter?",
+                message: "Another Prompter is on screen. Switch the screen to this script?",
+                preferredStyle: .alert
+            )
+            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+            alert.addAction(UIAlertAction(title: "Switch", style: .default) { [weak self] _ in
+                self?.openPrompterOperator(scriptId: scriptId)
+            })
+            topmostPresenter.present(alert, animated: true)
+            return
+        }
+        openPrompterOperator(scriptId: scriptId)
+    }
+
+    private func openPrompterOperator(scriptId: UUID) {
+        let prompter = PrompterViewController(scriptId: scriptId)
         // A Show Live operator device drives nothing itself: it reads along and
         // edits the script (which syncs), but Go Live stays with the director.
         if !ShowLiveSession.shared.isRemoteOperator {
             prompter.liveActions = .init(
-                goLive: { [weak self] in self?.presentPrompterLive() ?? false },
+                goLive: { [weak self] in self?.presentPrompterLive(scriptId: scriptId) ?? false },
                 stopLive: { [weak self] in self?.stopPrompterLive() }
             )
         }
@@ -31,20 +52,19 @@ extension LibraryGridViewController {
     }
 
     /// Opens the script editor straight from the tile.
-    func presentPrompterScriptEditor() {
-        guard let showId = openShowId else { return }
+    func presentPrompterScriptEditor(scriptId: UUID) {
         let nav = PrompterScriptEditorViewController.makeNavigation(
-            showId: showId, traits: traitCollection, anchor: nil, arrows: []
+            scriptId: scriptId, traits: traitCollection, anchor: nil, arrows: []
         )
         topmostPresenter.present(nav, animated: true)
     }
 
     // MARK: - Live
 
-    /// Puts the open Show's script on AirPlay / HDMI (or the Practice hero).
+    /// Puts one of the open Show's scripts on AirPlay / HDMI (or the Practice hero).
     /// Returns whether it went live.
     @discardableResult
-    func presentPrompterLive() -> Bool {
+    func presentPrompterLive(scriptId: UUID) -> Bool {
         guard let showId = openShowId else { return false }
         guard ensurePrompterDestination() else { return false }
         guard !blockLiveChangeIfLocked() else { return false }
@@ -54,7 +74,7 @@ extension LibraryGridViewController {
         SlideshowPlaybackController.shared.stop()
         // Bind, then publish the overlay: `liveShowId` and `overlaySource` name the
         // same script before anything observing either of them repaints.
-        PrompterController.shared.prepareLive(showId: showId)
+        PrompterController.shared.prepareLive(showId: showId, scriptId: scriptId)
         ExternalDisplayManager.shared.presentPrompter()
         store.updateCurrentId(nil)
         announceAirPlayOverlayIfLinked()
@@ -105,9 +125,9 @@ extension LibraryGridViewController {
 
     // MARK: - Tile
 
-    /// Configures the Show-grid Prompter tile.
-    func configurePrompterTile(_ cell: LibraryThumbnailCell, isLive: Bool) {
-        let script = openShowId.map { PrompterScriptStore.shared.script(forShowId: $0) } ?? ""
+    /// Configures a Show-grid Prompter tile.
+    func configurePrompterTile(_ cell: LibraryThumbnailCell, scriptId: UUID, isLive: Bool) {
+        let script = PrompterScriptStore.shared.script(forShowId: scriptId)
         cell.configurePrompter(
             excerpt: LibraryThumbnailCell.prompterExcerpt(from: script),
             isLive: isLive,
@@ -117,12 +137,11 @@ extension LibraryGridViewController {
     }
 
     /// ⋯ menu: open, go live, edit, reset, arrange, select, remove.
-    func prompterContextMenu() -> UIMenu {
-        let token = ShowToolToken.prompter
-        let isLive = isShowGridItemLive(.prompter)
+    func prompterContextMenu(token: String, scriptId: UUID) -> UIMenu {
+        let isLive = isShowGridItemLive(.prompter(token: token, scriptId: scriptId))
         var children: [UIMenuElement] = [
             UIAction(title: "Open", image: UIImage(systemName: "text.alignleft")) { [weak self] _ in
-                self?.presentPrompterOperator()
+                self?.presentPrompterOperator(scriptId: scriptId)
             }
         ]
         if !ShowLiveSession.shared.isRemoteOperator {
@@ -134,16 +153,21 @@ extension LibraryGridViewController {
                 children.append(UIAction(
                     title: "Go Live",
                     image: UIImage(systemName: "antenna.radiowaves.left.and.right"),
-                    attributes: PrompterScriptStore.shared.hasScript(forShowId: openShowId ?? UUID()) ? [] : .disabled
+                    attributes: PrompterScriptStore.shared.hasScript(forShowId: scriptId) ? [] : .disabled
                 ) { [weak self] _ in
-                    self?.presentPrompterLive()
+                    self?.presentPrompterLive(scriptId: scriptId)
                 })
             }
         }
         children.append(UIAction(title: "Edit Script", image: UIImage(systemName: "pencil")) { [weak self] _ in
-            self?.presentPrompterScriptEditor()
+            self?.presentPrompterScriptEditor(scriptId: scriptId)
         })
-        children.append(UIAction(title: "Reset to Top", image: UIImage(systemName: "backward.end.fill")) { _ in
+        // The one Prompter engine holds one script's position; reset only that one.
+        children.append(UIAction(
+            title: "Reset to Top",
+            image: UIImage(systemName: "backward.end.fill"),
+            attributes: PrompterController.shared.boundScriptId == scriptId ? [] : .disabled
+        ) { _ in
             PrompterController.shared.reset()
         })
         children.append(arrangeAction())
@@ -211,12 +235,12 @@ extension LibraryGridViewController {
     private func updateVisiblePrompterTile() {
         guard let showsSection = sectionIndex(for: .shows) else { return }
         for (index, row) in openShowGridItems.enumerated() {
-            guard case .prompter = row,
+            guard case .prompter(_, let scriptId) = row,
                   let cell = collectionView.cellForItem(
                     at: IndexPath(item: index, section: showsSection)
                   ) as? LibraryThumbnailCell
             else { continue }
-            configurePrompterTile(cell, isLive: isShowGridItemLive(.prompter))
+            configurePrompterTile(cell, scriptId: scriptId, isLive: isShowGridItemLive(row))
         }
     }
 }
