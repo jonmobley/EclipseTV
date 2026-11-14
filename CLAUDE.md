@@ -83,3 +83,8 @@
   (O(1) index), never `store.items.first(where:)`, and resolve the rows once before looping over paths.
 - Note cards: tap expands or collapses, and the pencil edits (2026-10-31).
 - Note editor on iPhone is a full-height sheet only: a medium detent gets pushed to large by the keyboard, which looks like a stall halfway up (2026-11-01). The text stops at `keyboardLayoutGuide`, and Hide Keyboard shows while editing because Done closes the editor.
+- Prompter shape (2026-11-13): the Prompter screen has its own Landscape / Vertical menu (`PrompterLocalSettings.prefersVertical`,
+  this phone only). Vertical while Display Mode is Landscape makes the card 9:16, turns the phone upright, and shows an upright
+  9:16 column on the TV (`PrompterController.isVerticalOnLandscapeDisplay`); the menu is hidden in Vertical Display Mode.
+  Use `PrompterController.isVertical` / `canvasAspectRatio` for prompter layout, never `ExternalOutputSettings.isVerticalMode`.
+  The blue lines are the reading guide (the line being read), on purpose.

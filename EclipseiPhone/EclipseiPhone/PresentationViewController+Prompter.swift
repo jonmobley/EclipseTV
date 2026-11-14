@@ -45,12 +45,21 @@ extension PresentationViewController {
         prompterStage = nil
     }
 
-    /// Fills the output canvas (rotated when Vertical) and sizes the text to it.
+    /// Fills the output canvas (rotated when Vertical) and sizes the text to it. A
+    /// Prompter switched to Vertical on a Landscape display is an upright 9:16 column.
     func applyPrompterLayout() {
         guard !prompterContainer.isHidden, let stage = prompterStage else { return }
-        applyRotatedLayout(to: stage, in: prompterContainer, scale: 1)
+        let controller = PrompterController.shared
+        if controller.isVerticalOnLandscapeDisplay {
+            stage.transform = .identity
+            stage.frame = ExternalOutputSettings.panelRect(
+                in: prompterContainer.bounds, aspect: controller.canvasAspectRatio
+            )
+        } else {
+            applyRotatedLayout(to: stage, in: prompterContainer, scale: 1)
+        }
         stage.layoutIfNeeded()
-        stage.setCanvasFontSize(PrompterController.shared.fontSize, isVertical: ExternalOutputSettings.isVerticalMode)
+        stage.setCanvasFontSize(controller.fontSize, isVertical: controller.isVertical)
         stage.layoutIfNeeded()
         stage.apply(anchor: PrompterController.shared.readingAnchor)
     }
@@ -91,8 +100,19 @@ extension PresentationViewController {
     private func refreshPrompterScript() {
         guard let stage = prompterStage else { return }
         let controller = PrompterController.shared
-        stage.setCanvasFontSize(controller.fontSize, isVertical: ExternalOutputSettings.isVerticalMode)
+        if stage.isVertical != controller.isVertical || shapeChanged(stage, controller) {
+            applyPrompterLayout()
+        }
+        stage.setCanvasFontSize(controller.fontSize, isVertical: controller.isVertical)
         guard stage.script != controller.script else { return }
         stage.setScript(controller.script, anchor: controller.readingAnchor)
+    }
+
+    /// True when the stage's aspect no longer matches the Prompter's canvas.
+    private func shapeChanged(_ stage: PrompterStageView, _ controller: PrompterController) -> Bool {
+        let size = stage.bounds.size
+        guard size.width > 0, size.height > 0 else { return false }
+        let wantsTall = controller.canvasAspectRatio < 1
+        return (size.height > size.width) != wantsTall
     }
 }
