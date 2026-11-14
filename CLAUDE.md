@@ -81,6 +81,9 @@
 - Show grid scrolling (2026-11-07): `openShowGridItems` is rebuilt on every read and is read several
   times per tile, so anything it calls must be cheap. Look up library items with `store.item(id:)`
   (O(1) index), never `store.items.first(where:)`, and resolve the rows once before looping over paths.
+- Show website card tap (2026-11-13): only puts the site live (hero shows it); the hero tap / expand arrows or ⋯ Preview open
+  the fullscreen browser. Closing it leaves the site live on whatever page it was on, and re-tapping the live card changes nothing.
+  With no destination (or output locked) the tap still opens the browser as a phone preview.
 - Note cards: tap expands or collapses, and the pencil edits (2026-10-31).
 - Note editor on iPhone is a full-height sheet only: a medium detent gets pushed to large by the keyboard, which looks like a stall halfway up (2026-11-01). The text stops at `keyboardLayoutGuide`, and Hide Keyboard shows while editing because Done closes the editor.
 - Prompter shape (2026-11-13): the Prompter screen has its own Landscape / Vertical menu (`PrompterLocalSettings.prefersVertical`,
