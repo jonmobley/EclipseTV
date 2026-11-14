@@ -146,8 +146,8 @@ final class PrompterController {
 
     /// Points the Prompter at a script. Switching scripts starts from the top.
     ///
-    /// While live, the output follows: it shows whatever script is bound (still in the
-    /// live Show; the operator view only opens Prompters of the open Show).
+    /// While live, the output follows: it shows whatever script is bound. A switch to
+    /// another Show's Prompter goes through `prepareLive` so `liveShowId` moves too.
     func bind(scriptId: UUID) {
         guard boundScriptId != scriptId else { return }
         boundScriptId = scriptId

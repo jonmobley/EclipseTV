@@ -137,17 +137,20 @@ final class PrompterScriptStore {
     /// Removes every Prompter script of a deleted Show: its first Prompter's (keyed
     /// by the Show id) and the extra ones in `extraScriptIds`.
     ///
-    /// Extra scripts are deleted from iCloud even while applying a remote Show
-    /// deletion: the Mac only knows the first Prompter, so a Show deleted there
-    /// would otherwise leave the extra records behind forever.
+    /// Only extra-shaped ids are touched (never a Show's first-Prompter script). Like
+    /// the first Prompter, nothing is deleted from iCloud while applying a remote
+    /// deletion: the device that deleted the Show does that. (A Show deleted on the
+    /// Mac, which doesn't know extra Prompters, leaves their small records behind.)
     func deleteAll(forShowId showId: UUID, extraScriptIds: [UUID]) {
         deleteAll(forShowId: showId)
-        for scriptId in extraScriptIds where scriptId != showId {
+        for scriptId in extraScriptIds
+        where scriptId != showId && ShowToolToken.isExtraPrompterScriptId(scriptId) {
             if entries.contains(where: { $0.showId == scriptId }) {
                 entries.removeAll { $0.showId == scriptId }
                 syncedIds.remove(scriptId.uuidString)
                 persist(changedShowId: scriptId)
             }
+            guard !EclipseSyncController.shared.isApplyingRemote else { continue }
             EclipseSyncController.shared.backend.schedulePrompterDelete(showId: scriptId)
         }
     }

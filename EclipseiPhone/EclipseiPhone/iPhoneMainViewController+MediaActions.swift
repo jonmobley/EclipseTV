@@ -583,13 +583,9 @@ extension iPhoneMainViewController {
     /// The first Prompter uses the Show's own script (shared with the Mac, and kept
     /// if the tile was removed earlier); each further one gets a fresh, empty script.
     func addPrompter(toShowId showId: UUID) {
-        let hasFirst = LocalAlbumStore.shared.album(id: showId)?
-            .resolvedSurfaceIds.contains(ShowToolToken.prompter) ?? false
-        let scriptId = hasFirst ? UUID() : showId
-        let token = ShowToolToken.prompterToken(scriptId: scriptId, showId: showId)
-        LocalAlbumStore.shared.showTool(token, albumId: showId)
-        libraryViewController.revealAddedShowMember(id: token)
-        libraryViewController.presentPrompterOperator(scriptId: scriptId)
+        guard let added = LocalAlbumStore.shared.addPrompter(toShowId: showId) else { return }
+        libraryViewController.revealAddedShowMember(id: added.token)
+        libraryViewController.presentPrompterOperator(scriptId: added.scriptId)
     }
 
     /// Configure-first Countdown add: duration, size & placement, background, and

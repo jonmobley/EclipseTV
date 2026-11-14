@@ -31,7 +31,12 @@ final class LocalAlbumStore {
         }
     }
 
-    private(set) var albums: [LocalAlbum] = []
+    private(set) var albums: [LocalAlbum] = [] {
+        didSet { extraPrompterListingsCache = nil }
+    }
+
+    /// Extra Prompter script id → Shows listing it; rebuilt lazily after any change.
+    private var extraPrompterListingsCache: [UUID: Set<UUID>]?
 
     private let defaults: UserDefaults
     private let itemsKey = "EclipseTV.localAlbums.items"
@@ -547,6 +552,48 @@ final class LocalAlbumStore {
         }
         return ShowToolToken.prompterScriptIds(in: show.surfaceIds ?? [], showId: show.id)
             .filter { $0 != show.id && !foreign.contains($0) }
+    }
+
+    /// Whether a Show other than `showId` also lists the extra Prompter `scriptId`.
+    ///
+    /// Each extra script belongs to one Show (Copy to Show makes a new one), so a
+    /// second listing can only be planted through a synced or shared surface; such a
+    /// tile must not open or edit the other Show's script. Cheap: cached per change.
+    func isExtraPrompterListedElsewhere(_ scriptId: UUID, showId: UUID) -> Bool {
+        let listings: [UUID: Set<UUID>]
+        if let cached = extraPrompterListingsCache {
+            listings = cached
+        } else {
+            var built: [UUID: Set<UUID>] = [:]
+            for album in albums {
+                for id in album.surfaceIds ?? [] {
+                    if let extra = ShowToolToken.extraPrompterScriptId(from: id) {
+                        built[extra, default: []].insert(album.id)
+                    }
+                }
+            }
+            extraPrompterListingsCache = built
+            listings = built
+        }
+        return listings[scriptId]?.contains { $0 != showId } ?? false
+    }
+
+    /// Adds a Prompter tile to Show `showId` and returns its token and script id.
+    ///
+    /// Uses the Show's first-Prompter slot when it is free and its kept script (from a
+    /// removed tile) is empty or `reuseKeptScript`; otherwise a new extra Prompter
+    /// with its own empty script.
+    @discardableResult
+    func addPrompter(toShowId showId: UUID, reuseKeptScript: Bool = true) -> (token: String, scriptId: UUID)? {
+        guard let album = album(id: showId) else { return nil }
+        let firstFree = !album.resolvedSurfaceIds.contains(ShowToolToken.prompter)
+        let keptScript = PrompterScriptStore.shared.hasScript(forShowId: showId)
+        let scriptId = firstFree && (reuseKeptScript || !keptScript)
+            ? showId
+            : ShowToolToken.newExtraPrompterScriptId()
+        let token = ShowToolToken.prompterToken(scriptId: scriptId, showId: showId)
+        showTool(token, albumId: showId)
+        return (token, scriptId)
     }
 
     func album(id: UUID) -> LocalAlbum? {

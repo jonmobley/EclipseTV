@@ -107,5 +107,8 @@
   Show-id script (`prompter-<showId>`, which the Mac reads too); extras are
   `__eclipse.tool.prompter.<scriptId>` with their own `Prompter` record named by that id, so no
   iCloud schema or Mac change was needed. `PrompterScript.showId` is really the script key.
+  Extra script ids are version-8 UUIDs (`ShowToolToken.newExtraPrompterScriptId`), Show ids are
+  version 4, so a planted token can never name a Show's script; a token another Show also lists
+  shows as unresolved. Copy to Show makes a new Prompter with a copy of the text (never shares).
   There is one `PrompterController`, so the TV shows whatever script is bound; opening a
   different Prompter while one is live asks before switching.

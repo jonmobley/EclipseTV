@@ -27,7 +27,15 @@ extension LibraryGridViewController {
             )
             alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
             alert.addAction(UIAlertAction(title: "Switch", style: .default) { [weak self] _ in
-                self?.openPrompterOperator(scriptId: scriptId)
+                guard let self else { return }
+                // Move the live script and its Show together, so ownership (Home live
+                // card, foreign-live mini) follows what the audience now sees.
+                if let showId = self.openShowId {
+                    PrompterController.shared.prepareLive(showId: showId, scriptId: scriptId)
+                    self.reloadLibraryGrid()
+                    self.refreshLiveHeader()
+                }
+                self.openPrompterOperator(scriptId: scriptId)
             })
             topmostPresenter.present(alert, animated: true)
             return
