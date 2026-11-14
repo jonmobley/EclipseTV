@@ -51,10 +51,10 @@ final class TVLibraryStore {
     }
     private(set) var currentId: String?
 
-    /// Ids the connected Apple TV listed in its latest manifest for the active mode.
-    /// Their availability is the TV's to say; the iCloud merge never turns it off.
-    /// Empty until a manifest arrives this launch (a cached list can't tell which
-    /// rows were the TV's), which is fine: offline, the TV can't play them anyway.
+    /// Ids the Apple TV listed in its latest manifest for the active mode. Their
+    /// availability is the TV's to say; the iCloud merge never turns it off.
+    /// Saved per TV and mode beside the cached list, so a Display Mode switch or a
+    /// relaunch still knows which cached rows were the TV's.
     private var tvManifestIds: Set<String> = []
 
     /// Position of each id in `items`, built on first `item(id:)` after a change.
@@ -110,6 +110,7 @@ final class TVLibraryStore {
 
     private let itemsKeyPrefix = "EclipseTV.companion.items."
     private let currentIdKeyPrefix = "EclipseTV.companion.currentId."
+    private let tvIdsKeyPrefix = "EclipseTV.companion.tvIds."
     private let activeTVNameKey = "EclipseTV.companion.activeTVName"
 
     private let baseThumbnailDirectory: URL
@@ -413,6 +414,7 @@ final class TVLibraryStore {
             }
         }
 
+        persistTVManifestIds(manifestIds, mode: mode)
         if mode != activeLibraryMode {
             persistBucket(items: items, currentId: currentId, mode: mode)
             logger.debug("Stored offline manifest for mode \(modeSuffix, privacy: .public)")
@@ -910,6 +912,7 @@ final class TVLibraryStore {
         for mode in EclipseShareProtocol.LibraryMode.allCases {
             UserDefaults.standard.removeObject(forKey: itemsKeyPrefix + hash + "." + mode.rawValue)
             UserDefaults.standard.removeObject(forKey: currentIdKeyPrefix + hash + "." + mode.rawValue)
+            UserDefaults.standard.removeObject(forKey: tvIdsKeyPrefix + hash + "." + mode.rawValue)
         }
         // Legacy unscoped keys
         UserDefaults.standard.removeObject(forKey: itemsKeyPrefix + hash)
@@ -936,6 +939,10 @@ final class TVLibraryStore {
         tvManifestIds = []
         currentId = nil
         guard let itemsKey = itemsKey(), let currentIdKey = currentIdKey() else { return }
+        if let key = tvIdsKey(),
+           let ids = UserDefaults.standard.stringArray(forKey: key) {
+            tvManifestIds = Set(ids)
+        }
         if let data = UserDefaults.standard.data(forKey: itemsKey),
            let decoded = try? JSONDecoder().decode([LibraryItemDTO].self, from: data) {
             items = decoded
@@ -992,7 +999,19 @@ final class TVLibraryStore {
         }
     }
 
+    private func persistTVManifestIds(_ ids: Set<String>,
+                                      mode: EclipseShareProtocol.LibraryMode) {
+        guard let key = tvIdsKey(for: mode) else { return }
+        UserDefaults.standard.set(ids.sorted(), forKey: key)
+    }
+
     // MARK: - Key & Path Helpers
+
+    private func tvIdsKey(for mode: EclipseShareProtocol.LibraryMode? = nil) -> String? {
+        guard let name = activeTVName else { return nil }
+        let m = mode ?? activeLibraryMode
+        return tvIdsKeyPrefix + Self.stableHash(name) + "." + m.rawValue
+    }
 
     private func itemsKey(for mode: EclipseShareProtocol.LibraryMode? = nil) -> String? {
         guard let name = activeTVName else { return nil }
