@@ -544,6 +544,7 @@ final class LibraryThumbnailCell: UICollectionViewCell {
     override func prepareForReuse() {
         super.prepareForReuse()
         resetChrome()
+        setUpNext(false)
         cardView.backgroundColor = .secondarySystemBackground
     }
 

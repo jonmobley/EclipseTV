@@ -71,6 +71,11 @@ extension LibraryGridViewController {
             liveHeader.syncExpandControl()
             syncLiveHeroBrowseChrome()
             syncLiveNoteChrome()
+            // Last: content passes above rewrite the badge, and Blackout must win.
+            liveHeader.setBlackoutHold(
+                isBlackoutHolding,
+                upNext: blackoutCue.flatMap { Self.blackoutCueTitle(for: $0) }
+            )
         }
 
         // Operator: the hero is a follow monitor for the director's program.
@@ -181,12 +186,7 @@ extension LibraryGridViewController {
             return
         }
         if isBlackSelected {
-            liveHeader.configureOverlay(
-                title: "Blackout",
-                systemImage: "moon.fill",
-                fillColor: .black
-            )
-            liveHeader.updatePlayback(PlaybackState())
+            applyBlackoutHoldHeader()
             return
         }
         if isLogoSelected {

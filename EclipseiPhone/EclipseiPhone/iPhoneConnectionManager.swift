@@ -487,7 +487,13 @@ class iPhoneConnectionManager: NSObject {
     /// - Parameter isFill: Framing override (slideshows). Nil uses the item's saved Fit / Fill.
     @MainActor
     @discardableResult
-    func sendPlayRequest(id: String, startAt: Double? = nil, isFill: Bool? = nil) -> Bool {
+    /// - Parameter startsPaused: A video waits paused at `startAt` (Blackout ending).
+    func sendPlayRequest(
+        id: String,
+        startAt: Double? = nil,
+        isFill: Bool? = nil,
+        startsPaused: Bool = false
+    ) -> Bool {
         let framing = MediaFramingStore.framing(forId: id)
         let resolvedFill = isFill
             ?? (framing != nil ? true : MediaFitSettings.isFill(forId: id))
@@ -496,7 +502,8 @@ class iPhoneConnectionManager: NSObject {
                 id: id,
                 isFill: resolvedFill,
                 framing: framing.map { $0.asDTO },
-                startAt: startAt
+                startAt: startAt,
+                startsPaused: startsPaused
             ),
             description: "play request"
         )

@@ -69,7 +69,7 @@ extension LibraryGridViewController {
     }
 
     /// Selects an item as live without the EclipseTV app (AirPlay remember / push).
-    func presentOfflineLive(for item: LibraryItemDTO) {
+    func presentOfflineLive(for item: LibraryItemDTO, videoStartsPaused: Bool = false) {
         if item.isVideo {
             if let localURL = LocalMediaStore.shared.localURL(forId: item.id) {
                 PresentationPrewarmer.shared.prewarm(url: localURL)
@@ -84,7 +84,9 @@ extension LibraryGridViewController {
             item, thumbnail: thumbnail, startAt: startAt
         )
         store.updateCurrentId(item.id)
-        ExternalDisplayManager.shared.present(source)
+        ExternalDisplayManager.shared.present(
+            videoStartsPaused ? source.pausingVideo(at: startAt) : source
+        )
         Haptics.impactLight()
     }
 
