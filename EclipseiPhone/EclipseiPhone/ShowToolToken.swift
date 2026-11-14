@@ -69,7 +69,7 @@ enum ShowToolToken {
 
     static func isTool(_ id: String) -> Bool {
         id == screensaver || id == logo || id == camera || id == ptzCamera
-            || isPrompter(id)
+            || isPrompter(id) || ShowCameraPresetToken.isCameraPreset(id)
     }
 
     // MARK: - Prompters

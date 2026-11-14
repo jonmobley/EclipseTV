@@ -15,6 +15,8 @@ enum ShowGridItem: Equatable {
     case screensaver
     case logo
     case camera
+    /// The phone camera with one saved frame (`ShowCameraPresetToken`).
+    case cameraPreset(frameId: UUID)
     /// Network PTZ camera (CamTailKit): live NDI picture, steer / track / presets.
     case ptzCamera
     case countdown(ShowCountdown)
@@ -50,7 +52,8 @@ enum ShowGridItem: Equatable {
         switch self {
         case .slideshow, .screensaver, .logo, .media, .website, .pdf:
             return true
-        case .camera, .ptzCamera, .livePoll, .countdown, .prompter, .unresolved, .add:
+        case .camera, .cameraPreset, .ptzCamera, .livePoll, .countdown, .prompter,
+             .unresolved, .add:
             return false
         }
     }
@@ -61,6 +64,7 @@ enum ShowGridItem: Equatable {
         case .screensaver: return ShowToolToken.screensaver
         case .logo: return ShowToolToken.logo
         case .camera: return ShowToolToken.camera
+        case .cameraPreset(let frameId): return ShowCameraPresetToken.token(for: frameId)
         case .ptzCamera: return ShowToolToken.ptzCamera
         case .prompter(let token, _): return token
         case .livePoll(let item): return ShowLivePollToken.token(for: item.id)

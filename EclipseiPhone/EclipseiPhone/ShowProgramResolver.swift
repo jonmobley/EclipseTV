@@ -22,6 +22,8 @@ struct ShowProgramState {
     var isOverlayLive = false
     /// Camera tile owns output — the live feed or a parked quick-change still.
     var isCameraTileLive = false
+    /// Overlay frame on the live camera, so a Camera Preset tile can light up.
+    var cameraFrameId: UUID?
     /// The network PTZ camera's picture is on program.
     var isPTZCameraLive = false
     var countdownId: UUID?
@@ -75,7 +77,7 @@ enum ShowProgramResolver {
     /// still up is the newer selection.
     private static func resolveOverlay(_ state: ShowProgramState) -> ShowProgram? {
         if state.isCameraTileLive {
-            return ShowProgram(kind: .camera)
+            return ShowProgram(kind: .camera, itemId: state.cameraFrameId?.uuidString)
         }
         if state.isPTZCameraLive {
             return ShowProgram(kind: .ptzCamera)

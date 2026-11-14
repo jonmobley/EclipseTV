@@ -141,16 +141,23 @@ extension CameraLiveViewController {
         }
     }
 
-    /// Hold a quick-change tile for Replace / Remove, as on the ribbon.
+    /// Hold a quick-change tile for Replace / Remove, or a frame to save it as a
+    /// Camera Preset, as on the ribbons.
     @objc func thumbGridLongPressed(_ gesture: UILongPressGestureRecognizer) {
         guard gesture.state == .began else { return }
         let point = gesture.location(in: thumbGridView)
         guard let indexPath = thumbGridView.indexPathForItem(at: point) else { return }
         let items = thumbGridItems
-        guard items.indices.contains(indexPath.item),
-              case .still(.cutaway(let id)) = items[indexPath.item]
-        else { return }
-        presentCutawayActions(id: id, anchor: thumbGridView.cellForItem(at: indexPath))
+        guard items.indices.contains(indexPath.item) else { return }
+        let anchor = thumbGridView.cellForItem(at: indexPath)
+        switch items[indexPath.item] {
+        case .still(.cutaway(let id)):
+            presentCutawayActions(id: id, anchor: anchor)
+        case .frame(let id):
+            presentFramePresetActions(frameId: id, anchor: anchor)
+        default:
+            break
+        }
     }
 }
 

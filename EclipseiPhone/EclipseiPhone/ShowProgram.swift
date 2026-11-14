@@ -23,7 +23,8 @@ struct ShowProgram: Equatable {
     let kind: ShowLiveItemKind
 
     /// Member id that is live (for the Prompter, its script id), or nil for a global
-    /// tool (Camera, Background, Screensaver, Blackout).
+    /// tool (Background, Screensaver, Blackout). For Camera it is the overlay frame on
+    /// the feed, if any, so a Camera Preset tile for that frame can be the one that lights up.
     let itemId: String?
 
     /// Creates a resolved program value.
@@ -54,7 +55,11 @@ extension ShowProgram {
     /// Whether `item`'s tile is the one that is live.
     ///
     /// Blackout matches nothing: it is header chrome, not a card.
-    func matches(_ item: ShowGridItem) -> Bool {
+    ///
+    /// - Parameter cameraPresetFrameIds: Frames that have a Camera Preset tile on
+    ///   the grid. When the live camera wears one of them, the preset is live and
+    ///   the plain Camera tile is not.
+    func matches(_ item: ShowGridItem, cameraPresetFrameIds: Set<String> = []) -> Bool {
         switch item {
         case .slideshow(let show):
             return kind == .slideshow && itemId == show.id.uuidString
@@ -73,7 +78,11 @@ extension ShowProgram {
         case .logo:
             return kind == .logo
         case .camera:
-            return kind == .camera
+            guard kind == .camera else { return false }
+            guard let itemId else { return true }
+            return !cameraPresetFrameIds.contains(itemId)
+        case .cameraPreset(let frameId):
+            return kind == .camera && itemId == frameId.uuidString
         case .ptzCamera:
             return kind == .ptzCamera
         case .prompter(_, let scriptId):

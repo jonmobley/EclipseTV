@@ -290,6 +290,47 @@ final class LocalAlbumStore {
         scheduleShowSaveIfNeeded(albumId)
     }
 
+    /// Adds a Camera Preset tile for `frameId`, right after the Camera tile and any
+    /// presets already beside it (or at the end when the Show has no Camera tile).
+    ///
+    /// - Returns: false when the Show is missing or already has this preset.
+    @discardableResult
+    func addCameraPreset(frameId: UUID, albumId: UUID) -> Bool {
+        guard let index = albums.firstIndex(where: { $0.id == albumId }) else { return false }
+        materializeSurface(at: index)
+        let token = ShowCameraPresetToken.token(for: frameId)
+        var surface = albums[index].surfaceIds ?? []
+        guard !surface.contains(token) else { return false }
+        surface.insert(token, at: Self.cameraPresetInsertIndex(in: surface))
+        SyncTombstones.markAdded(token, in: &albums[index].deletedSurfaceIds)
+        albums[index].surfaceIds = LocalAlbum.sanitizedSurface(
+            surface, itemIds: albums[index].itemIds
+        )
+        persist(changedAlbumId: albumId)
+        scheduleShowSaveIfNeeded(albumId)
+        return true
+    }
+
+    /// Drops every Camera Preset for `frameId` (its frame was deleted).
+    func removeCameraPresets(frameId: UUID) {
+        let token = ShowCameraPresetToken.token(for: frameId)
+        for album in albums where album.surfaceIds?.contains(token) == true {
+            hideTool(token, albumId: album.id)
+        }
+    }
+
+    /// Where a new preset goes: after the Camera tile and the presets that follow it.
+    nonisolated static func cameraPresetInsertIndex(in surface: [String]) -> Int {
+        guard var index = surface.firstIndex(of: ShowToolToken.camera) else {
+            return surface.count
+        }
+        index += 1
+        while index < surface.count, ShowCameraPresetToken.isCameraPreset(surface[index]) {
+            index += 1
+        }
+        return index
+    }
+
     /// Replaces the Show grid order (tools + members + slideshows).
     /// Syncs `itemIds` to member order; slideshow tokens stay on the surface only.
     func reorderSurface(_ surfaceIds: [String], albumId: UUID) {

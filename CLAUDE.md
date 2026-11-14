@@ -116,3 +116,10 @@
   9:16 column on the TV (`PrompterController.isVerticalOnLandscapeDisplay`); the menu is hidden in Vertical Display Mode.
   Use `PrompterController.isVertical` / `canvasAspectRatio` for prompter layout, never `ExternalOutputSettings.isVerticalMode`.
   The blue reading-guide lines were removed (2026-11-13, owner found them confusing); the line read sits mid-stage.
+  The blue lines are the reading guide (the line being read), on purpose.
+- Camera Presets (2026-11-13): a Show tile = phone camera + one saved frame. Stored only as the surface token
+  `__eclipse.tool.cameraPreset.<frameUUID>` (`ShowCameraPresetToken`, counts as a tool), so it syncs with the Show and
+  older builds keep it. Saved from the Camera tile ⋯ → Save as Camera Preset, or by holding a frame in full-screen Camera.
+  While the camera is live, `ShowProgram.itemId` carries the selected frame id so the matching preset (not the plain
+  Camera tile) gets the live stroke; the plain Camera tile drops a preset's frame when tapped. Deleting a frame removes its
+  presets. Tiles show a still (last camera picture + frame): the one live preview layer belongs to the Camera tile.

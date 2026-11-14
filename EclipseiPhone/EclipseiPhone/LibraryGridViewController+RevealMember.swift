@@ -86,6 +86,8 @@ extension LibraryGridViewController {
                 return id == ShowToolToken.logo
             case .camera:
                 return id == ShowToolToken.camera
+            case .cameraPreset(let frameId):
+                return id == ShowCameraPresetToken.token(for: frameId)
             case .ptzCamera:
                 return id == ShowToolToken.ptzCamera
             case .prompter(let token, _):

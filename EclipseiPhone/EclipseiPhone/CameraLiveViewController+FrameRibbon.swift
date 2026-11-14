@@ -20,6 +20,7 @@ extension CameraLiveViewController: UICollectionViewDataSource, UICollectionView
             forCellWithReuseIdentifier: CameraFrameRibbonCell.reuseId
         )
         view.addSubview(frameRibbonView)
+        installFramePresetLongPress()
         reloadFrameRibbon()
     }
 

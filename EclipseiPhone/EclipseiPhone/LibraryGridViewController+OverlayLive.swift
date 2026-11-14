@@ -18,6 +18,15 @@ extension LibraryGridViewController {
     /// A remote operator never presents locally, so its tile is never live here and
     /// the tap falls through to `presentCameraLiveOnOutput` to command the director.
     func presentCameraFromTile() {
+        // After a Camera Preset, the plain tile means the plain feed: drop the
+        // preset's frame first. Live already, that swap is the whole tap.
+        if !ShowLiveSession.shared.isRemoteOperator, isCameraWearingPresetFrame {
+            guard clearCameraPresetFrameForPlainCamera() else { return }
+            if ExternalDisplayManager.shared.isCameraTileLive {
+                Haptics.impactLight()
+                return
+            }
+        }
         switch CameraStillRibbon.cameraTileTap(
             isCameraTileLive: ExternalDisplayManager.shared.isCameraTileLive
         ) {

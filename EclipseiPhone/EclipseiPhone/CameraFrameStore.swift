@@ -209,6 +209,9 @@ final class CameraFrameStore {
         saveIndex()
         NotificationCenter.default.post(name: Self.didChangeNotification, object: self)
         guard !EclipseSyncController.shared.isApplyingRemote else { return }
+        // A preset without its frame is a dead tile. A remote delete skips this:
+        // the device that deleted the frame already synced its Shows.
+        LocalAlbumStore.shared.removeCameraPresets(frameId: id)
         markFrameNeedsUpload(id: id)
         markSettingsNeedsUpload(orientation: frame.orientation)
         EclipseSyncController.shared.backend.scheduleCameraFrameDelete(id: id)
