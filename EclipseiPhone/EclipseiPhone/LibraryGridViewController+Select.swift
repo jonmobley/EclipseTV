@@ -228,11 +228,6 @@ extension LibraryGridViewController {
         for id in ids {
             if let sourceShowId = openShowId,
                let sourceScriptId = ShowToolToken.prompterScriptId(from: id, showId: sourceShowId) {
-                // Same gate as the grid: a tile another Show also lists is shown as
-                // unresolved, and its script is not ours to read or copy.
-                if LocalAlbumStore.shared.isForeignPrompterScript(sourceScriptId, showId: sourceShowId) {
-                    continue
-                }
                 // A copied Prompter gets its own script with the same text, so editing
                 // one Show's copy never changes the other's.
                 let text = PrompterScriptStore.shared.script(forShowId: sourceScriptId)
@@ -243,6 +238,9 @@ extension LibraryGridViewController {
                 }
             } else if ShowToolToken.isTool(id) {
                 LocalAlbumStore.shared.showTool(id, albumId: albumId)
+            } else if id.hasPrefix(ShowToolToken.prefix) {
+                // A tool this build doesn't know (or a malformed one): never a media member.
+                continue
             } else if let countdownId = ShowCountdownToken.countdownId(from: id),
                       let source = CountdownStore.shared.countdown(id: countdownId) {
                 _ = try? CountdownStore.shared.create(

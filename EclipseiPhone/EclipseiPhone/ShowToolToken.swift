@@ -5,6 +5,7 @@
 //  Copyright © 2026 Moxie LLC. All rights reserved.
 //
 
+import CryptoKit
 import Foundation
 
 /// Reserved ids for per-Show tool tiles in `LocalAlbum.surfaceIds`.
@@ -19,9 +20,9 @@ enum ShowToolToken {
     /// The Show's first teleprompter: a scrolling script for the presenter. Its script
     /// is keyed by the Show id (the `prompter-<showId>` record the Mac also reads).
     static let prompter = "__eclipse.tool.prompter"
-    /// Further Prompters in the same Show: `__eclipse.tool.prompter.<scriptId>`, each
-    /// with its own script keyed by that id. Older builds keep these tokens through
-    /// sync because they carry `prefix`.
+    /// Further Prompters in the same Show: `__eclipse.tool.prompter.<nonce>`, each with
+    /// its own script keyed by `extraPrompterScriptId(nonce:showId:)`. Older builds keep
+    /// these tokens through sync because they carry `prefix`.
     static let extraPrompterPrefix = prompter + "."
 
     /// Every reserved tool id starts with this. Unknown ids with it (tools added by a
@@ -75,17 +76,36 @@ enum ShowToolToken {
 
     /// Whether `id` is any Prompter tile (the first one or an extra one).
     static func isPrompter(_ id: String) -> Bool {
-        id == prompter || extraPrompterScriptId(from: id) != nil
+        id == prompter || extraPrompterNonce(from: id) != nil
     }
 
-    /// A fresh extra-Prompter script id. It is a version-8 UUID, while Shows (on
-    /// every Eclipse app) get random version-4 ids from `UUID()`, so an extra token
-    /// can never name a Show's own (first-Prompter) script, even a Show this device
-    /// hasn't synced yet.
-    static func newExtraPrompterScriptId() -> UUID {
-        var bytes = UUID().uuid
-        bytes.6 = (bytes.6 & 0x0F) | 0x80
-        return UUID(uuid: bytes)
+    /// Token for a new extra Prompter: a random nonce, not the script id.
+    static func newExtraPrompterToken() -> String {
+        extraPrompterPrefix + UUID().uuidString
+    }
+
+    /// The nonce in an extra Prompter token, or nil for any other id.
+    static func extraPrompterNonce(from id: String) -> UUID? {
+        guard id.hasPrefix(extraPrompterPrefix) else { return nil }
+        return UUID(uuidString: String(id.dropFirst(extraPrompterPrefix.count)))
+    }
+
+    /// The script id of the extra Prompter with `nonce` in Show `showId`.
+    ///
+    /// Derived from both, so the script belongs to that Show by construction: the
+    /// same token on another Show (planted through a synced or shared surface, or
+    /// left after its own Show removed the tile) names a different, empty script and
+    /// can never read, edit, copy or delete this one. The result is a version-8 UUID;
+    /// Show ids are random version-4 ids, so it is never a Show's own script either.
+    static func extraPrompterScriptId(nonce: UUID, showId: UUID) -> UUID {
+        let digest = SHA256.hash(data: Data("eclipse.prompter|\(showId.uuidString)|\(nonce.uuidString)".utf8))
+        var bytes = Array(digest.prefix(16))
+        bytes[6] = (bytes[6] & 0x0F) | 0x80
+        bytes[8] = (bytes[8] & 0x3F) | 0x80
+        return UUID(uuid: (
+            bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
+            bytes[8], bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15]
+        ))
     }
 
     /// Whether `id` has the extra-Prompter (version 8) shape.
@@ -93,30 +113,11 @@ enum ShowToolToken {
         id.uuid.6 & 0xF0 == 0x80
     }
 
-    /// Token for an extra Prompter whose script is keyed by `scriptId`.
-    static func extraPrompterToken(scriptId: UUID) -> String {
-        extraPrompterPrefix + scriptId.uuidString
-    }
-
-    /// The script id in an extra Prompter token, or nil for any other id (including
-    /// one whose id isn't extra-shaped, e.g. planted with a Show's id).
-    static func extraPrompterScriptId(from id: String) -> UUID? {
-        guard id.hasPrefix(extraPrompterPrefix),
-              let uuid = UUID(uuidString: String(id.dropFirst(extraPrompterPrefix.count))),
-              isExtraPrompterScriptId(uuid)
-        else { return nil }
-        return uuid
-    }
-
     /// The `PrompterScriptStore` key behind a Prompter token in Show `showId`:
-    /// the Show id for the first Prompter, its own id for an extra one.
+    /// the Show id for the first Prompter, derived from Show and nonce for an extra one.
     static func prompterScriptId(from id: String, showId: UUID) -> UUID? {
-        id == prompter ? showId : extraPrompterScriptId(from: id)
-    }
-
-    /// The surface token for the Prompter whose script is keyed by `scriptId`.
-    static func prompterToken(scriptId: UUID, showId: UUID) -> String {
-        scriptId == showId ? prompter : extraPrompterToken(scriptId: scriptId)
+        if id == prompter { return showId }
+        return extraPrompterNonce(from: id).map { extraPrompterScriptId(nonce: $0, showId: showId) }
     }
 
     /// Script ids of every Prompter on `surfaceIds` (Show `showId`), in grid order.

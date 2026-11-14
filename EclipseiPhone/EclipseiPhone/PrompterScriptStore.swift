@@ -12,7 +12,7 @@ import os.log
 ///
 /// `showId` is the script's key: the Show's id for a Show's first Prompter (the
 /// `prompter-<showId>` record the Mac reads too), or the tile's own id for any extra
-/// Prompter in that Show (`ShowToolToken.extraPrompterToken`). The name stays
+/// Prompter in that Show (`ShowToolToken.extraPrompterScriptId(nonce:showId:)`). The name stays
 /// `showId` because it is the stored and synced field name.
 ///
 /// `script == ""` means someone cleared it; no entry at all means no device has

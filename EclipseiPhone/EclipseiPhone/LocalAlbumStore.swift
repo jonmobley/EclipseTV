@@ -31,12 +31,7 @@ final class LocalAlbumStore {
         }
     }
 
-    private(set) var albums: [LocalAlbum] = [] {
-        didSet { extraPrompterListingsCache = nil }
-    }
-
-    /// Extra Prompter script id → Shows listing it; rebuilt lazily after any change.
-    private var extraPrompterListingsCache: [UUID: Set<UUID>]?
+    private(set) var albums: [LocalAlbum] = []
 
     private let defaults: UserDefaults
     private let itemsKey = "EclipseTV.localAlbums.items"
@@ -161,7 +156,8 @@ final class LocalAlbumStore {
         LivePollStore.shared.deleteAll(forShowId: id)
         PrompterScriptStore.shared.deleteAll(
             forShowId: id,
-            extraScriptIds: Self.ownedExtraPrompterScriptIds(of: removed, among: albums)
+            // Derived from this Show's id, so every one is this Show's own script.
+            extraScriptIds: ShowToolToken.prompterScriptIds(in: removed?.surfaceIds ?? [], showId: id)
         )
         for itemId in removed?.itemIds ?? [] {
             if let pageId = UUID(uuidString: itemId) {
@@ -538,52 +534,6 @@ final class LocalAlbumStore {
     }
 
     /// Album with `id`, if any.
-    /// Extra Prompter script ids `show` may delete: never another Show's id (its
-    /// first Prompter's script) or a script another remaining Show also lists.
-    ///
-    /// Surfaces sync from other devices and, for shared Shows, other people, so a
-    /// planted token must not reach scripts this Show doesn't own.
-    static func ownedExtraPrompterScriptIds(of show: LocalAlbum?, among others: [LocalAlbum]) -> [UUID] {
-        guard let show else { return [] }
-        var foreign = Set<UUID>()
-        for other in others where other.id != show.id {
-            foreign.insert(other.id)
-            foreign.formUnion(ShowToolToken.prompterScriptIds(in: other.surfaceIds ?? [], showId: other.id))
-        }
-        return ShowToolToken.prompterScriptIds(in: show.surfaceIds ?? [], showId: show.id)
-            .filter { $0 != show.id && !foreign.contains($0) }
-    }
-
-    /// Whether a Show other than `showId` also lists the extra Prompter `scriptId`.
-    ///
-    /// Each extra script belongs to one Show (Copy to Show makes a new one), so a
-    /// second listing can only be planted through a synced or shared surface; such a
-    /// tile must not open or edit the other Show's script. Cheap: cached per change.
-    func isExtraPrompterListedElsewhere(_ scriptId: UUID, showId: UUID) -> Bool {
-        let listings: [UUID: Set<UUID>]
-        if let cached = extraPrompterListingsCache {
-            listings = cached
-        } else {
-            var built: [UUID: Set<UUID>] = [:]
-            for album in albums {
-                for id in album.surfaceIds ?? [] {
-                    if let extra = ShowToolToken.extraPrompterScriptId(from: id) {
-                        built[extra, default: []].insert(album.id)
-                    }
-                }
-            }
-            extraPrompterListingsCache = built
-            listings = built
-        }
-        return listings[scriptId]?.contains { $0 != showId } ?? false
-    }
-
-    /// Whether the Prompter script `scriptId` on Show `showId` belongs to another
-    /// Show: the one gate for every path that reads, edits or copies it.
-    func isForeignPrompterScript(_ scriptId: UUID, showId: UUID) -> Bool {
-        scriptId != showId && isExtraPrompterListedElsewhere(scriptId, showId: showId)
-    }
-
     /// Adds a Prompter tile to Show `showId` and returns its token and script id.
     ///
     /// Uses the Show's first-Prompter slot when it is free and its kept script (from a
@@ -594,10 +544,10 @@ final class LocalAlbumStore {
         guard let album = album(id: showId) else { return nil }
         let firstFree = !album.resolvedSurfaceIds.contains(ShowToolToken.prompter)
         let keptScript = PrompterScriptStore.shared.hasScript(forShowId: showId)
-        let scriptId = firstFree && (reuseKeptScript || !keptScript)
-            ? showId
-            : ShowToolToken.newExtraPrompterScriptId()
-        let token = ShowToolToken.prompterToken(scriptId: scriptId, showId: showId)
+        let token = firstFree && (reuseKeptScript || !keptScript)
+            ? ShowToolToken.prompter
+            : ShowToolToken.newExtraPrompterToken()
+        guard let scriptId = ShowToolToken.prompterScriptId(from: token, showId: showId) else { return nil }
         showTool(token, albumId: showId)
         return (token, scriptId)
     }
