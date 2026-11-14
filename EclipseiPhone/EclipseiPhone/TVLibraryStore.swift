@@ -51,6 +51,12 @@ final class TVLibraryStore {
     }
     private(set) var currentId: String?
 
+    /// Ids the connected Apple TV listed in its latest manifest for the active mode.
+    /// Their availability is the TV's to say; the iCloud merge never turns it off.
+    /// Empty until a manifest arrives this launch (a cached list can't tell which
+    /// rows were the TV's), which is fine: offline, the TV can't play them anyway.
+    private var tvManifestIds: Set<String> = []
+
     /// Position of each id in `items`, built on first `item(id:)` after a change.
     /// The Show grid resolves every tile by id several times per tile while
     /// scrolling; a linear `items.first(where:)` there made big Shows hitch.
@@ -415,6 +421,7 @@ final class TVLibraryStore {
 
         self.items = items
         self.currentId = currentId
+        tvManifestIds = manifestIds
         mergePendingUploads()
         mergeCaptures()
         mergeImportedMedia()
@@ -526,14 +533,14 @@ final class TVLibraryStore {
         return mergeCloudItems(dtos)
     }
 
-    /// Adds iCloud rows the list doesn't have and marks existing rows playable once
-    /// this phone has their file. Returns whether anything changed.
+    /// Adds iCloud rows the list doesn't have and keeps existing rows' `isAvailable`
+    /// in step with whether this phone has the file. Returns whether anything changed.
     ///
     /// Rows merged while their file was still in iCloud kept `isAvailable == false`
     /// after the download finished, so the tile said "Downloading…" forever and a tap
-    /// never played it. Availability is only ever turned on here, never off: a row
-    /// with the same id may come from the Apple TV's manifest, and the TV playing a
-    /// file says nothing about whether this phone has a copy.
+    /// never played it; and a removed download must go back to "In iCloud". Rows the
+    /// Apple TV listed are only ever turned on, never off: the TV playing a file says
+    /// nothing about whether this phone has a copy.
     private func mergeCloudItems(_ dtos: [LibraryItemDTO]) -> Bool {
         var indexById: [String: Int] = [:]
         for (index, item) in items.enumerated() where indexById[item.id] == nil {
@@ -542,7 +549,11 @@ final class TVLibraryStore {
         var changed = false
         for dto in dtos {
             if let index = indexById[dto.id] {
-                if items[index].isAvailable == false, dto.isAvailable != false {
+                let current = items[index].isAvailable
+                let gainsFile = current == false && dto.isAvailable != false
+                let losesFile = current != false && dto.isAvailable == false
+                    && !tvManifestIds.contains(dto.id)
+                if gainsFile || losesFile {
                     items[index].isAvailable = dto.isAvailable
                     changed = true
                 }
@@ -909,6 +920,7 @@ final class TVLibraryStore {
 
         guard tvName == activeTVName else { return }
         items = []
+        tvManifestIds = []
         currentId = nil
         thumbnails.removeAll()
         pendingDiskLoads.removeAll()
@@ -921,6 +933,7 @@ final class TVLibraryStore {
 
     private func loadPersistedManifest() {
         items = []
+        tvManifestIds = []
         currentId = nil
         guard let itemsKey = itemsKey(), let currentIdKey = currentIdKey() else { return }
         if let data = UserDefaults.standard.data(forKey: itemsKey),
