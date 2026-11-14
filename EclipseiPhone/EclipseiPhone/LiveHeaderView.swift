@@ -88,6 +88,12 @@ final class LiveHeaderView: UIView {
     /// When true, amber stroke (and LIVE LOCKED badge) mark locked live output.
     /// Read by collapse chrome so content updates don't wipe the thicker lock stroke.
     private(set) var isOutputLocked = false
+    /// Blackout is holding the screen: the picture dims and the badge reads BLACKOUT.
+    private(set) var isBlackoutHold = false
+    /// Shade over the held picture while Blackout is on (never takes touches).
+    var blackoutDimView: UIView?
+    /// "Up Next: …" beside the badge while Blackout has a cue.
+    var blackoutUpNextLabel: PaddedLabel?
 
     /// True once the hero reads as a trailing mini preview rather than a full hero.
     var isCompactPresentation: Bool { collapseProgress > 0.5 }
@@ -109,7 +115,7 @@ final class LiveHeaderView: UIView {
     var onSlideshowSwipe: ((Int) -> Void)?
     /// Swipe on the hero while a Show still is live: `+1` next, `-1` previous.
     var onLibraryBrowse: ((Int) -> Void)?
-    /// Toggles `showRibbonWhenLive` for the active Slideshow from the hero.
+    /// Hides or shows the active Slideshow's ribbon for this session, from the hero.
     var onToggleSlideshowRibbon: (() -> Void)?
     /// Toggles Fit / Fill for the live still or slideshow from the hero.
     var onToggleScreenFit: (() -> Void)?
@@ -663,7 +669,11 @@ final class LiveHeaderView: UIView {
     }
 
     private func applyOutputLockChrome() {
-        if isOutputLocked {
+        if isBlackoutHold {
+            layer.borderColor = UIColor.separator.cgColor
+            liveBadge.backgroundColor = .black
+            liveBadge.text = "BLACKOUT"
+        } else if isOutputLocked {
             layer.borderColor = UIColor.systemOrange.cgColor
             liveBadge.backgroundColor = .systemOrange
             liveBadge.text = "LIVE LOCKED"
@@ -674,6 +684,86 @@ final class LiveHeaderView: UIView {
         }
         // Width is owned by collapse chrome (counter-scales with the hero transform).
         applyCollapseChrome()
+    }
+
+    /// Dims the held picture and swaps the badge to BLACKOUT while Blackout holds.
+    ///
+    /// Re-applied after every hero refresh: content updates rewrite the badge's
+    /// visibility (Practice hides it), and Blackout must always say so.
+    func setBlackoutHold(_ holding: Bool, upNext: String?) {
+        if isBlackoutHold != holding {
+            isBlackoutHold = holding
+            applyOutputLockChrome()
+        }
+        if holding {
+            liveBadge.isHidden = false
+            installBlackoutDimIfNeeded()
+        } else {
+            blackoutDimView?.removeFromSuperview()
+            blackoutDimView = nil
+        }
+        applyBlackoutUpNext(holding ? upNext : nil)
+        liveBadge.layer.borderWidth = holding ? 1 : 0
+        liveBadge.layer.borderColor = UIColor.white.withAlphaComponent(0.6).cgColor
+        guard holding else { return }
+        if let dim = blackoutDimView { bringSubviewToFront(dim) }
+        bringSubviewToFront(liveBadge)
+        if let label = blackoutUpNextLabel { bringSubviewToFront(label) }
+        bringSubviewToFront(controls)
+        bringExpandControlToFront()
+        let base = accessibilityLabel ?? ""
+        if !base.hasPrefix("Blackout") {
+            accessibilityLabel = upNext.map { "Blackout on, up next \($0). \(base)" }
+                ?? "Blackout on. \(base)"
+        }
+    }
+
+    private func installBlackoutDimIfNeeded() {
+        guard blackoutDimView == nil else { return }
+        let dim = UIView()
+        dim.backgroundColor = UIColor.black.withAlphaComponent(0.55)
+        dim.isUserInteractionEnabled = false
+        dim.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(dim)
+        NSLayoutConstraint.activate([
+            dim.topAnchor.constraint(equalTo: topAnchor),
+            dim.bottomAnchor.constraint(equalTo: bottomAnchor),
+            dim.leadingAnchor.constraint(equalTo: leadingAnchor),
+            dim.trailingAnchor.constraint(equalTo: trailingAnchor),
+        ])
+        blackoutDimView = dim
+    }
+
+    private func applyBlackoutUpNext(_ title: String?) {
+        guard let title else {
+            blackoutUpNextLabel?.removeFromSuperview()
+            blackoutUpNextLabel = nil
+            return
+        }
+        let label: PaddedLabel
+        if let existing = blackoutUpNextLabel {
+            label = existing
+        } else {
+            label = PaddedLabel()
+            label.font = UIFontMetrics(forTextStyle: .caption1)
+                .scaledFont(for: .systemFont(ofSize: 13, weight: .semibold))
+            label.adjustsFontForContentSizeCategory = true
+            label.textColor = .white
+            label.backgroundColor = UIColor.black.withAlphaComponent(0.6)
+            label.layer.cornerRadius = 6
+            label.layer.masksToBounds = true
+            label.lineBreakMode = .byTruncatingTail
+            label.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(label)
+            NSLayoutConstraint.activate([
+                label.leadingAnchor.constraint(equalTo: liveBadge.trailingAnchor, constant: 8),
+                label.centerYAnchor.constraint(equalTo: liveBadge.centerYAnchor),
+                label.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -56),
+            ])
+            blackoutUpNextLabel = label
+        }
+        label.text = "Up Next: \(title)"
+        label.alpha = max(0, 1 - collapseProgress * 2)
     }
 
     // MARK: - Crossfade
@@ -716,10 +806,11 @@ final class LiveHeaderView: UIView {
         bringSubviewToFront(controls)
         transitionSnapshot = snapshot
 
-        // Brief hold so thumbnail/layout can settle under the snapshot.
+        // No hold before the fade: the new content is already laid out under the
+        // snapshot, and the 0.08 s pause read as lag after a tap.
         UIView.animate(
             withDuration: ContentTransitionStyle.crossfadeDuration,
-            delay: 0.08,
+            delay: 0,
             options: [.curveEaseInOut, .allowUserInteraction]
         ) {
             snapshot.alpha = 0

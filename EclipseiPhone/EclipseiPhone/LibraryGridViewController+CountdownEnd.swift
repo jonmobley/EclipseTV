@@ -87,7 +87,7 @@ extension LibraryGridViewController {
             presentBlackAfterCountdown()
             return
         }
-        presentAfterCountdown(next)
+        presentLiveUnattended(next)
         reloadGridIfSafe()
     }
 
@@ -95,7 +95,9 @@ extension LibraryGridViewController {
     ///
     /// Deliberately not `handleShowModeTap`: that opens phone Preview for media
     /// when tapped, which would leave the projector on the expired clock.
-    private func presentAfterCountdown(_ item: ShowGridItem) {
+    /// Also how a cued item leaves Blackout, where `videoStartsPaused` holds a
+    /// video on its first frame so nothing plays by itself.
+    func presentLiveUnattended(_ item: ShowGridItem, videoStartsPaused: Bool = false) {
         isBlackSelected = false
         isLogoSelected = false
         isScreensaverSelected = false
@@ -108,7 +110,7 @@ extension LibraryGridViewController {
             presentLogoLive()
         case .media(let media):
             SlideshowPlaybackController.shared.stop()
-            presentMedia(media)
+            presentMedia(media, videoStartsPaused: videoStartsPaused)
         case .website(let page):
             presentWebPageLive(page)
         case .pdf(let doc):

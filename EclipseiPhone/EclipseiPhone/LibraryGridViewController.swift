@@ -25,8 +25,10 @@ final class LibraryGridViewController: UIViewController {
     /// Invoked when the user chooses to re-send a purged item from Photos. The host VC
     /// owns the picker flow and the `pendingRestoreId` handshake.
     var onRequestResend: ((String) -> Void)?
-    /// Invoked when the user chooses Edit — host opens the crop tool for that item.
+    /// Invoked when the user chooses Crop — host opens the crop tool for that item.
     var onRequestEdit: ((String) -> Void)?
+    /// Invoked when the user chooses Trim — host opens the video trimmer.
+    var onRequestTrim: ((String) -> Void)?
     /// Invoked when the user chooses Thumbnail — host opens the video frame picker.
     var onRequestVideoThumbnail: ((String) -> Void)?
     /// Invoked when the Camera phone viewer should open (⋯ Camera Controls).
@@ -101,6 +103,11 @@ final class LibraryGridViewController: UIViewController {
 
     /// True while Black is the selected presentation source.
     var isBlackSelected = false
+    /// What goes live when Blackout ends, picked from ⋯ › Show After Blackout.
+    /// Nil brings back whatever was live before Blackout.
+    var blackoutCue: ShowGridItem?
+    /// Slideshow that was running when Blackout started, resumed when it ends.
+    var blackoutHeldSlideshow: BlackoutHeldSlideshow?
     /// True while Background is the selected presentation source.
     var isLogoSelected = false
     /// True while Screensaver is the selected presentation source.
@@ -247,7 +254,7 @@ final class LibraryGridViewController: UIViewController {
               let id = SlideshowPlaybackController.shared.activeSlideshowId,
               let show = SlideshowStore.shared.slideshow(id: id),
               show.showId == openShowId,
-              show.showRibbonWhenLive else { return false }
+              !ribbonHiddenSlideshowIds.contains(show.id) else { return false }
         return !SlideshowPlaybackController.shared.activeSlideIds.isEmpty
     }
 
@@ -404,6 +411,16 @@ final class LibraryGridViewController: UIViewController {
     var liveNoteTopConstraint: NSLayoutConstraint?
     /// Measured note-card height (0 when parked).
     var liveNoteHeightConstraint: NSLayoutConstraint?
+
+    /// A full grid reload is queued for after the current frame (`scheduleGridReloadAfterFrame`).
+    var isGridReloadScheduled = false
+
+    /// Slideshows whose live ribbon the operator hid from the hero, this session.
+    ///
+    /// The ribbon shows for every live slideshow; hiding it is a choice for the
+    /// current session, not a saved per-slideshow switch (the old "Show Ribbon When
+    /// Live" setting defaulted to off and was easy to lose track of).
+    var ribbonHiddenSlideshowIds: Set<UUID> = []
 
     /// Last in-grid / docked ribbon placement. Slide advances must not rebuild this.
     var lastSlideshowRibbonChrome: SlideshowRibbonChrome?
@@ -703,6 +720,13 @@ final class LibraryGridViewController: UIViewController {
             TVLibraryStore.shared.refreshMergedCaptures()
             self?.reloadGridIfSafe()
             self?.updateEmptyState()
+        }
+        // Imported photos and videos change state when they download from iCloud
+        // ("In iCloud" → "Downloading…" → playable); without this the tile kept its
+        // old pill until something else redrew the grid.
+        observe(ImportedMediaStore.didChangeNotification) { [weak self] _ in
+            TVLibraryStore.shared.refreshMergedImports()
+            self?.reloadGridIfSafe()
         }
         observe(EclipseSyncController.statusDidChangeNotification) { [weak self] _ in
             self?.syncStatusBanner.reload()

@@ -69,7 +69,7 @@ struct CaptureRecord: Equatable, Identifiable, Hashable {
             duration: duration,
             isLooping: isVideo ? false : nil,
             isMuted: isVideo ? false : nil,
-            isAvailable: syncState != .remoteOnly
+            isAvailable: syncState.hasLocalFile
         )
     }
 }

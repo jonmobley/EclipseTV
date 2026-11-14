@@ -46,6 +46,7 @@ extension LibraryGridViewController {
             ? CountdownController.shared.liveCountdownId
             : nil
         state.isPrompterLive = mgr.isPrompterLive
+        state.prompterScriptId = PrompterController.shared.liveScriptId
         state.questPollMembershipId = mgr.isQuestPollLive ? poll.membershipId : nil
         state.webPageId = mgr.isWebLive ? mgr.liveWebPageId : nil
         state.webVideoPageId = mgr.isWebVideoLive ? mgr.liveWebVideoPageId : nil

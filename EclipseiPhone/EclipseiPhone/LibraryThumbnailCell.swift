@@ -274,6 +274,7 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         }
 
         let isUnavailable = (item.isAvailable == false)
+        let unavailableReason = UnavailableMediaReason.of(item)
 
         imageView.alpha = isUnavailable ? 0.35 : 1.0
         placeholderIcon.isHidden = image != nil
@@ -291,6 +292,9 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         }
 
         unavailableBadge.isHidden = !isUnavailable
+        if isUnavailable {
+            unavailableBadge.text = unavailableReason?.pillTitle ?? "Unavailable"
+        }
         applyOverlayTitle(forId: item.id)
         setLive(isLive && !isUnavailable, isLocked: isLocked)
         var a11y = MediaTitleStore.title(forId: item.id) ?? item.name
@@ -302,7 +306,13 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         } else {
             a11y += ", photo"
         }
-        if isUnavailable { a11y += ", unavailable" }
+        if isUnavailable {
+            switch unavailableReason {
+            case .inICloud: a11y += ", in iCloud, double-tap to download"
+            case .downloading: a11y += ", downloading"
+            default: a11y += ", unavailable"
+            }
+        }
         if isLive && !isUnavailable { a11y += ", live" }
         if isLive && !isUnavailable && isLocked { a11y += ", locked" }
         accessibilityLabel = a11y
@@ -539,6 +549,7 @@ final class LibraryThumbnailCell: UICollectionViewCell {
     override func prepareForReuse() {
         super.prepareForReuse()
         resetChrome()
+        setUpNext(false)
         cardView.backgroundColor = .secondarySystemBackground
     }
 

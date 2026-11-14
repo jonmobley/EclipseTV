@@ -87,9 +87,10 @@ final class WebRemoteViewController: UIViewController {
 
     /// Creates a presenting browser for `page`, with a tab for every website of the Show.
     /// - Parameter showPages: The open Show's websites in Show order (may omit `page`).
-    init(page: WebPage, showPages: [WebPage] = []) {
+    /// - Parameter previewOnly: Shows `page` on the phone only; Send to TV takes it live.
+    init(page: WebPage, showPages: [WebPage] = [], previewOnly: Bool = false) {
         initialPage = page
-        tabs = BrowserTabList(pages: showPages, active: page)
+        tabs = BrowserTabList(pages: showPages, active: page, previewOnly: previewOnly)
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -269,6 +270,8 @@ final class WebRemoteViewController: UIViewController {
     }
 
     @objc func webEndedExternally() {
+        // A browser that never put anything on the TV is not what ended.
+        guard tabs.tvTabId != nil else { return }
         closeTapped()
     }
 

@@ -68,8 +68,8 @@ extension LibraryGridViewController {
     /// hero falls back to a static thumbnail while it is up.
     func presentControllerForLiveOverlay() {
         let mgr = ExternalDisplayManager.shared
-        if mgr.isPrompterLive {
-            presentPrompterOperator()
+        if mgr.isPrompterLive, let scriptId = PrompterController.shared.liveScriptId {
+            presentPrompterOperator(scriptId: scriptId)
             return
         }
         if mgr.isPTZCameraLive {
@@ -90,9 +90,13 @@ extension LibraryGridViewController {
 
     /// Marks a saved website live without opening the phone browser.
     ///
-    /// Used where phone UI must not appear: an operator's tap applied on the
-    /// director, Countdown reaching 0:00, and video links. A card tap opens the
-    /// browser via `presentWebPage` instead.
+    /// Used for a Show card tap (the hero then shows the page; tapping it opens
+    /// the browser), an operator's tap applied on the director, Countdown reaching
+    /// 0:00, and video links. ⋯ Preview and the hero tap open the browser via
+    /// `presentWebPage`.
+    ///
+    /// Re-tapping the live card leaves the TV alone, so a page navigated or
+    /// scrolled in the browser stays as it was left.
     ///
     /// YouTube / Vimeo / direct-file URLs play edge-to-edge instead of loading
     /// the desktop watch page.

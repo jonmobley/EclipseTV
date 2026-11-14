@@ -62,6 +62,18 @@ struct BrowserTabListTests {
         #expect(list.tvTabId == list.tabs[0].id)
     }
 
+    @Test func previewOnlyListPutsNothingOnTheTV() {
+        let list = BrowserTabList(pages: [], active: a, previewOnly: true)
+        #expect(list.active.isPhoneOnly)
+        #expect(list.tvTabId == nil)
+    }
+
+    @Test func showListMirrorsTheOpeningTab() {
+        let list = BrowserTabList(pages: [a, b], active: b)
+        #expect(!list.active.isPhoneOnly)
+        #expect(list.tvTabId == list.active.id)
+    }
+
     @Test func closingTheActiveTabPicksItsLeftNeighbour() {
         var list = BrowserTabList(pages: [a, b, c], active: b)
         #expect(list.close(id: list.activeId) != nil)

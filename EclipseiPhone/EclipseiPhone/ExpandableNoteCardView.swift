@@ -170,12 +170,18 @@ class ExpandableNoteCardView: UIControl {
         bodyLabel.numberOfLines = lines
         // A label shorter than its lines truncates to what fits, so a collapsed
         // card squeezed by a short screen ends on "…" rather than a cut-off line.
-        bodyLabel.frame = CGRect(
+        // The label jumps to its new size outside any toggle animation: it redraws
+        // at the final size at once, so animating its frame would stretch that
+        // drawing and make the text slide. The card's own growing edge reveals it.
+        let labelFrame = CGRect(
             x: horizontalInset,
             y: verticalInset,
             width: max(0, width),
             height: isExpanded ? needed : min(needed, room)
         )
+        if bodyLabel.frame != labelFrame {
+            UIView.performWithoutAnimation { bodyLabel.frame = labelFrame }
+        }
         scrollView.contentSize = CGSize(
             width: bounds.width,
             height: bodyLabel.frame.height + verticalInset * 2

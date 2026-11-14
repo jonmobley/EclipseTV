@@ -212,13 +212,16 @@ extension LibraryGridViewController {
         case ShowToolToken.logo: return .logo
         case ShowToolToken.camera: return .camera
         case ShowToolToken.ptzCamera: return .ptzCamera
-        case ShowToolToken.prompter: return .prompter
         default:
             if let frameId = ShowCameraPresetToken.frameId(from: id) {
                 // The frame syncs separately; until it lands the tile waits.
                 return CameraFrameStore.shared.frame(id: frameId) != nil
                     ? .cameraPreset(frameId: frameId)
                     : .unresolved(id: id)
+            }
+            if let showId = openShowId,
+               let scriptId = ShowToolToken.prompterScriptId(from: id, showId: showId) {
+                return .prompter(token: id, scriptId: scriptId)
             }
             if let uuid = ShowLivePollToken.livePollId(from: id) {
                 if let item = LivePollStore.shared.poll(id: uuid),
@@ -276,6 +279,7 @@ extension LibraryGridViewController {
         guard items.indices.contains(indexPath.item) else { return }
         let gridItem = items[indexPath.item]
         let live = isShowGridItemLive(gridItem)
+        defer { cell.setUpNext(isBlackoutCue(gridItem)) }
         switch gridItem {
         case .slideshow(let show):
             let cover = show.resolvedCoverId.flatMap { store.thumbnail(for: $0) }
@@ -286,13 +290,15 @@ extension LibraryGridViewController {
                 fillColor: .darkGray,
                 isLive: live,
                 isLocked: isLiveOutputLocked,
-                thumbnailContentMode: show.isFill
-                    ? .scaleAspectFill
-                    : .scaleAspectFit,
+                thumbnailContentMode: show.resolvedCoverId
+                    .map { MediaFitSettings.mode(forId: $0).contentMode }
+                    ?? .scaleAspectFit,
                 typeIcon: .slideshow
             )
             cell.setMoreMenu(
-                (isArranging || isSelecting) ? nil : slideshowContextMenu(show)
+                (isArranging || isSelecting)
+                    ? nil
+                    : menuWithBlackoutCue(slideshowContextMenu(show), for: gridItem)
             )
         case .screensaver:
             cell.configureSpecial(
@@ -308,7 +314,9 @@ extension LibraryGridViewController {
             cell.setMoreMenu(
                 (isArranging || isSelecting)
                     ? nil
-                    : toolContextMenu(token: ShowToolToken.screensaver)
+                    : menuWithBlackoutCue(
+                        toolContextMenu(token: ShowToolToken.screensaver), for: gridItem
+                    )
             )
         case .logo:
             cell.configureSpecial(
@@ -324,7 +332,9 @@ extension LibraryGridViewController {
             cell.setMoreMenu(
                 (isArranging || isSelecting)
                     ? nil
-                    : toolContextMenu(token: ShowToolToken.logo)
+                    : menuWithBlackoutCue(
+                        toolContextMenu(token: ShowToolToken.logo), for: gridItem
+                    )
             )
         case .camera:
             cell.configureCamera(
@@ -374,10 +384,10 @@ extension LibraryGridViewController {
             cell.setMoreMenu(
                 (isArranging || isSelecting) ? nil : livePollContextMenu(item)
             )
-        case .prompter:
-            configurePrompterTile(cell, isLive: live)
+        case .prompter(let token, let scriptId):
+            configurePrompterTile(cell, scriptId: scriptId, isLive: live)
             cell.setMoreMenu(
-                (isArranging || isSelecting) ? nil : prompterContextMenu()
+                (isArranging || isSelecting) ? nil : prompterContextMenu(token: token, scriptId: scriptId)
             )
         case .countdown(let item):
             configureCountdownTile(cell, item: item, isLive: live)
@@ -398,7 +408,9 @@ extension LibraryGridViewController {
                 cell.clearRewind()
             } else {
                 if let album = openShow {
-                    cell.setMoreMenu(mediaContextMenu(item, in: album))
+                    cell.setMoreMenu(
+                        menuWithBlackoutCue(mediaContextMenu(item, in: album), for: gridItem)
+                    )
                 }
                 applyVideoRewind(to: cell, item: item, isLive: live)
             }
@@ -416,7 +428,9 @@ extension LibraryGridViewController {
             if isArranging || isSelecting {
                 cell.clearMoreMenu()
             } else if let album = openShow {
-                cell.setMoreMenu(websiteContextMenu(page, in: album))
+                cell.setMoreMenu(
+                    menuWithBlackoutCue(websiteContextMenu(page, in: album), for: gridItem)
+                )
             }
         case .pdf(let doc):
             cell.configureSpecial(
@@ -432,7 +446,9 @@ extension LibraryGridViewController {
             if isArranging || isSelecting {
                 cell.clearMoreMenu()
             } else if let album = openShow {
-                cell.setMoreMenu(pdfContextMenu(doc, in: album))
+                cell.setMoreMenu(
+                    menuWithBlackoutCue(pdfContextMenu(doc, in: album), for: gridItem)
+                )
             }
         case .unresolved:
             cell.configureSpecial(
@@ -460,6 +476,7 @@ extension LibraryGridViewController {
         let items = openShowGridItems
         guard items.indices.contains(indexPath.item) else { return }
         let tapped = items[indexPath.item]
+        if handleShowTapDuringBlackout(tapped) { return }
         switch tapped {
         case .slideshow(let show):
             isBlackSelected = false
@@ -490,8 +507,8 @@ extension LibraryGridViewController {
             presentPTZCameraFromTile()
         case .livePoll(let item):
             selectLivePoll(item)
-        case .prompter:
-            presentPrompterOperator()
+        case .prompter(_, let scriptId):
+            presentPrompterOperator(scriptId: scriptId)
         case .countdown(let item):
             isLogoSelected = false
             isScreensaverSelected = false
@@ -507,21 +524,18 @@ extension LibraryGridViewController {
             SlideshowPlaybackController.shared.stop()
             presentMedia(item)
         case .website(let page):
-            // The browser is how the page is driven, so a tap opens it while
-            // marking the page live. Operators only send the selection.
+            // A tap only puts the page live; the hero shows it, and tapping the
+            // hero (or ⋯ Preview) opens the fullscreen browser. With nothing to go
+            // live on, the tap opens the browser as an on-phone preview instead.
+            // Operators only send the selection (inside `presentWebPageLive`).
             if prefersPhonePreviewOnTap {
                 presentWebPage(page)
-                return
-            }
-            if page.videoLink == nil,
-               sendShowLiveSelectIfOperator(.web, itemId: page.id.uuidString) {
-                Haptics.impactLight()
                 return
             }
             isBlackSelected = false
             isLogoSelected = false
             isScreensaverSelected = false
-            presentWebPage(page)
+            presentWebPageLive(page)
         case .pdf(let doc):
             if prefersPhonePreviewOnTap {
                 presentPDF(doc)
@@ -594,7 +608,7 @@ extension LibraryGridViewController {
         present(alert, animated: true)
     }
 
-    private func startSlideshow(_ slideshow: Slideshow, startingAt: Int) {
+    func startSlideshow(_ slideshow: Slideshow, startingAt: Int) {
         Haptics.impactLight()
         SlideshowPlaybackController.shared.play(
             slideshow,
@@ -610,6 +624,9 @@ extension LibraryGridViewController {
     /// Opens the slideshow editor (preferences + reorder).
     func presentSlideshowEditor(_ slideshowId: UUID) {
         let detail = SlideshowDetailViewController(slideshowId: slideshowId)
+        detail.onApplyScreenFit = { [weak self] mode, item in
+            self?.applyScreenFit(mode, to: item)
+        }
         let nav = UINavigationController(rootViewController: detail)
         nav.modalPresentationStyle = .formSheet
         let close = UIBarButtonItem(
@@ -644,17 +661,33 @@ extension LibraryGridViewController {
         ) { [weak self] _ in
             self?.confirmDeleteSlideshow(show)
         }
-        return UIMenu(children: [edit, screenFitMenu(for: show), rename, arrangeAction(), delete])
+        // Fit / Fill is per slide now, set in the editor (Edit).
+        return UIMenu(children: [edit, rename, arrangeAction(), delete])
     }
 
     /// Opens the pan/zoom cropper for a video. Stills use Screen Fit → Custom.
-    func editAction(for item: LibraryItemDTO) -> UIAction {
+    func cropAction(for item: LibraryItemDTO) -> UIAction {
         UIAction(
-            title: "Edit",
+            title: "Crop",
             image: UIImage(systemName: "crop")
         ) { [weak self] _ in
             self?.onRequestEdit?(item.id)
         }
+    }
+
+    /// Opens the trimmer, which cuts a video's start and end.
+    func trimAction(for item: LibraryItemDTO) -> UIAction {
+        UIAction(
+            title: "Trim",
+            image: UIImage(systemName: "scissors")
+        ) { [weak self] _ in
+            self?.onRequestTrim?(item.id)
+        }
+    }
+
+    /// Trim then Crop: the two permanent edits a video offers.
+    func videoEditActions(for item: LibraryItemDTO) -> [UIMenuElement] {
+        [trimAction(for: item), cropAction(for: item)]
     }
 
     private func mediaContextMenu(_ item: LibraryItemDTO, in album: LocalAlbum) -> UIMenu {
@@ -696,7 +729,7 @@ extension LibraryGridViewController {
             children.append(screenFitMenu(for: item))
         }
         if item.isAvailable != false, item.isVideo {
-            children.append(editAction(for: item))
+            children.append(contentsOf: videoEditActions(for: item))
         }
         if let capture = CaptureStore.shared.record(id: item.id),
            LocalMediaStore.shared.hasMedia(

@@ -209,7 +209,7 @@ extension iPhoneMainViewController {
         do {
             try FileManager.default.copyItem(at: croppedURL, to: namedURL)
         } catch {
-            showPresentationToast("Couldn't save the cropped video.")
+            showPresentationToast("Couldn't save the edited video.")
             cleanupTempFile(at: croppedURL)
             return
         }
@@ -308,9 +308,7 @@ extension iPhoneMainViewController {
         if albumId == nil {
             countdown.attributes = .disabled
         }
-        let prompterPresent = albumId
-            .flatMap { LocalAlbumStore.shared.album(id: $0) }?
-            .resolvedSurfaceIds.contains(ShowToolToken.prompter) ?? false
+        // A Show can hold any number of Prompters, each with its own script.
         let prompter = UIAction(
             title: "Prompter",
             image: UIImage(systemName: "text.alignleft")
@@ -318,7 +316,7 @@ extension iPhoneMainViewController {
             guard let albumId else { return }
             self?.addPrompter(toShowId: albumId)
         }
-        if albumId == nil || prompterPresent {
+        if albumId == nil {
             prompter.attributes = .disabled
         }
         let livePoll = UIAction(
@@ -580,15 +578,18 @@ extension iPhoneMainViewController {
         present(alert, animated: true)
     }
 
-    /// Configure-first Countdown add: duration, size & placement, background, and
-    /// ending are chosen on a sheet; Add appends the tile to this Show.
-    /// Adds the Prompter tile to the Show and opens it so the script can be written.
+    /// Adds a Prompter tile to the Show and opens it so the script can be written.
+    ///
+    /// The first Prompter uses the Show's own script (shared with the Mac, and kept
+    /// if the tile was removed earlier); each further one gets a fresh, empty script.
     func addPrompter(toShowId showId: UUID) {
-        LocalAlbumStore.shared.showTool(ShowToolToken.prompter, albumId: showId)
-        libraryViewController.revealAddedShowMember(id: ShowToolToken.prompter)
-        libraryViewController.presentPrompterOperator()
+        guard let added = LocalAlbumStore.shared.addPrompter(toShowId: showId) else { return }
+        libraryViewController.revealAddedShowMember(id: added.token)
+        libraryViewController.presentPrompterOperator(scriptId: added.scriptId)
     }
 
+    /// Configure-first Countdown add: duration, size & placement, background, and
+    /// ending are chosen on a sheet; Add appends the tile to this Show.
     func addCountdown(toShowId showId: UUID) {
         guard !isAlreadyOpen(AddCountdownViewController.self) else { return }
         let compose = AddCountdownViewController(showId: showId)
@@ -741,12 +742,19 @@ extension iPhoneMainViewController {
         if localURL.lastPathComponent != id {
             let renamed = FileManager.default.temporaryDirectory.appendingPathComponent(id)
             try? FileManager.default.removeItem(at: renamed)
-            do {
-                try FileManager.default.copyItem(at: localURL, to: renamed)
-                cleanupTempFile(at: localURL)
+            // A move within the temp directory is a rename. This used to copy, on the
+            // main thread, so adding a large video stalled the UI for the whole copy;
+            // the original was deleted straight after, so nothing relied on it.
+            if (try? FileManager.default.moveItem(at: localURL, to: renamed)) != nil {
                 namedURL = renamed
-            } catch {
-                // Fall back to the original temp path; LocalMediaStore still keys by `id`.
+            } else {
+                do {
+                    try FileManager.default.copyItem(at: localURL, to: renamed)
+                    cleanupTempFile(at: localURL)
+                    namedURL = renamed
+                } catch {
+                    // Fall back to the original temp path; LocalMediaStore still keys by `id`.
+                }
             }
         }
 

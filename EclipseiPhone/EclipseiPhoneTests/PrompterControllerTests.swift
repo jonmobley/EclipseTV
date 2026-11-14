@@ -50,7 +50,7 @@ struct PrompterControllerTests {
         let showId = UUID()
         store.scripts[showId] = longScript
         let controller = try makeController(store: store)
-        controller.bind(showId: showId)
+        controller.bind(scriptId: showId)
         #expect(controller.script == longScript)
         #expect(controller.offset == 0)
         #expect(controller.canPlay)
@@ -64,7 +64,7 @@ struct PrompterControllerTests {
         let showId = UUID()
         store.scripts[showId] = longScript
         let controller = try makeController(store: store, frames: frames)
-        controller.bind(showId: showId)
+        controller.bind(scriptId: showId)
         controller.play()
         #expect(controller.isPlaying)
         #expect(frames.isRunning)
@@ -77,7 +77,7 @@ struct PrompterControllerTests {
 
     @Test func emptyScriptCannotPlay() throws {
         let controller = try makeController()
-        controller.bind(showId: UUID())
+        controller.bind(scriptId: UUID())
         controller.play()
         #expect(!controller.isPlaying)
     }
@@ -88,7 +88,7 @@ struct PrompterControllerTests {
         let showId = UUID()
         store.scripts[showId] = "one\ntwo\nthree"
         let controller = try makeController(store: store, frames: frames)
-        controller.bind(showId: showId)
+        controller.bind(scriptId: showId)
         controller.setSpeed(3)
         controller.play()
         for _ in 0..<600 where controller.isPlaying { frames.step(0.1) }
@@ -103,7 +103,7 @@ struct PrompterControllerTests {
         let showId = UUID()
         store.scripts[showId] = longScript
         let controller = try makeController(store: store, frames: frames)
-        controller.bind(showId: showId)
+        controller.bind(scriptId: showId)
         controller.play()
         controller.beginScrub()
         let before = controller.offset
@@ -144,7 +144,7 @@ struct PrompterControllerTests {
         let showId = UUID()
         store.scripts[showId] = longScript
         let controller = PrompterController(scriptStore: store, settings: settings, frames: FakeFrames())
-        controller.bind(showId: showId)
+        controller.bind(scriptId: showId)
         controller.updateStage(width: 400, viewportHeight: 600)
         controller.nudge(lines: 10)
         let anchor = controller.readingAnchor
@@ -169,7 +169,7 @@ struct PrompterControllerTests {
         let showId = UUID()
         store.scripts[showId] = longScript
         let controller = try makeController(store: store)
-        controller.bind(showId: showId)
+        controller.bind(scriptId: showId)
         controller.updateStage(width: 400, viewportHeight: 600)
         controller.nudge(lines: 10)
         let anchor = controller.readingAnchor
@@ -183,7 +183,7 @@ struct PrompterControllerTests {
         let other = UUID()
         store.scripts[showId] = "First"
         let controller = try makeController(store: store)
-        controller.bind(showId: showId)
+        controller.bind(scriptId: showId)
         store.set("Ignored", for: other)
         #expect(controller.script == "First")
         store.set("Second", for: showId)
@@ -198,15 +198,17 @@ struct PrompterControllerTests {
         let showId = UUID()
         store.scripts[showId] = longScript
         let controller = try makeController(store: store, frames: frames)
-        controller.prepareLive(showId: showId)
+        controller.prepareLive(showId: showId, scriptId: showId)
         #expect(controller.isLive)
         #expect(controller.liveShowId == showId)
+        #expect(controller.liveScriptId == showId)
         controller.play()
         frames.step(1)
         let offset = controller.offset
         controller.endLive()
         #expect(!controller.isLive)
         #expect(controller.liveShowId == nil)
+        #expect(controller.liveScriptId == nil)
         #expect(controller.isPlaying)
         #expect(controller.offset == offset)
     }
@@ -217,7 +219,7 @@ struct PrompterControllerTests {
         let showId = UUID()
         store.scripts[showId] = longScript
         let controller = try makeController(store: store, frames: frames)
-        controller.bind(showId: showId)
+        controller.bind(scriptId: showId)
         var count = 0
         let token = NotificationCenter.default.addObserver(
             forName: PrompterController.offsetDidChangeNotification, object: controller, queue: nil
@@ -229,5 +231,23 @@ struct PrompterControllerTests {
         controller.play()
         frames.step()
         #expect(count == 1)
+    }
+
+    @Test func liveFollowsTheBoundPrompterWithinItsShow() throws {
+        let store = FakeStore()
+        let frames = FakeFrames()
+        let showId = UUID()
+        let extraId = UUID()
+        store.scripts[showId] = "First"
+        store.scripts[extraId] = "Second"
+        let controller = try makeController(store: store, frames: frames)
+        controller.prepareLive(showId: showId, scriptId: extraId)
+        #expect(controller.liveShowId == showId)
+        #expect(controller.liveScriptId == extraId)
+        #expect(controller.script == "Second")
+        controller.bind(scriptId: showId)
+        #expect(controller.liveShowId == showId)
+        #expect(controller.liveScriptId == showId)
+        #expect(controller.script == "First")
     }
 }

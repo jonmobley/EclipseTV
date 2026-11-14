@@ -23,8 +23,21 @@ extension LibraryGridViewController {
         LiveOutputRouting.canMarkLive(practiceMode: prefersDisconnectedLivePreview)
     }
 
-    /// Locked live output, or no AirPlay / Practice destination: tap Preview.
+    /// Locked live output, Blackout holding, or no AirPlay / Practice destination:
+    /// a tile tap opens Preview instead of going live.
     var prefersPhonePreviewOnTap: Bool {
+        LiveOutputRouting.prefersPhonePreviewOnTap(
+            isLiveOutputLocked: isLiveOutputLocked,
+            hasOutputDestination: hasLiveOutputDestination,
+            isBlackoutHolding: isBlackoutHolding
+        )
+    }
+
+    /// Same as `prefersPhonePreviewOnTap`, minus the Blackout hold.
+    ///
+    /// For deliberate go-live paths (an operator's select, ⋯ options, a cued item
+    /// leaving Blackout) that must not turn into a Preview on this phone.
+    var prefersPhonePreviewIgnoringBlackout: Bool {
         LiveOutputRouting.prefersPhonePreviewOnTap(
             isLiveOutputLocked: isLiveOutputLocked,
             hasOutputDestination: hasLiveOutputDestination

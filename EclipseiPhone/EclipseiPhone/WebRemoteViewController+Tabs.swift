@@ -129,11 +129,21 @@ extension WebRemoteViewController {
     }
 
     /// Sends a phone-only tab to the TV; from then on it mirrors like any tab.
+    ///
+    /// This is an explicit go-live, so it takes output even when something other than a
+    /// website is live (a mirrored navigation never does; see `WebOverlayReclaim`).
     func sendActiveTabToTV() {
         guard activeTab.isPhoneOnly else { return }
         activeTab.isPhoneOnly = false
         layoutPhoneWebViewport()
-        sendActiveTabToTVIfNeeded()
+        let manager = ExternalDisplayManager.shared
+        if !manager.isWebLive, let url = webView?.url, !isBlankBrowserURL(url) {
+            tabs.tvTabId = activeTab.id
+            manager.presentWeb(url, pageId: activeTab.page?.id ?? initialPage.id)
+            pushWebScrollProgress()
+        } else {
+            sendActiveTabToTVIfNeeded()
+        }
         updateBrowserChrome()
         refreshTabStrip()
     }

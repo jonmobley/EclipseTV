@@ -64,7 +64,8 @@ extension ImageViewController {
     func connectionManager(
         _ manager: ConnectionManager,
         didReceivePlayRequestForId id: String,
-        startAt: Double?
+        startAt: Double?,
+        startsPaused: Bool
     ) {
         // Library play always unparks so AirPlay overlays cannot leave a black cover.
         clearIdleParkForPlayRequest()
@@ -87,8 +88,10 @@ extension ImageViewController {
         // presented menu) still resumes from the companion’s offset.
         if let path = dataSource.getPath(at: index), MediaItem(path: path).isVideo {
             pendingVideoStartAt = (startAt ?? 0) > 0 ? startAt : nil
+            pendingVideoStartsPaused = startsPaused
         } else {
             pendingVideoStartAt = nil
+            pendingVideoStartsPaused = false
         }
 
         // Mid-reorder or a menu is open: update selection; live view catches up

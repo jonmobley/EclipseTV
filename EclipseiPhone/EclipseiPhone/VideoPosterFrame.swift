@@ -36,14 +36,14 @@ enum VideoPosterFrame {
     }
 
     /// Best non-black still from `url`. Nil when every sampled frame is empty.
-    static func image(at url: URL) -> UIImage? {
-        let semaphore = DispatchSemaphore(value: 0)
-        var image: UIImage?
-        Task {
-            image = await generate(at: url)
-            semaphore.signal()
-        }
-        _ = semaphore.wait(timeout: .now() + 8)
+    ///
+    /// Async on purpose: the old blocking version parked a thumbnail-queue thread for
+    /// up to 8 s per video, and every photo thumbnail queued behind it waited too.
+    static func poster(at url: URL) async -> UIImage? {
+        let signposter = PerformanceSignposts.signposter
+        let state = signposter.beginInterval("VideoPoster")
+        let image = await generate(at: url)
+        signposter.endInterval("VideoPoster", state)
         return image
     }
 

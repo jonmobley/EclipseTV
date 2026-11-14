@@ -132,7 +132,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         }
         switch homeSection(at: indexPath.section, in: collectionView) {
         case .hero:
-            break
+            performHomeContinueAction()
         case .slideshowRibbon:
             handleLiveSlideshowRibbonTap(at: indexPath)
         case .shows where !isHomePage(collectionView):
@@ -211,18 +211,63 @@ extension LibraryGridViewController: UICollectionViewDataSource,
 
     // MARK: - Hero
 
+    /// The Continue card: the last opened Show, or "Create your first Show".
     private func dequeueHomeHeroCell(
         in collectionView: UICollectionView,
         at indexPath: IndexPath
     ) -> UICollectionViewCell {
         guard let cell = collectionView.dequeueReusableCell(
-            withReuseIdentifier: HomeHeroCarouselCell.reuseIdentifier,
+            withReuseIdentifier: HomeContinueCell.reuseIdentifier,
             for: indexPath
-        ) as? HomeHeroCarouselCell else {
+        ) as? HomeContinueCell else {
             return UICollectionViewCell()
         }
-        cell.reload()
+        cell.configure(
+            Self.homeContinueContent(
+                albums: LocalAlbumStore.shared.albums,
+                cover: { [weak self] album in self?.homeShowCover(album) }
+            )
+        )
+        cell.onPrimaryAction = { [weak self] in
+            self?.performHomeContinueAction()
+        }
         return cell
+    }
+
+    /// What the Continue card shows. Recents order is the store's order (opening
+    /// a Show moves it first), so the first Show is the one to continue.
+    static func homeContinueContent(
+        albums: [LocalAlbum],
+        cover: (LocalAlbum) -> UIImage?
+    ) -> HomeContinueCell.Content {
+        guard let album = albums.first else { return .firstShow }
+        let count = album.itemIds.count
+        let items = count == 1 ? "1 item" : "\(count) items"
+        return .show(
+            id: album.id,
+            name: album.name,
+            detail: "\(album.lastOpenedSubtitle) · \(items)",
+            cover: cover(album)
+        )
+    }
+
+    /// Opens the Show on the Continue card, or starts a new one.
+    func performHomeContinueAction() {
+        if let album = LocalAlbumStore.shared.albums.first {
+            openLocalAlbum(id: album.id)
+        } else {
+            onCreateShow?()
+        }
+    }
+
+    /// A Show's cover image: library media, else a website or PDF thumbnail.
+    private func homeShowCover(_ show: LocalAlbum) -> UIImage? {
+        show.resolvedCoverId.flatMap { id -> UIImage? in
+            if let media = store.thumbnail(for: id) { return media }
+            guard let uuid = UUID(uuidString: id) else { return nil }
+            return WebThumbnailStore.shared.image(for: uuid)
+                ?? PDFThumbnailStore.shared.image(for: uuid)
+        }
     }
 
     // MARK: - Home Show Tiles
@@ -373,6 +418,10 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             isLogoSelected = false
             presentScreensaverLive()
         case .camera:
+            if isBlackoutHolding {
+                explainBlackoutHold(cueable: false)
+                return
+            }
             presentCameraFromTile()
         case .createShow:
             onCreateShow?()
@@ -380,7 +429,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             // Menu is hosted on the tile (`showsMenuAsPrimaryAction`).
             break
         case .show(let show):
-            isBlackSelected = false
+            // Opening a Show changes nothing on screen, so Blackout keeps holding.
             isLogoSelected = false
             isScreensaverSelected = false
             openLocalAlbum(id: show.id)
@@ -400,21 +449,11 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             return
         }
+        // A hold, not just a black frame: see `LibraryGridViewController+BlackoutHold`.
         if isBlackSelected {
-            isBlackSelected = false
-            ExternalDisplayManager.shared.endBlackout()
-            // Library restore unparks; overlay restore keeps EclipseTV parked.
-            if ExternalDisplayManager.shared.isOverlayLive {
-                announceAirPlayOverlayIfLinked()
-            } else {
-                _ = AirPlayOverlayPark.clear(using: connectionManager)
-            }
+            endBlackoutHold()
         } else {
-            SlideshowPlaybackController.shared.stop()
-            // Snapshot before flipping the flag — `currentSourceProvider` prefers black.
-            ExternalDisplayManager.shared.beginBlackout()
-            isBlackSelected = true
-            announceAirPlayOverlayIfLinked()
+            beginBlackoutHold()
         }
         Haptics.impactLight()
         refreshLiveHeader()
@@ -497,12 +536,18 @@ extension LibraryGridViewController: UICollectionViewDataSource,
     /// keeps AirPlay in step from `didCommit` anyway.
     func presentWebPage(_ page: WebPage) {
         if page.videoLink != nil {
+            // A video link has no phone Preview; it would go straight to the TV.
+            if isBlackoutHolding {
+                explainBlackoutHold(cueable: true)
+                return
+            }
             presentWebPageLive(page)
             return
         }
         let mgr = ExternalDisplayManager.shared
         let alreadyLive = mgr.isWebLive && mgr.liveWebPageId == page.id
-        let markLive = hasLiveOutputDestination && !isLiveOutputLocked && !alreadyLive
+        let markLive = hasLiveOutputDestination && !isLiveOutputLocked
+            && !isBlackoutHolding && !alreadyLive
         if let open = openController(ofType: WebRemoteViewController.self) {
             if markLive {
                 SlideshowPlaybackController.shared.stop()
@@ -562,22 +607,27 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         guard let url = resolvedPDFFileURL(for: doc) else { return }
         let mgr = ExternalDisplayManager.shared
         let alreadyLive = mgr.isPDFLive && mgr.livePDFDocumentId == doc.id
-        let markLive = hasLiveOutputDestination && !isLiveOutputLocked && !alreadyLive
+        let markLive = hasLiveOutputDestination && !isLiveOutputLocked
+            && !isBlackoutHolding && !alreadyLive
         if markLive {
             SlideshowPlaybackController.shared.stop()
             ExternalDisplayManager.shared.presentPDF(url, documentId: doc.id)
             announceAirPlayOverlayIfLinked()
         }
         let remote = PDFRemoteViewController(document: doc, fileURL: url)
-        let nav = UINavigationController(rootViewController: remote)
+        let nav = DisplayModeNavigationController(rootViewController: remote)
         nav.modalPresentationStyle = .fullScreen
         present(nav, animated: true)
         reloadLibraryGrid()
         refreshLiveHeader()
     }
 
-    func presentMedia(_ item: LibraryItemDTO) {
-        if prefersPhonePreviewOnTap {
+    /// - Parameter videoStartsPaused: A video goes out paused at its resume point
+    ///   instead of playing (a cue leaving Blackout).
+    func presentMedia(_ item: LibraryItemDTO, videoStartsPaused: Bool = false) {
+        // Tile taps check the Blackout hold before calling in; whoever reaches here
+        // (an operator's select, ⋯ options, a cue) means to go live.
+        if prefersPhonePreviewIgnoringBlackout {
             presentLocalPreview(for: item, in: openShowItems.isEmpty ? displayItems : openShowItems)
             return
         }
@@ -615,22 +665,33 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             PresentationPrewarmer.shared.clear()
         }
 
+        let signposter = PerformanceSignposts.signposter
+        let tapInterval = signposter.beginInterval("TapToPreview")
         let startAt = item.isVideo ? (VideoResumeStore.shared.position(for: item.id) ?? 0) : 0
-        if connectionManager.sendPlayRequest(id: item.id, startAt: startAt) {
+        if connectionManager.sendPlayRequest(
+            id: item.id, startAt: startAt, startsPaused: videoStartsPaused
+        ) {
             Haptics.impactLight()
             if item.isVideo { VideoResumeStore.shared.clear(for: item.id) }
             store.updateCurrentId(item.id)
+            let source = PresentationSource.forLibraryItem(
+                item,
+                thumbnail: store.thumbnail(for: item.id),
+                startAt: startAt
+            )
             ExternalDisplayManager.shared.present(
-                .forLibraryItem(
-                    item,
-                    thumbnail: store.thumbnail(for: item.id),
-                    startAt: startAt
-                )
+                videoStartsPaused ? source.pausingVideo(at: startAt) : source
             )
         } else {
-            presentOfflineLive(for: item)
+            presentOfflineLive(for: item, videoStartsPaused: videoStartsPaused)
         }
-        reloadLibraryGrid()
+        // `updateCurrentId` already repainted the hero and visible tiles; `present`
+        // has now ended any previous overlay, so settle the strokes before this frame
+        // draws, then let the full reload follow it.
+        syncVisibleShowTileLiveStrokes()
+        scheduleGridReloadAfterFrame {
+            signposter.endInterval("TapToPreview", tapInterval)
+        }
     }
 
     /// Downloads (if needed) then presents a capture via phone AirPlay.
@@ -779,6 +840,17 @@ extension LibraryGridViewController: UICollectionViewDataSource,
     func optionsMenu(for item: LibraryItemDTO) -> UIMenu {
         let id = item.id
 
+        if let reason = UnavailableMediaReason.of(item), reason.isICloud {
+            return UIMenu(
+                title: reason == .downloading
+                    ? UnavailableMediaReason.downloadingMessage
+                    : UnavailableMediaReason.inICloudMessage,
+                children: [iCloudDownloadAction(for: item, reason: reason) { [weak self] in
+                    self?.requestUnresolvedDownloadIfNeeded(id: id)
+                }]
+            )
+        }
+
         if item.isAvailable == false {
             let resend = UIAction(
                 title: "Re-send from Photos",
@@ -818,7 +890,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         if item.isVideo {
             children.append(contentsOf: videoOptionActions(for: item))
             children.append(screenFitMenu(for: item))
-            children.append(editAction(for: item))
+            children.append(contentsOf: videoEditActions(for: item))
         } else {
             children.append(noteAction(for: item))
             children.append(screenFitMenu(for: item))

@@ -10,8 +10,12 @@ import PDFKit
 
 /// Phone-side PDF reader that drives a live AirPlay PDFView.
 ///
-/// Stages a Display Mode aspect panel while a projector is available, and the
-/// full screen otherwise — see `PDFReaderViewportLayout`. A page counter and
+/// Frames the page the way the audience sees it (Display Mode aspect or custom
+/// screen size), with or without a projector, in both phone orientations — see
+/// `PDFReaderViewportLayout`. The framed panel is the exact TV mirror; a
+/// display-only copy behind it shows the surrounding page dimmed
+/// (`PDFAudienceFrameView`), and drags anywhere on the stage move the frame's
+/// PDF (`PDFReaderStageView`). A page counter and
 /// thumbnail ribbon sit beneath it for multi-page documents. Closing dismisses
 /// the phone UI only — AirPlay stays live via `livePDFDocumentId`.
 ///
@@ -24,14 +28,15 @@ final class PDFRemoteViewController: UIViewController {
     let document: SavedPDF
     private let fileURL: URL
     private var pdfView: PDFView?
-    private var stageView: UIView?
+    /// Display-only copy of the document behind the frame, kept aligned with
+    /// `pdfView` so the page around the audience frame shows dimmed.
+    private var contextPDFView: PDFView?
+    private let frameOverlay = PDFAudienceFrameView()
+    private var stageView: PDFReaderStageView?
     private var panelView: UIView?
     private let pageRibbon = PDFPageRibbonView()
     private var ribbonHeight: NSLayoutConstraint?
     private var lastPanelFrame: CGRect = .zero
-    /// Framing the last layout pass used, so a projector arriving or leaving
-    /// relayouts even when the new panel happens to measure the same.
-    private var lastPanelMatchedProjector: Bool?
     private var offsetObservation: NSKeyValueObservation?
     private weak var observedScrollView: UIScrollView?
     private var isSyncingScroll = false
@@ -72,6 +77,20 @@ final class PDFRemoteViewController: UIViewController {
         ExternalDisplayManager.shared.refreshConnection()
     }
 
+    /// Turns with the phone: the audience frame keeps the output shape either way,
+    /// so a turned phone just gives the framed page more room.
+    override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
+        .allButUpsideDown
+    }
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        guard isBeingDismissed || isMovingFromParent
+            || navigationController?.isBeingDismissed == true else { return }
+        // Put the grid behind it back upright if the reader was read sideways.
+        restoreUprightSceneGeometry()
+    }
+
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         layoutPhonePDFViewport(force: false)
@@ -88,7 +107,7 @@ final class PDFRemoteViewController: UIViewController {
     /// Stage on top, page ribbon pinned beneath it. The ribbon starts collapsed and
     /// only opens once a multi-page document has loaded.
     private func setupStageAndRibbon() -> UIView {
-        let stage = UIView()
+        let stage = PDFReaderStageView()
         stage.backgroundColor = .black
         stage.clipsToBounds = true
         stage.translatesAutoresizingMaskIntoConstraints = false
@@ -102,8 +121,8 @@ final class PDFRemoteViewController: UIViewController {
         ribbonHeight = height
 
         // Stage takes the safe area down to the ribbon (zero-height until a
-        // multi-page document opens); `PDFReaderViewportLayout` insets the panel
-        // inside it when there is a projector to frame.
+        // multi-page document opens); `PDFReaderViewportLayout` insets the
+        // audience frame inside it.
         let guide = view.safeAreaLayoutGuide
         NSLayoutConstraint.activate([
             stage.topAnchor.constraint(equalTo: guide.topAnchor),
@@ -124,6 +143,21 @@ final class PDFRemoteViewController: UIViewController {
         pageRibbon.isHidden = false
         ribbonHeight?.constant = PDFPageRibbonView.preferredHeight
         pageRibbon.attach(to: pdf)
+    }
+
+    /// Non-interactive copy of the document behind the frame. Scale and offset
+    /// follow `pdfView` (`alignContextView`); it never talks to the TV.
+    private func makeContextPDFView(for document: PDFDocument) -> PDFView {
+        let context = PDFView()
+        context.displayMode = .singlePageContinuous
+        context.displayDirection = .vertical
+        context.autoScales = false
+        context.backgroundColor = .black
+        context.isUserInteractionEnabled = false
+        context.accessibilityElementsHidden = true
+        context.usePageViewController(false)
+        context.document = document
+        return context
     }
 
     private func setupPDFView() {
@@ -147,6 +181,13 @@ final class PDFRemoteViewController: UIViewController {
         }
         pdf.document = document
         configureRibbon(for: document, pdf: pdf)
+
+        let context = makeContextPDFView(for: document)
+        stage.insertSubview(context, at: 0)
+        contextPDFView = context
+        frameOverlay.translatesAutoresizingMaskIntoConstraints = true
+        frameOverlay.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        stage.addSubview(frameOverlay)
 
         NotificationCenter.default.addObserver(
             self,
@@ -177,6 +218,7 @@ final class PDFRemoteViewController: UIViewController {
 
     @objc private func pdfViewChanged() {
         observeScrollViewIfNeeded()
+        alignContextView()
         if let pdfView { pageRibbon.refreshCounter(from: pdfView) }
         pushPageIndex()
         pushSyncState()
@@ -189,29 +231,24 @@ final class PDFRemoteViewController: UIViewController {
         let bounds = stage.bounds
         guard bounds.width > 0, bounds.height > 0 else { return }
 
-        let matchesProjector = PDFReaderViewportLayout.matchesProjectorFraming
-        let panel = PDFReaderViewportLayout.panelRect(
-            in: bounds,
-            matchesProjectorFraming: matchesProjector
-        )
-        if !force,
-           panel == lastPanelFrame,
-           matchesProjector == lastPanelMatchedProjector {
-            return
-        }
+        let panel = PDFReaderViewportLayout.panelRect(in: bounds)
+        if !force, panel == lastPanelFrame { return }
         lastPanelFrame = panel
-        lastPanelMatchedProjector = matchesProjector
 
         if panelView == nil {
             let host = UIView(frame: panel)
             host.backgroundColor = .black
             host.clipsToBounds = true
-            stage.addSubview(host)
+            stage.insertSubview(host, belowSubview: frameOverlay)
             panelView = host
             host.addSubview(pdf)
         }
         panelView?.frame = panel
         guard let panelView else { return }
+        frameOverlay.frame = bounds
+        frameOverlay.frameRect = panel
+        stage.panelRect = panel
+        contextPDFView?.frame = PDFReaderViewportLayout.contextRect(for: panel, in: bounds)
 
         PresentationViewController.applyRotatedLayout(
             to: pdf, in: panelView, scale: 1, rotationDegrees: 0
@@ -223,6 +260,7 @@ final class PDFRemoteViewController: UIViewController {
         pdf.minScaleFactor = fit * 0.5
         pdf.maxScaleFactor = fit * 5
         observeScrollViewIfNeeded()
+        alignContextView()
         pageRibbon.refreshCounter(from: pdf)
         pushPageIndex()
         pushSyncState()
@@ -234,10 +272,43 @@ final class PDFRemoteViewController: UIViewController {
         if observedScrollView === scroll { return }
         offsetObservation?.invalidate()
         observedScrollView = scroll
+        stageView?.forwardingTarget = scroll
         offsetObservation = scroll.observe(\.contentOffset, options: [.new]) { [weak self] _, _ in
-            guard let self, !self.isSyncingScroll else { return }
+            guard let self else { return }
+            self.alignContextView()
+            guard !self.isSyncingScroll else { return }
             self.pushSyncState()
         }
+    }
+
+    /// Keeps the dimmed page behind the frame lined up with the framed page:
+    /// same zoom, offset shifted by the frame's top, then corrected against
+    /// where PDFKit actually drew the current page in both views (it can center
+    /// or inset short documents differently in the taller context view).
+    private func alignContextView() {
+        guard let pdf = pdfView, let context = contextPDFView, let stage = stageView,
+              let panelView,
+              let scroll = pdf.eclipse_scrollView,
+              let contextScroll = context.eclipse_scrollView else { return }
+        if abs(context.scaleFactor - pdf.scaleFactor) > 0.0001 {
+            context.minScaleFactor = min(pdf.minScaleFactor, pdf.scaleFactor)
+            context.maxScaleFactor = max(pdf.maxScaleFactor, pdf.scaleFactor)
+            context.scaleFactor = pdf.scaleFactor
+            context.layoutIfNeeded()
+        }
+        contextScroll.contentOffset = PDFReaderViewportLayout.contextOffset(
+            forPanelOffset: scroll.contentOffset,
+            panelTop: panelView.frame.minY - context.frame.minY
+        )
+        guard let page = pdf.currentPage ?? pdf.document?.page(at: 0) else { return }
+        let anchor = page.bounds(for: pdf.displayBox).origin
+        let inPanel = pdf.convert(pdf.convert(anchor, from: page), to: stage)
+        let inContext = context.convert(context.convert(anchor, from: page), to: stage)
+        let dx = inContext.x - inPanel.x
+        let dy = inContext.y - inPanel.y
+        guard abs(dx) > 0.5 || abs(dy) > 0.5 else { return }
+        contextScroll.contentOffset.x += dx
+        contextScroll.contentOffset.y += dy
     }
 
     // MARK: - Sync
@@ -286,8 +357,8 @@ final class PDFRemoteViewController: UIViewController {
         title = latest.title
     }
 
-    /// Swaps between the projector panel and the full screen when a display
-    /// arrives or drops while the reader is open.
+    /// Relayouts when a display arrives or drops while the reader is open
+    /// (the frame itself only depends on the output shape).
     @objc private func externalDisplayChanged() {
         layoutPhonePDFViewport(force: false)
     }

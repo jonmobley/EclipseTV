@@ -267,6 +267,11 @@ final class CaptureStore {
             from: defaults,
             logger: logger
         ).elements
+        // A download is never running at launch. A row left `.downloading` by a quit
+        // mid-download would otherwise say "Downloading…" forever and never retry.
+        for index in records.indices where records[index].syncState == .downloading {
+            records[index].syncState = .remoteOnly
+        }
     }
 
     private func persist() {

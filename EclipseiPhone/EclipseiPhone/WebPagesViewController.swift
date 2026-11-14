@@ -122,16 +122,16 @@ final class WebPagesViewController: UITableViewController {
 
     /// Opens `page` in the phone browser, at most one browser at a time.
     ///
-    /// If a browser is already open, navigates it (and AirPlay) instead of stacking
-    /// a second one that would fight over the warm web view.
+    /// History only previews: the page shows on the phone and nothing live changes
+    /// until the user taps Send to TV. If a browser is already open, navigates it
+    /// instead of stacking a second one that would fight over the warm web view.
     private func presentPage(_ page: WebPage) {
         if let open = openController(ofType: WebRemoteViewController.self) {
             open.openSavedPage(page)
             return
         }
         WarmWebSessionPool.shared.warmIfNeeded(for: page)
-        ExternalDisplayManager.shared.presentWeb(page.url, pageId: page.id)
-        let preview = WebRemoteViewController(page: page)
+        let preview = WebRemoteViewController(page: page, previewOnly: true)
         navigationController?.pushViewController(preview, animated: true)
     }
 

@@ -30,15 +30,30 @@ extension LibraryGridViewController {
                     if QuestPollSessionStore.shared.session == nil { return }
                     continue
                 }
+                let result: Result<LivePollSession, Error>
                 do {
-                    let updated = try await LivePollAccountStore.client().fetchSession(
+                    result = .success(try await LivePollAccountStore.client().fetchSession(
                         joinCode: session.code,
                         includeInbox: session.mode == .qa
-                    )
-                    QuestPollSessionStore.shared.adopt(updated)
+                    ))
                 } catch {
-                    // Transient; keep the ribbon on the last known state.
+                    result = .failure(error)
                 }
+                // A tap or End may have changed the room while this was in flight.
+                guard !Task.isCancelled,
+                      !QuestPollSessionStore.shared.isControlInFlight,
+                      QuestPollSessionStore.shared.session?.code == session.code
+                else { continue }
+                if QuestPollStatusPoll.roomIsGone(result) {
+                    // Ended on the Mac or the website: close it here too.
+                    await self?.endQuestPollSession(clearAccount: false, notifyServer: false)
+                    self?.showPresentationToast(session.mode == .qa ? "Q&A ended" : "Poll ended")
+                    return
+                }
+                if case .success(let updated) = result {
+                    QuestPollSessionStore.shared.adopt(updated)
+                }
+                // Other errors are transient; keep the last known state.
             }
         }
     }
@@ -68,14 +83,39 @@ extension LibraryGridViewController {
         return alert
     }
 
-    func presentQuestPollError(_ error: Error) {
-        let message = (error as? LivePollError)?.userMessage
-            ?? "Could not start the poll."
+    /// Shows `error` on top of whatever is open (the Questions or Controls
+    /// sheet), so a failed tap is never silently dropped behind it.
+    func presentQuestPollError(
+        _ error: Error,
+        fallback: String = "Could not start the poll."
+    ) {
+        let message = (error as? LivePollError)?.userMessage ?? fallback
         let alert = UIAlertController(
             title: "QuestPoll", message: message, preferredStyle: .alert
         )
         alert.addAction(UIAlertAction(title: "OK", style: .default))
-        present(alert, animated: true)
+        var host: UIViewController = self
+        while let next = host.presentedViewController, !next.isBeingDismissed {
+            host = next
+        }
+        host.present(alert, animated: true)
+    }
+
+}
+
+/// Decisions for the 2-second room refresh.
+enum QuestPollStatusPoll {
+    /// True when the room was ended elsewhere or no longer exists.
+    static func roomIsGone(_ result: Result<LivePollSession, Error>) -> Bool {
+        switch result {
+        case .success(let session):
+            return session.phase == .ended
+        case .failure(let error):
+            if case .server(let message) = error as? LivePollError {
+                return message.localizedCaseInsensitiveContains("not found")
+            }
+            return false
+        }
     }
 
 }

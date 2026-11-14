@@ -74,8 +74,9 @@ enum PhoneWebViewportLayout {
 
     /// Display Mode card: Landscape locks 16:9; Vertical locks 9:16.
     ///
-    /// Landscape left-aligns the card so chrome can sit in the trailing column.
-    /// Under a top bar the card sits just beneath it, centred.
+    /// Landscape centres the card and its button column together, between the safe
+    /// edges. (It used to left-align the card, which piled all the spare width on the
+    /// right around the column.) Under a top bar the card sits just beneath it, centred.
     static func panelRect(
         in bounds: CGRect,
         isVertical: Bool,
@@ -102,7 +103,16 @@ enum PhoneWebViewportLayout {
         }
         let topAligned = isVertical || placement == .topRow
         let y = topAligned ? available.minY : available.midY - height / 2
-        let x = topAligned ? available.midX - width / 2 : available.minX
+        let x: CGFloat
+        if topAligned {
+            x = available.midX - width / 2
+        } else {
+            // `available` already leaves the column's width on the right; centre the
+            // card plus that column within the full span between the safe edges.
+            let regionWidth = available.width + landscapeChromeColumn
+            let groupWidth = width + landscapeChromeColumn
+            x = available.minX + max((regionWidth - groupWidth) / 2, 0)
+        }
         return CGRect(x: x, y: y, width: width, height: height)
     }
 
@@ -163,9 +173,8 @@ enum PhoneWebViewportLayout {
         let gap = overlayButtonGap
         switch placement {
         case .trailingColumn:
-            let stripMinX = panel.maxX
-            let stripMaxX = bounds.maxX - max(safeInsets.right, sideInset)
-            let colX = stripMinX + max((stripMaxX - stripMinX - size) / 2, 0)
+            // Right beside the card, so the two read as one centred group.
+            let colX = panel.maxX + (landscapeChromeColumn - size) / 2
             let firstY = showsTabStrip ? tabStripFrame(above: panel).minY : panel.minY
             let top = max(firstY, safeInsets.top + 8)
             return (0..<count).map { index in
@@ -301,7 +310,11 @@ extension WebRemoteViewController: UIScrollViewDelegate,
             let panelView = UIView(frame: panel)
             panelView.backgroundColor = .black
             panelView.clipsToBounds = true
-            panelView.layer.cornerRadius = 32
+            // Same card treatment as the hero preview: 16pt corners, 1pt grey hairline.
+            panelView.layer.cornerRadius = 16
+            panelView.layer.borderWidth = 1
+            panelView.layer.borderColor = UIColor.separator
+                .resolvedColor(with: traitCollection).cgColor
             panelView.layer.maskedCorners = [
                 .layerMinXMinYCorner, .layerMaxXMinYCorner,
                 .layerMinXMaxYCorner, .layerMaxXMaxYCorner

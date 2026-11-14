@@ -22,9 +22,9 @@ struct ShowProgram: Equatable {
     /// What kind of content or tool is live.
     let kind: ShowLiveItemKind
 
-    /// Member id that is live, or nil for a global tool (Background, Screensaver,
-    /// Blackout). For Camera it is the overlay frame on the feed, if any, so a
-    /// Camera Preset tile for that frame can be the one that lights up.
+    /// Member id that is live (for the Prompter, its script id), or nil for a global
+    /// tool (Background, Screensaver, Blackout). For Camera it is the overlay frame on
+    /// the feed, if any, so a Camera Preset tile for that frame can be the one that lights up.
     let itemId: String?
 
     /// Creates a resolved program value.
@@ -85,8 +85,9 @@ extension ShowProgram {
             return kind == .camera && itemId == frameId.uuidString
         case .ptzCamera:
             return kind == .ptzCamera
-        case .prompter:
-            return kind == .prompter
+        case .prompter(_, let scriptId):
+            // No id (an older director): every Prompter tile reads as live.
+            return kind == .prompter && (itemId == nil || itemId == scriptId.uuidString)
         case .unresolved, .add:
             return false
         }

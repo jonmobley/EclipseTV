@@ -47,6 +47,8 @@ final class MediaLibraryPickerViewController: UIViewController {
     var onAddToShow: (([String], [UUID]) -> Void)?
     /// Crop a video, or Custom framing for a still (same flow as Screen Fit).
     var onRequestEdit: ((String) -> Void)?
+    /// Cut a video's start and end.
+    var onRequestTrim: ((String) -> Void)?
     /// Replace a video’s poster frame.
     var onRequestVideoThumbnail: ((String) -> Void)?
     /// Persist Fit / Fill and sync to EclipseTV when linked.
@@ -212,6 +214,12 @@ final class MediaLibraryPickerViewController: UIViewController {
             name: TVLibraryStore.thumbnailDidChangeNotification,
             object: nil
         )
+        // iCloud downloads flip tiles from "In iCloud" to "Downloading…" to playable.
+        for name in [ImportedMediaStore.didChangeNotification, CaptureStore.didChangeNotification] {
+            NotificationCenter.default.addObserver(
+                self, selector: #selector(cloudMediaDidChange), name: name, object: nil
+            )
+        }
         reload()
     }
 
@@ -348,6 +356,14 @@ final class MediaLibraryPickerViewController: UIViewController {
     }
 
     // MARK: - Data
+
+    /// Brings the library's availability up to date before redrawing, so a tile
+    /// never reads a stale "In iCloud" after its download finished.
+    @objc private func cloudMediaDidChange() {
+        TVLibraryStore.shared.refreshMergedImports()
+        TVLibraryStore.shared.refreshMergedCaptures()
+        reload()
+    }
 
     @objc func reload() {
         let media = TVLibraryStore.shared.items

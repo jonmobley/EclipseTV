@@ -7,18 +7,14 @@
 
 import UIKit
 
-/// The scrolling script on black, with a reading guide at the centre and fades top
-/// and bottom. Used by the operator card and the output display alike: both are the
+/// The scrolling script on black, the line being read at the centre, with fades top
+/// and bottom (no guide lines: the owner found them confusing). Used by the operator card and the output display alike: both are the
 /// show's canvas at different sizes, so the same canvas text size wraps the same way
 /// on each, and both follow the controller's reading anchor.
 final class PrompterStageView: UIView {
 
     /// Called when the text column changes size (width, height).
     var onMetricsChange: ((CGSize) -> Void)?
-
-    var showsReadingGuide = true {
-        didSet { guideTop.isHidden = !showsReadingGuide; guideBottom.isHidden = !showsReadingGuide }
-    }
 
     /// Text size in canvas points (see `PrompterStageMetrics`).
     private(set) var canvasFontSize = PrompterStageMetrics.defaultCanvasFontSize
@@ -48,8 +44,6 @@ final class PrompterStageView: UIView {
 
     private let topFade = CAGradientLayer()
     private let bottomFade = CAGradientLayer()
-    private let guideTop = UIView()
-    private let guideBottom = UIView()
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -62,11 +56,6 @@ final class PrompterStageView: UIView {
         }
         bottomFade.startPoint = CGPoint(x: 0.5, y: 1)
         bottomFade.endPoint = CGPoint(x: 0.5, y: 0)
-        for guide in [guideTop, guideBottom] {
-            guide.backgroundColor = UIColor.liveStroke.withAlphaComponent(0.4)
-            guide.isUserInteractionEnabled = false
-            addSubview(guide)
-        }
         accessibilityLabel = "Prompter script"
     }
 
@@ -121,10 +110,6 @@ final class PrompterStageView: UIView {
         topFade.frame = CGRect(x: 0, y: 0, width: bounds.width, height: fadeHeight)
         bottomFade.frame = CGRect(x: 0, y: bounds.height - fadeHeight, width: bounds.width, height: fadeHeight)
         CATransaction.commit()
-
-        let guideY = bounds.midY
-        guideTop.frame = CGRect(x: 0, y: guideY - lineHeight / 2 - 1, width: bounds.width, height: 2)
-        guideBottom.frame = CGRect(x: 0, y: guideY + lineHeight / 2 - 1, width: bounds.width, height: 2)
 
         let metrics = CGSize(width: textWidth, height: bounds.height)
         if metrics != lastMetrics || fontChanged {

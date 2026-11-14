@@ -39,7 +39,8 @@ extension MediaLibraryPickerViewController {
         if item.isVideo {
             children.append(contentsOf: videoLibraryActions(for: item))
             children.append(screenFitMenu(for: item))
-            children.append(editAction(forId: item.id))
+            children.append(trimAction(forId: item.id))
+            children.append(cropAction(forId: item.id))
         } else {
             children.append(noteAction(forId: item.id))
             children.append(screenFitMenu(for: item))
@@ -60,7 +61,20 @@ extension MediaLibraryPickerViewController {
     }
 
     private func unavailableMediaMenu(for item: LibraryItemDTO) -> UIMenu {
-        UIMenu(children: [
+        if let reason = UnavailableMediaReason.of(item), reason.isICloud {
+            return UIMenu(
+                title: reason == .downloading
+                    ? UnavailableMediaReason.downloadingMessage
+                    : UnavailableMediaReason.inICloudMessage,
+                children: [
+                    iCloudDownloadAction(for: item, reason: reason) { [weak self] in
+                        self?.downloadFromICloud(id: item.id)
+                    },
+                    deleteMediaAction(item)
+                ]
+            )
+        }
+        return UIMenu(children: [
             UIAction(
                 title: "Re-send from Photos",
                 image: UIImage(systemName: "arrow.up.circle")
@@ -109,12 +123,21 @@ extension MediaLibraryPickerViewController {
         }
     }
 
-    private func editAction(forId id: String) -> UIAction {
+    private func cropAction(forId id: String) -> UIAction {
         UIAction(
-            title: "Edit",
+            title: "Crop",
             image: UIImage(systemName: "crop")
         ) { [weak self] _ in
             self?.onRequestEdit?(id)
+        }
+    }
+
+    private func trimAction(forId id: String) -> UIAction {
+        UIAction(
+            title: "Trim",
+            image: UIImage(systemName: "scissors")
+        ) { [weak self] _ in
+            self?.onRequestTrim?(id)
         }
     }
 

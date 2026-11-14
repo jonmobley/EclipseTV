@@ -371,7 +371,7 @@ extension LibraryGridViewController {
         children.append(arrangeAction())
         children.append(selectAction(seedId: ShowLivePollToken.token(for: item.id)))
         children.append(UIAction(
-            title: "Delete QuestPoll",
+            title: "Remove Poll",
             image: UIImage(systemName: "trash"),
             attributes: .destructive
         ) { [weak self] _ in
@@ -380,7 +380,7 @@ extension LibraryGridViewController {
         return UIMenu(children: children)
     }
 
-    /// Q&A card ⋯ menu: Questions, End, Arrange, Select, Delete.
+    /// Q&A card ⋯ menu: Questions, End, Arrange, Select, Remove.
     private func qaContextMenu(_ item: ShowLivePoll, ownsRoom: Bool) -> UIMenu {
         var children: [UIMenuElement] = []
         if ownsRoom {
@@ -401,7 +401,7 @@ extension LibraryGridViewController {
         children.append(arrangeAction())
         children.append(selectAction(seedId: ShowLivePollToken.token(for: item.id)))
         children.append(UIAction(
-            title: "Delete Q&A",
+            title: "Remove Q&A",
             image: UIImage(systemName: "trash"),
             attributes: .destructive
         ) { [weak self] _ in
@@ -444,12 +444,12 @@ extension LibraryGridViewController {
     /// Countdown and PDF rather than removing silently like a Show member.
     private func confirmDeleteLivePoll(_ item: ShowLivePoll) {
         let alert = UIAlertController(
-            title: item.isQA ? "Delete Q&A?" : "Delete QuestPoll?",
+            title: item.isQA ? "Remove Q&A?" : "Remove Poll?",
             message: "“\(item.title)” is removed from this Show.",
             preferredStyle: .alert
         )
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        alert.addAction(UIAlertAction(title: "Delete", style: .destructive) {
+        alert.addAction(UIAlertAction(title: "Remove", style: .destructive) {
             [weak self] _ in
             self?.endQuestPollIfRemovingMembership(item.id)
             LivePollStore.shared.delete(id: item.id)
@@ -534,6 +534,7 @@ extension LibraryGridViewController {
     /// Identical 2s status polls post nothing. Vote-count ticks patch the card
     /// caption in place so ⋯ menus stay up. Cue or room changes refresh thumbs.
     func handleQuestPollSessionChange() {
+        announceNewQAQuestionsIfListClosed()
         switch QuestPollSessionStore.shared.lastChange {
         case .none:
             return
@@ -554,6 +555,22 @@ extension LibraryGridViewController {
                 stopQuestPollStatusPolling()
             }
         }
+    }
+
+    /// Toast + tap when audience questions arrive while the Questions sheet
+    /// is closed; the card's "N new" caption is often off screen mid-show.
+    private func announceNewQAQuestionsIfListClosed() {
+        let store = QuestPollSessionStore.shared
+        guard store.session?.mode == .qa else { return }
+        let listIsOpen = (presentedViewController as? UINavigationController)?
+            .viewControllers.first is QuestPollQAViewController
+        // While the list is open it marks them seen itself.
+        guard !listIsOpen else { return }
+        guard let message = QuestPollSessionStore.newQuestionsAnnouncement(
+            store.takeUnannouncedQAQuestions()
+        ) else { return }
+        showPresentationToast(message, duration: 3.5)
+        Haptics.impactLight()
     }
 
     /// Patches visible Live Poll captions without recycling cells (keeps ⋯ menus).

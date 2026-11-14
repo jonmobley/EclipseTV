@@ -73,6 +73,19 @@ enum ShowLiveRouting {
         foundDirector && directorAppliesSelects
     }
 
+    /// Longest countdown a remote command may set (99 hours), in seconds.
+    static let maximumRemoteCountdownSeconds = 99 * 3600
+
+    /// A remote countdown length as whole seconds, or nil when it is not a
+    /// usable number. `Int(_:)` traps on NaN, infinity and values beyond
+    /// `Int`, so a bad value from a peer must never reach it unchecked.
+    /// - Parameter value: Seconds as sent by the operator.
+    /// - Returns: Seconds in `1...maximumRemoteCountdownSeconds`, or nil.
+    static func wholeSeconds(_ value: Double?) -> Int? {
+        guard let value, value.isFinite, value >= 1 else { return nil }
+        return Int(min(value, Double(maximumRemoteCountdownSeconds)))
+    }
+
     /// Short hash for discovery info (Multipeer discoveryInfo is tiny).
     static func hashedUserId(_ recordName: String) -> String {
         let digest = SHA256.hash(data: Data(recordName.utf8))

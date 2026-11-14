@@ -4,7 +4,9 @@
   (also used by the CamTail app). All camera-control feature code belongs there, never in
   Eclipse; Eclipse only hosts it (tile `LibraryThumbnailCell+PTZCamera`, hero
   `LiveHeaderView+PTZPreview`, AirPlay `PresentationViewController+PTZCamera`, controls
-  `LibraryGridViewController+PTZCamera`). After any CamTailKit change run
+  `LibraryGridViewController+PTZCamera`). Tile and hero host CamTailKit's status-aware
+  `CamTailLivePreview` via `CamTailPreviewHost` (AirPlay keeps the plain picture); a tile tap
+  with no camera connected opens the controls, which are CamTailKit's setup screen (2026-11-11). After any CamTailKit change run
   `~/apps/CamTail/tools/build_all.sh`, which builds and tests both apps.
 - Device builds need the NDI SDK at `/Library/NDI SDK for Apple` (linker flags in the
   EclipseiPhone target, `[sdk=iphoneos*]` only).
@@ -44,6 +46,13 @@
   and `MediaAspect.activeTarget` (Fit/Fill, still Reframe) read `ExternalOutputSettings.outputAspectRatio`; anything that
   rewrites a file (video re-crop) uses `MediaAspect.libraryTarget`. Grid tiles, media buckets and the Apple TV protocol still
   use `orientation` and know nothing about custom sizes.
+  Z-order on the TV picture goes through `stageView.bringSubviewToFront` (transition overlay, audio badge);
+  `view.bringSubviewToFront` on a stage subview is a no-op.
+- Leaving a live countdown (2026-11-13): `endOverlay` moves output state on *before* tearing the overlay down,
+  same order as `beginOverlay`. Ending the clock posts its change synchronously, and if `overlaySource` still says
+  countdown the grid repaints the hero back onto the frozen clock (countdown posts no end notice to fix it).
+- iPhone UI from the AirPlay branch (2026-11-13): the hero's Fit / Fill toggle shows the words, not an icon (menus keep
+  icons); tile menus say "Camera Controls" and "PTZ Controls"; Home Recent Shows uses two columns in panes under 500pt.
 - Settings notifications are expensive and reach the camera (2026-11-12): `ExternalOutputSettings.didChangeNotification`
   observers re-sync the library, refresh the camera tile (start/stop of the capture session) and re-lay-out every
   `PresentationViewController`. `CameraPreviewView.layoutSubviews` talks to the capture connection, so never force a
@@ -74,6 +83,7 @@
   picking one loads it in the active tab. The overlay buttons are re-raised on every layout, so the drawer is re-raised after them.
   Website Auto Scroll was removed (2026-11-13); `ScrollSpeedSlider` now serves only the Prompter. iPad gets a browser-style top bar (chips left, buttons top right)
   in both orientations, since iPadOS ignores the orientation lock while the app supports Split View.
+  The website card matches the hero preview: 16pt corners and a 1pt `separator` hairline (2026-11-13).
 - Seeding a simulator with websites/Shows for a visual check: the stores are JSON blobs in
   UserDefaults (`EclipseTV.pages.items`, `EclipseTV.localAlbums.items`); write them with
   `simctl spawn <udid> defaults write <container>/Library/Preferences/com.mobleypro.eclipse.EclipseiPhone.plist <key> -data <hex-json>`
@@ -81,12 +91,34 @@
 - Show grid scrolling (2026-11-07): `openShowGridItems` is rebuilt on every read and is read several
   times per tile, so anything it calls must be cheap. Look up library items with `store.item(id:)`
   (O(1) index), never `store.items.first(where:)`, and resolve the rows once before looping over paths.
+- Adding content never changes live output (2026-11-10). History opens a website phone-only
+  (`WebRemoteViewController(previewOnly:)`); Send to TV is the explicit go-live. Feedback review and
+  phased plan: `docs/reviews/2026-11-10-iphone-feedback-review.md`.
+- Show website card tap (2026-11-13): only puts the site live (hero shows it); the hero tap / expand arrows or ⋯ Preview open
+  the fullscreen browser. Closing it leaves the site live on whatever page it was on, and re-tapping the live card changes nothing.
+  With no destination (or output locked) the tap still opens the browser as a phone preview.
 - Note cards: tap expands or collapses, and the pencil edits (2026-10-31).
 - Note editor on iPhone is a full-height sheet only: a medium detent gets pushed to large by the keyboard, which looks like a stall halfway up (2026-11-01). The text stops at `keyboardLayoutGuide`, and Hide Keyboard shows while editing because Done closes the editor.
+- Blackout hold (iPhone, 2026-11-13, `LibraryGridViewController+BlackoutHold.swift`): while Blackout is on the TV stays
+  black and the phone stays usable. Tile taps open a private Preview (`prefersPhonePreviewOnTap(isBlackoutHolding:)`),
+  the held video scrubs muted in the hero, and ⋯ › Show After Blackout cues what follows (`blackoutCue`, "UP NEXT" pill).
+  Ending Blackout puts the cue live (videos paused), else restores what was live (video paused at the scrub, slideshow
+  on its slide). Operators are never held. Tools with no private Preview (camera, poll, countdown, prompter, slideshows)
+  show a toast instead. Apple TV gets paused video via the optional `startsPaused` field on `play_request`; older TV
+  builds ignore it and just play, so ship iPhone and Apple TV together.
+- Several Prompters per Show (2026-11-13): the first keeps token `__eclipse.tool.prompter` and the
+  Show-id script (`prompter-<showId>`, which the Mac reads too); extras are
+  `__eclipse.tool.prompter.<nonce>` whose script id is `ShowToolToken.extraPrompterScriptId(nonce:showId:)`
+  (SHA-256 of Show id + nonce, shaped as a version-8 UUID). So a token only ever reaches its own
+  Show's scripts, wherever it is planted, and never a Show's own (version-4) id. Records reuse the
+  `Prompter` type, so no iCloud schema or Mac change. `PrompterScript.showId` is really the script
+  key. Copy to Show makes a new Prompter with a copy of the text. There is one `PrompterController`,
+  so the TV shows whatever script is bound; opening a different Prompter while one is live asks first.
 - Prompter shape (2026-11-13): the Prompter screen has its own Landscape / Vertical menu (`PrompterLocalSettings.prefersVertical`,
   this phone only). Vertical while Display Mode is Landscape makes the card 9:16, turns the phone upright, and shows an upright
   9:16 column on the TV (`PrompterController.isVerticalOnLandscapeDisplay`); the menu is hidden in Vertical Display Mode.
   Use `PrompterController.isVertical` / `canvasAspectRatio` for prompter layout, never `ExternalOutputSettings.isVerticalMode`.
+  The blue reading-guide lines were removed (2026-11-13, owner found them confusing); the line read sits mid-stage.
   The blue lines are the reading guide (the line being read), on purpose.
 - Camera Presets (2026-11-13): a Show tile = phone camera + one saved frame. Stored only as the surface token
   `__eclipse.tool.cameraPreset.<frameUUID>` (`ShowCameraPresetToken`, counts as a tool), so it syncs with the Show and
