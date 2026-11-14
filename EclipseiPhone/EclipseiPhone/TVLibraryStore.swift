@@ -787,6 +787,7 @@ final class TVLibraryStore {
         }
         items = best.items
         currentId = best.currentId
+        loadTVManifestIds()
         mergePendingUploads()
         recoverOrphanedLocalMedia()
         persistManifest()
@@ -939,10 +940,7 @@ final class TVLibraryStore {
         tvManifestIds = []
         currentId = nil
         guard let itemsKey = itemsKey(), let currentIdKey = currentIdKey() else { return }
-        if let key = tvIdsKey(),
-           let ids = UserDefaults.standard.stringArray(forKey: key) {
-            tvManifestIds = Set(ids)
-        }
+        loadTVManifestIds()
         if let data = UserDefaults.standard.data(forKey: itemsKey),
            let decoded = try? JSONDecoder().decode([LibraryItemDTO].self, from: data) {
             items = decoded
@@ -997,6 +995,18 @@ final class TVLibraryStore {
                 try? FileManager.default.removeItem(at: file)
             }
         }
+    }
+
+    /// Reads the active TV's saved manifest ids for the active mode. Every path that
+    /// fills `items` from a cache calls this, so the iCloud merge that follows can
+    /// tell the TV's rows from the phone's.
+    private func loadTVManifestIds() {
+        guard let key = tvIdsKey(),
+              let ids = UserDefaults.standard.stringArray(forKey: key) else {
+            tvManifestIds = []
+            return
+        }
+        tvManifestIds = Set(ids)
     }
 
     private func persistTVManifestIds(_ ids: Set<String>,
