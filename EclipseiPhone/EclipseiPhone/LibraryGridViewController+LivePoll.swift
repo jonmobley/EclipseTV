@@ -371,7 +371,7 @@ extension LibraryGridViewController {
         children.append(arrangeAction())
         children.append(selectAction(seedId: ShowLivePollToken.token(for: item.id)))
         children.append(UIAction(
-            title: "Delete QuestPoll",
+            title: "Remove Poll",
             image: UIImage(systemName: "trash"),
             attributes: .destructive
         ) { [weak self] _ in
@@ -444,12 +444,12 @@ extension LibraryGridViewController {
     /// Countdown and PDF rather than removing silently like a Show member.
     private func confirmDeleteLivePoll(_ item: ShowLivePoll) {
         let alert = UIAlertController(
-            title: item.isQA ? "Delete Q&A?" : "Delete QuestPoll?",
+            title: item.isQA ? "Delete Q&A?" : "Remove Poll?",
             message: "“\(item.title)” is removed from this Show.",
             preferredStyle: .alert
         )
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        alert.addAction(UIAlertAction(title: "Delete", style: .destructive) {
+        alert.addAction(UIAlertAction(title: item.isQA ? "Delete" : "Remove", style: .destructive) {
             [weak self] _ in
             self?.endQuestPollIfRemovingMembership(item.id)
             LivePollStore.shared.delete(id: item.id)
