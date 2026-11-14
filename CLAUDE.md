@@ -94,6 +94,9 @@
 - Adding content never changes live output (2026-11-10). History opens a website phone-only
   (`WebRemoteViewController(previewOnly:)`); Send to TV is the explicit go-live. Feedback review and
   phased plan: `docs/reviews/2026-11-10-iphone-feedback-review.md`.
+- Show website card tap (2026-11-13): only puts the site live (hero shows it); the hero tap / expand arrows or ⋯ Preview open
+  the fullscreen browser. Closing it leaves the site live on whatever page it was on, and re-tapping the live card changes nothing.
+  With no destination (or output locked) the tap still opens the browser as a phone preview.
 - Note cards: tap expands or collapses, and the pencil edits (2026-10-31).
 - Note editor on iPhone is a full-height sheet only: a medium detent gets pushed to large by the keyboard, which looks like a stall halfway up (2026-11-01). The text stops at `keyboardLayoutGuide`, and Hide Keyboard shows while editing because Done closes the editor.
 - Blackout hold (iPhone, 2026-11-13, `LibraryGridViewController+BlackoutHold.swift`): while Blackout is on the TV stays
