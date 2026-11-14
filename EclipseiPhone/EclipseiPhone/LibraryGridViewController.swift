@@ -29,7 +29,7 @@ final class LibraryGridViewController: UIViewController {
     var onRequestEdit: ((String) -> Void)?
     /// Invoked when the user chooses Thumbnail — host opens the video frame picker.
     var onRequestVideoThumbnail: ((String) -> Void)?
-    /// Invoked when the Camera phone viewer should open (⋯ Open Controller).
+    /// Invoked when the Camera phone viewer should open (⋯ Camera Controls).
     var onPresentCamera: (() -> Void)?
     /// True while fullscreen Camera is opening/open — keep the tile on a still.
     var homeCameraWarmPreviewSuspended = false
@@ -101,6 +101,11 @@ final class LibraryGridViewController: UIViewController {
 
     /// True while Black is the selected presentation source.
     var isBlackSelected = false
+    /// What goes live when Blackout ends, picked from ⋯ › Show After Blackout.
+    /// Nil brings back whatever was live before Blackout.
+    var blackoutCue: ShowGridItem?
+    /// Slideshow that was running when Blackout started, resumed when it ends.
+    var blackoutHeldSlideshow: BlackoutHeldSlideshow?
     /// True while Background is the selected presentation source.
     var isLogoSelected = false
     /// True while Screensaver is the selected presentation source.

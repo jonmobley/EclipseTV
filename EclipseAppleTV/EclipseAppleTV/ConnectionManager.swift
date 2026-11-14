@@ -15,10 +15,12 @@ protocol ConnectionManagerDelegate: AnyObject {
     func connectionManager(_ manager: ConnectionManager, didUpdateConnectionState connected: Bool, with peer: MCPeerID?)
     /// The companion requested that the item with the given id (file name) be made live.
     /// - Parameter startAt: Absolute seconds to seek for video (nil = from the start).
+    /// - Parameter startsPaused: A video waits paused at `startAt` instead of playing.
     func connectionManager(
         _ manager: ConnectionManager,
         didReceivePlayRequestForId id: String,
-        startAt: Double?
+        startAt: Double?,
+        startsPaused: Bool
     )
     /// The companion requested deletion of the item with the given id.
     func connectionManager(_ manager: ConnectionManager, didReceiveDeleteRequestForId id: String)
@@ -350,6 +352,7 @@ class ConnectionManager: NSObject {
             let isFill = envelope.isFill
             let framing = envelope.framing
             let startAt = envelope.position
+            let startsPaused = envelope.startsPaused ?? false
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
                 self.activateModeIfNeeded(from: envelope)
@@ -360,7 +363,8 @@ class ConnectionManager: NSObject {
                 }
                 self.applyIncomingFraming(framing, forFileName: id)
                 self.delegate?.connectionManager(
-                    self, didReceivePlayRequestForId: id, startAt: startAt
+                    self, didReceivePlayRequestForId: id, startAt: startAt,
+                    startsPaused: startsPaused
                 )
             }
         case .deleteItem:

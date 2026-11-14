@@ -270,6 +270,7 @@ extension LibraryGridViewController {
         guard items.indices.contains(indexPath.item) else { return }
         let gridItem = items[indexPath.item]
         let live = isShowGridItemLive(gridItem)
+        defer { cell.setUpNext(isBlackoutCue(gridItem)) }
         switch gridItem {
         case .slideshow(let show):
             let cover = show.resolvedCoverId.flatMap { store.thumbnail(for: $0) }
@@ -286,7 +287,9 @@ extension LibraryGridViewController {
                 typeIcon: .slideshow
             )
             cell.setMoreMenu(
-                (isArranging || isSelecting) ? nil : slideshowContextMenu(show)
+                (isArranging || isSelecting)
+                    ? nil
+                    : menuWithBlackoutCue(slideshowContextMenu(show), for: gridItem)
             )
         case .screensaver:
             cell.configureSpecial(
@@ -302,7 +305,9 @@ extension LibraryGridViewController {
             cell.setMoreMenu(
                 (isArranging || isSelecting)
                     ? nil
-                    : toolContextMenu(token: ShowToolToken.screensaver)
+                    : menuWithBlackoutCue(
+                        toolContextMenu(token: ShowToolToken.screensaver), for: gridItem
+                    )
             )
         case .logo:
             cell.configureSpecial(
@@ -318,7 +323,9 @@ extension LibraryGridViewController {
             cell.setMoreMenu(
                 (isArranging || isSelecting)
                     ? nil
-                    : toolContextMenu(token: ShowToolToken.logo)
+                    : menuWithBlackoutCue(
+                        toolContextMenu(token: ShowToolToken.logo), for: gridItem
+                    )
             )
         case .camera:
             cell.configureCamera(
@@ -373,7 +380,9 @@ extension LibraryGridViewController {
                 cell.clearRewind()
             } else {
                 if let album = openShow {
-                    cell.setMoreMenu(mediaContextMenu(item, in: album))
+                    cell.setMoreMenu(
+                        menuWithBlackoutCue(mediaContextMenu(item, in: album), for: gridItem)
+                    )
                 }
                 applyVideoRewind(to: cell, item: item, isLive: live)
             }
@@ -391,7 +400,9 @@ extension LibraryGridViewController {
             if isArranging || isSelecting {
                 cell.clearMoreMenu()
             } else if let album = openShow {
-                cell.setMoreMenu(websiteContextMenu(page, in: album))
+                cell.setMoreMenu(
+                    menuWithBlackoutCue(websiteContextMenu(page, in: album), for: gridItem)
+                )
             }
         case .pdf(let doc):
             cell.configureSpecial(
@@ -407,7 +418,9 @@ extension LibraryGridViewController {
             if isArranging || isSelecting {
                 cell.clearMoreMenu()
             } else if let album = openShow {
-                cell.setMoreMenu(pdfContextMenu(doc, in: album))
+                cell.setMoreMenu(
+                    menuWithBlackoutCue(pdfContextMenu(doc, in: album), for: gridItem)
+                )
             }
         case .unresolved:
             cell.configureSpecial(
@@ -435,6 +448,7 @@ extension LibraryGridViewController {
         let items = openShowGridItems
         guard items.indices.contains(indexPath.item) else { return }
         let tapped = items[indexPath.item]
+        if handleShowTapDuringBlackout(tapped) { return }
         switch tapped {
         case .slideshow(let show):
             isBlackSelected = false
@@ -567,7 +581,7 @@ extension LibraryGridViewController {
         present(alert, animated: true)
     }
 
-    private func startSlideshow(_ slideshow: Slideshow, startingAt: Int) {
+    func startSlideshow(_ slideshow: Slideshow, startingAt: Int) {
         Haptics.impactLight()
         SlideshowPlaybackController.shared.play(
             slideshow,
@@ -761,7 +775,7 @@ extension LibraryGridViewController {
             children.append(contentsOf: cameraToolActions())
         case ShowToolToken.ptzCamera:
             children.append(UIAction(
-                title: "Open Controls",
+                title: "PTZ Controls",
                 image: UIImage(systemName: "slider.horizontal.3")
             ) { [weak self] _ in
                 self?.presentPTZCameraControls()

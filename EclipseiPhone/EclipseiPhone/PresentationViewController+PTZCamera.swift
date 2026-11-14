@@ -31,12 +31,12 @@ extension PresentationViewController {
             let live = CamTailLiveVideoView()
             live.translatesAutoresizingMaskIntoConstraints = false
             live.isUserInteractionEnabled = false
-            view.insertSubview(live, belowSubview: transitionOverlayContainer)
+            stageView.insertSubview(live, belowSubview: transitionOverlayContainer)
             NSLayoutConstraint.activate([
-                live.topAnchor.constraint(equalTo: view.topAnchor),
-                live.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-                live.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-                live.trailingAnchor.constraint(equalTo: view.trailingAnchor)
+                live.topAnchor.constraint(equalTo: stageView.topAnchor),
+                live.bottomAnchor.constraint(equalTo: stageView.bottomAnchor),
+                live.leadingAnchor.constraint(equalTo: stageView.leadingAnchor),
+                live.trailingAnchor.constraint(equalTo: stageView.trailingAnchor)
             ])
             ptzCameraView = live
         }

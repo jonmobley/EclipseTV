@@ -6,6 +6,7 @@
 //
 
 import CloudKit
+import CryptoKit
 import Foundation
 import MultipeerConnectivity
 import os.log
@@ -49,6 +50,16 @@ final class ShowLiveSession: NSObject {
     private(set) var snapshot: ShowLiveSnapshot?
     private(set) var directorDeviceName: String?
     private(set) var userHash: String?
+    /// Key from the iCloud Keychain account secret (``ShowLiveAccountSecret``)
+    /// proving this phone belongs to the owner; memory only. Nil keeps Show
+    /// Live off.
+    private(set) var userKey: SymmetricKey?
+    /// Per-peer mutual check and sealing state (``ShowLivePeerHandshake``).
+    var peerHandshakes: [MCPeerID: ShowLivePeerHandshake] = [:]
+    /// Challenge in this director's current discovery info.
+    var advertisedChallenge: String? { didSet { usedInviteNonces = [] } }
+    /// Invitation nonces already accepted for that challenge.
+    var usedInviteNonces: Set<String> = []
 
     /// Updates role from advertising / browsing extensions in this module.
     func setRole(_ role: Role) {
@@ -160,12 +171,18 @@ final class ShowLiveSession: NSObject {
 
     // MARK: - CloudKit identity
 
-    /// Resolves the iCloud user hash that scopes peers to one account.
+    /// Resolves the iCloud user hash that scopes peers to one account, and
+    /// reloads the account key.
     ///
-    /// Leaves `userHash` nil where CloudKit is unreachable — advertising,
-    /// browsing, and invitations all already require it, so Show Live simply
-    /// stays off rather than trapping on an unentitled container.
+    /// Leaves `userHash` nil where CloudKit is unreachable, and `userKey` nil
+    /// while the Keychain is unavailable — advertising, browsing, and
+    /// invitations all require both, so Show Live simply stays off and tries
+    /// again on the next sync. The key is re-read each time so phones that made
+    /// a secret at the same moment settle on the one iCloud Keychain keeps.
     func refreshCloudKitUser(then completion: (() -> Void)? = nil) {
+        userKey = ShowLiveAccountSecret.loadOrCreate().map {
+            ShowLiveInviteProof.key(forAccountSecret: $0)
+        }
         if userHash != nil {
             completion?()
             return
@@ -201,17 +218,9 @@ final class ShowLiveSession: NSObject {
         return next
     }
 
+    /// Sends to peers that passed the mutual check only, sealed per peer.
     func send(_ envelope: ShowLiveEnvelope) -> Bool {
-        guard let session, !session.connectedPeers.isEmpty,
-              let data = try? JSONEncoder().encode(envelope)
-        else { return false }
-        do {
-            try session.send(data, toPeers: session.connectedPeers, with: .reliable)
-            return true
-        } catch {
-            logger.error("Show live send failed: \(error.localizedDescription)")
-            return false
-        }
+        sendToVerifiedPeers(envelope)
     }
 
     func tearDownSession() {
@@ -220,6 +229,7 @@ final class ShowLiveSession: NSObject {
         stopBrowsing()
         session?.disconnect()
         session = nil
+        peerHandshakes = [:]
         snapshot = nil
         directorDeviceName = nil
         if role != .none {
@@ -286,22 +296,8 @@ final class ShowLiveSession: NSObject {
     func handlePeerState(_ state: MCSessionState, peer: MCPeerID) {
         switch state {
         case .connected:
-            if role == .none, foundDirector {
-                // Connecting always ends discovery; taking the operator role is
-                // the separate question of whether the director will act.
-                if ShowLiveRouting.shouldBecomeRemoteOperator(
-                    foundDirector: foundDirector
-                ) {
-                    role = .remote
-                    directorDeviceName = peer.displayName
-                }
-                stopBrowsing()
-                stopElection()
-                notifyChanged()
-            } else if role == .director {
-                pushSnapshotToPeers()
-                notifyChanged()
-            }
+            // Nothing is trusted until the peer passes the mutual check.
+            beginHandshake(with: peer)
         case .notConnected:
             handlePeerDrop(peer)
         default:
@@ -309,9 +305,31 @@ final class ShowLiveSession: NSObject {
         }
     }
 
+    /// Runs once `peer` proved it holds the account key.
+    func peerDidAuthenticate(_ peer: MCPeerID, peerRole: ShowLivePeerRole) {
+        if role == .none, foundDirector, peerRole == .director {
+            // Connecting always ends discovery; taking the operator role is
+            // the separate question of whether the director will act.
+            if ShowLiveRouting.shouldBecomeRemoteOperator(
+                foundDirector: foundDirector
+            ) {
+                role = .remote
+                directorDeviceName = peer.displayName
+            }
+            stopBrowsing()
+            stopElection()
+            notifyChanged()
+        } else if role == .director, peerRole == .joiner {
+            pushSnapshotToPeers()
+            notifyChanged()
+        }
+    }
+
     private func handlePeerDrop(_ peer: MCPeerID) {
+        let droppedDirector = peerHandshakes[peer]?.peerRole == .director
+        peerHandshakes[peer] = nil
         let stillHavePeers = !(session?.connectedPeers.isEmpty ?? true)
-        if role == .remote {
+        if role == .remote, droppedDirector {
             role = .none
             snapshot = nil
             directorDeviceName = nil
@@ -328,53 +346,4 @@ final class ShowLiveSession: NSObject {
         }
         _ = peer
     }
-}
-
-// MARK: - MCSessionDelegate
-
-extension ShowLiveSession: MCSessionDelegate {
-    nonisolated func session(
-        _ session: MCSession,
-        peer peerID: MCPeerID,
-        didChange state: MCSessionState
-    ) {
-        Task { @MainActor in
-            self.handlePeerState(state, peer: peerID)
-        }
-    }
-
-    nonisolated func session(
-        _ session: MCSession,
-        didReceive data: Data,
-        fromPeer peerID: MCPeerID
-    ) {
-        Task { @MainActor in
-            guard let envelope = try? JSONDecoder().decode(
-                ShowLiveEnvelope.self, from: data
-            ) else { return }
-            self.applyReceived(envelope, from: peerID)
-        }
-    }
-
-    nonisolated func session(
-        _ session: MCSession,
-        didReceive stream: InputStream,
-        withName streamName: String,
-        fromPeer peerID: MCPeerID
-    ) {}
-
-    nonisolated func session(
-        _ session: MCSession,
-        didStartReceivingResourceWithName resourceName: String,
-        fromPeer peerID: MCPeerID,
-        with progress: Progress
-    ) {}
-
-    nonisolated func session(
-        _ session: MCSession,
-        didFinishReceivingResourceWithName resourceName: String,
-        fromPeer peerID: MCPeerID,
-        at localURL: URL?,
-        withError error: (any Error)?
-    ) {}
 }

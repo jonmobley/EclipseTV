@@ -1,29 +1,74 @@
-Eclipse Review Notes
-====================
+Eclipse Review Notes (iPhone/iPad 1.0)
+======================================
 
-Eclipse is a companion pair: iPhone remote + Apple TV display.
-Please install BOTH apps on devices on the SAME Wi‑Fi network.
+Eclipse puts photos, videos, countdowns and slides on a big screen during
+live events. The iPhone/iPad app is the controller; the screen can be an
+Apple TV running Eclipse, an AirPlay receiver, or a screen plugged into the
+iPhone/iPad. No account is needed for any of this.
 
-Demo path
----------
-1. Launch Eclipse on Apple TV.
-2. Launch Eclipse on iPhone.
-3. When prompted, allow Local Network on both devices.
-4. On iPhone, connect/pair to the Apple TV (Settings or connection pill).
-5. Pick a photo/video from the library and send it to the TV, or present via AirPlay.
-6. Optional cloud albums: enter demo account code ______ on iPhone or TV.
+Quickest test (one device, no Apple TV)
+---------------------------------------
+1. Open Eclipse on iPhone or iPad and allow Photos when asked.
+2. Tap a photo or video in the library: it opens on the "Live" screen.
+3. Open Control Center > Screen Mirroring and pick any AirPlay receiver
+   (Apple TV or AirPlay TV). Eclipse shows the picture full screen there,
+   without the controls. A USB-C/HDMI adapter works the same way.
+
+With an Apple TV (both on the same Wi-Fi)
+-----------------------------------------
+1. Install Eclipse on the Apple TV and open it.
+2. Open Eclipse on iPhone; allow Local Network on both devices.
+3. Tap the connection pill at the top of the library and pick the Apple TV.
+4. Tap a photo or video; it appears on the TV.
+
+Features that need a second device or a Mac
+-------------------------------------------
+These are optional. Everything above works without them.
+- Show Live: two iPhones/iPads signed in to the same iCloud account run one
+  show together over the local network.
+- Eclipse for Mac remote / Send Camera to Mac: pairs with the Eclipse
+  app for Mac on the same Wi-Fi by scanning the QR code it shows. The app
+  only connects to addresses on the local network.
+- PTZ camera control: controls a network PTZ camera on the local network.
+  Voice control (microphone + speech recognition) is off until the user
+  turns it on in the camera controls.
+
+Live Poll (QuestPoll)
+---------------------
+Optional audience polls, under Settings > QuestPoll. Sign-in uses a 6-digit
+code emailed to the address entered.
+Demo account: [OWNER TO FILL IN, or remove this section]
+Settings > QuestPoll > Delete Account removes the account and its polls.
 
 Permissions used
 ----------------
-- Local Network / Bonjour: discover and connect iPhone ↔ Apple TV (Multipeer).
-- Photo Library: choose media to send/present.
-- Camera: live camera feed presentation (AirPlay).
-- Background audio: continue ambient/local audio playback.
+- Photo Library: choose photos/videos to show; save camera captures.
+- Camera: live camera on the big screen, Send Camera to Mac, QR pairing.
+- Microphone: record video with sound; optional PTZ voice control.
+- Speech Recognition: optional PTZ voice control ("wide shot"), on device
+  when supported.
+- Local Network / Bonjour: find the Apple TV, Mac, other iPhones and PTZ
+  cameras on the same Wi-Fi.
+- Background audio: keeps a show's music or video sound playing when the
+  screen locks or the operator switches apps mid-event.
+
+Network notes
+-------------
+NSAllowsArbitraryLoads is set because the app talks to devices on the local
+network by IP address over plain HTTP (Eclipse for Mac, PTZ cameras), which
+cannot have certificates. Internet services (iCloud, QuestPoll) use HTTPS.
+
+iCloud
+------
+Shows and settings sync through the user's private iCloud database
+(CloudKit). Nothing is sent to our own servers except Live Poll data,
+when the user uses Live Poll.
 
 Encryption
 ----------
-Uses only standard OS encryption (HTTPS, MultipeerConnectivity required encryption).
-No custom proprietary crypto.
+Only standard operating system encryption (HTTPS, CloudKit,
+MultipeerConnectivity, CryptoKit HMAC for local pairing).
+ITSAppUsesNonExemptEncryption = NO.
 
 Support
 -------

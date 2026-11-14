@@ -75,7 +75,7 @@ extension LibraryGridViewController {
     private func currentCameraToolActions() -> [UIMenuElement] {
         var actions: [UIMenuElement] = [
             UIAction(
-                title: "Open Controller",
+                title: "Camera Controls",
                 image: UIImage(systemName: "camera.viewfinder")
             ) { [weak self] _ in
                 self?.onPresentCamera?()

@@ -15,7 +15,7 @@ extension LiveHeaderView {
     ///
     /// - Parameters:
     ///   - visible: Still or slideshow owns live output (not video / overlays).
-    ///   - mode: Current framing; the icon reflects this mode.
+    ///   - mode: Current framing; the button shows this mode's name.
     func setScreenFitToggleVisible(_ visible: Bool, mode: MediaFitMode) {
         guard visible else {
             screenFitButton?.removeFromSuperview()
@@ -60,17 +60,15 @@ extension LiveHeaderView {
 
     private func applyScreenFitButtonAppearance(mode: MediaFitMode) {
         guard let button = screenFitButton else { return }
+        // The word, not an icon: no symbol read clearly as "Fit" vs "Fill" at this size.
         var config = button.configuration ?? .plain()
-        config.image = UIImage(
-            systemName: mode.iconName,
-            withConfiguration: UIImage.SymbolConfiguration(
-                pointSize: 13, weight: .semibold
-            )
-        )
+        config.image = nil
+        var title = AttributedString(mode.rawValue)
+        title.font = UIFont.systemFont(ofSize: 13, weight: .semibold)
+        config.attributedTitle = title
+        config.titleLineBreakMode = .byClipping
         config.baseForegroundColor = .white
-        config.contentInsets = NSDirectionalEdgeInsets(
-            top: 8, leading: 8, bottom: 8, trailing: 8
-        )
+        config.contentInsets = .zero
         button.configuration = config
         button.accessibilityLabel = "Screen Fit"
         button.accessibilityValue = mode.rawValue

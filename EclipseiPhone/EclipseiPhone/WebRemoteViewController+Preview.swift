@@ -349,7 +349,7 @@ extension WebRemoteViewController: UIScrollViewDelegate,
             in: bounds,
             isVertical: ExternalOutputSettings.isVerticalMode,
             safeInsets: view.safeAreaInsets,
-            aspect: ExternalOutputSettings.orientation.aspectRatio,
+            aspect: ExternalOutputSettings.outputAspectRatio,
             placement: overlayChromePlacement,
             showsTabStrip: tabs.showsStrip
         )

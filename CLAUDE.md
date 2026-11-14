@@ -37,6 +37,27 @@
   (a plain domain write or editing the plist directly is ignored, and the app then deletes the files as orphans).
   Drive the remote with osascript key codes to Simulator (123/124 arrows, 36 select, 53 Menu).
 
+- Custom screen sizes on iPhone (AirPlay only, 2026-11-11): Settings → Display Mode → Screen Size saves
+  named width×height shapes (`ExternalOutputCustomSize`, JSON in UserDefaults). They apply in Landscape only;
+  the selection is kept but inactive in Vertical. `PresentationViewController.stageView` is sized by
+  `ExternalOutputSettings.outputStageRect` (full screen unless a custom size is active) and every content
+  container is constrained to it, so new TV overlays must attach to `stageView`, not `view`. Anything that
+  mirrors the TV picture (phone camera / web / prompter stages, `webLogicalSize`, `displayModePanelRect`)
+  and `MediaAspect.activeTarget` (Fit/Fill, still Reframe) read `ExternalOutputSettings.outputAspectRatio`; anything that
+  rewrites a file (video re-crop) uses `MediaAspect.libraryTarget`. Grid tiles, media buckets and the Apple TV protocol still
+  use `orientation` and know nothing about custom sizes.
+- Settings notifications are expensive and reach the camera (2026-11-12): `ExternalOutputSettings.didChangeNotification`
+  observers re-sync the library, refresh the camera tile (start/stop of the capture session) and re-lay-out every
+  `PresentationViewController`. `CameraPreviewView.layoutSubviews` talks to the capture connection, so never force a
+  layout pass (`layoutIfNeeded`) from that notification unless a frame really changed; doing so on every post made the
+  camera suites crash (`AVCaptureSession.stopRunning` throws on the simulator) or hang under CI's parallel test mode.
+  Setters that post it should post only on a real change. CI runs the iPhone unit tests in the default parallel mode,
+  which is far more sensitive than the local `-parallel-testing-enabled NO` runs; before pushing anything that touches
+  settings observers or test fixtures, run the suite once the CI way (`xcodebuild test … -quiet`, no parallel flag).
+  Root cause of those hangs/crashes: on the simulator `AVCaptureVideoPreviewLayer.session = stubSession` waits in a
+  nested run loop inside `commitConfiguration`, so other main-actor tests run *inside* a camera test (UIKit animation
+  state crashes, `stopRunning` exceptions, or a wait that never ends). `CameraPreviewView.attach` therefore never binds
+  the session on the simulator (same as `detach`); keep it that way.
 - Crash reports: `CrashReporting.swift` in each app sends crashes and freezes to Sentry projects `eclipse-iphone` and `eclipse-appletv` (Release builds only; `scrub` keeps crash type, code location and device model, and drops all free text and activity trails; the `0.0.0.0` user address is what stops Sentry reading a city from the connection, since neither its IP setting nor `infer_ip` did). Upload symbols after each archive so reports are readable. App Privacy answers must list Crash Data and Other Diagnostic Data, not linked to the user, no tracking.
 
 ## TestFlight builds
@@ -62,3 +83,10 @@
   phased plan: `docs/reviews/2026-11-10-iphone-feedback-review.md`.
 - Note cards: tap expands or collapses, and the pencil edits (2026-10-31).
 - Note editor on iPhone is a full-height sheet only: a medium detent gets pushed to large by the keyboard, which looks like a stall halfway up (2026-11-01). The text stops at `keyboardLayoutGuide`, and Hide Keyboard shows while editing because Done closes the editor.
+- Blackout hold (iPhone, 2026-11-13, `LibraryGridViewController+BlackoutHold.swift`): while Blackout is on the TV stays
+  black and the phone stays usable. Tile taps open a private Preview (`prefersPhonePreviewOnTap(isBlackoutHolding:)`),
+  the held video scrubs muted in the hero, and ⋯ › Show After Blackout cues what follows (`blackoutCue`, "UP NEXT" pill).
+  Ending Blackout puts the cue live (videos paused), else restores what was live (video paused at the scrub, slideshow
+  on its slide). Operators are never held. Tools with no private Preview (camera, poll, countdown, prompter, slideshows)
+  show a toast instead. Apple TV gets paused video via the optional `startsPaused` field on `play_request`; older TV
+  builds ignore it and just play, so ship iPhone and Apple TV together.

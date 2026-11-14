@@ -28,7 +28,7 @@ Wi-Fi and send the library there. Ambient music can keep playing, and it can
 pause when a video or website has sound.
 
 Live Poll runs a poll or quiz on the big screen. Sign in with email, pick a
-deck, and host from the phone. Remote albums load with a 6-digit code.
+deck, and host from the phone.
 
 Keywords (99 characters):
 
@@ -56,8 +56,7 @@ Collected data, linked to the user, used for app functionality:
 
 - Email address. Live Poll sign-in.
 - Photos or videos. Shows and captures synced through the user’s iCloud.
-- Other user content. Show details, saved website addresses, and remote-album
-  codes sent to aircamtv.com.
+- Other user content. Show details and saved website addresses.
 
 Not collected: location, contacts, identifiers for advertising, purchase
 history, browsing history, search history, audio data, health, financial info.

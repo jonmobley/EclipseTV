@@ -20,6 +20,8 @@ enum ShowLiveProtocol {
     static let discoveryUserHash = "u"
     /// Discovery-info key for a short director device name.
     static let discoveryDeviceName = "n"
+    /// Discovery-info key for the director's per-advertise challenge.
+    static let discoveryChallenge = "c"
 
     /// Discriminator for a JSON envelope on `MCSession.send`.
     ///
@@ -94,10 +96,18 @@ enum ShowLiveItemKind: String, Codable, Equatable {
 struct ShowLiveInvitation: Codable, Equatable {
     var showId: UUID
     var userHash: String
+    /// Answer to the director's challenge, keyed by the account secret in
+    /// iCloud Keychain (see ``ShowLiveInviteProof``). Nil from builds before
+    /// 2026-11-13, which the director now refuses.
+    var proof: String?
+    /// The joiner's one-time random value, covered by `proof`.
+    var nonce: String?
 
     enum CodingKeys: String, CodingKey {
         case showId = "s"
         case userHash = "u"
+        case proof = "p"
+        case nonce = "n"
     }
 }
 

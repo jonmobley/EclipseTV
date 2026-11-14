@@ -418,6 +418,10 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             isLogoSelected = false
             presentScreensaverLive()
         case .camera:
+            if isBlackoutHolding {
+                explainBlackoutHold(cueable: false)
+                return
+            }
             presentCameraFromTile()
         case .createShow:
             onCreateShow?()
@@ -425,7 +429,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             // Menu is hosted on the tile (`showsMenuAsPrimaryAction`).
             break
         case .show(let show):
-            isBlackSelected = false
+            // Opening a Show changes nothing on screen, so Blackout keeps holding.
             isLogoSelected = false
             isScreensaverSelected = false
             openLocalAlbum(id: show.id)
@@ -445,21 +449,11 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             return
         }
+        // A hold, not just a black frame: see `LibraryGridViewController+BlackoutHold`.
         if isBlackSelected {
-            isBlackSelected = false
-            ExternalDisplayManager.shared.endBlackout()
-            // Library restore unparks; overlay restore keeps EclipseTV parked.
-            if ExternalDisplayManager.shared.isOverlayLive {
-                announceAirPlayOverlayIfLinked()
-            } else {
-                _ = AirPlayOverlayPark.clear(using: connectionManager)
-            }
+            endBlackoutHold()
         } else {
-            SlideshowPlaybackController.shared.stop()
-            // Snapshot before flipping the flag — `currentSourceProvider` prefers black.
-            ExternalDisplayManager.shared.beginBlackout()
-            isBlackSelected = true
-            announceAirPlayOverlayIfLinked()
+            beginBlackoutHold()
         }
         Haptics.impactLight()
         refreshLiveHeader()
@@ -542,12 +536,18 @@ extension LibraryGridViewController: UICollectionViewDataSource,
     /// keeps AirPlay in step from `didCommit` anyway.
     func presentWebPage(_ page: WebPage) {
         if page.videoLink != nil {
+            // A video link has no phone Preview; it would go straight to the TV.
+            if isBlackoutHolding {
+                explainBlackoutHold(cueable: true)
+                return
+            }
             presentWebPageLive(page)
             return
         }
         let mgr = ExternalDisplayManager.shared
         let alreadyLive = mgr.isWebLive && mgr.liveWebPageId == page.id
-        let markLive = hasLiveOutputDestination && !isLiveOutputLocked && !alreadyLive
+        let markLive = hasLiveOutputDestination && !isLiveOutputLocked
+            && !isBlackoutHolding && !alreadyLive
         if let open = openController(ofType: WebRemoteViewController.self) {
             if markLive {
                 SlideshowPlaybackController.shared.stop()
@@ -607,7 +607,8 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         guard let url = resolvedPDFFileURL(for: doc) else { return }
         let mgr = ExternalDisplayManager.shared
         let alreadyLive = mgr.isPDFLive && mgr.livePDFDocumentId == doc.id
-        let markLive = hasLiveOutputDestination && !isLiveOutputLocked && !alreadyLive
+        let markLive = hasLiveOutputDestination && !isLiveOutputLocked
+            && !isBlackoutHolding && !alreadyLive
         if markLive {
             SlideshowPlaybackController.shared.stop()
             ExternalDisplayManager.shared.presentPDF(url, documentId: doc.id)
@@ -621,8 +622,12 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         refreshLiveHeader()
     }
 
-    func presentMedia(_ item: LibraryItemDTO) {
-        if prefersPhonePreviewOnTap {
+    /// - Parameter videoStartsPaused: A video goes out paused at its resume point
+    ///   instead of playing (a cue leaving Blackout).
+    func presentMedia(_ item: LibraryItemDTO, videoStartsPaused: Bool = false) {
+        // Tile taps check the Blackout hold before calling in; whoever reaches here
+        // (an operator's select, ⋯ options, a cue) means to go live.
+        if prefersPhonePreviewIgnoringBlackout {
             presentLocalPreview(for: item, in: openShowItems.isEmpty ? displayItems : openShowItems)
             return
         }
@@ -663,19 +668,22 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         let signposter = PerformanceSignposts.signposter
         let tapInterval = signposter.beginInterval("TapToPreview")
         let startAt = item.isVideo ? (VideoResumeStore.shared.position(for: item.id) ?? 0) : 0
-        if connectionManager.sendPlayRequest(id: item.id, startAt: startAt) {
+        if connectionManager.sendPlayRequest(
+            id: item.id, startAt: startAt, startsPaused: videoStartsPaused
+        ) {
             Haptics.impactLight()
             if item.isVideo { VideoResumeStore.shared.clear(for: item.id) }
             store.updateCurrentId(item.id)
+            let source = PresentationSource.forLibraryItem(
+                item,
+                thumbnail: store.thumbnail(for: item.id),
+                startAt: startAt
+            )
             ExternalDisplayManager.shared.present(
-                .forLibraryItem(
-                    item,
-                    thumbnail: store.thumbnail(for: item.id),
-                    startAt: startAt
-                )
+                videoStartsPaused ? source.pausingVideo(at: startAt) : source
             )
         } else {
-            presentOfflineLive(for: item)
+            presentOfflineLive(for: item, videoStartsPaused: videoStartsPaused)
         }
         // `updateCurrentId` already repainted the hero and visible tiles; `present`
         // has now ended any previous overlay, so settle the strokes before this frame

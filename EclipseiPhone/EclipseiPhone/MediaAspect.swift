@@ -15,8 +15,18 @@ enum MediaAspect {
     /// Width ÷ height for Landscape library media.
     static let landscape: CGFloat = 16.0 / 9.0
 
-    /// Target aspect for the active Display Mode.
+    /// Target aspect of the output picture: 9:16 in Vertical, else the active
+    /// custom screen size or 16:9. Fit / Fill, the Reframe cropper and stored
+    /// framings all measure against this so they agree with the AirPlay stage.
+    /// Anything that rewrites a file uses `libraryTarget` instead.
     static var activeTarget: CGFloat {
+        ExternalOutputSettings.outputAspectRatio
+    }
+
+    /// Aspect of the Landscape / Vertical library bucket, ignoring any custom
+    /// screen size. Destructive edits (video re-crop, import crops) target this,
+    /// since the file outlives the display setting and also goes to Apple TV.
+    static var libraryTarget: CGFloat {
         ExternalOutputSettings.isVerticalMode ? vertical : landscape
     }
 

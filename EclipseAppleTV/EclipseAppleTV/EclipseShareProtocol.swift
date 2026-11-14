@@ -220,6 +220,9 @@ struct EclipseShareEnvelope: Codable {
     /// Normalized crop rect for a still (`setImageFit` / `playRequest`). Nil clears
     /// any saved custom position so Fit / Fill alone apply.
     var framing: MediaFramingDTO? = nil
+    /// `playRequest` only: cue a video paused on its first frame instead of playing.
+    /// Older TVs ignore it and play, which is how they always behaved.
+    var startsPaused: Bool? = nil
 
     var kind: EclipseShareProtocol.Kind? {
         EclipseShareProtocol.Kind(rawValue: eclipseMsg)
@@ -262,11 +265,14 @@ struct EclipseShareEnvelope: Codable {
     /// - Parameter framing: Custom crop rect (unit space). Nil clears a saved position.
     /// - Parameter startAt: Absolute seconds to seek when the item is a video (nil / 0 =
     ///   from the start). Carried in `position` for wire compatibility.
+    /// - Parameter startsPaused: A video waits on its first frame (used when Blackout
+    ///   ends, so nothing starts playing on its own). Nil / false plays as before.
     static func playRequest(
         id: String,
         isFill: Bool? = nil,
         framing: MediaFramingDTO? = nil,
-        startAt: Double? = nil
+        startAt: Double? = nil,
+        startsPaused: Bool = false
     ) -> EclipseShareEnvelope {
         let seek = (startAt ?? 0) > 0 ? startAt : nil
         return EclipseShareEnvelope(
@@ -276,7 +282,8 @@ struct EclipseShareEnvelope: Codable {
             id: id,
             isFill: isFill,
             position: seek,
-            framing: framing
+            framing: framing,
+            startsPaused: startsPaused ? true : nil
         )
     }
 

@@ -311,13 +311,26 @@ extension LibraryGridViewController {
     /// (iPad full screen or a wide Split View pane).
     static let wideLandscapeRecentMaxTile: CGFloat = 200
 
-    /// Columns for Home Recent. Display Mode's count, plus extra on phone landscape.
+    /// Home Recent on a phone held upright (or as narrow a pane): always 2-up.
+    ///
+    /// Recent tiles are square whatever the Display Mode, so Vertical's 3-up
+    /// left each Show too small to read on a phone (owner's call, 2026-11-13).
+    static let phonePortraitRecentColumns = 2
+
+    /// Widest pane that counts as a phone held upright (Pro Max is 440pt).
+    static let phonePortraitRecentMaxWidth: CGFloat = 500
+
+    /// Columns for Home Recent: 2-up on a phone held upright, Display Mode's
+    /// count elsewhere, plus extra on landscape panes.
     static func homeRecentColumnCount(
         containerWidth: CGFloat,
         containerHeight: CGFloat,
         sectionInset: CGFloat,
         spacing: CGFloat
     ) -> Int {
+        if containerWidth > 0, containerWidth < phonePortraitRecentMaxWidth {
+            return phonePortraitRecentColumns
+        }
         let base = homeGridColumnCount(
             containerWidth: containerWidth,
             sectionInset: sectionInset,

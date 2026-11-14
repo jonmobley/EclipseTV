@@ -38,10 +38,10 @@ extension LibraryGridViewController {
         case .videoToggle:
             handleLiveVideoPlayPause()
         case .videoSkip:
-            guard let delta = command.value else { return }
+            guard let delta = command.value, delta.isFinite else { return }
             handleLiveVideoSkip(by: delta)
         case .videoSeek:
-            guard let position = command.value else { return }
+            guard let position = command.value, position.isFinite, position >= 0 else { return }
             handleLiveVideoSeek(to: position)
         case .countdownToggleRunning:
             guard ExternalDisplayManager.shared.isCountdownLive else { return }
@@ -51,8 +51,8 @@ extension LibraryGridViewController {
             CountdownController.shared.reset()
         case .countdownSetDuration:
             guard ExternalDisplayManager.shared.isCountdownLive,
-                  let seconds = command.value else { return }
-            CountdownController.shared.setDuration(Int(seconds))
+                  let seconds = ShowLiveRouting.wholeSeconds(command.value) else { return }
+            CountdownController.shared.setDuration(seconds)
             refreshSlideshowRibbonPresentation()
         case .lockToggle:
             toggleLiveOutputLock()

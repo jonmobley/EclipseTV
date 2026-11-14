@@ -52,9 +52,17 @@ final class CameraPreviewView: UIView {
     /// layer shows its black background until it paints again.
     func attach(session: AVCaptureSession,
                 videoGravity: AVLayerVideoGravity = .resizeAspect) {
+        // The simulator has no camera. Binding its stub session makes AVFoundation
+        // build a capture graph inside a nested run-loop wait on the main thread,
+        // which can stall for good and lets other main-thread work run re-entrantly
+        // (the unit suites hung and crashed under parallel testing, 2026-11-12).
+        // There is nothing to show, so the layer stays unbound, as `detach()` already
+        // leaves it on the simulator.
+        #if !targetEnvironment(simulator)
         if videoPreviewLayer.session !== session {
             videoPreviewLayer.session = session
         }
+        #endif
         videoPreviewLayer.videoGravity = videoGravity
         backgroundColor = .black
         refreshRotationCoordinator()

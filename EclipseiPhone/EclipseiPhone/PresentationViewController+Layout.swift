@@ -67,6 +67,19 @@ extension PresentationViewController {
         return container
     }
 
+    /// Sizes `stageView` to the output shape and settles its children so the
+    /// apply*Layout passes read final container bounds.
+    func updateStageFrame() {
+        guard isViewLoaded else { return }
+        let target = ExternalOutputSettings.outputStageRect(in: view.bounds)
+        guard stageView.frame != target else { return }
+        stageView.frame = target
+        // Settle the containers now so the apply*Layout passes that follow read
+        // final bounds. Only on a real change: a forced pass also lays out the
+        // hidden camera preview, whose layout talks to the capture connection.
+        stageView.layoutIfNeeded()
+    }
+
     /// Instance wrapper for call sites on the presentation controller.
     func applyRotatedLayout(to content: UIView, in container: UIView, scale: CGFloat) {
         Self.applyRotatedLayout(to: content, in: container, scale: scale)

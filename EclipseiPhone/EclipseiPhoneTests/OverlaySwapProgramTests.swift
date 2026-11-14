@@ -104,6 +104,39 @@ struct OverlaySwapProgramTests {
         clearOverlays()
     }
 
+    /// Leaving a countdown for a still or video ends the clock with no end notice
+    /// of its own: the grid repaints the hero from the clock's change notification
+    /// alone. If that change still reads the countdown as live, the hero paints the
+    /// frozen clock back and nothing ever replaces it with the new picture.
+    @Test func aCountdownHandingOffToAStillIsNotLiveWhenTheClockAnnouncesTheEnd() {
+        let mgr = ExternalDisplayManager.shared
+        clearOverlays()
+        let countdown = ShowCountdown(showId: UUID(), name: "Break", duration: 60)
+        CountdownController.shared.prepare(countdown)
+        mgr.presentCountdown()
+        #expect(mgr.isCountdownLive)
+
+        let observed = CountdownSeen()
+        let token = NotificationCenter.default.addObserver(
+            forName: CountdownController.didChangeNotification,
+            object: nil,
+            queue: nil
+        ) { _ in
+            MainActor.assumeIsolated {
+                observed.wasLive.append(mgr.isCountdownLive)
+            }
+        }
+        defer { NotificationCenter.default.removeObserver(token) }
+
+        mgr.present(.image(URL(fileURLWithPath: "/tmp/after-countdown.jpg"), fill: false))
+
+        #expect(observed.wasLive.isEmpty == false)
+        #expect(observed.wasLive.allSatisfy { $0 == false })
+        #expect(mgr.isCountdownLive == false)
+        #expect(Self.program() == nil)
+        clearOverlays()
+    }
+
     /// The browser closes on the same notification that ends the web overlay, and a
     /// navigation committing on the way out asks `loadWeb` whether it may restore
     /// the page. Once a still is taking program the answer is no — otherwise the
@@ -186,6 +219,12 @@ struct OverlaySwapProgramTests {
     @MainActor
     private final class Observed {
         var programs: [ShowProgram?] = []
+    }
+
+    /// `isCountdownLive` sampled at each countdown change notification.
+    @MainActor
+    private final class CountdownSeen {
+        var wasLive: [Bool] = []
     }
 
     /// Whether a late browser commit took the web overlay back.

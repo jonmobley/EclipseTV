@@ -125,7 +125,7 @@ extension CameraLiveViewController {
             ? Self.stackedLayout(
                 in: bounds,
                 safeTop: view.safeAreaInsets.top,
-                aspect: orientation.aspectRatio,
+                aspect: ExternalOutputSettings.outputAspectRatio,
                 dockSpan: dockSpan,
                 tileHeight: Self.thumbGridTileSize(
                     width: bounds.width, orientation: orientation
@@ -134,7 +134,7 @@ extension CameraLiveViewController {
             : nil
         return stackedLayout?.panel ?? Self.phoneCameraPanelRect(
             in: bounds,
-            aspect: orientation.aspectRatio,
+            aspect: ExternalOutputSettings.outputAspectRatio,
             dockEdge: edge,
             dockSpan: dockSpan
         )
