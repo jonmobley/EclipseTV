@@ -76,7 +76,7 @@ final class SlideshowCountdownRingView: UIView {
     override init(frame: CGRect) {
         super.init(frame: frame)
         isUserInteractionEnabled = false
-        backgroundColor = UIColor.black.withAlphaComponent(0.45)
+        backgroundColor = UIColor.black.withAlphaComponent(0.65)
         layer.cornerRadius = 18
 
         for shape in [trackLayer, progressLayer] {

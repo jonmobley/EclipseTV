@@ -41,7 +41,7 @@ extension LiveHeaderView {
             top: 8, leading: 8, bottom: 8, trailing: 8
         )
         let button = MinimumHitTargetButton(configuration: config)
-        button.backgroundColor = UIColor.black.withAlphaComponent(0.45)
+        button.backgroundColor = UIColor.black.withAlphaComponent(0.65)
         button.layer.cornerRadius = 18
         button.clipsToBounds = true
         button.translatesAutoresizingMaskIntoConstraints = false

@@ -227,12 +227,11 @@ struct LandscapeBrowserChromeTests {
             #expect(browser.usesOverlayBrowserChrome)
             #expect(browser.navigationItem.title == nil)
             #expect(nav.isNavigationBarHidden)
-            // Back waits for in-session history; Refresh and ⋯ are always there.
-            // New Tab lives in ⋯; Auto Scroll shows only while it runs.
+            // Back waits for in-session history; Refresh and history are always
+            // there. ⊕ shows in the column while there is a single tab.
             #expect(browser.overlayBackButton.isHidden)
             #expect(browser.overlayRefreshButton.isHidden == false)
-            #expect(browser.overlayNewTabButton.isHidden)
-            #expect(browser.overlayAutoScrollButton.isHidden)
+            #expect(browser.overlayNewTabButton.isHidden == false)
             #expect(browser.overlayBookmarksButton.isHidden == false)
             #expect(browser.overlaySendToTVButton.isHidden)
         }

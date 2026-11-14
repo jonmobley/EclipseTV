@@ -46,6 +46,13 @@
   and `MediaAspect.activeTarget` (Fit/Fill, still Reframe) read `ExternalOutputSettings.outputAspectRatio`; anything that
   rewrites a file (video re-crop) uses `MediaAspect.libraryTarget`. Grid tiles, media buckets and the Apple TV protocol still
   use `orientation` and know nothing about custom sizes.
+  Z-order on the TV picture goes through `stageView.bringSubviewToFront` (transition overlay, audio badge);
+  `view.bringSubviewToFront` on a stage subview is a no-op.
+- Leaving a live countdown (2026-11-13): `endOverlay` moves output state on *before* tearing the overlay down,
+  same order as `beginOverlay`. Ending the clock posts its change synchronously, and if `overlaySource` still says
+  countdown the grid repaints the hero back onto the frozen clock (countdown posts no end notice to fix it).
+- iPhone UI from the AirPlay branch (2026-11-13): the hero's Fit / Fill toggle shows the words, not an icon (menus keep
+  icons); tile menus say "Camera Controls" and "PTZ Controls"; Home Recent Shows uses two columns in panes under 500pt.
 - Settings notifications are expensive and reach the camera (2026-11-12): `ExternalOutputSettings.didChangeNotification`
   observers re-sync the library, refresh the camera tile (start/stop of the capture session) and re-lay-out every
   `PresentationViewController`. `CameraPreviewView.layoutSubviews` talks to the capture connection, so never force a
@@ -68,9 +75,15 @@
 - Website fullscreen on iPhone/iPad (`WebRemoteViewController`, 2026-11-04): every website card of the
   open Show is a tab (`BrowserTabList`, strip above the card, shown with 2+ tabs); the TV follows the
   active tab. Windows a site opens (`window.open`, sign-in) are phone-only tabs until "Send to TV".
-  Landscape buttons (Close · ⋯ · Refresh · ⊕, then Send to TV / Back only when they apply) sit in a
-  column beside the card on a phone; iPad gets a browser-style top bar (chips left, buttons top right)
+  Landscape buttons (Close · history · Refresh, then ⊕ only with a single tab, Send to TV / Back only
+  when they apply) sit in a column beside the card on a phone; with 2+ tabs ⊕ ends the tab chips
+  instead (`BrowserTabStripView.newTabButton`). The history clock opens History: on iPhone a drawer (`WebHistoryDrawerView`, from the right in Landscape, from the
+  bottom in Vertical) with Saved and Recent; on iPad a pop-up menu with the same two sections. Recent is the last 30 pages
+  the phone finished loading in a tab (`WebHistoryStore`, UserDefaults `EclipseTV.web.recentPages`, phone only), and
+  picking one loads it in the active tab. The overlay buttons are re-raised on every layout, so the drawer is re-raised after them.
+  Website Auto Scroll was removed (2026-11-13); `ScrollSpeedSlider` now serves only the Prompter. iPad gets a browser-style top bar (chips left, buttons top right)
   in both orientations, since iPadOS ignores the orientation lock while the app supports Split View.
+  The website card matches the hero preview: 16pt corners and a 1pt `separator` hairline (2026-11-13).
 - Seeding a simulator with websites/Shows for a visual check: the stores are JSON blobs in
   UserDefaults (`EclipseTV.pages.items`, `EclipseTV.localAlbums.items`); write them with
   `simctl spawn <udid> defaults write <container>/Library/Preferences/com.mobleypro.eclipse.EclipseiPhone.plist <key> -data <hex-json>`

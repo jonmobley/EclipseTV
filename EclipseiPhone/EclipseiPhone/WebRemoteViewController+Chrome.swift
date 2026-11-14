@@ -11,7 +11,8 @@ import UIKit
 
 extension WebRemoteViewController {
 
-    /// Builds Back · host title · Refresh · ⊕ · ⋯ · Close.
+    /// Builds Back · host title · ⊕ · Refresh · history · Close.
+    /// ⊕ moves to the end of the tab chips while two or more tabs are open.
     func setupBrowserChrome() {
         backButton = UIBarButtonItem(
             image: UIImage(systemName: "chevron.backward"),
@@ -51,11 +52,20 @@ extension WebRemoteViewController {
             action: #selector(sendToTVTapped)
         )
         sendToTVBarButton.accessibilityLabel = "Send to TV"
-        bookmarksButton = UIBarButtonItem(
-            image: UIImage(systemName: "ellipsis"),
-            menu: makeBookmarksMenu()
-        )
-        bookmarksButton.accessibilityLabel = "Websites"
+        if usesHistoryDrawer {
+            bookmarksButton = UIBarButtonItem(
+                image: UIImage(systemName: Self.bookmarksSymbol),
+                style: .plain,
+                target: self,
+                action: #selector(historyTapped)
+            )
+        } else {
+            bookmarksButton = UIBarButtonItem(
+                image: UIImage(systemName: Self.bookmarksSymbol),
+                menu: makeBookmarksMenu()
+            )
+        }
+        bookmarksButton.accessibilityLabel = "History"
         closeButton = UIBarButtonItem(
             barButtonSystemItem: .close,
             target: self,
@@ -63,17 +73,27 @@ extension WebRemoteViewController {
         )
         closeButton.accessibilityHint =
             "Closes the browser. The TV keeps showing this site."
-        autoScrollBarButton = makeAutoScrollBarButton()
-        navigationItem.rightBarButtonItems = barTrailingItems(showsSendToTV: false)
+        navigationItem.rightBarButtonItems = barTrailingItems()
         setupOverlayChrome()
     }
 
+    /// Saved-websites button: a history clock, not a ⋯.
+    static let bookmarksSymbol = "clock.arrow.circlepath"
+
+    /// iPhone opens history as a drawer; iPad keeps a menu beside the button.
+    var usesHistoryDrawer: Bool { traitCollection.userInterfaceIdiom != .pad }
+
+    /// Whether ⊕ belongs in the button bar / column. With two or more tabs it sits
+    /// at the end of the tab chips instead, like a desktop browser.
+    var showsNewTabInChrome: Bool { !tabs.showsStrip }
+
     /// Right-to-left order of the nav bar's trailing items.
-    private func barTrailingItems(showsSendToTV: Bool) -> [UIBarButtonItem] {
-        var items: [UIBarButtonItem] = [
-            closeButton, bookmarksButton, autoScrollBarButton, refreshBarButton, newTabBarButton
-        ]
-        if showsSendToTV {
+    private func barTrailingItems() -> [UIBarButtonItem] {
+        var items: [UIBarButtonItem] = [closeButton, bookmarksButton, refreshBarButton]
+        if showsNewTabInChrome {
+            items.append(newTabBarButton)
+        }
+        if activeTab.isPhoneOnly {
             items.append(sendToTVBarButton)
         }
         return items
@@ -102,12 +122,11 @@ extension WebRemoteViewController {
             action: #selector(sendToTVTapped)
         )
         overlayBookmarksButton = makeOverlayChromeButton(
-            systemName: "ellipsis",
-            accessibilityLabel: "Websites",
-            action: nil
+            systemName: Self.bookmarksSymbol,
+            accessibilityLabel: "History",
+            action: usesHistoryDrawer ? #selector(historyTapped) : nil
         )
-        overlayBookmarksButton.showsMenuAsPrimaryAction = true
-        overlayAutoScrollButton = makeOverlayAutoScrollButton()
+        overlayBookmarksButton.showsMenuAsPrimaryAction = !usesHistoryDrawer
         overlayCloseButton = UIButton(type: .system)
         overlayCloseButton.applyPreviewCloseAppearance()
         overlayCloseButton.translatesAutoresizingMaskIntoConstraints = true
@@ -127,8 +146,8 @@ extension WebRemoteViewController {
     /// Every overlay button.
     var allOverlayChromeButtons: [UIButton] {
         [
-            overlayCloseButton, overlayBookmarksButton, overlayAutoScrollButton,
-            overlayRefreshButton, overlayNewTabButton, overlaySendToTVButton, overlayBackButton
+            overlayCloseButton, overlayBookmarksButton, overlayRefreshButton,
+            overlayNewTabButton, overlaySendToTVButton, overlayBackButton
         ]
     }
 
@@ -139,6 +158,7 @@ extension WebRemoteViewController {
         applyOverlayChromeVisibility()
         applyWebStageTopConstraint()
         updateBrowserChrome()
+        historyDrawer?.placement = historyDrawerPlacement
         view.setNeedsLayout()
     }
 
@@ -163,6 +183,10 @@ extension WebRemoteViewController {
             button.frame = frame
             view.bringSubviewToFront(button)
         }
+        // The history drawer covers the buttons while it is open.
+        if let drawer = historyDrawer, drawer.superview === view {
+            view.bringSubviewToFront(drawer)
+        }
     }
 
     /// Shows the overlay buttons that earn a slot (Landscape only), hides the rest.
@@ -173,16 +197,15 @@ extension WebRemoteViewController {
         }
     }
 
-    /// Overlay buttons that currently earn a slot, top to bottom: Close · ⋯ · Refresh,
-    /// then Auto Scroll (only while it runs, so one tap stops it), Send to TV and Back
-    /// only while they apply. The fixed three never move. New Tab and starting Auto
-    /// Scroll live in ⋯, which kept the column short beside the 16:9 card.
+    /// Overlay buttons that currently earn a slot, top to bottom: Close · history ·
+    /// Refresh, then ⊕ (single tab only; otherwise it ends the tab chips), Send to TV
+    /// and Back only while they apply, so the fixed three never move.
     var visibleOverlayChromeButtons: [UIButton] {
         var buttons: [UIButton] = [
             overlayCloseButton, overlayBookmarksButton, overlayRefreshButton
         ]
-        if autoScroller.isActive {
-            buttons.append(overlayAutoScrollButton)
+        if showsNewTabInChrome {
+            buttons.append(overlayNewTabButton)
         }
         if activeTab.isPhoneOnly {
             buttons.append(overlaySendToTVButton)
@@ -211,7 +234,7 @@ extension WebRemoteViewController {
         } ?? false
     }
 
-    /// Syncs the nav title, Back, Send to TV, and the ⋯ checkmarks with the active tab.
+    /// Syncs the nav title, Back, ⊕, Send to TV, and the history checkmarks with the active tab.
     func updateBrowserChrome() {
         if usesOverlayBrowserChrome {
             navigationItem.title = nil
@@ -226,11 +249,10 @@ extension WebRemoteViewController {
         backButton.isEnabled = canGoBack
         overlayBackButton?.isEnabled = canGoBack
         applyOverlayChromeVisibility()
-        let wantsSendToTV = activeTab.isPhoneOnly
-        let showsSendToTV = navigationItem.rightBarButtonItems?
-            .contains(where: { $0 === sendToTVBarButton }) ?? false
-        if wantsSendToTV != showsSendToTV {
-            navigationItem.rightBarButtonItems = barTrailingItems(showsSendToTV: wantsSendToTV)
+        let wanted = barTrailingItems()
+        let current = navigationItem.rightBarButtonItems ?? []
+        if !wanted.elementsEqual(current, by: ===) {
+            navigationItem.rightBarButtonItems = wanted
         }
         refreshBookmarksMenu()
         if usesOverlayBrowserChrome {
@@ -238,11 +260,77 @@ extension WebRemoteViewController {
         }
     }
 
-    /// Rebuilds the ⋯ menu (saved websites).
+    /// Rebuilds the history menu (iPad) or the open drawer's rows (iPhone).
     func refreshBookmarksMenu() {
+        if usesHistoryDrawer {
+            refreshHistoryDrawer()
+            return
+        }
         let menu = makeBookmarksMenu()
         bookmarksButton?.menu = menu
         overlayBookmarksButton?.menu = menu
+    }
+
+    // MARK: - History drawer (iPhone)
+
+    /// Beside a Landscape card the drawer comes in from the right; in Vertical, from below.
+    var historyDrawerPlacement: WebHistoryDrawerView.Placement {
+        usesOverlayBrowserChrome ? .trailing : .bottom
+    }
+
+    @objc func historyTapped() {
+        presentHistoryDrawer()
+    }
+
+    func presentHistoryDrawer() {
+        guard historyDrawer == nil else { return }
+        let drawer = WebHistoryDrawerView(placement: historyDrawerPlacement)
+        drawer.onSelectSaved = { [weak self] page in self?.openSavedPage(page) }
+        drawer.onSelectRecent = { [weak self] url in self?.openRecentPage(url) }
+        drawer.onClearRecent = { [weak self] in
+            WebHistoryStore.shared.clear()
+            self?.refreshHistoryDrawer()
+        }
+        drawer.onDismiss = { [weak self, weak drawer] in
+            if self?.historyDrawer === drawer { self?.historyDrawer = nil }
+        }
+        historyDrawer = drawer
+        refreshHistoryDrawer()
+        drawer.show(in: view)
+    }
+
+    func refreshHistoryDrawer() {
+        historyDrawer?.update(
+            saved: WebPageStore.shared.pages,
+            currentSavedId: currentSavedPageId,
+            recent: WebHistoryStore.shared.entries
+        )
+    }
+
+    /// The saved website the active tab is showing, for the checkmark.
+    private var currentSavedPageId: UUID? {
+        let currentURL = webView?.url
+        return WebPageStore.shared.pages.first {
+            isCurrentBookmark($0, currentURL: currentURL)
+        }?.id
+    }
+
+    /// A recent page: its tab when one is already on it, else it loads in the
+    /// active tab (like Safari history), and the TV follows as for a link.
+    func openRecentPage(_ url: URL) {
+        if let open = tabs.tabs.first(where: {
+            $0.webView?.url.map { WebHistoryStore.sameAddress($0, url) } ?? false
+        }) {
+            activateTab(id: open.id)
+            return
+        }
+        guard let webView else {
+            openNewTab(url: url)
+            return
+        }
+        // A page the user picked is real Back history, like following a link.
+        activeTab.backRoot.markUserNavigated()
+        webView.load(URLRequest(url: url))
     }
 
     func makeOverlayChromeButton(
@@ -317,22 +405,11 @@ extension WebRemoteViewController {
 
     // MARK: - Bookmarks Menu
 
-    /// Saved websites from the library (each opens in its own tab), then the browser's
-    /// own actions: New Tab, Auto Scroll and its speed.
+    /// Saved websites from the library; each opens in its own tab.
     private func makeBookmarksMenu() -> UIMenu {
         let pages = WebPageStore.shared.pages
-        if pages.isEmpty {
-            return UIMenu(children: [
-                UIAction(
-                    title: "No saved websites",
-                    attributes: .disabled
-                ) { _ in },
-                browserActionsMenu()
-            ])
-        }
-
         let currentURL = webView?.url
-        var children: [UIMenuElement] = pages.map { bookmark in
+        var saved: [UIMenuElement] = pages.map { bookmark in
             let state: UIMenuElement.State =
                 isCurrentBookmark(bookmark, currentURL: currentURL) ? .on : .off
             return UIAction(
@@ -343,30 +420,25 @@ extension WebRemoteViewController {
                 self?.openSavedPage(bookmark)
             }
         }
-        children.append(browserActionsMenu())
-        return UIMenu(children: children)
-    }
-
-    /// New Tab, Auto Scroll on/off and its speed, as one section of ⋯.
-    private func browserActionsMenu() -> UIMenu {
-        let newTab = UIAction(
-            title: "New Tab…",
-            image: UIImage(systemName: "plus.square.on.square")
-        ) { [weak self] _ in
-            self?.presentNewURLAlert()
+        if saved.isEmpty {
+            saved = [UIAction(title: "No saved websites", attributes: .disabled) { _ in }]
         }
-        let running = autoScroller.isActive
-        let autoScroll = UIAction(
-            title: running ? "Stop Auto Scroll" : "Auto Scroll",
-            image: UIImage(systemName: running ? "stop.circle" : "arrow.down.circle")
-        ) { [weak self] _ in
-            self?.autoScrollTapped()
+        var sections: [UIMenuElement] = [
+            UIMenu(title: "Saved", options: .displayInline, children: saved)
+        ]
+        let recent = WebHistoryStore.shared.entries.prefix(10).map { entry in
+            UIAction(
+                title: entry.title,
+                subtitle: WebHistoryStore.fallbackTitle(for: entry.url),
+                image: UIImage(systemName: "clock")
+            ) { [weak self] _ in
+                self?.openRecentPage(entry.url)
+            }
         }
-        return UIMenu(
-            title: "",
-            options: .displayInline,
-            children: [newTab, autoScroll, autoScrollSpeedMenu()]
-        )
+        if !recent.isEmpty {
+            sections.append(UIMenu(title: "Recent", options: .displayInline, children: recent))
+        }
+        return UIMenu(children: sections)
     }
 
     /// Whether `bookmark` should show a checkmark for the active tab.
