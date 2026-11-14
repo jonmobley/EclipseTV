@@ -126,3 +126,7 @@
   While the camera is live, `ShowProgram.itemId` carries the selected frame id so the matching preset (not the plain
   Camera tile) gets the live stroke; the plain Camera tile drops a preset's frame when tapped. Deleting a frame removes its
   presets. Tiles show a still (last camera picture + frame): the one live preview layer belongs to the Camera tile.
+- PDF reader zoom snap (2026-11-14): pinching in `PDFRemoteViewController` catches where the current page exactly fills
+  the audience frame's width and where it fills its height (`PDFZoomSnap`, ±4% hold band, light haptic on entry). It
+  rides the scroll view's own pinch recognizer (added target, never the delegate); UIScrollView sets zoom from the
+  cumulative pinch scale each frame, which is why holding by resetting `zoomScale` doesn't trap the pinch.

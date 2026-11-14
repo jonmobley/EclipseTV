@@ -40,6 +40,11 @@ final class PDFRemoteViewController: UIViewController {
     private var offsetObservation: NSKeyValueObservation?
     private weak var observedScrollView: UIScrollView?
     private var isSyncingScroll = false
+    /// Snap sizes for the pinch in progress (page fills the frame's width / height).
+    private var pinchSnapTargets: [CGFloat] = []
+    /// The snap size the pinch is currently holding on, if any.
+    private var heldSnapScale: CGFloat?
+    private let snapHaptic = UIImpactFeedbackGenerator(style: .light)
 
     // MARK: - Init
 
@@ -273,12 +278,87 @@ final class PDFRemoteViewController: UIViewController {
         offsetObservation?.invalidate()
         observedScrollView = scroll
         stageView?.forwardingTarget = scroll
+        // Added after the scroll view's own handler, so it sees the zoom the
+        // scroll view just applied and can hold it on a snap size.
+        scroll.pinchGestureRecognizer?.addTarget(self, action: #selector(pinchChanged(_:)))
         offsetObservation = scroll.observe(\.contentOffset, options: [.new]) { [weak self] _, _ in
             guard let self else { return }
             self.alignContextView()
             guard !self.isSyncingScroll else { return }
             self.pushSyncState()
         }
+    }
+
+    // MARK: - Zoom snap
+
+    /// Makes the pinch catch where the page exactly fills the audience frame's
+    /// width or height: within `PDFZoomSnap.holdBand` of one, the zoom holds there
+    /// (with a light tap) until the pinch moves well past it.
+    @objc private func pinchChanged(_ pinch: UIPinchGestureRecognizer) {
+        guard let pdf = pdfView, let scroll = pdf.eclipse_scrollView else { return }
+        switch pinch.state {
+        case .began:
+            pinchSnapTargets = currentSnapTargets()
+            heldSnapScale = nil
+            snapHaptic.prepare()
+        case .changed:
+            let target = PDFZoomSnap.target(for: pdf.scaleFactor, in: pinchSnapTargets)
+            if let target, target != heldSnapScale {
+                snapHaptic.impactOccurred()
+                snapHaptic.prepare()
+            }
+            heldSnapScale = target
+            if let target { hold(scroll, pdf: pdf, atScale: target, around: pinch) }
+        default:
+            if let held = heldSnapScale, pinch.state == .ended {
+                hold(scroll, pdf: pdf, atScale: held, around: pinch)
+            }
+            heldSnapScale = nil
+            pinchSnapTargets = []
+        }
+    }
+
+    /// Snap sizes for the current page against the audience frame.
+    private func currentSnapTargets() -> [CGFloat] {
+        guard let pdf = pdfView, let panelView,
+              let page = pdf.currentPage ?? pdf.document?.page(at: 0),
+              pdf.scaleFactor > 0 else { return [] }
+        let drawn = pdf.convert(page.bounds(for: pdf.displayBox), from: page)
+        let atScaleOne = CGSize(
+            width: drawn.width / pdf.scaleFactor,
+            height: drawn.height / pdf.scaleFactor
+        )
+        return PDFZoomSnap.targets(
+            pageSizeAtScaleOne: atScaleOne,
+            container: panelView.bounds.size,
+            range: pdf.minScaleFactor...pdf.maxScaleFactor
+        )
+    }
+
+    /// Sets the zoom to `scale` while keeping the content under the fingers in place.
+    private func hold(
+        _ scroll: UIScrollView,
+        pdf: PDFView,
+        atScale scale: CGFloat,
+        around pinch: UIPinchGestureRecognizer
+    ) {
+        let current = pdf.scaleFactor
+        guard current > 0, abs(current - scale) > 0.0001,
+              let content = scroll.delegate?.viewForZooming?(in: scroll) else { return }
+        let anchor = pinch.location(in: scroll)
+        let anchorInContent = scroll.convert(anchor, to: content)
+        scroll.setZoomScale(scroll.zoomScale * scale / current, animated: false)
+        let moved = content.convert(anchorInContent, to: scroll)
+        var offset = scroll.contentOffset
+        offset.x += moved.x - anchor.x
+        offset.y += moved.y - anchor.y
+        let minX = -scroll.adjustedContentInset.left
+        let minY = -scroll.adjustedContentInset.top
+        let maxX = max(minX, scroll.contentSize.width - scroll.bounds.width + scroll.adjustedContentInset.right)
+        let maxY = max(minY, scroll.contentSize.height - scroll.bounds.height + scroll.adjustedContentInset.bottom)
+        offset.x = min(max(offset.x, minX), maxX)
+        offset.y = min(max(offset.y, minY), maxY)
+        scroll.contentOffset = offset
     }
 
     /// Keeps the dimmed page behind the frame lined up with the framed page:
