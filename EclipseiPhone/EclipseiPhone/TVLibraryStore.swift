@@ -51,6 +51,12 @@ final class TVLibraryStore {
     }
     private(set) var currentId: String?
 
+    /// Ids the Apple TV listed in its latest manifest for the active mode. Their
+    /// availability is the TV's to say; the iCloud merge never turns it off.
+    /// Saved per TV and mode beside the cached list, so a Display Mode switch or a
+    /// relaunch still knows which cached rows were the TV's.
+    private var tvManifestIds: Set<String> = []
+
     /// Position of each id in `items`, built on first `item(id:)` after a change.
     /// The Show grid resolves every tile by id several times per tile while
     /// scrolling; a linear `items.first(where:)` there made big Shows hitch.
@@ -104,6 +110,7 @@ final class TVLibraryStore {
 
     private let itemsKeyPrefix = "EclipseTV.companion.items."
     private let currentIdKeyPrefix = "EclipseTV.companion.currentId."
+    private let tvIdsKeyPrefix = "EclipseTV.companion.tvIds."
     private let activeTVNameKey = "EclipseTV.companion.activeTVName"
 
     private let baseThumbnailDirectory: URL
@@ -407,6 +414,7 @@ final class TVLibraryStore {
             }
         }
 
+        persistTVManifestIds(manifestIds, mode: mode)
         if mode != activeLibraryMode {
             persistBucket(items: items, currentId: currentId, mode: mode)
             logger.debug("Stored offline manifest for mode \(modeSuffix, privacy: .public)")
@@ -415,6 +423,7 @@ final class TVLibraryStore {
 
         self.items = items
         self.currentId = currentId
+        tvManifestIds = manifestIds
         mergePendingUploads()
         mergeCaptures()
         mergeImportedMedia()
@@ -507,39 +516,68 @@ final class TVLibraryStore {
     }
 
     /// Merges phone-owned captures into the display list (never sent to Apple TV).
-    private func mergeCaptures() {
-        let existing = Set(items.map { $0.id })
+    @discardableResult
+    private func mergeCaptures() -> Bool {
         let mode = ExternalOutputSettings.orientation
-        for capture in CaptureStore.shared.capturesForCurrentMode
-        where capture.orientation == mode {
-            let dto = capture.asLibraryItem
-            guard !existing.contains(dto.id) else { continue }
-            items.append(dto)
-        }
+        let dtos = CaptureStore.shared.capturesForCurrentMode
+            .filter { $0.orientation == mode }
+            .map(\.asLibraryItem)
+        return mergeCloudItems(dtos)
     }
 
     /// Merges CloudKit-synced imports that are not yet in the TV manifest.
-    private func mergeImportedMedia() {
-        let existing = Set(items.map { $0.id })
+    @discardableResult
+    private func mergeImportedMedia() -> Bool {
         let mode = ExternalOutputSettings.orientation
-        for imported in ImportedMediaStore.shared.allActive
-        where imported.orientation == mode {
-            let dto = imported.asLibraryItem
-            guard !existing.contains(dto.id) else { continue }
-            items.append(dto)
+        let dtos = ImportedMediaStore.shared.allActive
+            .filter { $0.orientation == mode }
+            .map(\.asLibraryItem)
+        return mergeCloudItems(dtos)
+    }
+
+    /// Adds iCloud rows the list doesn't have and keeps existing rows' `isAvailable`
+    /// in step with whether this phone has the file. Returns whether anything changed.
+    ///
+    /// Rows merged while their file was still in iCloud kept `isAvailable == false`
+    /// after the download finished, so the tile said "Downloading…" forever and a tap
+    /// never played it; and a removed download must go back to "In iCloud". Rows the
+    /// Apple TV listed are only ever turned on, never off: the TV playing a file says
+    /// nothing about whether this phone has a copy.
+    private func mergeCloudItems(_ dtos: [LibraryItemDTO]) -> Bool {
+        var indexById: [String: Int] = [:]
+        for (index, item) in items.enumerated() where indexById[item.id] == nil {
+            indexById[item.id] = index
         }
+        var changed = false
+        for dto in dtos {
+            if let index = indexById[dto.id] {
+                let current = items[index].isAvailable
+                let gainsFile = current == false && dto.isAvailable != false
+                let losesFile = current != false && dto.isAvailable == false
+                    && !tvManifestIds.contains(dto.id)
+                if gainsFile || losesFile {
+                    items[index].isAvailable = dto.isAvailable
+                    changed = true
+                }
+            } else {
+                indexById[dto.id] = items.count
+                items.append(dto)
+                changed = true
+            }
+        }
+        return changed
     }
 
     /// Re-merges captures after CloudKit fetch / local capture changes.
     func refreshMergedCaptures() {
-        mergeCaptures()
+        guard mergeCaptures() else { return }
         persistManifest()
         delegate?.libraryStoreDidUpdateItems(self)
     }
 
-    /// Re-merges imported CloudKit media after a remote apply.
+    /// Re-merges imported CloudKit media after a remote apply or a download.
     func refreshMergedImports() {
-        mergeImportedMedia()
+        guard mergeImportedMedia() else { return }
         persistManifest()
         delegate?.libraryStoreDidUpdateItems(self)
     }
@@ -749,6 +787,7 @@ final class TVLibraryStore {
         }
         items = best.items
         currentId = best.currentId
+        loadTVManifestIds()
         mergePendingUploads()
         recoverOrphanedLocalMedia()
         persistManifest()
@@ -876,6 +915,7 @@ final class TVLibraryStore {
         for mode in EclipseShareProtocol.LibraryMode.allCases {
             UserDefaults.standard.removeObject(forKey: itemsKeyPrefix + hash + "." + mode.rawValue)
             UserDefaults.standard.removeObject(forKey: currentIdKeyPrefix + hash + "." + mode.rawValue)
+            UserDefaults.standard.removeObject(forKey: tvIdsKeyPrefix + hash + "." + mode.rawValue)
         }
         // Legacy unscoped keys
         UserDefaults.standard.removeObject(forKey: itemsKeyPrefix + hash)
@@ -886,6 +926,7 @@ final class TVLibraryStore {
 
         guard tvName == activeTVName else { return }
         items = []
+        tvManifestIds = []
         currentId = nil
         thumbnails.removeAll()
         pendingDiskLoads.removeAll()
@@ -898,8 +939,10 @@ final class TVLibraryStore {
 
     private func loadPersistedManifest() {
         items = []
+        tvManifestIds = []
         currentId = nil
         guard let itemsKey = itemsKey(), let currentIdKey = currentIdKey() else { return }
+        loadTVManifestIds()
         if let data = UserDefaults.standard.data(forKey: itemsKey),
            let decoded = try? JSONDecoder().decode([LibraryItemDTO].self, from: data) {
             items = decoded
@@ -956,7 +999,31 @@ final class TVLibraryStore {
         }
     }
 
+    /// Reads the active TV's saved manifest ids for the active mode. Every path that
+    /// fills `items` from a cache calls this, so the iCloud merge that follows can
+    /// tell the TV's rows from the phone's.
+    private func loadTVManifestIds() {
+        guard let key = tvIdsKey(),
+              let ids = UserDefaults.standard.stringArray(forKey: key) else {
+            tvManifestIds = []
+            return
+        }
+        tvManifestIds = Set(ids)
+    }
+
+    private func persistTVManifestIds(_ ids: Set<String>,
+                                      mode: EclipseShareProtocol.LibraryMode) {
+        guard let key = tvIdsKey(for: mode) else { return }
+        UserDefaults.standard.set(ids.sorted(), forKey: key)
+    }
+
     // MARK: - Key & Path Helpers
+
+    private func tvIdsKey(for mode: EclipseShareProtocol.LibraryMode? = nil) -> String? {
+        guard let name = activeTVName else { return nil }
+        let m = mode ?? activeLibraryMode
+        return tvIdsKeyPrefix + Self.stableHash(name) + "." + m.rawValue
+    }
 
     private func itemsKey(for mode: EclipseShareProtocol.LibraryMode? = nil) -> String? {
         guard let name = activeTVName else { return nil }

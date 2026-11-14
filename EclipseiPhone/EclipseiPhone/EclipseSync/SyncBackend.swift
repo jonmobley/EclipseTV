@@ -155,4 +155,15 @@ enum CaptureSyncState: String, Codable, Equatable {
     case remoteOnly
     /// Download of the full-res asset is in flight.
     case downloading
+
+    /// Whether the full-res file is on this device, so the item can play.
+    ///
+    /// A download in flight has no file yet: treating it as available let a tap try
+    /// to play a file that wasn't there, and hid the tile's "Downloading…" pill.
+    var hasLocalFile: Bool {
+        switch self {
+        case .localOnly, .pendingUpload, .synced: return true
+        case .remoteOnly, .downloading: return false
+        }
+    }
 }
