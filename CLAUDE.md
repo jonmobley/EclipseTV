@@ -83,8 +83,10 @@
   profile "Eclipse iPhone App Store (Mac CLI)", then uploads with the vault's `Moxie Builder` key, so
   Xcode's Apple sign-in is no longer needed (it lapsed every few hours: "Failed to Use Accounts").
   Cert + key backup: vault Moxie `APPLE_DISTRIBUTION_2YBTPD32DW_P12_B64` / `_P12_PASSWORD`; that key can
-  also create certificates and profiles through the App Store Connect API. iPhone app only so far: an Apple
-  TV upload still needs Xcode's sign-in or its own App Store profile. Upload crash symbols with `sentry-cli`.
+  also create certificates and profiles through the App Store Connect API. Works for both apps: the script
+  reads the bundle ID from the archive and picks the iPhone profile or "Eclipse Apple TV App Store (Mac CLI)"
+  (archive the Apple TV with `-scheme EclipseAppleTV -destination 'generic/platform=tvOS'`). Upload crash
+  symbols with `sentry-cli` (projects `eclipse-iphone` / `eclipse-appletv`).
 - Website fullscreen on iPhone/iPad (`WebRemoteViewController`, 2026-11-04): every website card of the
   open Show is a tab (`BrowserTabList`, strip above the card, shown with 2+ tabs); the TV follows the
   active tab. Windows a site opens (`window.open`, sign-in) are phone-only tabs until "Send to TV".
