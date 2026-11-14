@@ -103,3 +103,9 @@
   on its slide). Operators are never held. Tools with no private Preview (camera, poll, countdown, prompter, slideshows)
   show a toast instead. Apple TV gets paused video via the optional `startsPaused` field on `play_request`; older TV
   builds ignore it and just play, so ship iPhone and Apple TV together.
+- Several Prompters per Show (2026-11-13): the first keeps token `__eclipse.tool.prompter` and the
+  Show-id script (`prompter-<showId>`, which the Mac reads too); extras are
+  `__eclipse.tool.prompter.<scriptId>` with their own `Prompter` record named by that id, so no
+  iCloud schema or Mac change was needed. `PrompterScript.showId` is really the script key.
+  There is one `PrompterController`, so the TV shows whatever script is bound; opening a
+  different Prompter while one is live asks before switching.
