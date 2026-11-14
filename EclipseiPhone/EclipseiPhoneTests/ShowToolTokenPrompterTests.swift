@@ -144,4 +144,23 @@ struct ShowToolTokenPrompterTests {
         #expect(!scripts.hasScript(forShowId: extraId))
         #expect(scripts.script(forShowId: otherId) == "Other show")
     }
+
+    @Test func showDeletesOnlyExtraPromptersItOwns() {
+        let ownId = UUID()
+        let mineId = UUID()
+        let otherShowId = UUID()
+        let sharedScriptId = UUID()
+        let show = LocalAlbum(id: ownId, name: "A", surfaceIds: [
+            ShowToolToken.prompter,
+            ShowToolToken.extraPrompterToken(scriptId: mineId),
+            ShowToolToken.extraPrompterToken(scriptId: otherShowId),
+            ShowToolToken.extraPrompterToken(scriptId: sharedScriptId),
+            ShowToolToken.extraPrompterToken(scriptId: ownId)
+        ])
+        let other = LocalAlbum(id: otherShowId, name: "B", surfaceIds: [
+            ShowToolToken.extraPrompterToken(scriptId: sharedScriptId)
+        ])
+        #expect(LocalAlbumStore.ownedExtraPrompterScriptIds(of: show, among: [other]) == [mineId])
+        #expect(LocalAlbumStore.ownedExtraPrompterScriptIds(of: nil, among: [other]).isEmpty)
+    }
 }

@@ -156,9 +156,7 @@ final class LocalAlbumStore {
         LivePollStore.shared.deleteAll(forShowId: id)
         PrompterScriptStore.shared.deleteAll(
             forShowId: id,
-            extraScriptIds: ShowToolToken.prompterScriptIds(
-                in: removed?.surfaceIds ?? [], showId: id
-            )
+            extraScriptIds: Self.ownedExtraPrompterScriptIds(of: removed, among: albums)
         )
         for itemId in removed?.itemIds ?? [] {
             if let pageId = UUID(uuidString: itemId) {
@@ -535,6 +533,22 @@ final class LocalAlbumStore {
     }
 
     /// Album with `id`, if any.
+    /// Extra Prompter script ids `show` may delete: never another Show's id (its
+    /// first Prompter's script) or a script another remaining Show also lists.
+    ///
+    /// Surfaces sync from other devices and, for shared Shows, other people, so a
+    /// planted token must not reach scripts this Show doesn't own.
+    static func ownedExtraPrompterScriptIds(of show: LocalAlbum?, among others: [LocalAlbum]) -> [UUID] {
+        guard let show else { return [] }
+        var foreign = Set<UUID>()
+        for other in others where other.id != show.id {
+            foreign.insert(other.id)
+            foreign.formUnion(ShowToolToken.prompterScriptIds(in: other.surfaceIds ?? [], showId: other.id))
+        }
+        return ShowToolToken.prompterScriptIds(in: show.surfaceIds ?? [], showId: show.id)
+            .filter { $0 != show.id && !foreign.contains($0) }
+    }
+
     func album(id: UUID) -> LocalAlbum? {
         albums.first { $0.id == id }
     }
