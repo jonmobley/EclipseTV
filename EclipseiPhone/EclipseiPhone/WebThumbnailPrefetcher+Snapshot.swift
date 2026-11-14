@@ -17,8 +17,26 @@ extension WebThumbnailPrefetcher {
     func takeSnapshot(
         from webView: WKWebView,
         pageId: UUID,
-        completion: (() -> Void)? = nil
+        completion: (() -> Void)? = nil,
+        settleRetries: Int = 6
     ) {
+        // Wait out a transition (browser opening, rotating, closing) rather than
+        // render a card that is still moving; see `isSettledOnScreen`.
+        if webView.transform != .identity,
+           let panel = webView.superview,
+           !Self.isSettledOnScreen(panel),
+           settleRetries > 0 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self, weak webView] in
+                guard let self, let webView else { completion?(); return }
+                self.takeSnapshot(
+                    from: webView,
+                    pageId: pageId,
+                    completion: completion,
+                    settleRetries: settleRetries - 1
+                )
+            }
+            return
+        }
         let scroll = webView.scrollView
         scroll.contentInsetAdjustmentBehavior = .never
         scroll.contentInset = .zero
@@ -68,6 +86,11 @@ extension WebThumbnailPrefetcher {
         let logical = ExternalOutputSettings.webLogicalSize
         guard size.width > 8, size.height > 8,
               aspectMatchesDisplayMode(size, logical: logical) else { return nil }
+        // drawHierarchy paints what is on screen. Mid-transition (browser sliding in,
+        // rotating to Landscape, closing) the card is drawn smaller than its bounds,
+        // which saved a small card in the corner of a black preview. Let the
+        // caller fall back to a WebKit snapshot, which ignores on-screen motion.
+        guard Self.isSettledOnScreen(panel) else { return nil }
 
         let savedAlpha = panel.alpha
         if savedAlpha < 0.05 { panel.alpha = 1 }
@@ -116,6 +139,29 @@ extension WebThumbnailPrefetcher {
             webView.autoresizingMask = saved.mask
             webView.translatesAutoresizingMaskIntoConstraints = saved.translates
         }
+    }
+
+    /// True when `view` is in a window, drawn at its own size, and nothing it sits
+    /// in is animating, so an on-screen render matches its bounds.
+    static func isSettledOnScreen(_ view: UIView) -> Bool {
+        guard let window = view.window else { return false }
+        let onScreen = view.convert(view.bounds, to: nil)
+        guard onScreenSizeMatches(onScreen.size, bounds: view.bounds.size) else { return false }
+        if let presented = window.layer.presentation(),
+           !CATransform3DEqualToTransform(presented.transform, window.layer.transform) {
+            return false
+        }
+        var current: UIView? = view
+        while let layerOwner = current {
+            if let keys = layerOwner.layer.animationKeys(), !keys.isEmpty { return false }
+            current = layerOwner.superview
+        }
+        return true
+    }
+
+    /// On-screen size within a point of the layout size (no scale applied by ancestors).
+    static func onScreenSizeMatches(_ onScreen: CGSize, bounds: CGSize) -> Bool {
+        abs(onScreen.width - bounds.width) <= 1 && abs(onScreen.height - bounds.height) <= 1
     }
 
     private func aspectMatchesDisplayMode(_ size: CGSize, logical: CGSize) -> Bool {
