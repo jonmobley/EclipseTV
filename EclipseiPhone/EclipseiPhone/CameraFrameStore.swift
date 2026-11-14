@@ -426,13 +426,17 @@ final class CameraFrameStore {
             logger.error("Remote frame copy failed: \(error.localizedDescription)")
             return
         }
+        // A local edit the server hasn't acknowledged (e.g. a rename) wins over the
+        // incoming copy; the frame stays dirty so that edit still uploads.
+        var keepsLocalEdit = false
         if let index = allFrames.firstIndex(where: { $0.id == id }) {
+            keepsLocalEdit = frameNeedsUpload(id: id)
             allFrames[index] = CameraFrame(
                 id: id,
                 createdAt: createdAt,
                 lastUsedAt: allFrames[index].lastUsedAt,
                 orientation: orientation,
-                name: name
+                name: keepsLocalEdit ? allFrames[index].name : name
             )
         } else {
             allFrames.append(
@@ -447,7 +451,11 @@ final class CameraFrameStore {
             insertEnabled(id)
         }
         saveIndex()
-        markFrameSynced(id: id)
+        if keepsLocalEdit {
+            EclipseSyncController.shared.backend.scheduleCameraFrameSave(id: id)
+        } else {
+            markFrameSynced(id: id)
+        }
         NotificationCenter.default.post(name: Self.didChangeNotification, object: self)
     }
 
