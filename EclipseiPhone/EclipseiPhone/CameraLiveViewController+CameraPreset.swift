@@ -31,39 +31,73 @@ extension CameraLiveViewController {
         )
     }
 
-    /// Save-as-preset sheet for a frame, anchored to its tile on iPad.
-    ///
-    /// Only offered when Camera was opened from a Show: that's where the tile goes.
+    /// Actions for a held frame: Rename, plus Save as Camera Preset when Camera
+    /// was opened from a Show (that's where the tile goes). Anchored on iPad.
     func presentFramePresetActions(frameId: UUID, anchor: UIView?) {
-        guard let showId = captureDestinationShowId,
-              let show = LocalAlbumStore.shared.album(id: showId) else { return }
         Haptics.impactMedium()
-        let token = ShowCameraPresetToken.token(for: frameId)
-        let isSaved = show.surfaceIds?.contains(token) == true
-        let sheet = UIAlertController(
-            title: "Camera Frame",
-            message: isSaved
-                ? "This frame is already a Camera Preset in “\(show.name)”."
+        let show = captureDestinationShowId.flatMap { LocalAlbumStore.shared.album(id: $0) }
+        let isSaved = show?.surfaceIds?.contains(
+            ShowCameraPresetToken.token(for: frameId)
+        ) == true
+        var message: String?
+        if let show {
+            message = isSaved
+                ? "This frame is a Camera Preset in “\(show.name)”."
                 : "A Camera Preset is a tile in “\(show.name)” that puts the camera "
-                    + "live with this frame in one tap.",
+                    + "live with this frame in one tap."
+        }
+        let sheet = UIAlertController(
+            title: CameraFrameStore.shared.displayName(for: frameId),
+            message: message,
             preferredStyle: .actionSheet
         )
-        if !isSaved {
+        sheet.addAction(UIAlertAction(title: "Rename", style: .default) { [weak self] _ in
+            self?.presentRenameCameraFrame(frameId)
+        })
+        if let show, !isSaved {
             sheet.addAction(UIAlertAction(
                 title: "Save as Camera Preset", style: .default
             ) { [weak self] _ in
                 guard LocalAlbumStore.shared.addCameraPreset(
-                    frameId: frameId, albumId: showId
+                    frameId: frameId, albumId: show.id
                 ) else { return }
                 Haptics.success()
                 self?.showPresentationToast("Camera Preset added to the Show")
             })
         }
-        sheet.addAction(UIAlertAction(title: isSaved ? "OK" : "Cancel", style: .cancel))
+        sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         if let pop = sheet.popoverPresentationController, let anchor {
             pop.sourceView = anchor
             pop.sourceRect = anchor.bounds
         }
         present(sheet, animated: true)
+    }
+}
+
+// MARK: - Rename Frame
+
+extension UIViewController {
+
+    /// Name prompt for a camera frame; a blank name goes back to "Frame N".
+    func presentRenameCameraFrame(_ frameId: UUID) {
+        let store = CameraFrameStore.shared
+        guard let frame = store.frame(id: frameId) else { return }
+        let alert = UIAlertController(
+            title: "Rename Frame",
+            message: "Shown on its Camera Preset tiles.",
+            preferredStyle: .alert
+        )
+        alert.addTextField {
+            $0.text = frame.name
+            $0.placeholder = store.displayName(for: frameId)
+            $0.autocapitalizationType = .words
+            $0.clearButtonMode = .whileEditing
+            $0.returnKeyType = .done
+        }
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Save", style: .default) { [weak alert] _ in
+            CameraFrameStore.shared.rename(frameId, to: alert?.textFields?.first?.text)
+        })
+        present(alert, animated: true)
     }
 }

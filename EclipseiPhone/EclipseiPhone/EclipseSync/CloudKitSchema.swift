@@ -152,6 +152,9 @@ enum CloudKitSchema {
         static let asset = "asset"
         static let orientation = "orientation"
         static let createdAt = "createdAt"
+        /// Optional user name. Only written once a frame has one, so frames keep
+        /// syncing before this field is deployed to the Production schema.
+        static let name = "name"
         static let modifiedAt = "modifiedAt"
     }
 

@@ -86,10 +86,10 @@ extension LibraryGridViewController {
         }
         let saved = ShowCameraPresetToken.frameIds(in: show.surfaceIds ?? [])
         let selectedId = CameraFrameStore.shared.selectedId
-        let actions = frames.enumerated().map { offset, frame -> UIAction in
+        let actions = frames.map { frame -> UIAction in
             let isSaved = saved.contains(frame.id.uuidString)
             return UIAction(
-                title: "Frame \(offset + 1)",
+                title: CameraFrameStore.shared.displayName(for: frame.id),
                 subtitle: isSaved
                     ? "Already in this Show"
                     : (frame.id == selectedId ? "On the camera now" : nil),
@@ -101,6 +101,22 @@ extension LibraryGridViewController {
             }
         }
         return UIMenu(title: title, image: image, children: actions)
+    }
+
+    /// Preset tile title: the frame's name, or "Camera Preset" while it has none.
+    func cameraPresetTitle(frameId: UUID) -> String {
+        CameraFrameStore.shared.frame(id: frameId)?.name ?? "Camera Preset"
+    }
+
+    /// "Rename Frame" for a preset tile's ⋯ menu; the name is the frame's, so it
+    /// shows everywhere that frame appears.
+    func cameraPresetRenameAction(frameId: UUID) -> UIAction {
+        UIAction(
+            title: "Rename Frame",
+            image: UIImage(systemName: "pencil")
+        ) { [weak self] _ in
+            self?.presentRenameCameraFrame(frameId)
+        }
     }
 
     /// Adds a preset tile for `frameId` to the open Show.

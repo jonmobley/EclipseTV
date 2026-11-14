@@ -5,6 +5,7 @@
 //  Copyright © 2026 Moxie LLC. All rights reserved.
 //
 
+import CloudKit
 import Foundation
 import Testing
 import UIKit
@@ -120,6 +121,49 @@ struct CameraPresetTests {
             ShowGridItem.cameraPreset(frameId: frameA).selectionId
                 == ShowCameraPresetToken.token(for: frameA)
         )
+    }
+
+    // MARK: - Frame Names
+
+    @Test func frameNamesAreTrimmedClampedAndBlankMeansNone() {
+        #expect(CameraFrame.cleanedName("  Lower Third \n") == "Lower Third")
+        #expect(CameraFrame.cleanedName("   ") == nil)
+        #expect(CameraFrame.cleanedName(nil) == nil)
+        let long = String(repeating: "a", count: 100)
+        #expect(CameraFrame.cleanedName(long)?.count == CameraFrame.maxNameLength)
+    }
+
+    @Test func frameNameSurvivesSavingAndOldIndexesStillLoad() throws {
+        let frame = CameraFrame(
+            id: frameA, createdAt: Date(timeIntervalSince1970: 0),
+            lastUsedAt: Date(timeIntervalSince1970: 0),
+            orientation: .landscape, name: "Sponsor"
+        )
+        let data = try JSONEncoder().encode(frame)
+        #expect(try JSONDecoder().decode(CameraFrame.self, from: data).name == "Sponsor")
+
+        let legacy = Data(#"{"id":"\#(frameB.uuidString)","createdAt":0}"#.utf8)
+        let old = try JSONDecoder().decode(CameraFrame.self, from: legacy)
+        #expect(old.name == nil)
+    }
+
+    @Test func iCloudRecordCarriesTheNameOnlyWhenSet() {
+        let named = CloudKitRecordMapper.makeCameraFrameRecord(
+            id: frameA, orientation: .landscape, createdAt: Date(), name: "Sponsor"
+        )
+        #expect(CloudKitRecordMapper.cameraFrameName(from: named) == "Sponsor")
+
+        let unnamed = CloudKitRecordMapper.makeCameraFrameRecord(
+            id: frameB, orientation: .landscape, createdAt: Date()
+        )
+        // Unnamed frames never write the field, so they sync before it is deployed.
+        #expect(!unnamed.allKeys().contains(CloudKitSchema.CameraFrameKey.name))
+
+        // Clearing a name removes it from a record that had one.
+        let cleared = CloudKitRecordMapper.makeCameraFrameRecord(
+            id: frameA, orientation: .landscape, createdAt: Date(), existing: named
+        )
+        #expect(CloudKitRecordMapper.cameraFrameName(from: cleared) == nil)
     }
 
     // MARK: - Thumbnail

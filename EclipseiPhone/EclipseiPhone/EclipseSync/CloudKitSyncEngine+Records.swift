@@ -286,6 +286,7 @@ extension CloudKitSyncEngine {
             id: id,
             orientation: frame.orientation,
             createdAt: frame.createdAt,
+            name: frame.name,
             existing: existing,
             assetURL: CameraFrameStore.shared.fileURL(for: id)
         )

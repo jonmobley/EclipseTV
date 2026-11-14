@@ -16,21 +16,35 @@ struct CameraFrame: Equatable, Identifiable, Codable {
     var lastUsedAt: Date
     /// Landscape and Vertical keep separate frame libraries.
     let orientation: ExternalOutputOrientation
+    /// Name the user gave the frame, or nil to show "Frame N".
+    var name: String?
 
     enum CodingKeys: String, CodingKey {
-        case id, createdAt, lastUsedAt, orientation
+        case id, createdAt, lastUsedAt, orientation, name
     }
 
     init(
         id: UUID,
         createdAt: Date,
         lastUsedAt: Date,
-        orientation: ExternalOutputOrientation
+        orientation: ExternalOutputOrientation,
+        name: String? = nil
     ) {
         self.id = id
         self.createdAt = createdAt
         self.lastUsedAt = lastUsedAt
         self.orientation = orientation
+        self.name = CameraFrame.cleanedName(name)
+    }
+
+    /// Longest name kept; tiles and menus are narrow.
+    static let maxNameLength = 40
+
+    /// Trimmed and clamped `raw`, or nil when it is blank.
+    static func cleanedName(_ raw: String?) -> String? {
+        let trimmed = (raw ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        return String(trimmed.prefix(maxNameLength))
     }
 
     init(from decoder: Decoder) throws {
@@ -42,6 +56,7 @@ struct CameraFrame: Equatable, Identifiable, Codable {
         // Legacy frames (no orientation) land in Landscape.
         let raw = try c.decodeIfPresent(String.self, forKey: .orientation)
         orientation = ExternalOutputOrientation.resolved(fromStored: raw)
+        name = CameraFrame.cleanedName(try c.decodeIfPresent(String.self, forKey: .name))
     }
 
     func encode(to encoder: Encoder) throws {
@@ -50,6 +65,7 @@ struct CameraFrame: Equatable, Identifiable, Codable {
         try c.encode(createdAt, forKey: .createdAt)
         try c.encode(lastUsedAt, forKey: .lastUsedAt)
         try c.encode(orientation.rawValue, forKey: .orientation)
+        try c.encodeIfPresent(name, forKey: .name)
     }
 }
 
@@ -230,6 +246,31 @@ final class CameraFrameStore {
         rewriteRotated(id, clockwise: false)
     }
 
+    /// Names `id`; a blank name goes back to "Frame N". Syncs to the user's devices.
+    func rename(_ id: UUID, to rawName: String?) {
+        guard let index = allFrames.firstIndex(where: { $0.id == id }) else { return }
+        let name = CameraFrame.cleanedName(rawName)
+        guard allFrames[index].name != name else { return }
+        allFrames[index].name = name
+        saveIndex()
+        NotificationCenter.default.post(name: Self.didChangeNotification, object: self)
+        guard !EclipseSyncController.shared.isApplyingRemote else { return }
+        markFrameNeedsUpload(id: id)
+        EclipseSyncController.shared.backend.scheduleCameraFrameSave(id: id)
+    }
+
+    /// What people see for a frame: its name, else "Frame N" by when it was
+    /// added within its Display Mode (stable, unlike the recent-first ribbon).
+    func displayName(for id: UUID) -> String {
+        guard let frame = allFrames.first(where: { $0.id == id }) else { return "Frame" }
+        if let name = frame.name { return name }
+        let siblings = allFrames
+            .filter { $0.orientation == frame.orientation }
+            .sorted { $0.createdAt < $1.createdAt }
+        let number = (siblings.firstIndex { $0.id == id } ?? 0) + 1
+        return "Frame \(number)"
+    }
+
     /// Makes a frame live on the camera (ribbon tap), or `nil` for no overlay.
     func select(_ id: UUID?) {
         let mode = ExternalOutputSettings.orientation
@@ -372,6 +413,7 @@ final class CameraFrameStore {
         id: UUID,
         orientation: ExternalOutputOrientation,
         createdAt: Date,
+        name: String? = nil,
         assetURL: URL
     ) {
         let destination = fileURL(for: id)
@@ -389,7 +431,8 @@ final class CameraFrameStore {
                 id: id,
                 createdAt: createdAt,
                 lastUsedAt: allFrames[index].lastUsedAt,
-                orientation: orientation
+                orientation: orientation,
+                name: name
             )
         } else {
             allFrames.append(
@@ -397,7 +440,8 @@ final class CameraFrameStore {
                     id: id,
                     createdAt: createdAt,
                     lastUsedAt: createdAt,
-                    orientation: orientation
+                    orientation: orientation,
+                    name: name
                 )
             )
             insertEnabled(id)

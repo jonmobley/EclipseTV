@@ -129,6 +129,7 @@ extension CloudKitSyncEngine {
             id: uuid,
             orientation: orientation,
             createdAt: CloudKitRecordMapper.cameraFrameCreatedAt(from: record),
+            name: CloudKitRecordMapper.cameraFrameName(from: record),
             assetURL: assetURL
         )
     }
