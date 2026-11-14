@@ -144,7 +144,7 @@ struct PrompterControllerTests {
         let showId = UUID()
         store.scripts[showId] = longScript
         let controller = PrompterController(scriptStore: store, settings: settings, frames: FakeFrames())
-        controller.bind(showId: showId)
+        controller.bind(scriptId: showId)
         controller.updateStage(width: 400, viewportHeight: 600)
         controller.nudge(lines: 10)
         let anchor = controller.readingAnchor

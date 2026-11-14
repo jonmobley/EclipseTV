@@ -268,7 +268,7 @@ extension LibraryGridViewController {
         case .website(let page) where page.videoLink != nil:
             explainBlackoutHold(cueable: true)
             return true
-        case .camera, .livePoll, .countdown, .prompter:
+        case .camera, .cameraPreset, .livePoll, .countdown, .prompter:
             explainBlackoutHold(cueable: false)
             return true
         case .ptzCamera, .screensaver, .logo, .media, .website, .pdf, .unresolved, .add:
