@@ -35,11 +35,11 @@ extension PresentationViewController {
         ensureTransitionOverlay()
         transitionOverlayContainer.alpha = 0
         transitionOverlayContainer.isHidden = false
-        view.bringSubviewToFront(transitionOverlayContainer)
+        stageView.bringSubviewToFront(transitionOverlayContainer)
         view.bringSubviewToFront(messageLabel)
         view.bringSubviewToFront(activityIndicator)
         if let badge = audioNowPlayingBadge {
-            view.bringSubviewToFront(badge)
+            stageView.bringSubviewToFront(badge)
         }
         installIncoming(source, generation: generation)
 
@@ -189,12 +189,12 @@ extension PresentationViewController {
     func ensureTransitionOverlay() {
         if transitionOverlayContainer.superview == nil {
             transitionOverlayContainer.translatesAutoresizingMaskIntoConstraints = false
-            view.addSubview(transitionOverlayContainer)
+            stageView.addSubview(transitionOverlayContainer)
             NSLayoutConstraint.activate([
-                transitionOverlayContainer.topAnchor.constraint(equalTo: view.topAnchor),
-                transitionOverlayContainer.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-                transitionOverlayContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-                transitionOverlayContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor)
+                transitionOverlayContainer.topAnchor.constraint(equalTo: stageView.topAnchor),
+                transitionOverlayContainer.bottomAnchor.constraint(equalTo: stageView.bottomAnchor),
+                transitionOverlayContainer.leadingAnchor.constraint(equalTo: stageView.leadingAnchor),
+                transitionOverlayContainer.trailingAnchor.constraint(equalTo: stageView.trailingAnchor)
             ])
         }
     }

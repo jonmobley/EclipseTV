@@ -761,7 +761,7 @@ extension LibraryGridViewController {
             children.append(contentsOf: cameraToolActions())
         case ShowToolToken.ptzCamera:
             children.append(UIAction(
-                title: "Open Controls",
+                title: "PTZ Controls",
                 image: UIImage(systemName: "slider.horizontal.3")
             ) { [weak self] _ in
                 self?.presentPTZCameraControls()

@@ -39,13 +39,13 @@ extension PresentationViewController {
         stack.translatesAutoresizingMaskIntoConstraints = false
         badge.contentView.addSubview(stack)
 
-        view.addSubview(badge)
+        stageView.addSubview(badge)
         NSLayoutConstraint.activate([
             badge.leadingAnchor.constraint(
-                equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 28
+                equalTo: stageView.leadingAnchor, constant: 28
             ),
             badge.bottomAnchor.constraint(
-                equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -28
+                equalTo: stageView.bottomAnchor, constant: -28
             ),
             stack.topAnchor.constraint(equalTo: badge.contentView.topAnchor, constant: 12),
             stack.bottomAnchor.constraint(

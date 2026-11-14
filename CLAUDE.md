@@ -37,6 +37,27 @@
   (a plain domain write or editing the plist directly is ignored, and the app then deletes the files as orphans).
   Drive the remote with osascript key codes to Simulator (123/124 arrows, 36 select, 53 Menu).
 
+- Custom screen sizes on iPhone (AirPlay only, 2026-11-11): Settings → Display Mode → Screen Size saves
+  named width×height shapes (`ExternalOutputCustomSize`, JSON in UserDefaults). They apply in Landscape only;
+  the selection is kept but inactive in Vertical. `PresentationViewController.stageView` is sized by
+  `ExternalOutputSettings.outputStageRect` (full screen unless a custom size is active) and every content
+  container is constrained to it, so new TV overlays must attach to `stageView`, not `view`. Anything that
+  mirrors the TV picture (phone camera / web / prompter stages, `webLogicalSize`, `displayModePanelRect`)
+  and `MediaAspect.activeTarget` (Fit/Fill, still Reframe) read `ExternalOutputSettings.outputAspectRatio`; anything that
+  rewrites a file (video re-crop) uses `MediaAspect.libraryTarget`. Grid tiles, media buckets and the Apple TV protocol still
+  use `orientation` and know nothing about custom sizes.
+- Settings notifications are expensive and reach the camera (2026-11-12): `ExternalOutputSettings.didChangeNotification`
+  observers re-sync the library, refresh the camera tile (start/stop of the capture session) and re-lay-out every
+  `PresentationViewController`. `CameraPreviewView.layoutSubviews` talks to the capture connection, so never force a
+  layout pass (`layoutIfNeeded`) from that notification unless a frame really changed; doing so on every post made the
+  camera suites crash (`AVCaptureSession.stopRunning` throws on the simulator) or hang under CI's parallel test mode.
+  Setters that post it should post only on a real change. CI runs the iPhone unit tests in the default parallel mode,
+  which is far more sensitive than the local `-parallel-testing-enabled NO` runs; before pushing anything that touches
+  settings observers or test fixtures, run the suite once the CI way (`xcodebuild test … -quiet`, no parallel flag).
+  Root cause of those hangs/crashes: on the simulator `AVCaptureVideoPreviewLayer.session = stubSession` waits in a
+  nested run loop inside `commitConfiguration`, so other main-actor tests run *inside* a camera test (UIKit animation
+  state crashes, `stopRunning` exceptions, or a wait that never ends). `CameraPreviewView.attach` therefore never binds
+  the session on the simulator (same as `detach`); keep it that way.
 - Crash reports: `CrashReporting.swift` in each app sends crashes and freezes to Sentry projects `eclipse-iphone` and `eclipse-appletv` (Release builds only; `scrub` keeps crash type, code location and device model, and drops all free text and activity trails; the `0.0.0.0` user address is what stops Sentry reading a city from the connection, since neither its IP setting nor `infer_ip` did). Upload symbols after each archive so reports are readable. App Privacy answers must list Crash Data and Other Diagnostic Data, not linked to the user, no tracking.
 
 ## TestFlight builds
@@ -47,8 +68,13 @@
 - Website fullscreen on iPhone/iPad (`WebRemoteViewController`, 2026-11-04): every website card of the
   open Show is a tab (`BrowserTabList`, strip above the card, shown with 2+ tabs); the TV follows the
   active tab. Windows a site opens (`window.open`, sign-in) are phone-only tabs until "Send to TV".
-  Landscape buttons (Close · ⋯ · Refresh · ⊕, then Send to TV / Back only when they apply) sit in a
-  column beside the card on a phone; iPad gets a browser-style top bar (chips left, buttons top right)
+  Landscape buttons (Close · history · Refresh, then ⊕ only with a single tab, Send to TV / Back only
+  when they apply) sit in a column beside the card on a phone; with 2+ tabs ⊕ ends the tab chips
+  instead (`BrowserTabStripView.newTabButton`). The history clock opens History: on iPhone a drawer (`WebHistoryDrawerView`, from the right in Landscape, from the
+  bottom in Vertical) with Saved and Recent; on iPad a pop-up menu with the same two sections. Recent is the last 30 pages
+  the phone finished loading in a tab (`WebHistoryStore`, UserDefaults `EclipseTV.web.recentPages`, phone only), and
+  picking one loads it in the active tab. The overlay buttons are re-raised on every layout, so the drawer is re-raised after them.
+  Website Auto Scroll was removed (2026-11-13); `ScrollSpeedSlider` now serves only the Prompter. iPad gets a browser-style top bar (chips left, buttons top right)
   in both orientations, since iPadOS ignores the orientation lock while the app supports Split View.
 - Seeding a simulator with websites/Shows for a visual check: the stores are JSON blobs in
   UserDefaults (`EclipseTV.pages.items`, `EclipseTV.localAlbums.items`); write them with

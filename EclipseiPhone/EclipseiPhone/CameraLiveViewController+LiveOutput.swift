@@ -28,7 +28,7 @@ extension CameraLiveViewController {
         guard shouldShow else { return }
 
         let short = Self.alternateStillThumbShortSide
-        let aspect = ExternalOutputSettings.orientation.aspectRatio
+        let aspect = ExternalOutputSettings.outputAspectRatio
         let width = aspect >= 1 ? short * aspect : short
         let height = width / aspect
         let inset = cameraThumbEdgeInset(panel: panel)

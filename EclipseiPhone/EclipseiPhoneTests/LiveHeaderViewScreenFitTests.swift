@@ -18,12 +18,15 @@ struct LiveHeaderViewScreenFitTests {
         #expect(header.isUserInteractionEnabled == true)
         #expect(header.screenFitButton != nil)
         #expect(header.screenFitButton?.accessibilityValue == "Fit")
+        #expect(header.screenFitButton?.configuration?.title == "Fit")
     }
 
     @Test func screenFitToggleReflectsFillMode() {
         let header = LiveHeaderView(frame: CGRect(x: 0, y: 0, width: 320, height: 180))
         header.setScreenFitToggleVisible(true, mode: .fill)
         #expect(header.screenFitButton?.accessibilityValue == "Fill")
+        #expect(header.screenFitButton?.configuration?.title == "Fill")
+        #expect(header.screenFitButton?.configuration?.image == nil)
         #expect(
             header.screenFitButton?.accessibilityHint
                 == "Shows the whole image with letterboxing"

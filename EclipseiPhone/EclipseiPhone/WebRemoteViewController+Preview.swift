@@ -199,7 +199,7 @@ enum PhoneWebViewportLayout {
         }
     }
 
-    /// Back · ⋯ · Close stacked in the trailing strip, outside `panel`.
+    /// Back · history · Close stacked in the trailing strip, outside `panel`.
     static func landscapeOverlayFrames(
         panel: CGRect,
         in bounds: CGRect,
@@ -247,6 +247,7 @@ extension WebRemoteViewController: UIScrollViewDelegate,
         strip.isHidden = true
         strip.onSelect = { [weak self] id in self?.activateTab(id: id) }
         strip.onClose = { [weak self] id in self?.closeTab(id: id) }
+        strip.onNewTab = { [weak self] in self?.newTabTapped() }
         stage.addSubview(strip)
         tabStripView = strip
 
@@ -349,7 +350,7 @@ extension WebRemoteViewController: UIScrollViewDelegate,
             in: bounds,
             isVertical: ExternalOutputSettings.isVerticalMode,
             safeInsets: view.safeAreaInsets,
-            aspect: ExternalOutputSettings.orientation.aspectRatio,
+            aspect: ExternalOutputSettings.outputAspectRatio,
             placement: overlayChromePlacement,
             showsTabStrip: tabs.showsStrip
         )
@@ -392,12 +393,6 @@ extension WebRemoteViewController: UIScrollViewDelegate,
         pushWebScrollProgress()
     }
 
-    /// A finger on the page holds Auto Scroll; a tap resumes it.
-    func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
-        guard scrollView === webView?.scrollView else { return }
-        autoScroller.pause()
-    }
-
     // MARK: - WKNavigationDelegate
 
     func webView(
@@ -418,8 +413,6 @@ extension WebRemoteViewController: UIScrollViewDelegate,
         }
         refreshTabStrip()
         guard webView === self.webView else { return }
-        // A new page starts from its top, by hand.
-        autoScroller.stop()
         captureBrowserSessionRootIfNeeded()
         updateBrowserChrome()
         guard let url = webView.url else { return }
@@ -429,6 +422,9 @@ extension WebRemoteViewController: UIScrollViewDelegate,
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         if let url = webView.url, !isBlankBrowserURL(url) {
             tab(for: webView)?.hostTitle = displayHost(for: url)
+            if tab(for: webView) != nil {
+                WebHistoryStore.shared.record(url: url, title: webView.title)
+            }
         }
         refreshTabStrip()
         guard webView === self.webView else { return }

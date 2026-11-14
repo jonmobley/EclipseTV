@@ -7,7 +7,8 @@
 
 import UIKit
 
-/// Row of tab chips above the browser card: one per open tab, scrolling sideways.
+/// Row of tab chips above the browser card: one per open tab, scrolling sideways,
+/// followed by a ⊕ that opens a new tab.
 ///
 /// The active chip is light with a close ×; the others are dark glass. A chip shows
 /// a TV glyph when the TV is on that tab and a phone glyph when the tab is phone-only.
@@ -15,10 +16,19 @@ final class BrowserTabStripView: UIView {
 
     var onSelect: ((UUID) -> Void)?
     var onClose: ((UUID) -> Void)?
+    var onNewTab: (() -> Void)?
 
     private let scrollView = UIScrollView()
     private let stack = UIStackView()
     private var chips: [UUID: BrowserTabChip] = [:]
+    /// ⊕ after the last chip; it scrolls with them.
+    let newTabButton = UIButton(type: .system)
+    /// Active chip, kept so the next layout pass can bring it (and ⊕, for the last
+    /// tab) into view once chip widths and the strip's own width are final.
+    private var activeId: UUID?
+    private var activeIsLast = false
+    private var needsActiveScroll = false
+    private var lastLaidOutSize: CGSize = .zero
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -32,6 +42,22 @@ final class BrowserTabStripView: UIView {
         stack.alignment = .fill
         stack.translatesAutoresizingMaskIntoConstraints = false
         scrollView.addSubview(stack)
+
+        var plus = UIButton.Configuration.plain()
+        plus.image = UIImage(
+            systemName: "plus",
+            withConfiguration: UIImage.SymbolConfiguration(pointSize: 13, weight: .semibold)
+        )
+        plus.baseForegroundColor = .white
+        plus.background.backgroundColor = UIColor.black.withAlphaComponent(0.45)
+        plus.background.strokeColor = UIColor.white.withAlphaComponent(0.28)
+        plus.background.strokeWidth = 0.5
+        plus.cornerStyle = .capsule
+        newTabButton.configuration = plus
+        newTabButton.accessibilityLabel = "New Tab"
+        newTabButton.addAction(UIAction { [weak self] _ in self?.onNewTab?() }, for: .touchUpInside)
+        newTabButton.widthAnchor.constraint(equalTo: newTabButton.heightAnchor).isActive = true
+        stack.addArrangedSubview(newTabButton)
 
         NSLayoutConstraint.activate([
             scrollView.topAnchor.constraint(equalTo: topAnchor),
@@ -66,17 +92,41 @@ final class BrowserTabStripView: UIView {
                 isPhoneOnly: tab.isPhoneOnly,
                 canClose: tabs.count > 1
             )
-            if stack.arrangedSubviews.count > index {
-                if stack.arrangedSubviews[index] !== chip {
-                    stack.insertArrangedSubview(chip, at: index)
-                }
-            } else {
-                stack.addArrangedSubview(chip)
+            // ⊕ is always the last arranged view, so chips go in before it.
+            if stack.arrangedSubviews[index] !== chip {
+                stack.insertArrangedSubview(chip, at: index)
             }
         }
-        layoutIfNeeded()
-        if let active = chips[activeId] {
-            scrollView.scrollRectToVisible(active.frame.insetBy(dx: -12, dy: 0), animated: true)
+        self.activeId = activeId
+        activeIsLast = tabs.last?.id == activeId
+        needsActiveScroll = true
+        setNeedsLayout()
+    }
+
+    /// Scrolls only once the chips have their real sizes: `update` often runs
+    /// before the strip has its width, and new titles resize chips after it.
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        if bounds.size != lastLaidOutSize {
+            lastLaidOutSize = bounds.size
+            needsActiveScroll = true
+        }
+        guard needsActiveScroll, bounds.width > 0 else { return }
+        scrollView.layoutIfNeeded()
+        stack.layoutIfNeeded()
+        guard let activeId, let active = chips[activeId] else { return }
+        needsActiveScroll = false
+        let target = (activeIsLast ? active.frame.union(newTabButton.frame) : active.frame)
+            .insetBy(dx: -12, dy: 0)
+        let width = scrollView.bounds.width
+        let maxOffset = max(scrollView.contentSize.width - width, 0)
+        var x = scrollView.contentOffset.x
+        if target.maxX > x + width { x = target.maxX - width }
+        if target.minX < x { x = target.minX }
+        x = min(max(x, 0), maxOffset)
+        // Not animated: a layout pass in flight cancels an animated offset.
+        if x != scrollView.contentOffset.x {
+            scrollView.contentOffset = CGPoint(x: x, y: 0)
         }
     }
 

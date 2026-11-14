@@ -79,6 +79,25 @@ struct HomeLayoutTests {
         }
     }
 
+    /// A phone held upright shows two Recent Shows per row. The rule is decided
+    /// before the Display Mode's count is read, so Vertical's 3-up cannot leak in.
+    @Test func phonePortraitRecentIsTwoPerRow() {
+        for (width, height) in [(CGFloat(320), CGFloat(568)), (375, 667), (402, 874), (440, 956)] {
+            let columns = LibraryGridViewController.homeRecentColumnCount(
+                containerWidth: width,
+                containerHeight: height,
+                sectionInset: inset,
+                spacing: spacing
+            )
+            #expect(columns == 2, "\(width)pt gave \(columns) columns")
+        }
+        // iPad portrait keeps the Display Mode's count.
+        let iPad = LibraryGridViewController.homeRecentColumnCount(
+            containerWidth: 820, containerHeight: 1180, sectionInset: inset, spacing: spacing
+        )
+        #expect(iPad >= 2)
+    }
+
     /// Phone landscape packs Recent so a Show is a thumbnail, not half the screen.
     @Test func phoneLandscapeRecentTilesStaySmallAndFillTheRow() {
         let width: CGFloat = 780
