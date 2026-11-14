@@ -77,7 +77,14 @@
 
 - The iPhone project reads LivePollKit / EclipsePhoneCameraClient from `../../eclipsepro/Packages` (and CamTailKit from `../../CamTail`), i.e. whatever branch `~/apps/eclipsepro` has checked out. To archive against eclipsepro `main` without touching that checkout, lay out worktrees side by side in a scratch dir (`<dir>/EclipseTV`, `<dir>/eclipsepro`, `<dir>/CamTail` symlink) and archive from there.
 - Build numbers: current scheme is `YYYYMMDDNN`; pass it explicitly (`Scripts/set_build_number.sh 2026101801`) since the script's default `YYYYMMDD.minute` sorts below it.
-- Upload from the CLI: `xcodebuild archive … -allowProvisioningUpdates`, then `xcodebuild -exportArchive` with `method=app-store-connect`, `destination=upload`, team `2YBTPD32DW`. Xcode's signed-in account is enough; the WebRTC "Upload Symbols Failed" warning is expected.
+- Upload from the CLI (2026-11-14): `xcodebuild archive … -allowProvisioningUpdates`, then
+  `Scripts/upload_testflight.sh <archive>` (`--validate-only` for a dry run). It signs with this Mac's own
+  Apple Distribution certificate (cert 9W52VA48F9, login keychain, expires 2027-11-14) and the App Store
+  profile "Eclipse iPhone App Store (Mac CLI)", then uploads with the vault's `Moxie Builder` key, so
+  Xcode's Apple sign-in is no longer needed (it lapsed every few hours: "Failed to Use Accounts").
+  Cert + key backup: vault Moxie `APPLE_DISTRIBUTION_2YBTPD32DW_P12_B64` / `_P12_PASSWORD`; that key can
+  also create certificates and profiles through the App Store Connect API. iPhone app only so far: an Apple
+  TV upload still needs Xcode's sign-in or its own App Store profile. Upload crash symbols with `sentry-cli`.
 - Website fullscreen on iPhone/iPad (`WebRemoteViewController`, 2026-11-04): every website card of the
   open Show is a tab (`BrowserTabList`, strip above the card, shown with 2+ tabs); the TV follows the
   active tab. Windows a site opens (`window.open`, sign-in) are phone-only tabs until "Send to TV".
