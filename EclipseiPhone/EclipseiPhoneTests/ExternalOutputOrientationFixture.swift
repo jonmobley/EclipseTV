@@ -23,15 +23,18 @@ import Foundation
 @MainActor
 enum ExternalOutputOrientationFixture {
 
-    /// Runs `body` with `orientation` applied, restoring the previous value after.
+    /// Runs `body` with `orientation` applied and no custom screen size selected,
+    /// restoring both after.
     static func with<T>(
         _ orientation: ExternalOutputOrientation,
         _ body: () throws -> T
     ) rethrows -> T {
-        let previous = ExternalOutputSettings.orientation
-        defer { ExternalOutputSettings.orientation = previous }
-        ExternalOutputSettings.orientation = orientation
-        return try body()
+        try withoutCustomSize {
+            let previous = ExternalOutputSettings.orientation
+            defer { ExternalOutputSettings.orientation = previous }
+            ExternalOutputSettings.orientation = orientation
+            return try body()
+        }
     }
 
     /// Like `with(_:_:)` for tests that switch orientation more than once; `set`
@@ -39,8 +42,25 @@ enum ExternalOutputOrientationFixture {
     static func withSwitching<T>(
         _ body: (_ set: (ExternalOutputOrientation) -> Void) throws -> T
     ) rethrows -> T {
-        let previous = ExternalOutputSettings.orientation
-        defer { ExternalOutputSettings.orientation = previous }
-        return try body { ExternalOutputSettings.orientation = $0 }
+        try withoutCustomSize {
+            let previous = ExternalOutputSettings.orientation
+            defer { ExternalOutputSettings.orientation = previous }
+            return try body { ExternalOutputSettings.orientation = $0 }
+        }
+    }
+
+    /// A custom screen size reshapes the Landscape picture, and it is saved in
+    /// UserDefaults, so one can outlive the test that chose it: a test-host crash
+    /// mid-test relaunches with it still selected (CI, 2026-11-14), and a simulator
+    /// used by hand may have one. Tests that pin a Display Mode expect plain
+    /// 16:9 / 9:16, so the selection is cleared for the body. Writing only when one
+    /// is selected keeps the usual case free of settings notifications.
+    private static func withoutCustomSize<T>(_ body: () throws -> T) rethrows -> T {
+        guard let selected = ExternalOutputSettings.selectedCustomSizeID else {
+            return try body()
+        }
+        ExternalOutputSettings.selectedCustomSizeID = nil
+        defer { ExternalOutputSettings.selectedCustomSizeID = selected }
+        return try body()
     }
 }
