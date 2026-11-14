@@ -169,3 +169,7 @@
   armed per owner (`armRecordingAudio(owner:)`: "fullscreen", "showHero"), so it stays on while the camera hero is up.
   Hero expand control is a 36pt circle. `CameraMirrorView` flushes its renderer when it re-enters a window or reports
   it needs a flush: a fullscreen presentation stalled it and left the hero black after closing the camera.
+- PDF reader zoom snap (2026-11-14): pinching in `PDFRemoteViewController` catches where the current page exactly fills
+  the audience frame's width and where it fills its height (`PDFZoomSnap`, ±4% hold band, light haptic on entry). It
+  rides the scroll view's own pinch recognizer (added target, never the delegate); UIScrollView sets zoom from the
+  cumulative pinch scale each frame, which is why holding by resetting `zoomScale` doesn't trap the pinch.
