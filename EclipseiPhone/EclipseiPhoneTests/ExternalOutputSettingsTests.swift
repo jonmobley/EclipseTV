@@ -70,7 +70,8 @@ struct ExternalOutputSettingsTests {
         }
     }
 
-    @Test func pauseMusicForVideoDefaultsOff() {
+    /// Main-actor bound so it cannot race `AudioAmbientPolicyTests` on the same key.
+    @Test @MainActor func pauseMusicForVideoDefaultsOff() {
         let key = "EclipseTV.audio.pauseMusicForVideo"
         let previous = UserDefaults.standard.object(forKey: key)
         UserDefaults.standard.removeObject(forKey: key)

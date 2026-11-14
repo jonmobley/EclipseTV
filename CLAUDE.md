@@ -65,6 +65,12 @@
   nested run loop inside `commitConfiguration`, so other main-actor tests run *inside* a camera test (UIKit animation
   state crashes, `stopRunning` exceptions, or a wait that never ends). `CameraPreviewView.attach` therefore never binds
   the session on the simulator (same as `detach`); keep it that way.
+  Any test that writes an `ExternalOutputSettings` value must be `@MainActor` (2026-11-14): the setters post
+  `didChangeNotification` on the calling thread, so a nonisolated suite (`AudioAmbientPolicyTests`) ran other suites'
+  live view-controller observers off the main thread and segfaulted the parallel CI run. The crash also left a
+  custom screen size saved in UserDefaults, which the relaunched test host inherited, so 16:9 suites failed after it.
+  `ExternalOutputOrientationFixture` now clears any selected custom size for its body (also covers simulators with a
+  size saved by hand). A local test run reading 512×786 / "Lobby wall" comes from that simulator's own saved settings.
 - Crash reports: `CrashReporting.swift` in each app sends crashes and freezes to Sentry projects `eclipse-iphone` and `eclipse-appletv` (Release builds only; `scrub` keeps crash type, code location and device model, and drops all free text and activity trails; the `0.0.0.0` user address is what stops Sentry reading a city from the connection, since neither its IP setting nor `infer_ip` did). Upload symbols after each archive so reports are readable. App Privacy answers must list Crash Data and Other Diagnostic Data, not linked to the user, no tracking.
 
 ## TestFlight builds

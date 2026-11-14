@@ -10,7 +10,12 @@ import Foundation
 import Testing
 @testable import EclipseiPhone
 
+/// Main-actor bound: the setter posts `ExternalOutputSettings.didChangeNotification`,
+/// whose observers include live view controllers from other suites. Posting from a
+/// background test thread ran their UIKit code off the main thread and crashed the
+/// parallel CI run (segv), leaving another suite's custom size saved for the restart.
 @Suite(.serialized)
+@MainActor
 struct AudioAmbientPolicyTests {
 
     @Test func defaultDoesNotYieldToAudibleVideo() {
@@ -46,6 +51,7 @@ struct AudioAmbientPolicyTests {
     }
 }
 
+@MainActor
 private func withPauseMusicForVideo(_ value: Bool, _ body: () -> Void) {
     let previous = ExternalOutputSettings.pauseMusicForVideo
     ExternalOutputSettings.pauseMusicForVideo = value
