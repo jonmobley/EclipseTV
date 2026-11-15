@@ -147,18 +147,41 @@ enum MediaAspect {
 
     /// Center-crops to 1:1 so landscape (or tall) covers fill Home’s square Recent tiles.
     static func centerCroppedToSquare(_ image: UIImage) -> UIImage {
+        centerCropped(image, toAspect: 1)
+    }
+
+    /// Trims the centre of `image` to `aspect` (width ÷ height), the way aspect-fill
+    /// shows it. Returns the (upright) image unchanged when it already matches.
+    static func centerCropped(_ image: UIImage, toAspect aspect: CGFloat) -> UIImage {
         let normalized = normalized(image)
         let pointSize = normalized.size
         guard pointSize.width > 1, pointSize.height > 1 else { return image }
-        let side = min(pointSize.width, pointSize.height)
-        guard abs(pointSize.width - pointSize.height) > 0.5 else { return normalized }
-        let rect = CGRect(
-            x: (pointSize.width - side) / 2,
-            y: (pointSize.height - side) / 2,
-            width: side,
-            height: side
-        )
+        guard let rect = centerCropRect(for: pointSize, aspect: aspect) else {
+            return normalized
+        }
         return crop(normalized, to: rect) ?? normalized
+    }
+
+    /// Centred `aspect` (width ÷ height) rect inside `size`, as aspect-fill shows it;
+    /// nil when `size` already matches to within half a unit (nothing to trim).
+    static func centerCropRect(for size: CGSize, aspect: CGFloat) -> CGRect? {
+        guard aspect > 0, size.width > 0, size.height > 0 else { return nil }
+        var width = size.width
+        var height = size.height
+        if width / height > aspect {
+            width = height * aspect
+        } else {
+            height = width / aspect
+        }
+        guard abs(size.width - width) > 0.5 || abs(size.height - height) > 0.5 else {
+            return nil
+        }
+        return CGRect(
+            x: (size.width - width) / 2,
+            y: (size.height - height) / 2,
+            width: width,
+            height: height
+        )
     }
 
     /// Natural display size of a video (orientation applied when available).
