@@ -137,7 +137,10 @@ final class CameraFramePickerCell: UICollectionViewCell {
         moreButton.accessibilityLabel = "More"
         moreButton.translatesAutoresizingMaskIntoConstraints = false
         moreButton.isHidden = true
-        // On imageView so the pill sits on the thumb, not the caption.
+        // On imageView so the pill sits on the thumb, not the caption. Image views ignore
+        // touches by default, which made ⋯ untappable; without a gesture of its own the
+        // image view still lets a tap elsewhere on the card select it.
+        imageView.isUserInteractionEnabled = true
         imageView.addSubview(moreButton)
         NSLayoutConstraint.activate([
             moreButton.trailingAnchor.constraint(

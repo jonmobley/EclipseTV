@@ -153,3 +153,7 @@
   closes (`armRecordingAudio` / `disarmRecordingAudio`), never at record start/stop: turning the mic on or off
   re-routes audio and cuts other apps' music for a moment (2026-11-15). Eclipse's own Background
   Music still takes over audio when the user presses play (normal for a music player).
+- Camera frames order (2026-11-15): `CameraFrameStore.frames` is newest-first by `createdAt` and never reorders on a tap
+  (sorting by `lastUsedAt` made a tapped frame jump in the camera ribbon). The camera header shows only the LIVE pill;
+  the PRACTICE pill was removed at the owner's request. Buttons placed inside a `UIImageView` need
+  `isUserInteractionEnabled = true` on the image view, or they never get taps (Camera Frames ⋯).

@@ -374,9 +374,11 @@ extension CameraLiveViewController {
             isCameraLive: ExternalDisplayManager.shared.isCameraLive,
             hasProgramOutput: LiveOutputRouting.showsHeroLiveBadge()
         )
-        goLiveButton.isHidden = state == .hidden
+        // Only LIVE gets a pill; the PRACTICE pill was removed from the camera header
+        // (2026-11-15, owner request). Practice Mode is still shown elsewhere.
+        goLiveButton.isHidden = state != .live
         goLiveButton.isUserInteractionEnabled = false
-        guard state != .hidden else {
+        guard state == .live else {
             goLiveButton.configuration = nil
             return
         }
@@ -391,22 +393,19 @@ extension CameraLiveViewController {
             return attrs
         }
         config.baseForegroundColor = .white
-        let practice = state == .practice
-        config.title = practice ? "PRACTICE" : "LIVE"
-        config.baseBackgroundColor = practice ? .systemGray : .liveStroke
-        if !practice {
-            // The pulsing dot is the on-air tell; rehearsal does not earn it.
-            let dot = UIImage.SymbolConfiguration(pointSize: 5, weight: .bold)
-            config.image = UIImage(systemName: "circle.fill", withConfiguration: dot)
-            config.imagePadding = 4
-        }
-        goLiveButton.accessibilityLabel = practice ? "Practice" : "Live"
+        config.title = "LIVE"
+        config.baseBackgroundColor = .liveStroke
+        // The pulsing dot is the on-air tell.
+        let dot = UIImage.SymbolConfiguration(pointSize: 5, weight: .bold)
+        config.image = UIImage(systemName: "circle.fill", withConfiguration: dot)
+        config.imagePadding = 4
+        goLiveButton.accessibilityLabel = "Live"
         goLiveButton.accessibilityHint = nil
         goLiveButton.configuration = config
     }
 
     /// A pill shows only for the live camera feed, not a parked cutaway still.
-    /// Which pill — LIVE or PRACTICE — is `CameraLiveBadgeState`.
+    /// Only the LIVE state of `CameraLiveBadgeState` shows a pill.
     static func showsLiveBadge(isCameraLive: Bool) -> Bool { isCameraLive }
 
     /// Hint is shown on open (preview) and while a cutaway still is on program.

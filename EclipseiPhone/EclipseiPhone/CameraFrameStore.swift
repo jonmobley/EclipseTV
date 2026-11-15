@@ -89,16 +89,18 @@ final class CameraFrameStore {
     /// All frames on disk (both modes). Prefer `frames` for the active mode.
     private var allFrames: [CameraFrame] = []
 
-    /// Frames for the current Display Mode, recently used first.
+    /// Frames for the current Display Mode, newest first. The order never changes on a
+    /// tap: sorting by `lastUsedAt` made a tapped frame jump to the front of the camera
+    /// ribbon (2026-11-15). `lastUsedAt` is still recorded and synced.
     var frames: [CameraFrame] {
         let mode = ExternalOutputSettings.orientation
         return allFrames
             .filter { $0.orientation == mode }
             .sorted {
-                if $0.lastUsedAt != $1.lastUsedAt {
-                    return $0.lastUsedAt > $1.lastUsedAt
+                if $0.createdAt != $1.createdAt {
+                    return $0.createdAt > $1.createdAt
                 }
-                return $0.createdAt > $1.createdAt
+                return $0.id.uuidString < $1.id.uuidString
             }
     }
 
