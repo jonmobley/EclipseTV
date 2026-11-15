@@ -296,6 +296,9 @@ final class CameraManager: NSObject {
         sessionQueue.async { [weak self, session] in
             session.beginConfiguration()
             session.sessionPreset = .high
+            // Its automatic audio setup stops other apps' music; recording sets a
+            // mixable session itself (`AppAudioSession.beginRecording`).
+            session.automaticallyConfiguresApplicationAudioSession = false
 
             if session.inputs.isEmpty {
                 guard let videoDevice = Self.device(at: .back) else {

@@ -146,3 +146,8 @@
   Preset tiles show the name (or "Camera Preset"). Syncs as CloudKit field `CameraFrame.name`, written only when a frame
   has a name: **the field must be deployed Development → Production in the CloudKit Console** before names sync in
   TestFlight/App Store builds (until then a renamed frame's save is refused there; unnamed frames are unaffected).
+- Other apps' music (2026-11-14, `AppAudioSession.swift`): Eclipse must never stop Spotify etc. just by being open.
+  Launch sets `.ambient`; audible video uses `.playback` + `.mixWithOthers` (non-mixing only when Pause Music for
+  Video is on); the camera has `automaticallyConfiguresApplicationAudioSession = false`, records with
+  `.playAndRecord` + `.mixWithOthers`, and removes the mic input when a recording ends. Eclipse's own Background
+  Music still takes over audio when the user presses play (normal for a music player).

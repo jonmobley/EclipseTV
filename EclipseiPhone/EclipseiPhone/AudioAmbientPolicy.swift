@@ -47,6 +47,14 @@ enum AudioAmbientPolicy {
         ExternalOutputSettings.pauseMusicForVideo ? .moviePlayback : .default
     }
 
+    /// Audible video plays over other apps' music (Spotify…) unless Pause Music for
+    /// Video is on.
+    static var presentationAudioOptions: AVAudioSession.CategoryOptions {
+        AppAudioSession.presentationOptions(
+            pauseMusicForVideo: ExternalOutputSettings.pauseMusicForVideo
+        )
+    }
+
     /// Pauses ambient audio when `source` is audible video; no-op otherwise.
     ///
     /// Pauses rather than stops: `stop()` clears the queue and hides the mini player, so

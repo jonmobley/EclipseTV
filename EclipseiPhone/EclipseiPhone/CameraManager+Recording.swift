@@ -127,6 +127,7 @@ extension CameraManager: AVCaptureFileOutputRecordingDelegate {
         sessionQueue.async { [weak self] in
             guard let self else { return }
             self.isStoppingRecording = false
+            self.removeMicrophoneLocked()
             guard self.stopSessionWhenRecordingFinishes else { return }
             self.stopSessionWhenRecordingFinishes = false
             self.stopCaptureSessionLocked()
@@ -260,6 +261,10 @@ extension CameraManager: AVCaptureFileOutputRecordingDelegate {
 
         let micAuthorized =
             AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
+        if micAuthorized {
+            // Record with the mic without stopping music from other apps.
+            AppAudioSession.beginRecording()
+        }
         if micAuthorized, audioDeviceInput == nil,
            let mic = AVCaptureDevice.default(for: .audio) {
             do {
@@ -272,6 +277,19 @@ extension CameraManager: AVCaptureFileOutputRecordingDelegate {
                 logger.error("Mic input failed: \(error.localizedDescription)")
             }
         }
+    }
+
+    /// The mic is only needed while recording; keeping it in the session holds the
+    /// recording audio session (and the orange mic dot) for as long as the camera is open.
+    private func removeMicrophoneLocked() {
+        if let input = audioDeviceInput {
+            let session = captureSession
+            session.beginConfiguration()
+            session.removeInput(input)
+            session.commitConfiguration()
+            audioDeviceInput = nil
+        }
+        AppAudioSession.endRecording()
     }
 
     private func saveImageToPhotos(

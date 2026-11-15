@@ -31,16 +31,22 @@ enum PresentationAudioSession {
     /// True after a successful `setActive(true)` for presentation playback.
     private static var isActivated = false
 
-    /// Ensures `.playback` is active with `AudioAmbientPolicy.presentationAudioMode`.
+    /// Ensures `.playback` is active with `AudioAmbientPolicy.presentationAudioMode`, mixing
+    /// with other apps' music unless Pause Music for Video is on.
     ///
     /// No-op when `muted` is true (silent video / screensaver should not grab audio).
     static func activateIfNeeded(muted: Bool) {
         guard !muted else { return }
         let mode = AudioAmbientPolicy.presentationAudioMode
+        let options = AudioAmbientPolicy.presentationAudioOptions
         let session = AVAudioSession.sharedInstance()
         do {
-            if activeMode != mode || !isActivated {
-                try session.setCategory(.playback, mode: mode)
+            // Read the live session too: the app's own music player or a camera
+            // recording can change the category behind this cache.
+            if activeMode != mode || !isActivated
+                || session.category != .playback
+                || session.categoryOptions != options {
+                try session.setCategory(.playback, mode: mode, options: options)
                 activeMode = mode
             }
             if !isActivated {
