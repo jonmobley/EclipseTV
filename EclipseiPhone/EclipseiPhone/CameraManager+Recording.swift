@@ -37,7 +37,13 @@ extension CameraManager: AVCaptureFileOutputRecordingDelegate {
                     completion(.failure(CaptureError.noFrame))
                     return
                 }
-                let output = CameraFrameCompositor.stillWithFrameIfNeeded(still)
+                // The viewfinder aspect-fills the output shape (9:16 in Vertical), so
+                // save the same trimmed picture rather than the whole 4:3 sensor frame.
+                let viewfinderStill = MediaAspect.centerCropped(
+                    still,
+                    toAspect: MediaAspect.activeTarget
+                )
+                let output = CameraFrameCompositor.stillWithFrameIfNeeded(viewfinderStill)
                 self.saveImageToPhotos(output) { result in
                     switch result {
                     case .success:
@@ -154,12 +160,12 @@ extension CameraManager: AVCaptureFileOutputRecordingDelegate {
         }
     }
 
-    /// Optionally burns the selected frame in, then saves Photos + Caches preview.
+    /// Trims to the viewfinder shape (and burns the frame in), then saves Photos + Caches preview.
     private func finishRecording(rawFileURL: URL) async {
         // File is closed — clear the recording chrome before a possibly slow burn-in.
         await MainActor.run { self.publishRecording(false) }
 
-        let framedURL = await CameraFrameCompositor.framedVideoURLIfNeeded(
+        let framedURL = await CameraFrameCompositor.viewfinderVideoURLIfNeeded(
             from: rawFileURL
         )
         let urlToSave = framedURL ?? rawFileURL

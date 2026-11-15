@@ -8,7 +8,7 @@
 import AVFoundation
 import UIKit
 
-/// Burns a PNG camera frame into stills and movies to match the live overlay.
+/// Makes stills and movies match the live viewfinder (shape and frame overlay).
 enum CameraFrameCompositor {
 
     // MARK: - Photo
@@ -41,24 +41,36 @@ enum CameraFrameCompositor {
 
     // MARK: - Video
 
-    /// Burns the selected frame into `sourceURL` when the setting is on; else nil.
+    /// Re-exports `sourceURL` to match the live viewfinder: trimmed to the output shape
+    /// (the panel aspect-fills it, e.g. 9:16 in Vertical) and, when the setting is on,
+    /// with the selected frame burned in. Nil when the recording already matches.
     ///
     /// Reads prefs/store on the main actor, then exports off the main thread.
-    static func framedVideoURLIfNeeded(from sourceURL: URL) async -> URL? {
-        let frame: UIImage? = await MainActor.run {
-            guard ExternalOutputSettings.includeFrameInCaptures else { return nil }
-            return CameraFrameStore.shared.selectedImage
+    static func viewfinderVideoURLIfNeeded(from sourceURL: URL) async -> URL? {
+        let (frame, aspect): (UIImage?, CGFloat) = await MainActor.run {
+            let frame = ExternalOutputSettings.includeFrameInCaptures
+                ? CameraFrameStore.shared.selectedImage
+                : nil
+            return (frame, MediaAspect.activeTarget)
         }
-        guard let frame else { return nil }
         do {
-            return try await burnFrame(frame, intoVideoAt: sourceURL)
+            return try await exportViewfinderVideo(
+                from: sourceURL,
+                aspect: aspect,
+                frame: frame
+            )
         } catch {
             return nil
         }
     }
 
-    /// Exports a copy of `sourceURL` with `frame` aspect-fit over every video frame.
-    static func burnFrame(_ frame: UIImage, intoVideoAt sourceURL: URL) async throws -> URL {
+    /// Exports a copy of `sourceURL` centre-cropped to `aspect` (when it differs) with
+    /// `frame` aspect-fit over every video frame (when given). Nil when neither applies.
+    static func exportViewfinderVideo(
+        from sourceURL: URL,
+        aspect: CGFloat?,
+        frame: UIImage?
+    ) async throws -> URL? {
         let asset = AVURLAsset(url: sourceURL)
         let videoTracks = try await asset.loadTracks(withMediaType: .video)
         guard let track = videoTracks.first else {
@@ -69,13 +81,19 @@ enum CameraFrameCompositor {
         let transform = try await track.load(.preferredTransform)
         let duration = try await asset.load(.duration)
         let displaySize = natural.applying(transform)
-        let renderSize = CGSize(
+        let fullSize = CGSize(
             width: abs(displaySize.width),
             height: abs(displaySize.height)
         )
-        guard renderSize.width > 2, renderSize.height > 2 else {
+        guard fullSize.width > 2, fullSize.height > 2 else {
             throw ExportError.compositionFailed
         }
+        let cropRect = aspect.flatMap {
+            videoCropRect(for: fullSize, aspect: $0)
+        }
+        guard cropRect != nil || frame != nil else { return nil }
+        let renderRect = cropRect ?? CGRect(origin: .zero, size: fullSize)
+        let renderSize = renderRect.size
 
         let composition = AVMutableComposition()
         guard let compTrack = composition.addMutableTrack(
@@ -99,7 +117,14 @@ enum CameraFrameCompositor {
         let layerInstruction = AVMutableVideoCompositionLayerInstruction(
             assetTrack: compTrack
         )
-        layerInstruction.setTransform(transform, at: .zero)
+        // Upright first, then slide the trimmed window to the render origin.
+        layerInstruction.setTransform(
+            transform.concatenating(CGAffineTransform(
+                translationX: -renderRect.minX,
+                y: -renderRect.minY
+            )),
+            at: .zero
+        )
 
         let instruction = AVMutableVideoCompositionInstruction()
         instruction.timeRange = timeRange
@@ -109,10 +134,12 @@ enum CameraFrameCompositor {
         videoComposition.renderSize = renderSize
         videoComposition.frameDuration = CMTime(value: 1, timescale: 30)
         videoComposition.instructions = [instruction]
-        videoComposition.animationTool = makeAnimationTool(
-            frame: frame,
-            renderSize: renderSize
-        )
+        if let frame {
+            videoComposition.animationTool = makeAnimationTool(
+                frame: frame,
+                renderSize: renderSize
+            )
+        }
 
         let outURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("EclipseFramed-\(UUID().uuidString).mov")
@@ -127,6 +154,23 @@ enum CameraFrameCompositor {
         session.videoComposition = videoComposition
         try await session.export(to: outURL, as: .mov)
         return outURL
+    }
+
+    /// Centre crop for a video of `size` to `aspect`, snapped to whole even pixels
+    /// (encoders reject odd dimensions); nil when the video already matches.
+    static func videoCropRect(for size: CGSize, aspect: CGFloat) -> CGRect? {
+        guard let rect = MediaAspect.centerCropRect(for: size, aspect: aspect) else {
+            return nil
+        }
+        let width = (rect.width / 2).rounded(.down) * 2
+        let height = (rect.height / 2).rounded(.down) * 2
+        guard width >= 2, height >= 2 else { return nil }
+        return CGRect(
+            x: ((size.width - width) / 2).rounded(.down),
+            y: ((size.height - height) / 2).rounded(.down),
+            width: width,
+            height: height
+        )
     }
 
     // MARK: - Geometry
