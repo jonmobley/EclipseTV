@@ -149,5 +149,7 @@
 - Other apps' music (2026-11-14, `AppAudioSession.swift`): Eclipse must never stop Spotify etc. just by being open.
   Launch sets `.ambient`; audible video uses `.playback` + `.mixWithOthers` (non-mixing only when Pause Music for
   Video is on); the camera has `automaticallyConfiguresApplicationAudioSession = false`, records with
-  `.playAndRecord` + `.mixWithOthers`, and removes the mic input when a recording ends. Eclipse's own Background
+  `.playAndRecord` + `.mixWithOthers`. The mic is attached when the full-screen camera opens and removed when it
+  closes (`armRecordingAudio` / `disarmRecordingAudio`), never at record start/stop: turning the mic on or off
+  re-routes audio and cuts other apps' music for a moment (2026-11-15). Eclipse's own Background
   Music still takes over audio when the user presses play (normal for a music player).

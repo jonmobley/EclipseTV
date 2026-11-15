@@ -133,7 +133,10 @@ extension CameraManager: AVCaptureFileOutputRecordingDelegate {
         sessionQueue.async { [weak self] in
             guard let self else { return }
             self.isStoppingRecording = false
-            self.removeMicrophoneLocked()
+            // The camera screen closed mid-recording: release the mic now the file is done.
+            if !self.wantsRecordingAudio {
+                self.removeMicrophoneLocked()
+            }
             guard self.stopSessionWhenRecordingFinishes else { return }
             self.stopSessionWhenRecordingFinishes = false
             self.stopCaptureSessionLocked()
@@ -265,28 +268,62 @@ extension CameraManager: AVCaptureFileOutputRecordingDelegate {
             }
         }
 
-        let micAuthorized =
-            AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
-        if micAuthorized {
-            // Record with the mic without stopping music from other apps.
-            AppAudioSession.beginRecording()
-        }
-        if micAuthorized, audioDeviceInput == nil,
-           let mic = AVCaptureDevice.default(for: .audio) {
-            do {
-                let input = try AVCaptureDeviceInput(device: mic)
-                if session.canAddInput(input) {
-                    session.addInput(input)
-                    audioDeviceInput = input
-                }
-            } catch {
-                logger.error("Mic input failed: \(error.localizedDescription)")
+        attachMicrophoneInConfigurationLocked(session)
+    }
+
+    // MARK: - Recording audio (no blips in other apps' music)
+
+    /// Called when the full-screen camera opens: turns the mic on now, so pressing record
+    /// or stop changes nothing about audio. Switching the mic on or off makes iOS re-route
+    /// audio, which cuts other apps' music (Spotify…) for a moment; doing it at record
+    /// start and stop put that cut on every recording.
+    func armRecordingAudio() {
+        sessionQueue.async { [weak self] in
+            guard let self else { return }
+            self.wantsRecordingAudio = true
+            let session = self.captureSession
+            session.beginConfiguration()
+            if !session.outputs.contains(self.movieFileOutput),
+               session.canAddOutput(self.movieFileOutput) {
+                session.addOutput(self.movieFileOutput)
             }
+            self.attachMicrophoneInConfigurationLocked(session)
+            session.commitConfiguration()
         }
     }
 
-    /// The mic is only needed while recording; keeping it in the session holds the
-    /// recording audio session (and the orange mic dot) for as long as the camera is open.
+    /// Called when the full-screen camera closes. A recording still being written keeps
+    /// the mic until its file is closed (`fileOutput(_:didFinishRecordingTo:...)`).
+    func disarmRecordingAudio() {
+        sessionQueue.async { [weak self] in
+            guard let self else { return }
+            self.wantsRecordingAudio = false
+            guard !self.movieFileOutput.isRecording, !self.isStoppingRecording else { return }
+            self.removeMicrophoneLocked()
+        }
+    }
+
+    /// Adds the mic (when permitted) inside an open `beginConfiguration` block.
+    private func attachMicrophoneInConfigurationLocked(_ session: AVCaptureSession) {
+        guard AVCaptureDevice.authorizationStatus(for: .audio) == .authorized,
+              audioDeviceInput == nil,
+              let mic = AVCaptureDevice.default(for: .audio) else { return }
+        // Record with the mic without stopping music from other apps.
+        AppAudioSession.beginRecording()
+        do {
+            let input = try AVCaptureDeviceInput(device: mic)
+            if session.canAddInput(input) {
+                session.addInput(input)
+                audioDeviceInput = input
+            }
+        } catch {
+            logger.error("Mic input failed: \(error.localizedDescription)")
+        }
+    }
+
+    /// The mic is only needed while the full-screen camera is open; keeping it in the
+    /// session would hold the recording audio session (and the orange mic dot) for the
+    /// home Camera tile too.
     private func removeMicrophoneLocked() {
         if let input = audioDeviceInput {
             let session = captureSession

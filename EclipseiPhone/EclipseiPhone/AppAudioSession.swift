@@ -49,21 +49,30 @@ enum AppAudioSession {
         pauseMusicForVideo ? [] : [.mixWithOthers]
     }
 
-    /// Before adding the mic to the capture session: record without stopping other audio.
+    /// Before adding the mic to the capture session (when the full-screen camera opens):
+    /// record without stopping other audio.
     /// Safe to call from any queue.
     static func beginRecording() {
         let session = AVAudioSession.sharedInstance()
+        let options: AVAudioSession.CategoryOptions =
+            [.mixWithOthers, .defaultToSpeaker, .allowBluetoothA2DP]
         lock.lock()
         if savedBeforeRecording == nil {
             savedBeforeRecording = (session.category, session.mode, session.categoryOptions)
         }
         lock.unlock()
+        if session.category == .playAndRecord, session.categoryOptions == options {
+            return
+        }
+        // Keep the hardware sample rate other apps are playing at: a rate change is what
+        // makes their music drop out while the route is rebuilt.
+        let currentRate = session.sampleRate
         do {
-            try session.setCategory(
-                .playAndRecord,
-                mode: .videoRecording,
-                options: [.mixWithOthers, .defaultToSpeaker, .allowBluetoothA2DP]
-            )
+            // `.default` mode: `.videoRecording` switches mic processing, another re-route.
+            try session.setCategory(.playAndRecord, mode: .default, options: options)
+            if currentRate > 0 {
+                try? session.setPreferredSampleRate(currentRate)
+            }
             try session.setActive(true)
         } catch {
             logger.error("Recording audio session failed: \(error.localizedDescription)")
