@@ -28,6 +28,9 @@ final class CameraStillRibbonCell: UICollectionViewCell {
         return view
     }()
 
+    /// ⋯ on Show-sized grid tiles only; hidden on the small in-panel ribbon.
+    private lazy var moreButton = CameraTileMoreButton.install(in: contentView)
+
     override init(frame: CGRect) {
         super.init(frame: frame)
         contentView.backgroundColor = UIColor.black.withAlphaComponent(0.45)
@@ -49,6 +52,16 @@ final class CameraStillRibbonCell: UICollectionViewCell {
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        setMoreMenu(nil)
+    }
+
+    /// Shows the ⋯ menu (`nil` hides it).
+    func setMoreMenu(_ menu: UIMenu?) {
+        CameraTileMoreButton.set(menu, on: moreButton)
     }
 
     /// Ribbon thumbs are 10pt; Show-sized grid tiles take the Show card radius.

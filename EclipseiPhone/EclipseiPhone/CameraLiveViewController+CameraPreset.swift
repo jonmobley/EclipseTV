@@ -58,11 +58,7 @@ extension CameraLiveViewController {
             sheet.addAction(UIAlertAction(
                 title: "Save as Camera Preset", style: .default
             ) { [weak self] _ in
-                guard LocalAlbumStore.shared.addCameraPreset(
-                    frameId: frameId, albumId: show.id
-                ) else { return }
-                Haptics.success()
-                self?.showPresentationToast("Camera Preset added to the Show")
+                self?.confirmSaveCameraPreset(frameId: frameId, show: show)
             })
         }
         sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))

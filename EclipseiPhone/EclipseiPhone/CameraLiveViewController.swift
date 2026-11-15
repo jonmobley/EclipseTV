@@ -111,6 +111,8 @@ final class CameraLiveViewController: UIViewController {
 
     /// Top-right gear — Recording and Frames.
     let settingsButton = UIButton(type: .system)
+    /// Left of the gear: saves the camera + its current frame as a Show preset.
+    let savePresetButton = UIButton(type: .system)
 
     /// Shared diameter for Settings / Flip circular controls.
     static let chromeControlSize: CGFloat = 44
@@ -225,6 +227,7 @@ final class CameraLiveViewController: UIViewController {
         setupFrameRibbon()
         setupFrameOverlay()
         setupSettingsButton()
+        setupSavePresetButton()
 
         let pinch = UIPinchGestureRecognizer(target: self, action: #selector(handlePinch(_:)))
         stageView.addGestureRecognizer(pinch)

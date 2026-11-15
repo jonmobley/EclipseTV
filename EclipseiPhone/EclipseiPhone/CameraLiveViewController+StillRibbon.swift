@@ -192,6 +192,22 @@ extension CameraLiveViewController {
         presentCutawayActions(id: id, anchor: stillRibbonView.cellForItem(at: indexPath))
     }
 
+    /// ⋯ on a quick-change grid tile: the same Replace / Delete as press-and-hold.
+    func cutawayTileMenu(id: UUID) -> UIMenu {
+        UIMenu(children: [
+            UIAction(title: "Replace…", image: UIImage(systemName: "photo")) { [weak self] _ in
+                self?.presentStillPicker(replacing: id)
+            },
+            UIAction(
+                title: "Delete",
+                image: UIImage(systemName: "trash"),
+                attributes: .destructive
+            ) { [weak self] _ in
+                self?.confirmDeleteCutaway(id)
+            }
+        ])
+    }
+
     /// Replace / Remove sheet for a quick-change still, anchored to its tile on iPad.
     func presentCutawayActions(id: UUID, anchor: UIView?) {
         Haptics.impactMedium()
@@ -214,7 +230,7 @@ extension CameraLiveViewController {
 
     /// The still is a stored copy, not a link to library media, so deleting it
     /// confirms like Camera Frames does.
-    private func confirmDeleteCutaway(_ id: UUID) {
+    func confirmDeleteCutaway(_ id: UUID) {
         let alert = UIAlertController(
             title: "Delete Quick Change?",
             message: "This removes the still from the camera ribbon.",

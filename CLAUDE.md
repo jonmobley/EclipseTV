@@ -157,3 +157,8 @@
   (sorting by `lastUsedAt` made a tapped frame jump in the camera ribbon). The camera header shows only the LIVE pill;
   the PRACTICE pill was removed at the owner's request. Buttons placed inside a `UIImageView` need
   `isUserInteractionEnabled = true` on the image view, or they never get taps (Camera Frames ⋯).
+- Camera tile ⋯ and Save Preset (2026-11-15): Show-sized camera grid tiles have a ⋯ (`CameraTileMoreButton`): frames get
+  Rename / Save as Preset…, quick-change stills Replace… / Delete (small in-panel ribbon thumbs keep press-and-hold only).
+  A bookmark left of the gear (`savePresetButton`) shows only while a frame is on the camera and Camera came from a Show;
+  it asks "Save as preset?" / "Adds camera and frame as preset to your show." (all save paths use that prompt) and turns
+  filled once saved.

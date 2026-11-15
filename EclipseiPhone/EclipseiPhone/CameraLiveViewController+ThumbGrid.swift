@@ -115,6 +115,7 @@ extension CameraLiveViewController {
             let store = CameraFrameStore.shared
             cell.configure(image: store.image(for: id), isLive: store.selectedId == id)
             cell.applyCornerRadius(radius)
+            cell.setMoreMenu(frameTileMenu(frameId: id))
             return cell
         case .still(let item):
             guard let cell = thumbGridView.dequeueReusableCell(
@@ -123,6 +124,11 @@ extension CameraLiveViewController {
             ) as? CameraStillRibbonCell else { return UICollectionViewCell() }
             configureStillRibbonCell(cell, item: item)
             cell.applyCornerRadius(radius)
+            if case .cutaway(let id) = item {
+                cell.setMoreMenu(cutawayTileMenu(id: id))
+            } else {
+                cell.setMoreMenu(nil)
+            }
             return cell
         }
     }

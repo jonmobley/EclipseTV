@@ -52,6 +52,7 @@ extension CameraLiveViewController {
             width: controlSize,
             height: controlSize
         )
+        savePresetButton.frame = settingsButton.frame.offsetBy(dx: -(controlSize + 12), dy: 0)
 
         // Fixed size for LIVE so the pill doesn't jump when chrome re-layouts.
         let goSize = CGSize(width: 78, height: 28)
@@ -70,6 +71,7 @@ extension CameraLiveViewController {
         view.bringSubviewToFront(goLiveButton)
         view.bringSubviewToFront(recordingTimerPillView)
         view.bringSubviewToFront(settingsButton)
+        view.bringSubviewToFront(savePresetButton)
     }
 
     /// Builds photo + record + Flip + Frame (docked outside the Display Mode panel).
@@ -271,6 +273,7 @@ extension CameraLiveViewController {
         updateLivePreviewSource()
         let recording = CameraManager.shared.isRecording
         applyLiveBadgeAppearance()
+        refreshSavePresetButton()
         applyShutterAppearance(isRecording: recording)
         refreshFlipButtonEnabled()
         syncRecordingTimer()

@@ -42,7 +42,7 @@ extension CameraLiveViewController {
     /// True when the tap landed on a chrome control that owns the gesture.
     private func hitTestBlocksStageLiveToggle(at location: CGPoint) -> Bool {
         let blockers: [UIView] = [
-            backButton, settingsButton, shutterButton, photoButton, flipButton,
+            backButton, settingsButton, savePresetButton, shutterButton, photoButton, flipButton,
             frameButton, stillRibbonView, frameRibbonView, thumbGridView,
             tapToGoLiveHintView
         ]
