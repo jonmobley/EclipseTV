@@ -43,6 +43,7 @@ extension LibraryGridViewController {
             liveHeader.setScreenFitToggleVisible(false, mode: .fit)
             liveHeader.setSlideshowCountdown(deadline: nil, interval: 0)
             liveHeader.setCameraFlipVisible(false)
+            syncLiveCameraCaptureChrome()
             liveHeader.allowsSlideshowBrowse = false
             liveHeader.allowsLibraryBrowse = false
             // No kind owns the tap once the hero is gone, so the expand control
@@ -68,6 +69,7 @@ extension LibraryGridViewController {
             syncLiveScreenFitChrome()
             syncLiveSlideshowCountdownChrome()
             syncLiveCameraFlipChrome()
+            syncLiveCameraCaptureChrome()
             liveHeader.syncExpandControl()
             syncLiveHeroBrowseChrome()
             syncLiveNoteChrome()

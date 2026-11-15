@@ -249,7 +249,7 @@ final class LibraryGridViewController: UIViewController {
     ///
     /// A live countdown has no ribbon: its duration lives in the tile's ⋯ menu.
     var showsLiveSlideshowRibbon: Bool {
-        if showsLivePollRibbon { return true }
+        if showsLivePollRibbon || showsCameraRibbon { return true }
         guard isShowMode,
               let id = SlideshowPlaybackController.shared.activeSlideshowId,
               let show = SlideshowStore.shared.slideshow(id: id),
@@ -506,6 +506,7 @@ final class LibraryGridViewController: UIViewController {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
         installHomeCameraPreviewObservers()
+        installCameraRibbonObservers()
         installCameraPresetObservers()
         observe(WarmWebSession.didRelinquishNotification) { [weak self] _ in
             self?.refreshLiveHeader()
@@ -557,6 +558,12 @@ final class LibraryGridViewController: UIViewController {
         }
         liveHeader.onFlipCamera = { [weak self] in
             self?.flipLiveCameraLens()
+        }
+        liveHeader.onCameraTakePhoto = { [weak self] in
+            self?.takeLiveCameraPhoto()
+        }
+        liveHeader.onCameraToggleRecording = { [weak self] in
+            self?.toggleLiveCameraRecording()
         }
         liveNoteCard.onEdit = { [weak self] in
             self?.handleLiveNoteEdit()

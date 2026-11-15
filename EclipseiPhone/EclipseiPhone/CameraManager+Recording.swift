@@ -273,14 +273,18 @@ extension CameraManager: AVCaptureFileOutputRecordingDelegate {
 
     // MARK: - Recording audio (no blips in other apps' music)
 
-    /// Called when the full-screen camera opens: turns the mic on now, so pressing record
+    /// Called when a screen that can record appears (`owner` names it): turns the mic on now, so pressing record
     /// or stop changes nothing about audio. Switching the mic on or off makes iOS re-route
     /// audio, which cuts other apps' music (Spotify…) for a moment; doing it at record
     /// start and stop put that cut on every recording.
-    func armRecordingAudio() {
+    func armRecordingAudio(owner: String) {
         sessionQueue.async { [weak self] in
             guard let self else { return }
-            self.wantsRecordingAudio = true
+            // Called on every hero refresh: skip the session reconfigure once armed.
+            let alreadyArmed = self.recordingAudioOwners.contains(owner)
+                && self.audioDeviceInput != nil
+            self.recordingAudioOwners.insert(owner)
+            guard !alreadyArmed else { return }
             let session = self.captureSession
             session.beginConfiguration()
             if !session.outputs.contains(self.movieFileOutput),
@@ -292,12 +296,14 @@ extension CameraManager: AVCaptureFileOutputRecordingDelegate {
         }
     }
 
-    /// Called when the full-screen camera closes. A recording still being written keeps
+    /// Called when that screen goes away; the mic stays while another owner is up. A
+    /// recording still being written keeps
     /// the mic until its file is closed (`fileOutput(_:didFinishRecordingTo:...)`).
-    func disarmRecordingAudio() {
+    func disarmRecordingAudio(owner: String) {
         sessionQueue.async { [weak self] in
             guard let self else { return }
-            self.wantsRecordingAudio = false
+            guard self.recordingAudioOwners.remove(owner) != nil,
+                  !self.wantsRecordingAudio else { return }
             guard !self.movieFileOutput.isRecording, !self.isStoppingRecording else { return }
             self.removeMicrophoneLocked()
         }

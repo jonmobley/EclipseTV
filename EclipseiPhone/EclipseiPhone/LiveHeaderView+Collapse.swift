@@ -83,6 +83,13 @@ extension LiveHeaderView {
                 flip.isHidden = hideFlip
             }
         }
+        if let capture = cameraCaptureStack {
+            capture.alpha = controlsFade
+            let hideCapture = controlsFade <= 0.01
+            if capture.isHidden != hideCapture {
+                capture.isHidden = hideCapture
+            }
+        }
         gradientLayer.opacity = Float(controlsFade)
         titleLabel.alpha = max(0, 1 - progress * 2)
         countdownClockLabel.alpha = max(0, 1 - progress * 2)

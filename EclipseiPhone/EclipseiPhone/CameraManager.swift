@@ -159,9 +159,11 @@ final class CameraManager: NSObject {
     let movieFileOutput = AVCaptureMovieFileOutput()
     /// Optional mic input added when recording with audio permission.
     var audioDeviceInput: AVCaptureDeviceInput?
-    /// True while the full-screen camera is open (session queue only); the mic stays
-    /// attached for that whole time so record start/stop never re-routes audio.
-    var wantsRecordingAudio = false
+    /// Screens that can record right now (full-screen camera, the grid's live camera
+    /// hero). Session queue only. While any is up the mic stays attached, so record
+    /// start/stop never re-routes audio.
+    var recordingAudioOwners: Set<String> = []
+    var wantsRecordingAudio: Bool { !recordingAudioOwners.isEmpty }
     /// Whether a movie file is currently being written.
     private(set) var isRecording = false
     /// Completion invoked when `stopRecording` finishes writing/saving.

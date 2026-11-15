@@ -308,7 +308,7 @@ final class CameraLiveViewController: UIViewController {
         updateLivePreviewSource(force: true)
         startCameraPreviewIfNeeded()
         // Mic on now rather than at record, so recording doesn't blip other apps' music.
-        CameraManager.shared.armRecordingAudio()
+        CameraManager.shared.armRecordingAudio(owner: "fullscreen")
     }
 
     /// Vertical Show stays portrait. Landscape Show follows the phone so a
@@ -337,7 +337,7 @@ final class CameraLiveViewController: UIViewController {
             CameraManager.shared.closeOutRecordingIfNeeded()
         }
         stopRecordingTimer()
-        CameraManager.shared.disarmRecordingAudio()
+        CameraManager.shared.disarmRecordingAudio(owner: "fullscreen")
         CameraManager.shared.captureLastFrame(from: previewView)
         teardownLivePreviewSource()
         previewView.detach()

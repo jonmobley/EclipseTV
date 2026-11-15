@@ -162,3 +162,10 @@
   A bookmark left of the gear (`savePresetButton`) shows only while a frame is on the camera and Camera came from a Show;
   it asks "Save as preset?" / "Adds camera and frame as preset to your show." (all save paths use that prompt) and turns
   filled once saved.
+- Live camera on the Show screen (2026-11-15): while the phone camera owns the hero, the docked ribbon under it shows
+  the camera's frames, Background and quick-change stills (`LibraryGridViewController+CameraRibbon`, hooked into the
+  slideshow/Live Poll ribbon like Live Poll), and the hero has Take Photo / Record bottom-left
+  (`LiveHeaderView+CameraCapture`). Captures file through `CameraCaptureFiling` (shared with fullscreen). The mic is
+  armed per owner (`armRecordingAudio(owner:)`: "fullscreen", "showHero"), so it stays on while the camera hero is up.
+  Hero expand control is a 36pt circle. `CameraMirrorView` flushes its renderer when it re-enters a window or reports
+  it needs a flush: a fullscreen presentation stalled it and left the hero black after closing the camera.

@@ -118,12 +118,12 @@ extension LiveHeaderView {
             )
         )
         config.baseForegroundColor = .white
-        config.contentInsets = NSDirectionalEdgeInsets(
-            top: 8, leading: 8, bottom: 8, trailing: 8
-        )
+        config.contentInsets = .zero
         let button = UIButton(configuration: config)
+        // A fixed 36pt circle like Flip Camera / Screen Fit. Sized to its glyph with an
+        // 8pt radius it came out as a lopsided rounded rectangle (2026-11-15).
         button.backgroundColor = UIColor.black.withAlphaComponent(0.45)
-        button.layer.cornerRadius = 8
+        button.layer.cornerRadius = 18
         button.clipsToBounds = true
         button.translatesAutoresizingMaskIntoConstraints = false
         button.addAction(UIAction { [weak self] _ in
@@ -134,7 +134,9 @@ extension LiveHeaderView {
             button.trailingAnchor.constraint(
                 equalTo: trailingAnchor, constant: -10
             ),
-            button.topAnchor.constraint(equalTo: topAnchor, constant: 10)
+            button.topAnchor.constraint(equalTo: topAnchor, constant: 10),
+            button.widthAnchor.constraint(equalToConstant: 36),
+            button.heightAnchor.constraint(equalToConstant: 36)
         ])
         heroExpandButton = button
     }

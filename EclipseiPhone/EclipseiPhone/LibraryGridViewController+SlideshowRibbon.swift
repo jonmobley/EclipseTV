@@ -45,6 +45,9 @@ extension LibraryGridViewController {
     /// Live Poll is checked first throughout: its Practice preview owns the
     /// hero even while a countdown clock keeps running on the projector.
     func liveSlideshowRibbonItemCount() -> Int {
+        if showsCameraRibbon {
+            return cameraRibbonItemCount()
+        }
         if showsLivePollRibbon {
             return livePollRibbonItemCount()
         }
@@ -57,6 +60,10 @@ extension LibraryGridViewController {
         _ cell: LibraryThumbnailCell,
         at indexPath: IndexPath
     ) {
+        if showsCameraRibbon {
+            configureCameraRibbonCell(cell, at: indexPath)
+            return
+        }
         if showsLivePollRibbon {
             configureLivePollRibbonCell(cell, at: indexPath)
             return
@@ -81,6 +88,10 @@ extension LibraryGridViewController {
 
     /// Jumps the live slideshow to the tapped ribbon slide.
     func handleLiveSlideshowRibbonTap(at indexPath: IndexPath) {
+        if showsCameraRibbon {
+            handleCameraRibbonTap(at: indexPath)
+            return
+        }
         if showsLivePollRibbon {
             handleLivePollRibbonTap(at: indexPath)
             return
@@ -140,7 +151,7 @@ extension LibraryGridViewController {
     /// Hero ribbon toggle + swipe browse while this Show’s slideshow is live.
     /// Live Poll shows its ribbon on program or in Practice (no toggle).
     func syncLiveSlideshowRibbonChrome() {
-        if showsLivePollRibbon {
+        if showsLivePollRibbon || showsCameraRibbon {
             liveHeader.setSlideshowRibbonToggleVisible(false, isOn: false)
             liveHeader.allowsSlideshowBrowse = false
             return
@@ -194,7 +205,7 @@ extension LibraryGridViewController {
     /// Already-visible cues stay put (highlight only). Off-screen cues scroll just
     /// enough to peek into view — never a forced horizontal center.
     func scrollLiveSlideshowRibbonToCurrentSlide() {
-        guard showsLiveSlideshowRibbon else { return }
+        guard showsLiveSlideshowRibbon, !showsCameraRibbon else { return }
         let index: Int
         let count: Int
         if showsLivePollRibbon {
@@ -351,7 +362,7 @@ extension LibraryGridViewController {
     }
 
     /// Reloads visible docked thumbs without resetting the strip's offset.
-    private func reloadDockedRibbonThumbsInPlace() {
+    func reloadDockedRibbonThumbsInPlace() {
         let expected = liveSlideshowRibbonItemCount()
         let actual = slideshowRibbonView.numberOfItems(inSection: 0)
         if expected != actual {

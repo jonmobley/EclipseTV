@@ -69,6 +69,22 @@ final class CameraMirrorView: UIView {
             name: AVSampleBufferVideoRenderer.didFailToDecodeNotification,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleDecodeFailure(_:)),
+            name: AVSampleBufferVideoRenderer.requiresFlushToResumeDecodingDidChangeNotification,
+            object: nil
+        )
+    }
+
+    /// Covered by a full-screen presentation (fullscreen Camera), the grid's views
+    /// leave the window and the renderer stops decoding until it is flushed. Without
+    /// this the Show hero stayed black after closing the camera until its content
+    /// changed (2026-11-15).
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        guard window != nil, isMirroring else { return }
+        renderer.flush()
     }
 
     // MARK: - Mirroring
@@ -100,7 +116,12 @@ final class CameraMirrorView: UIView {
     /// The renderer has no control timebase, so each sample is tagged to display on
     /// arrival instead of being scheduled against a clock.
     func enqueue(_ sampleBuffer: CMSampleBuffer) {
-        guard let renderer, renderer.isReadyForMoreMediaData else { return }
+        guard let renderer else { return }
+        // A stalled renderer never becomes ready again by itself: flush and carry on.
+        if renderer.status == .failed || renderer.requiresFlushToResumeDecoding {
+            renderer.flush()
+        }
+        guard renderer.isReadyForMoreMediaData else { return }
         Self.markDisplayImmediately(sampleBuffer)
         renderer.enqueue(sampleBuffer)
         notifyFirstFrameIfNeeded()
@@ -135,6 +156,11 @@ final class CameraMirrorView: UIView {
         guard let failed = notification.object as? AVSampleBufferVideoRenderer,
               failed === renderer
         else {
+            return
+        }
+        // Didn't-decode always flushes; the flush-needed notice only when it turned on.
+        if notification.name == AVSampleBufferVideoRenderer.requiresFlushToResumeDecodingDidChangeNotification,
+           !failed.requiresFlushToResumeDecoding {
             return
         }
         renderer.flush()

@@ -65,6 +65,8 @@ final class LiveHeaderView: UIView {
     var slideshowCountdownTrailing: NSLayoutConstraint?
     /// Circular front / back shortcut while the live camera owns the hero.
     var cameraFlipButton: UIButton?
+    /// Bottom-leading Take Photo / Record pair while the live camera owns the hero.
+    var cameraCaptureStack: UIStackView?
     /// Left/right swipes that browse slides or the Show's stills from the hero.
     /// Exposed so the Library↔Music pager can be told to yield to them.
     var browseSwipeRecognizers: [UISwipeGestureRecognizer] = []
@@ -121,6 +123,10 @@ final class LiveHeaderView: UIView {
     var onToggleScreenFit: (() -> Void)?
     /// Switches the live camera between the front and back lenses from the hero.
     var onFlipCamera: (() -> Void)?
+    /// Hero Take Photo while the live camera owns the hero.
+    var onCameraTakePhoto: (() -> Void)?
+    /// Hero Record / Stop while the live camera owns the hero.
+    var onCameraToggleRecording: (() -> Void)?
     /// When true, the expanded hero accepts left/right swipes (and stays tappable).
     var allowsSlideshowBrowse = false {
         didSet {
@@ -643,6 +649,7 @@ final class LiveHeaderView: UIView {
             || slideshowRibbonButton != nil
             || screenFitButton != nil
             || cameraFlipButton != nil
+            || cameraCaptureStack != nil
     }
 
     /// Opens whatever fullscreen surface the expanded hero stands in for.
