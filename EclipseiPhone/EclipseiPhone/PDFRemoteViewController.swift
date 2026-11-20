@@ -44,6 +44,13 @@ final class PDFRemoteViewController: UIViewController {
     private var pinchSnapTargets: [CGFloat] = []
     /// The snap size the pinch is currently holding on, if any.
     private var heldSnapScale: CGFloat?
+    /// Zoom and finger spread when the pinch began, and the latest spread.
+    private var pinchStartScale: CGFloat = 0
+    private var pinchStartSpan: CGFloat = 0
+    private var pinchSpan: CGFloat = 0
+    /// Whether this pinch has held on a snap size; from then on the reader steers
+    /// the zoom by finger spread (see `PDFZoomSnap.fingerScale`).
+    private var pinchHasHeld = false
     private let snapHaptic = UIImpactFeedbackGenerator(style: .light)
 
     // MARK: - Init
@@ -294,28 +301,57 @@ final class PDFRemoteViewController: UIViewController {
     /// Makes the pinch catch where the page exactly fills the audience frame's
     /// width or height: within `PDFZoomSnap.holdBand` of one, the zoom holds there
     /// (with a light tap) until the pinch moves well past it.
+    ///
+    /// Holding sets the zoom, and the scroll view then pinches on from the held
+    /// zoom, so a slow pinch would never get out of the band. Once a pinch has
+    /// held, the zoom therefore follows the fingers' spread instead.
     @objc private func pinchChanged(_ pinch: UIPinchGestureRecognizer) {
         guard let pdf = pdfView, let scroll = pdf.eclipse_scrollView else { return }
         switch pinch.state {
         case .began:
             pinchSnapTargets = currentSnapTargets()
             heldSnapScale = nil
+            pinchHasHeld = false
+            pinchStartScale = pdf.scaleFactor
+            pinchStartSpan = fingerSpan(of: pinch) ?? 0
+            pinchSpan = pinchStartSpan
             snapHaptic.prepare()
         case .changed:
-            let target = PDFZoomSnap.target(for: pdf.scaleFactor, in: pinchSnapTargets)
+            if let span = fingerSpan(of: pinch) { pinchSpan = span }
+            let fingers = PDFZoomSnap.fingerScale(
+                startScale: pinchStartScale,
+                startSpan: pinchStartSpan,
+                span: pinchSpan,
+                range: pdf.minScaleFactor...pdf.maxScaleFactor
+            ) ?? pdf.scaleFactor
+            let target = PDFZoomSnap.target(for: fingers, in: pinchSnapTargets)
             if let target, target != heldSnapScale {
                 snapHaptic.impactOccurred()
                 snapHaptic.prepare()
             }
             heldSnapScale = target
-            if let target { hold(scroll, pdf: pdf, atScale: target, around: pinch) }
+            if let target {
+                pinchHasHeld = true
+                hold(scroll, pdf: pdf, atScale: target, around: pinch)
+            } else if pinchHasHeld {
+                hold(scroll, pdf: pdf, atScale: fingers, around: pinch)
+            }
         default:
             if let held = heldSnapScale, pinch.state == .ended {
                 hold(scroll, pdf: pdf, atScale: held, around: pinch)
             }
             heldSnapScale = nil
+            pinchHasHeld = false
             pinchSnapTargets = []
         }
+    }
+
+    /// Distance between the two fingers, or `nil` while fewer than two are down.
+    private func fingerSpan(of pinch: UIPinchGestureRecognizer) -> CGFloat? {
+        guard pinch.numberOfTouches >= 2 else { return nil }
+        let a = pinch.location(ofTouch: 0, in: view)
+        let b = pinch.location(ofTouch: 1, in: view)
+        return hypot(a.x - b.x, a.y - b.y)
     }
 
     /// Snap sizes for the current page against the audience frame.

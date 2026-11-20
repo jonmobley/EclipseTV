@@ -171,5 +171,7 @@
   it needs a flush: a fullscreen presentation stalled it and left the hero black after closing the camera.
 - PDF reader zoom snap (2026-11-14): pinching in `PDFRemoteViewController` catches where the current page exactly fills
   the audience frame's width and where it fills its height (`PDFZoomSnap`, ±4% hold band, light haptic on entry). It
-  rides the scroll view's own pinch recognizer (added target, never the delegate); UIScrollView sets zoom from the
-  cumulative pinch scale each frame, which is why holding by resetting `zoomScale` doesn't trap the pinch.
+  rides the scroll view's own pinch recognizer (added target, never the delegate). Holding sets the zoom, and the scroll
+  view then pinches on *from the held zoom*, so a slow pinch stayed caught for good (found 2026-11-19). Once a pinch has
+  held, the reader drives the zoom from finger spread (`PDFZoomSnap.fingerScale`). Only snap sizes inside the reader's
+  zoom range count: a portrait page in a 16:9 frame only gets the fill-width catch.

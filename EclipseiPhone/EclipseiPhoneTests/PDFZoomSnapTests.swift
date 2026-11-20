@@ -57,4 +57,29 @@ struct PDFZoomSnapTests {
         #expect(PDFZoomSnap.target(for: 0.4, in: targets) == nil)
         #expect(PDFZoomSnap.target(for: 0, in: targets) == nil)
     }
+
+    @Test func fingerScaleFollowsSpreadWithinRange() {
+        #expect(PDFZoomSnap.fingerScale(startScale: 0.5, startSpan: 100, span: 150, range: 0.1...10) == 0.75)
+        #expect(PDFZoomSnap.fingerScale(startScale: 0.5, startSpan: 100, span: 50, range: 0.3...10) == 0.3)
+        #expect(PDFZoomSnap.fingerScale(startScale: 0.5, startSpan: 100, span: 1000, range: 0.1...2) == 2)
+        #expect(PDFZoomSnap.fingerScale(startScale: 0.5, startSpan: 0, span: 50, range: 0.1...2) == nil)
+    }
+
+    /// A slow pinch (1pt a frame) through a snap size holds on it, then lets go on
+    /// the far side. Holding by zoom alone kept the pinch caught for good.
+    @Test func slowPinchHoldsThenLetsGo() {
+        let targets: [CGFloat] = [0.6]
+        var held: [CGFloat?] = []
+        for span in stride(from: CGFloat(100), through: 200, by: 1) {
+            let fingers = PDFZoomSnap.fingerScale(
+                startScale: 0.4, startSpan: 100, span: span, range: 0.1...3
+            )!
+            held.append(PDFZoomSnap.target(for: fingers, in: targets))
+        }
+        #expect(held.contains(0.6))
+        #expect(held.last! == nil)
+        let firstHeld = held.firstIndex(of: 0.6)!
+        let lastHeld = held.lastIndex(of: 0.6)!
+        #expect(held[firstHeld...lastHeld].allSatisfy { $0 == 0.6 })
+    }
 }

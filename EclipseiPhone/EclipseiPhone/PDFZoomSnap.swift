@@ -46,6 +46,22 @@ enum PDFZoomSnap {
         return result
     }
 
+    /// The zoom the fingers alone ask for: the pinch's starting zoom times how
+    /// far the two fingers have spread (or closed) since it began, kept in `range`.
+    ///
+    /// The reader holds on snap sizes by setting the zoom itself, and the scroll
+    /// view then pinches on from the held zoom. Steering by finger spread instead
+    /// is what lets a slow pinch carry on past a snap size rather than stay caught.
+    static func fingerScale(
+        startScale: CGFloat,
+        startSpan: CGFloat,
+        span: CGFloat,
+        range: ClosedRange<CGFloat>
+    ) -> CGFloat? {
+        guard startScale > 0, startSpan > 0, span > 0 else { return nil }
+        return min(max(startScale * span / startSpan, range.lowerBound), range.upperBound)
+    }
+
     /// The target `scale` should hold on, if it is within `band` of one.
     static func target(
         for scale: CGFloat,
