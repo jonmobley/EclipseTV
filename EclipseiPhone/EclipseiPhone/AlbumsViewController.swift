@@ -219,6 +219,7 @@ final class AlbumsViewController: UIViewController {
             self.collectionView.reloadData()
             self.refresh()
         })
+        alert.preferConfirmAction()
         present(alert, animated: true)
     }
 

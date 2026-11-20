@@ -41,6 +41,7 @@ extension LibraryGridViewController {
                 name: name, itemIds: itemIds, showId: showId
             )
         })
+        alert.preferConfirmAction()
         present(alert, animated: true)
     }
 

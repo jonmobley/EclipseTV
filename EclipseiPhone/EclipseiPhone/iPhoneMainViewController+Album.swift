@@ -40,6 +40,7 @@ extension iPhoneMainViewController {
             }
             self.presentAlbums()
         })
+        alert.preferConfirmAction()
         present(alert, animated: true)
     }
 

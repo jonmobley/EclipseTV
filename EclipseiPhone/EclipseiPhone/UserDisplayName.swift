@@ -46,3 +46,17 @@ private final class TextFieldMaxLengthBridge: NSObject {
         field.text = String(text.prefix(UserDisplayName.maxLength))
     }
 }
+
+// MARK: - Return key confirms
+
+extension UIAlertController {
+
+    /// Makes Return on a keyboard press the confirm button instead of Cancel.
+    ///
+    /// Without a preferred action UIKit sends Return to Cancel, so typing a name
+    /// and pressing Return (iPad keyboards) threw the entry away.
+    func preferConfirmAction() {
+        guard preferredAction == nil else { return }
+        preferredAction = actions.first { $0.style == .default }
+    }
+}

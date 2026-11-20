@@ -44,6 +44,7 @@ extension UIViewController {
         alert.addAction(UIAlertAction(title: "Save", style: .default) { [weak alert] _ in
             MediaTitleStore.setTitle(alert?.textFields?.first?.text, forId: id)
         })
+        alert.preferConfirmAction()
         present(alert, animated: true)
     }
 }

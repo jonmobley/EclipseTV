@@ -304,6 +304,12 @@ final class CameraManager: NSObject {
             // Its automatic audio setup stops other apps' music; recording sets a
             // mixable session itself (`AppAudioSession.beginRecording`).
             session.automaticallyConfiguresApplicationAudioSession = false
+            // iPad: keep the camera running in Split View, Slide Over and resized
+            // windows. Off by default, which blanked the camera whenever Eclipse
+            // was not full screen.
+            if session.isMultitaskingCameraAccessSupported {
+                session.isMultitaskingCameraAccessEnabled = true
+            }
 
             if session.inputs.isEmpty {
                 guard let videoDevice = Self.device(at: .back) else {

@@ -182,3 +182,7 @@
   once cropped a one-finger drag pans. The Fit/Fill corner button turns into ↺ (reset) while adjusted.
   Browse swipes and the home pager `require(toFail:)` the adjust pan, which fails at once when
   there's nothing to drag. Off for video, overlays, locked output, remote operators.
+- iPad (2026-11-19, audit `docs/audit-2026-11-19-ipad-and-mac.md`): every alert with a text field calls
+  `alert.preferConfirmAction()` before it is presented; without a preferred action UIKit sends a keyboard's
+  Return to Cancel. The camera and QR scanner sessions set `isMultitaskingCameraAccessEnabled` so the camera
+  keeps running in Split View / resized windows (unconfirmed on a real iPad).

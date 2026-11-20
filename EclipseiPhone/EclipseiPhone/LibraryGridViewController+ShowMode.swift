@@ -916,6 +916,7 @@ extension LibraryGridViewController {
             let name = alert.textFields?.first?.text ?? ""
             try? SlideshowStore.shared.rename(id: show.id, to: name)
         })
+        alert.preferConfirmAction()
         present(alert, animated: true)
     }
 

@@ -63,6 +63,7 @@ extension UIViewController {
             )
             bridge.refresh(with: field.text ?? "")
         }
+        alert.preferConfirmAction()
         present(alert, animated: true)
     }
 }
