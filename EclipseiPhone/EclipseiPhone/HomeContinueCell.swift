@@ -36,6 +36,9 @@ final class HomeContinueCell: UICollectionViewCell {
     private let titleLabel = UILabel()
     private let detailLabel = UILabel()
     private let actionButton = UIButton(type: .system)
+    /// Text beside the button (Continue) or above it (Get Started).
+    private let contentStack = UIStackView()
+    private var textFullWidth: NSLayoutConstraint?
     private var cardWidth: NSLayoutConstraint?
     private var cardHeight: NSLayoutConstraint?
 
@@ -83,6 +86,7 @@ final class HomeContinueCell: UICollectionViewCell {
             accessibilityLabel = "Continue \(name)"
             accessibilityValue = detail
             accessibilityHint = "Opens this Show."
+            setButtonBelowText(false)
         case .firstShow:
             kickerLabel.text = "GET STARTED"
             titleLabel.text = "Create your first Show"
@@ -94,11 +98,22 @@ final class HomeContinueCell: UICollectionViewCell {
             accessibilityLabel = "Create your first Show"
             accessibilityValue = nil
             accessibilityHint = "Creates a new Show."
+            // No cover to look at, so the text gets the full width and the button
+            // sits under it; beside it the description was cut off mid-sentence.
+            setButtonBelowText(true)
         }
         actionButton.configuration = button
     }
 
     // MARK: - Private
+
+    private func setButtonBelowText(_ below: Bool) {
+        contentStack.axis = below ? .vertical : .horizontal
+        contentStack.alignment = below ? .leading : .bottom
+        contentStack.spacing = below ? 14 : 12
+        detailLabel.numberOfLines = below ? 3 : 2
+        textFullWidth?.isActive = below
+    }
 
     private func setUp() {
         card.backgroundColor = UIColor(white: 0.12, alpha: 1)
@@ -148,10 +163,11 @@ final class HomeContinueCell: UICollectionViewCell {
         let text = UIStackView(arrangedSubviews: [kickerLabel, titleLabel, detailLabel])
         text.axis = .vertical
         text.spacing = 4
-        let bottom = UIStackView(arrangedSubviews: [text, actionButton])
-        bottom.axis = .horizontal
-        bottom.alignment = .bottom
-        bottom.spacing = 12
+        let bottom = contentStack
+        bottom.addArrangedSubview(text)
+        bottom.addArrangedSubview(actionButton)
+        textFullWidth = text.widthAnchor.constraint(equalTo: bottom.widthAnchor)
+        setButtonBelowText(false)
         bottom.translatesAutoresizingMaskIntoConstraints = false
         card.addSubview(bottom)
 
