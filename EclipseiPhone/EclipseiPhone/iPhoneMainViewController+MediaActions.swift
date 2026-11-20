@@ -478,6 +478,7 @@ extension iPhoneMainViewController {
                 )
             }
         })
+        alert.preferConfirmAction()
         present(alert, animated: true)
     }
 
@@ -575,6 +576,7 @@ extension iPhoneMainViewController {
             self?.pendingSlideshowName = trimmed
             self?.showSlideshowImagePicker()
         })
+        alert.preferConfirmAction()
         present(alert, animated: true)
     }
 

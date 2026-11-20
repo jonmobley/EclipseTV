@@ -62,6 +62,10 @@ final class QRScannerViewController: UIViewController, AVCaptureMetadataOutputOb
             return
         }
         session.addInput(input)
+        // iPad: keep scanning in Split View and resized windows.
+        if session.isMultitaskingCameraAccessSupported {
+            session.isMultitaskingCameraAccessEnabled = true
+        }
         let output = AVCaptureMetadataOutput()
         guard session.canAddOutput(output) else { return }
         session.addOutput(output)

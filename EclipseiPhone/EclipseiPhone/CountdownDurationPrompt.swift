@@ -43,6 +43,7 @@ enum CountdownDurationPrompt {
             }
             onSet(parsed)
         })
+        alert.preferConfirmAction()
         host.present(alert, animated: true)
     }
 

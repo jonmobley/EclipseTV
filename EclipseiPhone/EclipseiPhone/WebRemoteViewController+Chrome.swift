@@ -400,6 +400,7 @@ extension WebRemoteViewController {
                 self.present(errorAlert, animated: true)
             }
         })
+        alert.preferConfirmAction()
         present(alert, animated: true)
     }
 

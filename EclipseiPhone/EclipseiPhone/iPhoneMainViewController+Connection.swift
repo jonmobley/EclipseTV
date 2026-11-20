@@ -128,6 +128,7 @@ extension iPhoneMainViewController {
                 self.connectionManager.invitePeer(target)
             }
         })
+        alert.preferConfirmAction()
         presentationAnchor.present(alert, animated: true)
     }
 

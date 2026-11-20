@@ -94,6 +94,7 @@ extension UIViewController {
         alert.addAction(UIAlertAction(title: "Save", style: .default) { [weak alert] _ in
             CameraFrameStore.shared.rename(frameId, to: alert?.textFields?.first?.text)
         })
+        alert.preferConfirmAction()
         present(alert, animated: true)
     }
 }

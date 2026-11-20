@@ -88,6 +88,7 @@ extension UIViewController {
             }
         }
         alert.addAction(save)
+        alert.preferConfirmAction()
         present(alert, animated: true)
     }
 

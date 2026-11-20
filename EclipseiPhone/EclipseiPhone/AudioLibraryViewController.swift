@@ -173,6 +173,7 @@ final class AudioLibraryViewController: UITableViewController {
                 self?.presentError(error, title: "Couldn't Create Playlist")
             }
         })
+        alert.preferConfirmAction()
         present(alert, animated: true)
     }
 
@@ -536,6 +537,7 @@ final class AudioLibraryViewController: UITableViewController {
                 self?.presentError(error, title: "Couldn't Rename")
             }
         })
+        alert.preferConfirmAction()
         present(alert, animated: true)
     }
 
@@ -558,6 +560,7 @@ final class AudioLibraryViewController: UITableViewController {
                 self?.presentError(error, title: "Couldn't Rename")
             }
         })
+        alert.preferConfirmAction()
         present(alert, animated: true)
     }
 

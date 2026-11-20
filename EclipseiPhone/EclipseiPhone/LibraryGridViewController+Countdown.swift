@@ -371,6 +371,7 @@ extension LibraryGridViewController {
             let name = alert.textFields?.first?.text ?? ""
             try? CountdownStore.shared.rename(id: item.id, to: name)
         })
+        alert.preferConfirmAction()
         present(alert, animated: true)
     }
 
