@@ -21,11 +21,14 @@ extension LiveHeaderView {
             return
         }
         if let existing = screensaverPreview {
-            // Same URL already playing — keep it.
-            _ = existing
-            setStaticPreviewHidden(true)
-            bringScreensaverPreviewChromeToFront()
-            return
+            if existing.url == url {
+                // Same URL already playing — keep it.
+                setStaticPreviewHidden(true)
+                bringScreensaverPreviewChromeToFront()
+                return
+            }
+            // A different clip (e.g. Landscape ↔ Vertical): rebuild below.
+            clearScreensaverPreview()
         }
         clearWebPreview(parking: true)
         clearCameraPreview()

@@ -101,8 +101,16 @@ final class ScreensaverStore {
         subsystem: "com.eclipseapp.ios", category: "ScreensaverStore"
     )
 
+    /// Bundled Eclipse loop: the tall (9:16) cut in Vertical mode, else the 16:9 one.
     private static var bundledVideoURL: URL? {
-        Bundle.main.url(forResource: "EclipseScreensaver", withExtension: "mp4")
+        bundledVideoURL(vertical: ExternalOutputSettings.isVerticalMode)
+    }
+
+    /// Bundled Eclipse loop for one output shape; the tall cut falls back to 16:9.
+    static func bundledVideoURL(vertical: Bool) -> URL? {
+        let wide = Bundle.main.url(forResource: "EclipseScreensaver", withExtension: "mp4")
+        guard vertical else { return wide }
+        return Bundle.main.url(forResource: "EclipseScreensaverTall", withExtension: "mp4") ?? wide
     }
 
     private init() {

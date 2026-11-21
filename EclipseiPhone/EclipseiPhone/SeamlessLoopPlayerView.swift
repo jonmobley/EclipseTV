@@ -21,6 +21,9 @@ final class SeamlessLoopPlayerView: UIView {
     /// Whether the loop point is blended (dual player) or hard (gapless looper).
     let crossfadesAtLoop: Bool
 
+    /// The clip this view loops.
+    let url: URL
+
     private let players: [AVPlayer]
     private let playerLayers: [AVPlayerLayer]
     private let looper: AVPlayerLooper?
@@ -39,6 +42,7 @@ final class SeamlessLoopPlayerView: UIView {
     /// - Parameter crossfadesAtLoop: Blend the loop point. Off plays a hard, gapless loop.
     init(url: URL, crossfadesAtLoop: Bool = true) {
         self.crossfadesAtLoop = crossfadesAtLoop
+        self.url = url
         if crossfadesAtLoop {
             players = [AVPlayer(url: url), AVPlayer(url: url)]
             looper = nil
