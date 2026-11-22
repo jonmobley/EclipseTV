@@ -312,13 +312,10 @@ extension CameraLiveViewController {
         shutterButton.accessibilityValue = isRecording ? "Recording" : "Idle"
     }
 
-    /// White still shutter, visually distinct from the red record control.
+    /// Plain white round still shutter (no icon), distinct from red record.
     func applyPhotoButtonAppearance() {
         var config = UIButton.Configuration.plain()
         config.cornerStyle = .capsule
-        let symbol = UIImage.SymbolConfiguration(pointSize: 18, weight: .medium)
-        config.image = UIImage(systemName: "camera.fill", withConfiguration: symbol)
-        config.baseForegroundColor = .black
         config.background.backgroundColor = .white
         config.background.strokeColor = UIColor.white.withAlphaComponent(0.35)
         config.background.strokeWidth = 3

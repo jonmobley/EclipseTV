@@ -9,38 +9,27 @@ import UIKit
 
 // MARK: - CameraOperatorChromeView
 
-/// Camera Mode extras laid over the full-screen Camera.
+/// Camera Mode's Mac status pill, laid over the full-screen Camera.
 ///
-/// - Status pill: whether the picture is reaching the Mac (where Back sits).
-/// - Connect card: shown until the Mac is connected, with Scan Mac QR Code.
-///
-/// Touches outside these controls fall through to the camera underneath, so
-/// pinch-to-zoom, Flip, frames and stills keep working. Main thread only.
+/// Hidden until the volunteer links a Mac (Connect to Mac in the camera
+/// settings); then it shows Linked, or Live while the Mac has this camera on
+/// its Audience Display. Touches always fall through to the camera. Main
+/// thread only.
 final class CameraOperatorChromeView: UIView {
 
     // MARK: - Constants
 
     private static let pillHeight: CGFloat = 30
-    private static let cardWidth: CGFloat = 300
-
-    // MARK: - Callbacks
-
-    /// Invoked by Scan Mac QR Code.
-    var onScan: (() -> Void)?
 
     // MARK: - Subviews
 
     private let statusPill = UILabel()
-    private let card = UIView()
-    private let cardLabel = UILabel()
-    private let scanButton = UIButton(type: .system)
 
     // MARK: - Initialization
 
     override init(frame: CGRect) {
         super.init(frame: frame)
         setupStatusPill()
-        setupCard()
         apply(status: CameraOperatorMode.shared.macStatus)
     }
 
@@ -48,20 +37,21 @@ final class CameraOperatorChromeView: UIView {
 
     // MARK: - Public Interface
 
-    /// Updates the pill and card for a Mac link state.
+    /// Updates the pill for a Mac link state.
     /// - Parameter status: Current Camera Mode Mac status.
     func apply(status: CameraOperatorMode.MacStatus) {
-        let text = CameraOperatorChromeText.pill(for: status)
+        guard let text = CameraOperatorChromeText.pill(for: status) else {
+            statusPill.isHidden = true
+            return
+        }
+        statusPill.isHidden = false
         statusPill.text = "  \(text.title)  "
         statusPill.backgroundColor = text.color
         statusPill.accessibilityLabel = text.title
-        let message = CameraOperatorChromeText.cardMessage(for: status)
-        card.isHidden = message == nil
-        cardLabel.text = message
         setNeedsLayout()
     }
 
-    /// Places the controls around the camera panel.
+    /// Centres the pill over the panel on the top control row.
     /// - Parameters:
     ///   - panel: Camera panel frame in this view's coordinates.
     ///   - topRowFrame: Where Back normally sits; the pill is centred on that row.
@@ -74,18 +64,12 @@ final class CameraOperatorChromeView: UIView {
             width: pillWidth,
             height: Self.pillHeight
         )
-        let width = min(Self.cardWidth, panel.width - 32)
-        let labelHeight = cardLabel.sizeThatFits(CGSize(width: width - 32, height: .greatestFiniteMagnitude)).height
-        let height = labelHeight + 16 + 44 + 32
-        card.frame = CGRect(x: panel.midX - width / 2, y: panel.midY - height / 2, width: width, height: height)
-        cardLabel.frame = CGRect(x: 16, y: 16, width: width - 32, height: labelHeight)
-        scanButton.frame = CGRect(x: 16, y: cardLabel.frame.maxY + 16, width: width - 32, height: 44)
     }
 
     // MARK: - Touch Pass-Through
 
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
-        !card.isHidden && card.frame.contains(point)
+        false
     }
 
     // MARK: - Private Helpers
@@ -98,29 +82,6 @@ final class CameraOperatorChromeView: UIView {
         statusPill.isUserInteractionEnabled = false
         addSubview(statusPill)
     }
-
-    private func setupCard() {
-        card.backgroundColor = UIColor.black.withAlphaComponent(0.75)
-        card.layer.cornerRadius = 16
-        cardLabel.font = .systemFont(ofSize: 15, weight: .medium)
-        cardLabel.textColor = .white
-        cardLabel.numberOfLines = 0
-        cardLabel.textAlignment = .center
-        var config = UIButton.Configuration.filled()
-        config.title = "Scan Mac QR Code"
-        config.image = UIImage(systemName: "qrcode.viewfinder")
-        config.imagePadding = 8
-        config.cornerStyle = .capsule
-        scanButton.configuration = config
-        scanButton.addTarget(self, action: #selector(scanTapped), for: .touchUpInside)
-        card.addSubview(cardLabel)
-        card.addSubview(scanButton)
-        addSubview(card)
-    }
-
-    @objc private func scanTapped() {
-        onScan?()
-    }
 }
 
 // MARK: - CameraOperatorChromeText
@@ -128,29 +89,43 @@ final class CameraOperatorChromeView: UIView {
 /// Words and colours for Camera Mode's Mac status (pure, testable).
 enum CameraOperatorChromeText {
 
-    /// Pill title and colour for a status.
+    /// Pill title and colour, or nil when no pill shows (no Mac link).
     /// - Parameter status: Mac link state.
-    /// - Returns: Short title and background colour.
-    static func pill(for status: CameraOperatorMode.MacStatus) -> (title: String, color: UIColor) {
+    static func pill(for status: CameraOperatorMode.MacStatus) -> (title: String, color: UIColor)? {
         switch status {
-        case .live: return ("● Live on Mac", .systemGreen.withAlphaComponent(0.85))
+        case .off: return nil
+        case .live: return ("● Live", .systemRed.withAlphaComponent(0.9))
+        case .linked: return ("Linked", .systemBlue.withAlphaComponent(0.85))
         case .connecting: return ("Connecting to Mac…", .systemOrange.withAlphaComponent(0.85))
         case .reconnecting: return ("Reconnecting to Mac…", .systemOrange.withAlphaComponent(0.85))
-        case .notConnected, .failed: return ("Not connected to Mac", .systemGray.withAlphaComponent(0.85))
+        case .failed: return ("Mac Disconnected", .systemGray.withAlphaComponent(0.85))
         }
     }
 
-    /// Card text, or nil when the card should hide (connected or connecting).
+    /// Short status line for the camera settings' Mac section.
     /// - Parameter status: Mac link state.
-    /// - Returns: Message shown above Scan Mac QR Code.
-    static func cardMessage(for status: CameraOperatorMode.MacStatus) -> String? {
+    static func settingsStatus(for status: CameraOperatorMode.MacStatus) -> String {
         switch status {
-        case .live, .connecting, .reconnecting:
-            return nil
-        case .notConnected:
-            return "On the Mac, open Eclipse › Settings › Connect › Phone Camera, then scan its QR code."
+        case .off: return "Not linked"
+        case .connecting: return "Connecting…"
+        case .linked: return "Linked"
+        case .live: return "Live on the Audience Display"
+        case .reconnecting: return "Reconnecting…"
+        case .failed: return "Disconnected"
+        }
+    }
+
+    /// Footer under the settings' Mac section.
+    /// - Parameter status: Mac link state.
+    static func settingsFooter(for status: CameraOperatorMode.MacStatus) -> String {
+        switch status {
+        case .off:
+            return "Send this camera to Eclipse on a Mac. On the Mac, open Settings › Connect › "
+                + "Phone Camera, then scan its QR code."
         case .failed(let message):
             return message
+        case .connecting, .linked, .live, .reconnecting:
+            return "Live means the Mac is showing this camera on its Audience Display."
         }
     }
 }
