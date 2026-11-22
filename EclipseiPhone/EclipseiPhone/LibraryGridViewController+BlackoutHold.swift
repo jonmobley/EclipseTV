@@ -42,6 +42,8 @@ extension LibraryGridViewController {
             BlackoutHeldSlideshow(id: $0, index: playback.currentSlideIndex)
         }
         playback.stop()
+        heroPhonePreview = nil
+        blackoutHeldScrubPosition = nil
         // Snapshot before flipping the flag — `currentSourceProvider` prefers black.
         ExternalDisplayManager.shared.beginBlackout()
         isBlackSelected = true
@@ -63,6 +65,7 @@ extension LibraryGridViewController {
         let heldItem = blackoutHeldLibraryItem
         let heldVideoAt = heldItem.flatMap { blackoutHeldVideoPosition(for: $0) }
 
+        blackoutHeldScrubPosition = nil
         blackoutCue = nil
         blackoutHeldSlideshow = nil
         isBlackSelected = false
@@ -123,6 +126,10 @@ extension LibraryGridViewController {
         guard item.isVideo else { return nil }
         if liveHeader.libraryVideoItemId == item.id {
             return liveHeader.libraryVideoPlaybackState.currentTime
+        }
+        // A phone preview borrowed the hero's player; this is where it had been.
+        if let scrub = blackoutHeldScrubPosition, scrub.id == item.id {
+            return scrub.time
         }
         if let held = ExternalDisplayManager.shared.blackoutHeldSource?.videoStartAt,
            held > 0 {

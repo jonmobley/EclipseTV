@@ -114,6 +114,12 @@ final class LibraryGridViewController: UIViewController {
     var isScreensaverSelected = false
     /// When true, live output cannot change; media taps open phone Preview.
     var isLiveOutputLocked = false
+    /// Tile shown in the hero on this phone only while Lock / Blackout holds the
+    /// TV (`HeroPhonePreview`). Nil shows program.
+    var heroPhonePreview: ShowGridItem?
+    /// Where the operator had scrubbed the video Blackout holds, kept while a
+    /// phone preview borrows the hero's player.
+    var blackoutHeldScrubPosition: (id: String, time: TimeInterval)?
 
     /// Open Show id while in Show mode; `nil` means Home (Recent ribbon).
     var openShowId: UUID? {
@@ -532,7 +538,15 @@ final class LibraryGridViewController: UIViewController {
             self?.handleLiveVideoSeek(to: position)
         }
         liveHeader.onRequestFullscreen = { [weak self] in
-            self?.presentFullscreenForLiveMedia()
+            guard let self else { return }
+            if self.heroPhonePreview != nil {
+                self.presentFullscreenForHeroPhonePreview()
+                return
+            }
+            self.presentFullscreenForLiveMedia()
+        }
+        liveHeader.onReturnFromPhonePreview = { [weak self] in
+            self?.clearHeroPhonePreview()
         }
         liveHeader.onRequestHostController = { [weak self] in
             self?.presentQuestPollHostController()

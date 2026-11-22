@@ -115,12 +115,21 @@
 - Note cards: tap expands or collapses, and the pencil edits (2026-10-31).
 - Note editor on iPhone is a full-height sheet only: a medium detent gets pushed to large by the keyboard, which looks like a stall halfway up (2026-11-01). The text stops at `keyboardLayoutGuide`, and Hide Keyboard shows while editing because Done closes the editor.
 - Blackout hold (iPhone, 2026-11-13, `LibraryGridViewController+BlackoutHold.swift`): while Blackout is on the TV stays
-  black and the phone stays usable. Tile taps open a private Preview (`prefersPhonePreviewOnTap(isBlackoutHolding:)`),
+  black and the phone stays usable. Tile taps open a private Preview in the hero (`prefersPhonePreviewOnTap(isBlackoutHolding:)`, see Hero phone preview),
   the held video scrubs muted in the hero, and ⋯ › Show After Blackout cues what follows (`blackoutCue`, "UP NEXT" pill).
   Ending Blackout puts the cue live (videos paused), else restores what was live (video paused at the scrub, slideshow
   on its slide). Operators are never held. Tools with no private Preview (camera, poll, countdown, prompter, slideshows)
   show a toast instead. Apple TV gets paused video via the optional `startsPaused` field on `play_request`; older TV
   builds ignore it and just play, so ship iPhone and Apple TV together.
+- Hero phone preview (iPhone, 2026-11-22, `HeroPhonePreview` + `LibraryGridViewController+HeroPhonePreview`): while
+  Live Lock or Blackout holds the TV, tapping a photo, video, website, PDF, Background or Screensaver tile shows it in the
+  hero on the phone only (grey PREVIEW badge, "Back to Live" / "Back to Blackout"), instead of opening fullscreen.
+  Tapping the previewed tile again, or the hero's expand control, opens it fullscreen; tapping the live (or held) tile,
+  the return button, toggling Lock or starting Blackout drops the preview. Nothing connected / operators keep the old
+  fullscreen Preview. While previewing, hero transport only drives the hero's own muted player, and Screen Fit, hero
+  swipe, slideshow and camera-capture buttons are hidden (they act on program). A held Blackout video's scrub is kept in
+  `blackoutHeldScrubPosition` while a preview borrows the hero player. Any new hero chrome that acts on program must
+  check `heroPhonePreview == nil`.
 - Several Prompters per Show (2026-11-13): the first keeps token `__eclipse.tool.prompter` and the
   Show-id script (`prompter-<showId>`, which the Mac reads too); extras are
   `__eclipse.tool.prompter.<nonce>` whose script id is `ShowToolToken.extraPrompterScriptId(nonce:showId:)`

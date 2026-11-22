@@ -97,7 +97,7 @@ extension LiveHeaderView {
 
         // Locked preview keeps a thicker amber stroke; both widths counter-scale so
         // the hairline stays constant under the host's uniform transform.
-        let baseBorder: CGFloat = isOutputLocked ? 3 : 1
+        let baseBorder: CGFloat = isOutputLocked && !isPhonePreview ? 3 : 1
         layer.borderWidth = baseBorder * inverse
         let radius = Self.expandedCornerRadius * (1 - progress)
             + Self.compactCornerRadius * inverse * progress

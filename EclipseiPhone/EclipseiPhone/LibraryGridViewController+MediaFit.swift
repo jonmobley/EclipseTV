@@ -147,7 +147,8 @@ extension LibraryGridViewController {
     func syncLiveScreenFitChrome() {
         let target = liveHeroAdjustTarget()
         liveHeader.directAdjustTarget = target
-        guard showsLiveHero, !isLiveFromOtherShow else {
+        // A phone preview is not program: Fit / Fill here would reframe the TV.
+        guard showsLiveHero, !isLiveFromOtherShow, heroPhonePreview == nil else {
             liveHeader.setScreenFitToggleVisible(false, mode: .fit)
             return
         }
@@ -235,6 +236,7 @@ extension LibraryGridViewController {
     /// must stay black until Blackout ends.
     func liveHeroAdjustTarget() -> DirectAdjustTarget? {
         guard showsLiveHero,
+              heroPhonePreview == nil,
               !isBlackoutHolding,
               !isLiveFromOtherShow,
               !isLiveOutputLocked,

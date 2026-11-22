@@ -16,6 +16,10 @@ extension LibraryGridViewController {
     /// there. Blackout chrome still updates so the header moon reflects live state.
     func refreshLiveHeader() {
         let mgr = ExternalDisplayManager.shared
+        // A phone preview only lives while Lock / Blackout is why taps preview.
+        if heroPhonePreview != nil, !allowsHeroPhonePreview {
+            heroPhonePreview = nil
+        }
         // Only the PTZ branch below keeps its live picture in the hero.
         if !(mgr.isPTZCameraLive && showsLiveHero && !ShowLiveSession.shared.isRemoteOperator
              && !isLiveFromOtherShow) {
@@ -73,10 +77,14 @@ extension LibraryGridViewController {
             liveHeader.syncExpandControl()
             syncLiveHeroBrowseChrome()
             syncLiveNoteChrome()
-            // Last: content passes above rewrite the badge, and Blackout must win.
+            // Last: content passes above rewrite the badge, and Blackout must win,
+            // unless a phone preview has borrowed the hero (it says PREVIEW).
             liveHeader.setBlackoutHold(
-                isBlackoutHolding,
+                isBlackoutHolding && heroPhonePreview == nil,
                 upNext: blackoutCue.flatMap { Self.blackoutCueTitle(for: $0) }
+            )
+            liveHeader.setPhonePreview(
+                heroPhonePreview != nil, returnTitle: heroPhonePreviewReturnTitle
             )
         }
 
@@ -98,6 +106,9 @@ extension LibraryGridViewController {
         }
         refreshForeignLivePreview()
 
+        if applyHeroPhonePreviewHeaderIfNeeded() {
+            return
+        }
         if applyLivePollPracticeHeaderIfNeeded() {
             return
         }
@@ -277,7 +288,7 @@ extension LibraryGridViewController {
     }
 
     /// Static poster chrome + muted looping video in the phone preview.
-    private func presentScreensaverInLiveHeader() {
+    func presentScreensaverInLiveHeader() {
         liveHeader.configureOverlay(
             title: "Screensaver",
             systemImage: "sparkles.tv",

@@ -49,6 +49,7 @@ extension LibraryGridViewController {
     func syncLiveCameraFlipChrome() {
         guard showsLiveHero,
               !isLiveFromOtherShow,
+              heroPhonePreview == nil,
               ExternalDisplayManager.shared.isCameraLive,
               canSwitchCameraLens
         else {
