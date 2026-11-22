@@ -43,6 +43,11 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // Cold-start from an `eclipse://mac-remote` QR scan.
         if let url = connectionOptions.urlContexts.first?.url {
             handleIncomingURL(url)
+        } else {
+            // A volunteer who never left Camera Mode lands straight back in it.
+            DispatchQueue.main.async {
+                mainViewController.restoreCameraModeIfNeeded()
+            }
         }
     }
 
@@ -63,7 +68,8 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // Defer until after splash / first layout so presentation has a host VC.
         DispatchQueue.main.async {
             if host == "phone-camera" {
-                PhoneCameraSendLauncher.open(connectString: url.absoluteString)
+                // A volunteer scanned the Mac's Phone Camera code: Camera Mode.
+                iPhoneMainViewController.current?.presentCameraMode(link: url.absoluteString)
             } else if host == ConnectURLParser.appHost {
                 MacRemoteLauncher.open(connectString: url.absoluteString)
             }

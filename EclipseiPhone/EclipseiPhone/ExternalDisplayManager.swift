@@ -1234,6 +1234,8 @@ final class ExternalDisplayManager {
 
     private func updateIdleTimer() {
         // Keep the device awake while anything is live on the external display.
-        UIApplication.shared.isIdleTimerDisabled = isConnected && lastSource != nil
+        // Camera Mode keeps a volunteer's phone awake for the whole event.
+        UIApplication.shared.isIdleTimerDisabled =
+            (isConnected && lastSource != nil) || CameraOperatorMode.keepsScreenAwake
     }
 }

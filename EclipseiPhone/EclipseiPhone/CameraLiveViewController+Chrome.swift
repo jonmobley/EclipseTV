@@ -281,6 +281,7 @@ extension CameraLiveViewController {
         layoutBottomChromeInPanel()
         stillRibbonView.reloadData()
         thumbGridView.reloadData()
+        layoutOperatorChromeIfNeeded()
     }
 
     /// Whether AirPlay currently owns the camera overlay (including still park).

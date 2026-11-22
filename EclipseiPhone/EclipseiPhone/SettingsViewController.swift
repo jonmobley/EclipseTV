@@ -365,8 +365,8 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
                 config.secondaryText = "Remote control"
                 config.image = UIImage(systemName: "desktopcomputer")
             case .phoneCamera:
-                config.text = "Send Camera to Mac"
-                config.secondaryText = "Live phone camera source"
+                config.text = "Camera Mode"
+                config.secondaryText = "Send this camera to Eclipse on a Mac"
                 config.image = UIImage(systemName: "web.camera")
             case .none:
                 break
@@ -678,8 +678,9 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
         MacRemoteLauncher.open(from: self)
     }
 
+    /// Camera Mode replaces the old Send Camera form (same full-screen camera).
     private func presentPhoneCameraSend() {
-        PhoneCameraSendLauncher.open(from: self)
+        iPhoneMainViewController.current?.presentCameraMode()
     }
 
     private func pushGettingStarted() {
