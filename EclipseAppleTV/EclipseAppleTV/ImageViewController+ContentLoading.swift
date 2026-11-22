@@ -173,9 +173,9 @@ extension ImageViewController {
         dataSource.applyOrder(orderedIds: orderedIds)
     }
 
-    /// The companion changed a per-item video setting (loop / mute).
+    /// The companion changed a per-item video setting (loop / mute / cross-fade).
     func connectionManager(_ manager: ConnectionManager, didReceiveVideoSettingForId id: String,
-                           isLooping: Bool?, isMuted: Bool?) {
+                           isLooping: Bool?, isMuted: Bool?, crossfadesLoop: Bool?) {
         guard let index = libraryIndex(forItemId: id), let path = dataSource.getPath(at: index) else {
             logger.error("Video setting for unknown id: \(id, privacy: .public)")
             return
@@ -189,6 +189,9 @@ extension ImageViewController {
         }
         if let isMuted = isMuted {
             viewModel.updateVideoSetting(for: item, keyPath: \.isMuted, value: isMuted)
+        }
+        if let crossfadesLoop {
+            viewModel.updateVideoSetting(for: item, keyPath: \.crossfadesLoop, value: crossfadesLoop)
         }
 
         // If this video is the one playing fullscreen, apply the change live.

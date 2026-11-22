@@ -12,13 +12,39 @@ import Testing
 @MainActor
 struct CrossfadeLoopTests {
 
-    @Test func onlyShippedVideosBlend() {
+    @Test func shippedVideosBlendUnlessTurnedOff() {
         let bundled = ShippedVideo.bundledURLs.first
         #expect(bundled != nil)
-        #expect(bundled.map { ImageViewController.crossfadesLoop(path: $0.path) } == true)
-        #expect(ImageViewController.crossfadesLoop(path: "/old/Videos/Loop/video1.mp4"))
-        #expect(!ImageViewController.crossfadesLoop(
-            path: "/data/Containers/Data/Application/X/Library/Caches/Media/clip.mp4"))
+        let defaults = AppState.VideoSettings()
+        #expect(bundled.map { ImageViewController.crossfadesLoop(path: $0.path, settings: defaults) } == true)
+        var off = defaults
+        off.crossfadesLoop = false
+        #expect(bundled.map { ImageViewController.crossfadesLoop(path: $0.path, settings: off) } == false)
+    }
+
+    @Test func phoneVideosBlendOnlyWhenTurnedOn() {
+        let phoneVideo = "/data/Containers/Data/Application/X/Library/Caches/Media/clip.mp4"
+        var settings = AppState.VideoSettings()
+        #expect(!ImageViewController.crossfadesLoop(path: phoneVideo, settings: settings))
+        settings.crossfadesLoop = true
+        #expect(ImageViewController.crossfadesLoop(path: phoneVideo, settings: settings))
+    }
+
+    @Test func olderSavedSettingsStillDecode() throws {
+        let old = Data(#"{"isLooping":true,"isMuted":false,"volume":1,"playbackRate":1,"lastPosition":0}"#.utf8)
+        let decoded = try JSONDecoder().decode(AppState.VideoSettings.self, from: old)
+        #expect(decoded.isLooping)
+        #expect(decoded.crossfadesLoop == nil)
+    }
+
+    @Test func settingMessageCarriesTheChoice() throws {
+        let envelope = EclipseShareEnvelope.setVideoSetting(
+            id: "clip.mp4", isLooping: true, isMuted: nil, crossfadesLoop: true
+        )
+        let decoded = try JSONDecoder().decode(
+            EclipseShareEnvelope.self, from: JSONEncoder().encode(envelope)
+        )
+        #expect(decoded.crossfadesLoop == true)
     }
 
     @Test func shippedVideosLoopByDefault() {

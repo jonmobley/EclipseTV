@@ -45,7 +45,10 @@ extension ImageViewController {
         // Loop can't be toggled on a live player (it swaps player types), so rebuild
         // the player in place only when the desired loop state differs from the active one.
         let isCurrentlyLooping = (playerLooper != nil)
-        if settings.isLooping != isCurrentlyLooping {
+        let isCurrentlyBlended = player.currentItem?.videoComposition != nil
+        let wantsBlend = settings.isLooping
+            && Self.crossfadesLoop(path: currentPath, settings: settings)
+        if settings.isLooping != isCurrentlyLooping || wantsBlend != isCurrentlyBlended {
             rebuildCurrentVideoPlayer(for: mediaItem)
         }
 

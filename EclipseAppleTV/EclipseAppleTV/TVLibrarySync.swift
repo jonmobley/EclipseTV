@@ -149,6 +149,7 @@ final class TVLibrarySync {
                 let settings = settingsProvider.getVideoSettings(for: path)
                 dto.isLooping = settings.isLooping
                 dto.isMuted = settings.isMuted
+                dto.crossfadesLoop = ImageViewController.crossfadesLoop(path: path, settings: settings)
             }
             items.append(dto)
         }

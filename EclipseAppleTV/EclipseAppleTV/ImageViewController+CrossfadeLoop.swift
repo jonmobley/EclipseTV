@@ -13,14 +13,16 @@ extension ImageViewController {
 
     /// Whether a looping video blends its end into its start.
     ///
-    /// The shipped Eclipse loop does not loop perfectly, so it always blends,
-    /// matching the iPhone's Screensaver. Videos sent from a phone keep their
-    /// hard, gapless loop.
+    /// Follows the video's Cross-Fade Loop setting (set from the phone). With no
+    /// setting, only the shipped Eclipse loop blends, matching the iPhone's
+    /// Screensaver; other videos keep a hard, gapless loop.
     ///
-    /// - Parameter path: The video's file path
-    /// - Returns: `true` for videos shipped inside the app
-    static func crossfadesLoop(path: String) -> Bool {
-        ShippedVideo.isShipped(path: path)
+    /// - Parameters:
+    ///   - path: The video's file path
+    ///   - settings: Its stored settings
+    /// - Returns: `true` when the loop point should dissolve
+    nonisolated static func crossfadesLoop(path: String, settings: AppState.VideoSettings) -> Bool {
+        settings.crossfadesLoop ?? ShippedVideo.isShipped(path: path)
     }
 
     /// Builds the blended versions of the shipped loops at launch so they
@@ -36,19 +38,25 @@ extension ImageViewController {
 
     /// A looping player that plays the blended version of `mediaItem`.
     ///
+    /// When the blend is wanted but not built yet, starts building it and
+    /// returns `nil` (the caller hard-loops); once built, the player is rebuilt
+    /// in place if the same video is still on screen.
+    ///
     /// - Parameters:
     ///   - mediaItem: The video to play
-    ///   - settings: Its mute and volume settings
-    /// - Returns: The player, or `nil` when the video does not blend or its
-    ///   blended version is not built yet (the caller then hard-loops it)
+    ///   - settings: Its mute, volume and cross-fade settings
+    /// - Returns: The blended player, or `nil` to hard-loop
     func makeCrossfadeLoopPlayer(
         for mediaItem: MediaItem,
         settings: AppState.VideoSettings
     ) -> AVPlayer? {
-        guard Self.crossfadesLoop(path: mediaItem.path),
-              let item = CrossfadeLoopComposer.cachedItem(
-                for: URL(fileURLWithPath: mediaItem.path)
-              ) else { return nil }
+        guard Self.crossfadesLoop(path: mediaItem.path, settings: settings) else { return nil }
+        let url = URL(fileURLWithPath: mediaItem.path)
+        guard CrossfadeLoopComposer.isPrepared(url) else {
+            buildCrossfadeThenApply(url: url)
+            return nil
+        }
+        guard let item = CrossfadeLoopComposer.cachedItem(for: url) else { return nil }
         let queuePlayer = AVQueuePlayer()
         queuePlayer.automaticallyWaitsToMinimizeStalling = false
         queuePlayer.preventsDisplaySleepDuringVideoPlayback = true
@@ -57,5 +65,16 @@ extension ImageViewController {
         queuePlayer.volume = settings.volume
         logger.debug("🔄 Cross-faded loop player for: \(mediaItem.fileName)")
         return queuePlayer
+    }
+
+    // MARK: - Private Helpers
+
+    /// Builds the blend, then switches the on-screen video to it if still shown.
+    private func buildCrossfadeThenApply(url: URL) {
+        Task { @MainActor [weak self] in
+            await CrossfadeLoopComposer.prepare(url)
+            guard let self, self.currentDisplayPath() == url.path else { return }
+            self.applySettingsToCurrentVideo()
+        }
     }
 }

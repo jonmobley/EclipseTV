@@ -30,7 +30,7 @@ protocol ConnectionManagerDelegate: AnyObject {
     /// item ids (file names) match `orderedIds`.
     func connectionManager(_ manager: ConnectionManager, didReceiveReorderRequest orderedIds: [String])
     /// The companion requested a per-item video setting change. Nil fields are unchanged.
-    func connectionManager(_ manager: ConnectionManager, didReceiveVideoSettingForId id: String, isLooping: Bool?, isMuted: Bool?)
+    func connectionManager(_ manager: ConnectionManager, didReceiveVideoSettingForId id: String, isLooping: Bool?, isMuted: Bool?, crossfadesLoop: Bool?)
     /// The companion changed an item's Fit / Fill framing (already stored); re-frame it if
     /// it is the item on screen.
     func connectionManager(_ manager: ConnectionManager, didReceiveImageFitForId id: String)
@@ -395,12 +395,14 @@ class ConnectionManager: NSObject {
             guard let id = envelope.id else { return }
             let isLooping = envelope.isLooping
             let isMuted = envelope.isMuted
+            let crossfadesLoop = envelope.crossfadesLoop
             logger.info("Received video setting for id: \(id, privacy: .public)")
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
                 self.activateModeIfNeeded(from: envelope)
                 self.delegate?.connectionManager(self, didReceiveVideoSettingForId: id,
-                                                  isLooping: isLooping, isMuted: isMuted)
+                                                  isLooping: isLooping, isMuted: isMuted,
+                                                  crossfadesLoop: crossfadesLoop)
             }
         case .setImageFit:
             guard let id = envelope.id, let isFill = envelope.isFill else { return }

@@ -21,6 +21,8 @@ class AppState: ObservableObject {
         var volume: Float = 1.0
         var playbackRate: Float = 1.0
         var lastPosition: TimeInterval = 0
+        /// Blend the loop point. nil = the default (on only for the shipped loop).
+        var crossfadesLoop: Bool? = nil
     }
     
     private let videoSettingsKey = "EclipseTV.VideoSettings"
