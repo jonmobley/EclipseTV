@@ -65,6 +65,14 @@ enum CrossfadeLoopComposer {
         cache.keys.contains(url)
     }
 
+    /// Whether a built, usable blend exists for `url`.
+    /// - Parameter url: Local video file URL
+    /// - Returns: `true` when `cachedItem(for:)` returns an item
+    static func hasBlend(for url: URL) -> Bool {
+        if case .some(.some) = cache[url] { return true }
+        return false
+    }
+
     /// A fresh player item for a prepared loop.
     /// - Parameter url: Local video file URL
     /// - Returns: The cross-faded item, or `nil` when the clip is too short,

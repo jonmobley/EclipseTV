@@ -47,7 +47,10 @@ final class TVLibraryStore {
 
     private(set) var items: [LibraryItemDTO] = [] {
         // Any write (append, remove, element replace, whole-array swap) drops the index.
-        didSet { itemIndexById = nil }
+        didSet {
+            itemIndexById = nil
+            prepareCrossfadeLoops()
+        }
     }
     private(set) var currentId: String?
 
@@ -860,8 +863,14 @@ final class TVLibraryStore {
         )
     }
 
-    /// Updates loop / mute for a video and persists the manifest (local + pending upload).
-    func updateVideoSetting(id: String, isLooping: Bool?, isMuted: Bool?) {
+    /// Updates loop / mute / cross-fade for a video and persists the manifest
+    /// (local + pending upload).
+    func updateVideoSetting(
+        id: String,
+        isLooping: Bool?,
+        isMuted: Bool?,
+        crossfadesLoop: Bool? = nil
+    ) {
         guard let index = items.firstIndex(where: { $0.id == id }) else { return }
         var item = items[index]
         guard item.isVideo else { return }
@@ -872,6 +881,10 @@ final class TVLibraryStore {
         }
         if let isMuted, item.isMuted != isMuted {
             item.isMuted = isMuted
+            changed = true
+        }
+        if let crossfadesLoop, (item.crossfadesLoop ?? false) != crossfadesLoop {
+            item.crossfadesLoop = crossfadesLoop
             changed = true
         }
         guard changed else { return }
@@ -898,6 +911,7 @@ final class TVLibraryStore {
                 duration: seconds,
                 isLooping: item.isLooping,
                 isMuted: item.isMuted,
+                crossfadesLoop: item.crossfadesLoop,
                 isAvailable: item.isAvailable
             )
             items[index] = updated

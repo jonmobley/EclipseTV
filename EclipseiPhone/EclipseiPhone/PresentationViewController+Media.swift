@@ -138,7 +138,8 @@ extension PresentationViewController {
         isMuted: Bool,
         startAt: TimeInterval = 0,
         autoplay: Bool = true,
-        fill: Bool = false
+        fill: Bool = false,
+        crossfadesLoop: Bool = false
     ) {
         messageLabel.text = nil
         imageView.isHidden = true
@@ -160,7 +161,7 @@ extension PresentationViewController {
 
         videoReadyObservation = nil
         let (player, looper) = makePresentationPlayer(
-            url: url, isMuted: isMuted, isLooping: isLooping
+            url: url, isMuted: isMuted, isLooping: isLooping, crossfadesLoop: crossfadesLoop
         )
         let layer = AVPlayerLayer(player: player)
         layer.videoGravity = Self.videoGravity(fill: fill)
@@ -190,9 +191,11 @@ extension PresentationViewController {
     func makePresentationPlayer(
         url: URL,
         isMuted: Bool,
-        isLooping: Bool
+        isLooping: Bool,
+        crossfadesLoop: Bool = false
     ) -> (player: AVPlayer, looper: AVPlayerLooper?) {
-        let item = PresentationPrewarmer.shared.takeItem(matching: url)
+        let item = (isLooping && crossfadesLoop ? crossfadeLoopItem(for: url) : nil)
+            ?? PresentationPrewarmer.shared.takeItem(matching: url)
             ?? AVPlayerItem(url: url)
         let player: AVPlayer
         var looper: AVPlayerLooper?

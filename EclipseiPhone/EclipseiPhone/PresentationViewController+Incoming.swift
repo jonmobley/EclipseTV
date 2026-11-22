@@ -29,6 +29,7 @@ extension PresentationViewController {
                 startAt: source.videoStartAt,
                 autoplay: source.videoAutoplay,
                 fill: source.videoFill,
+                crossfadesLoop: source.videoCrossfadesLoop,
                 generation: generation
             )
         case .screensaver(let url, let crossfade):
@@ -148,13 +149,14 @@ extension PresentationViewController {
         startAt: TimeInterval,
         autoplay: Bool,
         fill: Bool,
+        crossfadesLoop: Bool,
         generation: Int
     ) {
         let host = makeIncomingMediaHost()
         configureAudioSession(muted: isMuted)
 
         let (player, looper) = makePresentationPlayer(
-            url: url, isMuted: isMuted, isLooping: isLooping
+            url: url, isMuted: isMuted, isLooping: isLooping, crossfadesLoop: crossfadesLoop
         )
         let layer = AVPlayerLayer(player: player)
         layer.videoGravity = Self.videoGravity(fill: fill)

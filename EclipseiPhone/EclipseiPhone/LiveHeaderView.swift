@@ -50,6 +50,8 @@ final class LiveHeaderView: UIView {
     var libraryVideoLayer: AVPlayerLayer?
     var libraryVideoItemId: String?
     var libraryVideoIsLooping = false
+    /// The hero's library video plays its cross-faded loop.
+    var libraryVideoBlendsLoop = false
     var libraryVideoEndObserver: NSObjectProtocol?
     var libraryVideoTimeObserver: Any?
     /// Top-trailing control that opens the hero's fullscreen surface.

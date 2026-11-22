@@ -55,6 +55,9 @@ struct PresentationSource: Equatable {
     /// _, _)` matches across the app keep working, matching how `videoStartAt` and
     /// `videoAutoplay` are already carried.
     let videoFill: Bool
+    /// When true, a looping `.video` dissolves its end into its start
+    /// (Cross-Fade Loop). Carried here for the same reason as `videoFill`.
+    let videoCrossfadesLoop: Bool
 
     /// - Parameter videoStartAt: Resume offset for library video (0 = from the start).
     /// - Parameter videoAutoplay: Play immediately. False parks on a still frame.
@@ -63,12 +66,14 @@ struct PresentationSource: Equatable {
         content: Content,
         videoStartAt: TimeInterval = 0,
         videoAutoplay: Bool = true,
-        videoFill: Bool = false
+        videoFill: Bool = false,
+        videoCrossfadesLoop: Bool = false
     ) {
         self.content = content
         self.videoStartAt = videoStartAt
         self.videoAutoplay = videoAutoplay
         self.videoFill = videoFill
+        self.videoCrossfadesLoop = videoCrossfadesLoop
     }
 
     // MARK: - Convenience builders
@@ -87,13 +92,15 @@ struct PresentationSource: Equatable {
         isMuted: Bool,
         startAt: TimeInterval = 0,
         autoplay: Bool = true,
-        fill: Bool = false
+        fill: Bool = false,
+        crossfadesLoop: Bool = false
     ) -> PresentationSource {
         PresentationSource(
             content: .video(url: url, isLooping: isLooping, isMuted: isMuted),
             videoStartAt: startAt,
             videoAutoplay: autoplay,
-            videoFill: fill
+            videoFill: fill,
+            videoCrossfadesLoop: crossfadesLoop
         )
     }
 
@@ -104,7 +111,8 @@ struct PresentationSource: Equatable {
             content: content,
             videoStartAt: startAt,
             videoAutoplay: false,
-            videoFill: videoFill
+            videoFill: videoFill,
+            videoCrossfadesLoop: videoCrossfadesLoop
         )
     }
 
@@ -177,7 +185,8 @@ struct PresentationSource: Equatable {
                 isLooping: item.isLooping ?? false,
                 isMuted: item.isMuted ?? false,
                 startAt: startAt,
-                fill: fill ?? MediaFitSettings.isFill(forId: item.id)
+                fill: fill ?? MediaFitSettings.isFill(forId: item.id),
+                crossfadesLoop: item.crossfadesLoop ?? false
             )
         }
         return .image(
