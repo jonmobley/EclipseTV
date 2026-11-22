@@ -82,4 +82,24 @@ struct CameraKitTests {
         let second = PhoneCameraKitItem(id: "a", kind: .frame, name: "", orientation: .landscape, version: "1-3")
         #expect(CameraKitUploadPlan.cacheName(for: first) != CameraKitUploadPlan.cacheName(for: second))
     }
+
+    @MainActor @Test func macFrameChoiceWaitsForTheKitToArrive() {
+        let store = CameraKitStore.shared
+        let frameId = UUID()
+        let manifest = PhoneCameraKitManifest(revision: 1, showName: "Sunday", locked: false, twoWay: false, items: [])
+        store.apply(manifest, pictures: [])
+        store.applyMacFrameChoice(frameId)
+        #expect(store.selectedFrameId == nil)
+
+        let picture = CameraKitPicture(
+            id: frameId, kind: .frame, name: "Logo", orientation: .landscape,
+            fileURL: URL(fileURLWithPath: "/dev/null")
+        )
+        store.apply(manifest, pictures: [picture])
+        #expect(store.selectedFrameId == frameId)
+
+        store.applyMacFrameChoice(nil)
+        #expect(store.selectedFrameId == nil)
+        store.clear()
+    }
 }

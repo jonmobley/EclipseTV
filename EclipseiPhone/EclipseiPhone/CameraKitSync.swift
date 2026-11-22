@@ -48,9 +48,17 @@ final class CameraKitSync {
         }
     }
 
-    /// Handles a Mac event; refetches on `KIT_CHANGED`.
-    /// - Parameter data: Raw SSE JSON.
-    func handleEvent(_ data: Data) {
+    /// Handles a Mac event: refetches on `KIT_CHANGED`, and puts the frame
+    /// the Mac operator picked on the camera for `SELECT_FRAME`.
+    /// - Parameters:
+    ///   - data: Raw SSE JSON.
+    ///   - phoneId: This phone's id (a select-frame for another phone is ignored).
+    func handleEvent(_ data: Data, phoneId: String?) {
+        if let select = PhoneCameraSelectFrameMessage.decode(data) {
+            guard select.phoneId == phoneId else { return }
+            CameraKitStore.shared.applyMacFrameChoice(select.frameId.flatMap(UUID.init(uuidString:)))
+            return
+        }
         guard let message = try? JSONDecoder().decode(PhoneCameraKitChangedMessage.self, from: data),
               message.type == PhoneCameraMessageType.kitChanged.rawValue,
               message.revision != lastRevision else { return }

@@ -56,6 +56,8 @@ final class CameraKitStore {
         .appendingPathComponent("CameraKit", isDirectory: true)
 
     private var images: [UUID: UIImage] = [:]
+    /// A frame the Mac picked before the kit had it; applied on the next kit.
+    private var pendingMacFrameId: UUID?
 
     // MARK: - Initialization
 
@@ -124,7 +126,31 @@ final class CameraKitStore {
         if isLocked, CameraOperatorMode.shared.isActive {
             CameraFrameStore.shared.select(nil)
         }
+        if let pending = pendingMacFrameId, frames.contains(where: { $0.id == pending }) {
+            pendingMacFrameId = nil
+            selectFrame(pending)
+            return
+        }
         postChange()
+    }
+
+    /// Puts on the frame the Mac operator picked in the Mac's frames ribbon
+    /// (nil takes every frame off, the volunteer's own too). A frame the kit
+    /// hasn't downloaded yet goes on as soon as it arrives.
+    /// - Parameter id: Kit frame id, or nil for no frame.
+    func applyMacFrameChoice(_ id: UUID?) {
+        guard let id else {
+            pendingMacFrameId = nil
+            CameraFrameStore.shared.select(nil)
+            selectFrame(nil)
+            return
+        }
+        guard frames.contains(where: { $0.id == id }) else {
+            pendingMacFrameId = id
+            return
+        }
+        pendingMacFrameId = nil
+        selectFrame(id)
     }
 
     /// Puts a kit frame on the camera (nil takes it off).
@@ -152,6 +178,7 @@ final class CameraKitStore {
         isTwoWay = false
         pictures = []
         selectedFrameId = nil
+        pendingMacFrameId = nil
         images.removeAll()
         try? FileManager.default.removeItem(at: cacheDirectory)
         postChange()
