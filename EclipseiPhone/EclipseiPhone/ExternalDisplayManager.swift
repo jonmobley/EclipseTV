@@ -87,7 +87,7 @@ final class ExternalDisplayManager {
     /// Quick-change art for the Camera tile while that still is on program.
     var cameraTileParkedStillImage: UIImage? {
         guard case .cutaway(let id) = parkedCameraStill else { return nil }
-        return CameraAlternateStillStore.shared.image(for: id)
+        return CameraAlternateStillStore.shared.image(for: id) ?? CameraKitStore.shared.image(for: id)
     }
 
     /// AirPlay source for the parked still, if any.
@@ -97,6 +97,7 @@ final class ExternalDisplayManager {
             return LogoStore.shared.presentationSource
         case .cutaway(let id):
             return CameraAlternateStillStore.shared.presentationSource(for: id)
+                ?? CameraKitStore.shared.presentationSource(for: id)
         case nil:
             return nil
         }

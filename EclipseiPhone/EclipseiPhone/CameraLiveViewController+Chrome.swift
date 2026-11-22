@@ -113,7 +113,7 @@ extension CameraLiveViewController {
 
         var frameConfig = UIButton.Configuration.plain()
         frameConfig.image = UIImage(
-            systemName: "rectangle.dashed",
+            systemName: "photo.on.rectangle.angled",
             withConfiguration: symbol
         )
         frameConfig.baseForegroundColor = .white
@@ -123,9 +123,9 @@ extension CameraLiveViewController {
             top: 10, leading: 10, bottom: 10, trailing: 10
         )
         frameButton.configuration = frameConfig
-        frameButton.accessibilityLabel = "Frames"
+        frameButton.accessibilityLabel = "Pictures"
         frameButton.accessibilityHint =
-            "Chooses which frames appear as overlay thumbnails on the camera"
+            "Opens the frames and pictures you can put on the camera"
         frameButton.translatesAutoresizingMaskIntoConstraints = true
         frameButton.addTarget(
             self,

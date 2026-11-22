@@ -25,6 +25,12 @@ extension CameraLiveViewController {
             name: CameraFrameStore.didChangeNotification,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(cameraKitStoreChanged),
+            name: CameraKitStore.didChangeNotification,
+            object: nil
+        )
         refreshFrameOverlay()
     }
 
@@ -37,7 +43,7 @@ extension CameraLiveViewController {
 
     /// Reloads the selected frame image onto the phone overlay.
     func refreshFrameOverlay() {
-        frameOverlayView.image = CameraFrameStore.shared.selectedImage
+        frameOverlayView.image = CameraKitStore.shared.activeFrameImage
         frameOverlayView.isHidden = frameOverlayView.image == nil
         layoutFrameOverlay()
     }
@@ -52,15 +58,15 @@ extension CameraLiveViewController {
     @objc func frameButtonTapped() {
         if CameraManager.shared.isRecording {
             finalizeRecordingIfNeeded { [weak self] in
-                self?.presentFrameDrawer()
+                self?.presentPicturesSheet()
             }
             return
         }
-        presentFrameDrawer()
+        presentPicturesSheet()
     }
 
-    /// Page-sheet drawer for picking, importing, and deleting frames.
-    private func presentFrameDrawer() {
+    /// Page-sheet drawer for importing, renaming and deleting own frames.
+    func presentFrameDrawer() {
         let picker = CameraFramePickerViewController()
         let nav = UINavigationController(rootViewController: picker)
         nav.modalPresentationStyle = .pageSheet

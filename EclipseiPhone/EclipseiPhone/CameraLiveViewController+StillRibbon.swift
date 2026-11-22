@@ -18,9 +18,13 @@ extension CameraLiveViewController {
     /// Ribbon items: Background, quick-change stills, trailing +.
     var stillRibbonItems: [CameraStillRibbonItem] {
         let store = CameraAlternateStillStore.shared
+        let kit = CameraKitStore.shared
+        let inMode = isOperatorMode
         return CameraStillRibbon.items(
             cutawayIds: store.cutawayIds,
-            canAdd: store.canAddStill
+            canAdd: inMode ? CameraPictureAdding.canAdd(ownRoomLeft: store.canAddStill) : store.canAddStill,
+            kitIds: inMode ? kit.stills.map(\.id) : [],
+            showsOwn: !kit.hidesOwnPictures
         )
     }
 
@@ -106,7 +110,11 @@ extension CameraLiveViewController {
     func handleStillRibbonItemTap(_ item: CameraStillRibbonItem) {
         switch item {
         case .add:
-            presentStillPicker(replacing: nil)
+            if isOperatorMode {
+                presentPictureAddMenu(from: nil)
+            } else {
+                presentStillPicker(replacing: nil)
+            }
         case .background:
             toggleParkedStill(
                 source: LogoStore.shared.presentationSource,
@@ -114,7 +122,8 @@ extension CameraLiveViewController {
             )
         case .cutaway(let id):
             toggleParkedStill(
-                source: CameraAlternateStillStore.shared.presentationSource(for: id),
+                source: CameraAlternateStillStore.shared.presentationSource(for: id)
+                    ?? CameraKitStore.shared.presentationSource(for: id),
                 kind: .cutaway(id)
             )
         }
@@ -172,7 +181,8 @@ extension CameraLiveViewController {
     @objc func stillRibbonStoreDidChange() {
         let mgr = ExternalDisplayManager.shared
         if case .cutaway(let id) = mgr.parkedCameraStill,
-           !CameraAlternateStillStore.shared.contains(id) {
+           !CameraAlternateStillStore.shared.contains(id),
+           !CameraKitStore.shared.containsStill(id) {
             mgr.resumeCameraFromStillPark()
         }
         reloadStillRibbon()
@@ -187,7 +197,8 @@ extension CameraLiveViewController {
         }
         let items = stillRibbonItems
         guard items.indices.contains(indexPath.item),
-              case .cutaway(let id) = items[indexPath.item]
+              case .cutaway(let id) = items[indexPath.item],
+              !CameraKitStore.shared.containsStill(id)
         else { return }
         presentCutawayActions(id: id, anchor: stillRibbonView.cellForItem(at: indexPath))
     }

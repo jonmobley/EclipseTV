@@ -100,6 +100,7 @@ final class CameraOperatorMode {
         retryTask?.cancel()
         retryTask = nil
         session.disconnect()
+        CameraKitSync.shared.reset()
         MacProgramCompositor.shared.stop()
         UIApplication.shared.isIdleTimerDisabled = false
         macStatus = .notConnected
@@ -127,7 +128,7 @@ final class CameraOperatorMode {
         if display.isCameraParkedOnStill {
             still = Self.parkedStillImage(display).flatMap(Self.ciImage)
         }
-        let overlay = CameraFrameStore.shared.selectedImage.flatMap(Self.ciImage)
+        let overlay = CameraKitStore.shared.activeFrameImage.flatMap(Self.ciImage)
         let quality = PhoneCameraStreamQuality.load()
         let isVertical = ExternalOutputSettings.isVerticalMode
         let size = isVertical
@@ -140,6 +141,8 @@ final class CameraOperatorMode {
 
     private func observeSessionIfNeeded() {
         guard phaseSubscription == nil else { return }
+        CameraKitSync.shared.clientProvider = { [weak self] in self?.session.apiClient }
+        session.onEvent = { CameraKitSync.shared.handleEvent($0) }
         phaseSubscription = session.$phase
             .receive(on: DispatchQueue.main)
             .sink { [weak self] phase in
@@ -152,6 +155,7 @@ final class CameraOperatorMode {
         let names: [Notification.Name] = [
             CameraFrameStore.didChangeNotification,
             CameraAlternateStillStore.didChangeNotification,
+            CameraKitStore.didChangeNotification,
             ExternalDisplayManager.didChangeNotification,
             ExternalOutputSettings.didChangeNotification
         ]
@@ -168,6 +172,7 @@ final class CameraOperatorMode {
         switch phase {
         case .streaming:
             macStatus = .live
+            CameraKitSync.shared.refresh(force: true)
         case .connecting, .needsPIN:
             if macStatus != .reconnecting { macStatus = .connecting }
         case .idle:
@@ -206,7 +211,8 @@ final class CameraOperatorMode {
     private static func parkedStillImage(_ display: ExternalDisplayManager) -> UIImage? {
         switch display.parkedCameraStill {
         case .background: return LogoStore.shared.image
-        case .cutaway(let id): return CameraAlternateStillStore.shared.image(for: id)
+        case .cutaway(let id):
+            return CameraAlternateStillStore.shared.image(for: id) ?? CameraKitStore.shared.image(for: id)
         case nil: return nil
         }
     }
