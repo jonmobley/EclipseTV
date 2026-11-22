@@ -14,6 +14,8 @@ import os.log
 extension ImageViewController {
 
     func setupViewModel() {
+        prepareShippedCrossfadeLoops()
+
         // Bind to view model changes
         viewModel.$isLoading
             .receive(on: DispatchQueue.main)

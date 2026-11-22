@@ -362,6 +362,10 @@ extension ImageViewController {
         // Try to get cached asset first for faster loading
         let cachedAsset = VideoCacheManager.shared.getCachedAsset(for: mediaItem.path)
 
+        if settings.isLooping, let blended = makeCrossfadeLoopPlayer(for: mediaItem, settings: settings) {
+            return blended
+        }
+
         if settings.isLooping {
             // Create multiple player items for truly gapless looping
             let playerItem1: AVPlayerItem
