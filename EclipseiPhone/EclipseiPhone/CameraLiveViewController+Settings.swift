@@ -55,6 +55,11 @@ extension CameraLiveViewController {
     private func presentCameraSettings() {
         let settings = CameraSettingsViewController()
         let nav = UINavigationController(rootViewController: settings)
+        if isOperatorMode {
+            settings.onExitCameraMode = { [weak self, weak nav] in
+                nav?.dismiss(animated: true) { self?.exitOperatorMode() }
+            }
+        }
         nav.modalPresentationStyle = .pageSheet
         settings.navigationItem.rightBarButtonItem = UIBarButtonItem(
             systemItem: .done,

@@ -328,9 +328,9 @@ struct CameraLiveChromeTests {
         }
     }
 
-    /// Landscape is the portrait row turned with the phone: Frame keeps Photo's
-    /// side of record, Flip the other, and both land on the edge the turn produced.
-    @Test func landscapeDockIsTheBottomRowTurnedWithThePhone() {
+    /// Landscape docks beside the panel with Flip and Frame traded from the
+    /// turned portrait row (owner's call, 2026-11-22); Photo stays by record.
+    @Test func landscapeDockSwapsFlipAndFrame() {
         ExternalOutputOrientationFixture.with(.landscape) {
             let vc = CameraLiveViewController()
             vc.loadViewIfNeeded()
@@ -348,14 +348,14 @@ struct CameraLiveChromeTests {
             switch vc.captureDockEdge {
             case .right:
                 #expect(shutter.minX >= panel.maxX - 0.5)
-                #expect(vc.flipButton.frame.maxY <= shutter.minY)
+                #expect(vc.frameButton.frame.maxY <= shutter.minY)
                 #expect(vc.photoButton.frame.minY >= shutter.maxY)
-                #expect(vc.frameButton.frame.minY >= vc.photoButton.frame.maxY)
+                #expect(vc.flipButton.frame.minY >= vc.photoButton.frame.maxY)
             case .left:
                 #expect(shutter.maxX <= panel.minX + 0.5)
-                #expect(vc.frameButton.frame.maxY <= vc.photoButton.frame.minY)
+                #expect(vc.flipButton.frame.maxY <= vc.photoButton.frame.minY)
                 #expect(vc.photoButton.frame.maxY <= shutter.minY)
-                #expect(vc.flipButton.frame.minY >= shutter.maxY)
+                #expect(vc.frameButton.frame.minY >= shutter.maxY)
             case .bottom:
                 Issue.record("landscape layout must not dock at the bottom")
             }

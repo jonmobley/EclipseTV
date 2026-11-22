@@ -10,12 +10,18 @@ import UIKit
 /// Camera-page settings: recording and frame burn-in.
 ///
 /// Frame picking / import lives on the camera Frame button drawer, not here.
+/// In Camera Mode it also holds Exit Camera Mode (see `onExitCameraMode`).
 final class CameraSettingsViewController: UITableViewController {
 
     private enum Section: Int, CaseIterable {
         case recording
         case frameCaptures
+        case cameraMode
     }
+
+    /// Set in Camera Mode: shows Exit Camera Mode and runs this after the
+    /// volunteer confirms. Nil hides the row.
+    var onExitCameraMode: (() -> Void)?
 
     init() {
         super.init(style: .insetGrouped)
@@ -53,7 +59,8 @@ final class CameraSettingsViewController: UITableViewController {
     // MARK: - Table
 
     override func numberOfSections(in tableView: UITableView) -> Int {
-        Section.allCases.count
+        // Camera Mode is the last section, only shown while in Camera Mode.
+        onExitCameraMode == nil ? Section.allCases.count - 1 : Section.allCases.count
     }
 
     override func tableView(
@@ -61,7 +68,7 @@ final class CameraSettingsViewController: UITableViewController {
         numberOfRowsInSection section: Int
     ) -> Int {
         switch Section(rawValue: section) {
-        case .recording, .frameCaptures:
+        case .recording, .frameCaptures, .cameraMode:
             return 1
         case .none:
             return 0
@@ -77,6 +84,8 @@ final class CameraSettingsViewController: UITableViewController {
             return "Recording"
         case .frameCaptures:
             return "Frames"
+        case .cameraMode:
+            return "Camera Mode"
         case .none:
             return nil
         }
@@ -94,6 +103,8 @@ final class CameraSettingsViewController: UITableViewController {
         case .frameCaptures:
             return "When on, the selected frame is saved into photos and video recordings. "
                 + "Live view always shows the frame. Choose frames with the Frame button."
+        case .cameraMode:
+            return "Stops sending this camera to the Mac and goes back to the Home screen."
         case .none:
             return nil
         }
@@ -138,6 +149,11 @@ final class CameraSettingsViewController: UITableViewController {
                 for: .valueChanged
             )
             cell.accessoryView = toggle
+        case .cameraMode:
+            config.text = "Exit Camera Mode"
+            config.textProperties.color = .systemRed
+            config.image = UIImage(systemName: "rectangle.portrait.and.arrow.right")
+            config.imageProperties.tintColor = .systemRed
         case .none:
             break
         }
@@ -148,6 +164,22 @@ final class CameraSettingsViewController: UITableViewController {
 
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
+        guard Section(rawValue: indexPath.section) == .cameraMode else { return }
+        confirmExitCameraMode()
+    }
+
+    /// Asks once so a stray tap doesn't drop the Mac's camera mid-show.
+    private func confirmExitCameraMode() {
+        let alert = UIAlertController(
+            title: "Exit Camera Mode?",
+            message: "This phone stops sending its camera to the Mac.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Exit", style: .destructive) { [weak self] _ in
+            self?.onExitCameraMode?()
+        })
+        present(alert, animated: true)
     }
 
     @objc private func alwaysRecordToggleChanged(_ sender: UISwitch) {

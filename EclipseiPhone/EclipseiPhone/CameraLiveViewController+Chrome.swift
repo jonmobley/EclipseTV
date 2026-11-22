@@ -193,12 +193,11 @@ extension CameraLiveViewController {
         flipButton.transform = .identity
     }
 
-    /// The bottom row turned with the phone, in a column beside the panel.
+    /// The capture controls in a column beside the panel.
     ///
-    /// Frame leads and Flip trails the portrait row. Turned counterclockwise
-    /// (`.right`), the row's leading end lands at the bottom, so Frame is lowest
-    /// and Flip highest; turned clockwise (`.left`) it is the reverse. Photo stays
-    /// on Frame's side of record either way.
+    /// Flip and Frame trade places from the turned portrait row (owner's call,
+    /// 2026-11-22): docked right (`.right`) Flip is lowest and Frame highest;
+    /// docked left (`.left`) it is the reverse. Photo keeps its place by record.
     private func layoutLandscapeCaptureChrome(panel: CGRect, edge: CaptureDockEdge) {
         let inset: CGFloat = 20
         let controlSize = Self.chromeControlSize
@@ -209,8 +208,8 @@ extension CameraLiveViewController {
         let sideX = colX + (Self.shutterSize - controlSize) / 2
         let topY = panel.minY + inset
         let bottomY = panel.maxY - inset - controlSize
-        let frameY = edge == .left ? topY : bottomY
-        let flipY = edge == .left ? bottomY : topY
+        let frameY = edge == .left ? bottomY : topY
+        let flipY = edge == .left ? topY : bottomY
 
         shutterButton.frame = CGRect(
             x: colX,

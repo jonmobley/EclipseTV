@@ -11,8 +11,7 @@ import UIKit
 
 /// Camera Mode extras laid over the full-screen Camera.
 ///
-/// - Status pill: whether the picture is reaching the Mac.
-/// - Hold to Exit: replaces Back so a volunteer can't leave by accident.
+/// - Status pill: whether the picture is reaching the Mac (where Back sits).
 /// - Connect card: shown until the Mac is connected, with Scan Mac QR Code.
 ///
 /// Touches outside these controls fall through to the camera underneath, so
@@ -21,24 +20,17 @@ final class CameraOperatorChromeView: UIView {
 
     // MARK: - Constants
 
-    /// How long Hold to Exit must be held.
-    static let exitHoldDuration: TimeInterval = 1.0
     private static let pillHeight: CGFloat = 30
-    private static let exitSize = CGSize(width: 160, height: 40)
     private static let cardWidth: CGFloat = 300
 
     // MARK: - Callbacks
 
-    /// Invoked after a completed hold on Hold to Exit.
-    var onExit: (() -> Void)?
     /// Invoked by Scan Mac QR Code.
     var onScan: (() -> Void)?
 
     // MARK: - Subviews
 
     private let statusPill = UILabel()
-    private let exitButton = UIButton(type: .system)
-    private let exitFill = UIView()
     private let card = UIView()
     private let cardLabel = UILabel()
     private let scanButton = UIButton(type: .system)
@@ -48,7 +40,6 @@ final class CameraOperatorChromeView: UIView {
     override init(frame: CGRect) {
         super.init(frame: frame)
         setupStatusPill()
-        setupExitButton()
         setupCard()
         apply(status: CameraOperatorMode.shared.macStatus)
     }
@@ -73,18 +64,13 @@ final class CameraOperatorChromeView: UIView {
     /// Places the controls around the camera panel.
     /// - Parameters:
     ///   - panel: Camera panel frame in this view's coordinates.
-    ///   - exitFrame: Where Back normally sits (Hold to Exit takes its place).
-    func layout(panel: CGRect, exitFrame: CGRect) {
+    ///   - topRowFrame: Where Back normally sits; the pill is centred on that row.
+    func layout(panel: CGRect, topRowFrame: CGRect) {
         frame = superview?.bounds ?? frame
-        exitButton.frame = CGRect(
-            origin: CGPoint(x: exitFrame.minX, y: exitFrame.midY - Self.exitSize.height / 2),
-            size: Self.exitSize
-        )
-        exitFill.frame = CGRect(x: 0, y: 0, width: 0, height: Self.exitSize.height)
         let pillWidth = statusPill.intrinsicContentSize.width
         statusPill.frame = CGRect(
             x: panel.midX - pillWidth / 2,
-            y: exitButton.frame.maxY + 10,
+            y: topRowFrame.midY - Self.pillHeight / 2,
             width: pillWidth,
             height: Self.pillHeight
         )
@@ -99,9 +85,7 @@ final class CameraOperatorChromeView: UIView {
     // MARK: - Touch Pass-Through
 
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
-        [exitButton, card].contains { control in
-            !control.isHidden && control.frame.contains(point)
-        }
+        !card.isHidden && card.frame.contains(point)
     }
 
     // MARK: - Private Helpers
@@ -113,28 +97,6 @@ final class CameraOperatorChromeView: UIView {
         statusPill.layer.masksToBounds = true
         statusPill.isUserInteractionEnabled = false
         addSubview(statusPill)
-    }
-
-    private func setupExitButton() {
-        var config = UIButton.Configuration.filled()
-        config.title = "Hold to Exit"
-        config.image = UIImage(systemName: "xmark")
-        config.imagePadding = 6
-        config.cornerStyle = .capsule
-        config.baseBackgroundColor = UIColor.black.withAlphaComponent(0.55)
-        config.baseForegroundColor = .white
-        exitButton.configuration = config
-        exitButton.clipsToBounds = true
-        exitButton.accessibilityHint = "Press and hold to leave Camera Mode."
-        exitFill.backgroundColor = UIColor.systemRed.withAlphaComponent(0.7)
-        exitFill.isUserInteractionEnabled = false
-        exitButton.insertSubview(exitFill, at: 0)
-        let hold = UILongPressGestureRecognizer(target: self, action: #selector(exitHeld(_:)))
-        hold.minimumPressDuration = Self.exitHoldDuration
-        exitButton.addGestureRecognizer(hold)
-        exitButton.addTarget(self, action: #selector(exitTouchDown), for: .touchDown)
-        exitButton.addTarget(self, action: #selector(exitTouchEnded), for: [.touchUpInside, .touchUpOutside, .touchCancel])
-        addSubview(exitButton)
     }
 
     private func setupCard() {
@@ -154,25 +116,6 @@ final class CameraOperatorChromeView: UIView {
         card.addSubview(cardLabel)
         card.addSubview(scanButton)
         addSubview(card)
-    }
-
-    /// Fills the button left to right over the hold time.
-    @objc private func exitTouchDown() {
-        exitFill.frame.size.width = 0
-        UIView.animate(withDuration: Self.exitHoldDuration, delay: 0, options: [.curveLinear]) {
-            self.exitFill.frame.size.width = self.exitButton.bounds.width
-        }
-    }
-
-    @objc private func exitTouchEnded() {
-        exitFill.layer.removeAllAnimations()
-        exitFill.frame.size.width = 0
-    }
-
-    @objc private func exitHeld(_ gesture: UILongPressGestureRecognizer) {
-        guard gesture.state == .began else { return }
-        Haptics.impactMedium()
-        onExit?()
     }
 
     @objc private func scanTapped() {

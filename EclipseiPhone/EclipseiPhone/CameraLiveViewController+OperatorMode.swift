@@ -10,8 +10,9 @@ import UIKit
 
 // MARK: - Camera Mode
 
-/// Camera Mode is this same full-screen Camera with three changes: Back becomes
-/// Hold to Exit (which goes Home), Show-only controls (Save as Preset, the
+/// Camera Mode is this same full-screen Camera with three changes: Back is
+/// hidden and Exit Camera Mode (which goes Home) sits in the camera's settings
+/// sheet, Show-only controls (Save as Preset, the
 /// Show thumbnail grid and the TV's go-LIVE hint) are hidden, and a status pill / connect card track the
 /// Mac link. Frames, quick-change stills, zoom, flip, photo and record all stay.
 extension CameraLiveViewController {
@@ -23,7 +24,6 @@ extension CameraLiveViewController {
     func setupOperatorModeIfRequested() {
         guard opensInOperatorMode, operatorChrome == nil else { return }
         let chrome = CameraOperatorChromeView(frame: view.bounds)
-        chrome.onExit = { [weak self] in self?.exitOperatorMode() }
         chrome.onScan = { [weak self] in self?.presentMacScanner() }
         view.addSubview(chrome)
         operatorChrome = chrome
@@ -40,7 +40,7 @@ extension CameraLiveViewController {
     func layoutOperatorChromeIfNeeded() {
         guard let chrome = operatorChrome else { return }
         applyOperatorModeVisibility()
-        chrome.layout(panel: panelView.convert(panelView.bounds, to: view), exitFrame: backButton.frame)
+        chrome.layout(panel: panelView.convert(panelView.bounds, to: view), topRowFrame: backButton.frame)
         view.bringSubviewToFront(chrome)
     }
 
@@ -62,7 +62,7 @@ extension CameraLiveViewController {
     }
 
     /// Leaves Camera Mode for Home, saving any clip in progress first.
-    private func exitOperatorMode() {
+    func exitOperatorMode() {
         let leave = { [weak self] in
             CameraOperatorMode.shared.deactivate()
             iPhoneMainViewController.current?.libraryViewController.closeOpenShow()
