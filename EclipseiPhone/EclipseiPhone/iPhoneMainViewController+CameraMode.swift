@@ -25,9 +25,9 @@ extension iPhoneMainViewController {
         return nil
     }
 
-    /// Opens Camera Mode: the full-screen Camera, sending its picture to a Mac.
-    /// - Parameter link: A scanned Mac Phone Camera QR link, or nil to reuse
-    ///   the saved one (and show Scan Mac QR Code if there is none).
+    /// Opens Camera Mode: the full-screen Camera, optionally linked to a Mac.
+    /// - Parameter link: A scanned Mac Phone Camera QR link, or nil to relink
+    ///   the last Mac (none: a plain camera until Connect to Mac in settings).
     func presentCameraMode(link: String? = nil) {
         CameraOperatorMode.shared.activate(link: link)
         if let open = openController(ofType: CameraLiveViewController.self) {

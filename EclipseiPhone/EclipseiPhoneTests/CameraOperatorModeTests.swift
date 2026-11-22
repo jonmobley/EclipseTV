@@ -47,18 +47,28 @@ struct CameraOperatorModeTests {
 
     // MARK: - Volunteer wording
 
-    @Test func liveHidesTheConnectCard() {
-        #expect(CameraOperatorChromeText.cardMessage(for: .live) == nil)
-        #expect(CameraOperatorChromeText.pill(for: .live).title == "● Live on Mac")
+    @Test func noPillWithoutAMac() {
+        #expect(CameraOperatorChromeText.pill(for: .off) == nil)
     }
 
-    @Test func notConnectedExplainsWhereTheQRCodeIs() {
-        let message = CameraOperatorChromeText.cardMessage(for: .notConnected)
-        #expect(message?.contains("Phone Camera") == true)
+    @Test func pillSaysLinkedOrLive() {
+        #expect(CameraOperatorChromeText.pill(for: .linked)?.title == "Linked")
+        #expect(CameraOperatorChromeText.pill(for: .live)?.title == "● Live")
+    }
+
+    @Test func settingsExplainWhereTheQRCodeIs() {
+        #expect(CameraOperatorChromeText.settingsFooter(for: .off).contains("Phone Camera"))
     }
 
     @Test func failureShowsItsReason() {
-        #expect(CameraOperatorChromeText.cardMessage(for: .failed("Mac is asleep")) == "Mac is asleep")
+        #expect(CameraOperatorChromeText.settingsFooter(for: .failed("Mac is asleep")) == "Mac is asleep")
+    }
+
+    @Test func onlyActiveLinksOfferDisconnect() {
+        #expect(CameraOperatorMode.MacStatus.live.isLinkedOrTrying)
+        #expect(CameraOperatorMode.MacStatus.reconnecting.isLinkedOrTrying)
+        #expect(!CameraOperatorMode.MacStatus.off.isLinkedOrTrying)
+        #expect(!CameraOperatorMode.MacStatus.failed("x").isLinkedOrTrying)
     }
 
     // MARK: - Reconnecting

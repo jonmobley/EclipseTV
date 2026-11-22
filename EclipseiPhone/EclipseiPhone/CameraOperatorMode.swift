@@ -15,10 +15,11 @@ import UIKit
 /// Camera Mode: this phone runs the camera for Eclipse on a Mac.
 ///
 /// A volunteer opens Camera Mode from Home (or by scanning the Mac's Phone
-/// Camera QR code). It is the regular full-screen Camera, with Show navigation
-/// hidden, sending its picture (frame and parked stills included) to the Mac.
-/// The mode survives relaunch: the app reopens into it and reconnects with the
-/// last scanned link while that Mac session is still running.
+/// Camera QR code). It is the regular full-screen Camera with Show navigation
+/// hidden — a clean camera for a TV, and optionally linked to Eclipse on a Mac
+/// (Connect to Mac in the camera settings), which then gets the picture with
+/// its frame and parked stills. The mode survives relaunch and relinks to the
+/// same Mac while that Mac session is still running.
 ///
 /// Thread safety: main actor only. Frames reach the Mac through
 /// `MacProgramCompositor` on the camera's frame queue.
@@ -27,13 +28,25 @@ final class CameraOperatorMode {
 
     // MARK: - Types
 
-    /// Mac link state shown in the Camera Mode status pill.
+    /// Mac link state shown in the Camera Mode status pill and settings.
     enum MacStatus: Equatable {
-        case notConnected
+        /// No Mac link (a plain camera, e.g. for a TV).
+        case off
         case connecting
+        /// The Mac is receiving the picture.
+        case linked
+        /// The Mac is showing this camera on its Audience Display.
         case live
         case reconnecting
         case failed(String)
+
+        /// True while a Mac link exists or is being made.
+        var isLinkedOrTrying: Bool {
+            switch self {
+            case .connecting, .linked, .live, .reconnecting: return true
+            case .off, .failed: return false
+            }
+        }
     }
 
     // MARK: - Properties
@@ -53,7 +66,7 @@ final class CameraOperatorMode {
     }
 
     /// Current Mac link state.
-    private(set) var macStatus: MacStatus = .notConnected {
+    private(set) var macStatus: MacStatus = .off {
         didSet {
             guard oldValue != macStatus else { return }
             NotificationCenter.default.post(name: Self.didChangeNotification, object: self)
@@ -63,6 +76,8 @@ final class CameraOperatorMode {
     private static let activeKey = "EclipseTV.cameraMode.active"
     private static let linkKey = "cameraMode.macLink"
     private static let retryDelay: UInt64 = 4_000_000_000
+    private static let idleSettleDelay: UInt64 = 500_000_000
+    private static let removedByMacMessage = "The Mac stopped using this camera. Connect again to send it."
     private static let notLocalMessage = "That code isn't for a Mac on this Wi-Fi network. Scan the QR code on the Mac."
 
     private let feed = PhoneCameraFrameFeed()
@@ -77,8 +92,9 @@ final class CameraOperatorMode {
 
     // MARK: - Public Interface
 
-    /// Turns Camera Mode on: screen stays awake and the Mac link starts.
-    /// - Parameter link: A freshly scanned QR link, or nil to reuse the saved one.
+    /// Turns Camera Mode on (screen stays awake) and relinks to a Mac if asked.
+    /// - Parameter link: A freshly scanned QR link, or nil to reuse the Mac
+    ///   this phone was linked to (none: stays a plain camera).
     func activate(link: String? = nil) {
         isActive = true
         UIApplication.shared.isIdleTimerDisabled = true
@@ -89,22 +105,28 @@ final class CameraOperatorMode {
         NotificationCenter.default.post(name: Self.didChangeNotification, object: self)
         if let link {
             connect(link: link)
-        } else if case .notConnected = macStatus, let saved = KeychainStore.string(forKey: Self.linkKey) {
+        } else if !macStatus.isLinkedOrTrying, let saved = KeychainStore.string(forKey: Self.linkKey) {
             connect(link: saved)
         }
     }
 
-    /// Turns Camera Mode off and leaves the Mac.
+    /// Turns Camera Mode off and leaves (and forgets) the Mac.
     func deactivate() {
         isActive = false
-        retryTask?.cancel()
-        retryTask = nil
-        session.disconnect()
-        CameraKitSync.shared.reset()
+        disconnectMac()
         MacProgramCompositor.shared.stop()
         UIApplication.shared.isIdleTimerDisabled = false
-        macStatus = .notConnected
         NotificationCenter.default.post(name: Self.didChangeNotification, object: self)
+    }
+
+    /// Unlinks from the Mac and forgets it; the camera keeps running.
+    func disconnectMac() {
+        retryTask?.cancel()
+        retryTask = nil
+        KeychainStore.removeValue(forKey: Self.linkKey)
+        macStatus = .off
+        session.disconnect()
+        CameraKitSync.shared.reset()
     }
 
     /// Connects to the Mac using a scanned Phone Camera QR link.
@@ -142,11 +164,15 @@ final class CameraOperatorMode {
     private func observeSessionIfNeeded() {
         guard phaseSubscription == nil else { return }
         CameraKitSync.shared.clientProvider = { [weak self] in self?.session.apiClient }
-        session.onEvent = { CameraKitSync.shared.handleEvent($0) }
+        session.onEvent = { [weak self] data in
+            CameraKitSync.shared.handleEvent(data, phoneId: self?.session.phoneId)
+        }
         phaseSubscription = session.$phase
+            .combineLatest(session.$isOnAir)
+            .removeDuplicates { $0 == $1 }
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] phase in
-                self?.handle(phase)
+            .sink { [weak self] phase, isOnAir in
+                self?.handle(phase, isOnAir: isOnAir)
             }
     }
 
@@ -167,18 +193,31 @@ final class CameraOperatorMode {
     }
 
     /// Maps the shared session's phase to the pill and retries dropped links.
-    private func handle(_ phase: PhoneCameraSessionController.Phase) {
-        guard isActive else { return }
+    private func handle(_ phase: PhoneCameraSessionController.Phase, isOnAir: Bool) {
+        guard isActive, macStatus != .off else { return }
         switch phase {
         case .streaming:
-            macStatus = .live
-            CameraKitSync.shared.refresh(force: true)
+            let wasLinked = macStatus == .linked || macStatus == .live
+            macStatus = isOnAir ? .live : .linked
+            if !wasLinked { CameraKitSync.shared.refresh(force: true) }
         case .connecting, .needsPIN:
             if macStatus != .reconnecting { macStatus = .connecting }
         case .idle:
-            break
+            confirmRemovedByMacIfStillIdle()
         case .failed(let message):
             handleFailure(message)
+        }
+    }
+
+    /// Idle while linked means the Mac removed this camera — unless it was only
+    /// the brief idle a failing session passes through on its way to `.failed`.
+    private func confirmRemovedByMacIfStillIdle() {
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: Self.idleSettleDelay)
+            guard let self, self.isActive, self.macStatus.isLinkedOrTrying,
+                  self.session.phase == .idle else { return }
+            KeychainStore.removeValue(forKey: Self.linkKey)
+            self.macStatus = .failed(Self.removedByMacMessage)
         }
     }
 

@@ -11,10 +11,11 @@ import UIKit
 // MARK: - Camera Mode
 
 /// Camera Mode is this same full-screen Camera with three changes: Back is
-/// hidden and Exit Camera Mode (which goes Home) sits in the camera's settings
-/// sheet, Show-only controls (Save as Preset, the
-/// Show thumbnail grid and the TV's go-LIVE hint) are hidden, and a status pill / connect card track the
-/// Mac link. Frames, quick-change stills, zoom, flip, photo and record all stay.
+/// hidden (Exit Camera Mode, which goes Home, is in the camera settings), the
+/// Show-only Save as Preset and thumbnail grid are hidden, and a pill shows the
+/// optional Mac link (Linked / Live). Connect to Mac and Disconnect are in the
+/// settings too. Frames, quick-change stills, zoom, flip, photo, record and
+/// going live on a TV all stay.
 extension CameraLiveViewController {
 
     /// True when opened as Camera Mode.
@@ -24,7 +25,6 @@ extension CameraLiveViewController {
     func setupOperatorModeIfRequested() {
         guard opensInOperatorMode, operatorChrome == nil else { return }
         let chrome = CameraOperatorChromeView(frame: view.bounds)
-        chrome.onScan = { [weak self] in self?.presentMacScanner() }
         view.addSubview(chrome)
         operatorChrome = chrome
         NotificationCenter.default.addObserver(
@@ -50,15 +50,19 @@ extension CameraLiveViewController {
         backButton.isHidden = true
         savePresetButton.isHidden = true
         thumbGridView.isHidden = true
-        // "Tap screen to go LIVE" is about the TV; the Mac link has its own card.
-        tapToGoLiveHintView.isHidden = true
+        // "Tap screen to go LIVE" is for a TV. While a Mac is linked the Mac is
+        // the audience output, so the hint would only confuse.
+        if CameraOperatorMode.shared.macStatus.isLinkedOrTrying {
+            tapToGoLiveHintView.isHidden = true
+        }
     }
 
     // MARK: - Private Helpers
 
     @objc private func operatorModeDidChange() {
         operatorChrome?.apply(status: CameraOperatorMode.shared.macStatus)
-        layoutOperatorChromeIfNeeded()
+        // Re-runs the TV hint's own rule, then Camera Mode's hiding on top.
+        refreshLiveChrome()
     }
 
     /// Leaves Camera Mode for Home, saving any clip in progress first.
@@ -75,8 +79,9 @@ extension CameraLiveViewController {
         }
     }
 
-    /// Scans the Mac's Phone Camera QR code, then resumes the camera.
-    private func presentMacScanner() {
+    /// Scans the Mac's Phone Camera QR code (Connect to Mac in settings), then
+    /// resumes the camera. The scanner exists only while this screen is open.
+    func presentMacScanner() {
         let scanner = UIHostingController(rootView: QRScannerView { [weak self] payload in
             self?.dismiss(animated: true) {
                 CameraOperatorMode.shared.connect(link: payload)
