@@ -116,6 +116,14 @@ final class LiveHeaderView: UIView {
     var blackoutDimView: UIView?
     /// "Up Next: …" beside the badge while Blackout has a cue.
     var blackoutUpNextLabel: PaddedLabel?
+    /// A tapped tile is showing here on the phone only (Lock / Blackout): the badge
+    /// reads PREVIEW and Back to Live sits beside it.
+    /// Owned by `setPhonePreview(_:returnTitle:)`.
+    var isPhonePreview = false
+    /// "Back to Live" / "Back to Blackout" beside the PREVIEW badge.
+    var phonePreviewReturnButton: UIButton?
+    /// Back to Live: drop the phone preview and show program again.
+    var onReturnFromPhonePreview: (() -> Void)?
 
     /// True once the hero reads as a trailing mini preview rather than a full hero.
     var isCompactPresentation: Bool { collapseProgress > 0.5 }
@@ -672,6 +680,7 @@ final class LiveHeaderView: UIView {
             || screenFitButton != nil
             || cameraFlipButton != nil
             || cameraCaptureStack != nil
+            || phonePreviewReturnButton != nil
             || directAdjustTarget != nil
     }
 
@@ -698,8 +707,13 @@ final class LiveHeaderView: UIView {
         }
     }
 
-    private func applyOutputLockChrome() {
-        if isBlackoutHold {
+    func applyOutputLockChrome() {
+        if isPhonePreview {
+            // Not program output, so neither the live blue nor the lock amber.
+            layer.borderColor = UIColor.separator.cgColor
+            liveBadge.backgroundColor = UIColor(white: 0.22, alpha: 0.92)
+            liveBadge.text = "PREVIEW"
+        } else if isBlackoutHold {
             layer.borderColor = UIColor.separator.cgColor
             liveBadge.backgroundColor = .black
             liveBadge.text = "BLACKOUT"

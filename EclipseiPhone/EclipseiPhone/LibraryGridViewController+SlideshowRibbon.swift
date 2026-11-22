@@ -156,7 +156,7 @@ extension LibraryGridViewController {
             liveHeader.allowsSlideshowBrowse = false
             return
         }
-        guard showsLiveHero, !isLiveFromOtherShow,
+        guard showsLiveHero, !isLiveFromOtherShow, heroPhonePreview == nil,
               let slideshow = activeLiveSlideshow() else {
             liveHeader.setSlideshowRibbonToggleVisible(false, isOn: false)
             liveHeader.allowsSlideshowBrowse = false
@@ -171,7 +171,7 @@ extension LibraryGridViewController {
     /// Bottom-trailing seconds-left ring while this Show's slideshow autoplays.
     func syncLiveSlideshowCountdownChrome() {
         let playback = SlideshowPlaybackController.shared
-        guard showsLiveHero, !isLiveFromOtherShow,
+        guard showsLiveHero, !isLiveFromOtherShow, heroPhonePreview == nil,
               activeLiveSlideshow() != nil,
               let deadline = playback.autoplayDeadline else {
             liveHeader.setSlideshowCountdown(deadline: nil, interval: 0)

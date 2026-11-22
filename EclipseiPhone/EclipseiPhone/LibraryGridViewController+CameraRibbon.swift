@@ -127,8 +127,9 @@ extension LibraryGridViewController {
     /// Runs from every live-header refresh.
     func syncLiveCameraCaptureChrome() {
         let visible = isLiveCameraHero
+        // Capture buttons belong to the camera picture, not a phone preview over it.
         liveHeader.setCameraCaptureVisible(
-            visible, isRecording: CameraManager.shared.isRecording
+            visible && heroPhonePreview == nil, isRecording: CameraManager.shared.isRecording
         )
         // Mic on while capture is a tap away, so Record / Stop don't blip other apps' music.
         if visible {

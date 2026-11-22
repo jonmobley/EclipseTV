@@ -13,6 +13,8 @@ extension LibraryGridViewController {
 
     /// Play/pause: in-hero phone player, else AirPlay, and EclipseTV when linked.
     func handleLiveVideoPlayPause() {
+        // A phone preview's player is the only thing transport may touch.
+        if heroPhonePreview != nil { _ = liveHeader.toggleLibraryVideoPlayback(); return }
         if sendShowLiveCommandIfOperator(.videoToggle) { return }
         if liveHeader.toggleLibraryVideoPlayback() { return }
         let airPlay = ExternalDisplayManager.shared.toggleLibraryVideoPlayback()
@@ -24,6 +26,8 @@ extension LibraryGridViewController {
 
     /// Skip: in-hero phone player, else AirPlay, and EclipseTV when linked.
     func handleLiveVideoSkip(by delta: TimeInterval) {
+        // A phone preview's player is the only thing transport may touch.
+        if heroPhonePreview != nil { _ = liveHeader.skipLibraryVideo(by: delta); return }
         if sendShowLiveCommandIfOperator(.videoSkip, value: delta) { return }
         if liveHeader.skipLibraryVideo(by: delta) { return }
         let airPlay = ExternalDisplayManager.shared.skipLibraryVideo(by: delta)
@@ -35,6 +39,8 @@ extension LibraryGridViewController {
 
     /// Seek: in-hero phone player, else AirPlay, and EclipseTV when linked.
     func handleLiveVideoSeek(to position: TimeInterval) {
+        // A phone preview's player is the only thing transport may touch.
+        if heroPhonePreview != nil { _ = liveHeader.seekLibraryVideo(to: position); return }
         if sendShowLiveCommandIfOperator(.videoSeek, value: position) { return }
         if liveHeader.seekLibraryVideo(to: position) { return }
         let airPlay = ExternalDisplayManager.shared.seekLibraryVideo(to: position)

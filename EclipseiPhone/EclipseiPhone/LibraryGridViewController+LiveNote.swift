@@ -27,6 +27,12 @@ extension LibraryGridViewController {
     /// the hero themselves and have no library id to look a note up with.
     var liveNoteItemId: String? {
         guard showsLiveHero, !isLiveFromOtherShow else { return nil }
+        // A previewed still shows its own note: that is what the operator is reading ahead.
+        if let heroPhonePreview {
+            guard case .media(let media) = heroPhonePreview,
+                  MediaNoteStore.hasNote(forId: media.id) else { return nil }
+            return media.id
+        }
         guard !isBlackSelected, !isLogoSelected, !isScreensaverSelected else {
             return nil
         }

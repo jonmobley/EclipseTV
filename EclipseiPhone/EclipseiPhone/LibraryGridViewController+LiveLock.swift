@@ -21,6 +21,8 @@ extension LibraryGridViewController {
         }
         isLiveOutputLocked.toggle()
         applyLiveOutputLockChrome()
+        // A mode change starts the hero over on program.
+        clearHeroPhonePreview()
         // Operators mirror the director's lock, so they must hear about it.
         broadcastShowLiveSnapshotIfNeeded()
         Haptics.impactMedium()

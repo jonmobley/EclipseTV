@@ -44,7 +44,7 @@ extension LibraryGridViewController {
     /// tiles (Camera, Background, Blackout, Screensaver) are not part of the
     /// Show's still order, so there is nothing to step through from them.
     var allowsLiveHeroBrowse: Bool {
-        guard showsLiveHero, !isLiveFromOtherShow else { return false }
+        guard showsLiveHero, !isLiveFromOtherShow, heroPhonePreview == nil else { return false }
         guard activeLiveSlideshow() == nil,
               !showsLivePollRibbon else { return false }
         let manager = ExternalDisplayManager.shared

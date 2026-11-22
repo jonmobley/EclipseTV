@@ -477,6 +477,7 @@ extension LibraryGridViewController {
         guard items.indices.contains(indexPath.item) else { return }
         let tapped = items[indexPath.item]
         if handleShowTapDuringBlackout(tapped) { return }
+        if handleShowTapForHeroPreview(tapped) { return }
         switch tapped {
         case .slideshow(let show):
             isBlackSelected = false
