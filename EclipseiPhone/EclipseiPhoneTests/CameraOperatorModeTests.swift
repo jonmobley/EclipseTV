@@ -83,7 +83,8 @@ struct CameraOperatorModeTests {
     }
 
     @Test func internetHostsAreRefused() {
-        for host in ["8.8.8.8", "172.32.0.1", "example.com", "evil.local.example.com", "2001:db8::1", "999.1.1.1"] {
+        for host in ["8.8.8.8", "172.32.0.1", "example.com", "evil.local.example.com", "2001:db8::1", "999.1.1.1",
+                     "010.0.0.1", "10.x.0.0.1", "0x0a.0.0.1", "10.0.1", "10.0.0.1.", "192.168.1.+1"] {
             #expect(!CameraModeLinkPolicy.isLocalNetworkHost(host), "\(host)")
         }
     }

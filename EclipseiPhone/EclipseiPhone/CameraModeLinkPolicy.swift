@@ -44,13 +44,29 @@ enum CameraModeLinkPolicy {
     // MARK: - Private Helpers
 
     private static func isPrivateIPv4(_ address: String) -> Bool {
-        let parts = address.split(separator: ".").compactMap { Int($0) }
-        guard parts.count == 4, parts.allSatisfy({ (0...255).contains($0) }) else { return false }
+        guard let parts = canonicalIPv4Octets(address) else { return false }
         switch (parts[0], parts[1]) {
         case (10, _), (192, 168), (169, 254): return true
         case (172, 16...31): return true
         default: return false
         }
+    }
+
+    /// Strict dotted-decimal: exactly four 0–255 parts, digits only, no
+    /// leading zeros. Anything else (octal like "010", hex, extra or missing
+    /// parts) is refused, since other code could read it as a different address.
+    private static func canonicalIPv4Octets(_ address: String) -> [Int]? {
+        let pieces = address.split(separator: ".", omittingEmptySubsequences: false)
+        guard pieces.count == 4 else { return nil }
+        var octets: [Int] = []
+        for piece in pieces {
+            guard (1...3).contains(piece.count),
+                  piece.allSatisfy({ ("0"..."9").contains($0) }),
+                  piece == "0" || !piece.hasPrefix("0"),
+                  let value = Int(piece), value <= 255 else { return nil }
+            octets.append(value)
+        }
+        return octets
     }
 
     /// Link-local (fe80::/10) and unique-local (fc00::/7) addresses.
