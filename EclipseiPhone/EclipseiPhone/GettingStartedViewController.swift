@@ -62,8 +62,9 @@ final class GettingStartedViewController: UITableViewController {
         Topic(
             title: "QuestPoll",
             body: """
-            Add QuestPoll from + inside a Show and pick one of your polls \
-            (sign in with your questpoll.com email once). Tapping the card puts it \
+            Add QuestPoll from + inside a Show and pick one of your polls, or tap + \
+            there to write a new one (sign in with your questpoll.com email once). \
+            ⋯ Edit Poll changes its questions. Tapping the card puts it \
             on AirPlay, HDMI, or Practice Mode; EclipseTV alone can't show it. The \
             ribbon under the live preview cues Join, each question, and its results, \
             and tapping the preview opens Controls. ⋯ Practice rehearses on this \

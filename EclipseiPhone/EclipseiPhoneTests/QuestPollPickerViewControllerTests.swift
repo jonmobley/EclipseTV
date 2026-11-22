@@ -20,7 +20,20 @@ struct QuestPollPickerViewControllerTests {
         #expect(picker.tableView.numberOfSections == 2)
         // Plan row appears only once the plan loads; the stub returns 401.
         #expect(picker.tableView.numberOfRows(inSection: 0) == 0)
-        #expect(picker.navigationItem.rightBarButtonItem?.title == "Manage")
+        // + writes a new poll in the app (it used to send people to the website).
+        #expect(picker.navigationItem.rightBarButtonItem?.accessibilityLabel == "New Poll")
+    }
+
+    @Test func settingsListEditsOnTapAndSaysSo() {
+        let picker = QuestPollPickerViewController(mode: .manage, client: quietClient())
+        picker.loadViewIfNeeded()
+        #expect(picker.title == "My Polls")
+        let choose = QuestPollPickerViewController.footerText(mode: .choose, hasPolls: true)
+        let manage = QuestPollPickerViewController.footerText(mode: .manage, hasPolls: true)
+        #expect(choose.contains("pencil"))
+        #expect(manage.hasPrefix("Tap a poll to change it."))
+        #expect(!QuestPollPickerViewController.footerText(mode: .choose, hasPolls: false)
+            .contains("pencil"))
     }
 
     @Test func planTextNamesTheLimitAndHowToLiftIt() {

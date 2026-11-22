@@ -10,13 +10,21 @@ import UIKit
 
 /// Lists the account's polls (Poll and Quiz) after email sign-in.
 ///
-/// Account management (sign out, delete) lives in Settings → QuestPoll, the
-/// same place the Mac keeps it; this sheet is only for choosing a poll.
+/// Polls are made and changed right here: + starts a new one, the pencil (or
+/// a swipe) edits or deletes one. Account management (sign out, delete) lives
+/// in Settings → QuestPoll, the same place the Mac keeps it.
 final class QuestPollPickerViewController: UITableViewController {
 
-    var onPick: ((LivePollDeckSummary) -> Void)?
-    var onEditHost: (() -> Void)?
+    enum Mode {
+        /// Tapping a poll picks it (for a Show card); the pencil edits it.
+        case choose
+        /// Settings → My Polls: tapping a poll edits it.
+        case manage
+    }
 
+    var onPick: ((LivePollDeckSummary) -> Void)?
+
+    private let mode: Mode
     private let client: LivePollClient
     private var polls: [LivePollDeckSummary] = []
     private var plan: LivePollPlan?
@@ -29,7 +37,8 @@ final class QuestPollPickerViewController: UITableViewController {
     }
 
     /// - Parameter client: Injected for tests; production uses the account token.
-    init(client: LivePollClient = LivePollAccountStore.client()) {
+    init(mode: Mode = .choose, client: LivePollClient = LivePollAccountStore.client()) {
+        self.mode = mode
         self.client = client
         super.init(style: .insetGrouped)
     }
@@ -38,7 +47,7 @@ final class QuestPollPickerViewController: UITableViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = "Choose a Poll"
+        title = mode == .choose ? "Choose a Poll" : "My Polls"
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: "poll")
         navigationItem.leftBarButtonItem = UIBarButtonItem(
             barButtonSystemItem: .close,
@@ -46,11 +55,12 @@ final class QuestPollPickerViewController: UITableViewController {
             action: #selector(closeTapped)
         )
         navigationItem.rightBarButtonItem = UIBarButtonItem(
-            title: "Manage",
-            style: .plain,
+            barButtonSystemItem: .add,
             target: self,
-            action: #selector(editTapped)
+            action: #selector(newPollTapped)
         )
+        navigationItem.rightBarButtonItem?.accessibilityLabel = "New Poll"
+        navigationItem.rightBarButtonItem?.accessibilityIdentifier = "questpoll.picker.new"
         refreshControl = UIRefreshControl()
         refreshControl?.addTarget(
             self, action: #selector(reloadPolls), for: .valueChanged
@@ -62,8 +72,65 @@ final class QuestPollPickerViewController: UITableViewController {
         dismiss(animated: true)
     }
 
-    @objc private func editTapped() {
-        onEditHost?()
+    @objc private func newPollTapped() {
+        presentEditor(.new)
+    }
+
+    /// Opens the in-app editor over this list.
+    private func presentEditor(_ target: QuestPollEditorViewController.Target) {
+        let nav = QuestPollEditorViewController.makeNavigation(
+            target: target,
+            client: client,
+            onSaved: { [weak self] deck in self?.didSave(deck, wasNew: target == .new) },
+            onDeleted: { [weak self] _ in self?.reloadPolls() }
+        )
+        present(nav, animated: true)
+    }
+
+    /// A poll made while choosing one is the choice; anything else just
+    /// refreshes the list.
+    private func didSave(_ deck: LivePollDeck, wasNew: Bool) {
+        if wasNew, mode == .choose, let id = deck.id, let onPick {
+            onPick(LivePollDeckSummary(
+                id: id, title: deck.title, questionCount: deck.questions.count, mode: deck.mode
+            ))
+            return
+        }
+        reloadPolls()
+    }
+
+    private func confirmDelete(_ poll: LivePollDeckSummary) {
+        let cards = LivePollStore.shared.polls.filter { $0.pollId == poll.id }.count
+        let alert = UIAlertController(
+            title: poll.mode == .quiz ? "Delete Quiz?" : "Delete Poll?",
+            message: QuestPollEditorViewController.deleteMessage(
+                title: poll.title, cardsUsingIt: cards
+            ),
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Delete", style: .destructive) { [weak self] _ in
+            self?.delete(poll)
+        })
+        present(alert, animated: true)
+    }
+
+    private func delete(_ poll: LivePollDeckSummary) {
+        let writer = QuestPollDeckWriter(client: client)
+        Task { @MainActor [weak self] in
+            do {
+                try await writer.delete(pollId: poll.id)
+            } catch {
+                let alert = UIAlertController(
+                    title: "Could Not Delete",
+                    message: Self.message(for: error),
+                    preferredStyle: .alert
+                )
+                alert.addAction(UIAlertAction(title: "OK", style: .default))
+                self?.present(alert, animated: true)
+            }
+            self?.reloadPolls()
+        }
     }
 
     @objc private func reloadPolls() {
@@ -105,7 +172,7 @@ final class QuestPollPickerViewController: UITableViewController {
         guard section == Section.polls.rawValue, !isLoading, loadError == nil else {
             return nil
         }
-        return "Create and edit polls at questpoll.com (Manage)."
+        return Self.footerText(mode: mode, hasPolls: !polls.isEmpty)
     }
 
     override func tableView(
@@ -114,6 +181,7 @@ final class QuestPollPickerViewController: UITableViewController {
         let cell = tableView.dequeueReusableCell(withIdentifier: "poll", for: indexPath)
         var content = cell.defaultContentConfiguration()
         cell.accessoryType = .none
+        cell.accessoryView = nil
         cell.selectionStyle = .none
         cell.accessibilityIdentifier = nil
         if indexPath.section == Section.plan.rawValue {
@@ -129,18 +197,67 @@ final class QuestPollPickerViewController: UITableViewController {
         } else if isLoading {
             content.text = "Loading polls…"
         } else if polls.isEmpty {
-            content.text = "No polls on this account yet."
+            content.text = "No polls yet. Tap + to make one."
         } else {
             let poll = polls[indexPath.row]
             content.text = poll.title
             let modeLabel = poll.mode == .quiz ? "Quiz" : "Poll"
             let count = "\(poll.questionCount) question\(poll.questionCount == 1 ? "" : "s")"
             content.secondaryText = "\(modeLabel) · \(count)"
-            cell.accessoryType = .disclosureIndicator
             cell.selectionStyle = .default
+            if mode == .choose {
+                cell.accessoryView = editButton(for: poll)
+            } else {
+                cell.accessoryType = .disclosureIndicator
+            }
         }
         cell.contentConfiguration = content
         return cell
+    }
+
+    /// The pencil at the end of a row in `choose` mode.
+    private func editButton(for poll: LivePollDeckSummary) -> UIButton {
+        var configuration = UIButton.Configuration.plain()
+        configuration.image = UIImage(systemName: "pencil")
+        configuration.contentInsets = NSDirectionalEdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 4)
+        let button = UIButton(configuration: configuration, primaryAction: UIAction { [weak self] _ in
+            self?.presentEditor(.existing(pollId: poll.id))
+        })
+        button.accessibilityLabel = "Edit \(poll.title)"
+        button.sizeToFit()
+        return button
+    }
+
+    static func footerText(mode: Mode, hasPolls: Bool) -> String {
+        let saved = "Polls are saved to your QuestPoll account, so they are on your "
+            + "other devices and questpoll.com too."
+        guard hasPolls else { return saved }
+        switch mode {
+        case .choose: return "Tap a poll to use it. Tap the pencil to change it. " + saved
+        case .manage: return "Tap a poll to change it. " + saved
+        }
+    }
+
+    override func tableView(
+        _ tableView: UITableView,
+        trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath
+    ) -> UISwipeActionsConfiguration? {
+        guard indexPath.section == Section.polls.rawValue,
+              loadError == nil, !isLoading,
+              polls.indices.contains(indexPath.row) else { return nil }
+        let poll = polls[indexPath.row]
+        let delete = UIContextualAction(style: .destructive, title: "Delete") {
+            [weak self] _, _, done in
+            self?.confirmDelete(poll)
+            done(false)
+        }
+        let edit = UIContextualAction(style: .normal, title: "Edit") { [weak self] _, _, done in
+            self?.presentEditor(.existing(pollId: poll.id))
+            done(true)
+        }
+        let configuration = UISwipeActionsConfiguration(actions: [delete, edit])
+        configuration.performsFirstActionWithFullSwipe = false
+        return configuration
     }
 
     override func tableView(
@@ -150,7 +267,10 @@ final class QuestPollPickerViewController: UITableViewController {
         guard indexPath.section == Section.polls.rawValue,
               loadError == nil, !isLoading,
               polls.indices.contains(indexPath.row) else { return }
-        onPick?(polls[indexPath.row])
+        switch mode {
+        case .choose: onPick?(polls[indexPath.row])
+        case .manage: presentEditor(.existing(pollId: polls[indexPath.row].id))
+        }
     }
 
     private static func message(for error: Error) -> String {

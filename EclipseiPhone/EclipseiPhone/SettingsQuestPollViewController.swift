@@ -18,6 +18,7 @@ final class SettingsQuestPollViewController: UITableViewController {
     private enum Row: Hashable {
         case account
         case plan
+        case myPolls
         case manage
         case signIn
         case signOut
@@ -31,7 +32,7 @@ final class SettingsQuestPollViewController: UITableViewController {
         guard LivePollAccountStore.isSignedIn else {
             return [[.account, .signIn]]
         }
-        return [[.account, .plan, .manage], [.signOut], [.deleteAccount]]
+        return [[.account, .plan], [.myPolls, .manage], [.signOut], [.deleteAccount]]
     }
 
     init() {
@@ -68,9 +69,15 @@ final class SettingsQuestPollViewController: UITableViewController {
     override func tableView(
         _ tableView: UITableView, titleForFooterInSection section: Int
     ) -> String? {
-        guard section == 0 else { return nil }
-        return "QuestPoll runs the live polls and Q&A in your Shows. "
-            + "Create and edit polls at questpoll.com."
+        switch section {
+        case 0:
+            return "QuestPoll runs the live polls and Q&A in your Shows."
+        case 1 where LivePollAccountStore.isSignedIn:
+            return "Make and change polls here, or at questpoll.com. "
+                + "They are the same polls everywhere you sign in."
+        default:
+            return nil
+        }
     }
 
     override func tableView(
@@ -79,6 +86,7 @@ final class SettingsQuestPollViewController: UITableViewController {
         let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
         var config = cell.defaultContentConfiguration()
         cell.accessoryType = .none
+        cell.accessibilityIdentifier = nil
         cell.selectionStyle = .default
         switch sections[indexPath.section][indexPath.row] {
         case .account:
@@ -90,8 +98,13 @@ final class SettingsQuestPollViewController: UITableViewController {
             config.secondaryText = QuestPollPlanText.detail(plan)
             config.image = UIImage(systemName: "person.3")
             cell.selectionStyle = .none
+        case .myPolls:
+            config.text = "My Polls"
+            config.image = UIImage(systemName: "list.bullet.rectangle")
+            cell.accessoryType = .disclosureIndicator
+            cell.accessibilityIdentifier = "questpoll.settings.myPolls"
         case .manage:
-            config.text = "Manage Polls on questpoll.com"
+            config.text = "Open questpoll.com"
             config.image = UIImage(systemName: "safari")
             cell.accessoryType = .disclosureIndicator
         case .signIn:
@@ -114,6 +127,12 @@ final class SettingsQuestPollViewController: UITableViewController {
         tableView.deselectRow(at: indexPath, animated: true)
         guard !isWorking else { return }
         switch sections[indexPath.section][indexPath.row] {
+        case .myPolls:
+            let nav = UINavigationController(
+                rootViewController: QuestPollPickerViewController(mode: .manage)
+            )
+            nav.modalPresentationStyle = .formSheet
+            present(nav, animated: true)
         case .manage:
             present(SFSafariViewController(url: QuestPollConfig.hostURL), animated: true)
         case .signIn:

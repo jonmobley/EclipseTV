@@ -353,10 +353,10 @@ extension LibraryGridViewController {
                 self?.presentQuestPollPickerOrLink(mode: .replace(item.id))
             },
             UIAction(
-                title: "Edit on QuestPoll",
-                image: UIImage(systemName: "safari")
+                title: "Edit Poll…",
+                image: UIImage(systemName: "pencil")
             ) { [weak self] _ in
-                self?.presentQuestPollHostEditor(pollId: item.pollId)
+                self?.presentQuestPollEditor(pollId: item.pollId)
             }
         ])
         if ownsRoom {
