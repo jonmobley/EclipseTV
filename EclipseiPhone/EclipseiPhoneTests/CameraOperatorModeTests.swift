@@ -73,4 +73,24 @@ struct CameraOperatorModeTests {
         #expect(!CameraOperatorMode.isRejectedLink(dropped))
         #expect(!CameraOperatorMode.isRejectedLink("Disconnected from Mac"))
     }
+
+    // MARK: - Which Macs are allowed
+
+    @Test func localNetworkMacsAreAllowed() {
+        for host in ["192.168.1.20", "10.0.0.5", "172.20.1.1", "169.254.3.4", "Studio-Mac.local", "fe80::1", "[fd12::5]"] {
+            #expect(CameraModeLinkPolicy.isLocalNetworkHost(host), "\(host)")
+        }
+    }
+
+    @Test func internetHostsAreRefused() {
+        for host in ["8.8.8.8", "172.32.0.1", "example.com", "evil.local.example.com", "2001:db8::1", "999.1.1.1"] {
+            #expect(!CameraModeLinkPolicy.isLocalNetworkHost(host), "\(host)")
+        }
+    }
+
+    @Test func linksAreCheckedByTheirMacAddress() {
+        #expect(CameraModeLinkPolicy.isAllowed("eclipse://phone-camera?h=192.168.1.20&p=7880&t=abc"))
+        #expect(!CameraModeLinkPolicy.isAllowed("eclipse://phone-camera?h=203.0.113.9&p=7880&t=abc"))
+        #expect(!CameraModeLinkPolicy.isAllowed("not a link"))
+    }
 }

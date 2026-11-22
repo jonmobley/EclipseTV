@@ -68,8 +68,8 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // Defer until after splash / first layout so presentation has a host VC.
         DispatchQueue.main.async {
             if host == "phone-camera" {
-                // A volunteer scanned the Mac's Phone Camera code: Camera Mode.
-                iPhoneMainViewController.current?.presentCameraMode(link: url.absoluteString)
+                // Opened from outside the app: ask before sending the camera.
+                iPhoneMainViewController.current?.confirmCameraModeLink(url.absoluteString)
             } else if host == ConnectURLParser.appHost {
                 MacRemoteLauncher.open(connectString: url.absoluteString)
             }

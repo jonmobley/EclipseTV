@@ -43,6 +43,27 @@ extension iPhoneMainViewController {
         }
     }
 
+    /// Asks before a link from outside the app (a tapped link or the Camera
+    /// app's QR reader) starts sending this camera, naming the Mac it points at.
+    /// - Parameter link: The `eclipse://phone-camera?...` link that opened the app.
+    func confirmCameraModeLink(_ link: String) {
+        guard CameraModeLinkPolicy.isAllowed(link), let host = CameraModeLinkPolicy.macHost(in: link) else {
+            presentCameraModeAlert(
+                title: "Can't Use This Link",
+                message: "Camera Mode only connects to Eclipse on a Mac on this Wi-Fi network.",
+                confirmTitle: nil
+            ) {}
+            return
+        }
+        presentCameraModeAlert(
+            title: "Send Camera to Mac?",
+            message: "This phone's camera will be sent to Eclipse on the Mac at \(host).",
+            confirmTitle: "Send Camera"
+        ) { [weak self] in
+            self?.presentCameraMode(link: link)
+        }
+    }
+
     /// Reopens Camera Mode after a relaunch if the volunteer never left it.
     func restoreCameraModeIfNeeded() {
         guard CameraOperatorMode.shared.isActive else { return }
@@ -68,6 +89,22 @@ extension iPhoneMainViewController {
             return
         }
         dismiss(animated: false, completion: completion)
+    }
+
+    private func presentCameraModeAlert(
+        title: String,
+        message: String,
+        confirmTitle: String?,
+        onConfirm: @escaping () -> Void
+    ) {
+        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: confirmTitle == nil ? "OK" : "Cancel", style: .cancel))
+        if let confirmTitle {
+            alert.addAction(UIAlertAction(title: confirmTitle, style: .default) { _ in onConfirm() })
+        }
+        var top: UIViewController = self
+        while let presented = top.presentedViewController { top = presented }
+        top.present(alert, animated: true)
     }
 
     private func showCameraModeScreen() {

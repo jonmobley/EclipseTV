@@ -63,6 +63,7 @@ final class CameraOperatorMode {
     private static let activeKey = "EclipseTV.cameraMode.active"
     private static let linkKey = "cameraMode.macLink"
     private static let retryDelay: UInt64 = 4_000_000_000
+    private static let notLocalMessage = "That code isn't for a Mac on this Wi-Fi network. Scan the QR code on the Mac."
 
     private let feed = PhoneCameraFrameFeed()
     private lazy var session = PhoneCameraSessionController(frameFeed: feed)
@@ -110,6 +111,10 @@ final class CameraOperatorMode {
     func connect(link: String) {
         retryTask?.cancel()
         retryTask = nil
+        guard CameraModeLinkPolicy.isAllowed(link) else {
+            macStatus = .failed(Self.notLocalMessage)
+            return
+        }
         KeychainStore.set(link, forKey: Self.linkKey)
         macStatus = .connecting
         session.connect(scannedURL: link)
