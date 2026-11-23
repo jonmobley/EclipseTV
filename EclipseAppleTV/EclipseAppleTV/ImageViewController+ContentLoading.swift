@@ -52,6 +52,12 @@ extension ImageViewController {
     /// apply-and-sync flow so an invalid/unknown code is reported (and rolled back) here
     /// too, rather than failing silently.
     func connectionManager(_ manager: ConnectionManager, didReceiveSetAccountCode code: String) {
+        // Same rule as the TV's own menu: while code entry is off (1.0 review), a
+        // phone may only change a code this TV already has, never add the first one.
+        guard AlbumConfig.offersAccountCodeEntry || albumStore.hasAlbumConfigured else {
+            logger.info("Ignored a pushed album code: code entry is switched off")
+            return
+        }
         applyAccountCodeAndSync(code)
     }
 

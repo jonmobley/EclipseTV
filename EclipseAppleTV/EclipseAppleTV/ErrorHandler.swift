@@ -229,11 +229,10 @@ class ErrorHandler: ObservableObject {
             })
         }
         
-        alert.addAction(UIAlertAction(title: "Report Issue", style: .default) { _ in
-            // Could open support or generate error report
-            self.generateErrorReport()
-        })
-        
+        // The report goes to the log automatically; there is no "Report Issue"
+        // button because it could not send anything the viewer would see.
+        generateErrorReport()
+
         alert.addAction(UIAlertAction(title: "OK", style: .cancel))
         
         presentingVC.present(alert, animated: true)
@@ -252,7 +251,6 @@ class ErrorHandler: ObservableObject {
         
         logger.info("Error report generated:\n\(report)")
         
-        // Could save to files or send to analytics
     }
 }
 
