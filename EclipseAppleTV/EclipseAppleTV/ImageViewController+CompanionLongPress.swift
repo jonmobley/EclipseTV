@@ -55,17 +55,17 @@ extension ImageViewController {
     /// - Parameter item: The tile's position in the grid.
     /// - Returns: An index into `dataSource`, or nil.
     func companionLibraryIndex(atItem item: Int) -> Int? {
-        let fileName: String?
+        let ids: [String]
         switch companionBrowse {
         case .album(let albumId):
-            fileName = displayCompanionAlbums.first { $0.id == albumId }?.itemIds[safe: item]
+            ids = displayCompanionAlbums.first { $0.id == albumId }?.itemIds ?? []
         case .leftover:
-            fileName = leftoverLibraryIds[safe: item]
+            ids = leftoverLibraryIds
         case .root, .remote:
             return nil
         }
-        guard let fileName else { return nil }
-        return libraryIndex(forItemId: fileName)
+        guard ids.indices.contains(item) else { return nil }
+        return libraryIndex(forItemId: ids[item])
     }
 
     /// Same hold time as the flat library grid.
