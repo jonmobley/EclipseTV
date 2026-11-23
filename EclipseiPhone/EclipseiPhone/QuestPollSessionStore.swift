@@ -196,11 +196,15 @@ final class QuestPollSessionStore {
     }
 
     /// Tile secondary line: join code and live response count.
+    ///
+    /// Q&A says "Active" instead of the code: the room keeps taking questions
+    /// while it is off screen (people may join from a printed or shared QR),
+    /// and the owner wants the code characters kept off the tile (2026-11-23).
     var tileSubtitle: String? {
         guard let session else { return nil }
         if session.mode == .qa {
             let unseen = unseenQACount
-            return unseen > 0 ? "\(session.code) · \(unseen) new" : session.code
+            return unseen > 0 ? "Active · \(unseen) new" : "Active"
         }
         let votes = session.answeredCount
         if votes > 0 {

@@ -61,7 +61,7 @@ final class QuestPollQAViewController: UITableViewController {
         navigationItem.leftBarButtonItem?.tintColor = .systemRed
         // Icon and words: a bare QR glyph didn't say what it opens.
         var joinConfig = UIButton.Configuration.plain()
-        joinConfig.title = "Join Code & Link"
+        joinConfig.title = "Join QR & Link"
         joinConfig.image = UIImage(systemName: "qrcode")
         joinConfig.imagePadding = 8
         let joinButton = UIButton(configuration: joinConfig, primaryAction: UIAction { [weak self] _ in
@@ -193,14 +193,16 @@ final class QuestPollQAViewController: UITableViewController {
                 cell.accessoryView = doneButton()
                 cell.selectionStyle = .none
             } else {
-                config.text = "Join code and QR"
-                config.secondaryText = "Tap a question below to show it instead."
+                config.text = "Join QR"
+                config.secondaryText = ExternalDisplayManager.shared.isQuestPollLive
+                    ? "Tap a question below to show it instead."
+                    : "Not on screen now. People can still join and ask."
                 config.image = UIImage(systemName: "qrcode")
                 cell.selectionStyle = .none
             }
         case .new where questions(in: .new).isEmpty:
             config.text = "No new questions yet"
-            config.secondaryText = "People join with the code on screen and type a question."
+            config.secondaryText = "People scan the join QR and type a question."
             config.textProperties.color = .secondaryLabel
             cell.selectionStyle = .none
         case .new, .shown, .hidden:

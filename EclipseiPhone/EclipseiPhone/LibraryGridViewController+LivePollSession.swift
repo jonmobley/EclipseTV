@@ -175,11 +175,17 @@ extension LibraryGridViewController {
 
     /// Starts a room for `item`, or rejoins one already running its deck
     /// (after a relaunch, or started from another device such as the Mac).
-    func confirmStartOrReplaceQuestPoll(_ item: ShowLivePoll) {
-        guard ensureQuestPollDestination() else { return }
+    ///
+    /// `showOnScreen: false` opens the room without putting the join QR on
+    /// the TV (people may already have a printed or shared QR), so it needs
+    /// no AirPlay / HDMI.
+    func confirmStartOrReplaceQuestPoll(_ item: ShowLivePoll, showOnScreen: Bool = true) {
+        if showOnScreen {
+            guard ensureQuestPollDestination() else { return }
+        }
         let hasLocal = QuestPollSessionStore.shared.session != nil
         if hasLocal {
-            presentReplaceConfirm(for: item, running: nil)
+            presentReplaceConfirm(for: item, running: nil, showOnScreen: showOnScreen)
             return
         }
         Task { @MainActor [weak self] in
@@ -199,18 +205,19 @@ extension LibraryGridViewController {
             }
             switch decision {
             case .start:
-                self.startQuestPoll(item)
+                self.startQuestPoll(item, showOnScreen: showOnScreen)
             case .resume(let session):
-                self.resumeQuestPoll(session, for: item)
+                self.resumeQuestPoll(session, for: item, showOnScreen: showOnScreen)
             case .replace(let running):
-                self.presentReplaceConfirm(for: item, running: running)
+                self.presentReplaceConfirm(for: item, running: running, showOnScreen: showOnScreen)
             }
         }
     }
 
     private func presentReplaceConfirm(
         for item: ShowLivePoll,
-        running: LivePollSession?
+        running: LivePollSession?,
+        showOnScreen: Bool = true
     ) {
         let runningSession = running ?? QuestPollSessionStore.shared.session
         let message: String
@@ -233,7 +240,7 @@ extension LibraryGridViewController {
             [weak self] _ in
             Task { @MainActor in
                 await self?.endQuestPollSession(clearAccount: false)
-                self?.startQuestPoll(item)
+                self?.startQuestPoll(item, showOnScreen: showOnScreen)
             }
         })
         present(alert, animated: true)
@@ -249,13 +256,15 @@ extension LibraryGridViewController {
         }
     }
 
-    func startQuestPoll(_ item: ShowLivePoll) {
-        guard ensureQuestPollDestination() else { return }
+    func startQuestPoll(_ item: ShowLivePoll, showOnScreen: Bool = true) {
+        if showOnScreen {
+            guard ensureQuestPollDestination() else { return }
+        }
         guard LivePollAccountStore.isSignedIn else {
             // Carry on with this card once signed in, rather than landing on the
             // poll picker and making the user choose the deck again.
             promptLivePollSignIn { [weak self] in
-                self?.confirmStartOrReplaceQuestPoll(item)
+                self?.confirmStartOrReplaceQuestPoll(item, showOnScreen: showOnScreen)
             }
             return
         }
@@ -283,7 +292,11 @@ extension LibraryGridViewController {
                     membershipId: item.id
                 )
                 busy.dismiss(animated: true) {
-                    self?.presentQuestPollLive()
+                    if showOnScreen {
+                        self?.presentQuestPollLive()
+                    } else {
+                        self?.didOpenQuestPollOffScreen()
+                    }
                 }
             } catch LivePollError.unauthorized {
                 // A saved sign-in the server no longer accepts used to end in
@@ -297,7 +310,7 @@ extension LibraryGridViewController {
                     }
                     LivePollAccountStore.signOut()
                     self.promptLivePollSignIn { [weak self] in
-                        self?.confirmStartOrReplaceQuestPoll(item)
+                        self?.confirmStartOrReplaceQuestPoll(item, showOnScreen: showOnScreen)
                     }
                 }
             } catch {
@@ -326,7 +339,11 @@ extension LibraryGridViewController {
     /// Adopts a room already running `item`'s deck and goes live on it,
     /// instead of ending it. The card's own question count is the fallback
     /// while the room is still in the lobby.
-    private func resumeQuestPoll(_ session: LivePollSession, for item: ShowLivePoll) {
+    private func resumeQuestPoll(
+        _ session: LivePollSession,
+        for item: ShowLivePoll,
+        showOnScreen: Bool = true
+    ) {
         QuestPollSessionStore.shared.adopt(
             session,
             questionCount: session.questionCount > 0
@@ -334,8 +351,12 @@ extension LibraryGridViewController {
                 : item.questionCount,
             membershipId: item.id
         )
-        presentQuestPollLive()
-        showPresentationToast("Rejoined room \(session.code)")
+        if showOnScreen {
+            presentQuestPollLive()
+        }
+        showPresentationToast(
+            session.mode == .qa ? "Rejoined the open Q&A" : "Rejoined room \(session.code)"
+        )
         if session.mode == .qa {
             // The active-room lookup leaves out the question list.
             Task { @MainActor in
