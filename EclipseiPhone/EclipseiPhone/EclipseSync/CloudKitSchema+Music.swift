@@ -73,6 +73,12 @@ extension CloudKitSchema {
         uuid(in: name, afterPrefix: audioPlaylistRecordNamePrefix)
     }
 
+    /// Whether `zoneID` is the owner's own private library zone, the only place
+    /// music records (and their tombstones) are accepted from.
+    static func isPrivateLibraryZone(_ zoneID: CKRecordZone.ID) -> Bool {
+        zoneID.zoneName == zoneName && zoneID.ownerName == CKCurrentUserDefaultName
+    }
+
     private static func uuid(in name: String, afterPrefix prefix: String) -> UUID? {
         guard name.hasPrefix(prefix) else { return nil }
         return UUID(uuidString: String(name.dropFirst(prefix.count)))

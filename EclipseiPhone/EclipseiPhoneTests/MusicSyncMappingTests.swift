@@ -44,12 +44,48 @@ struct MusicSyncMappingTests {
 
     @Test func controllerRoutesMusicTombstonesOnly() {
         let controller = EclipseSyncController.shared
-        #expect(controller.applyRemoteMusicDeletion(recordName: "audio-\(UUID().uuidString)"))
+        let zone = CloudKitSchema.zoneID
         #expect(controller.applyRemoteMusicDeletion(
-            recordName: "playlist-\(UUID().uuidString)"
+            recordName: "audio-\(UUID().uuidString)", zoneID: zone
         ))
-        #expect(!controller.applyRemoteMusicDeletion(recordName: UUID().uuidString))
-        #expect(!controller.applyRemoteMusicDeletion(recordName: "eclipse.background"))
+        #expect(controller.applyRemoteMusicDeletion(
+            recordName: "playlist-\(UUID().uuidString)", zoneID: zone
+        ))
+        #expect(!controller.applyRemoteMusicDeletion(recordName: UUID().uuidString, zoneID: zone))
+        #expect(!controller.applyRemoteMusicDeletion(recordName: "eclipse.background", zoneID: zone))
+    }
+
+    @Test func onlyTheOwnersPrivateLibraryZoneCounts() {
+        #expect(CloudKitSchema.isPrivateLibraryZone(CloudKitSchema.zoneID))
+        let shared = CKRecordZone.ID(zoneName: CloudKitSchema.zoneName, ownerName: "_someoneElse")
+        #expect(!CloudKitSchema.isPrivateLibraryZone(shared))
+        let other = CKRecordZone.ID(zoneName: "Other", ownerName: CKCurrentUserDefaultName)
+        #expect(!CloudKitSchema.isPrivateLibraryZone(other))
+    }
+
+    @Test func tombstoneFromSomeoneElsesZoneNeverRemovesOwnPlaylist() {
+        let store = AudioPlaylistStore.shared
+        let playlist = AudioPlaylist(name: "Owner's set")
+        store.applyRemote(SyncedAudioPlaylist(playlist: playlist, modifiedAt: clock))
+        defer { store.purgeRemote(id: playlist.id) }
+        let name = CloudKitSchema.audioPlaylistRecordID(for: playlist.id).recordName
+        let foreign = CKRecordZone.ID(zoneName: CloudKitSchema.zoneName, ownerName: "_someoneElse")
+        EclipseSyncController.shared.applyRemoteDeletion(recordName: name, zoneID: foreign)
+        #expect(store.playlist(id: playlist.id) != nil)
+        EclipseSyncController.shared.applyRemoteDeletion(
+            recordName: name, zoneID: CloudKitSchema.zoneID
+        )
+        #expect(store.playlist(id: playlist.id) == nil)
+    }
+
+    @Test func songRecordFromSharedZoneIsNotApplied() throws {
+        let recordID = CKRecord.ID(
+            recordName: "audio-\(UUID().uuidString)",
+            zoneID: CKRecordZone.ID(zoneName: CloudKitSchema.zoneName, ownerName: "_someoneElse")
+        )
+        let record = CKRecord(recordType: "AudioTrack", recordID: recordID)
+        #expect(!CloudKitSchema.isPrivateLibraryZone(record.recordID.zoneID))
+        #expect(!CloudKitRecordMapper.isPrivateToMe(record))
     }
 
     // MARK: - AudioTrack

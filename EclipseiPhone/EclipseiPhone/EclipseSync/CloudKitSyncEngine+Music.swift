@@ -86,20 +86,21 @@ extension CloudKitSyncEngine {
     // MARK: - Incoming
 
     /// Applies a fetched song or playlist record. Returns false for other types.
+    /// Only the owner's own unparented records in the private library zone apply.
     @discardableResult
     func applyRemoteMusic(_ record: CKRecord) -> Bool {
+        let isOwn = CloudKitRecordMapper.isPrivateToMe(record)
+            && CloudKitSchema.isPrivateLibraryZone(record.recordID.zoneID)
         switch record.recordType {
         case CloudKitSchema.MusicRecordType.audioTrack:
-            if CloudKitRecordMapper.isPrivateToMe(record),
-               let synced = CloudKitRecordMapper.audioTrack(from: record) {
+            if isOwn, let synced = CloudKitRecordMapper.audioTrack(from: record) {
                 AudioStore.shared.applyRemote(
                     synced, assetURL: CloudKitRecordMapper.audioTrackAssetURL(from: record)
                 )
             }
             return true
         case CloudKitSchema.MusicRecordType.audioPlaylist:
-            if CloudKitRecordMapper.isPrivateToMe(record),
-               let synced = CloudKitRecordMapper.audioPlaylist(from: record) {
+            if isOwn, let synced = CloudKitRecordMapper.audioPlaylist(from: record) {
                 AudioPlaylistStore.shared.applyRemote(synced)
             }
             return true
