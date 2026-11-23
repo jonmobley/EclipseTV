@@ -43,6 +43,27 @@ final class MediaLibraryPickerViewController: UIViewController {
 
     /// When set, taps toggle selection and **Add** appends to this Show (no live).
     var targetShowId: UUID?
+    /// iPad: where the Home / Show / Library tabs stood when Library was opened.
+    /// With `onSelectHeaderDestination` set, the page shows those tabs (Library
+    /// selected) in place of Back, so Library reads as a tab and not a pushed page.
+    var headerSelection: HomeHeaderNavSelection?
+    /// Called after the page has closed because Home or Show was tapped.
+    var onSelectHeaderDestination: ((HomeHeaderDestination) -> Void)?
+    private lazy var headerTabs: HomeHeaderNavTabs = {
+        let tabs = HomeHeaderNavTabs()
+        tabs.onSelect = { [weak self] destination in
+            guard let self, destination != .library else { return }
+            self.closePicker { [weak self] in
+                self?.onSelectHeaderDestination?(destination)
+            }
+        }
+        return tabs
+    }()
+    private lazy var headerTabsItem: UIBarButtonItem = {
+        let item = UIBarButtonItem(customView: headerTabs)
+        if #available(iOS 26.0, *) { item.hidesSharedBackground = true }
+        return item
+    }()
     /// Called when the user confirms Add in Show mode.
     var onAddToShow: (([String], [UUID]) -> Void)?
     /// Crop a video, or Custom framing for a still (same flow as Screen Fit).
@@ -115,6 +136,11 @@ final class MediaLibraryPickerViewController: UIViewController {
             addButton = add
         }
         updateRightBarButtons(searchActive: false)
+        registerForTraitChanges(
+            [UITraitHorizontalSizeClass.self, UITraitVerticalSizeClass.self]
+        ) { (controller: Self, _: UITraitCollection) in
+            controller.refreshLeadingBarItem()
+        }
 
         filterControl.selectedSegmentIndex = Filter.all.rawValue
         filterControl.addTarget(self, action: #selector(filterChanged), for: .valueChanged)
@@ -241,13 +267,35 @@ final class MediaLibraryPickerViewController: UIViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         navigationController?.setNavigationBarHidden(false, animated: animated)
-        if isNavRoot {
-            navigationItem.leftBarButtonItem = UIBarButtonItem(
-                title: "Back",
-                style: .plain,
-                target: self,
-                action: #selector(backTapped)
+        refreshLeadingBarItem()
+    }
+
+    /// Tabs on a full iPad canvas, Back everywhere else (iPhone, narrow iPad windows).
+    private func refreshLeadingBarItem() {
+        let showsTabs = onSelectHeaderDestination != nil
+            && HomeHeaderNavLayout.showsDestinationTabs(
+                horizontalSizeClass: traitCollection.horizontalSizeClass,
+                verticalSizeClass: traitCollection.verticalSizeClass
             )
+        if showsTabs {
+            var selection = headerSelection ?? .home
+            selection.isLibrary = true
+            headerTabs.apply(selection)
+            navigationItem.hidesBackButton = true
+            navigationItem.leftBarButtonItem = headerTabsItem
+            // The selected tab names the page; `title` stays for VoiceOver.
+            navigationItem.titleView = UIView()
+        } else {
+            navigationItem.hidesBackButton = false
+            navigationItem.titleView = nil
+            navigationItem.leftBarButtonItem = isNavRoot
+                ? UIBarButtonItem(
+                    title: "Back",
+                    style: .plain,
+                    target: self,
+                    action: #selector(backTapped)
+                )
+                : nil
         }
     }
 

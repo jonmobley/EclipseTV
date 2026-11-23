@@ -210,3 +210,7 @@
   "Open questpoll.com" (it opens Safari) and `rectangle.stack` / `.fill` means a Show, not a slideshow. Tiles no longer draw
   the top-left type disc (`ThumbnailTypeIconView.showsOnTiles = false`, owner's call: the Mac has none); VoiceOver still speaks the kind.
   Review and before/after pictures: `docs/reviews/2026-11-22-polish/`.
+- iPad Library tab (2026-11-22): on a full iPad canvas the Media Library page shows its own copy of the Home / Show / Library
+  tabs (Library lit) in place of Back and the centred title (`MediaLibraryPickerViewController.refreshLeadingBarItem`,
+  `HomeHeaderNavSelection.isLibrary`). Home or Show closes the page first, then acts. iPhone and narrow iPad windows keep Back.
+  The page still covers the Music button.

@@ -90,7 +90,7 @@ struct HomeHeaderNavTabsTests {
         #expect(show?.configuration?.title == "Spring Recital")
     }
 
-    @Test func libraryIsNeverSelected() {
+    @Test func libraryIsNotSelectedOnHomeOrShow() {
         let tabs = HomeHeaderNavTabs()
         tabs.apply(
             HomeHeaderNavSelection(
@@ -101,6 +101,25 @@ struct HomeHeaderNavTabsTests {
         )
         let library = tabButton(HomeHeaderDestination.library, in: tabs)
         #expect(library?.accessibilityTraits.contains(.selected) != true)
+    }
+
+    /// The Media Library page shows its own copy of the tabs with Library lit.
+    @Test func libraryPageSelectsOnlyLibraryAndKeepsShowName() {
+        let tabs = HomeHeaderNavTabs()
+        var selection = HomeHeaderNavSelection(
+            isShowMode: true,
+            isMusicPinned: false,
+            showTitle: "Spring Recital"
+        )
+        selection.isLibrary = true
+        tabs.apply(selection)
+        let home = tabButton(HomeHeaderDestination.home, in: tabs)
+        let show = tabButton(HomeHeaderDestination.show, in: tabs)
+        let library = tabButton(HomeHeaderDestination.library, in: tabs)
+        #expect(library?.accessibilityTraits.contains(.selected) == true)
+        #expect(home?.accessibilityTraits.contains(.selected) != true)
+        #expect(show?.accessibilityTraits.contains(.selected) != true)
+        #expect(show?.configuration?.title == "Spring Recital")
     }
 
     @Test func tapsReportTabBarDestinationsOnly() {
