@@ -104,7 +104,8 @@
   when they apply) sit in a column beside the card on a phone; with 2+ tabs ⊕ ends the tab chips
   instead (`BrowserTabStripView.newTabButton`). The clock button opens Websites (named History until 2026-11-23; the owner found
   "History" + "Saved" confusing): on iPhone a drawer (`WebHistoryDrawerView`, from the right in Landscape, from the
-  bottom in Vertical) with My Websites (the library's website cards) and Recently Visited; on iPad a pop-up menu with the same two sections. Recent is the last 30 pages
+  bottom in Vertical) with My Websites (the library's website cards) and Recently Visited; on iPad a pop-up menu with the same two sections. The Mac uses the same words (eclipsepro, 2026-11-23): browser-window list My Websites / Recently
+  Visited, main-window list My Websites / Recently Live (it also holds photos and videos that went live); same clock icon on both apps. Recent is the last 30 pages
   the phone finished loading in a tab (`WebHistoryStore`, UserDefaults `EclipseTV.web.recentPages`, phone only), and
   picking one loads it in the active tab. The overlay buttons are re-raised on every layout, so the drawer is re-raised after them.
   Website Auto Scroll was removed (2026-11-13); `ScrollSpeedSlider` now serves only the Prompter. iPad gets a browser-style top bar (chips left, buttons top right)
