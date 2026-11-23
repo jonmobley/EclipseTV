@@ -539,8 +539,14 @@ class iPhoneConnectionManager: NSObject {
     /// Asks the Apple TV to change a per-item video setting. Nil fields are left as-is.
     /// Broadcast to all synced TVs.
     @discardableResult
-    func sendVideoSetting(id: String, isLooping: Bool?, isMuted: Bool?) -> Bool {
-        return sendCommand(.setVideoSetting(id: id, isLooping: isLooping, isMuted: isMuted),
+    func sendVideoSetting(
+        id: String,
+        isLooping: Bool?,
+        isMuted: Bool?,
+        crossfadesLoop: Bool? = nil
+    ) -> Bool {
+        return sendCommand(.setVideoSetting(id: id, isLooping: isLooping, isMuted: isMuted,
+                                            crossfadesLoop: crossfadesLoop),
                            description: "video setting", broadcast: true)
     }
 

@@ -48,6 +48,16 @@
   use `orientation` and know nothing about custom sizes.
   Z-order on the TV picture goes through `stageView.bringSubviewToFront` (transition overlay, audio badge);
   `view.bringSubviewToFront` on a stage subview is a no-op.
+- Odd-shaped external screens (2026-11-22, `ExternalScreenSignal`, `ExternalDisplayManager+ScreenSignal`): for an LED wall
+  behind an EDID box that reports its own size (e.g. 2048×768). On attach the manager reads the screen's signal into
+  `ExternalOutputSettings.connectedScreenSignal`. When that size is not 16:9 (1% tolerance) and no custom size is chosen,
+  `outputAspectRatio` is the screen's own shape in Landscape (so Full Screen fills the wall), and
+  `overscanCompensation` is set to `.none` so nothing is shrunk. If a chosen custom size is not 16:9 and the screen offers
+  exactly that pixel size, the screen is switched to it. 16:9 screens are never touched. `updateConnectedScreenSignal`
+  does not post `didChangeNotification`; the manager posts it on the next main-queue turn and only when the shape
+  changed, because it runs inside `attach` and that notification's observers call back into the manager. Settings →
+  Display Mode → Connected Screen shows the signal being sent and the other sizes offered. Tests use the pure rules only
+  and never set the global signal. Not yet tried on real hardware: whether iOS lists or sends a non-standard size.
 - Leaving a live countdown (2026-11-13): `endOverlay` moves output state on *before* tearing the overlay down,
   same order as `beginOverlay`. Ending the clock posts its change synchronously, and if `overlaySource` still says
   countdown the grid repaints the hero back onto the frozen clock (countdown posts no end notice to fix it).
@@ -219,3 +229,10 @@
   strength at the title and unreadable on a white website thumbnail; keep the three-stop shade for any new title over art.
 - Shows list (2026-11-22): presented as a form sheet (compact centred sheet on iPad, like Settings); its filter says
   "Landscape", the same word as Display Mode, never "Horizontal".
+- Background colors (2026-11-22, `BackgroundColorPreset`): the Background tile's ⋯ menu has a "Color" row with the Mac's
+  eight presets (same names, order, stops and `eclipse://builtin/gradient/<name>` URL as eclipsepro's
+  `BackgroundGradientPreset`; keep them in step). Picking one draws a 1920×1080 picture and stores it as the Background
+  still (`LogoStore.apply(_:)`), so tile, hero, AirPlay/HDMI and iCloud use the existing picture path; it replaces a
+  custom picture, like the Mac. Which preset is chosen is remembered on this device only (UserDefaults
+  `EclipseTV.background.colorPreset`): other iPhones receive the picture without the name, since the iCloud Background
+  record has no field for it. The Mac does not sync its Background (it is per presentation there).

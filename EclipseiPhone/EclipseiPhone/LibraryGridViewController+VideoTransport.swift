@@ -77,6 +77,7 @@ extension LibraryGridViewController {
                 itemId: item.id,
                 isMuted: item.isMuted ?? false,
                 isLooping: item.isLooping ?? false,
+                crossfadesLoop: item.crossfadesLoop ?? false,
                 startAt: startAt
             )
             liveHeader.updatePlayback(liveHeader.libraryVideoPlaybackState)

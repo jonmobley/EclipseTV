@@ -35,7 +35,20 @@ extension LibraryGridViewController {
             self?.applyVideoSetting(id: item.id, isLooping: nil, isMuted: !muted)
         }
 
-        var actions: [UIMenuElement] = [loop, mute]
+        var actions: [UIMenuElement] = [loop]
+        // Only a looping video has a loop point to dissolve.
+        if loopOn {
+            let crossfadeOn = item.crossfadesLoop ?? false
+            actions.append(UIAction(
+                title: "Cross-Fade Loop",
+                image: UIImage(systemName: crossfadeOn ? "checkmark" : "circle.lefthalf.filled")
+            ) { [weak self] _ in
+                self?.applyVideoSetting(
+                    id: item.id, isLooping: nil, isMuted: nil, crossfadesLoop: !crossfadeOn
+                )
+            })
+        }
+        actions.append(mute)
 
         if LocalMediaStore.shared.localURL(forId: item.id) != nil {
             let thumbnail = UIAction(
@@ -50,15 +63,26 @@ extension LibraryGridViewController {
         return actions
     }
 
-    /// Persists loop/mute locally, syncs to EclipseTV when linked, refreshes AirPlay if live.
-    func applyVideoSetting(id: String, isLooping: Bool?, isMuted: Bool?) {
-        store.updateVideoSetting(id: id, isLooping: isLooping, isMuted: isMuted)
+    /// Persists loop/mute/cross-fade locally, syncs to EclipseTV when linked,
+    /// refreshes AirPlay if live.
+    func applyVideoSetting(id: String, isLooping: Bool?, isMuted: Bool?, crossfadesLoop: Bool? = nil) {
+        store.updateVideoSetting(
+            id: id, isLooping: isLooping, isMuted: isMuted, crossfadesLoop: crossfadesLoop
+        )
         EclipseSyncController.shared.backend.scheduleMediaPrefsSave(libraryId: id)
         Haptics.selection()
         _ = connectionManager.sendVideoSetting(
-            id: id, isLooping: isLooping, isMuted: isMuted
+            id: id, isLooping: isLooping, isMuted: isMuted, crossfadesLoop: crossfadesLoop
         )
-        refreshLiveVideoPresentationIfNeeded(id: id)
+        guard crossfadesLoop == true, let url = LocalMediaStore.shared.localURL(forId: id) else {
+            refreshLiveVideoPresentationIfNeeded(id: id)
+            return
+        }
+        // Build the blend first so the refreshed video plays it straight away.
+        Task { @MainActor [weak self] in
+            await CrossfadeLoopComposer.prepare(url)
+            self?.refreshLiveVideoPresentationIfNeeded(id: id)
+        }
     }
 
     /// Re-pushes the live video so AirPlay picks up new loop / mute / fit flags.

@@ -37,10 +37,14 @@ extension LiveHeaderView {
         itemId: String,
         isMuted: Bool,
         isLooping: Bool,
+        crossfadesLoop: Bool = false,
         startAt: TimeInterval = 0,
         autoplay: Bool = true
     ) {
-        if libraryVideoItemId == itemId, libraryVideoPlayer != nil {
+        // Only counts once the blend exists, so an unbuilt one doesn't restart the video.
+        let blends = isLooping && crossfadesLoop && CrossfadeLoopComposer.hasBlend(for: url)
+        if libraryVideoItemId == itemId, libraryVideoPlayer != nil,
+           blends == libraryVideoBlendsLoop {
             libraryVideoPlayer?.isMuted = isMuted
             libraryVideoIsLooping = isLooping
             // A Fit / Fill change re-presents the same item, which lands here rather
@@ -74,7 +78,10 @@ extension LiveHeaderView {
 
         PresentationAudioSession.activateIfNeeded(muted: isMuted)
 
-        let player = AVPlayer(url: url)
+        // A blended loop still restarts by seeking; its end matches its start.
+        let blended = blends ? CrossfadeLoopComposer.cachedItem(for: url) : nil
+        let player = blended.map { AVPlayer(playerItem: $0) } ?? AVPlayer(url: url)
+        libraryVideoBlendsLoop = blended != nil
         player.isMuted = isMuted
         player.actionAtItemEnd = isLooping ? .none : .pause
         AirPlayVideoTransport.configureLayerOnlyPlayback(on: player)
@@ -128,6 +135,7 @@ extension LiveHeaderView {
         }
         libraryVideoPlayer?.pause()
         libraryVideoPlayer = nil
+        libraryVideoBlendsLoop = false
         libraryVideoLayer?.removeFromSuperlayer()
         libraryVideoLayer = nil
         libraryVideoHost?.removeFromSuperview()

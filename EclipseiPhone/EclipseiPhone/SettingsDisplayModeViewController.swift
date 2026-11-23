@@ -15,6 +15,7 @@ final class SettingsDisplayModeViewController: UITableViewController {
         case orientation
         case rotation
         case screenSize
+        case connectedScreen
     }
 
     /// Rows of the Screen Size section: full screen, one per custom size, then Add.
@@ -48,6 +49,13 @@ final class SettingsDisplayModeViewController: UITableViewController {
             name: ExternalOutputSettings.didChangeNotification,
             object: nil
         )
+        // A screen was plugged in or removed: the Connected Screen section follows.
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(reload),
+            name: ExternalDisplayManager.didChangeNotification,
+            object: nil
+        )
     }
 
     deinit {
@@ -63,9 +71,23 @@ final class SettingsDisplayModeViewController: UITableViewController {
 
     /// Rotation only matters in Vertical; custom sizes only apply in Landscape.
     private var visibleSections: [Section] {
-        ExternalOutputSettings.isVerticalMode
+        let sections: [Section] = ExternalOutputSettings.isVerticalMode
             ? [.orientation, .rotation]
             : [.orientation, .screenSize]
+        return ExternalOutputSettings.connectedScreenSignal == nil
+            ? sections
+            : sections + [.connectedScreen]
+    }
+
+    /// Rows of the Connected Screen section: the signal, then other offered sizes.
+    private var connectedScreenRows: [(title: String, value: String)] {
+        guard let signal = ExternalOutputSettings.connectedScreenSignal else { return [] }
+        var rows = [(title: "Signal", value: signal.current.label)]
+        let others = signal.otherOffered.map(\.label)
+        if !others.isEmpty {
+            rows.append((title: "Also Offered", value: others.joined(separator: ", ")))
+        }
+        return rows
     }
 
     private func section(at index: Int) -> Section? {
@@ -92,6 +114,7 @@ final class SettingsDisplayModeViewController: UITableViewController {
         case .orientation: return ExternalOutputOrientation.allCases.count
         case .rotation: return ExternalRotationDirection.allCases.count
         case .screenSize: return screenSizeRows.count
+        case .connectedScreen: return connectedScreenRows.count
         case .none: return 0
         }
     }
@@ -104,6 +127,7 @@ final class SettingsDisplayModeViewController: UITableViewController {
         case .orientation: return "Orientation"
         case .rotation: return "Vertical Rotation"
         case .screenSize: return "Screen Size"
+        case .connectedScreen: return "Connected Screen"
         case .none: return nil
         }
     }
@@ -128,6 +152,13 @@ final class SettingsDisplayModeViewController: UITableViewController {
             phone frames content the same way. Only the proportions matter. \
             Swipe a size to delete it; tap ⓘ to edit.
             """
+        case .connectedScreen:
+            return ExternalOutputSettings.connectedScreenSignal?.oddShape == nil
+                ? "The size this device is sending to the screen."
+                : """
+                This screen is not 16:9, so Full Screen fills its real size and \
+                every dot of the signal is used.
+                """
         case .none:
             return nil
         }
@@ -156,7 +187,7 @@ final class SettingsDisplayModeViewController: UITableViewController {
         case .screenSize:
             switch screenSizeRow(at: indexPath.row) {
             case .fullScreen:
-                config.text = "Full Screen (16:9)"
+                config.text = ExternalOutputSettings.fullScreenLabel
                 cell.accessoryType =
                     ExternalOutputSettings.activeCustomSize == nil ? .checkmark : .none
             case .custom(let size):
@@ -175,6 +206,13 @@ final class SettingsDisplayModeViewController: UITableViewController {
             case .none:
                 break
             }
+        case .connectedScreen:
+            let rows = connectedScreenRows
+            guard rows.indices.contains(indexPath.row) else { break }
+            config = UIListContentConfiguration.valueCell()
+            config.text = rows[indexPath.row].title
+            config.secondaryText = rows[indexPath.row].value
+            cell.selectionStyle = .none
         case .none:
             break
         }
@@ -196,14 +234,17 @@ final class SettingsDisplayModeViewController: UITableViewController {
             switch screenSizeRow(at: indexPath.row) {
             case .fullScreen:
                 ExternalOutputSettings.selectedCustomSizeID = nil
+                ExternalDisplayManager.shared.refreshScreenSignal()
             case .custom(let size):
                 ExternalOutputSettings.selectedCustomSizeID = size.id
+                // If the screen offers exactly this size, send it.
+                ExternalDisplayManager.shared.refreshScreenSignal()
             case .add:
                 presentSizeEditor(editing: nil)
             case .none:
                 break
             }
-        case .none:
+        case .connectedScreen, .none:
             break
         }
     }

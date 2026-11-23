@@ -26,7 +26,7 @@ extension CameraLiveViewController: UICollectionViewDataSource, UICollectionView
 
     /// Packs the ribbon against the stills ribbon, same thumb size and 8pt gap.
     func layoutFrameRibbon(panel: CGRect) {
-        let frames = CameraFrameStore.shared.enabledFrames
+        let frames = frameRibbonEntries
         frameRibbonView.isHidden = frames.isEmpty
         guard !frames.isEmpty else { return }
 
@@ -77,6 +77,7 @@ extension CameraLiveViewController: UICollectionViewDataSource, UICollectionView
     /// Tap toggles the overlay on the camera; tapping the live one turns it off.
     func toggleFrameOverlay(_ id: UUID) {
         let store = CameraFrameStore.shared
+        CameraKitStore.shared.clearFrameSelection()
         store.select(store.selectedId == id ? nil : id)
         Haptics.impactLight()
     }
@@ -92,7 +93,7 @@ extension CameraLiveViewController: UICollectionViewDataSource, UICollectionView
             return thumbGridItemCount()
         }
         guard collectionView === frameRibbonView else { return 0 }
-        return CameraFrameStore.shared.enabledFrames.count
+        return frameRibbonEntries.count
     }
 
     func collectionView(
@@ -112,14 +113,10 @@ extension CameraLiveViewController: UICollectionViewDataSource, UICollectionView
               ) as? CameraFrameRibbonCell else {
             return UICollectionViewCell()
         }
-        let store = CameraFrameStore.shared
-        let frames = store.enabledFrames
-        guard frames.indices.contains(indexPath.item) else { return cell }
-        let frame = frames[indexPath.item]
-        cell.configure(
-            image: store.image(for: frame.id),
-            isLive: store.selectedId == frame.id
-        )
+        let entries = frameRibbonEntries
+        guard entries.indices.contains(indexPath.item) else { return cell }
+        let entry = entries[indexPath.item]
+        cell.configure(image: pictureImage(entry), isLive: pictureIsLive(entry), isFrame: entry.isFrame)
         return cell
     }
 
@@ -137,9 +134,9 @@ extension CameraLiveViewController: UICollectionViewDataSource, UICollectionView
             return
         }
         guard collectionView === frameRibbonView else { return }
-        let frames = CameraFrameStore.shared.enabledFrames
-        guard frames.indices.contains(indexPath.item) else { return }
-        toggleFrameOverlay(frames[indexPath.item].id)
+        let entries = frameRibbonEntries
+        guard entries.indices.contains(indexPath.item) else { return }
+        toggleFrameEntry(entries[indexPath.item])
     }
 
     /// Configures a Background / quick-change / add cell for the stills ribbon.
@@ -175,7 +172,8 @@ extension CameraLiveViewController: UICollectionViewDataSource, UICollectionView
         case .cutaway(let id):
             let live = parked == .cutaway(id)
             cell.configure(
-                image: CameraAlternateStillStore.shared.image(for: id),
+                image: CameraAlternateStillStore.shared.image(for: id)
+                    ?? CameraKitStore.shared.image(for: id),
                 symbolName: "photo",
                 isLive: live,
                 accessibilityLabel: "Quick Change",
@@ -203,7 +201,8 @@ final class CameraFrameRibbonCell: UICollectionViewCell {
     private let imageView: UIImageView = {
         let view = UIImageView()
         view.contentMode = .scaleAspectFit
-        view.backgroundColor = .mediaPlaceholder
+        // Dark checks show which parts of the frame are see-through.
+        view.backgroundColor = .transparencyCheckerboard
         view.clipsToBounds = true
         view.layer.cornerRadius = 10
         view.translatesAutoresizingMaskIntoConstraints = false
@@ -244,13 +243,16 @@ final class CameraFrameRibbonCell: UICollectionViewCell {
         imageView.layer.cornerCurve = .continuous
     }
 
-    func configure(image: UIImage?, isLive: Bool) {
+    /// Shows a tile. Frames sit on a dark checkerboard so see-through areas show.
+    func configure(image: UIImage?, isLive: Bool, isFrame: Bool = true) {
         imageView.image = image
+        imageView.contentMode = isFrame ? .scaleAspectFit : .scaleAspectFill
+        imageView.backgroundColor = isFrame ? .transparencyCheckerboard : .mediaPlaceholder
         imageView.layer.borderWidth = isLive ? 3 : 1
         imageView.layer.borderColor = isLive
             ? UIColor.accent.cgColor
             : UIColor.white.withAlphaComponent(0.35).cgColor
-        accessibilityLabel = "Frame overlay"
+        accessibilityLabel = isFrame ? "Frame overlay" : "Picture"
         accessibilityValue = isLive ? "On camera" : "Off"
         accessibilityHint = isLive
             ? "Tap to hide this overlay"

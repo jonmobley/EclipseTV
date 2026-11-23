@@ -199,6 +199,10 @@ final class CameraLiveViewController: UIViewController {
     var recordingStartedAt: Date?
     /// 0.25s tick while recording to refresh `recordingTimerLabel`.
     var recordingTickTimer: Timer?
+    /// Set before presenting to open as Camera Mode (volunteer camera for a Mac).
+    var opensInOperatorMode = false
+    /// Camera Mode chrome; nil in the regular camera.
+    var operatorChrome: CameraOperatorChromeView?
     /// Zoom factor at the start of the active pinch.
     private var pinchStartZoom: CGFloat = 1
 
@@ -291,6 +295,7 @@ final class CameraLiveViewController: UIViewController {
             name: CameraManager.previewRotationNeedsApplyNotification,
             object: nil
         )
+        setupOperatorModeIfRequested()
         refreshLiveChrome()
     }
 
@@ -406,6 +411,7 @@ final class CameraLiveViewController: UIViewController {
         layoutMirrorView()
         layoutFrameOverlay()
         previewView.syncPhoneViewerOrientation(previewView.phoneInterfaceOrientation)
+        layoutOperatorChromeIfNeeded()
     }
 
     /// Vertical Show still pins portrait. Landscape Show stays with the phone.
@@ -450,7 +456,7 @@ final class CameraLiveViewController: UIViewController {
     }
 
     /// Starts capture for phone framing only — does not push AirPlay unless already live.
-    private func startCameraPreviewIfNeeded() {
+    func startCameraPreviewIfNeeded() {
         Task { @MainActor in
             let granted = await CameraManager.shared.checkPermissions()
             guard granted else {

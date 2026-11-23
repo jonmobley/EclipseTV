@@ -35,13 +35,20 @@ enum CameraTileTapAction: Equatable {
 
 enum CameraStillRibbon {
 
-    /// Builds the camera stills ribbon: Background, quick-change stills, then +.
+    /// Builds the camera stills ribbon: Background, Camera Kit stills, the
+    /// volunteer's quick-change stills (unless the kit is locked), then +.
+    /// Kit stills park like quick-change stills, so they share `.cutaway`.
     static func items(
         cutawayIds: [UUID],
-        canAdd: Bool
+        canAdd: Bool,
+        kitIds: [UUID] = [],
+        showsOwn: Bool = true
     ) -> [CameraStillRibbonItem] {
         var items: [CameraStillRibbonItem] = [.background]
-        items.append(contentsOf: cutawayIds.map { .cutaway($0) })
+        items.append(contentsOf: kitIds.map { .cutaway($0) })
+        if showsOwn {
+            items.append(contentsOf: cutawayIds.map { .cutaway($0) })
+        }
         if canAdd {
             items.append(.add)
         }

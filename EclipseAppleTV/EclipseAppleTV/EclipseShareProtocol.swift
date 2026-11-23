@@ -141,6 +141,9 @@ struct LibraryItemDTO: Codable, Equatable {
     let duration: Double
     var isLooping: Bool?
     var isMuted: Bool?
+    /// Looping video dissolves its end into its start. nil (older peers) = off,
+    /// except the TV's shipped Eclipse loop, which always blends.
+    var crossfadesLoop: Bool?
     /// nil or true means available; false means the TV's file was purged and the item
     /// can only be re-sent from the companion.
     var isAvailable: Bool?
@@ -187,6 +190,8 @@ struct EclipseShareEnvelope: Codable {
     var id: String?
     var isLooping: Bool? = nil
     var isMuted: Bool? = nil
+    /// Cross-Fade Loop choice on `setVideoSetting`. Older TVs ignore it.
+    var crossfadesLoop: Bool? = nil
     /// Fit / Fill framing for a still or a video. `true` fills (and crops to) the screen,
     /// `false` letterboxes it. Carried on `playRequest` so the TV frames the first show
     /// correctly, and on `setImageFit` when the choice changes while an item is live.
@@ -288,14 +293,20 @@ struct EclipseShareEnvelope: Codable {
     }
 
     /// Requests a per-item video setting change. Only non-nil fields are applied.
-    static func setVideoSetting(id: String, isLooping: Bool?, isMuted: Bool?) -> EclipseShareEnvelope {
+    static func setVideoSetting(
+        id: String,
+        isLooping: Bool?,
+        isMuted: Bool?,
+        crossfadesLoop: Bool? = nil
+    ) -> EclipseShareEnvelope {
         EclipseShareEnvelope(
             eclipseMsg: EclipseShareProtocol.Kind.setVideoSetting.rawValue,
             currentId: nil,
             items: nil,
             id: id,
             isLooping: isLooping,
-            isMuted: isMuted
+            isMuted: isMuted,
+            crossfadesLoop: crossfadesLoop
         )
     }
 

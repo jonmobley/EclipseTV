@@ -748,7 +748,8 @@ extension LibraryGridViewController: UICollectionViewDataSource,
                     image: UIImage(systemName: "photo")
                 ) { [weak self] _ in
                     self?.onChooseLogo?()
-                }
+                },
+                backgroundColorPresetMenu()
             ]
             if LogoStore.shared.hasCustomImage {
                 actions.append(UIAction(

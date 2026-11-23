@@ -21,6 +21,8 @@ class AppState: ObservableObject {
         var volume: Float = 1.0
         var playbackRate: Float = 1.0
         var lastPosition: TimeInterval = 0
+        /// Blend the loop point. nil = the default (on only for the shipped loop).
+        var crossfadesLoop: Bool? = nil
     }
     
     private let videoSettingsKey = "EclipseTV.VideoSettings"
@@ -35,9 +37,9 @@ class AppState: ObservableObject {
         if let stored = videoSettings[path] {
             return stored
         }
-        // Default: videos in a "Loop" folder loop automatically until the user overrides it.
+        // Default: videos shipped with the app (the Eclipse loop) loop until the user overrides it.
         var defaults = VideoSettings()
-        if path.contains("/Loop/") {
+        if ShippedVideo.isShipped(path: path) {
             defaults.isLooping = true
         }
         return defaults

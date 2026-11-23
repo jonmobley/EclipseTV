@@ -113,7 +113,7 @@ extension CameraLiveViewController {
 
         var frameConfig = UIButton.Configuration.plain()
         frameConfig.image = UIImage(
-            systemName: "rectangle.dashed",
+            systemName: "photo.on.rectangle.angled",
             withConfiguration: symbol
         )
         frameConfig.baseForegroundColor = .white
@@ -123,9 +123,9 @@ extension CameraLiveViewController {
             top: 10, leading: 10, bottom: 10, trailing: 10
         )
         frameButton.configuration = frameConfig
-        frameButton.accessibilityLabel = "Frames"
+        frameButton.accessibilityLabel = "Pictures"
         frameButton.accessibilityHint =
-            "Chooses which frames appear as overlay thumbnails on the camera"
+            "Opens the frames and pictures you can put on the camera"
         frameButton.translatesAutoresizingMaskIntoConstraints = true
         frameButton.addTarget(
             self,
@@ -193,12 +193,11 @@ extension CameraLiveViewController {
         flipButton.transform = .identity
     }
 
-    /// The bottom row turned with the phone, in a column beside the panel.
+    /// The capture controls in a column beside the panel.
     ///
-    /// Frame leads and Flip trails the portrait row. Turned counterclockwise
-    /// (`.right`), the row's leading end lands at the bottom, so Frame is lowest
-    /// and Flip highest; turned clockwise (`.left`) it is the reverse. Photo stays
-    /// on Frame's side of record either way.
+    /// Flip and Frame trade places from the turned portrait row (owner's call,
+    /// 2026-11-22): docked right (`.right`) Flip is lowest and Frame highest;
+    /// docked left (`.left`) it is the reverse. Photo keeps its place by record.
     private func layoutLandscapeCaptureChrome(panel: CGRect, edge: CaptureDockEdge) {
         let inset: CGFloat = 20
         let controlSize = Self.chromeControlSize
@@ -209,8 +208,8 @@ extension CameraLiveViewController {
         let sideX = colX + (Self.shutterSize - controlSize) / 2
         let topY = panel.minY + inset
         let bottomY = panel.maxY - inset - controlSize
-        let frameY = edge == .left ? topY : bottomY
-        let flipY = edge == .left ? bottomY : topY
+        let frameY = edge == .left ? bottomY : topY
+        let flipY = edge == .left ? topY : bottomY
 
         shutterButton.frame = CGRect(
             x: colX,
@@ -281,6 +280,7 @@ extension CameraLiveViewController {
         layoutBottomChromeInPanel()
         stillRibbonView.reloadData()
         thumbGridView.reloadData()
+        layoutOperatorChromeIfNeeded()
     }
 
     /// Whether AirPlay currently owns the camera overlay (including still park).
@@ -312,13 +312,10 @@ extension CameraLiveViewController {
         shutterButton.accessibilityValue = isRecording ? "Recording" : "Idle"
     }
 
-    /// White still shutter, visually distinct from the red record control.
+    /// Plain white round still shutter (no icon), distinct from red record.
     func applyPhotoButtonAppearance() {
         var config = UIButton.Configuration.plain()
         config.cornerStyle = .capsule
-        let symbol = UIImage.SymbolConfiguration(pointSize: 18, weight: .medium)
-        config.image = UIImage(systemName: "camera.fill", withConfiguration: symbol)
-        config.baseForegroundColor = .black
         config.background.backgroundColor = .white
         config.background.strokeColor = UIColor.white.withAlphaComponent(0.35)
         config.background.strokeWidth = 3

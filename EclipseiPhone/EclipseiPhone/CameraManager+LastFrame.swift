@@ -22,6 +22,7 @@ extension CameraManager: AVCaptureVideoDataOutputSampleBufferDelegate {
     ) {
         // Ahead of the still-request return below: a mirror needs every frame.
         broadcastToFrameMirrors(sampleBuffer)
+        feedMacProgramIfNeeded(sampleBuffer)
 
         if !stillRequests.isEmpty {
             let requests = stillRequests

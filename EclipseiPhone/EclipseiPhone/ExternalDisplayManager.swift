@@ -87,7 +87,7 @@ final class ExternalDisplayManager {
     /// Quick-change art for the Camera tile while that still is on program.
     var cameraTileParkedStillImage: UIImage? {
         guard case .cutaway(let id) = parkedCameraStill else { return nil }
-        return CameraAlternateStillStore.shared.image(for: id)
+        return CameraAlternateStillStore.shared.image(for: id) ?? CameraKitStore.shared.image(for: id)
     }
 
     /// AirPlay source for the parked still, if any.
@@ -97,6 +97,7 @@ final class ExternalDisplayManager {
             return LogoStore.shared.presentationSource
         case .cutaway(let id):
             return CameraAlternateStillStore.shared.presentationSource(for: id)
+                ?? CameraKitStore.shared.presentationSource(for: id)
         case nil:
             return nil
         }
@@ -267,6 +268,16 @@ final class ExternalDisplayManager {
                     self?.refreshConnection()
                     self?.keepPresentationAlive()
                 }
+            },
+            center.addObserver(
+                forName: UIScreen.modeDidChangeNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] note in
+                let screen = note.object as? UIScreen
+                Task { @MainActor in
+                    self?.screenModeDidChange(screen)
+                }
             }
         ]
         refreshConnection()
@@ -301,6 +312,8 @@ final class ExternalDisplayManager {
     /// - Returns: The external window, retained by the manager.
     @discardableResult
     func attach(to windowScene: UIWindowScene) -> UIWindow {
+        // Before the window exists, so its first layout uses the screen's real shape.
+        refreshScreenSignal(for: windowScene.screen)
         if let existing = externalWindow,
            existing.windowScene === windowScene,
            let root = existing.rootViewController as? PresentationViewController {
@@ -387,6 +400,7 @@ final class ExternalDisplayManager {
         externalWindow = nil
         presentationVC = nil
         isConnected = false
+        refreshScreenSignal(for: nil)
         PresentationAudioSession.reset()
         PresentationPrewarmer.shared.clear()
         endBackgroundPresentationTask()
@@ -1234,6 +1248,8 @@ final class ExternalDisplayManager {
 
     private func updateIdleTimer() {
         // Keep the device awake while anything is live on the external display.
-        UIApplication.shared.isIdleTimerDisabled = isConnected && lastSource != nil
+        // Camera Mode keeps a volunteer's phone awake for the whole event.
+        UIApplication.shared.isIdleTimerDisabled =
+            (isConnected && lastSource != nil) || CameraOperatorMode.keepsScreenAwake
     }
 }

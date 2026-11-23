@@ -36,7 +36,8 @@ extension iPhoneMainViewController {
         refreshPresentedSettingsConnectionState()
     }
 
-    /// Open Show → New Show → Library → Music → Settings, then Recent Shows.
+    /// Open Show → New Show → Library → Music → Camera Mode → Settings, then
+    /// Recent Shows.
     /// Show mode drops Settings — the header gear already opens it. Return to
     /// Home is the compact back control or the iPad Home tab, not this menu.
     /// Home Settings omits show-specific rows.
@@ -56,6 +57,7 @@ extension iPhoneMainViewController {
         children.append(newShowAction())
         children.append(mediaLibraryAction())
         children.append(musicAction())
+        children.append(cameraModeAction())
         if openShow == nil {
             children.append(settingsAction())
         }
