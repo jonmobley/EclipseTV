@@ -313,7 +313,7 @@ extension WebHistoryDrawerView: UITableViewDataSource, UITableViewDelegate {
         case .saved(let page):
             content.text = page.title
             content.secondaryText = WebHistoryStore.fallbackTitle(for: page.url)
-            content.image = UIImage(systemName: "safari")
+            content.image = UIImage(systemName: ThumbnailTypeIcon.website.systemName)
             if page.id == currentSavedId {
                 cell.accessoryType = .checkmark
                 cell.accessibilityTraits = [.button, .selected]

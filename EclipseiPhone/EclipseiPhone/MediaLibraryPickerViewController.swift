@@ -483,7 +483,7 @@ extension MediaLibraryPickerViewController: UICollectionViewDataSource {
             if let doc = PDFStore.shared.documents.first(where: { $0.id == id }) {
                 cell.configureSpecial(
                     title: doc.title,
-                    systemImage: "doc.richtext",
+                    systemImage: ThumbnailTypeIcon.pdf.systemName,
                     thumbnail: PDFThumbnailStore.shared.image(for: id),
                     fillColor: .darkGray,
                     isLive: false,

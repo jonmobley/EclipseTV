@@ -91,7 +91,7 @@ extension CameraLiveViewController {
                 image: nil, symbol: "moon.fill", fill: .black, title: "Blackout"
             )
         case .prompter:
-            return LiveOutputArt(image: nil, symbol: "text.alignleft", fill: dim, title: "Prompter")
+            return LiveOutputArt(image: nil, symbol: ThumbnailTypeIcon.prompter.systemName, fill: dim, title: "Prompter")
         case .countdown:
             return LiveOutputArt(
                 image: nil,
@@ -115,7 +115,7 @@ extension CameraLiveViewController {
             let page = id.flatMap { WebPageStore.shared.page(id: $0) }
             return LiveOutputArt(
                 image: id.flatMap { WebThumbnailStore.shared.image(for: $0) },
-                symbol: "safari",
+                symbol: ThumbnailTypeIcon.website.systemName,
                 fill: dim,
                 title: page?.title ?? "Website"
             )
@@ -133,7 +133,7 @@ extension CameraLiveViewController {
             let doc = PDFStore.shared.documents.first { $0.id == id }
             return LiveOutputArt(
                 image: id.flatMap { PDFThumbnailStore.shared.image(for: $0) },
-                symbol: "doc.richtext",
+                symbol: ThumbnailTypeIcon.pdf.systemName,
                 fill: dim,
                 title: doc?.title ?? "PDF"
             )

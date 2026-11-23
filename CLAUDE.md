@@ -206,7 +206,7 @@
   `URLProtocol` client instead (see `QuestPollEditorTests`).
 - Content icons match the Mac app (2026-11-22): `ThumbnailTypeIcon.systemName` is the one place a content kind's SF Symbol is named
   (Website `globe`, PDF `doc.text`, Prompter `text.viewfinder`, Slideshow `photo.on.rectangle.angled`, same as the Mac's
-  `AddMediaList` / `MediaTypeVisual`). The Show page (+ menu, tiles, hero) reads it; Camera output art, the History drawer, Media
-  Library picker and Getting Started still hold their own literals until the owner approves rolling it out. Tiles no longer draw
+  `AddMediaList` / `MediaTypeVisual`). Every screen reads it; never write those symbol names inline. `safari` stays only on
+  "Open questpoll.com" (it opens Safari) and `rectangle.stack` / `.fill` means a Show, not a slideshow. Tiles no longer draw
   the top-left type disc (`ThumbnailTypeIconView.showsOnTiles = false`, owner's call: the Mac has none); VoiceOver still speaks the kind.
   Review and before/after pictures: `docs/reviews/2026-11-22-polish/`.
