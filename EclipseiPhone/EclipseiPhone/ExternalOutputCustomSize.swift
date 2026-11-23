@@ -96,9 +96,14 @@ extension ExternalOutputSettings {
     }
 
     /// Width ÷ height of the picture the TV shows: the active custom size, else
-    /// 16:9 in Landscape and 9:16 in Vertical.
+    /// the connected screen's own shape when it is not 16:9 (Landscape only),
+    /// else 16:9 in Landscape and 9:16 in Vertical.
     static var outputAspectRatio: CGFloat {
-        outputAspectRatio(orientation: orientation, customSize: activeCustomSize)
+        outputAspectRatio(
+            orientation: orientation,
+            customSize: activeCustomSize,
+            screenShape: connectedScreenSignal?.oddShape
+        )
     }
 
     /// Where the picture sits on the external display.
@@ -119,12 +124,20 @@ extension ExternalOutputSettings {
         return sizes.first { $0.id == selectedID }
     }
 
-    /// The active custom size's ratio, else the Display Mode's.
+    /// The active custom size's ratio, else an odd-shaped screen's own ratio in
+    /// Landscape, else the Display Mode's.
+    /// - Parameters:
+    ///   - orientation: The Display Mode.
+    ///   - customSize: The active custom size, if any.
+    ///   - screenShape: Width ÷ height of a connected screen that is not 16:9.
     static func outputAspectRatio(
         orientation: ExternalOutputOrientation,
-        customSize: ExternalOutputCustomSize?
+        customSize: ExternalOutputCustomSize?,
+        screenShape: CGFloat? = nil
     ) -> CGFloat {
-        customSize?.aspectRatio ?? orientation.aspectRatio
+        if let customSize { return customSize.aspectRatio }
+        if orientation == .landscape, let screenShape { return screenShape }
+        return orientation.aspectRatio
     }
 
     /// Full screen for Landscape / Vertical (Vertical rotates the content to fill

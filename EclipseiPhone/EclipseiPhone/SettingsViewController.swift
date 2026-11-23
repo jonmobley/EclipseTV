@@ -646,6 +646,9 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
             if let custom = ExternalOutputSettings.activeCustomSize {
                 return "\(orientation.rawValue) · \(custom.displayLabel)"
             }
+            if let signal = ExternalOutputSettings.connectedScreenSignal, signal.oddShape != nil {
+                return "\(orientation.rawValue) · Screen \(signal.current.label)"
+            }
             return orientation.rawValue
         }
         return "\(orientation.rawValue) · \(ExternalOutputSettings.rotationDirection.rawValue)"

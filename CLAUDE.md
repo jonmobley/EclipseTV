@@ -48,6 +48,16 @@
   use `orientation` and know nothing about custom sizes.
   Z-order on the TV picture goes through `stageView.bringSubviewToFront` (transition overlay, audio badge);
   `view.bringSubviewToFront` on a stage subview is a no-op.
+- Odd-shaped external screens (2026-11-22, `ExternalScreenSignal`, `ExternalDisplayManager+ScreenSignal`): for an LED wall
+  behind an EDID box that reports its own size (e.g. 2048×768). On attach the manager reads the screen's signal into
+  `ExternalOutputSettings.connectedScreenSignal`. When that size is not 16:9 (1% tolerance) and no custom size is chosen,
+  `outputAspectRatio` is the screen's own shape in Landscape (so Full Screen fills the wall), and
+  `overscanCompensation` is set to `.none` so nothing is shrunk. If a chosen custom size is not 16:9 and the screen offers
+  exactly that pixel size, the screen is switched to it. 16:9 screens are never touched. `updateConnectedScreenSignal`
+  does not post `didChangeNotification`; the manager posts it on the next main-queue turn and only when the shape
+  changed, because it runs inside `attach` and that notification's observers call back into the manager. Settings →
+  Display Mode → Connected Screen shows the signal being sent and the other sizes offered. Tests use the pure rules only
+  and never set the global signal. Not yet tried on real hardware: whether iOS lists or sends a non-standard size.
 - Leaving a live countdown (2026-11-13): `endOverlay` moves output state on *before* tearing the overlay down,
   same order as `beginOverlay`. Ending the clock posts its change synchronously, and if `overlaySource` still says
   countdown the grid repaints the hero back onto the frozen clock (countdown posts no end notice to fix it).
