@@ -28,6 +28,24 @@ final class LogoStore {
     /// Whether the user has replaced the bundled default with a custom image.
     var hasCustomImage: Bool { customImage != nil }
 
+    /// The color preset the Background currently shows, if it was chosen on this
+    /// device. Picking a picture, resetting, or a change arriving from iCloud
+    /// clears it (another device only receives the picture, not the name).
+    private(set) var selectedPreset: BackgroundColorPreset? {
+        get { BackgroundColorPreset(savedName: defaults.string(forKey: Self.presetDefaultsKey)) }
+        set {
+            if let newValue {
+                defaults.set(newValue.rawValue, forKey: Self.presetDefaultsKey)
+            } else {
+                defaults.removeObject(forKey: Self.presetDefaultsKey)
+            }
+        }
+    }
+
+    static let presetDefaultsKey = "EclipseTV.background.colorPreset"
+
+    private let defaults = UserDefaults.standard
+
     /// AirPlay source for Background (always a still, aspect-fill).
     var presentationSource: PresentationSource? {
         guard let url = fileURL else { return nil }
@@ -81,6 +99,17 @@ final class LogoStore {
 
     /// Saves `image` as JPEG and posts `didChangeNotification`.
     func save(_ image: UIImage) {
+        store(image, preset: nil)
+    }
+
+    /// Makes `preset` the Background: its picture replaces any custom image, so
+    /// every place that shows the Background (and iCloud) gets it unchanged.
+    func apply(_ preset: BackgroundColorPreset) {
+        guard selectedPreset != preset || !hasCustomImage else { return }
+        store(preset.image(), preset: preset)
+    }
+
+    private func store(_ image: UIImage, preset: BackgroundColorPreset?) {
         let normalized = MediaAspect.normalized(image)
         guard let data = normalized.jpegData(compressionQuality: 0.92) else {
             logger.error("Failed to encode logo JPEG")
@@ -89,6 +118,7 @@ final class LogoStore {
         do {
             try data.write(to: logoFileURL, options: .atomic)
             customImage = normalized
+            selectedPreset = preset
             NotificationCenter.default.post(name: Self.didChangeNotification, object: self)
             guard !EclipseSyncController.shared.isApplyingRemote else { return }
             EclipseSyncController.shared.backend.scheduleBackgroundSave()
@@ -101,6 +131,7 @@ final class LogoStore {
     func clear() {
         try? FileManager.default.removeItem(at: logoFileURL)
         customImage = nil
+        selectedPreset = nil
         NotificationCenter.default.post(name: Self.didChangeNotification, object: self)
         guard !EclipseSyncController.shared.isApplyingRemote else { return }
         EclipseSyncController.shared.backend.scheduleBackgroundDelete()
@@ -131,6 +162,7 @@ final class LogoStore {
             try? FileManager.default.removeItem(at: logoFileURL)
             customImage = nil
         }
+        selectedPreset = nil
         NotificationCenter.default.post(name: Self.didChangeNotification, object: self)
     }
 

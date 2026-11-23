@@ -805,6 +805,7 @@ extension LibraryGridViewController {
             ) { [weak self] _ in
                 self?.onChooseLogo?()
             })
+            children.append(backgroundColorPresetMenu())
             if LogoStore.shared.hasCustomImage {
                 children.append(UIAction(
                     title: "Reset to Default",
