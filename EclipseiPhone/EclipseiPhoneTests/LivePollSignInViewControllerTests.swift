@@ -27,7 +27,7 @@ struct LivePollSignInViewControllerTests {
 
     @Test func errorCopyMatchesAuthFailures() {
         #expect(LivePollError.unauthorized.userMessage == "Sign in required.")
-        #expect(LivePollError.transport.userMessage.contains("QuestPoll"))
+        #expect(LivePollError.transport.userMessage.contains("Eclipse Polls"))
     }
 }
 

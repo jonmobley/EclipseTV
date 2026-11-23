@@ -51,7 +51,7 @@ enum ThumbnailTypeIcon: Equatable {
         case .pdf: return "PDF"
         case .camera: return "camera"
         case .ptzCamera: return "PTZ camera"
-        case .livePoll: return "QuestPoll"
+        case .livePoll: return "Poll"
         case .countdown: return "countdown"
         case .prompter: return "prompter"
         }

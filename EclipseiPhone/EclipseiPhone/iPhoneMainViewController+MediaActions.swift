@@ -320,7 +320,7 @@ extension iPhoneMainViewController {
             prompter.attributes = .disabled
         }
         let livePoll = UIAction(
-            title: "QuestPoll",
+            title: "Poll",
             image: UIImage(systemName: "chart.bar.fill")
         ) { [weak self] _ in
             guard let albumId else { return }

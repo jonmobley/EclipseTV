@@ -43,7 +43,7 @@ final class SettingsQuestPollViewController: UITableViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = "QuestPoll"
+        title = "Eclipse Polls"
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: "cell")
         loadPlan()
     }
@@ -71,9 +71,9 @@ final class SettingsQuestPollViewController: UITableViewController {
     ) -> String? {
         switch section {
         case 0:
-            return "QuestPoll runs the live polls and Q&A in your Shows."
+            return "Eclipse Polls runs the live polls and Q&A in your Shows."
         case 1 where LivePollAccountStore.isSignedIn:
-            return "Make and change polls here, or at questpoll.com. "
+            return "Make and change polls here, or at polls.eclipseapp.com. "
                 + "They are the same polls everywhere you sign in."
         default:
             return nil
@@ -104,7 +104,7 @@ final class SettingsQuestPollViewController: UITableViewController {
             cell.accessoryType = .disclosureIndicator
             cell.accessibilityIdentifier = "questpoll.settings.myPolls"
         case .manage:
-            config.text = "Open questpoll.com"
+            config.text = "Open polls.eclipseapp.com"
             config.image = UIImage(systemName: "safari")
             cell.accessoryType = .disclosureIndicator
         case .signIn:
@@ -177,7 +177,7 @@ final class SettingsQuestPollViewController: UITableViewController {
 
     private func confirmDeleteAccount() {
         let alert = UIAlertController(
-            title: "Delete QuestPoll Account?",
+            title: "Delete Eclipse Polls Account?",
             message: "Deletes this account and its polls. This cannot be undone.",
             preferredStyle: .alert
         )
