@@ -214,3 +214,10 @@
   choosing one for a Show is picked automatically. A running room keeps its own copy, so edits show on the next start.
   questpoll.com has no test copy: never save/delete polls against it to try things out. Check the screens with a stub
   `URLProtocol` client instead (see `QuestPollEditorTests`).
+- Background colors (2026-11-22, `BackgroundColorPreset`): the Background tile's ⋯ menu has a "Color" row with the Mac's
+  eight presets (same names, order, stops and `eclipse://builtin/gradient/<name>` URL as eclipsepro's
+  `BackgroundGradientPreset`; keep them in step). Picking one draws a 1920×1080 picture and stores it as the Background
+  still (`LogoStore.apply(_:)`), so tile, hero, AirPlay/HDMI and iCloud use the existing picture path; it replaces a
+  custom picture, like the Mac. Which preset is chosen is remembered on this device only (UserDefaults
+  `EclipseTV.background.colorPreset`): other iPhones receive the picture without the name, since the iCloud Background
+  record has no field for it. The Mac does not sync its Background (it is per presentation there).
