@@ -16,6 +16,10 @@ final class LibraryThumbnailCell: UICollectionViewCell {
 
     /// Rounded media / tool surface (titles overlay the bottom with a fade).
     let cardView = UIView()
+    private var frameOnBadgeIsLoaded = false
+
+    /// "✓ ON" for a camera frame switched on (Show camera ribbon only).
+    private lazy var frameOnBadge = CameraFrameOnBadge.install(in: cardView, inset: 8)
     let imageView = UIImageView()
     let placeholderIcon = UIImageView()
     let captionLabel = UILabel()
@@ -547,7 +551,17 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         super.prepareForReuse()
         resetChrome()
         setUpNext(false)
+        setFrameOn(false)
         cardView.backgroundColor = .secondarySystemBackground
+    }
+
+    /// Shows the ON badge for a camera frame that is on over the camera.
+    func setFrameOn(_ on: Bool) {
+        // Never build the badge just to hide it.
+        guard on || frameOnBadgeIsLoaded else { return }
+        frameOnBadgeIsLoaded = true
+        frameOnBadge.isHidden = !on
+        if on { cardView.bringSubviewToFront(frameOnBadge) }
     }
 
     // MARK: - Helpers

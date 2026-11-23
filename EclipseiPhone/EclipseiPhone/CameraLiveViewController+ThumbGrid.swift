@@ -113,7 +113,7 @@ extension CameraLiveViewController {
                 for: indexPath
             ) as? CameraFrameRibbonCell else { return UICollectionViewCell() }
             let store = CameraFrameStore.shared
-            cell.configure(image: store.image(for: id), isLive: store.selectedId == id)
+            cell.configure(image: store.image(for: id), isOn: store.selectedId == id)
             cell.applyCornerRadius(radius)
             cell.setMoreMenu(frameTileMenu(frameId: id))
             return cell

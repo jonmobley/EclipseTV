@@ -77,7 +77,8 @@ extension LibraryGridViewController {
         case .frame(let id):
             image = CameraFrameStore.shared.image(for: id)
             name = CameraFrameStore.shared.displayName(for: id)
-            isLive = CameraFrameStore.shared.selectedId == id
+            // A frame is a layer on the camera, not what the TV shows: ON badge, never blue.
+            isLive = false
         case .background:
             image = LogoStore.shared.image
             name = "Background"
@@ -99,6 +100,11 @@ extension LibraryGridViewController {
             isLive: isLive,
             showsTypeIcon: false
         )
+        if case .frame(let id) = item {
+            cell.setFrameOn(CameraFrameStore.shared.selectedId == id)
+        } else {
+            cell.setFrameOn(false)
+        }
     }
 
     /// Frames toggle on the camera; stills cut to the still, or back to the camera.

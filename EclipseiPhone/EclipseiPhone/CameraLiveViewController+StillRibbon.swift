@@ -145,6 +145,12 @@ extension CameraLiveViewController {
             }
             return
         }
+        // Same rule as tapping the stage: with no TV a picture has nowhere to go.
+        // Parking anyway lit the tile blue as if the audience saw it (2026-11-23).
+        guard mgr.isCameraModeActive || canGoLiveFromCamera else {
+            showPresentationToast("Connect a TV to show this picture", centeredIn: panelView)
+            return
+        }
         parkStillGoingLiveIfNeeded(source, kind: kind)
     }
 

@@ -176,6 +176,12 @@
   closes (`armRecordingAudio` / `disarmRecordingAudio`), never at record start/stop: turning the mic on or off
   re-routes audio and cuts other apps' music for a moment (2026-11-15). Eclipse's own Background
   Music still takes over audio when the user presses play (normal for a music player).
+- Camera tile colors (2026-11-23): blue (`liveStroke`) means "on the TV" and nothing else. A frame switched on over the
+  camera gets the "✓ ON" badge (`CameraFrameOnBadge`, check only on small ribbon thumbs), never the blue outline, in the
+  full-screen camera, the Pictures sheet and the Show camera ribbon. Background / Quick Change tiles are blue while parked on
+  program, and a tap with no TV (no AirPlay, Apple TV, Practice Mode or operator: `canGoLiveFromCamera`) shows a toast instead
+  of parking. The centered hint says what the TV shows ("TV shows Quick Change · Tap for camera", "Preview only · No TV
+  connected", else "Tap screen to go LIVE").
 - Camera frames order (2026-11-15): `CameraFrameStore.frames` is newest-first by `createdAt` and never reorders on a tap
   (sorting by `lastUsedAt` made a tapped frame jump in the camera ribbon). The camera header shows only the LIVE pill;
   the PRACTICE pill was removed at the owner's request. Buttons placed inside a `UIImageView` need

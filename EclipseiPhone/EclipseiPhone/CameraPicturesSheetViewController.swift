@@ -149,7 +149,7 @@ extension CameraPicturesSheetViewController: UICollectionViewDataSource, UIColle
             withReuseIdentifier: CameraFrameRibbonCell.reuseId, for: indexPath
         ) as? CameraFrameRibbonCell else { return UICollectionViewCell() }
         let entry = sections[indexPath.section].entries[indexPath.item]
-        cell.configure(image: actions.image(entry), isLive: actions.isLive(entry), isFrame: entry.isFrame)
+        cell.configure(image: actions.image(entry), isOn: actions.isLive(entry), isFrame: entry.isFrame)
         return cell
     }
 

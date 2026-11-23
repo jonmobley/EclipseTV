@@ -54,6 +54,33 @@ struct CameraLiveChromeTests {
         #expect(CameraLiveViewController.showsTapToGoLiveHint(isCameraLive: true) == false)
     }
 
+    @Test func hintSaysWhatTheTVShows() {
+        typealias VC = CameraLiveViewController
+        #expect(VC.tapToGoLiveHintTitle(parked: nil, canGoLive: true) == "Tap screen to go LIVE")
+        #expect(
+            VC.tapToGoLiveHintTitle(parked: nil, canGoLive: false)
+            == "Preview only · No TV connected"
+        )
+        #expect(
+            VC.tapToGoLiveHintTitle(parked: .cutaway(UUID()), canGoLive: true)
+            == "TV shows Quick Change · Tap for camera"
+        )
+        #expect(
+            VC.tapToGoLiveHintTitle(parked: .background, canGoLive: true)
+            == "TV shows Background · Tap for camera"
+        )
+    }
+
+    /// Blue means "on the TV"; a frame that is on gets the ON badge instead.
+    @Test func framesNeverTakeTheBlueOutline() {
+        typealias Cell = CameraFrameRibbonCell
+        #expect(Cell.showsLiveOutline(isOn: true, isFrame: true) == false)
+        #expect(Cell.showsOnBadge(isOn: true, isFrame: true))
+        #expect(Cell.showsOnBadge(isOn: false, isFrame: true) == false)
+        #expect(Cell.showsLiveOutline(isOn: true, isFrame: false))
+        #expect(Cell.showsOnBadge(isOn: true, isFrame: false) == false)
+    }
+
     @Test func liveOutputThumbStaysVisibleWhileCameraIsLive() {
         #expect(CameraLiveViewController.showsLiveOutputThumb(isConnected: true))
         #expect(
@@ -73,8 +100,17 @@ struct CameraLiveChromeTests {
 
         #expect(vc.goLiveButton.isHidden)
         #expect(vc.tapToGoLiveHintView.isHidden == false)
+        // Words follow whether this simulator can go live (no TV → "Preview only").
+        let expected = CameraLiveViewController.tapToGoLiveHintAccessibility(
+            parked: nil,
+            canGoLive: vc.canGoLiveFromCamera
+        )
+        #expect(vc.tapToGoLiveHintView.accessibilityLabel == expected.label)
         #expect(
-            vc.tapToGoLiveHintView.accessibilityLabel == String(localized: "Go LIVE")
+            vc.tapToGoLiveHintView.configuration?.title
+            == CameraLiveViewController.tapToGoLiveHintTitle(
+                parked: nil, canGoLive: vc.canGoLiveFromCamera
+            )
         )
         let panel = vc.panelView.convert(vc.panelView.bounds, to: vc.view)
         #expect(panel.width > 1)
