@@ -53,9 +53,10 @@ final class MediaLibraryPickerViewController: UIViewController {
         let tabs = HomeHeaderNavTabs()
         tabs.onSelect = { [weak self] destination in
             guard let self, destination != .library else { return }
-            self.closePicker { [weak self] in
-                self?.onSelectHeaderDestination?(destination)
-            }
+            // Hold the handler itself: the page can be gone by the time an animated
+            // close finishes, and Home / Show must still act (same as `commitAddToShow`).
+            let handler = self.onSelectHeaderDestination
+            self.closePicker { handler?(destination) }
         }
         return tabs
     }()
