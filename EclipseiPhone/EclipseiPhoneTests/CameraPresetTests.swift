@@ -169,14 +169,37 @@ struct CameraPresetTests {
     // MARK: - Thumbnail
 
     @MainActor
-    @Test func thumbnailKeepsTheFrameShapeAndFillsTheBackdrop() {
-        let frame = UIGraphicsImageRenderer(size: CGSize(width: 1920, height: 1080)).image { _ in }
+    @Test func thumbnailIsTheOutputShapeWithTheFrameFitted() {
+        // A portrait frame on a Landscape output: TV shows it fitted, so must the tile.
+        let frame = UIGraphicsImageRenderer(size: CGSize(width: 900, height: 1600)).image {
+            UIColor.blue.setFill()
+            $0.fill(CGRect(x: 0, y: 0, width: 900, height: 1600))
+        }
         let backdrop = UIGraphicsImageRenderer(size: CGSize(width: 300, height: 400)).image {
             UIColor.red.setFill()
             $0.fill(CGRect(x: 0, y: 0, width: 300, height: 400))
         }
-        let out = CameraPresetThumbnail.compose(frame: frame, backdrop: backdrop)
+        let out = CameraPresetThumbnail.compose(frame: frame, backdrop: backdrop, outputAspect: 16.0 / 9.0)
         #expect(out.size.width == 640)
         #expect(out.size.height == 360)
+        // Edges show the camera (red), the centre the frame (blue).
+        #expect(pixel(out, x: 10, y: 180).red > 0.8)
+        #expect(pixel(out, x: 320, y: 180).blue > 0.8)
+
+        let vertical = CameraPresetThumbnail.compose(frame: frame, backdrop: nil, outputAspect: 9.0 / 16.0)
+        #expect(vertical.size.width == 360)
+        #expect(vertical.size.height == 640)
+    }
+
+    private func pixel(_ image: UIImage, x: Int, y: Int) -> (red: CGFloat, blue: CGFloat) {
+        let cg = image.cgImage!
+        var data = [UInt8](repeating: 0, count: 4)
+        let ctx = CGContext(
+            data: &data, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        )!
+        ctx.draw(cg, in: CGRect(x: -x, y: y - cg.height + 1, width: cg.width, height: cg.height))
+        return (CGFloat(data[0]) / 255, CGFloat(data[2]) / 255)
     }
 }
