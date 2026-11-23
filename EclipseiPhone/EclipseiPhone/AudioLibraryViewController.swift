@@ -255,7 +255,10 @@ final class AudioLibraryViewController: UITableViewController {
                 applyNowPlayingStyle(&config, isCurrent: isCurrent)
                 if !isEditing {
                     cell.accessoryView = AudioMusicRowViews.playlistAccessory(
-                        songCount: playlist.trackIds.count
+                        // Songs still arriving from another device are not counted.
+                        songCount: playlist.trackIds.filter {
+                            trackStore.track(id: $0) != nil
+                        }.count
                     )
                 }
             }

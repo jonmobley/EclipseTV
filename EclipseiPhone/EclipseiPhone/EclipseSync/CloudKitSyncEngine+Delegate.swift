@@ -35,7 +35,8 @@ extension CloudKitSyncEngine: CKSyncEngineDelegate {
             defer { isApplyingRemote = wasApplying }
             for deletion in changes.deletions {
                 EclipseSyncController.shared.applyRemoteDeletion(
-                    recordName: deletion.recordID.recordName
+                    recordName: deletion.recordID.recordName,
+                    zoneID: deletion.recordID.zoneID
                 )
             }
 

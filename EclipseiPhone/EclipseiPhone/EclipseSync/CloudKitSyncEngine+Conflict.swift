@@ -62,7 +62,7 @@ extension CloudKitSyncEngine {
                 CameraAlternateStillStore.shared.markSynced(id: uuid)
             }
         default:
-            break
+            markMusicRecordSynced(record)
         }
     }
 
@@ -151,6 +151,7 @@ extension CloudKitSyncEngine {
         case CloudKitSchema.RecordType.cutawayStill:
             if let uuid = UUID(uuidString: name) { scheduleCutawaySave(id: uuid) }
         default:
+            if requeueMusicSave(recordName: name) { return }
             logger.error(
                 "Unhandled conflict type \(server.recordType, privacy: .public)"
             )

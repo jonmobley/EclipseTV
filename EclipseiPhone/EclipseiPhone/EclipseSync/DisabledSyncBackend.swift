@@ -74,6 +74,14 @@ final class DisabledSyncBackend: SyncBackend {
 
     func schedulePrompterDelete(showId: UUID) {}
 
+    func scheduleAudioTrackSave(id: UUID) {}
+
+    func scheduleAudioTrackDelete(id: UUID) {}
+
+    func scheduleAudioPlaylistSave(id: UUID) {}
+
+    func scheduleAudioPlaylistDelete(id: UUID) {}
+
     func scheduleLivePollSave(id: UUID) {}
 
     func scheduleLivePollDelete(id: UUID) {}

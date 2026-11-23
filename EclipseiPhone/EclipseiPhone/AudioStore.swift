@@ -46,6 +46,9 @@ final class AudioStore {
     private let rootDirectory: URL
     private let logger = Logger(subsystem: "com.eclipseapp.ios", category: "AudioStore")
 
+    /// iCloud clocks and acknowledgements for songs (see `AudioStore+Sync`).
+    let syncLedger: MusicSyncLedger
+
     /// Allowed document-picker types for import.
     static let importTypes: [UTType] = {
         var types: [UTType] = [.mp3, .mpeg4Audio, .wav, .aiff]
@@ -53,16 +56,22 @@ final class AudioStore {
         return types
     }()
 
-    init(defaults: UserDefaults = .standard) {
+    /// Creates a store.
+    /// - Parameters:
+    ///   - defaults: Where the track list and sync ledger are saved.
+    ///   - rootDirectory: Folder for the audio files; nil = Application Support/Audio.
+    init(defaults: UserDefaults = .standard, rootDirectory: URL? = nil) {
         self.defaults = defaults
+        syncLedger = MusicSyncLedger(defaults: defaults, keyPrefix: "EclipseTV.audio.sync")
         let base = FileManager.default.urls(
             for: .applicationSupportDirectory, in: .userDomainMask
         )[0]
-        rootDirectory = base.appendingPathComponent("Audio", isDirectory: true)
+        self.rootDirectory = rootDirectory
+            ?? base.appendingPathComponent("Audio", isDirectory: true)
         try? FileManager.default.createDirectory(
-            at: rootDirectory, withIntermediateDirectories: true
+            at: self.rootDirectory, withIntermediateDirectories: true
         )
-        excludeFromBackup(rootDirectory)
+        excludeFromBackup(self.rootDirectory)
         load()
     }
 
@@ -127,6 +136,7 @@ final class AudioStore {
         )
         tracks.insert(item, at: 0)
         persist()
+        noteLocalEdit(id: item.id)
         return item
     }
 
@@ -150,8 +160,10 @@ final class AudioStore {
         }
         guard let index = tracks.firstIndex(where: { $0.id == id }) else { return }
         guard !tracks[index].isProtected else { return }
+        guard tracks[index].title != trimmed else { return }
         tracks[index].title = trimmed
         persist()
+        noteLocalEdit(id: id)
     }
 
     /// Removes the track and deletes its file; prunes playlists.
@@ -159,6 +171,29 @@ final class AudioStore {
     func remove(id: UUID) {
         guard let existing = tracks.first(where: { $0.id == id }),
               !existing.isProtected else { return }
+        removeTrackAndFile(id: id)
+        noteLocalDeletion(id: id)
+    }
+
+    /// Path a song's file is stored at (whether or not it exists yet).
+    func storageURL(for id: UUID, fileExtension: String) -> URL {
+        rootDirectory.appendingPathComponent("\(id.uuidString).\(fileExtension)")
+    }
+
+    /// Inserts or replaces a song received from iCloud (its file is already in place).
+    func upsertSyncedTrack(_ track: AudioTrack) {
+        if let index = tracks.firstIndex(where: { $0.id == track.id }) {
+            guard tracks[index] != track else { return }
+            tracks[index] = track
+        } else {
+            tracks.insert(track, at: 0)
+        }
+        persist()
+    }
+
+    /// Removes a song, its file and its playlist memberships. No protection check
+    /// and no iCloud bookkeeping: callers do both.
+    func removeTrackAndFile(id: UUID) {
         let before = tracks.count
         tracks.removeAll { $0.id == id }
         guard tracks.count != before else { return }

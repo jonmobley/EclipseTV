@@ -257,3 +257,9 @@
   custom picture, like the Mac. Which preset is chosen is remembered on this device only (UserDefaults
   `EclipseTV.background.colorPreset`): other iPhones receive the picture without the name, since the iCloud Background
   record has no field for it. The Mac does not sync its Background (it is per presentation there).
+- Music sync (2026-11-23, with the Mac): songs are `AudioTrack` records `audio-<UUID>`, playlists `AudioPlaylist`
+  records `playlist-<UUID>`, never parented, last writer wins on `modifiedAt` (tie → remote). Protected items
+  (Background Music + Chill Low Fi) never sync; `caf` and files over 200 MB stay on the phone. Clocks and
+  acknowledgements live in `MusicSyncLedger`, not in the saved track/playlist format. Playlists keep song ids the
+  phone has no file for yet (`MusicSyncPolicy.mergeOrder` on reorder). **Both record types must be deployed
+  Development → Production in the CloudKit Console** before music syncs in TestFlight/App Store builds.
