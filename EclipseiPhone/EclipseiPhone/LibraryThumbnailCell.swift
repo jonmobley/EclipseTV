@@ -552,6 +552,8 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         resetChrome()
         setUpNext(false)
         setFrameOn(false)
+        // The camera ribbon sets On / Off; a recycled tile must not keep saying it.
+        accessibilityValue = nil
         cardView.backgroundColor = .secondarySystemBackground
     }
 
