@@ -57,7 +57,7 @@ final class WebHistoryDrawerView: UIView {
         dimmer.backgroundColor = UIColor.black.withAlphaComponent(0.4)
         dimmer.alpha = 0
         dimmer.isAccessibilityElement = true
-        dimmer.accessibilityLabel = "Close History"
+        dimmer.accessibilityLabel = "Close Websites"
         dimmer.accessibilityTraits = .button
         dimmer.addAction(UIAction { [weak self] _ in self?.dismiss() }, for: .touchUpInside)
         addSubview(dimmer)
@@ -73,7 +73,7 @@ final class WebHistoryDrawerView: UIView {
         grabber.layer.cornerRadius = 2.5
         panel.addSubview(grabber)
 
-        titleLabel.text = "History"
+        titleLabel.text = "Websites"
         titleLabel.font = .systemFont(ofSize: 20, weight: .bold)
         titleLabel.textColor = .white
         titleLabel.accessibilityTraits = .header
@@ -86,7 +86,7 @@ final class WebHistoryDrawerView: UIView {
         )
         close.baseForegroundColor = UIColor.white.withAlphaComponent(0.55)
         closeButton.configuration = close
-        closeButton.accessibilityLabel = "Close History"
+        closeButton.accessibilityLabel = "Close Websites"
         closeButton.addAction(UIAction { [weak self] _ in self?.dismiss() }, for: .touchUpInside)
         panel.addSubview(closeButton)
 
@@ -293,8 +293,8 @@ extension WebHistoryDrawerView: UITableViewDataSource, UITableViewDelegate {
 
     func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
         switch Section(rawValue: section) {
-        case .saved: return "Saved"
-        case .recent: return "Recent"
+        case .saved: return "My Websites"
+        case .recent: return "Recently Visited"
         case nil: return nil
         }
     }
@@ -337,7 +337,7 @@ extension WebHistoryDrawerView: UITableViewDataSource, UITableViewDelegate {
             cell.accessibilityTraits = .staticText
         case .clearRecent:
             content = .cell()
-            content.text = "Clear Recent"
+            content.text = "Clear Recently Visited"
             content.textProperties.color = .systemRed
         }
         content.imageProperties.tintColor = .secondaryLabel

@@ -1015,14 +1015,9 @@ final class ExternalDisplayManager {
         presentationVC?.loadWeb(url: url)
     }
 
-    /// Mirrors the phone browser's scroll offset onto the external web view.
-    func setWebContentOffset(_ offset: CGPoint) {
-        presentationVC?.setWebContentOffset(offset)
-    }
-
-    /// Mirrors normalized vertical scroll progress (0...1) onto the external web view.
-    func setWebScrollProgress(_ progress: CGFloat) {
-        presentationVC?.setWebScrollProgress(progress)
+    /// Mirrors the phone browser's zoom and position onto the external web view.
+    func setWebViewport(_ viewport: WebViewportMirror) {
+        presentationVC?.setWebViewport(viewport)
     }
 
     /// Reloads the external web page.

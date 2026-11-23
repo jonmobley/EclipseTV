@@ -188,31 +188,12 @@ extension PresentationViewController: WKNavigationDelegate {
         }
     }
 
-    /// Sets the page scroll offset to match the phone browser (1:1 logical space).
-    func setWebContentOffset(_ offset: CGPoint) {
+    /// Shows the same part of the page as the phone browser: its zoom, then its
+    /// position across and down. The phone never sends a zoom below fit, and this
+    /// never goes below the page's own smallest zoom, so the page fills the width.
+    func setWebViewport(_ viewport: WebViewportMirror) {
         guard let webView = webView, !webContainer.isHidden else { return }
-        let scroll = webView.scrollView
-        let maxX = max(0, scroll.contentSize.width - scroll.bounds.width)
-        let maxY = max(0, scroll.contentSize.height - scroll.bounds.height)
-        let clamped = CGPoint(
-            x: min(max(0, offset.x), maxX),
-            y: min(max(0, offset.y), maxY)
-        )
-        if scroll.contentOffset != clamped {
-            scroll.contentOffset = clamped
-        }
-    }
-
-    /// Sets vertical scroll from normalized progress (0...1) for mismatched viewports.
-    func setWebScrollProgress(_ progress: CGFloat) {
-        guard let webView = webView, !webContainer.isHidden else { return }
-        let scroll = webView.scrollView
-        let maxY = max(0, scroll.contentSize.height - scroll.bounds.height)
-        let clampedProgress = min(max(progress, 0), 1)
-        let offset = CGPoint(x: scroll.contentOffset.x, y: clampedProgress * maxY)
-        if scroll.contentOffset != offset {
-            scroll.contentOffset = offset
-        }
+        viewport.apply(to: webView.scrollView)
     }
 
     /// Reloads the current page.
