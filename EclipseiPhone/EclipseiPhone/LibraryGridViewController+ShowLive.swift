@@ -248,7 +248,7 @@ extension LibraryGridViewController {
                 thumbnail: ScreensaverStore.poster
             )
         case .livePoll:
-            applyRemoteOverlayHeader(title: "QuestPoll", systemImage: "chart.bar.fill")
+            applyRemoteOverlayHeader(title: "Poll", systemImage: "chart.bar.fill")
         case .black, nil:
             liveHeader.configure(
                 with: nil, thumbnail: nil, isOnline: true, showsLiveBadge: true

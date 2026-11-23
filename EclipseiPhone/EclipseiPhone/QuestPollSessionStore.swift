@@ -49,7 +49,7 @@ final class QuestPollSessionStore {
         practiceDeckFragment = nil
         practiceCueIndex = 0
         // The room knows its real length; a card's cached count can be stale
-        // after the poll was edited on questpoll.com.
+        // after the poll was edited on polls.eclipseapp.com.
         if session.questionCount > 0 {
             self.questionCount = session.questionCount
         } else if let questionCount {

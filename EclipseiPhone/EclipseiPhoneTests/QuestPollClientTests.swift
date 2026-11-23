@@ -99,7 +99,7 @@ struct QuestPollClientTests {
     @Test func previewPageUsesPresentURL() {
         #expect(QuestPollConfig.previewPage.url == QuestPollConfig.presentURL)
         #expect(QuestPollConfig.previewPage.id == QuestPollConfig.previewPageId)
-        #expect(QuestPollConfig.previewPage.title == "QuestPoll")
+        #expect(QuestPollConfig.previewPage.title == "Poll")
     }
 
     @Test func practicePreviewURLUsesPollIdWithoutCode() {

@@ -216,6 +216,9 @@
   `alert.preferConfirmAction()` before it is presented; without a preferred action UIKit sends a keyboard's
   Return to Cancel. The camera and QR scanner sessions set `isMultitaskingCameraAccessEnabled` so the camera
   keeps running in Split View / resized windows (unconfirmed on a real iPad).
+- Polls naming (2026-11-23): the owner dropped the QuestPoll brand. On screen, the thing on stage is a "Poll", and the
+  web account/service is "Eclipse Polls" at polls.eclipseapp.com (Q&A audience link ask.eclipseapp.com/CODE).
+  questpoll.com / quest.eclipseapp.com still answer the API and forward pages. Code names (QuestPoll*, LivePoll*) stay.
 - Polls are made and edited in the app (iPhone/iPad, 2026-11-22): `QuestPollEditorViewController` (name, Poll / Quiz,
   time per question, question list) → `QuestPollQuestionEditorViewController` (text, 2–5 answers, right answer in a quiz).
   Reached from the poll list's + and pencil (`QuestPollPickerViewController`, also Settings → QuestPoll → My Polls in

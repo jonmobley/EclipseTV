@@ -26,7 +26,7 @@ extension LibraryGridViewController {
         return LivePollStore.shared.poll(id: membershipId)?.showId == showId
     }
 
-    /// Updates this Show's poll cards from questpoll.com (names and lengths
+    /// Updates this Show's poll cards from polls.eclipseapp.com (names and lengths
     /// edited there). At most once a minute; silent when offline or signed out.
     func refreshLivePollCardsFromWeb(showId: UUID) {
         let polls = LivePollStore.shared
@@ -102,7 +102,7 @@ extension LibraryGridViewController {
             promptLivePollSignIn { [weak self] in self?.practiceLivePoll(item) }
             return
         }
-        // The preview page can't sign in to questpoll.com, so the app fetches
+        // The preview page can't sign in to polls.eclipseapp.com, so the app fetches
         // the deck and hands it to the page.
         let busy = presentQuestPollBusy(message: "Loading poll…")
         Task { @MainActor [weak self] in
@@ -207,7 +207,7 @@ extension LibraryGridViewController {
     func applyQuestPollLiveHeader() {
         let code = QuestPollSessionStore.shared.session?.code
         let page = QuestPollConfig.previewPage(code: code)
-        let title = QuestPollSessionStore.shared.session?.deckTitle ?? "QuestPoll"
+        let title = QuestPollSessionStore.shared.session?.deckTitle ?? "Poll"
         let canShow = !WarmWebSessionPool.shared.isAdopted(pageId: page.id)
         if canShow {
             WarmWebSessionPool.shared.warmIfNeeded(for: page)
@@ -670,14 +670,14 @@ extension LibraryGridViewController {
         if canPresentQuestPollOverlay { return true }
         let message: String
         if TVLibraryStore.shared.isOnline {
-            message = "QuestPoll needs AirPlay or HDMI. EclipseTV stays on the library."
+            message = "Polls need AirPlay or HDMI. EclipseTV stays on the library."
         } else {
             // Name the Settings switch, not "the phone preview" — the user has to
             // find "Practice Mode" to act on this.
-            message = "QuestPoll needs AirPlay, HDMI, or Practice Mode."
+            message = "Polls need AirPlay, HDMI, or Practice Mode."
         }
         let alert = UIAlertController(
-            title: "QuestPoll", message: message, preferredStyle: .alert
+            title: "Poll", message: message, preferredStyle: .alert
         )
         alert.addAction(UIAlertAction(title: "OK", style: .default))
         present(alert, animated: true)

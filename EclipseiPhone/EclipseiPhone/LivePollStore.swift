@@ -62,7 +62,7 @@ final class LivePollStore {
         let item = ShowLivePoll(
             showId: showId,
             pollId: pollId,
-            title: trimmedTitle.isEmpty ? "QuestPoll" : trimmedTitle,
+            title: trimmedTitle.isEmpty ? "Poll" : trimmedTitle,
             questionCount: questionCount
         )
         polls.append(item)
@@ -83,13 +83,13 @@ final class LivePollStore {
         guard let index = polls.firstIndex(where: { $0.id == id }) else { return }
         let trimmed = summary.title.trimmingCharacters(in: .whitespacesAndNewlines)
         polls[index].pollId = summary.id
-        polls[index].title = trimmed.isEmpty ? "QuestPoll" : trimmed
+        polls[index].title = trimmed.isEmpty ? "Poll" : trimmed
         polls[index].questionCount = max(summary.questionCount, 1)
         persist()
         scheduleSaveIfNeeded(id: id)
     }
 
-    /// Updates a card's cached title / length from questpoll.com (the deck
+    /// Updates a card's cached title / length from polls.eclipseapp.com (the deck
     /// may have been edited there). No-op when nothing changed.
     func refresh(id: UUID, title: String, questionCount: Int) {
         guard let index = polls.firstIndex(where: { $0.id == id }) else { return }
@@ -107,13 +107,13 @@ final class LivePollStore {
 
     private var lastWebRefreshAt: Date?
 
-    /// Whether a questpoll.com refresh is due (once a minute).
+    /// Whether a polls.eclipseapp.com refresh is due (once a minute).
     func shouldRefreshFromWeb(now: Date = Date()) -> Bool {
         guard let lastWebRefreshAt else { return true }
         return now.timeIntervalSince(lastWebRefreshAt) >= 60
     }
 
-    /// Marks a questpoll.com refresh as started.
+    /// Marks a polls.eclipseapp.com refresh as started.
     func didStartWebRefresh(now: Date = Date()) {
         lastWebRefreshAt = now
     }
