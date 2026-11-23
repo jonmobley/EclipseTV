@@ -152,12 +152,12 @@
   `Prompter` type, so no iCloud schema or Mac change. `PrompterScript.showId` is really the script
   key. Copy to Show makes a new Prompter with a copy of the text. There is one `PrompterController`,
   so the TV shows whatever script is bound; opening a different Prompter while one is live asks first.
-- Prompter shape (2026-11-13): the Prompter screen has its own Landscape / Vertical menu (`PrompterLocalSettings.prefersVertical`,
-  this phone only). Vertical while Display Mode is Landscape makes the card 9:16, turns the phone upright, and shows an upright
-  9:16 column on the TV (`PrompterController.isVerticalOnLandscapeDisplay`); the menu is hidden in Vertical Display Mode.
-  Use `PrompterController.isVertical` / `canvasAspectRatio` for prompter layout, never `ExternalOutputSettings.isVerticalMode`.
+- Prompter shape (2026-11-23): the Prompter always takes the display's shape (`ExternalOutputSettings.outputAspectRatio`,
+  Vertical only when Display Mode is Vertical). The owner removed the Prompter's own Landscape / Vertical menu
+  ("it should just match the Show's screen"). The phone turns freely on the Prompter screen (`.allButUpsideDown`, no
+  forced rotation): on its side the card is large with one control row, upright it is smaller with the controls
+  stacked. Use `PrompterController.isVertical` / `canvasAspectRatio` for prompter layout.
   The blue reading-guide lines were removed (2026-11-13, owner found them confusing); the line read sits mid-stage.
-  The blue lines are the reading guide (the line being read), on purpose.
 - Camera Presets (2026-11-13): a Show tile = phone camera + one saved frame. Stored only as the surface token
   `__eclipse.tool.cameraPreset.<frameUUID>` (`ShowCameraPresetToken`, counts as a tool), so it syncs with the Show and
   older builds keep it. Saved from the Camera tile ⋯ → Save as Camera Preset, or by holding a frame in full-screen Camera.
