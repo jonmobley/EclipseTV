@@ -353,10 +353,13 @@ extension LibraryGridViewController {
         )
         if showOnScreen {
             presentQuestPollLive()
+            showPresentationToast(
+                session.mode == .qa ? "Rejoined the open Q&A" : "Rejoined room \(session.code)"
+            )
+        } else {
+            // "Start Without Showing" is for getting the join QR: same as a fresh start.
+            didOpenQuestPollOffScreen()
         }
-        showPresentationToast(
-            session.mode == .qa ? "Rejoined the open Q&A" : "Rejoined room \(session.code)"
-        )
         if session.mode == .qa {
             // The active-room lookup leaves out the question list.
             Task { @MainActor in
