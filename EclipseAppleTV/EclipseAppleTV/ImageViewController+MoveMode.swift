@@ -15,10 +15,13 @@ extension ImageViewController {
     @objc func handleLongPress(_ gesture: UILongPressGestureRecognizer) {
         // Only trigger once when gesture begins
         if gesture.state == .began {
-            guard !usesAlbumHome else { return }
             guard let cell = gesture.view as? ImageThumbnailCell else { 
                 logger.warning("🔴 Long press gesture not on ImageThumbnailCell")
                 return 
+            }
+            if usesAlbumHome {
+                handleCompanionLongPress(on: cell)
+                return
             }
             
             // CRITICAL: Get the actual index from collection view, not from cell.tag
@@ -62,15 +65,17 @@ extension ImageViewController {
     }
     
     // Show options menu with move functionality
-    internal func showDeleteMenu(forImageAt index: Int) {
+    internal func showDeleteMenu(forImageAt index: Int, allowsMove: Bool = true) {
         guard index < dataSource.count else { return }
         
         let alertController = UIAlertController(title: "Image Options", message: nil, preferredStyle: .actionSheet)
         
-        // Move option
-        alertController.addAction(UIAlertAction(title: "Move", style: .default) { [weak self] _ in
-            self?.startMoveMode(forImageAt: index)
-        })
+        // Move option (not inside a phone Show: the phone owns that order)
+        if allowsMove {
+            alertController.addAction(UIAlertAction(title: "Move", style: .default) { [weak self] _ in
+                self?.startMoveMode(forImageAt: index)
+            })
+        }
         
         // Delete option
         alertController.addAction(UIAlertAction(title: "Delete Image", style: .destructive) { [weak self] _ in
@@ -98,7 +103,11 @@ extension ImageViewController {
     }
 
     // Show video-specific options menu
-    internal func showVideoOptionsMenu(forVideoAt index: Int) {
+    internal func showVideoOptionsMenu(
+        forVideoAt index: Int,
+        cellIndexPath: IndexPath? = nil,
+        allowsMove: Bool = true
+    ) {
         guard index < dataSource.count else { return }
         
         guard let videoPath = dataSource.getPath(at: index) else { return }
@@ -138,7 +147,7 @@ extension ImageViewController {
             }
             
             // Update the cell to show the new indicator state
-            let indexPath = IndexPath(item: index, section: 0)
+            let indexPath = cellIndexPath ?? IndexPath(item: index, section: 0)
             if let cell = self.gridView.cellForItem(at: indexPath) as? ImageThumbnailCell {
                 // Get current settings
                 let duration = cell.getDuration()
@@ -176,7 +185,7 @@ extension ImageViewController {
             }
             
             // Update the cell to show the new indicator state
-            let indexPath = IndexPath(item: index, section: 0)
+            let indexPath = cellIndexPath ?? IndexPath(item: index, section: 0)
             if let cell = self.gridView.cellForItem(at: indexPath) as? ImageThumbnailCell {
                 // Get current settings
                 let duration = cell.getDuration()
@@ -191,10 +200,12 @@ extension ImageViewController {
         alertController.addAction(muteAction)
         alertController.addAction(loopAction)
         
-        // Move option
-        alertController.addAction(UIAlertAction(title: "Move", style: .default) { [weak self] _ in
-            self?.startMoveMode(forImageAt: index)
-        })
+        // Move option (not inside a phone Show: the phone owns that order)
+        if allowsMove {
+            alertController.addAction(UIAlertAction(title: "Move", style: .default) { [weak self] _ in
+                self?.startMoveMode(forImageAt: index)
+            })
+        }
         
         // Delete option
         alertController.addAction(UIAlertAction(title: "Delete Video", style: .destructive) { [weak self] _ in

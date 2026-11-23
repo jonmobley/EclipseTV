@@ -26,6 +26,7 @@ struct RemoteControlView: View {
             ScrollView {
                 VStack(spacing: 12) {
                     LivePreviewView(session: session)
+                    RemoteToolRow(session: session)
                     sourcePicker
                     MediaGridView(
                         items: showLibrary
@@ -58,12 +59,25 @@ struct RemoteControlView: View {
 
     // MARK: - Header (Show-page chrome)
 
-    /// Presentation menu pill + Blackout moon — same roles as Show header.
+    /// Presentation menu pill + Lock + Blackout moon — same roles as Show header.
     private var headerBar: some View {
         HStack(spacing: 8) {
             presentationMenu
             Spacer(minLength: 8)
-            blackoutButton
+            RemoteHeaderToggle(
+                systemImage: "lock.fill",
+                label: "Lock",
+                isOn: session.snapshot?.isLocked == true
+            ) {
+                session.send(.lock)
+            }
+            RemoteHeaderToggle(
+                systemImage: "moon.fill",
+                label: "Blackout",
+                isOn: session.snapshot?.isBlackout == true
+            ) {
+                session.send(.blackout)
+            }
         }
         .frame(height: 36)
     }
@@ -117,32 +131,6 @@ struct RemoteControlView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Presentation menu")
-    }
-
-    private var blackoutButton: some View {
-        let isOn = session.snapshot?.isBlackout == true
-        return Button {
-            session.send(.blackout)
-        } label: {
-            Image(systemName: "moon.fill")
-                .font(.system(size: 20, weight: .regular))
-                .foregroundStyle(isOn ? Color.white : Color.primary)
-                .frame(width: 44, height: 44)
-                .background(
-                    Capsule(style: .continuous)
-                        .fill(isOn ? Color.accentColor : Color.clear)
-                )
-                .overlay(
-                    Capsule(style: .continuous)
-                        .strokeBorder(
-                            isOn ? Color.clear : Color(uiColor: .separator),
-                            lineWidth: 1
-                        )
-                )
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Blackout")
-        .accessibilityValue(isOn ? "On" : "Off")
     }
 
     // MARK: - Source + transport

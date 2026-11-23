@@ -262,6 +262,7 @@ private extension ImageViewController {
               let path = dataSource.getPath(at: index) else { return }
         let media = MediaItem(path: path)
         cell.tag = indexPath.item
+        attachCompanionLongPress(to: cell)
         cell.configure(with: nil, isVideo: media.isVideo)
         let size = (gridView.collectionViewLayout as? UICollectionViewFlowLayout)?
             .itemSize ?? TVGridMetrics.fallbackItemSize(for: dataSource.activeLibraryMode)
