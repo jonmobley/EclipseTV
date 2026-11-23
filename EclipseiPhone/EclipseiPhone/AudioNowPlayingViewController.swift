@@ -81,7 +81,7 @@ final class AudioNowPlayingViewController: UIViewController {
         let control = UISwitch()
         control.accessibilityLabel = "Autoplay Next"
         control.accessibilityHint =
-            "When off, playback stops at the end of the current song"
+            "When off, playback stops at the end of the current song unless songs are in Up Next"
         control.translatesAutoresizingMaskIntoConstraints = false
         return control
     }()
@@ -104,6 +104,12 @@ final class AudioNowPlayingViewController: UIViewController {
     private var isScrubbing = false
     private var observer: NSObjectProtocol?
     private let cellReuseId = "queueCell"
+    private let upNextHeaderId = "upNextHeader"
+    /// Last queue drawn; the list reloads only when this changes (not on progress ticks).
+    private var lastQueueState: AudioPlayerController.QueueState?
+    /// Set while a drag reorder hands its result to the player, so the post it causes
+    /// doesn't reload rows the table has already moved.
+    private var isApplyingLocalMove = false
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -184,7 +190,16 @@ final class AudioNowPlayingViewController: UIViewController {
         tableView.dataSource = self
         tableView.delegate = self
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: cellReuseId)
-        tableView.rowHeight = 56
+        tableView.register(
+            UpNextHeaderView.self, forHeaderFooterViewReuseIdentifier: upNextHeaderId
+        )
+        // Up Next rows reorder by press-and-drag (no edit mode, so taps still play).
+        tableView.dragInteractionEnabled = true
+        tableView.dragDelegate = self
+        tableView.dropDelegate = self
+        // At least 56pt, taller when a row has an artist line (a fixed 56 clipped it).
+        tableView.rowHeight = UITableView.automaticDimension
+        tableView.estimatedRowHeight = 56
         tableView.tableFooterView = UIView()
         tableView.keyboardDismissMode = .onDrag
         tableView.alwaysBounceVertical = true
@@ -335,7 +350,13 @@ final class AudioNowPlayingViewController: UIViewController {
         playButton.setImage(UIImage(systemName: symbol, withConfiguration: large), for: .normal)
         playButton.accessibilityLabel = player.isPlaying ? "Pause" : "Play"
         playNextSwitch.isOn = player.playsNext
-        tableView.reloadData()
+        let queueState = player.queueState
+        if isApplyingLocalMove {
+            lastQueueState = queueState
+        } else if queueState != lastQueueState {
+            lastQueueState = queueState
+            tableView.reloadData()
+        }
     }
 
     private func format(_ seconds: TimeInterval) -> String {
@@ -367,18 +388,72 @@ final class AudioNowPlayingViewController: UIViewController {
 
 // MARK: - Queue Table
 
+/// Sections of the Now Playing list: songs lined up with Play Next / Add to Queue
+/// (only when there are some), then the playlist or Music list being played through.
+private enum NowPlayingSection {
+    case upNext
+    case playlist
+}
+
 extension AudioNowPlayingViewController: UITableViewDataSource, UITableViewDelegate {
 
+    private var sections: [NowPlayingSection] {
+        AudioPlayerController.shared.upNext.isEmpty ? [.playlist] : [.upNext, .playlist]
+    }
+
+    private func section(at index: Int) -> NowPlayingSection {
+        let all = sections
+        return all.indices.contains(index) ? all[index] : .playlist
+    }
+
+    func numberOfSections(in tableView: UITableView) -> Int {
+        sections.count
+    }
+
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        AudioPlayerController.shared.queue.count
+        let player = AudioPlayerController.shared
+        switch self.section(at: section) {
+        case .upNext: return player.upNext.count
+        case .playlist: return player.queue.count
+        }
+    }
+
+    /// Title of the playlist section: where the songs come from, and how many.
+    static func playlistSectionTitle(
+        playlistName: String?,
+        trackCount: Int,
+        hasUpNext: Bool
+    ) -> String {
+        let source = (playlistName?.isEmpty == false) ? playlistName! : "Music"
+        guard trackCount > 1 else { return hasUpNext ? "Then \(source)" : "Now Playing" }
+        let prefix = hasUpNext ? "Then " : ""
+        return "\(prefix)\(source) · \(trackCount) tracks"
     }
 
     func tableView(
         _ tableView: UITableView,
         titleForHeaderInSection section: Int
     ) -> String? {
-        let count = AudioPlayerController.shared.queue.count
-        return count > 1 ? "Up Next · \(count) tracks" : "Now Playing"
+        guard self.section(at: section) == .playlist else { return nil }
+        let player = AudioPlayerController.shared
+        return Self.playlistSectionTitle(
+            playlistName: player.playlistName,
+            trackCount: player.queue.count,
+            hasUpNext: !player.upNext.isEmpty
+        )
+    }
+
+    func tableView(
+        _ tableView: UITableView,
+        viewForHeaderInSection section: Int
+    ) -> UIView? {
+        guard self.section(at: section) == .upNext,
+              let header = tableView.dequeueReusableHeaderFooterView(
+                withIdentifier: upNextHeaderId
+              ) as? UpNextHeaderView
+        else { return nil }
+        header.configure(count: AudioPlayerController.shared.upNext.count)
+        return header
     }
 
     func tableView(
@@ -388,13 +463,24 @@ extension AudioNowPlayingViewController: UITableViewDataSource, UITableViewDeleg
         let cell = tableView.dequeueReusableCell(withIdentifier: cellReuseId, for: indexPath)
         var config = cell.defaultContentConfiguration()
         let player = AudioPlayerController.shared
-        let trackId = player.queue[indexPath.row]
-        let track = AudioStore.shared.track(id: trackId)
+        let isUpNext = section(at: indexPath.section) == .upNext
+        let ids = isUpNext ? player.upNext.trackIds : player.queue
+        guard ids.indices.contains(indexPath.row) else { return cell }
+        let track = AudioStore.shared.track(id: ids[indexPath.row])
         config.text = track?.title ?? "Missing Track"
-        config.secondaryText = track?.subtitle
+        let subtitle = track?.subtitle ?? ""
+        config.secondaryText = subtitle.isEmpty ? nil : subtitle
+        // Keep one-line rows at the old 56pt; rows with an artist grow to fit it.
+        if subtitle.isEmpty {
+            config.directionalLayoutMargins.top = 16
+            config.directionalLayoutMargins.bottom = 16
+        }
         config.image = UIImage(systemName: "music.note")
         config.imageProperties.tintColor = .secondaryLabel
-        let isCurrent = indexPath.row == player.currentIndex
+        // The playlist row is "current" only while it, not an Up Next song, is playing.
+        let isCurrent = !isUpNext
+            && !player.isPlayingFromUpNext
+            && indexPath.row == player.currentIndex
         config.textProperties.font = .systemFont(
             ofSize: 16, weight: isCurrent ? .semibold : .regular
         )
@@ -402,17 +488,193 @@ extension AudioNowPlayingViewController: UITableViewDataSource, UITableViewDeleg
         cell.contentConfiguration = config
         cell.accessoryType = isCurrent ? .checkmark : .none
         cell.selectionStyle = .default
+        cell.accessibilityCustomActions = isUpNext
+            ? upNextAccessibilityActions(row: indexPath.row, count: ids.count)
+            : nil
         return cell
     }
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
         let player = AudioPlayerController.shared
-        guard player.queue.indices.contains(indexPath.row) else { return }
-        if player.tapStopsPlayback(for: player.queue[indexPath.row]) {
-            player.stop()
-        } else {
-            player.play(at: indexPath.row)
+        switch section(at: indexPath.section) {
+        case .upNext:
+            player.playUpNext(at: indexPath.row)
+        case .playlist:
+            guard player.queue.indices.contains(indexPath.row) else { return }
+            let id = player.queue[indexPath.row]
+            if !player.isPlayingFromUpNext, player.tapStopsPlayback(for: id) {
+                player.stop()
+            } else {
+                player.play(at: indexPath.row)
+            }
         }
+    }
+
+    func tableView(
+        _ tableView: UITableView,
+        trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath
+    ) -> UISwipeActionsConfiguration? {
+        let player = AudioPlayerController.shared
+        switch section(at: indexPath.section) {
+        case .upNext:
+            guard player.upNext.trackIds.indices.contains(indexPath.row) else { return nil }
+            let id = player.upNext.trackIds[indexPath.row]
+            let remove = UIContextualAction(style: .destructive, title: "Remove") { _, _, done in
+                AudioPlayerController.shared.removeFromUpNext(id)
+                done(true)
+            }
+            return UISwipeActionsConfiguration(actions: [remove])
+        case .playlist:
+            return nil
+        }
+    }
+
+    func tableView(
+        _ tableView: UITableView,
+        leadingSwipeActionsConfigurationForRowAt indexPath: IndexPath
+    ) -> UISwipeActionsConfiguration? {
+        let player = AudioPlayerController.shared
+        guard section(at: indexPath.section) == .playlist,
+              player.queue.indices.contains(indexPath.row)
+        else { return nil }
+        return AudioQueueActions.leadingSwipe(for: player.queue[indexPath.row], host: self)
+    }
+
+    // MARK: Reorder (Up Next only)
+
+    func tableView(_ tableView: UITableView, canMoveRowAt indexPath: IndexPath) -> Bool {
+        section(at: indexPath.section) == .upNext
+    }
+
+    func tableView(
+        _ tableView: UITableView,
+        targetIndexPathForMoveFromRowAt sourceIndexPath: IndexPath,
+        toProposedIndexPath proposedIndexPath: IndexPath
+    ) -> IndexPath {
+        guard proposedIndexPath.section == sourceIndexPath.section else {
+            // Dragged past the end of Up Next: keep it in Up Next, at the nearest end.
+            let last = max(0, AudioPlayerController.shared.upNext.count - 1)
+            let row = proposedIndexPath.section < sourceIndexPath.section ? 0 : last
+            return IndexPath(row: row, section: sourceIndexPath.section)
+        }
+        return proposedIndexPath
+    }
+
+    func tableView(
+        _ tableView: UITableView,
+        moveRowAt sourceIndexPath: IndexPath,
+        to destinationIndexPath: IndexPath
+    ) {
+        isApplyingLocalMove = true
+        AudioPlayerController.shared.moveUpNext(
+            from: sourceIndexPath.row, to: destinationIndexPath.row
+        )
+        isApplyingLocalMove = false
+    }
+
+    private func upNextAccessibilityActions(row: Int, count: Int) -> [UIAccessibilityCustomAction] {
+        var actions: [UIAccessibilityCustomAction] = []
+        if row > 0 {
+            actions.append(UIAccessibilityCustomAction(name: "Move Up") { _ in
+                AudioPlayerController.shared.moveUpNext(from: row, to: row - 1)
+                return true
+            })
+        }
+        if row < count - 1 {
+            actions.append(UIAccessibilityCustomAction(name: "Move Down") { _ in
+                AudioPlayerController.shared.moveUpNext(from: row, to: row + 1)
+                return true
+            })
+        }
+        actions.append(UIAccessibilityCustomAction(
+            name: AudioQueueActions.removeFromUpNextTitle
+        ) { _ in
+            let ids = AudioPlayerController.shared.upNext.trackIds
+            guard ids.indices.contains(row) else { return false }
+            AudioPlayerController.shared.removeFromUpNext(ids[row])
+            return true
+        })
+        return actions
+    }
+}
+
+// MARK: - Drag to reorder Up Next
+
+extension AudioNowPlayingViewController: UITableViewDragDelegate, UITableViewDropDelegate {
+
+    func tableView(
+        _ tableView: UITableView,
+        itemsForBeginning session: UIDragSession,
+        at indexPath: IndexPath
+    ) -> [UIDragItem] {
+        guard section(at: indexPath.section) == .upNext else { return [] }
+        let item = UIDragItem(itemProvider: NSItemProvider())
+        item.localObject = indexPath
+        return [item]
+    }
+
+    func tableView(
+        _ tableView: UITableView,
+        dropSessionDidUpdate session: UIDropSession,
+        withDestinationIndexPath destinationIndexPath: IndexPath?
+    ) -> UITableViewDropProposal {
+        guard session.localDragSession != nil else {
+            return UITableViewDropProposal(operation: .forbidden)
+        }
+        return UITableViewDropProposal(operation: .move, intent: .insertAtDestinationIndexPath)
+    }
+
+    func tableView(
+        _ tableView: UITableView,
+        performDropWith coordinator: UITableViewDropCoordinator
+    ) {
+        // Local reorders go through `moveRowAt`.
+    }
+}
+
+/// "Up Next" section header with a Clear button (same words as the Mac's Up Next).
+private final class UpNextHeaderView: UITableViewHeaderFooterView {
+
+    private let titleLabel = UILabel()
+    private let clearButton = UIButton(type: .system)
+
+    override init(reuseIdentifier: String?) {
+        super.init(reuseIdentifier: reuseIdentifier)
+        // Own label, not a content configuration: a configuration's view sits over
+        // added subviews and hid the Clear button.
+        let style = UIListContentConfiguration.plainHeader().textProperties
+        titleLabel.font = style.font
+        titleLabel.textColor = style.color
+        titleLabel.adjustsFontForContentSizeCategory = true
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(titleLabel)
+        clearButton.setTitle("Clear", for: .normal)
+        clearButton.titleLabel?.font = .preferredFont(forTextStyle: .subheadline)
+        clearButton.titleLabel?.adjustsFontForContentSizeCategory = true
+        clearButton.accessibilityLabel = "Clear Up Next"
+        clearButton.translatesAutoresizingMaskIntoConstraints = false
+        clearButton.addAction(UIAction { _ in
+            AudioPlayerController.shared.clearUpNext()
+        }, for: .touchUpInside)
+        contentView.addSubview(clearButton)
+        let margins = contentView.layoutMarginsGuide
+        NSLayoutConstraint.activate([
+            titleLabel.leadingAnchor.constraint(equalTo: margins.leadingAnchor),
+            titleLabel.topAnchor.constraint(equalTo: margins.topAnchor),
+            titleLabel.bottomAnchor.constraint(equalTo: margins.bottomAnchor),
+            titleLabel.trailingAnchor.constraint(
+                lessThanOrEqualTo: clearButton.leadingAnchor, constant: -8
+            ),
+            clearButton.trailingAnchor.constraint(equalTo: margins.trailingAnchor),
+            clearButton.centerYAnchor.constraint(equalTo: titleLabel.centerYAnchor)
+        ])
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    func configure(count: Int) {
+        titleLabel.text = count > 1 ? "Up Next · \(count) tracks" : "Up Next"
     }
 }

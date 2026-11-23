@@ -82,6 +82,13 @@
   `ExternalOutputOrientationFixture` now clears any selected custom size for its body (also covers simulators with a
   size saved by hand). A local test run reading 512×786 / "Lobby wall" comes from that simulator's own saved settings.
 - Crash reports: `CrashReporting.swift` in each app sends crashes and freezes to Sentry projects `eclipse-iphone` and `eclipse-appletv` (Release builds only; `scrub` keeps crash type, code location and device model, and drops all free text and activity trails; the `0.0.0.0` user address is what stops Sentry reading a city from the connection, since neither its IP setting nor `infer_ip` did). Upload symbols after each archive so reports are readable. App Privacy answers must list Crash Data and Other Diagnostic Data, not linked to the user, no tracking.
+- Music Up Next (iPhone, 2026-11-23, `MusicUpNext`, `AudioQueueActions`): Play Next / Add to Queue on song rows
+  (menu + leading swipe), same rules as the Mac's `MusicQueue` (a song at most once; Play Next puts it first, Add to
+  Queue last). Offered only while music is loaded (`AudioPlayerController.canQueue`). A queued song playing sets
+  `queuedTrackId` and leaves `currentIndex` on the interrupted playlist song, so the playlist resumes at index+1.
+  Queued songs play even with Autoplay Next off. Up Next is session-only (cleared by `stop()`), reorderable by drag in
+  Now Playing (VoiceOver: Move Up / Move Down). Now Playing reloads its list only when `queueState` changes, since the
+  player posts its change notice twice a second while playing (a reload every tick cancelled swipes and drags).
 
 ## TestFlight builds
 
