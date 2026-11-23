@@ -55,6 +55,7 @@ extension CloudKitSyncEngine {
         CountdownStore.shared.markAllNeedsUpload()
         LivePollStore.shared.markAllNeedsUpload()
         PrompterScriptStore.shared.markAllNeedsUpload()
+        markMusicNeedsUpload()
         CameraFrameStore.shared.markAllNeedsUpload()
         CameraAlternateStillStore.shared.markAllNeedsUpload()
     }

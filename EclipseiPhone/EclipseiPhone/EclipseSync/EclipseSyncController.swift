@@ -128,6 +128,7 @@ final class EclipseSyncController {
             PrompterScriptStore.shared.purgeRemote(showId: showId)
             return
         }
+        if applyRemoteMusicDeletion(recordName: recordName) { return }
 
         if let uuid = UUID(uuidString: recordName) {
             if LocalAlbumStore.shared.album(id: uuid) != nil {
@@ -168,5 +169,27 @@ final class EclipseSyncController {
             return
         }
         CaptureStore.shared.purge(id: recordName)
+    }
+}
+
+// MARK: - Music deletions
+
+extension EclipseSyncController {
+
+    /// Applies a song (`audio-`) or playlist (`playlist-`) tombstone.
+    ///
+    /// Tombstones have no record type, so the name prefix picks the store. A song
+    /// also loses its file and its place in every local playlist.
+    /// - Returns: False when `recordName` is not a music record.
+    func applyRemoteMusicDeletion(recordName: String) -> Bool {
+        if let id = CloudKitSchema.audioTrackId(fromRecordName: recordName) {
+            AudioStore.shared.purgeRemote(id: id)
+            return true
+        }
+        if let id = CloudKitSchema.audioPlaylistId(fromRecordName: recordName) {
+            AudioPlaylistStore.shared.purgeRemote(id: id)
+            return true
+        }
+        return false
     }
 }

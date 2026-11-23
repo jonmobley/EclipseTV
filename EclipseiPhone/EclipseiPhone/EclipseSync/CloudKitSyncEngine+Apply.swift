@@ -85,7 +85,7 @@ extension CloudKitSyncEngine {
         case CloudKitSchema.RecordType.cutawayStill:
             applyRemoteCutaway(record)
         default:
-            break
+            applyRemoteMusic(record)
         }
     }
 

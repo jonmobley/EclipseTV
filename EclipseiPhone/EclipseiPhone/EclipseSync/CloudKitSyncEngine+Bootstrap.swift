@@ -138,6 +138,8 @@ extension CloudKitSyncEngine {
         CameraAlternateStillStore.shared.markAllNeedsUpload()
         // Scripts are text-only, so a re-upload into the new zone is cheap.
         PrompterScriptStore.shared.markAllNeedsUpload()
+        // Songs go back with their files: the new zone has no assets.
+        markMusicNeedsUpload()
         engine.state.add(pendingDatabaseChanges: [
             .saveZone(CKRecordZone(zoneID: CloudKitSchema.zoneID))
         ])
