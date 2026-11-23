@@ -5,8 +5,10 @@
 //  Copyright © 2026 Moxie LLC. All rights reserved.
 //
 
+import CoreImage
 import Foundation
 import LivePollKit
+import UIKit
 import Testing
 @testable import EclipseiPhone
 
@@ -48,10 +50,10 @@ struct QuestPollQATests {
             {"id":"b","text":"Second?","from":null,"askedAt":2,"status":"new"}
             """))
         #expect(store.unseenQACount == 2)
-        #expect(store.tileSubtitle == "QA1234 · 2 new")
+        #expect(store.tileSubtitle == "Active · 2 new")
         store.markQAQuestionsSeen()
         #expect(store.unseenQACount == 0)
-        #expect(store.tileSubtitle == "QA1234")
+        #expect(store.tileSubtitle == "Active")
     }
 
     @Test func questionListChangesUpdateTheCardNotTheRibbon() throws {
@@ -155,5 +157,19 @@ struct QuestPollQATests {
         let message = QuestPollSessionStore.newQuestionsAnnouncement([long]) ?? ""
         #expect(message.hasSuffix("…”"))
         #expect(message.count < 80)
+    }
+
+    @Test func savedJoinQRPictureScansBackToTheJoinLink() throws {
+        let link = "https://questpoll.com/join/QA1234"
+        let png = try #require(QuestPollJoinQRViewController.qrPNG(for: link))
+        #expect(png.cgImage != nil)
+        #expect(png.size == CGSize(width: 1024, height: 1024))
+        let image = try #require(CIImage(image: png))
+        let detector = try #require(CIDetector(
+            ofType: CIDetectorTypeQRCode, context: nil,
+            options: [CIDetectorAccuracy: CIDetectorAccuracyHigh]
+        ))
+        let found = detector.features(in: image).compactMap { ($0 as? CIQRCodeFeature)?.messageString }
+        #expect(found == [link])
     }
 }

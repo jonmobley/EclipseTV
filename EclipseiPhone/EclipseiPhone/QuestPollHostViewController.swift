@@ -432,7 +432,7 @@ final class QuestPollHostViewController: UIViewController {
     private func presentJoinQR() {
         guard let code = QuestPollSessionStore.shared.session?.code else { return }
         let url = QuestPollConfig.joinURL(code: code)
-        let sheet = QuestPollJoinQRViewController(code: code, joinURL: url)
+        let sheet = QuestPollJoinQRViewController(code: code, joinURL: url, showsLifetimeNote: false)
         let nav = UINavigationController(rootViewController: sheet)
         nav.modalPresentationStyle = .formSheet
         present(nav, animated: true)

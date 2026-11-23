@@ -36,7 +36,7 @@ final class HomeContinueCell: UICollectionViewCell {
     private let titleLabel = UILabel()
     private let detailLabel = UILabel()
     private let actionButton = UIButton(type: .system)
-    /// Text beside the button (Continue) or above it (Get Started).
+    /// Text above the button (Get Started); Continue has no button.
     private let contentStack = UIStackView()
     private var textFullWidth: NSLayoutConstraint?
     private var cardWidth: NSLayoutConstraint?
@@ -81,18 +81,20 @@ final class HomeContinueCell: UICollectionViewCell {
             detailLabel.text = detail
             coverView.image = cover
             coverView.isHidden = cover == nil
-            button.title = "Open"
-            button.image = UIImage(systemName: "play.fill")
+            // No button: the whole card opens the Show (owner found the big
+            // white "Open" pill heavy, 2026-11-23), so the text gets the width.
+            actionButton.isHidden = true
             accessibilityLabel = "Continue \(name)"
             accessibilityValue = detail
             accessibilityHint = "Opens this Show."
-            setButtonBelowText(false)
+            setButtonBelowText(true)
         case .firstShow:
             kickerLabel.text = "GET STARTED"
             titleLabel.text = "Create your first Show"
             detailLabel.text = "Put photos, videos, websites and polls in order, then present them."
             coverView.image = nil
             coverView.isHidden = true
+            actionButton.isHidden = false
             button.title = "New Show"
             button.image = UIImage(systemName: "plus")
             accessibilityLabel = "Create your first Show"
@@ -128,11 +130,8 @@ final class HomeContinueCell: UICollectionViewCell {
         card.addSubview(coverView)
 
         // Keeps white text readable over any cover.
-        scrim.colors = [
-            UIColor.black.withAlphaComponent(0.05).cgColor,
-            UIColor.black.withAlphaComponent(0.75).cgColor
-        ]
-        scrim.locations = [0.3, 1]
+        scrim.colors = GradientView.titleScrimColors.map(\.cgColor)
+        scrim.locations = [0.3, 0.68, 1]
         card.layer.addSublayer(scrim)
 
         kickerLabel.font = .scaled(12, weight: .semibold, relativeTo: .caption1, maximumPointSize: 18)
@@ -205,7 +204,7 @@ final class HomeContinueCell: UICollectionViewCell {
         return 0
     }
 
-    // The whole card is the button for VoiceOver and for taps outside "Open".
+    // The whole card is the button, for VoiceOver and for taps.
     override func accessibilityActivate() -> Bool {
         onPrimaryAction?()
         return true

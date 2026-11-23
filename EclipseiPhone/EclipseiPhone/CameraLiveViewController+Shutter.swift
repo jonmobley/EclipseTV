@@ -83,10 +83,7 @@ extension CameraLiveViewController {
             return
         }
 
-        let practice = captureDestinationShowId.flatMap {
-            LocalAlbumStore.shared.album(id: $0)?.previewsWhenDisconnected
-        } ?? false
-        guard LiveOutputRouting.canMarkLive(practiceMode: practice) else { return }
+        guard canGoLiveFromCamera else { return }
 
         // Mirror first — AirPlay's attach steals the one preview connection.
         if mgr.isConnected {
@@ -96,6 +93,15 @@ extension CameraLiveViewController {
         Haptics.impactMedium()
         refreshLiveChrome()
         startAlwaysLiveRecordingIfNeeded()
+    }
+
+    /// A TV (AirPlay or Apple TV), Practice Mode or a remote operator can take
+    /// the camera live; with none of them the stage is only a viewfinder.
+    var canGoLiveFromCamera: Bool {
+        let practice = captureDestinationShowId.flatMap {
+            LocalAlbumStore.shared.album(id: $0)?.previewsWhenDisconnected
+        } ?? false
+        return LiveOutputRouting.canMarkLive(practiceMode: practice)
     }
 
     /// Blink the panel and save a still to Photos (and the Eclipse library).

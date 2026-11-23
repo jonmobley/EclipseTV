@@ -380,9 +380,23 @@ extension LibraryGridViewController {
         return UIMenu(children: children)
     }
 
-    /// Q&A card ⋯ menu: Questions, End, Arrange, Select, Remove.
+    /// Q&A card ⋯ menu: Start Without Showing (no room yet), or Questions,
+    /// Join QR Code, Show QR on Screen, End; then Arrange, Select, Remove.
+    ///
+    /// A tile tap opens the room *and* puts the join QR on screen. Hosts with
+    /// a QR already printed or on slides want the room open without that, so
+    /// the menu can start it off screen, and the QR can be saved or shared.
     private func qaContextMenu(_ item: ShowLivePoll, ownsRoom: Bool) -> UIMenu {
         var children: [UIMenuElement] = []
+        if !ownsRoom {
+            children.append(UIAction(
+                title: "Start Without Showing",
+                subtitle: "Takes questions; the screen stays as it is",
+                image: UIImage(systemName: "play.circle")
+            ) { [weak self] _ in
+                self?.confirmStartOrReplaceQuestPoll(item, showOnScreen: false)
+            })
+        }
         if ownsRoom {
             children.append(UIAction(
                 title: "Questions",
@@ -390,6 +404,21 @@ extension LibraryGridViewController {
             ) { [weak self] _ in
                 self?.presentQuestPollHostController()
             })
+            children.append(UIAction(
+                title: "Join QR Code…",
+                subtitle: "Save or share it",
+                image: UIImage(systemName: "qrcode")
+            ) { [weak self] _ in
+                self?.presentQuestPollJoinQR()
+            })
+            if !ExternalDisplayManager.shared.isQuestPollLive {
+                children.append(UIAction(
+                    title: "Show QR on Screen",
+                    image: UIImage(systemName: "tv")
+                ) { [weak self] _ in
+                    self?.presentQuestPollLive()
+                })
+            }
             children.append(UIAction(
                 title: "End Q&A",
                 image: UIImage(systemName: "stop.circle"),
@@ -509,6 +538,26 @@ extension LibraryGridViewController {
                 self?.confirmEndQuestPoll()
             }
         )
+        present(nav, animated: true)
+    }
+
+    /// After "Start Without Showing": the room is open, nothing on screen
+    /// changed. Opens the join QR so the host can save or share it.
+    func didOpenQuestPollOffScreen() {
+        Haptics.impactLight()
+        reloadLivePollTilesInPlace()
+        showPresentationToast("Q&A is open. The screen didn't change.", duration: 3)
+        presentQuestPollJoinQR()
+    }
+
+    /// Full-size join QR for the open room, with Save / Share.
+    func presentQuestPollJoinQR() {
+        guard let code = QuestPollSessionStore.shared.session?.code else { return }
+        let sheet = QuestPollJoinQRViewController(
+            code: code, joinURL: QuestPollConfig.joinURL(code: code)
+        )
+        let nav = UINavigationController(rootViewController: sheet)
+        nav.modalPresentationStyle = .formSheet
         present(nav, animated: true)
     }
 

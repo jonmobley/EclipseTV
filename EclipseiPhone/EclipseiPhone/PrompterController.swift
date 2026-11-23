@@ -97,21 +97,12 @@ final class PrompterController {
 
     var canPlay: Bool { !script.isEmpty }
 
-    /// The Prompter's own Vertical choice (see `PrompterLocalSettings.prefersVertical`).
-    var prefersVertical: Bool { settings.prefersVertical }
+    /// True when the script is laid out on a 9:16 canvas. The Prompter always takes the
+    /// display's shape (Display Mode, custom screen size); it has no shape of its own.
+    var isVertical: Bool { ExternalOutputSettings.isVerticalMode }
 
-    /// True when the script is laid out on a 9:16 canvas: Display Mode is Vertical, or
-    /// the Prompter was switched to Vertical on its own.
-    var isVertical: Bool { ExternalOutputSettings.isVerticalMode || settings.prefersVertical }
-
-    /// True when the Prompter is 9:16 although Display Mode is Landscape, so the
-    /// display shows it as an upright 9:16 column instead of filling the screen.
-    var isVerticalOnLandscapeDisplay: Bool { settings.prefersVertical && !ExternalOutputSettings.isVerticalMode }
-
-    /// Width ÷ height of the Prompter's canvas.
-    var canvasAspectRatio: CGFloat {
-        isVerticalOnLandscapeDisplay ? 9.0 / 16.0 : ExternalOutputSettings.outputAspectRatio
-    }
+    /// Width ÷ height of the Prompter's canvas: the display's own.
+    var canvasAspectRatio: CGFloat { ExternalOutputSettings.outputAspectRatio }
 
     // MARK: - Private
 
@@ -238,17 +229,6 @@ final class PrompterController {
         let anchor = readingAnchor
         fontSize = next
         settings.fontSize = next
-        rebuildLayout(preserving: anchor)
-        postChange()
-        publishOffset()
-    }
-
-    /// Switches the Prompter between its own Vertical (9:16) and Landscape shape.
-    /// The reading position is kept.
-    func setPrefersVertical(_ vertical: Bool) {
-        guard vertical != settings.prefersVertical else { return }
-        let anchor = readingAnchor
-        settings.prefersVertical = vertical
         rebuildLayout(preserving: anchor)
         postChange()
         publishOffset()

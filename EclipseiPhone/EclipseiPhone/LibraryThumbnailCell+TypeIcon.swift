@@ -47,7 +47,8 @@ extension LibraryThumbnailCell {
     func refreshTypeIconVisibility() {
         let hasArt = imageView.image != nil && imageView.alpha > 0.5
         let allowEmpty = contentTypeIcon?.showsWithoutThumbnail == true
-        let show = contentTypeIcon?.showsOnThumbnail == true
+        let show = ThumbnailTypeIconView.showsOnTiles
+            && contentTypeIcon?.showsOnThumbnail == true
             && (hasArt || allowEmpty)
         typeIconOverlay.apply(show ? contentTypeIcon : nil)
         if show {

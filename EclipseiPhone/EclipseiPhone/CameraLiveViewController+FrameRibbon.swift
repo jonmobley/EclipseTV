@@ -116,7 +116,7 @@ extension CameraLiveViewController: UICollectionViewDataSource, UICollectionView
         let entries = frameRibbonEntries
         guard entries.indices.contains(indexPath.item) else { return cell }
         let entry = entries[indexPath.item]
-        cell.configure(image: pictureImage(entry), isLive: pictureIsLive(entry), isFrame: entry.isFrame)
+        cell.configure(image: pictureImage(entry), isOn: pictureIsLive(entry), isFrame: entry.isFrame)
         return cell
     }
 
@@ -193,6 +193,73 @@ extension CameraLiveViewController: UICollectionViewDataSource, UICollectionView
     }
 }
 
+// MARK: - Frame "ON" Badge
+
+/// Marks a frame that is switched on over the camera picture.
+///
+/// Frames never take the blue outline: blue means "on the TV", and a frame is
+/// only a layer on the camera, which may not be on the TV at all (2026-11-23).
+final class CameraFrameOnBadge: UIView {
+    private let iconView = UIImageView()
+    private let label = UILabel()
+    private let stack = UIStackView()
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        backgroundColor = UIColor.black.withAlphaComponent(0.65)
+        layer.cornerCurve = .continuous
+        isUserInteractionEnabled = false
+        let config = UIImage.SymbolConfiguration(pointSize: 10, weight: .bold)
+        iconView.image = UIImage(systemName: "checkmark", withConfiguration: config)
+        iconView.tintColor = .white
+        iconView.contentMode = .scaleAspectFit
+        label.text = "ON"
+        label.font = .systemFont(ofSize: 11, weight: .bold)
+        label.textColor = .white
+        stack.axis = .horizontal
+        stack.spacing = 3
+        stack.alignment = .center
+        stack.addArrangedSubview(iconView)
+        stack.addArrangedSubview(label)
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 7),
+            stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -7),
+            stack.topAnchor.constraint(equalTo: topAnchor, constant: 3),
+            stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -3)
+        ])
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    /// Small ribbon thumbs show the check only; the word needs a Show-sized tile.
+    func setCompact(_ compact: Bool) {
+        label.isHidden = compact
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        layer.cornerRadius = bounds.height / 2
+    }
+
+    /// Adds a hidden badge to the top-leading corner of `host`.
+    static func install(in host: UIView, inset: CGFloat = 6) -> CameraFrameOnBadge {
+        let badge = CameraFrameOnBadge()
+        badge.isHidden = true
+        badge.translatesAutoresizingMaskIntoConstraints = false
+        host.addSubview(badge)
+        NSLayoutConstraint.activate([
+            badge.leadingAnchor.constraint(equalTo: host.leadingAnchor, constant: inset),
+            badge.topAnchor.constraint(equalTo: host.topAnchor, constant: inset),
+            badge.heightAnchor.constraint(equalToConstant: 20)
+        ])
+        return badge
+    }
+}
+
 // MARK: - Ribbon Cell
 
 final class CameraFrameRibbonCell: UICollectionViewCell {
@@ -211,6 +278,9 @@ final class CameraFrameRibbonCell: UICollectionViewCell {
 
     /// ⋯ on Show-sized grid tiles only; hidden on the small in-panel ribbon.
     private lazy var moreButton = CameraTileMoreButton.install(in: contentView)
+
+    /// "✓ ON" on a frame that is switched on over the camera.
+    private lazy var onBadge = CameraFrameOnBadge.install(in: contentView)
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -244,18 +314,42 @@ final class CameraFrameRibbonCell: UICollectionViewCell {
     }
 
     /// Shows a tile. Frames sit on a dark checkerboard so see-through areas show.
-    func configure(image: UIImage?, isLive: Bool, isFrame: Bool = true) {
+    ///
+    /// - Parameter isOn: for a frame, switched on over the camera (shown with the
+    ///   ON badge, never the blue outline); for a picture, on the TV now (blue).
+    func configure(image: UIImage?, isOn: Bool, isFrame: Bool = true) {
         imageView.image = image
         imageView.contentMode = isFrame ? .scaleAspectFit : .scaleAspectFill
         imageView.backgroundColor = isFrame ? .transparencyCheckerboard : .mediaPlaceholder
-        imageView.layer.borderWidth = isLive ? 3 : 1
-        imageView.layer.borderColor = isLive
-            ? UIColor.accent.cgColor
+        let showsBlue = Self.showsLiveOutline(isOn: isOn, isFrame: isFrame)
+        imageView.layer.borderWidth = showsBlue ? 3 : 1
+        imageView.layer.borderColor = showsBlue
+            ? UIColor.liveStroke.cgColor
             : UIColor.white.withAlphaComponent(0.35).cgColor
+        onBadge.isHidden = !Self.showsOnBadge(isOn: isOn, isFrame: isFrame)
+        contentView.bringSubviewToFront(onBadge)
         accessibilityLabel = isFrame ? "Frame overlay" : "Picture"
-        accessibilityValue = isLive ? "On camera" : "Off"
-        accessibilityHint = isLive
-            ? "Tap to hide this overlay"
-            : "Tap to show this overlay on the camera"
+        if isFrame {
+            accessibilityValue = isOn ? "On" : "Off"
+            accessibilityHint = isOn
+                ? "Tap to take this frame off the camera"
+                : "Tap to put this frame on the camera"
+        } else {
+            accessibilityValue = isOn ? "On the TV" : "Off"
+            accessibilityHint = isOn
+                ? "Tap to go back to the camera"
+                : "Tap to show this picture on the TV"
+        }
     }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        onBadge.setCompact(bounds.width < 100)
+    }
+
+    /// Blue is reserved for what the TV shows; a frame never gets it.
+    static func showsLiveOutline(isOn: Bool, isFrame: Bool) -> Bool { isOn && !isFrame }
+
+    /// A frame that is on gets the ON badge instead of an outline.
+    static func showsOnBadge(isOn: Bool, isFrame: Bool) -> Bool { isOn && isFrame }
 }

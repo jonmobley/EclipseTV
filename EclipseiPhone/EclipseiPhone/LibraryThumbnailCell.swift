@@ -16,6 +16,10 @@ final class LibraryThumbnailCell: UICollectionViewCell {
 
     /// Rounded media / tool surface (titles overlay the bottom with a fade).
     let cardView = UIView()
+    private var frameOnBadgeIsLoaded = false
+
+    /// "✓ ON" for a camera frame switched on (Show camera ribbon only).
+    private lazy var frameOnBadge = CameraFrameOnBadge.install(in: cardView, inset: 8)
     let imageView = UIImageView()
     let placeholderIcon = UIImageView()
     let captionLabel = UILabel()
@@ -101,11 +105,8 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         placeholderIcon.translatesAutoresizingMaskIntoConstraints = false
         cardView.addSubview(placeholderIcon)
 
-        captionScrimView.colors = [
-            UIColor.clear,
-            UIColor.black.withAlphaComponent(0.72)
-        ]
-        captionScrimView.locations = [0, 1]
+        captionScrimView.colors = GradientView.titleScrimColors
+        captionScrimView.locations = [0, 0.55, 1]
         captionScrimView.isHidden = true
         captionScrimView.isUserInteractionEnabled = false
         captionScrimView.translatesAutoresizingMaskIntoConstraints = false
@@ -550,7 +551,19 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         super.prepareForReuse()
         resetChrome()
         setUpNext(false)
+        setFrameOn(false)
+        // The camera ribbon sets On / Off; a recycled tile must not keep saying it.
+        accessibilityValue = nil
         cardView.backgroundColor = .secondarySystemBackground
+    }
+
+    /// Shows the ON badge for a camera frame that is on over the camera.
+    func setFrameOn(_ on: Bool) {
+        // Never build the badge just to hide it.
+        guard on || frameOnBadgeIsLoaded else { return }
+        frameOnBadgeIsLoaded = true
+        frameOnBadge.isHidden = !on
+        if on { cardView.bringSubviewToFront(frameOnBadge) }
     }
 
     // MARK: - Helpers
@@ -578,6 +591,16 @@ final class PaddedLabel: UILabel {
 
 /// Vertical `CAGradientLayer` host for caption readability scrims.
 final class GradientView: UIView {
+    /// Shade behind a white title at the bottom of a picture: clear, then dark enough
+    /// where the words sit that they read on a white cover (a plain clear-to-dark ramp
+    /// was only half strength at the title, about 2:1 on a white website thumbnail).
+    /// Pair with three `locations`; the middle one is where the title's top edge sits.
+    static let titleScrimColors: [UIColor] = [
+        .clear,
+        UIColor.black.withAlphaComponent(0.62),
+        UIColor.black.withAlphaComponent(0.8)
+    ]
+
     var colors: [UIColor] = [] {
         didSet { updateColors() }
     }

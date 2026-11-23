@@ -73,6 +73,8 @@ struct HomeHeaderNavSelection: Equatable {
     var isShowMode: Bool
     var isMusicPinned: Bool
     var showTitle: String
+    /// The Media Library page is in front (its own copy of the tabs shows this).
+    var isLibrary = false
 
     /// Home when no Show is open.
     static let home = HomeHeaderNavSelection(
@@ -197,9 +199,9 @@ final class HomeHeaderNavTabs: UIView {
         selection: HomeHeaderNavSelection
     ) -> Bool {
         switch destination {
-        case .home: return !selection.isShowMode
-        case .show: return selection.isShowMode
-        case .library: return false
+        case .home: return !selection.isShowMode && !selection.isLibrary
+        case .show: return selection.isShowMode && !selection.isLibrary
+        case .library: return selection.isLibrary
         case .music: return selection.isMusicPinned
         }
     }
@@ -212,11 +214,12 @@ final class HomeHeaderNavTabs: UIView {
         case .home:
             return "Returns to Home"
         case .show:
+            if selection.isLibrary && selection.isShowMode { return "Returns to the Show" }
             return selection.isShowMode
                 ? "Opens the Shows list"
                 : "Opens a Show"
         case .library:
-            return "Opens the media Library"
+            return selection.isLibrary ? "" : "Opens the media Library"
         case .music:
             return "Shows Music"
         }

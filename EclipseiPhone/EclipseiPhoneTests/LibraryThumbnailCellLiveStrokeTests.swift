@@ -79,7 +79,7 @@ struct LibraryThumbnailCellLiveStrokeTests {
         let cell = makeCell()
         cell.configureSpecial(
             title: "Runsheet",
-            systemImage: "doc.richtext",
+            systemImage: "doc.text",
             thumbnail: nil,
             fillColor: .specialTile,
             isLive: false

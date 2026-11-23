@@ -12,10 +12,13 @@ final class QuestPollJoinQRViewController: UIViewController {
 
     private let code: String
     private let joinURL: URL
+    /// Q&A rooms: say the QR stops working when the room ends.
+    private let showsLifetimeNote: Bool
 
-    init(code: String, joinURL: URL) {
+    init(code: String, joinURL: URL, showsLifetimeNote: Bool = true) {
         self.code = code
         self.joinURL = joinURL
+        self.showsLifetimeNote = showsLifetimeNote
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -33,17 +36,20 @@ final class QuestPollJoinQRViewController: UIViewController {
                 self?.dismiss(animated: true)
             }
         )
-        // Share sheet covers Copy, Messages, AirDrop — one place for the link.
+        // Share sheet covers Save Image, Copy, Messages, AirDrop: the QR
+        // picture and the link in one place.
         let share = UIBarButtonItem(
             systemItem: .action,
             primaryAction: UIAction { [weak self] _ in
-                self?.shareLink()
+                self?.shareQR()
             }
         )
-        share.accessibilityLabel = "Share Join Link"
+        share.accessibilityLabel = "Save or Share QR Code"
         navigationItem.leftBarButtonItem = share
 
         let imageView = UIImageView(image: Self.qrImage(for: joinURL.absoluteString))
+        imageView.isUserInteractionEnabled = true
+        imageView.addInteraction(UIContextMenuInteraction(delegate: self))
         imageView.contentMode = .scaleAspectFit
         imageView.backgroundColor = .white
         imageView.layer.cornerRadius = CornerRadii.card
@@ -67,7 +73,17 @@ final class QuestPollJoinQRViewController: UIViewController {
 
         // Code + link read as one block; the QR sits above it in portrait and
         // beside it in landscape, where 240pt plus the text was taller than the screen.
-        let textStack = UIStackView(arrangedSubviews: [codeLabel, hint])
+        // A room gets a new code each time it starts, so a saved or printed
+        // QR only works for this one.
+        let lifetime = UILabel()
+        lifetime.text = "Works until you end this Q&A."
+        lifetime.font = .systemFont(ofSize: 13)
+        lifetime.textColor = UIColor.white.withAlphaComponent(0.55)
+        lifetime.textAlignment = .center
+        lifetime.numberOfLines = 0
+        lifetime.isHidden = !showsLifetimeNote
+
+        let textStack = UIStackView(arrangedSubviews: [codeLabel, hint, lifetime])
         textStack.axis = .vertical
         textStack.spacing = 8
         textStack.alignment = .fill
@@ -116,17 +132,49 @@ final class QuestPollJoinQRViewController: UIViewController {
         contentStack.spacing = isShort ? 32 : 20
     }
 
-    private func shareLink() {
+    private func shareQR() {
+        var items: [Any] = []
+        if let png = Self.qrPNG(for: joinURL.absoluteString) {
+            items.append(png)
+        }
+        items.append(joinURL)
         let activity = UIActivityViewController(
-            activityItems: [joinURL], applicationActivities: nil
+            activityItems: items, applicationActivities: nil
         )
         activity.popoverPresentationController?.barButtonItem =
             navigationItem.leftBarButtonItem
         present(activity, animated: true)
     }
 
+    /// Print-ready QR picture (black on white with a quiet zone), as a
+    /// bitmap-backed image so Save Image and AirDrop get a real PNG.
+    static func qrPNG(for string: String, side: CGFloat = 1024) -> UIImage? {
+        guard let ciImage = qrImage(for: string)?.ciImage,
+              let cgImage = CIContext().createCGImage(ciImage, from: ciImage.extent)
+        else { return nil }
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+        let renderer = UIGraphicsImageRenderer(
+            size: CGSize(width: side, height: side), format: format
+        )
+        return renderer.image { context in
+            UIColor.white.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: side, height: side))
+            context.cgContext.interpolationQuality = .none
+            let inset = side * 0.08
+            // Draw upright: Core Graphics flips y.
+            context.cgContext.translateBy(x: 0, y: side)
+            context.cgContext.scaleBy(x: 1, y: -1)
+            context.cgContext.draw(
+                cgImage,
+                in: CGRect(x: inset, y: inset, width: side - inset * 2, height: side - inset * 2)
+            )
+        }
+    }
+
     /// Renders a high-contrast QR for `string`.
-    private static func qrImage(for string: String) -> UIImage? {
+    static func qrImage(for string: String) -> UIImage? {
         let data = Data(string.utf8)
         guard let filter = CIFilter(name: "CIQRCodeGenerator") else { return nil }
         filter.setValue(data, forKey: "inputMessage")
@@ -134,5 +182,37 @@ final class QuestPollJoinQRViewController: UIViewController {
         guard let output = filter.outputImage else { return nil }
         let scaled = output.transformed(by: CGAffineTransform(scaleX: 10, y: 10))
         return UIImage(ciImage: scaled)
+    }
+}
+
+// MARK: - Press and hold the QR
+
+extension QuestPollJoinQRViewController: UIContextMenuInteractionDelegate {
+    func contextMenuInteraction(
+        _ interaction: UIContextMenuInteraction,
+        configurationForMenuAtLocation location: CGPoint
+    ) -> UIContextMenuConfiguration? {
+        UIContextMenuConfiguration(actionProvider: { [weak self] _ in
+            UIMenu(children: [
+                UIAction(
+                    title: "Save to Photos",
+                    image: UIImage(systemName: "square.and.arrow.down")
+                ) { _ in self?.saveQRToPhotos() },
+                UIAction(
+                    title: "Copy Link",
+                    image: UIImage(systemName: "link")
+                ) { _ in UIPasteboard.general.url = self?.joinURL },
+                UIAction(
+                    title: "Share…",
+                    image: UIImage(systemName: "square.and.arrow.up")
+                ) { _ in self?.shareQR() }
+            ])
+        })
+    }
+
+    private func saveQRToPhotos() {
+        guard let png = Self.qrPNG(for: joinURL.absoluteString) else { return }
+        UIImageWriteToSavedPhotosAlbum(png, nil, nil, nil)
+        Haptics.impactLight()
     }
 }

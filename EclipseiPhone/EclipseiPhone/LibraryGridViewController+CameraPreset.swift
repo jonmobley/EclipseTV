@@ -141,6 +141,7 @@ extension LibraryGridViewController {
 
     private func cameraFramesDidChange() {
         CameraPresetThumbnail.invalidate()
+        liveHeader.refreshCameraFrameOverlay()
         guard isShowMode,
               let showsSection = sectionIndex(for: .shows),
               !ShowCameraPresetToken.frameIds(in: openShow?.surfaceIds ?? []).isEmpty

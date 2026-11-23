@@ -28,6 +28,13 @@ enum GridCameraRibbonItem: Equatable {
         items.append(contentsOf: cutawayIds.map { .cutaway($0) })
         return items
     }
+
+    /// What VoiceOver adds after the name: frames say On / Off (the ON badge is
+    /// visual only), like the full-screen camera's ribbon. Stills say nothing extra.
+    func spokenState(selectedFrameId: UUID?) -> String? {
+        guard case .frame(let id) = self else { return nil }
+        return selectedFrameId == id ? "On" : "Off"
+    }
 }
 
 // MARK: - Live camera ribbon + capture on the Show screen
@@ -77,7 +84,8 @@ extension LibraryGridViewController {
         case .frame(let id):
             image = CameraFrameStore.shared.image(for: id)
             name = CameraFrameStore.shared.displayName(for: id)
-            isLive = CameraFrameStore.shared.selectedId == id
+            // A frame is a layer on the camera, not what the TV shows: ON badge, never blue.
+            isLive = false
         case .background:
             image = LogoStore.shared.image
             name = "Background"
@@ -99,6 +107,13 @@ extension LibraryGridViewController {
             isLive: isLive,
             showsTypeIcon: false
         )
+        let selectedFrameId = CameraFrameStore.shared.selectedId
+        if case .frame(let id) = item {
+            cell.setFrameOn(selectedFrameId == id)
+        } else {
+            cell.setFrameOn(false)
+        }
+        cell.accessibilityValue = item.spokenState(selectedFrameId: selectedFrameId)
     }
 
     /// Frames toggle on the camera; stills cut to the still, or back to the camera.

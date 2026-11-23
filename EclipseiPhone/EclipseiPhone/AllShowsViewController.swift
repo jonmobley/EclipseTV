@@ -27,7 +27,7 @@ final class AllShowsViewController: UIViewController, UIAdaptivePresentationCont
     private var didSelectDestination = false
     private var formatFilter: ShowFormatFilter = .all
 
-    /// Shows matching the active All / Horizontal / Vertical filter.
+    /// Shows matching the active All / Landscape / Vertical filter.
     private var displayedAlbums: [LocalAlbum] {
         ShowFormatFilter.albums(albums, matching: formatFilter)
     }

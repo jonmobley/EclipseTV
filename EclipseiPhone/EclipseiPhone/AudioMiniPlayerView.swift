@@ -89,15 +89,9 @@ final class AudioMiniPlayerView: UIView, UIGestureRecognizerDelegate {
         let label = UILabel()
         label.font = .systemFont(ofSize: 15, weight: .semibold)
         label.textColor = .label
-        label.lineBreakMode = .byTruncatingTail
-        label.translatesAutoresizingMaskIntoConstraints = false
-        return label
-    }()
-
-    private let subtitleLabel: UILabel = {
-        let label = UILabel()
-        label.font = .systemFont(ofSize: 12, weight: .regular)
-        label.textColor = .secondaryLabel
+        // The song name gets both lines (owner's call, 2026-11-23); artist and
+        // playlist are still read out by VoiceOver.
+        label.numberOfLines = 2
         label.lineBreakMode = .byTruncatingTail
         label.translatesAutoresizingMaskIntoConstraints = false
         return label
@@ -153,13 +147,34 @@ final class AudioMiniPlayerView: UIView, UIGestureRecognizerDelegate {
             return
         }
         isHidden = false
-        titleLabel.text = track.title
+        let details: String
         if let playlist = player.playlistName, !playlist.isEmpty {
             let artist = track.subtitle
-            subtitleLabel.text = artist.isEmpty ? playlist : "\(artist) · \(playlist)"
+            details = artist.isEmpty ? playlist : "\(artist) · \(playlist)"
         } else {
-            subtitleLabel.text = track.subtitle.isEmpty ? "Music" : track.subtitle
+            details = track.subtitle
         }
+        showTrack(title: track.title, details: details)
+    }
+
+    /// Song name on up to two lines; artist and playlist only for VoiceOver.
+    func showTrack(title: String, details: String) {
+        titleLabel.text = title
+        // The bar itself is not an accessibility element (its buttons are), so
+        // the title label is what VoiceOver reads: song, then artist and playlist.
+        titleLabel.accessibilityValue = details.isEmpty ? title : "\(title), \(details)"
+    }
+
+    /// What VoiceOver reads for the track (song, then artist and playlist).
+    var spokenTrack: String? { titleLabel.accessibilityValue }
+
+    /// Lines the song name currently needs (tests).
+    var titleLineCount: Int {
+        guard let font = titleLabel.font, titleLabel.bounds.width > 0 else { return 0 }
+        let height = titleLabel.sizeThatFits(
+            CGSize(width: titleLabel.bounds.width, height: .greatestFiniteMagnitude)
+        ).height
+        return Int((height / font.lineHeight).rounded())
     }
 
     /// Mic on (accent) while volume is ducked.
@@ -182,9 +197,8 @@ final class AudioMiniPlayerView: UIView, UIGestureRecognizerDelegate {
         clipsToBounds = false
         fillView.layer.mask = fillMask
 
-        let textStack = UIStackView(arrangedSubviews: [titleLabel, subtitleLabel])
+        let textStack = UIStackView(arrangedSubviews: [titleLabel])
         textStack.axis = .vertical
-        textStack.spacing = 2
         textStack.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         textStack.setContentHuggingPriority(.defaultLow, for: .horizontal)
         textStack.translatesAutoresizingMaskIntoConstraints = false
@@ -197,8 +211,10 @@ final class AudioMiniPlayerView: UIView, UIGestureRecognizerDelegate {
         pinChrome(textStack: textStack)
         applyFloatingChrome()
 
-        accessibilityLabel = "Now Playing"
-        accessibilityHint = "Double tap to open Now Playing"
+        // VoiceOver focuses the title (a double tap lands on the bar's open tap).
+        titleLabel.accessibilityLabel = "Now Playing"
+        titleLabel.accessibilityHint = "Double tap to open Now Playing"
+        titleLabel.accessibilityTraits = .button
 
         let tap = UITapGestureRecognizer(target: self, action: #selector(openTapped))
         tap.delegate = self
@@ -216,8 +232,9 @@ final class AudioMiniPlayerView: UIView, UIGestureRecognizerDelegate {
 
             textStack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 20),
             textStack.centerYAnchor.constraint(equalTo: centerYAnchor),
+            // Fixed width so the two-line title wraps at the mic button.
             textStack.trailingAnchor.constraint(
-                lessThanOrEqualTo: duckButton.leadingAnchor, constant: -8
+                equalTo: duckButton.leadingAnchor, constant: -8
             ),
 
             stopButton.trailingAnchor.constraint(

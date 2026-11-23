@@ -126,11 +126,8 @@ final class HomeShowTileCell: UICollectionViewCell {
         imageView.translatesAutoresizingMaskIntoConstraints = false
         cardView.addSubview(imageView)
 
-        scrimView.colors = [
-            UIColor.clear,
-            UIColor.black.withAlphaComponent(0.72)
-        ]
-        scrimView.locations = [0.4, 1]
+        scrimView.colors = GradientView.titleScrimColors
+        scrimView.locations = [0.4, 0.7, 1]
         scrimView.isHidden = true
         scrimView.translatesAutoresizingMaskIntoConstraints = false
         cardView.addSubview(scrimView)

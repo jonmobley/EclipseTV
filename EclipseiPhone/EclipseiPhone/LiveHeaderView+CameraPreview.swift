@@ -38,6 +38,7 @@ extension LiveHeaderView {
             self?.setStaticPreviewHidden(true)
         }
         host.isHidden = false
+        refreshCameraFrameOverlay()
         preview.startMirroring()
         layoutCameraPreviewIfNeeded()
         bringCameraPreviewChromeToFront()
@@ -77,6 +78,16 @@ extension LiveHeaderView {
         )
     }
 
+    /// Puts the selected camera frame over the hero camera, as the TV shows it.
+    ///
+    /// The overlay sits in the upright hero (Display Mode shape), not on the rotated
+    /// mirror, and fits like `PresentationViewController.cameraFrameOverlayView`.
+    func refreshCameraFrameOverlay() {
+        let image = CameraFrameStore.shared.selectedImage
+        cameraFrameOverlay?.image = image
+        cameraFrameOverlay?.isHidden = image == nil
+    }
+
     // MARK: - Private
 
     /// Creates the camera-preview host once, pinned under LIVE chrome.
@@ -98,8 +109,16 @@ extension LiveHeaderView {
         let preview = CameraMirrorView()
         preview.translatesAutoresizingMaskIntoConstraints = true
         host.addSubview(preview)
+        let overlay = UIImageView()
+        overlay.contentMode = .scaleAspectFit
+        overlay.isUserInteractionEnabled = false
+        overlay.isHidden = true
+        overlay.frame = host.bounds
+        overlay.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        host.addSubview(overlay)
         cameraPreviewHost = host
         cameraPreview = preview
+        cameraFrameOverlay = overlay
     }
 
     /// Keeps LIVE chrome above the embedded camera mirror.

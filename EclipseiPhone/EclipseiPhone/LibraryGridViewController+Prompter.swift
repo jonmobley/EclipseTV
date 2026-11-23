@@ -148,7 +148,7 @@ extension LibraryGridViewController {
     func prompterContextMenu(token: String, scriptId: UUID) -> UIMenu {
         let isLive = isShowGridItemLive(.prompter(token: token, scriptId: scriptId))
         var children: [UIMenuElement] = [
-            UIAction(title: "Open", image: UIImage(systemName: "text.alignleft")) { [weak self] _ in
+            UIAction(title: "Open", image: UIImage(systemName: ThumbnailTypeIcon.prompter.systemName)) { [weak self] _ in
                 self?.presentPrompterOperator(scriptId: scriptId)
             }
         ]

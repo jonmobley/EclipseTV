@@ -411,6 +411,35 @@ extension CameraLiveViewController {
     /// Hint is shown on open (preview) and while a cutaway still is on program.
     static func showsTapToGoLiveHint(isCameraLive: Bool) -> Bool { !isCameraLive }
 
+    /// Words on the centered hint: what the TV shows now, and what a tap does.
+    ///
+    /// A plain "Tap screen to go LIVE" read the same whether a Quick Change was on
+    /// the TV or nothing was connected at all, so the operator could not tell what
+    /// the audience saw (2026-11-23).
+    static func tapToGoLiveHintTitle(parked: CameraParkedStill?, canGoLive: Bool) -> String {
+        switch parked {
+        case .background:
+            return "TV shows Background · Tap for camera"
+        case .cutaway:
+            return "TV shows Quick Change · Tap for camera"
+        case nil:
+            return canGoLive ? "Tap screen to go LIVE" : "Preview only · No TV connected"
+        }
+    }
+
+    /// VoiceOver words for the hint, matching `tapToGoLiveHintTitle`.
+    static func tapToGoLiveHintAccessibility(
+        parked: CameraParkedStill?,
+        canGoLive: Bool
+    ) -> (label: String, hint: String?) {
+        if parked != nil {
+            return ("Back to camera", "Puts the live camera back on the TV")
+        }
+        return canGoLive
+            ? ("Go LIVE", "Starts live camera on the TV")
+            : ("Preview only", "Connect a TV to go live")
+    }
+
     /// Builds the centered "Tap screen to go LIVE" overlay.
     private func configureTapToGoLiveHint() {
         var config = UIButton.Configuration.filled()
@@ -467,6 +496,19 @@ extension CameraLiveViewController {
         recordingTimerLabel.frame = recordingTimerPillView.bounds.insetBy(dx: padX, dy: padY)
     }
 
+    /// Keeps the hint's words in step with what the TV shows. Sets them only on a
+    /// change, since this runs on every layout pass.
+    private func refreshTapToGoLiveHintTitle() {
+        let parked = ExternalDisplayManager.shared.parkedCameraStill
+        let canGoLive = canGoLiveFromCamera
+        let title = Self.tapToGoLiveHintTitle(parked: parked, canGoLive: canGoLive)
+        guard tapToGoLiveHintView.configuration?.title != title else { return }
+        tapToGoLiveHintView.configuration?.title = title
+        let words = Self.tapToGoLiveHintAccessibility(parked: parked, canGoLive: canGoLive)
+        tapToGoLiveHintView.accessibilityLabel = words.label
+        tapToGoLiveHintView.accessibilityHint = words.hint
+    }
+
     /// Centers the go-live hint in the Display Mode panel.
     private func layoutTapToGoLiveHint(in panel: CGRect) {
         let show = Self.showsTapToGoLiveHint(
@@ -474,6 +516,7 @@ extension CameraLiveViewController {
         )
         tapToGoLiveHintView.isHidden = !show
         guard show else { return }
+        refreshTapToGoLiveHintTitle()
         var size = tapToGoLiveHintView.intrinsicContentSize
         if size.width < 8 || size.height < 8 {
             size = tapToGoLiveHintView.sizeThatFits(

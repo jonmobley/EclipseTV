@@ -25,7 +25,7 @@ struct ShowFormatFilterTests {
 
     @Test func titlesMatchTheVisibleChips() {
         #expect(ShowFormatFilter.allCases.map(\.title) == [
-            "All", "Horizontal", "Vertical"
+            "All", "Landscape", "Vertical"
         ])
     }
 
@@ -52,7 +52,7 @@ struct ShowFormatFilterBarTests {
         let bar = ShowFormatFilterBar()
         #expect(bar.selected == .all)
         let all = chip(titled: "All", in: bar)
-        let horizontal = chip(titled: "Horizontal", in: bar)
+        let horizontal = chip(titled: "Landscape", in: bar)
         #expect(all?.configuration?.baseBackgroundColor == UIColor.accent)
         #expect(all?.configuration?.baseForegroundColor == UIColor.white)
         #expect(horizontal?.configuration?.baseBackgroundColor != UIColor.accent)
@@ -75,7 +75,7 @@ struct ShowFormatFilterBarTests {
     @Test func chipsStaySingleLineInAnIPadSheet() {
         let host = laidOutFilterBar(width: 540)
         let all = chip(titled: "All", in: host.bar)
-        let horizontal = chip(titled: "Horizontal", in: host.bar)
+        let horizontal = chip(titled: "Landscape", in: host.bar)
         let vertical = chip(titled: "Vertical", in: host.bar)
         #expect(all?.configuration?.titleLineBreakMode == .byTruncatingTail)
         #expect(horizontal?.configuration?.titleLineBreakMode == .byTruncatingTail)
@@ -92,7 +92,7 @@ struct ShowFormatFilterBarTests {
         host.window.frame.size.width = 540
         host.root.frame.size.width = 540
         host.window.layoutIfNeeded()
-        let horizontal = chip(titled: "Horizontal", in: host.bar)
+        let horizontal = chip(titled: "Landscape", in: host.bar)
         #expect((horizontal?.bounds.height ?? 0) < 48)
         #expect((horizontal?.bounds.width ?? 0) > 80)
     }
@@ -109,12 +109,12 @@ struct HomeSectionHeaderFilterChipTests {
             title: "Recent",
             actions: [
                 .init(title: "All", isSelected: true, handler: {}),
-                .init(title: "Horizontal", isSelected: false, handler: {}),
+                .init(title: "Landscape", isSelected: false, handler: {}),
                 .init(title: "Vertical", isSelected: false, handler: {})
             ]
         )
         let all = chip(titled: "All", in: header)
-        let horizontal = chip(titled: "Horizontal", in: header)
+        let horizontal = chip(titled: "Landscape", in: header)
         #expect(all?.configuration?.baseBackgroundColor == UIColor.accent)
         #expect(all?.configuration?.baseForegroundColor == UIColor.white)
         #expect(horizontal?.configuration?.baseBackgroundColor != UIColor.accent)

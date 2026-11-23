@@ -128,4 +128,16 @@ struct AudioMiniPlayerViewTests {
                 == AudioMiniPlayerView.connectedOverlap + AudioMiniPlayerView.controlChromeInset
         )
     }
+
+    /// A long song name uses both lines instead of cutting off after one.
+    @Test func longSongNameWrapsOntoTwoLines() {
+        let bar = AudioMiniPlayerView(
+            frame: CGRect(x: 0, y: 0, width: 300, height: AudioMiniPlayerView.preferredHeight)
+        )
+        bar.showTrack(title: "Remember the Name (feat. Styles of Beyond)", details: "Fort Minor")
+        bar.layoutIfNeeded()
+        #expect(bar.titleLineCount == 2)
+        #expect(bar.spokenTrack == "Remember the Name (feat. Styles of Beyond), Fort Minor")
+        #expect(bar.isAccessibilityElement == false)
+    }
 }

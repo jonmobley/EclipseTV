@@ -7,7 +7,7 @@
 
 import UIKit
 
-/// All / Horizontal / Vertical format filter for Home Recent and the Shows list.
+/// All / Landscape / Vertical format filter for Home Recent and the Shows list.
 enum ShowFormatFilter: Int, CaseIterable, Equatable {
     case all
     case landscape
@@ -16,7 +16,7 @@ enum ShowFormatFilter: Int, CaseIterable, Equatable {
     var title: String {
         switch self {
         case .all: return "All"
-        case .landscape: return "Horizontal"
+        case .landscape: return "Landscape"
         case .vertical: return "Vertical"
         }
     }
@@ -50,7 +50,7 @@ enum ShowFormatFilter: Int, CaseIterable, Equatable {
 
 // MARK: - Chip bar
 
-/// All / Horizontal / Vertical chips. All is selected by default (blue).
+/// All / Landscape / Vertical chips. All is selected by default (blue).
 final class ShowFormatFilterBar: UIView {
 
     /// Active format filter. Starts on All.

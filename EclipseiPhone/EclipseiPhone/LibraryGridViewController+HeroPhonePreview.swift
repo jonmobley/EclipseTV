@@ -120,7 +120,7 @@ extension LibraryGridViewController {
         case .website(let page):
             liveHeader.configureOverlay(
                 title: page.title,
-                systemImage: "safari",
+                systemImage: ThumbnailTypeIcon.website.systemName,
                 fillColor: .mediaPlaceholder,
                 thumbnail: WebThumbnailStore.shared.image(for: page.id),
                 showsLiveBadge: true
@@ -130,7 +130,7 @@ extension LibraryGridViewController {
         case .pdf(let doc):
             liveHeader.configureOverlay(
                 title: doc.title,
-                systemImage: "doc.richtext",
+                systemImage: ThumbnailTypeIcon.pdf.systemName,
                 fillColor: .mediaPlaceholder,
                 thumbnail: PDFThumbnailStore.shared.image(for: doc.id),
                 showsLiveBadge: true

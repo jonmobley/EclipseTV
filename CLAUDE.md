@@ -102,13 +102,18 @@
   active tab. Windows a site opens (`window.open`, sign-in) are phone-only tabs until "Send to TV".
   Landscape buttons (Close · history · Refresh, then ⊕ only with a single tab, Send to TV / Back only
   when they apply) sit in a column beside the card on a phone; with 2+ tabs ⊕ ends the tab chips
-  instead (`BrowserTabStripView.newTabButton`). The history clock opens History: on iPhone a drawer (`WebHistoryDrawerView`, from the right in Landscape, from the
-  bottom in Vertical) with Saved and Recent; on iPad a pop-up menu with the same two sections. Recent is the last 30 pages
+  instead (`BrowserTabStripView.newTabButton`). The clock button opens Websites (named History until 2026-11-23; the owner found
+  "History" + "Saved" confusing): on iPhone a drawer (`WebHistoryDrawerView`, from the right in Landscape, from the
+  bottom in Vertical) with My Websites (the library's website cards) and Recently Visited; on iPad a pop-up menu with the same two sections. The Mac uses the same words (eclipsepro, 2026-11-23): browser-window list My Websites / Recently
+  Visited, main-window list My Websites / Recently Live (it also holds photos and videos that went live); same clock icon on both apps. Recent is the last 30 pages
   the phone finished loading in a tab (`WebHistoryStore`, UserDefaults `EclipseTV.web.recentPages`, phone only), and
   picking one loads it in the active tab. The overlay buttons are re-raised on every layout, so the drawer is re-raised after them.
   Website Auto Scroll was removed (2026-11-13); `ScrollSpeedSlider` now serves only the Prompter. iPad gets a browser-style top bar (chips left, buttons top right)
   in both orientations, since iPadOS ignores the orientation lock while the app supports Split View.
   The website card matches the hero preview: 16pt corners and a 1pt `separator` hairline (2026-11-13).
+  Zoom mirrors to the TV (2026-11-23, `WebViewportMirror`): pinch zoom plus position across and down, sent as zoom +
+  0…1 fractions (not points) on every scroll/zoom. A pinch can't shrink the page below fit (`fitScale`: 1, or a wide
+  page's own width), so no empty background ever shows on either screen. Not yet tried on a real TV.
 - Seeding a simulator with websites/Shows for a visual check: the stores are JSON blobs in
   UserDefaults (`EclipseTV.pages.items`, `EclipseTV.localAlbums.items`); write them with
   `simctl spawn <udid> defaults write <container>/Library/Preferences/com.mobleypro.eclipse.EclipseiPhone.plist <key> -data <hex-json>`
@@ -148,12 +153,12 @@
   `Prompter` type, so no iCloud schema or Mac change. `PrompterScript.showId` is really the script
   key. Copy to Show makes a new Prompter with a copy of the text. There is one `PrompterController`,
   so the TV shows whatever script is bound; opening a different Prompter while one is live asks first.
-- Prompter shape (2026-11-13): the Prompter screen has its own Landscape / Vertical menu (`PrompterLocalSettings.prefersVertical`,
-  this phone only). Vertical while Display Mode is Landscape makes the card 9:16, turns the phone upright, and shows an upright
-  9:16 column on the TV (`PrompterController.isVerticalOnLandscapeDisplay`); the menu is hidden in Vertical Display Mode.
-  Use `PrompterController.isVertical` / `canvasAspectRatio` for prompter layout, never `ExternalOutputSettings.isVerticalMode`.
+- Prompter shape (2026-11-23): the Prompter always takes the display's shape (`ExternalOutputSettings.outputAspectRatio`,
+  Vertical only when Display Mode is Vertical). The owner removed the Prompter's own Landscape / Vertical menu
+  ("it should just match the Show's screen"). The phone turns freely on the Prompter screen (`.allButUpsideDown`, no
+  forced rotation): on its side the card is large with one control row, upright it is smaller with the controls
+  stacked. Use `PrompterController.isVertical` / `canvasAspectRatio` for prompter layout.
   The blue reading-guide lines were removed (2026-11-13, owner found them confusing); the line read sits mid-stage.
-  The blue lines are the reading guide (the line being read), on purpose.
 - Camera Presets (2026-11-13): a Show tile = phone camera + one saved frame. Stored only as the surface token
   `__eclipse.tool.cameraPreset.<frameUUID>` (`ShowCameraPresetToken`, counts as a tool), so it syncs with the Show and
   older builds keep it. Saved from the Camera tile ⋯ → Save as Camera Preset, or by holding a frame in full-screen Camera.
@@ -172,6 +177,12 @@
   closes (`armRecordingAudio` / `disarmRecordingAudio`), never at record start/stop: turning the mic on or off
   re-routes audio and cuts other apps' music for a moment (2026-11-15). Eclipse's own Background
   Music still takes over audio when the user presses play (normal for a music player).
+- Camera tile colors (2026-11-23): blue (`liveStroke`) means "on the TV" and nothing else. A frame switched on over the
+  camera gets the "✓ ON" badge (`CameraFrameOnBadge`, check only on small ribbon thumbs), never the blue outline, in the
+  full-screen camera, the Pictures sheet and the Show camera ribbon. Background / Quick Change tiles are blue while parked on
+  program, and a tap with no TV (no AirPlay, Apple TV, Practice Mode or operator: `canGoLiveFromCamera`) shows a toast instead
+  of parking. The centered hint says what the TV shows ("TV shows Quick Change · Tap for camera", "Preview only · No TV
+  connected", else "Tap screen to go LIVE").
 - Camera frames order (2026-11-15): `CameraFrameStore.frames` is newest-first by `createdAt` and never reorders on a tap
   (sorting by `lastUsedAt` made a tapped frame jump in the camera ribbon). The camera header shows only the LIVE pill;
   the PRACTICE pill was removed at the owner's request. Buttons placed inside a `UIImageView` need
@@ -214,6 +225,21 @@
   choosing one for a Show is picked automatically. A running room keeps its own copy, so edits show on the next start.
   questpoll.com has no test copy: never save/delete polls against it to try things out. Check the screens with a stub
   `URLProtocol` client instead (see `QuestPollEditorTests`).
+- Content icons match the Mac app (2026-11-22): `ThumbnailTypeIcon.systemName` is the one place a content kind's SF Symbol is named
+  (Website `globe`, PDF `doc.text`, Prompter `text.viewfinder`, Slideshow `photo.on.rectangle.angled`, same as the Mac's
+  `AddMediaList` / `MediaTypeVisual`). Every screen reads it; never write those symbol names inline. `safari` stays only on
+  "Open questpoll.com" (it opens Safari) and `rectangle.stack` / `.fill` means a Show, not a slideshow. Tiles no longer draw
+  the top-left type disc (`ThumbnailTypeIconView.showsOnTiles = false`, owner's call: the Mac has none); VoiceOver still speaks the kind.
+  Review and before/after pictures: `docs/reviews/2026-11-22-polish/`.
+- iPad Library tab (2026-11-22): on a full iPad canvas the Media Library page shows its own copy of the Home / Show / Library
+  tabs (Library lit) in place of Back and the centred title (`MediaLibraryPickerViewController.refreshLeadingBarItem`,
+  `HomeHeaderNavSelection.isLibrary`). Home or Show closes the page first, then acts. iPhone and narrow iPad windows keep Back.
+  The page still covers the Music button.
+- Titles over pictures (2026-11-22): white titles on Home Recent tiles, the Continue card and Library/Show tile captions sit on
+  `GradientView.titleScrimColors` (three stops, about 62% black where the words start). A plain clear-to-dark ramp was half
+  strength at the title and unreadable on a white website thumbnail; keep the three-stop shade for any new title over art.
+- Shows list (2026-11-22): presented as a form sheet (compact centred sheet on iPad, like Settings); its filter says
+  "Landscape", the same word as Display Mode, never "Horizontal".
 - Background colors (2026-11-22, `BackgroundColorPreset`): the Background tile's ⋯ menu has a "Color" row with the Mac's
   eight presets (same names, order, stops and `eclipse://builtin/gradient/<name>` URL as eclipsepro's
   `BackgroundGradientPreset`; keep them in step). Picking one draws a 1920×1080 picture and stores it as the Background

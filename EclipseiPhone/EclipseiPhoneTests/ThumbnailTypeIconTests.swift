@@ -15,10 +15,13 @@ struct ThumbnailTypeIconTests {
     @Test func symbolsMatchContentTypes() {
         #expect(ThumbnailTypeIcon.photo.systemName == "photo.fill")
         #expect(ThumbnailTypeIcon.video.systemName == "play.fill")
-        #expect(ThumbnailTypeIcon.slideshow.systemName == "rectangle.stack.fill")
-        #expect(ThumbnailTypeIcon.website.systemName == "safari")
+        #expect(ThumbnailTypeIcon.slideshow.systemName == "photo.on.rectangle.angled")
+        #expect(ThumbnailTypeIcon.website.systemName == "globe")
         #expect(ThumbnailTypeIcon.webVideo.systemName == "play.rectangle.fill")
-        #expect(ThumbnailTypeIcon.pdf.systemName == "doc.richtext")
+        #expect(ThumbnailTypeIcon.pdf.systemName == "doc.text")
+        #expect(ThumbnailTypeIcon.prompter.systemName == "text.viewfinder")
+        // Tiles carry no corner glyph (like the Mac app).
+        #expect(ThumbnailTypeIconView.showsOnTiles == false)
         #expect(ThumbnailTypeIcon.camera.systemName == "camera.fill")
         #expect(ThumbnailTypeIcon.livePoll.systemName == "chart.bar.fill")
         #expect(ThumbnailTypeIcon.countdown.systemName == "timer")
@@ -45,11 +48,11 @@ struct ThumbnailTypeIconTests {
         #expect(cell.typeIconOverlay.isHidden)
     }
 
-    @Test func videoThumbnailShowsCornerPlayIcon() {
+    @Test func videoThumbnailHasNoCornerIcon() {
         let cell = makeCell()
         cell.configure(with: makeItem(isVideo: true), thumbnail: swatch(), isLive: false)
-        #expect(cell.typeIconOverlay.appliedIcon == .video)
-        #expect(cell.typeIconOverlay.isHidden == false)
+        #expect(cell.typeIconOverlay.appliedIcon == nil)
+        #expect(cell.typeIconOverlay.isHidden)
     }
 
     @Test func missingThumbnailHidesTypeIcon() {
@@ -72,7 +75,7 @@ struct ThumbnailTypeIconTests {
         let cell = makeCell()
         cell.configureSpecial(
             title: "Deck",
-            systemImage: "rectangle.stack.fill",
+            systemImage: "photo.on.rectangle.angled",
             thumbnail: nil,
             fillColor: .darkGray,
             isLive: false,
@@ -85,39 +88,39 @@ struct ThumbnailTypeIconTests {
         #expect(cell.isShowingPlaceholder == false)
         #expect(cell.imageView.alpha == 1)
         #expect(cell.placeholderIcon.isHidden)
-        #expect(cell.typeIconOverlay.appliedIcon == .slideshow)
+        #expect(cell.typeIconOverlay.appliedIcon == nil)
     }
 
-    @Test func applyLoadedThumbnailShowsVideoTypeIcon() {
+    @Test func applyLoadedThumbnailKeepsCornerIconHidden() {
         let cell = makeCell()
         cell.configure(with: makeItem(isVideo: true), thumbnail: nil, isLive: false)
         #expect(cell.typeIconOverlay.isHidden)
 
         cell.applyLoadedThumbnail(swatch())
 
-        #expect(cell.typeIconOverlay.appliedIcon == .video)
-        #expect(cell.typeIconOverlay.isHidden == false)
+        #expect(cell.typeIconOverlay.appliedIcon == nil)
+        #expect(cell.typeIconOverlay.isHidden)
     }
 
-    @Test func websiteSpecialShowsTypeIconOnArt() {
+    @Test func websiteSpecialHasNoCornerIconOnArt() {
         let cell = makeCell()
         cell.configureSpecial(
             title: "Example",
-            systemImage: "safari",
+            systemImage: "globe",
             thumbnail: swatch(),
             fillColor: .darkGray,
             isLive: false,
             typeIcon: .website
         )
-        #expect(cell.typeIconOverlay.appliedIcon == .website)
-        #expect(cell.typeIconOverlay.isHidden == false)
+        #expect(cell.typeIconOverlay.appliedIcon == nil)
+        #expect(cell.typeIconOverlay.isHidden)
     }
 
-    @Test func titledCaptionStaysAtBottomWhenTypeIconIsTop() {
+    @Test func titledCaptionStaysAtBottomLeft() {
         let cell = makeCell()
         cell.configureSpecial(
             title: "Example",
-            systemImage: "safari",
+            systemImage: "globe",
             thumbnail: swatch(),
             fillColor: .darkGray,
             isLive: false,
@@ -125,8 +128,7 @@ struct ThumbnailTypeIconTests {
         )
         cell.layoutIfNeeded()
         #expect(cell.captionLabel.textAlignment == .left)
-        #expect(abs(cell.typeIconOverlay.frame.minY - ThumbnailTypeIconView.inset) < 0.5)
-        #expect(cell.captionLabel.frame.minY > cell.typeIconOverlay.frame.maxY)
+        #expect(cell.typeIconOverlay.isHidden)
         let trailingInset = cell.cardView.bounds.width - cell.captionLabel.frame.maxX
         #expect(abs(trailingInset - 8) < 0.5)
     }
@@ -145,7 +147,7 @@ struct ThumbnailTypeIconTests {
         )
     }
 
-    @Test func toolTilesShowTypeIcons() {
+    @Test func toolTilesHaveNoCornerIcons() {
         let cell = makeCell()
         cell.configureSpecial(
             title: "Screensaver",
@@ -155,8 +157,8 @@ struct ThumbnailTypeIconTests {
             isLive: false,
             typeIcon: .video
         )
-        #expect(cell.typeIconOverlay.appliedIcon == .video)
-        #expect(cell.typeIconOverlay.isHidden == false)
+        #expect(cell.typeIconOverlay.appliedIcon == nil)
+        #expect(cell.typeIconOverlay.isHidden)
 
         cell.configureSpecial(
             title: "Screensaver",
@@ -181,8 +183,8 @@ struct ThumbnailTypeIconTests {
         #expect(cell.typeIconOverlay.isHidden)
 
         cell.configureCamera(isLive: false, lastFrame: nil, warmPreview: false)
-        #expect(cell.typeIconOverlay.appliedIcon == .camera)
-        #expect(cell.typeIconOverlay.isHidden == false)
+        #expect(cell.typeIconOverlay.appliedIcon == nil)
+        #expect(cell.typeIconOverlay.isHidden)
         #expect(cell.captionLabel.textAlignment == .left)
 
         cell.configureSpecial(
@@ -193,8 +195,8 @@ struct ThumbnailTypeIconTests {
             isLive: false,
             typeIcon: .livePoll
         )
-        #expect(cell.typeIconOverlay.appliedIcon == .livePoll)
-        #expect(cell.typeIconOverlay.isHidden == false)
+        #expect(cell.typeIconOverlay.appliedIcon == nil)
+        #expect(cell.typeIconOverlay.isHidden)
         // A poll card has no preview or clock, so it keeps the centred glyph.
         #expect(cell.placeholderIcon.isHidden == false)
 
@@ -206,8 +208,8 @@ struct ThumbnailTypeIconTests {
             isLive: false,
             typeIcon: .countdown
         )
-        #expect(cell.typeIconOverlay.appliedIcon == .countdown)
-        #expect(cell.typeIconOverlay.isHidden == false)
+        #expect(cell.typeIconOverlay.appliedIcon == nil)
+        #expect(cell.typeIconOverlay.isHidden)
         #expect(cell.placeholderIcon.isHidden)
 
         cell.configureActionTile(title: "New Show")
@@ -221,9 +223,8 @@ struct ThumbnailTypeIconTests {
         cell.layoutIfNeeded()
         #expect(cell.durationOverlayText == "0:12")
         #expect(ThumbnailTypeIcon.video.systemName == "play.fill")
-        // Play glyph stays in the top-leading corner, not centered on the still.
-        #expect(cell.typeIconOverlay.frame.minX == 8)
-        #expect(abs(cell.typeIconOverlay.frame.minY - 8) < 0.5)
+        // The duration is what marks a video now that tiles have no corner glyph.
+        #expect(cell.typeIconOverlay.isHidden)
     }
 
     @Test func photoThumbnailHidesDurationOverlay() {
@@ -245,16 +246,16 @@ struct ThumbnailTypeIconTests {
         #expect(cell.durationOverlayText == nil)
     }
 
-    @Test func rewindKeepsVideoTypeIcon() {
+    @Test func rewindLeavesCornerIconHidden() {
         let cell = makeCell()
         cell.configure(with: makeItem(isVideo: true), thumbnail: swatch(), isLive: false)
-        #expect(cell.typeIconOverlay.isHidden == false)
+        #expect(cell.typeIconOverlay.isHidden)
         cell.setRewindHandler { }
-        #expect(cell.typeIconOverlay.appliedIcon == .video)
-        #expect(cell.typeIconOverlay.isHidden == false)
+        #expect(cell.typeIconOverlay.appliedIcon == nil)
+        #expect(cell.typeIconOverlay.isHidden)
         cell.clearRewind()
-        #expect(cell.typeIconOverlay.appliedIcon == .video)
-        #expect(cell.typeIconOverlay.isHidden == false)
+        #expect(cell.typeIconOverlay.appliedIcon == nil)
+        #expect(cell.typeIconOverlay.isHidden)
     }
 
     private func makeCell() -> LibraryThumbnailCell {

@@ -387,6 +387,26 @@ extension iPhoneMainViewController {
                 }
             }
         }
+        let openShow = libraryViewController.openShow
+        picker.headerSelection = HomeHeaderNavSelection(
+            isShowMode: openShow != nil,
+            isMusicPinned: false,
+            showTitle: openShow?.name ?? HomeHeaderDestination.show.title
+        )
+        picker.onSelectHeaderDestination = { [weak self] destination in
+            guard let self else { return }
+            switch destination {
+            case .home:
+                self.libraryViewController.closeOpenShow()
+            case .show:
+                // Back on the open Show already; with none open, offer the list.
+                if self.libraryViewController.openShowId == nil {
+                    self.libraryViewController.presentAllShows()
+                }
+            case .library, .music:
+                break
+            }
+        }
         showMediaLibraryPage(picker)
     }
 

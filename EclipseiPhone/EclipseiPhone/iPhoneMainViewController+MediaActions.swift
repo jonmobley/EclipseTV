@@ -280,7 +280,7 @@ extension iPhoneMainViewController {
         }
         let website = UIAction(
             title: "Website",
-            image: UIImage(systemName: "safari")
+            image: UIImage(systemName: ThumbnailTypeIcon.website.systemName)
         ) { [weak self] _ in
             if let albumId {
                 self?.promptAddWebsite(toAlbumId: albumId)
@@ -290,7 +290,7 @@ extension iPhoneMainViewController {
         }
         let slideshow = UIAction(
             title: "Slideshow",
-            image: UIImage(systemName: "rectangle.stack.badge.play")
+            image: UIImage(systemName: ThumbnailTypeIcon.slideshow.systemName)
         ) { [weak self] _ in
             guard let albumId else { return }
             self?.promptNewSlideshow(inShowId: albumId)
@@ -311,7 +311,7 @@ extension iPhoneMainViewController {
         // A Show can hold any number of Prompters, each with its own script.
         let prompter = UIAction(
             title: "Prompter",
-            image: UIImage(systemName: "text.alignleft")
+            image: UIImage(systemName: ThumbnailTypeIcon.prompter.systemName)
         ) { [weak self] _ in
             guard let albumId else { return }
             self?.addPrompter(toShowId: albumId)
@@ -341,7 +341,7 @@ extension iPhoneMainViewController {
         }
         let pdf = UIAction(
             title: "PDF",
-            image: UIImage(systemName: "doc.richtext")
+            image: UIImage(systemName: ThumbnailTypeIcon.pdf.systemName)
         ) { [weak self] _ in
             self?.pendingAlbumId = albumId
             self?.showPDFPicker()

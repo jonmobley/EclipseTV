@@ -285,7 +285,7 @@ extension LibraryGridViewController {
             let cover = show.resolvedCoverId.flatMap { store.thumbnail(for: $0) }
             cell.configureSpecial(
                 title: show.name,
-                systemImage: "rectangle.stack.fill",
+                systemImage: ThumbnailTypeIcon.slideshow.systemName,
                 thumbnail: cover,
                 fillColor: .darkGray,
                 isLive: live,
@@ -418,7 +418,7 @@ extension LibraryGridViewController {
             let isVideoLink = page.videoLink != nil
             cell.configureSpecial(
                 title: page.title,
-                systemImage: isVideoLink ? "play.rectangle.fill" : "safari",
+                systemImage: isVideoLink ? "play.rectangle.fill" : ThumbnailTypeIcon.website.systemName,
                 thumbnail: WebThumbnailStore.shared.image(for: page.id),
                 fillColor: .specialTile,
                 isLive: live,
@@ -435,7 +435,7 @@ extension LibraryGridViewController {
         case .pdf(let doc):
             cell.configureSpecial(
                 title: doc.title,
-                systemImage: "doc.richtext",
+                systemImage: ThumbnailTypeIcon.pdf.systemName,
                 thumbnail: PDFThumbnailStore.shared.image(for: doc.id),
                 fillColor: .specialTile,
                 isLive: live,

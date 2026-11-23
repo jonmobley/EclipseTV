@@ -138,7 +138,7 @@ extension LibraryGridViewController {
         if mgr.isPrompterLive {
             foreignLiveHeader.configureOverlay(
                 title: "Prompter",
-                systemImage: "text.alignleft",
+                systemImage: ThumbnailTypeIcon.prompter.systemName,
                 fillColor: .mediaPlaceholder
             )
             pinForeignLiveChrome()
@@ -171,7 +171,7 @@ extension LibraryGridViewController {
             let thumb = pageId.flatMap { WebThumbnailStore.shared.image(for: $0) }
             foreignLiveHeader.configureOverlay(
                 title: page?.title ?? "Website",
-                systemImage: "safari",
+                systemImage: ThumbnailTypeIcon.website.systemName,
                 fillColor: .mediaPlaceholder,
                 thumbnail: thumb
             )
@@ -184,7 +184,7 @@ extension LibraryGridViewController {
             let thumb = doc.flatMap { PDFThumbnailStore.shared.image(for: $0.id) }
             foreignLiveHeader.configureOverlay(
                 title: doc?.title ?? "PDF",
-                systemImage: "doc.richtext",
+                systemImage: ThumbnailTypeIcon.pdf.systemName,
                 fillColor: .mediaPlaceholder,
                 thumbnail: thumb
             )

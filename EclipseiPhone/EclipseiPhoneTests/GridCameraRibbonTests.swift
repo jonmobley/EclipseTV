@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import UIKit
 import Testing
 @testable import EclipseiPhone
 
@@ -24,6 +25,24 @@ struct GridCameraRibbonTests {
         #expect(GridCameraRibbonItem.items(
             frameIds: [], hasBackground: false, cutawayIds: [still]
         ) == [.cutaway(still)])
+    }
+
+    /// VoiceOver hears which frame is on; stills carry no On / Off.
+    @Test func framesSpeakOnOrOff() {
+        let on = UUID(), off = UUID()
+        #expect(GridCameraRibbonItem.frame(on).spokenState(selectedFrameId: on) == "On")
+        #expect(GridCameraRibbonItem.frame(off).spokenState(selectedFrameId: on) == "Off")
+        #expect(GridCameraRibbonItem.frame(off).spokenState(selectedFrameId: nil) == "Off")
+        #expect(GridCameraRibbonItem.background.spokenState(selectedFrameId: on) == nil)
+        #expect(GridCameraRibbonItem.cutaway(on).spokenState(selectedFrameId: on) == nil)
+    }
+
+    /// A ribbon tile recycled as an ordinary Show tile stops saying On / Off.
+    @MainActor @Test func reusedTileDropsOnOff() {
+        let cell = LibraryThumbnailCell(frame: CGRect(x: 0, y: 0, width: 160, height: 90))
+        cell.accessibilityValue = "On"
+        cell.prepareForReuse()
+        #expect(cell.accessibilityValue == nil)
     }
 
     @Test func emptyWhenNothingToShow() {

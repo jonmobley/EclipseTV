@@ -76,6 +76,8 @@ final class LiveHeaderView: UIView {
     var cameraPreviewHost: UIView?
     /// In-hero live camera, fed by `CameraManager`'s frame tap.
     var cameraPreview: CameraMirrorView?
+    /// The selected camera frame over the hero camera, fitted like the TV overlay.
+    var cameraFrameOverlay: UIImageView?
     /// What a pinch or drag on the expanded hero adjusts, if anything. Set by the
     /// host controller; see `LiveHeaderView+DirectAdjust`.
     var directAdjustTarget: DirectAdjustTarget? {

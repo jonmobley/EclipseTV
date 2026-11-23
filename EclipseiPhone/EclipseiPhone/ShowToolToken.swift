@@ -62,7 +62,7 @@ enum ShowToolToken {
         case logo: return "seal.fill"
         case camera: return "camera.fill"
         case ptzCamera: return "web.camera"
-        case prompter: return "text.alignleft"
+        case prompter: return ThumbnailTypeIcon.prompter.systemName
         default: return nil
         }
     }
