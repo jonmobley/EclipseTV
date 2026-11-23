@@ -19,6 +19,21 @@ struct VideoPosterFrameTests {
         #expect(times.contains { abs($0 - 1) < 0.02 })
     }
 
+    @Test func longVideosAlsoTryLaterTimes() {
+        let movie = 88 * 60.0 + 23
+        let times = VideoPosterFrame.candidateSeconds(duration: movie)
+        #expect(times.first == 0)
+        #expect(times.contains { abs($0 - 30) < 0.02 })
+        #expect(times.contains { abs($0 - movie * 0.1) < 0.02 })
+        #expect(times.allSatisfy { $0 >= 0 && $0 < movie })
+    }
+
+    @Test func typicalClipsKeepTheirLaterTimesInsideTheClip() {
+        let times = VideoPosterFrame.candidateSeconds(duration: 8)
+        #expect(times.contains { abs($0 - 3) < 0.02 })
+        #expect(!times.contains { $0 > 4 })
+    }
+
     @Test func shortClipsStayInsideDuration() {
         let times = VideoPosterFrame.candidateSeconds(duration: 0.2)
         #expect(!times.isEmpty)
