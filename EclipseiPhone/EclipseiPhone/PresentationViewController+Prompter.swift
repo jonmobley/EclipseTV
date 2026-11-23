@@ -45,19 +45,11 @@ extension PresentationViewController {
         prompterStage = nil
     }
 
-    /// Fills the output canvas (rotated when Vertical) and sizes the text to it. A
-    /// Prompter switched to Vertical on a Landscape display is an upright 9:16 column.
+    /// Fills the output canvas (rotated when Vertical) and sizes the text to it.
     func applyPrompterLayout() {
         guard !prompterContainer.isHidden, let stage = prompterStage else { return }
         let controller = PrompterController.shared
-        if controller.isVerticalOnLandscapeDisplay {
-            stage.transform = .identity
-            stage.frame = ExternalOutputSettings.panelRect(
-                in: prompterContainer.bounds, aspect: controller.canvasAspectRatio
-            )
-        } else {
-            applyRotatedLayout(to: stage, in: prompterContainer, scale: 1)
-        }
+        applyRotatedLayout(to: stage, in: prompterContainer, scale: 1)
         stage.layoutIfNeeded()
         stage.setCanvasFontSize(controller.fontSize, isVertical: controller.isVertical)
         stage.layoutIfNeeded()

@@ -45,17 +45,10 @@ final class PrompterViewController: UIViewController {
     private var transportRows: UIStackView?
     private var verticalRowConstraints: [NSLayoutConstraint] = []
 
-    /// Landscape / Vertical switch for the Prompter's own shape. Hidden while Display
-    /// Mode is Vertical, which already makes it 9:16.
-    let shapeItem = UIBarButtonItem()
-
     /// Card inset from the screen edges.
     static let cardInset: CGFloat = 12
 
-    /// True once this screen covers the grid and holds the phone to the Display Mode
-    /// orientation (the browser does the same): a 16:9 card on a turned phone, not a
-    /// strip across a portrait one. iPad keeps whatever orientation it is in.
-    var holdsDisplayModeOrientation = false
+    /// Set once this screen is closing, so the phone is put back upright behind it.
     private var isLeaving = false
 
     init(scriptId: UUID, controller: PrompterController? = nil) {
@@ -87,7 +80,7 @@ final class PrompterViewController: UIViewController {
             target: self, action: #selector(editTapped)
         )
         edit.accessibilityLabel = "Edit Script"
-        navigationItem.rightBarButtonItems = [edit, shapeItem]
+        navigationItem.rightBarButtonItems = [edit]
 
         controller.bind(scriptId: scriptId)
         setupStage()
@@ -102,21 +95,6 @@ final class PrompterViewController: UIViewController {
         super.viewDidAppear(animated)
         // A prompter must not dim or lock mid-speech.
         UIApplication.shared.isIdleTimerDisabled = true
-        // Turn only now that this screen covers the grid.
-        holdsDisplayModeOrientation = true
-        requestPrompterSceneGeometry()
-    }
-
-    /// Orientations that match the Prompter's shape (Vertical or Landscape).
-    private var prompterOrientationMask: UIInterfaceOrientationMask {
-        controller.isVertical ? .portrait : .landscape
-    }
-
-    /// Turns the phone to the Prompter's shape, like `requestDisplayModeSceneGeometry`.
-    private func requestPrompterSceneGeometry() {
-        setNeedsUpdateOfSupportedInterfaceOrientations()
-        guard traitCollection.userInterfaceIdiom == .phone, let scene = view.window?.windowScene else { return }
-        scene.requestGeometryUpdate(.iOS(interfaceOrientations: prompterOrientationMask)) { _ in }
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -164,23 +142,15 @@ final class PrompterViewController: UIViewController {
         // A faint edge so the show's frame reads on the black background.
         stage.layer.borderWidth = 1
         stage.layer.borderColor = UIColor.white.withAlphaComponent(0.22).cgColor
-        // Hidden until a phone has turned to the Display Mode orientation, so a 16:9
-        // card never flashes as a strip across a portrait screen.
-        let fits = BrowserOrientationFit.matches(
-            bounds: view.bounds.size,
-            isVertical: controller.isVertical,
-            idiom: traitCollection.userInterfaceIdiom
-        )
-        stage.alpha = fits ? 1 : 0
-        emptyStack?.alpha = fits ? 1 : 0
     }
 
+    /// The phone turns freely: on its side the card is large, upright it is smaller
+    /// with the controls stacked under it. The card always keeps the display's shape.
     override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
-        holdsDisplayModeOrientation ? prompterOrientationMask : .allButUpsideDown
+        .allButUpsideDown
     }
 
     override var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation {
-        guard !holdsDisplayModeOrientation else { return controller.isVertical ? .portrait : .landscapeRight }
         let current = view.phoneInterfaceOrientation
         return current == .portraitUpsideDown ? .portrait : current
     }
@@ -357,33 +327,7 @@ final class PrompterViewController: UIViewController {
         sizeDownButton.isEnabled = controller.fontSize > PrompterStageMetrics.canvasFontRange.lowerBound
         sizeUpButton.isEnabled = controller.fontSize < PrompterStageMetrics.canvasFontRange.upperBound
         refreshLiveButton()
-        refreshShapeItem()
         applyAnchor()
-    }
-
-    private var lastShapeIsVertical: Bool?
-
-    private func refreshShapeItem() {
-        let vertical = controller.isVertical
-        shapeItem.isHidden = ExternalOutputSettings.isVerticalMode
-        shapeItem.image = UIImage(systemName: vertical ? "rectangle.portrait" : "rectangle")
-        shapeItem.accessibilityLabel = "Prompter Shape"
-        shapeItem.accessibilityValue = vertical ? "Vertical" : "Landscape"
-        shapeItem.menu = UIMenu(title: "Prompter Shape", options: .singleSelection, children: [
-            UIAction(
-                title: "Landscape", image: UIImage(systemName: "rectangle"),
-                state: vertical ? .off : .on
-            ) { [weak self] _ in self?.controller.setPrefersVertical(false) },
-            UIAction(
-                title: "Vertical", image: UIImage(systemName: "rectangle.portrait"),
-                state: vertical ? .on : .off
-            ) { [weak self] _ in self?.controller.setPrefersVertical(true) }
-        ])
-        // On a change, turn the phone and re-fit the card to the new shape.
-        defer { lastShapeIsVertical = vertical }
-        guard let last = lastShapeIsVertical, last != vertical else { return }
-        view.setNeedsLayout()
-        if holdsDisplayModeOrientation { requestPrompterSceneGeometry() }
     }
 
     private func refreshLiveButton() {

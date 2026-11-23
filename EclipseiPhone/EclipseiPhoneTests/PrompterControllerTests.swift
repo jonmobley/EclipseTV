@@ -135,33 +135,10 @@ struct PrompterControllerTests {
         #expect(again.fontSize == 24)
     }
 
-    @Test func verticalShapePersistsAndKeepsTheReadingLine() throws {
-        let suite = "PrompterController.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defaults.removePersistentDomain(forName: suite)
-        let settings = PrompterLocalSettings(defaults: defaults)
-        let store = FakeStore()
-        let showId = UUID()
-        store.scripts[showId] = longScript
-        let controller = PrompterController(scriptStore: store, settings: settings, frames: FakeFrames())
-        controller.bind(scriptId: showId)
-        controller.updateStage(width: 400, viewportHeight: 600)
-        controller.nudge(lines: 10)
-        let anchor = controller.readingAnchor
-        #expect(!controller.prefersVertical)
-
-        controller.setPrefersVertical(true)
-        #expect(controller.isVertical)
-        #expect(settings.prefersVertical)
-        #expect(controller.canvasAspectRatio < 1)
-        #expect(controller.readingAnchor.characterIndex == anchor.characterIndex)
-        let again = PrompterController(scriptStore: FakeStore(), settings: settings, frames: FakeFrames())
-        #expect(again.prefersVertical)
-
-        controller.setPrefersVertical(false)
-        #expect(!settings.prefersVertical)
+    @Test func shapeAlwaysFollowsTheDisplay() {
+        let controller = PrompterController(scriptStore: FakeStore(), settings: PrompterLocalSettings(), frames: FakeFrames())
         #expect(controller.isVertical == ExternalOutputSettings.isVerticalMode)
-        #expect(!controller.isVerticalOnLandscapeDisplay)
+        #expect(controller.canvasAspectRatio == ExternalOutputSettings.outputAspectRatio)
     }
 
     @Test func fontChangeKeepsTheReadingLine() throws {
