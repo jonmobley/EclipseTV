@@ -51,7 +51,7 @@ struct QuestPollEditorTests {
 
     @Test func newPollIsPostedAndComesBackWithItsId() async throws {
         RecordingPollProtocol.reset(status: 200, body: try stored(id: "new-1"))
-        let saved = try await QuestPollDeckWriter(client: client()).save(deck)
+        let saved = try await client().saveDeck(deck)
         #expect(saved.id == "new-1")
         let request = try #require(RecordingPollProtocol.requests.last)
         #expect(request.method == "POST")
@@ -66,7 +66,7 @@ struct QuestPollEditorTests {
         RecordingPollProtocol.reset(status: 200, body: try stored(id: "abc"))
         var existing = deck
         existing.id = "abc"
-        _ = try await QuestPollDeckWriter(client: client()).save(existing)
+        _ = try await client().saveDeck(existing)
         let request = try #require(RecordingPollProtocol.requests.last)
         #expect(request.method == "PUT")
         #expect(request.path == "/api/polls/abc")
@@ -74,7 +74,7 @@ struct QuestPollEditorTests {
 
     @Test func deleteCallsThePollsAddress() async throws {
         RecordingPollProtocol.reset(status: 200, body: Data(#"{"ok":true}"#.utf8))
-        try await QuestPollDeckWriter(client: client()).delete(pollId: "abc")
+        try await client().deleteDeck(id: "abc")
         let request = try #require(RecordingPollProtocol.requests.last)
         #expect(request.method == "DELETE")
         #expect(request.path == "/api/polls/abc")
@@ -85,11 +85,11 @@ struct QuestPollEditorTests {
             status: 400, body: Data(#"{"error":"deck title is required"}"#.utf8)
         )
         await #expect(throws: LivePollError.server("deck title is required")) {
-            _ = try await QuestPollDeckWriter(client: self.client()).save(self.deck)
+            _ = try await self.client().saveDeck(self.deck)
         }
         RecordingPollProtocol.reset(status: 401, body: Data("{}".utf8))
         await #expect(throws: LivePollError.unauthorized) {
-            _ = try await QuestPollDeckWriter(client: self.client()).save(self.deck)
+            _ = try await self.client().saveDeck(self.deck)
         }
     }
 

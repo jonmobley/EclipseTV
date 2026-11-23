@@ -209,8 +209,8 @@
   time per question, question list) → `QuestPollQuestionEditorViewController` (text, 2–5 answers, right answer in a quiz).
   Reached from the poll list's + and pencil (`QuestPollPickerViewController`, also Settings → QuestPoll → My Polls in
   `.manage` mode) and a card's ⋯ → Edit Poll…. `QuestPollDraft` holds the unsaved poll and its limits (mirrors
-  `quest-relay/src/limits.ts`); `QuestPollDeckWriter` does `POST` / `PUT` / `DELETE /api/polls` (the same calls the website
-  editor uses; LivePollKit itself only reads, so move the writer there when the Mac editor lands). A new poll made while
+  `quest-relay/src/limits.ts`); saving and deleting go through LivePollKit's `saveDeck` / `deleteDeck` (`POST` / `PUT` / `DELETE /api/polls`, the same calls
+  the website editor and the Mac use). A new poll made while
   choosing one for a Show is picked automatically. A running room keeps its own copy, so edits show on the next start.
   questpoll.com has no test copy: never save/delete polls against it to try things out. Check the screens with a stub
   `URLProtocol` client instead (see `QuestPollEditorTests`).

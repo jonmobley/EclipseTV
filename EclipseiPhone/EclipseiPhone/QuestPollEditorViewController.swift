@@ -507,11 +507,11 @@ final class QuestPollEditorViewController: UITableViewController,
         guard let draft, draft.problem == nil, !isWorking else { return }
         view.endEditing(true)
         let deck = draft.deck()
-        let writer = QuestPollDeckWriter(client: client)
+        let client = self.client
         setWorking(true)
         Task { @MainActor [weak self] in
             do {
-                let saved = try await writer.save(deck)
+                let saved = try await client.saveDeck(deck)
                 self?.finishSave(saved, fallbackId: deck.id)
             } catch {
                 self?.setWorking(false)
@@ -625,11 +625,11 @@ final class QuestPollEditorViewController: UITableViewController,
     }
 
     private func delete(pollId: String) {
-        let writer = QuestPollDeckWriter(client: client)
+        let client = self.client
         setWorking(true)
         Task { @MainActor [weak self] in
             do {
-                try await writer.delete(pollId: pollId)
+                try await client.deleteDeck(id: pollId)
                 self?.isWorking = false
                 self?.original = self?.draft
                 let onDeleted = self?.onDeleted
