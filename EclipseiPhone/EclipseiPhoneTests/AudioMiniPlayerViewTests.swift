@@ -137,6 +137,7 @@ struct AudioMiniPlayerViewTests {
         bar.showTrack(title: "Remember the Name (feat. Styles of Beyond)", details: "Fort Minor")
         bar.layoutIfNeeded()
         #expect(bar.titleLineCount == 2)
-        #expect(bar.accessibilityValue == "Remember the Name (feat. Styles of Beyond), Fort Minor")
+        #expect(bar.spokenTrack == "Remember the Name (feat. Styles of Beyond), Fort Minor")
+        #expect(bar.isAccessibilityElement == false)
     }
 }

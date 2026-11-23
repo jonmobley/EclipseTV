@@ -160,8 +160,13 @@ final class AudioMiniPlayerView: UIView, UIGestureRecognizerDelegate {
     /// Song name on up to two lines; artist and playlist only for VoiceOver.
     func showTrack(title: String, details: String) {
         titleLabel.text = title
-        accessibilityValue = details.isEmpty ? title : "\(title), \(details)"
+        // The bar itself is not an accessibility element (its buttons are), so
+        // the title label is what VoiceOver reads: song, then artist and playlist.
+        titleLabel.accessibilityValue = details.isEmpty ? title : "\(title), \(details)"
     }
+
+    /// What VoiceOver reads for the track (song, then artist and playlist).
+    var spokenTrack: String? { titleLabel.accessibilityValue }
 
     /// Lines the song name currently needs (tests).
     var titleLineCount: Int {
@@ -206,8 +211,10 @@ final class AudioMiniPlayerView: UIView, UIGestureRecognizerDelegate {
         pinChrome(textStack: textStack)
         applyFloatingChrome()
 
-        accessibilityLabel = "Now Playing"
-        accessibilityHint = "Double tap to open Now Playing"
+        // VoiceOver focuses the title (a double tap lands on the bar's open tap).
+        titleLabel.accessibilityLabel = "Now Playing"
+        titleLabel.accessibilityHint = "Double tap to open Now Playing"
+        titleLabel.accessibilityTraits = .button
 
         let tap = UITapGestureRecognizer(target: self, action: #selector(openTapped))
         tap.delegate = self
