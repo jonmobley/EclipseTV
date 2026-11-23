@@ -197,7 +197,9 @@ final class AudioNowPlayingViewController: UIViewController {
         tableView.dragInteractionEnabled = true
         tableView.dragDelegate = self
         tableView.dropDelegate = self
-        tableView.rowHeight = 56
+        // At least 56pt, taller when a row has an artist line (a fixed 56 clipped it).
+        tableView.rowHeight = UITableView.automaticDimension
+        tableView.estimatedRowHeight = 56
         tableView.tableFooterView = UIView()
         tableView.keyboardDismissMode = .onDrag
         tableView.alwaysBounceVertical = true
@@ -466,7 +468,13 @@ extension AudioNowPlayingViewController: UITableViewDataSource, UITableViewDeleg
         guard ids.indices.contains(indexPath.row) else { return cell }
         let track = AudioStore.shared.track(id: ids[indexPath.row])
         config.text = track?.title ?? "Missing Track"
-        config.secondaryText = track?.subtitle
+        let subtitle = track?.subtitle ?? ""
+        config.secondaryText = subtitle.isEmpty ? nil : subtitle
+        // Keep one-line rows at the old 56pt; rows with an artist grow to fit it.
+        if subtitle.isEmpty {
+            config.directionalLayoutMargins.top = 16
+            config.directionalLayoutMargins.bottom = 16
+        }
         config.image = UIImage(systemName: "music.note")
         config.imageProperties.tintColor = .secondaryLabel
         // The playlist row is "current" only while it, not an Up Next song, is playing.
@@ -628,10 +636,19 @@ extension AudioNowPlayingViewController: UITableViewDragDelegate, UITableViewDro
 /// "Up Next" section header with a Clear button (same words as the Mac's Up Next).
 private final class UpNextHeaderView: UITableViewHeaderFooterView {
 
+    private let titleLabel = UILabel()
     private let clearButton = UIButton(type: .system)
 
     override init(reuseIdentifier: String?) {
         super.init(reuseIdentifier: reuseIdentifier)
+        // Own label, not a content configuration: a configuration's view sits over
+        // added subviews and hid the Clear button.
+        let style = UIListContentConfiguration.plainHeader().textProperties
+        titleLabel.font = style.font
+        titleLabel.textColor = style.color
+        titleLabel.adjustsFontForContentSizeCategory = true
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(titleLabel)
         clearButton.setTitle("Clear", for: .normal)
         clearButton.titleLabel?.font = .preferredFont(forTextStyle: .subheadline)
         clearButton.titleLabel?.adjustsFontForContentSizeCategory = true
@@ -641,11 +658,16 @@ private final class UpNextHeaderView: UITableViewHeaderFooterView {
             AudioPlayerController.shared.clearUpNext()
         }, for: .touchUpInside)
         contentView.addSubview(clearButton)
+        let margins = contentView.layoutMarginsGuide
         NSLayoutConstraint.activate([
-            clearButton.trailingAnchor.constraint(
-                equalTo: contentView.layoutMarginsGuide.trailingAnchor
+            titleLabel.leadingAnchor.constraint(equalTo: margins.leadingAnchor),
+            titleLabel.topAnchor.constraint(equalTo: margins.topAnchor),
+            titleLabel.bottomAnchor.constraint(equalTo: margins.bottomAnchor),
+            titleLabel.trailingAnchor.constraint(
+                lessThanOrEqualTo: clearButton.leadingAnchor, constant: -8
             ),
-            clearButton.centerYAnchor.constraint(equalTo: contentView.centerYAnchor)
+            clearButton.trailingAnchor.constraint(equalTo: margins.trailingAnchor),
+            clearButton.centerYAnchor.constraint(equalTo: titleLabel.centerYAnchor)
         ])
     }
 
@@ -653,9 +675,6 @@ private final class UpNextHeaderView: UITableViewHeaderFooterView {
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     func configure(count: Int) {
-        var config = UIListContentConfiguration.plainHeader()
-        config.text = count > 1 ? "Up Next · \(count) tracks" : "Up Next"
-        contentConfiguration = config
-        contentView.bringSubviewToFront(clearButton)
+        titleLabel.text = count > 1 ? "Up Next · \(count) tracks" : "Up Next"
     }
 }
