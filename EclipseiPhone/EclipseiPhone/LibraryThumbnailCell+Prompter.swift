@@ -23,7 +23,7 @@ extension LibraryThumbnailCell {
     ) {
         configureSpecial(
             title: "Prompter",
-            systemImage: "text.alignleft",
+            systemImage: ThumbnailTypeIcon.prompter.systemName,
             thumbnail: nil,
             fillColor: .specialTile,
             isLive: isLive,

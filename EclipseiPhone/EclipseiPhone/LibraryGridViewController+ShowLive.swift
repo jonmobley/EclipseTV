@@ -213,13 +213,13 @@ extension LibraryGridViewController {
             let isVideo = page?.videoLink != nil
             applyRemoteOverlayHeader(
                 title: remoteWebTitle(snap.liveItemId),
-                systemImage: isVideo ? "play.rectangle.fill" : "safari",
+                systemImage: isVideo ? "play.rectangle.fill" : ThumbnailTypeIcon.website.systemName,
                 thumbnail: remoteWebThumb(snap.liveItemId)
             )
         case .pdf:
             applyRemoteOverlayHeader(
                 title: remotePDFTitle(snap.liveItemId),
-                systemImage: "doc.richtext",
+                systemImage: ThumbnailTypeIcon.pdf.systemName,
                 thumbnail: remotePDFThumb(snap.liveItemId)
             )
         case .camera:
@@ -227,13 +227,13 @@ extension LibraryGridViewController {
         case .ptzCamera:
             applyRemoteOverlayHeader(title: "PTZ Camera", systemImage: "web.camera")
         case .prompter:
-            applyRemoteOverlayHeader(title: "Prompter", systemImage: "text.alignleft")
+            applyRemoteOverlayHeader(title: "Prompter", systemImage: ThumbnailTypeIcon.prompter.systemName)
         case .countdown:
             applyRemoteCountdownHeader(snap)
         case .slideshow:
             applyRemoteOverlayHeader(
                 title: remoteSlideshowTitle(snap.liveItemId),
-                systemImage: "rectangle.stack.fill"
+                systemImage: ThumbnailTypeIcon.slideshow.systemName
             )
         case .logo:
             applyRemoteOverlayHeader(

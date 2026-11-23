@@ -21,20 +21,22 @@ enum ThumbnailTypeIcon: Equatable {
     case countdown
     case prompter
 
-    /// SF Symbol used on the overlay (matches existing Show-grid placeholders).
+    /// SF Symbol for this kind of content, everywhere it is named: the + menu, tile
+    /// placeholders and the hero. Website, PDF, Prompter and Slideshow use the same
+    /// symbols as the Mac app (`AddMediaList` / `MediaTypeVisual` in eclipsepro).
     var systemName: String {
         switch self {
         case .photo: return "photo.fill"
         case .video: return "play.fill"
-        case .slideshow: return "rectangle.stack.fill"
-        case .website: return "safari"
+        case .slideshow: return "photo.on.rectangle.angled"
+        case .website: return "globe"
         case .webVideo: return "play.rectangle.fill"
-        case .pdf: return "doc.richtext"
+        case .pdf: return "doc.text"
         case .camera: return "camera.fill"
         case .ptzCamera: return "web.camera"
         case .livePoll: return "chart.bar.fill"
         case .countdown: return "timer"
-        case .prompter: return "text.alignleft"
+        case .prompter: return "text.viewfinder"
         }
     }
 
@@ -85,6 +87,10 @@ enum ThumbnailTypeIcon: Equatable {
 
 /// Dark disc + white glyph so the type reads on light or dark thumbnail art.
 final class ThumbnailTypeIconView: UIView {
+
+    /// Off since 2026-11-22: tiles carry no corner glyph, like the Mac app. The kind
+    /// still reaches VoiceOver through `spokenName`, and videos keep their duration.
+    static let showsOnTiles = false
 
     static let side: CGFloat = 24
     static let inset: CGFloat = 8

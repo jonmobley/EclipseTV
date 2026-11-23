@@ -126,7 +126,7 @@ extension LibraryGridViewController {
             } ?? false
             liveHeader.configureOverlay(
                 title: title,
-                systemImage: "safari",
+                systemImage: ThumbnailTypeIcon.website.systemName,
                 fillColor: .mediaPlaceholder,
                 thumbnail: thumb,
                 keepWebPreview: canShowLivePreview
@@ -162,7 +162,7 @@ extension LibraryGridViewController {
             let thumb = doc.flatMap { PDFThumbnailStore.shared.image(for: $0.id) }
             liveHeader.configureOverlay(
                 title: title,
-                systemImage: "doc.richtext",
+                systemImage: ThumbnailTypeIcon.pdf.systemName,
                 fillColor: .mediaPlaceholder,
                 thumbnail: thumb
             )

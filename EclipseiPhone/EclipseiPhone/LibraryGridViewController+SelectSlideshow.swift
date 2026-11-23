@@ -16,7 +16,7 @@ extension LibraryGridViewController {
         guard slideshowImageIdsFromSelection() != nil else { return nil }
         return UIAction(
             title: "Create Slideshow",
-            image: UIImage(systemName: "rectangle.stack.badge.play")
+            image: UIImage(systemName: ThumbnailTypeIcon.slideshow.systemName)
         ) { [weak self] _ in
             DispatchQueue.main.async { self?.promptCreateSlideshowFromSelection() }
         }
