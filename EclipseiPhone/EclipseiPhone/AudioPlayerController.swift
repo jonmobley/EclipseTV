@@ -23,8 +23,15 @@ final class AudioPlayerController: NSObject {
     static let trackRemovedNotification =
         Notification.Name("AudioPlayerController.trackRemoved")
 
+    /// The playlist (or Music list) being played through, in order.
     private(set) var queue: [UUID] = []
+    /// Position in `queue`. While an Up Next song plays it stays on the song that was
+    /// playing when Up Next took over, so the playlist resumes after it.
     private(set) var currentIndex: Int = 0
+    /// Songs lined up with Play Next / Add to Queue; they play before `queue` carries on.
+    private(set) var upNext = MusicUpNext()
+    /// The Up Next song playing now (already taken off `upNext`), if any.
+    private(set) var queuedTrackId: UUID?
     private(set) var playlistId: UUID?
     private(set) var playlistName: String?
     private(set) var isPlaying = false
@@ -74,10 +81,37 @@ final class AudioPlayerController: NSObject {
         RowState(currentTrackId: currentTrack?.id, isPlaying: isPlaying)
     }
 
-    /// Current track, if the queue points at a valid id.
+    /// Current track: the Up Next song playing now, else the queue's current song.
     var currentTrack: AudioTrack? {
+        if let queuedTrackId {
+            return AudioStore.shared.track(id: queuedTrackId)
+        }
         guard queue.indices.contains(currentIndex) else { return nil }
         return AudioStore.shared.track(id: queue[currentIndex])
+    }
+
+    /// True while the song playing came from Up Next rather than the playlist.
+    var isPlayingFromUpNext: Bool { queuedTrackId != nil }
+
+    /// What the Now Playing list draws: playlist order, position and Up Next.
+    /// Lets the list skip the twice-a-second progress posts (a reload mid-swipe or
+    /// mid-drag would cancel the gesture).
+    struct QueueState: Equatable {
+        var queue: [UUID]
+        var currentIndex: Int
+        var upNext: [UUID]
+        var queuedTrackId: UUID?
+        var playlistName: String?
+    }
+
+    var queueState: QueueState {
+        QueueState(
+            queue: queue,
+            currentIndex: currentIndex,
+            upNext: upNext.trackIds,
+            queuedTrackId: queuedTrackId,
+            playlistName: playlistName
+        )
     }
 
     /// True when the mini player should be visible.
@@ -176,6 +210,72 @@ final class AudioPlayerController: NSObject {
         play()
     }
 
+    // MARK: - Up Next
+
+    /// Whether a song can be added to Up Next now: only while music is loaded,
+    /// since with nothing loaded there is nothing for it to follow.
+    var canQueue: Bool { hasActiveSession }
+
+    /// Plays `trackId` after the current song (Play Next).
+    func playTrackNext(_ trackId: UUID) {
+        guard canQueue, AudioStore.shared.track(id: trackId) != nil else { return }
+        upNext.playNext(trackId)
+        notify()
+    }
+
+    /// Plays `trackId` after everything already in Up Next (Add to Queue).
+    func addTrackToQueue(_ trackId: UUID) {
+        guard canQueue, AudioStore.shared.track(id: trackId) != nil else { return }
+        upNext.add(trackId)
+        notify()
+    }
+
+    func removeFromUpNext(_ trackId: UUID) {
+        guard upNext.contains(trackId) else { return }
+        upNext.remove(trackId)
+        notify()
+    }
+
+    func moveUpNext(from source: Int, to destination: Int) {
+        guard source != destination else { return }
+        upNext.move(from: source, to: destination)
+        notify()
+    }
+
+    func clearUpNext() {
+        guard !upNext.isEmpty else { return }
+        upNext.removeAll()
+        notify()
+    }
+
+    /// Plays the Up Next song at `index` now; it leaves Up Next.
+    func playUpNext(at index: Int) {
+        guard let id = upNext.remove(at: index) else { return }
+        guard AudioStore.shared.track(id: id) != nil else {
+            notify()
+            return
+        }
+        queuedTrackId = id
+        reloadCurrentItem()
+        play()
+    }
+
+    /// Moves to the next song without starting it: Up Next first, then the queue
+    /// (after the song Up Next interrupted). Returns false when there is nothing to move to.
+    @discardableResult
+    private func advanceToNext() -> Bool {
+        if let id = upNext.popFirst(where: { AudioStore.shared.track(id: $0) != nil }) {
+            queuedTrackId = id
+            reloadCurrentItem()
+            return true
+        }
+        guard !queue.isEmpty else { return false }
+        queuedTrackId = nil
+        currentIndex = (currentIndex + 1) % queue.count
+        reloadCurrentItem()
+        return true
+    }
+
     func togglePlayPause() {
         if isPlaying { pause() } else { play() }
     }
@@ -261,6 +361,8 @@ final class AudioPlayerController: NSObject {
 
         queue = []
         currentIndex = 0
+        upNext.removeAll()
+        queuedTrackId = nil
         playlistId = nil
         playlistName = nil
         isPlaying = false
@@ -290,17 +392,23 @@ final class AudioPlayerController: NSObject {
         notify()
     }
 
+    /// Skips to the next song: Up Next first, then the playlist.
     func playNext() {
-        guard !queue.isEmpty else { return }
-        currentIndex = (currentIndex + 1) % queue.count
-        reloadCurrentItem()
+        guard advanceToNext() else { return }
         play()
     }
 
     func playPrevious() {
-        guard !queue.isEmpty else { return }
-        if currentTime > 3 {
+        guard !queue.isEmpty || queuedTrackId != nil else { return }
+        if currentTime > 3 || queue.isEmpty {
             seek(to: 0)
+            return
+        }
+        if queuedTrackId != nil {
+            // Back from an Up Next song: return to the playlist song it interrupted.
+            queuedTrackId = nil
+            reloadCurrentItem()
+            play()
             return
         }
         currentIndex = (currentIndex - 1 + queue.count) % queue.count
@@ -311,7 +419,9 @@ final class AudioPlayerController: NSObject {
     /// Jumps to a queue index and starts playback.
     func play(at index: Int) {
         guard queue.indices.contains(index) else { return }
-        guard index != currentIndex else {
+        let wasQueued = queuedTrackId != nil
+        queuedTrackId = nil
+        guard index != currentIndex || wasQueued else {
             play()
             return
         }
@@ -368,9 +478,17 @@ final class AudioPlayerController: NSObject {
         notify()
     }
 
-    /// Advances when Autoplay Next is on; otherwise parks on this track, paused at 0.
+    /// Plays Up Next first (even with Autoplay Next off, as on the Mac), then advances
+    /// when Autoplay Next is on; otherwise parks on this track, paused at 0.
     private func handleTrackDidEnd() {
-        if playsNext, !queue.isEmpty {
+        let action = Self.trackEndAction(
+            hasPlayableUpNext: upNext.trackIds.contains {
+                AudioStore.shared.track(id: $0) != nil
+            },
+            playsNext: playsNext,
+            queueIsEmpty: queue.isEmpty
+        )
+        if action == .playNext {
             playNext()
             return
         }
@@ -378,6 +496,25 @@ final class AudioPlayerController: NSObject {
         reloadCurrentItem()
         player?.pause()
         updateNowPlayingPlayback()
+    }
+
+    enum TrackEndAction: Equatable {
+        /// Start the next song (Up Next first, then the playlist).
+        case playNext
+        /// Stay on this song, paused at the start.
+        case park
+    }
+
+    /// What happens when a song ends. Up Next always plays on, even with Autoplay Next
+    /// off (same as the Mac); otherwise the playlist advances only with Autoplay Next on.
+    static func trackEndAction(
+        hasPlayableUpNext: Bool,
+        playsNext: Bool,
+        queueIsEmpty: Bool
+    ) -> TrackEndAction {
+        if hasPlayableUpNext { return .playNext }
+        if playsNext, !queueIsEmpty { return .playNext }
+        return .park
     }
 
     // MARK: - Internals
@@ -390,6 +527,12 @@ final class AudioPlayerController: NSObject {
     ) {
         queue = ids
         currentIndex = min(max(0, startIndex), max(0, ids.count - 1))
+        // Picking a song by hand ends any Up Next song, and the picked song
+        // leaves Up Next (the rest stays lined up).
+        queuedTrackId = nil
+        if ids.indices.contains(currentIndex) {
+            upNext.remove(ids[currentIndex])
+        }
         self.playlistId = playlistId
         self.playlistName = playlistName
         reloadCurrentItem()
@@ -477,23 +620,53 @@ final class AudioPlayerController: NSObject {
         notify()
     }
 
-    @objc private func handleTrackRemoved(_ note: Notification) {
-        guard let id = note.userInfo?["id"] as? UUID else { return }
-        let removedPositions = queue.indices.filter { queue[$0] == id }
-        guard !removedPositions.isEmpty else { return }
-
-        let removedCurrent = removedPositions.contains(currentIndex)
-        // Shift the cursor by however many entries disappeared ahead of it, otherwise it
-        // ends up pointing one past the playing track and gets clamped back to zero.
-        let removedBefore = removedPositions.filter { $0 < currentIndex }.count
-
-        queue.removeAll { $0 == id }
-        if queue.isEmpty {
+    /// The playlist ran out under the song playing from it: carry on into Up Next when it
+    /// has a song (Play Next / Add to Queue songs are never thrown away), otherwise stop.
+    private func continueIntoUpNextOrStop() {
+        currentIndex = 0
+        let wasPlaying = isPlaying
+        guard advanceToNext() else {
             stop()
             return
         }
-        currentIndex = min(max(0, currentIndex - removedBefore), queue.count - 1)
+        if wasPlaying { play() } else { notify() }
+    }
 
+    @objc private func handleTrackRemoved(_ note: Notification) {
+        guard let id = note.userInfo?["id"] as? UUID else { return }
+        let wasInUpNext = upNext.contains(id)
+        upNext.remove(id)
+        let removedQueuedCurrent = queuedTrackId == id
+        let removedPositions = queue.indices.filter { queue[$0] == id }
+        // While an Up Next song plays, the playlist position only matters for resuming.
+        let removedCurrent = queuedTrackId == nil && removedPositions.contains(currentIndex)
+
+        if !removedPositions.isEmpty {
+            // Shift the cursor by however many entries disappeared ahead of it, otherwise
+            // it ends up pointing one past the playing track and gets clamped back to zero.
+            let removedBefore = removedPositions.filter { $0 < currentIndex }.count
+            queue.removeAll { $0 == id }
+            if queue.isEmpty, queuedTrackId == nil || removedQueuedCurrent {
+                continueIntoUpNextOrStop()
+                return
+            }
+            currentIndex = min(max(0, currentIndex - removedBefore), max(0, queue.count - 1))
+        }
+
+        if removedQueuedCurrent {
+            // The Up Next song playing now was deleted: move on as if it had ended.
+            let wasPlaying = isPlaying
+            guard advanceToNext() else {
+                stop()
+                return
+            }
+            if wasPlaying { play() } else { notify() }
+            return
+        }
+        guard !removedPositions.isEmpty else {
+            if wasInUpNext { notify() }
+            return
+        }
         guard removedCurrent else {
             // Some other track left the queue; leave the current item playing untouched.
             notify()
@@ -525,10 +698,17 @@ final class AudioPlayerController: NSObject {
             return
         }
 
-        let playingId = currentTrack?.id
+        // The playlist's own song, even while an Up Next song is playing over it.
+        let playingId = queue.indices.contains(currentIndex) ? queue[currentIndex] : nil
         queue = updated
         if queue.isEmpty {
-            stop()
+            if queuedTrackId != nil {
+                // Let the Up Next song finish; there is just no playlist to return to.
+                currentIndex = 0
+                notify()
+                return
+            }
+            continueIntoUpNextOrStop()
             return
         }
         if let playingId, let stillThere = queue.firstIndex(of: playingId) {
@@ -539,6 +719,11 @@ final class AudioPlayerController: NSObject {
             return
         }
         currentIndex = min(currentIndex, queue.count - 1)
+        if queuedTrackId != nil {
+            // An Up Next song is playing; only the resume point moved.
+            notify()
+            return
+        }
         reloadCurrentItem()
         if isPlaying { play() } else { notify() }
     }

@@ -91,7 +91,7 @@ extension LibraryGridViewController {
     ) {
         let message = (error as? LivePollError)?.userMessage ?? fallback
         let alert = UIAlertController(
-            title: "QuestPoll", message: message, preferredStyle: .alert
+            title: "Poll", message: message, preferredStyle: .alert
         )
         alert.addAction(UIAlertAction(title: "OK", style: .default))
         var host: UIViewController = self

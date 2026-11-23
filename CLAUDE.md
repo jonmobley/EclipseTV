@@ -82,6 +82,13 @@
   `ExternalOutputOrientationFixture` now clears any selected custom size for its body (also covers simulators with a
   size saved by hand). A local test run reading 512×786 / "Lobby wall" comes from that simulator's own saved settings.
 - Crash reports: `CrashReporting.swift` in each app sends crashes and freezes to Sentry projects `eclipse-iphone` and `eclipse-appletv` (Release builds only; `scrub` keeps crash type, code location and device model, and drops all free text and activity trails; the `0.0.0.0` user address is what stops Sentry reading a city from the connection, since neither its IP setting nor `infer_ip` did). Upload symbols after each archive so reports are readable. App Privacy answers must list Crash Data and Other Diagnostic Data, not linked to the user, no tracking.
+- Music Up Next (iPhone, 2026-11-23, `MusicUpNext`, `AudioQueueActions`): Play Next / Add to Queue on song rows
+  (menu + leading swipe), same rules as the Mac's `MusicQueue` (a song at most once; Play Next puts it first, Add to
+  Queue last). Offered only while music is loaded (`AudioPlayerController.canQueue`). A queued song playing sets
+  `queuedTrackId` and leaves `currentIndex` on the interrupted playlist song, so the playlist resumes at index+1.
+  Queued songs play even with Autoplay Next off. Up Next is session-only (cleared by `stop()`), reorderable by drag in
+  Now Playing (VoiceOver: Move Up / Move Down). Now Playing reloads its list only when `queueState` changes, since the
+  player posts its change notice twice a second while playing (a reload every tick cancelled swipes and drags).
 
 ## TestFlight builds
 
@@ -216,6 +223,9 @@
   `alert.preferConfirmAction()` before it is presented; without a preferred action UIKit sends a keyboard's
   Return to Cancel. The camera and QR scanner sessions set `isMultitaskingCameraAccessEnabled` so the camera
   keeps running in Split View / resized windows (unconfirmed on a real iPad).
+- Polls naming (2026-11-23): the owner dropped the QuestPoll brand. On screen, the thing on stage is a "Poll", and the
+  web account/service is "Eclipse Polls" at polls.eclipseapp.com (Q&A audience link ask.eclipseapp.com/CODE).
+  questpoll.com / quest.eclipseapp.com still answer the API and forward pages. Code names (QuestPoll*, LivePoll*) stay.
 - Polls are made and edited in the app (iPhone/iPad, 2026-11-22): `QuestPollEditorViewController` (name, Poll / Quiz,
   time per question, question list) → `QuestPollQuestionEditorViewController` (text, 2–5 answers, right answer in a quiz).
   Reached from the poll list's + and pencil (`QuestPollPickerViewController`, also Settings → QuestPoll → My Polls in
@@ -247,3 +257,9 @@
   custom picture, like the Mac. Which preset is chosen is remembered on this device only (UserDefaults
   `EclipseTV.background.colorPreset`): other iPhones receive the picture without the name, since the iCloud Background
   record has no field for it. The Mac does not sync its Background (it is per presentation there).
+- Music sync (2026-11-23, with the Mac): songs are `AudioTrack` records `audio-<UUID>`, playlists `AudioPlaylist`
+  records `playlist-<UUID>`, never parented, last writer wins on `modifiedAt` (tie → remote). Protected items
+  (Background Music + Chill Low Fi) never sync; `caf` and files over 200 MB stay on the phone. Clocks and
+  acknowledgements live in `MusicSyncLedger`, not in the saved track/playlist format. Playlists keep song ids the
+  phone has no file for yet (`MusicSyncPolicy.mergeOrder` on reorder). **Both record types must be deployed
+  Development → Production in the CloudKit Console** before music syncs in TestFlight/App Store builds.

@@ -36,8 +36,15 @@ final class AudioPlaylistStore {
         subsystem: "com.eclipseapp.ios", category: "AudioPlaylistStore"
     )
 
+    /// iCloud clocks and acknowledgements for playlists (see `AudioPlaylistStore+Sync`).
+    let syncLedger: MusicSyncLedger
+
+    /// Creates a store saved in `defaults`.
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        syncLedger = MusicSyncLedger(
+            defaults: defaults, keyPrefix: "EclipseTV.audioPlaylists.sync"
+        )
         load()
     }
 
@@ -52,6 +59,7 @@ final class AudioPlaylistStore {
         let playlist = AudioPlaylist(name: trimmed)
         playlists.insert(playlist, at: 0)
         persist()
+        noteLocalEdit(id: playlist.id)
         return playlist
     }
 
@@ -62,21 +70,18 @@ final class AudioPlaylistStore {
         }
         guard let index = playlists.firstIndex(where: { $0.id == id }) else { return }
         guard !playlists[index].isProtected else { return }
+        guard playlists[index].name != trimmed else { return }
         playlists[index].name = trimmed
         persist()
+        noteLocalEdit(id: id)
     }
 
     /// Deletes the playlist with `id` when present. Protected playlists are ignored.
     func delete(id: UUID) {
         guard let existing = playlists.first(where: { $0.id == id }),
               !existing.isProtected else { return }
-        let before = playlists.count
-        playlists.removeAll { $0.id == id }
-        guard playlists.count != before else { return }
-        if lastPlayedPlaylistId == id {
-            lastPlayedPlaylistId = nil
-        }
-        persist()
+        removePlaylist(id: id)
+        noteLocalDeletion(id: id)
     }
 
     /// Inserts or repairs a protected system playlist and ensures membership.
@@ -120,6 +125,7 @@ final class AudioPlaylistStore {
         guard !playlists[index].trackIds.contains(trackId) else { return }
         playlists[index].trackIds.append(trackId)
         persist()
+        noteLocalEdit(id: playlistId)
     }
 
     /// Removes `trackId` from the playlist when present.
@@ -134,30 +140,68 @@ final class AudioPlaylistStore {
            track.isProtected {
             return
         }
+        let before = playlists[index].trackIds.count
         playlists[index].trackIds.removeAll { $0 == trackId }
+        guard playlists[index].trackIds.count != before else { return }
         persist()
+        noteLocalEdit(id: playlistId)
     }
 
-    /// Replaces the playlist's ordered membership.
+    /// Reorders the playlist's songs.
+    ///
+    /// `trackIds` may list only the songs this device can play: ids of songs still
+    /// coming from another device keep their places (`MusicSyncPolicy.mergeOrder`),
+    /// so a reorder here never drops them from the synced playlist.
     func reorder(trackIds: [UUID], inPlaylistId playlistId: UUID) {
         guard let index = playlists.firstIndex(where: { $0.id == playlistId }) else {
             return
         }
-        playlists[index].trackIds = trackIds
+        let merged = MusicSyncPolicy.mergeOrder(
+            existing: playlists[index].trackIds, reordered: trackIds
+        )
+        guard merged != playlists[index].trackIds else { return }
+        playlists[index].trackIds = merged
         persist()
+        noteLocalEdit(id: playlistId)
     }
 
     /// Drops `trackId` from every playlist (skips protected membership).
     func removeTrackFromAllPlaylists(trackId: UUID) {
         let trackProtected = AudioStore.shared.track(id: trackId)?.isProtected == true
-        var changed = false
+        var changedIds: [UUID] = []
         for index in playlists.indices {
             if playlists[index].isProtected && trackProtected { continue }
             let before = playlists[index].trackIds.count
             playlists[index].trackIds.removeAll { $0 == trackId }
-            if playlists[index].trackIds.count != before { changed = true }
+            if playlists[index].trackIds.count != before {
+                changedIds.append(playlists[index].id)
+            }
         }
-        if changed { persist() }
+        guard !changedIds.isEmpty else { return }
+        persist()
+        changedIds.forEach { noteLocalEdit(id: $0) }
+    }
+
+    /// Inserts or replaces a playlist received from iCloud.
+    func upsertSyncedPlaylist(_ playlist: AudioPlaylist) {
+        if let index = playlists.firstIndex(where: { $0.id == playlist.id }) {
+            guard playlists[index] != playlist else { return }
+            playlists[index] = playlist
+        } else {
+            playlists.insert(playlist, at: 0)
+        }
+        persist()
+    }
+
+    /// Removes a playlist. No protection check and no iCloud bookkeeping.
+    func removePlaylist(id: UUID) {
+        let before = playlists.count
+        playlists.removeAll { $0.id == id }
+        guard playlists.count != before else { return }
+        if lastPlayedPlaylistId == id {
+            lastPlayedPlaylistId = nil
+        }
+        persist()
     }
 
     /// Playlist with `id`, if any.

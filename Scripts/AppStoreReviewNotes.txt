@@ -33,12 +33,12 @@ These are optional. Everything above works without them.
   Voice control (microphone + speech recognition) is off until the user
   turns it on in the camera controls.
 
-Live Poll (QuestPoll)
----------------------
-Optional audience polls, under Settings > QuestPoll. Sign-in uses a 6-digit
+Polls (Eclipse Polls)
+----------------------
+Optional audience polls, under Settings > Eclipse Polls. Sign-in uses a 6-digit
 code emailed to the address entered.
 Demo account: [OWNER TO FILL IN, or remove this section]
-Settings > QuestPoll > Delete Account removes the account and its polls.
+Settings > Eclipse Polls > Delete Account removes the account and its polls.
 
 Permissions used
 ----------------
@@ -56,7 +56,7 @@ Network notes
 -------------
 NSAllowsArbitraryLoads is set because the app talks to devices on the local
 network by IP address over plain HTTP (Eclipse for Mac, PTZ cameras), which
-cannot have certificates. Internet services (iCloud, QuestPoll) use HTTPS.
+cannot have certificates. Internet services (iCloud, Eclipse Polls) use HTTPS.
 
 iCloud
 ------

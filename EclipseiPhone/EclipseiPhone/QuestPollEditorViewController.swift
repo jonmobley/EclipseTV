@@ -615,7 +615,7 @@ final class QuestPollEditorViewController: UITableViewController,
     static func deleteMessage(title: String, cardsUsingIt: Int) -> String {
         let name = title.trimmingCharacters(in: .whitespacesAndNewlines)
         var message = "\(name.isEmpty ? "This poll" : "“\(name)”") is removed from your "
-            + "QuestPoll account, on every device. This cannot be undone."
+            + "Eclipse Polls account, on every device. This cannot be undone."
         if cardsUsingIt > 0 {
             let cards = cardsUsingIt == 1 ? "1 card" : "\(cardsUsingIt) cards"
             let verb = cardsUsingIt == 1 ? "uses" : "use"

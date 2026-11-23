@@ -135,7 +135,8 @@ final class CloudKitSharedSyncHost: NSObject, CKSyncEngineDelegate {
             }
             for deletion in changes.deletions {
                 EclipseSyncController.shared.applyRemoteDeletion(
-                    recordName: deletion.recordID.recordName
+                    recordName: deletion.recordID.recordName,
+                    zoneID: deletion.recordID.zoneID
                 )
             }
         default:

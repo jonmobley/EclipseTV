@@ -30,6 +30,9 @@ extension CloudKitSyncEngine {
         if name.hasPrefix("eclipse.cameraSettings.") {
             return makeCameraSettingsRecordToSave(name: name, existing: existing)
         }
+        if Self.isMusicRecordName(name) {
+            return makeMusicRecordToSave(name: name, existing: existing)
+        }
         if let showId = CloudKitSchema.prompterShowId(fromRecordName: name) {
             guard let entry = PrompterScriptStore.shared.entry(forShowId: showId)
             else { return nil }
@@ -108,6 +111,7 @@ extension CloudKitSyncEngine {
                 .saveRecord(CloudKitSchema.prompterRecordID(for: showId))
             )
         }
+        enqueueMusicContent(into: &changes)
         if LogoStore.shared.hasCustomImage {
             changes.append(.saveRecord(CloudKitSchema.backgroundRecordID))
         }

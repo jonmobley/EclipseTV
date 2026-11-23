@@ -27,7 +27,9 @@ struct LivePollSignInViewControllerTests {
 
     @Test func errorCopyMatchesAuthFailures() {
         #expect(LivePollError.unauthorized.userMessage == "Sign in required.")
-        #expect(LivePollError.transport.userMessage.contains("QuestPoll"))
+        // The service name comes from LivePollKit ("QuestPoll" until its rename lands).
+        let transport = LivePollError.transport.userMessage
+        #expect(transport.hasPrefix("Could not reach "))
     }
 }
 

@@ -255,7 +255,10 @@ final class AudioLibraryViewController: UITableViewController {
                 applyNowPlayingStyle(&config, isCurrent: isCurrent)
                 if !isEditing {
                     cell.accessoryView = AudioMusicRowViews.playlistAccessory(
-                        songCount: playlist.trackIds.count
+                        // Songs still arriving from another device are not counted.
+                        songCount: playlist.trackIds.filter {
+                            trackStore.track(id: $0) != nil
+                        }.count
                     )
                 }
             }
@@ -364,6 +367,19 @@ final class AudioLibraryViewController: UITableViewController {
             )
         }
         return proposedIndexPath
+    }
+
+    override func tableView(
+        _ tableView: UITableView,
+        leadingSwipeActionsConfigurationForRowAt indexPath: IndexPath
+    ) -> UISwipeActionsConfiguration? {
+        guard Section(rawValue: indexPath.section) == .tracks,
+              !isEditing,
+              trackStore.tracks.indices.contains(indexPath.row)
+        else { return nil }
+        return AudioQueueActions.leadingSwipe(
+            for: trackStore.tracks[indexPath.row].id, host: self
+        )
     }
 
     override func tableView(
@@ -484,6 +500,7 @@ final class AudioLibraryViewController: UITableViewController {
     }
 
     /// Long-press menu for a library track (Play is row tap, not listed here).
+    /// Play Next / Add to Queue lead it while music is loaded.
     private func trackMoreMenu(for track: AudioTrack) -> UIMenu {
         let arrange = UIAction(
             title: "Arrange",
@@ -498,7 +515,11 @@ final class AudioLibraryViewController: UITableViewController {
         ) { [weak self] _ in
             self?.promptAddToPlaylist(trackId: track.id)
         }
-        var children: [UIMenuElement] = [arrange, add]
+        var children: [UIMenuElement] = []
+        if let queue = AudioQueueActions.menuSection(for: track.id, host: self) {
+            children.append(queue)
+        }
+        children.append(contentsOf: [arrange, add])
         if !track.isProtected {
             let rename = UIAction(
                 title: "Rename",

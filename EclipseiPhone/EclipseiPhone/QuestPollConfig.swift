@@ -17,7 +17,7 @@ enum QuestPollConfig {
     /// Unified Live Poll relay origin.
     static var origin: URL { LivePollConfig.origin }
 
-    /// The website's host page (Settings → Open questpoll.com).
+    /// The website's host page (Settings → Open polls.eclipseapp.com).
     static var hostURL: URL { LivePollConfig.hostURL }
 
     /// Bare `/present` path. Query items (code, pollId, aspect) are added per URL.
@@ -94,7 +94,7 @@ enum QuestPollConfig {
 
     /// Synthetic page so the warm web pool can attach `/present` to the hero.
     static var previewPage: WebPage {
-        WebPage(id: previewPageId, title: "QuestPoll", url: presentURL)
+        WebPage(id: previewPageId, title: "Poll", url: presentURL)
     }
 
     /// Projector page for an active room (falls back to unbound `/present`).
@@ -102,14 +102,14 @@ enum QuestPollConfig {
         guard let code, !code.isEmpty else { return previewPage }
         return WebPage(
             id: previewPageId,
-            title: "QuestPoll",
+            title: "Poll",
             url: presentURL(code: code)
         )
     }
 
     /// Practice page for a deck without creating a room.
     ///
-    /// The app's web view has no questpoll.com sign-in, so the deck itself
+    /// The app's web view has no polls.eclipseapp.com sign-in, so the deck itself
     /// rides in the URL fragment with the ribbon cue (`#deck=…&cue=N`). A
     /// fragment-only change moves the page without reloading it.
     /// - Parameters:
@@ -129,7 +129,7 @@ enum QuestPollConfig {
         }
         return WebPage(
             id: previewPageId(pollId: pollId),
-            title: "QuestPoll Practice",
+            title: "Poll Practice",
             url: url
         )
     }

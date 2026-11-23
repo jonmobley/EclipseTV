@@ -270,7 +270,7 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
         case .showSharing: return "Show Sharing"
         case .eclipseTV: return "EclipseTV"
         case .eclipseMac: return "Eclipse for Mac"
-        case .questPoll: return "QuestPoll"
+        case .questPoll: return "Eclipse Polls"
         case .recommendations: return GuidedAccessRecommendation.settingsHeader
         case .help: return "Help"
         }
@@ -372,7 +372,7 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
                 break
             }
         case .questPoll:
-            config.text = "QuestPoll Account"
+            config.text = "Eclipse Polls Account"
             config.secondaryText = LivePollAccountStore.isSignedIn ? "Signed in" : "Not signed in"
             config.image = UIImage(systemName: "chart.bar.fill")
         case .recommendations:

@@ -83,6 +83,18 @@ protocol SyncBackend: AnyObject {
     /// Schedules deletion of a Show's Prompter script record.
     func schedulePrompterDelete(showId: UUID)
 
+    /// Schedules a song upload (`audio-<id>`).
+    func scheduleAudioTrackSave(id: UUID)
+
+    /// Schedules deletion of a song record.
+    func scheduleAudioTrackDelete(id: UUID)
+
+    /// Schedules a playlist upload (`playlist-<id>`).
+    func scheduleAudioPlaylistSave(id: UUID)
+
+    /// Schedules deletion of a playlist record.
+    func scheduleAudioPlaylistDelete(id: UUID)
+
     /// Schedules the account-global Background custom image upload (or clear).
     func scheduleBackgroundSave()
 

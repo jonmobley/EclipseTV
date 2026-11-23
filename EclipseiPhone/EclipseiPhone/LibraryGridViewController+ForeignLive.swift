@@ -156,7 +156,7 @@ extension LibraryGridViewController {
             return
         }
         if mgr.isQuestPollLive {
-            let title = QuestPollSessionStore.shared.session?.deckTitle ?? "QuestPoll"
+            let title = QuestPollSessionStore.shared.session?.deckTitle ?? "Poll"
             foreignLiveHeader.configureOverlay(
                 title: title,
                 systemImage: "chart.bar.fill",

@@ -244,6 +244,14 @@ final class AudioPlaylistDetailViewController: UITableViewController {
 
     override func tableView(
         _ tableView: UITableView,
+        leadingSwipeActionsConfigurationForRowAt indexPath: IndexPath
+    ) -> UISwipeActionsConfiguration? {
+        guard !isEditing, tracks.indices.contains(indexPath.row) else { return nil }
+        return AudioQueueActions.leadingSwipe(for: tracks[indexPath.row].id, host: self)
+    }
+
+    override func tableView(
+        _ tableView: UITableView,
         trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath
     ) -> UISwipeActionsConfiguration? {
         guard !tracks.isEmpty, !isEditing else { return nil }
@@ -278,7 +286,8 @@ final class AudioPlaylistDetailViewController: UITableViewController {
         }
     }
 
-    /// Long-press menu: Arrange / Add to Playlist / Delete (remove from this playlist).
+    /// Long-press menu: Play Next / Add to Queue (while music is loaded), Arrange,
+    /// Add to Playlist, Delete (remove from this playlist).
     private func trackMoreMenu(for track: AudioTrack) -> UIMenu {
         let arrange = UIAction(
             title: "Arrange",
@@ -293,7 +302,11 @@ final class AudioPlaylistDetailViewController: UITableViewController {
         ) { [weak self] _ in
             self?.promptAddToPlaylist(trackId: track.id)
         }
-        var children: [UIMenuElement] = [arrange, add]
+        var children: [UIMenuElement] = []
+        if let queue = AudioQueueActions.menuSection(for: track.id, host: self) {
+            children.append(queue)
+        }
+        children.append(contentsOf: [arrange, add])
         let canRemove = !(playlist?.isProtected == true && track.isProtected)
         if canRemove {
             let delete = UIAction(
