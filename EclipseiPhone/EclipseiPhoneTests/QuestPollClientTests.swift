@@ -120,12 +120,12 @@ struct QuestPollClientTests {
 
     @Test func hostURLPointsAtHostConsole() {
         #expect(QuestPollConfig.hostURL.absoluteString.hasSuffix("/host"))
-        #expect(QuestPollConfig.origin.host == "questpoll.com")
+        #expect(QuestPollConfig.origin.host == "polls.eclipseapp.com")
     }
 
     @Test func joinURLUsesUnifiedOrigin() {
         let url = QuestPollConfig.joinURL(code: "VR2V")
-        #expect(url.host == "questpoll.com")
+        #expect(url.host == "polls.eclipseapp.com")
         #expect(url.path.hasSuffix("/join/VR2V"))
     }
 
