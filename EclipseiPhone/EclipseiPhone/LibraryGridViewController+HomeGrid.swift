@@ -195,8 +195,10 @@ extension LibraryGridViewController: UICollectionViewDataSource,
     ) -> UIContextMenuConfiguration? {
         guard !isArranging, !isSelecting else { return nil }
         switch homeSection(at: indexPath.section, in: collectionView) {
-        case .hero, .slideshowRibbon:
+        case .hero:
             return nil
+        case .slideshowRibbon:
+            return liveSlideMenuConfiguration(at: indexPath)
         case .shows where !isHomePage(collectionView):
             // Show tiles: long-press enters arrange; ⋯ hosts Preview / Cover / Remove.
             return nil

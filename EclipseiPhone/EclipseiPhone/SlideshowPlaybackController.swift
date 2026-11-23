@@ -121,6 +121,44 @@ final class SlideshowPlaybackController {
         notifyChanged()
     }
 
+    /// Re-reads the live slideshow's slides after its membership changed.
+    ///
+    /// The slide on screen keeps playing when it is still a member. When it
+    /// was removed, the slide that moved into its place is shown instead (the
+    /// first slide when it was the last one).
+    func reloadActiveSlides(slideshowId: UUID) {
+        guard activeSlideshowId == slideshowId,
+              let show = SlideshowStore.shared.slideshow(id: slideshowId) else { return }
+        let ids = Self.playableSlideIds(in: show)
+        guard !ids.isEmpty else {
+            stop()
+            return
+        }
+        let next = Self.slideIndex(
+            afterChangeTo: ids, currentId: currentSlideId, currentIndex: currentSlideIndex
+        )
+        activeSlideIds = ids
+        currentSlideIndex = next.index
+        if next.slideChanged {
+            presentCurrent()
+            rescheduleAutoplayIfNeeded()
+        }
+        notifyChanged()
+    }
+
+    /// Where a run stands once its slide list becomes `ids`.
+    /// - Returns: The index to show, and whether that is a different slide.
+    static func slideIndex(
+        afterChangeTo ids: [String],
+        currentId: String?,
+        currentIndex: Int
+    ) -> (index: Int, slideChanged: Bool) {
+        if let currentId, let kept = ids.firstIndex(of: currentId) {
+            return (kept, false)
+        }
+        return (ids.indices.contains(currentIndex) ? currentIndex : 0, true)
+    }
+
     /// Resume index after a manual mid-show leave, if the slide is still present.
     func resumeIndex(for slideshow: Slideshow) -> Int? {
         guard let resume = interruptedResume,
