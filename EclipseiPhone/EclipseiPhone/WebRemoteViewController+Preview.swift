@@ -358,15 +358,19 @@ extension WebRemoteViewController: UIScrollViewDelegate,
 
     // MARK: - External Display Sync
 
-    /// Sends the browser's normalized scroll position to the external display.
+    /// Sends the browser's zoom and position to the external display, so the TV shows
+    /// the same part of the page (`WebViewportMirror`).
     ///
-    /// Normalized rather than absolute: the TV renders the same logical viewport at a
-    /// different scale, so its content height need not match the phone's exactly.
+    /// Positions are normalized rather than absolute: the TV renders the same logical
+    /// viewport at a different scale, so its content size need not match exactly.
     func pushWebScrollProgress() {
         guard mirrorsActiveTab, let scroll = webView?.scrollView else { return }
-        let maxY = scroll.contentSize.height - scroll.bounds.height
-        let progress = maxY > 0 ? min(max(scroll.contentOffset.y / maxY, 0), 1) : 0
-        ExternalDisplayManager.shared.setWebScrollProgress(progress)
+        ExternalDisplayManager.shared.setWebViewport(WebViewportMirror(
+            zoomScale: scroll.zoomScale,
+            contentOffset: scroll.contentOffset,
+            contentSize: scroll.contentSize,
+            boundsSize: scroll.bounds.size
+        ))
     }
 
     /// Re-asserts URL and scroll position on the external display after a rotation.
@@ -390,6 +394,36 @@ extension WebRemoteViewController: UIScrollViewDelegate,
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
         guard !isSyncingScroll, scrollView === webView?.scrollView else { return }
+        pushWebScrollProgress()
+    }
+
+    func scrollViewDidZoom(_ scrollView: UIScrollView) {
+        guard !isSyncingScroll, scrollView === webView?.scrollView else { return }
+        pushWebScrollProgress()
+    }
+
+    /// Lets a pinch shrink the page only to fit the card, so no empty background
+    /// shows around it. Set as the pinch starts: WebKit resets the range on page loads.
+    func scrollViewWillBeginZooming(_ scrollView: UIScrollView, with view: UIView?) {
+        guard scrollView === webView?.scrollView else { return }
+        scrollView.minimumZoomScale = WebViewportMirror.fitScale(
+            zoomScale: scrollView.zoomScale,
+            contentWidth: scrollView.contentSize.width,
+            boundsWidth: scrollView.bounds.width
+        )
+    }
+
+    /// Springs the page back to fit if it was pinched smaller anyway.
+    func scrollViewDidEndZooming(_ scrollView: UIScrollView, with view: UIView?, atScale scale: CGFloat) {
+        guard scrollView === webView?.scrollView else { return }
+        let fit = WebViewportMirror.fitScale(
+            zoomScale: scale,
+            contentWidth: scrollView.contentSize.width,
+            boundsWidth: scrollView.bounds.width
+        )
+        if scale < fit - 0.001 {
+            scrollView.setZoomScale(fit, animated: true)
+        }
         pushWebScrollProgress()
     }
 

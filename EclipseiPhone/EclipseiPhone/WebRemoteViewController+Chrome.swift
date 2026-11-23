@@ -65,7 +65,7 @@ extension WebRemoteViewController {
                 menu: makeBookmarksMenu()
             )
         }
-        bookmarksButton.accessibilityLabel = "History"
+        bookmarksButton.accessibilityLabel = "Websites"
         closeButton = UIBarButtonItem(
             barButtonSystemItem: .close,
             target: self,
@@ -123,7 +123,7 @@ extension WebRemoteViewController {
         )
         overlayBookmarksButton = makeOverlayChromeButton(
             systemName: Self.bookmarksSymbol,
-            accessibilityLabel: "History",
+            accessibilityLabel: "Websites",
             action: usesHistoryDrawer ? #selector(historyTapped) : nil
         )
         overlayBookmarksButton.showsMenuAsPrimaryAction = !usesHistoryDrawer
@@ -425,7 +425,7 @@ extension WebRemoteViewController {
             saved = [UIAction(title: "No saved websites", attributes: .disabled) { _ in }]
         }
         var sections: [UIMenuElement] = [
-            UIMenu(title: "Saved", options: .displayInline, children: saved)
+            UIMenu(title: "My Websites", options: .displayInline, children: saved)
         ]
         let recent = WebHistoryStore.shared.entries.prefix(10).map { entry in
             UIAction(
@@ -437,7 +437,7 @@ extension WebRemoteViewController {
             }
         }
         if !recent.isEmpty {
-            sections.append(UIMenu(title: "Recent", options: .displayInline, children: recent))
+            sections.append(UIMenu(title: "Recently Visited", options: .displayInline, children: recent))
         }
         return UIMenu(children: sections)
     }

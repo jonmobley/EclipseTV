@@ -102,13 +102,17 @@
   active tab. Windows a site opens (`window.open`, sign-in) are phone-only tabs until "Send to TV".
   Landscape buttons (Close · history · Refresh, then ⊕ only with a single tab, Send to TV / Back only
   when they apply) sit in a column beside the card on a phone; with 2+ tabs ⊕ ends the tab chips
-  instead (`BrowserTabStripView.newTabButton`). The history clock opens History: on iPhone a drawer (`WebHistoryDrawerView`, from the right in Landscape, from the
-  bottom in Vertical) with Saved and Recent; on iPad a pop-up menu with the same two sections. Recent is the last 30 pages
+  instead (`BrowserTabStripView.newTabButton`). The clock button opens Websites (named History until 2026-11-23; the owner found
+  "History" + "Saved" confusing): on iPhone a drawer (`WebHistoryDrawerView`, from the right in Landscape, from the
+  bottom in Vertical) with My Websites (the library's website cards) and Recently Visited; on iPad a pop-up menu with the same two sections. Recent is the last 30 pages
   the phone finished loading in a tab (`WebHistoryStore`, UserDefaults `EclipseTV.web.recentPages`, phone only), and
   picking one loads it in the active tab. The overlay buttons are re-raised on every layout, so the drawer is re-raised after them.
   Website Auto Scroll was removed (2026-11-13); `ScrollSpeedSlider` now serves only the Prompter. iPad gets a browser-style top bar (chips left, buttons top right)
   in both orientations, since iPadOS ignores the orientation lock while the app supports Split View.
   The website card matches the hero preview: 16pt corners and a 1pt `separator` hairline (2026-11-13).
+  Zoom mirrors to the TV (2026-11-23, `WebViewportMirror`): pinch zoom plus position across and down, sent as zoom +
+  0…1 fractions (not points) on every scroll/zoom. A pinch can't shrink the page below fit (`fitScale`: 1, or a wide
+  page's own width), so no empty background ever shows on either screen. Not yet tried on a real TV.
 - Seeding a simulator with websites/Shows for a visual check: the stores are JSON blobs in
   UserDefaults (`EclipseTV.pages.items`, `EclipseTV.localAlbums.items`); write them with
   `simctl spawn <udid> defaults write <container>/Library/Preferences/com.mobleypro.eclipse.EclipseiPhone.plist <key> -data <hex-json>`
