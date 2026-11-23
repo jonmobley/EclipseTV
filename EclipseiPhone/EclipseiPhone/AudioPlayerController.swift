@@ -620,6 +620,18 @@ final class AudioPlayerController: NSObject {
         notify()
     }
 
+    /// The playlist ran out under the song playing from it: carry on into Up Next when it
+    /// has a song (Play Next / Add to Queue songs are never thrown away), otherwise stop.
+    private func continueIntoUpNextOrStop() {
+        currentIndex = 0
+        let wasPlaying = isPlaying
+        guard advanceToNext() else {
+            stop()
+            return
+        }
+        if wasPlaying { play() } else { notify() }
+    }
+
     @objc private func handleTrackRemoved(_ note: Notification) {
         guard let id = note.userInfo?["id"] as? UUID else { return }
         let wasInUpNext = upNext.contains(id)
@@ -635,7 +647,7 @@ final class AudioPlayerController: NSObject {
             let removedBefore = removedPositions.filter { $0 < currentIndex }.count
             queue.removeAll { $0 == id }
             if queue.isEmpty, queuedTrackId == nil || removedQueuedCurrent {
-                stop()
+                continueIntoUpNextOrStop()
                 return
             }
             currentIndex = min(max(0, currentIndex - removedBefore), max(0, queue.count - 1))
@@ -696,7 +708,7 @@ final class AudioPlayerController: NSObject {
                 notify()
                 return
             }
-            stop()
+            continueIntoUpNextOrStop()
             return
         }
         if let playingId, let stillThere = queue.firstIndex(of: playingId) {

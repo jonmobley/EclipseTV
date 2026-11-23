@@ -520,8 +520,19 @@ extension AudioNowPlayingViewController: UITableViewDataSource, UITableViewDeleg
         case .upNext:
             guard player.upNext.trackIds.indices.contains(indexPath.row) else { return nil }
             let id = player.upNext.trackIds[indexPath.row]
-            let remove = UIContextualAction(style: .destructive, title: "Remove") { _, _, done in
+            let remove = UIContextualAction(style: .destructive, title: "Remove") { [weak self] _, _, done in
+                guard let self else { return done(false) }
+                // Update the table ourselves: a reload from the change notice in the middle of
+                // the swipe leaves UIKit finishing a delete on a table it no longer knows.
+                let section = indexPath.section
+                self.isApplyingLocalMove = true
                 AudioPlayerController.shared.removeFromUpNext(id)
+                self.isApplyingLocalMove = false
+                if AudioPlayerController.shared.upNext.isEmpty {
+                    tableView.deleteSections(IndexSet(integer: section), with: .automatic)
+                } else {
+                    tableView.deleteRows(at: [indexPath], with: .automatic)
+                }
                 done(true)
             }
             return UISwipeActionsConfiguration(actions: [remove])
@@ -629,7 +640,26 @@ extension AudioNowPlayingViewController: UITableViewDragDelegate, UITableViewDro
         _ tableView: UITableView,
         performDropWith coordinator: UITableViewDropCoordinator
     ) {
-        // Local reorders go through `moveRowAt`.
+        // Local reorders. When UIKit routes the move through `moveRowAt` instead, it does
+        // not call this, so the move is never applied twice.
+        guard coordinator.proposal.operation == .move,
+              let destination = coordinator.destinationIndexPath,
+              let item = coordinator.items.first,
+              let source = item.sourceIndexPath,
+              section(at: source.section) == .upNext
+        else { return }
+        let target = self.tableView(
+            tableView, targetIndexPathForMoveFromRowAt: source, toProposedIndexPath: destination
+        )
+        let count = AudioPlayerController.shared.upNext.count
+        let row = min(max(0, target.row), max(0, count - 1))
+        guard row != source.row else { return }
+        isApplyingLocalMove = true
+        AudioPlayerController.shared.moveUpNext(from: source.row, to: row)
+        isApplyingLocalMove = false
+        let to = IndexPath(row: row, section: source.section)
+        tableView.moveRow(at: source, to: to)
+        coordinator.drop(item.dragItem, toRowAt: to)
     }
 }
 
