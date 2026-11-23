@@ -78,7 +78,7 @@ extension CameraLiveViewController {
         guard let show = presetDestinationShow,
               let frameId = CameraFrameStore.shared.selectedId else { return }
         if isCameraPreset(frameId, in: show) {
-            showPresentationToast("Already a preset in “\(show.name)”")
+            showPresentationToast("Already a preset in “\(show.name)”", centeredIn: panelView)
             return
         }
         confirmSaveCameraPreset(frameId: frameId, show: show)
@@ -102,7 +102,8 @@ extension CameraLiveViewController {
         guard LocalAlbumStore.shared.addCameraPreset(frameId: frameId, albumId: show.id)
         else { return }
         Haptics.success()
-        showPresentationToast("Camera Preset added to the Show")
+        // Centred in the panel: the default bottom spot sits under the shutter row.
+        showPresentationToast("Camera Preset added to the Show", centeredIn: panelView)
         refreshSavePresetButton()
     }
 
