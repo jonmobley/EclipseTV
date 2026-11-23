@@ -785,15 +785,6 @@ extension LibraryGridViewController: UICollectionViewDataSource,
                 guard let self else { return }
                 self.presentShowMediaExport(forShowId: show.id, from: self.view)
             }
-            let row = Self.offlineRow(forShowId: show.id)
-            let offline = UIAction(
-                title: row.title,
-                subtitle: row.subtitle,
-                image: UIImage(systemName: row.systemImage),
-                attributes: row.canDownload ? [] : .disabled
-            ) { [weak self] _ in
-                self?.presentShowOfflineDownload(forShowId: show.id)
-            }
             let delete = UIAction(
                 title: "Delete Show",
                 image: UIImage(systemName: "trash"),
@@ -801,7 +792,21 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             ) { [weak self] _ in
                 self?.confirmDeleteShow(show)
             }
-            return UIMenu(children: [rename, share, export, offline, delete])
+            // Only real actions are rows. Once everything is on this iPhone the
+            // offline state is a status in the menu's header, never a grey row
+            // (which reads as "locked" rather than "done").
+            let row = Self.offlineRow(forShowId: show.id)
+            guard row.canDownload else {
+                return UIMenu(title: row.title, children: [rename, share, export, delete])
+            }
+            let download = UIAction(
+                title: row.title,
+                subtitle: row.subtitle,
+                image: UIImage(systemName: row.systemImage)
+            ) { [weak self] _ in
+                self?.presentShowOfflineDownload(forShowId: show.id)
+            }
+            return UIMenu(children: [rename, share, export, download, delete])
         }
     }
 
