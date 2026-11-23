@@ -17,7 +17,7 @@ enum QuestPollConfig {
     /// Unified Live Poll relay origin.
     static var origin: URL { LivePollConfig.origin }
 
-    /// Host console for editing decks (Safari deep link).
+    /// The website's host page (Settings → Open questpoll.com).
     static var hostURL: URL { LivePollConfig.hostURL }
 
     /// Bare `/present` path. Query items (code, pollId, aspect) are added per URL.
@@ -141,13 +141,6 @@ enum QuestPollConfig {
             .replacingOccurrences(of: "+", with: "-")
             .replacingOccurrences(of: "/", with: "_")
             .replacingOccurrences(of: "=", with: "")
-    }
-
-    /// Web editor for one saved deck (`/host?edit=<id>`).
-    static func editURL(pollId: String) -> URL {
-        var components = URLComponents(url: hostURL, resolvingAgainstBaseURL: false)
-        components?.queryItems = [URLQueryItem(name: "edit", value: pollId)]
-        return components?.url ?? hostURL
     }
 
     /// Whether `url` is the Live Poll projector page (path may grow a slash).

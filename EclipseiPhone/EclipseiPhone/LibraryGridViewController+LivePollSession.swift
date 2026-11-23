@@ -6,7 +6,6 @@
 //
 
 import LivePollKit
-import SafariServices
 import UIKit
 
 /// How the deck picker applies a selection.
@@ -23,34 +22,19 @@ enum QuestPollPickerMode {
 
 extension LibraryGridViewController {
 
-    /// Opens questpoll.com in Safari: one poll's editor, or the poll list.
-    ///
-    /// Signed in, it first asks for a one-time link that opens the website already
-    /// signed in as this account; the website has its own cookie, so without it
-    /// people were asked to sign in a second time. Any failure falls back to the
-    /// plain page, which shows the website's own sign-in.
-    func presentQuestPollHostEditor(pollId: String? = nil) {
-        let page = pollId.map(QuestPollConfig.editURL(pollId:)) ?? QuestPollConfig.hostURL
+    /// Opens the in-app editor for one saved poll (card ⋯ → Edit Poll),
+    /// asking for the email sign-in first when signed out.
+    func presentQuestPollEditor(pollId: String) {
         guard LivePollAccountStore.isSignedIn else {
-            present(SFSafariViewController(url: page), animated: true)
+            promptLivePollSignIn { [weak self] in
+                self?.presentQuestPollEditor(pollId: pollId)
+            }
             return
         }
-        Task { @MainActor [weak self] in
-            let url = await LibraryGridViewController.signedInWebURL(landingOn: page) ?? page
-            self?.present(SFSafariViewController(url: url), animated: true)
-        }
-    }
-
-    /// One-time signed-in link to `page`, or nil when the server can't make one.
-    private static func signedInWebURL(landingOn page: URL) async -> URL? {
-        guard let link = try? await LivePollAccountStore.client().webSignInLink(),
-              var components = URLComponents(url: link, resolvingAgainstBaseURL: false)
-        else { return nil }
-        var next = page.path
-        if let query = page.query { next += "?" + query }
-        components.queryItems = (components.queryItems ?? [])
-            + [URLQueryItem(name: "next", value: next)]
-        return components.url
+        present(
+            QuestPollEditorViewController.makeNavigation(target: .existing(pollId: pollId)),
+            animated: true
+        )
     }
 
     /// Ends the active room (best-effort), clears local state, drops the overlay.
@@ -154,9 +138,6 @@ extension LibraryGridViewController {
         mode: QuestPollPickerMode
     ) -> QuestPollPickerViewController {
         let picker = QuestPollPickerViewController()
-        picker.onEditHost = { [weak self] in
-            self?.presentQuestPollHostEditor()
-        }
         picker.onPick = { [weak self] poll in
             picker.dismiss(animated: true) {
                 self?.handleQuestPollPick(poll, mode: mode)

@@ -205,3 +205,12 @@
   `alert.preferConfirmAction()` before it is presented; without a preferred action UIKit sends a keyboard's
   Return to Cancel. The camera and QR scanner sessions set `isMultitaskingCameraAccessEnabled` so the camera
   keeps running in Split View / resized windows (unconfirmed on a real iPad).
+- Polls are made and edited in the app (iPhone/iPad, 2026-11-22): `QuestPollEditorViewController` (name, Poll / Quiz,
+  time per question, question list) → `QuestPollQuestionEditorViewController` (text, 2–5 answers, right answer in a quiz).
+  Reached from the poll list's + and pencil (`QuestPollPickerViewController`, also Settings → QuestPoll → My Polls in
+  `.manage` mode) and a card's ⋯ → Edit Poll…. `QuestPollDraft` holds the unsaved poll and its limits (mirrors
+  `quest-relay/src/limits.ts`); `QuestPollDeckWriter` does `POST` / `PUT` / `DELETE /api/polls` (the same calls the website
+  editor uses; LivePollKit itself only reads, so move the writer there when the Mac editor lands). A new poll made while
+  choosing one for a Show is picked automatically. A running room keeps its own copy, so edits show on the next start.
+  questpoll.com has no test copy: never save/delete polls against it to try things out. Check the screens with a stub
+  `URLProtocol` client instead (see `QuestPollEditorTests`).
