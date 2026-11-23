@@ -114,7 +114,7 @@ struct HomeLayoutTests {
             sectionInset: inset,
             spacing: spacing
         )
-        #expect(columns >= 5)
+        #expect(columns >= 4)
         #expect(columns > portraitColumns)
 
         let tile = LibraryGridViewController.homeRecentTileSize(
@@ -125,7 +125,7 @@ struct HomeLayoutTests {
         )
         #expect(tile.width == tile.height)
         #expect(tile.width <= LibraryGridViewController.phoneLandscapeRecentMaxTile)
-        #expect(tile.width > 64)
+        #expect(tile.width > 140, "Landscape Recent tile \(tile) is too small to read")
 
         let used = tile.width * CGFloat(columns) + spacing * CGFloat(columns - 1) + inset * 2
         #expect(used <= width)

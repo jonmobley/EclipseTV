@@ -304,8 +304,10 @@ extension LibraryGridViewController {
     ///
     /// Display Mode's 2-up / 3-up squares are sized for a tall portrait pane.
     /// On a short landscape phone those same counts made each Show nearly half
-    /// the screen. This cap adds columns until the tile fits.
-    static let phoneLandscapeRecentMaxTile: CGFloat = 128
+    /// the screen. This cap adds columns until the tile fits. 128pt (six-up)
+    /// left titles wrapping and fighting the cover; 180pt is four-up on most
+    /// phones, with the next row peeking so it reads as scrollable (2026-11-23).
+    static let phoneLandscapeRecentMaxTile: CGFloat = 180
 
     /// Largest Home Recent tile on a wide landscape pane that isn't a phone
     /// (iPad full screen or a wide Split View pane).
