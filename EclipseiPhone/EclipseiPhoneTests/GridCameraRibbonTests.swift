@@ -26,6 +26,16 @@ struct GridCameraRibbonTests {
         ) == [.cutaway(still)])
     }
 
+    /// VoiceOver hears which frame is on; stills carry no On / Off.
+    @Test func framesSpeakOnOrOff() {
+        let on = UUID(), off = UUID()
+        #expect(GridCameraRibbonItem.frame(on).spokenState(selectedFrameId: on) == "On")
+        #expect(GridCameraRibbonItem.frame(off).spokenState(selectedFrameId: on) == "Off")
+        #expect(GridCameraRibbonItem.frame(off).spokenState(selectedFrameId: nil) == "Off")
+        #expect(GridCameraRibbonItem.background.spokenState(selectedFrameId: on) == nil)
+        #expect(GridCameraRibbonItem.cutaway(on).spokenState(selectedFrameId: on) == nil)
+    }
+
     @Test func emptyWhenNothingToShow() {
         #expect(GridCameraRibbonItem.items(
             frameIds: [], hasBackground: false, cutawayIds: []
