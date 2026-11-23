@@ -116,10 +116,10 @@ final class QuestPollPickerViewController: UITableViewController {
     }
 
     private func delete(_ poll: LivePollDeckSummary) {
-        let writer = QuestPollDeckWriter(client: client)
+        let client = self.client
         Task { @MainActor [weak self] in
             do {
-                try await writer.delete(pollId: poll.id)
+                try await client.deleteDeck(id: poll.id)
             } catch {
                 let alert = UIAlertController(
                     title: "Could Not Delete",
