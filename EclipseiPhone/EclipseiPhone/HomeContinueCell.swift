@@ -128,11 +128,8 @@ final class HomeContinueCell: UICollectionViewCell {
         card.addSubview(coverView)
 
         // Keeps white text readable over any cover.
-        scrim.colors = [
-            UIColor.black.withAlphaComponent(0.05).cgColor,
-            UIColor.black.withAlphaComponent(0.75).cgColor
-        ]
-        scrim.locations = [0.3, 1]
+        scrim.colors = GradientView.titleScrimColors.map(\.cgColor)
+        scrim.locations = [0.3, 0.68, 1]
         card.layer.addSublayer(scrim)
 
         kickerLabel.font = .scaled(12, weight: .semibold, relativeTo: .caption1, maximumPointSize: 18)

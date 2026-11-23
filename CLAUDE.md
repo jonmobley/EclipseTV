@@ -214,3 +214,8 @@
   tabs (Library lit) in place of Back and the centred title (`MediaLibraryPickerViewController.refreshLeadingBarItem`,
   `HomeHeaderNavSelection.isLibrary`). Home or Show closes the page first, then acts. iPhone and narrow iPad windows keep Back.
   The page still covers the Music button.
+- Titles over pictures (2026-11-22): white titles on Home Recent tiles, the Continue card and Library/Show tile captions sit on
+  `GradientView.titleScrimColors` (three stops, about 62% black where the words start). A plain clear-to-dark ramp was half
+  strength at the title and unreadable on a white website thumbnail; keep the three-stop shade for any new title over art.
+- Shows list (2026-11-22): presented as a form sheet (compact centred sheet on iPad, like Settings); its filter says
+  "Landscape", the same word as Display Mode, never "Horizontal".

@@ -316,7 +316,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         return cell
     }
 
-    /// Presents the full Shows list (both Display Modes, All / Horizontal / Vertical).
+    /// Presents the full Shows list (both Display Modes, All / Landscape / Vertical).
     func presentAllShows() {
         guard !isAlreadyOpen(AllShowsViewController.self) else { return }
         let list = AllShowsViewController()
@@ -332,7 +332,9 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             self?.enforceHomeLiveHeroTeardownIfNeeded()
         }
         let nav = UINavigationController(rootViewController: list)
-        nav.modalPresentationStyle = .pageSheet
+        // Form sheet: on iPad the same compact centred sheet as Settings and New Countdown
+        // (a page sheet left a short list in a mostly empty panel). Same as before on iPhone.
+        nav.modalPresentationStyle = .formSheet
         present(nav, animated: true)
     }
 

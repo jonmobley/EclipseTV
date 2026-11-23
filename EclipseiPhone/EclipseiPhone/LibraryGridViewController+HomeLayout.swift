@@ -495,7 +495,7 @@ extension LibraryGridViewController {
 
     /// Nominal Home section-header height (Recent Shows title); empty-state offset.
     static let sectionHeaderEstimatedHeight: CGFloat = 44
-    /// Title + All / Horizontal / Vertical chips.
+    /// Title + All / Landscape / Vertical chips.
     static let sectionHeaderWithFilterEstimatedHeight: CGFloat = 92
 
     private static func sectionHeaderItem(
