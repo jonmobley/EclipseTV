@@ -556,21 +556,15 @@ extension iPhoneMainViewController {
             title: "New Slideshow", message: nil, preferredStyle: .alert
         )
         alert.addTextField { field in
-            field.placeholder = "Slideshow name"
+            field.placeholder = SlideshowStore.shared.nextName(forShowId: showId)
             field.autocapitalizationType = .words
             UserDisplayName.configureTextField(field)
         }
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         alert.addAction(UIAlertAction(title: "Next", style: .default) { [weak self] _ in
             let name = alert.textFields?.first?.text ?? ""
+            // Blank is fine: the store names it "Slideshow NN" when it is created.
             let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty else {
-                self?.showAlert(
-                    title: "Couldn't Create Slideshow",
-                    message: SlideshowStore.StoreError.emptyName.localizedDescription
-                )
-                return
-            }
             self?.pendingAlbumId = nil
             self?.pendingSlideshowShowId = showId
             self?.pendingSlideshowName = trimmed

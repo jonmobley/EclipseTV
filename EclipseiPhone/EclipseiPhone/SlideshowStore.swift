@@ -18,12 +18,10 @@ final class SlideshowStore {
     static let didChangeNotification = Notification.Name("SlideshowStore.didChange")
 
     enum StoreError: LocalizedError {
-        case emptyName
         case noImages
 
         var errorDescription: String? {
             switch self {
-            case .emptyName: return "Enter a name for the Slideshow."
             case .noImages: return "Pick at least one image."
             }
         }
@@ -73,6 +71,14 @@ final class SlideshowStore {
         slideshows.filter { $0.showId == showId }
     }
 
+    /// The name an unnamed slideshow gets in `showId`: "Slideshow 01", "Slideshow 02", …
+    /// - Parameter excluded: A slideshow being renamed (its own name doesn't count).
+    func nextName(forShowId showId: UUID, excluding excluded: UUID? = nil) -> String {
+        SlideshowNaming.nextName(
+            existing: slideshows(forShowId: showId).filter { $0.id != excluded }.map(\.name)
+        )
+    }
+
     /// Slideshow with `id`, if any.
     func slideshow(id: UUID) -> Slideshow? {
         slideshows.first { $0.id == id }
@@ -81,6 +87,7 @@ final class SlideshowStore {
     // MARK: - Mutations
 
     /// Creates a slideshow and appends it at the end of this Show's surface.
+    /// A blank `name` becomes the next "Slideshow NN".
     @discardableResult
     func create(
         name: String,
@@ -88,9 +95,7 @@ final class SlideshowStore {
         itemIds: [String],
         orientation: ExternalOutputOrientation = ExternalOutputSettings.orientation
     ) throws -> Slideshow {
-        guard let trimmed = UserDisplayName.normalized(name) else {
-            throw StoreError.emptyName
-        }
+        let trimmed = UserDisplayName.normalized(name) ?? nextName(forShowId: showId)
         guard !itemIds.isEmpty else { throw StoreError.noImages }
         let show = Slideshow(
             showId: showId,
@@ -117,12 +122,12 @@ final class SlideshowStore {
         if changed { persist() }
     }
 
-    /// Renames the slideshow with `id` when present.
+    /// Renames the slideshow with `id` when present; a blank name becomes the
+    /// next "Slideshow NN" in its Show.
     func rename(id: UUID, to name: String) throws {
-        guard let trimmed = UserDisplayName.normalized(name) else {
-            throw StoreError.emptyName
-        }
         guard let index = slideshows.firstIndex(where: { $0.id == id }) else { return }
+        let trimmed = UserDisplayName.normalized(name)
+            ?? nextName(forShowId: slideshows[index].showId, excluding: id)
         slideshows[index].name = trimmed
         persist()
         scheduleSaveIfNeeded(id: id)
