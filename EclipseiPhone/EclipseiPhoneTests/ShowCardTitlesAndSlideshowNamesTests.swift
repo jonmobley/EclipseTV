@@ -52,6 +52,7 @@ struct ShowCardTitlesAndSlideshowNamesTests {
         #expect(SlideshowNaming.nextName(existing: []) == "Slideshow 01")
         #expect(SlideshowNaming.nextName(existing: ["Slideshow 01", "Slideshow 7", "Walk-in"]) == "Slideshow 08")
         #expect(SlideshowNaming.nextName(existing: ["My Slideshow 05", "Slideshow 2B"]) == "Slideshow 01")
+        #expect(SlideshowNaming.nextName(existing: ["Slideshow 9223372036854775807"]) == "Slideshow 01")
     }
 
     @Test func blankNamesBecomeNumbered() throws {

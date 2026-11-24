@@ -18,6 +18,9 @@ enum SlideshowNaming {
     /// Numbers are padded to at least this many digits.
     private static let minimumDigits = 2
 
+    /// Longer numbers are ignored, so a huge synced name can't overflow the count.
+    private static let maximumDigits = 4
+
     /// The next free numbered name, one above the highest "Slideshow NN" in use.
     static func nextName(existing: [String]) -> String {
         let highest = existing.compactMap(number(in:)).max() ?? 0
@@ -32,7 +35,7 @@ enum SlideshowNaming {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.hasPrefix(prefix) else { return nil }
         let digits = trimmed.dropFirst(prefix.count)
-        guard !digits.isEmpty, digits.allSatisfy(\.isASCII), digits.allSatisfy(\.isNumber) else {
+        guard !digits.isEmpty, digits.count <= maximumDigits, digits.allSatisfy(\.isASCII), digits.allSatisfy(\.isNumber) else {
             return nil
         }
         return Int(digits)
