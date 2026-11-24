@@ -48,6 +48,7 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
     private enum Section: Hashable {
         case show
         case showLivePreview
+        case showCardTitles
         case playback
         case notes
         case showSharing
@@ -90,6 +91,7 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
         if openShowName != nil {
             result.append(.show)
             result.append(.showLivePreview)
+            result.append(.showCardTitles)
         }
         result.append(contentsOf: [.playback, .notes])
         if !showSharingRows.isEmpty {
@@ -246,6 +248,7 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
         switch sections[section] {
         case .show: return 1
         case .showLivePreview: return 1
+        case .showCardTitles: return 1
         case .playback: return PlaybackRow.allCases.count
         case .notes: return 1
         case .showSharing: return showSharingRows.count
@@ -265,6 +268,7 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
         case .show:
             return "Show"
         case .showLivePreview: return nil
+        case .showCardTitles: return nil
         case .playback: return "Playback"
         case .notes: return "Notes"
         case .showSharing: return "Show Sharing"
@@ -283,6 +287,8 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
         switch sections[section] {
         case .showLivePreview:
             return Self.disconnectedLivePreviewFooter
+        case .showCardTitles:
+            return Self.cardTitlesFooter
         case .notes:
             return "Notes stay attached to each image. Always shows an empty Note "
                 + "card on Preview so you can add notes while browsing."
@@ -335,6 +341,8 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
             break
         case .showLivePreview:
             configureDisconnectedLivePreviewCell(cell, config: &config)
+        case .showCardTitles:
+            configureCardTitlesCell(cell, config: &config)
         case .playback:
             switch PlaybackRow(rawValue: indexPath.row) {
             case .displayMode:
@@ -406,7 +414,7 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
         switch sections[indexPath.section] {
         case .show:
             showNameField.becomeFirstResponder()
-        case .showLivePreview:
+        case .showLivePreview, .showCardTitles:
             break
         case .playback:
             switch PlaybackRow(rawValue: indexPath.row) {

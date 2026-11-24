@@ -28,6 +28,9 @@ struct LocalAlbum: Codable, Equatable, Identifiable, Hashable {
     /// Practice Mode: live preview plus Lock / Blackout with no AirPlay, HDMI,
     /// or EclipseTV. Default is on so a Show is rehearsable without a display.
     var previewsWhenDisconnected: Bool
+    /// Settings → Card Titles: every card in the Show draws its name over the
+    /// thumbnail. Default on; syncs with the Mac's Show Settings.
+    var cardTitlesShown: Bool
     /// Membership ids removed locally — CloudKit union merge subtracts these.
     var deletedItemIds: [String]
     /// Surface ids removed locally (tools / slideshow / countdown / Live Poll).
@@ -44,6 +47,7 @@ struct LocalAlbum: Codable, Equatable, Identifiable, Hashable {
         lastOpenedAt: Date? = nil,
         surfaceIds: [String]? = nil,
         previewsWhenDisconnected: Bool = true,
+        cardTitlesShown: Bool = true,
         deletedItemIds: [String] = [],
         deletedSurfaceIds: [String] = []
     ) {
@@ -56,6 +60,7 @@ struct LocalAlbum: Codable, Equatable, Identifiable, Hashable {
         self.lastOpenedAt = lastOpenedAt
         self.surfaceIds = surfaceIds
         self.previewsWhenDisconnected = previewsWhenDisconnected
+        self.cardTitlesShown = cardTitlesShown
         self.deletedItemIds = deletedItemIds
         self.deletedSurfaceIds = deletedSurfaceIds
     }
@@ -183,7 +188,7 @@ struct LocalAlbum: Codable, Equatable, Identifiable, Hashable {
 
     private enum CodingKeys: String, CodingKey {
         case id, name, itemIds, coverId, orientation, createdAt, lastOpenedAt, surfaceIds
-        case previewsWhenDisconnected, deletedItemIds, deletedSurfaceIds
+        case previewsWhenDisconnected, cardTitlesShown, deletedItemIds, deletedSurfaceIds
     }
 
     init(from decoder: Decoder) throws {
@@ -198,6 +203,7 @@ struct LocalAlbum: Codable, Equatable, Identifiable, Hashable {
         previewsWhenDisconnected = try c.decodeIfPresent(
             Bool.self, forKey: .previewsWhenDisconnected
         ) ?? true
+        cardTitlesShown = try c.decodeIfPresent(Bool.self, forKey: .cardTitlesShown) ?? true
         deletedItemIds = try c.decodeIfPresent([String].self, forKey: .deletedItemIds) ?? []
         deletedSurfaceIds = try c.decodeIfPresent(
             [String].self, forKey: .deletedSurfaceIds
@@ -218,6 +224,7 @@ struct LocalAlbum: Codable, Equatable, Identifiable, Hashable {
         try c.encodeIfPresent(lastOpenedAt, forKey: .lastOpenedAt)
         try c.encodeIfPresent(surfaceIds, forKey: .surfaceIds)
         try c.encode(previewsWhenDisconnected, forKey: .previewsWhenDisconnected)
+        try c.encode(cardTitlesShown, forKey: .cardTitlesShown)
         try c.encode(deletedItemIds, forKey: .deletedItemIds)
         try c.encode(deletedSurfaceIds, forKey: .deletedSurfaceIds)
     }

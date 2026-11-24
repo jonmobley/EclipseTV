@@ -22,7 +22,8 @@ struct SettingsShowEditingTests {
         #expect(table.numberOfRows(inSection: 0) == 1)
         #expect(settings.tableView(table, titleForHeaderInSection: 0) == "Show")
         #expect(settings.tableView(table, titleForHeaderInSection: 1) == nil)
-        #expect(settings.tableView(table, titleForHeaderInSection: 2) == "Playback")
+        #expect(settings.tableView(table, titleForHeaderInSection: 2) == nil)
+        #expect(settings.tableView(table, titleForHeaderInSection: 3) == "Playback")
 
         let nameCell = settings.tableView(
             table, cellForRowAt: IndexPath(row: 0, section: 0)

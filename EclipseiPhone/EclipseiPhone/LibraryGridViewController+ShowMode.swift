@@ -279,6 +279,7 @@ extension LibraryGridViewController {
         guard items.indices.contains(indexPath.item) else { return }
         let gridItem = items[indexPath.item]
         let live = isShowGridItemLive(gridItem)
+        cell.hidesCaptions = hidesCardTitle(gridItem)
         defer { cell.setUpNext(isBlackoutCue(gridItem)) }
         switch gridItem {
         case .slideshow(let show):
