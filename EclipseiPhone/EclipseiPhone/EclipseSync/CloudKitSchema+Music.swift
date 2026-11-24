@@ -79,6 +79,30 @@ extension CloudKitSchema {
         zoneID.zoneName == zoneName && zoneID.ownerName == CKCurrentUserDefaultName
     }
 
+    /// What a tombstone means for music.
+    enum MusicDeletion: Equatable {
+        /// Remove this song.
+        case track(UUID)
+        /// Remove this playlist.
+        case playlist(UUID)
+        /// A music name from another zone (someone else's share): do nothing.
+        case ignored
+    }
+
+    /// Routes a tombstone by name prefix and zone, or nil when it is not music.
+    /// Only the owner's private library zone may remove songs or playlists.
+    static func musicDeletion(
+        recordName: String,
+        zoneID: CKRecordZone.ID
+    ) -> MusicDeletion? {
+        let trackId = audioTrackId(fromRecordName: recordName)
+        let playlistId = audioPlaylistId(fromRecordName: recordName)
+        guard trackId != nil || playlistId != nil else { return nil }
+        guard isPrivateLibraryZone(zoneID) else { return .ignored }
+        if let trackId { return .track(trackId) }
+        return playlistId.map(MusicDeletion.playlist)
+    }
+
     private static func uuid(in name: String, afterPrefix prefix: String) -> UUID? {
         guard name.hasPrefix(prefix) else { return nil }
         return UUID(uuidString: String(name.dropFirst(prefix.count)))

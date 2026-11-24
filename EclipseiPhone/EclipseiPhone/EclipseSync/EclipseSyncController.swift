@@ -190,16 +190,16 @@ extension EclipseSyncController {
     /// it can never remove the owner's own songs or playlists.
     /// - Returns: False when `recordName` is not a music record name.
     func applyRemoteMusicDeletion(recordName: String, zoneID: CKRecordZone.ID) -> Bool {
-        guard CloudKitSyncEngine.isMusicRecordName(recordName) else { return false }
-        guard CloudKitSchema.isPrivateLibraryZone(zoneID) else { return true }
-        if let id = CloudKitSchema.audioTrackId(fromRecordName: recordName) {
+        switch CloudKitSchema.musicDeletion(recordName: recordName, zoneID: zoneID) {
+        case .track(let id):
             AudioStore.shared.purgeRemote(id: id)
-            return true
-        }
-        if let id = CloudKitSchema.audioPlaylistId(fromRecordName: recordName) {
+        case .playlist(let id):
             AudioPlaylistStore.shared.purgeRemote(id: id)
-            return true
+        case .ignored:
+            break
+        case nil:
+            return false
         }
-        return false
+        return true
     }
 }
