@@ -132,3 +132,21 @@ Optional: the companion Eclipse Apple TV app on the same Wi-Fi can be linked fro
 Live Poll is an optional add-on for people who already host polls on our website; it signs in with an emailed link, so it isn't needed to review the rest of the app. If you'd like to try it, contact us at the email above and we'll set up access right away.
 
 Permissions: Local Network (find the Apple TV), Photos (choose media), Camera and Microphone (live camera on the display and QR pairing).
+
+## Submitted (2026-11-23 evening, owner's go-ahead)
+
+Both 1.0 versions are **Waiting for Review** with build 2026112303 (iPhone resubmitted on 968918f3-…,
+Apple TV on new submission d7d3cbc6-…). Both are set to **manual release**: after approval, release both
+together from App Store Connect.
+
+What had to be fixed first (Apple refused to start review until then):
+- New age-rating questions (dating, shared location, social media, age-restricted social media) answered
+  "no" on both apps.
+- China mainland removed from both apps' countries (174 others kept). China now needs a government
+  Security Assessment and an AI-content (AIGC) filing that Moxie doesn't have. Add it back later if that changes.
+- Apple TV: price set to Free (base USA), countries set, and an Apple TV privacy policy text written
+  (tvOS needs text, not just a link): no accounts/ads/tracking, media stays on the local network,
+  anonymous Sentry crash reports, link to moxieapps.io/eclipse/privacy.
+
+Open: the website privacy policy still says Sentry crash reports come from the Mac app only; the iPhone and
+Apple TV apps also send them (Release builds). Update moxieapps.io/eclipse/privacy to match.
