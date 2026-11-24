@@ -10,8 +10,11 @@ Done through the App Store Connect API (nothing submitted):
   Center), the TV shows the pairing code (not the iPhone), Settings → EclipseTV to link, Settings →
   Practice Mode for a reviewer without a second screen, polls sign in with an emailed code.
 
-State found: iPhone 1.0 is **Rejected** (submitted 2026-10-14, submission 968918f3-…), with two unread
-App Review messages from 2026-11-14 that are only readable in App Store Connect. Apple TV 1.0 was never submitted.
+State found: iPhone 1.0 is **Rejected** (submitted 2026-10-14, submission 968918f3-…), under
+guideline 4.3 Spam / 4.2.6 (Apple's question list, 2026-10-14). The owner answered all nine questions on
+2026-11-13; Apple replied the same day "We will continue the review" and then "Please resubmit the app for
+review in App Store Connect once any necessary adjustments have been made." So the iPhone app only needs a
+resubmit (button "Resubmit to App Review" on submission 968918f3-…). Apple TV 1.0 was never submitted.
 Screenshots present: iPhone 6.7" ×6, iPad 12.9" ×5, Apple TV ×8 (not re-checked against this build).
 Every upload also gets ITMS-90725 (built with iOS 26.5 SDK): only a warning until April 2027.
 
