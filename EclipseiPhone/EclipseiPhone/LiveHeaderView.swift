@@ -111,10 +111,10 @@ final class LiveHeaderView: UIView {
     var collapseProgress: CGFloat = 0
     /// Uniform transform scale the host controller currently applies to this view.
     var collapseScale: CGFloat = 1
-    /// When true, amber stroke (and LIVE LOCKED badge) mark locked live output.
+    /// When true, amber stroke (and LOCKED SCREEN badge) mark locked live output.
     /// Read by collapse chrome so content updates don't wipe the thicker lock stroke.
     private(set) var isOutputLocked = false
-    /// Blackout is holding the screen: the picture dims and the badge reads BLACKOUT.
+    /// Blackout is holding the screen: the picture dims and the badge reads BLACK SCREEN, as on the Mac.
     private(set) var isBlackoutHold = false
     /// Shade over the held picture while Blackout is on (never takes touches).
     var blackoutDimView: UIView?
@@ -702,7 +702,7 @@ final class LiveHeaderView: UIView {
         controls.update(isPlaying: state.isPlaying, currentTime: state.currentTime, duration: state.duration)
     }
 
-    /// Amber hero stroke + LIVE LOCKED badge while live output is locked.
+    /// Amber hero stroke + LOCKED SCREEN badge (the Mac's words) while live output is locked.
     func setOutputLocked(_ locked: Bool) {
         guard isOutputLocked != locked else { return }
         isOutputLocked = locked
@@ -720,11 +720,11 @@ final class LiveHeaderView: UIView {
         } else if isBlackoutHold {
             layer.borderColor = UIColor.separator.cgColor
             liveBadge.backgroundColor = .black
-            liveBadge.text = "BLACKOUT"
+            liveBadge.text = "BLACK SCREEN"
         } else if isOutputLocked {
             layer.borderColor = UIColor.systemOrange.cgColor
             liveBadge.backgroundColor = .systemOrange
-            liveBadge.text = "LIVE LOCKED"
+            liveBadge.text = "LOCKED SCREEN"
         } else {
             layer.borderColor = UIColor.separator.cgColor
             liveBadge.backgroundColor = .liveStroke
@@ -734,7 +734,7 @@ final class LiveHeaderView: UIView {
         applyCollapseChrome()
     }
 
-    /// Dims the held picture and swaps the badge to BLACKOUT while Blackout holds.
+    /// Dims the held picture and swaps the badge to BLACK SCREEN while Blackout holds.
     ///
     /// Re-applied after every hero refresh: content updates rewrite the badge's
     /// visibility (Practice hides it), and Blackout must always say so.

@@ -109,7 +109,7 @@ struct HeroPhonePreviewTests {
         #expect(header.accessibilityLabel?.hasPrefix("Preview on this phone only") == true)
 
         header.setPhonePreview(false, returnTitle: "Back to Live")
-        #expect(header.liveBadge.text == "LIVE LOCKED")
+        #expect(header.liveBadge.text == "LOCKED SCREEN")
         #expect(header.phonePreviewReturnButton == nil)
     }
 }

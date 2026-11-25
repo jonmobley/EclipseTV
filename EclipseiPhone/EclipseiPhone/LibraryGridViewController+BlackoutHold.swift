@@ -138,7 +138,7 @@ extension LibraryGridViewController {
         return store.playback.currentTime > 0 ? store.playback.currentTime : nil
     }
 
-    /// Hero while Blackout holds: the held picture, dimmed, with BLACKOUT and Up Next.
+    /// Hero while Blackout holds: the held picture, dimmed, with BLACK SCREEN and Up Next.
     ///
     /// A held video gets a silent phone-only player, paused, so the operator can
     /// line it up. Its transport never reaches the TV while Blackout is on.
