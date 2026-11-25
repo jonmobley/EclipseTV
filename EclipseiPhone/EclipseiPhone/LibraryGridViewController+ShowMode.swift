@@ -664,7 +664,9 @@ extension LibraryGridViewController {
             self?.confirmDeleteSlideshow(show)
         }
         // Fit / Fill is per slide now, set in the editor (Edit).
-        return UIMenu(children: [edit, rename, arrangeAction(), delete])
+        return UIMenu(children: [
+            edit, rename, cardNoteAction(forId: show.id.uuidString), arrangeAction(), delete
+        ])
     }
 
     /// Opens the pan/zoom cropper for a video. Stills use Screen Fit → Custom.
@@ -723,13 +725,11 @@ extension LibraryGridViewController {
             },
             titleAction(for: item)
         ]
+        children.append(noteAction(for: item))
         if item.isVideo {
             children.append(contentsOf: videoOptionActions(for: item))
-            children.append(screenFitMenu(for: item))
-        } else {
-            children.append(noteAction(for: item))
-            children.append(screenFitMenu(for: item))
         }
+        children.append(screenFitMenu(for: item))
         if item.isAvailable != false, item.isVideo {
             children.append(contentsOf: videoEditActions(for: item))
         }
@@ -758,7 +758,8 @@ extension LibraryGridViewController {
             self?.presentWebPage(page)
         }
         let rest = memberContextMenu(itemId: page.id.uuidString, in: album)
-        return UIMenu(children: [preview] + rest.children)
+        let note = cardNoteAction(forId: page.id.uuidString)
+        return UIMenu(children: [preview, note] + rest.children)
     }
 
     /// Cover / Arrange / Remove for a Show member (media, website, or PDF id).

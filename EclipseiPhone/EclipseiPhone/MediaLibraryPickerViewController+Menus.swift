@@ -36,13 +36,13 @@ extension MediaLibraryPickerViewController {
             previewAction { [weak self] in self?.previewMedia(item) },
             titleAction(forId: item.id)
         ]
+        children.append(noteAction(forId: item.id))
         if item.isVideo {
             children.append(contentsOf: videoLibraryActions(for: item))
             children.append(screenFitMenu(for: item))
             children.append(trimAction(forId: item.id))
             children.append(cropAction(forId: item.id))
         } else {
-            children.append(noteAction(forId: item.id))
             children.append(screenFitMenu(for: item))
         }
         children.append(addToShowMenu(membershipId: item.id))
@@ -55,6 +55,7 @@ extension MediaLibraryPickerViewController {
         UIMenu(children: [
             previewAction { [weak self] in self?.previewPDF(doc) },
             renamePDFAction(doc),
+            noteAction(forId: doc.id.uuidString),
             addToShowMenu(membershipId: doc.id.uuidString),
             deletePDFAction(doc)
         ])

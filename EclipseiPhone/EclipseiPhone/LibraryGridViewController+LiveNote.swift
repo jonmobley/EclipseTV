@@ -23,15 +23,17 @@ extension LibraryGridViewController {
             : sideBySideGutter
     }
 
-    /// Live still / video that actually carries a note. Overlays and tools own
-    /// the hero themselves and have no library id to look a note up with.
+    /// Live card (photo, video, website, PDF, slideshow, countdown, poll or
+    /// prompter) that actually carries a note. Camera and the global tools have
+    /// no note, so nothing shows for them.
     var liveNoteItemId: String? {
         guard showsLiveHero, !isLiveFromOtherShow else { return nil }
-        // A previewed still shows its own note: that is what the operator is reading ahead.
+        // A previewed card shows its own note: that is what the operator is reading ahead.
         if let heroPhonePreview {
-            guard case .media(let media) = heroPhonePreview,
-                  MediaNoteStore.hasNote(forId: media.id) else { return nil }
-            return media.id
+            guard let id = heroPhonePreview.noteId, MediaNoteStore.hasNote(forId: id) else {
+                return nil
+            }
+            return id
         }
         guard !isBlackSelected, !isLogoSelected, !isScreensaverSelected else {
             return nil
@@ -40,15 +42,28 @@ extension LibraryGridViewController {
             return nil
         }
         let manager = ExternalDisplayManager.shared
-        guard !manager.isWebLive, !manager.isPDFLive, !manager.isCameraLive,
-              !manager.isParkedOnQuickChangeStill, !manager.isCountdownLive,
-              !manager.isPrompterLive else {
+        guard !manager.isCameraLive, !manager.isParkedOnQuickChangeStill else {
             return nil
         }
-        guard let id = store.currentId, MediaNoteStore.hasNote(forId: id) else {
+        guard let id = liveCardNoteId(manager), MediaNoteStore.hasNote(forId: id) else {
             return nil
         }
         return id
+    }
+
+    /// Note key for what is on output. Cards that own the hero name themselves
+    /// through the resolved program; stills, videos and slides use the current
+    /// media id, and a slideshow with no note on the slide shows its own.
+    private func liveCardNoteId(_ manager: ExternalDisplayManager) -> String? {
+        if manager.isWebLive || manager.isPDFLive || manager.isCountdownLive
+            || manager.isPrompterLive || manager.isQuestPollLive {
+            return outputOwningShowProgram?.noteId
+        }
+        if let id = store.currentId, MediaNoteStore.hasNote(forId: id) { return id }
+        if let program = outputOwningShowProgram, program.kind == .slideshow {
+            return program.noteId
+        }
+        return store.currentId
     }
 
     /// True while the note card is part of the live chrome.

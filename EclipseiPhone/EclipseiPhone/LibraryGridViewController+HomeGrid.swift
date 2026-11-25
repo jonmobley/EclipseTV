@@ -897,12 +897,12 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             },
             titleAction(for: item)
         ]
+        children.append(noteAction(for: item))
         if item.isVideo {
             children.append(contentsOf: videoOptionActions(for: item))
             children.append(screenFitMenu(for: item))
             children.append(contentsOf: videoEditActions(for: item))
         } else {
-            children.append(noteAction(for: item))
             children.append(screenFitMenu(for: item))
         }
         children.append(delete)

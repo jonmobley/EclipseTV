@@ -149,6 +149,7 @@ final class CountdownStore {
     func delete(id: UUID) {
         guard let item = countdowns.first(where: { $0.id == id }) else { return }
         countdowns.removeAll { $0.id == id }
+        MediaNoteStore.clear(forId: id.uuidString)
         syncedIds.remove(id.uuidString)
         persist()
         LocalAlbumStore.shared.removeCountdown(id, fromAlbumId: item.showId)
