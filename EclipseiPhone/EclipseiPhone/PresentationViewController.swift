@@ -34,6 +34,9 @@ final class PresentationViewController: UIViewController {
         return view
     }()
 
+    /// Template cards and media overlays layered over the stage (always on top).
+    let liveOverlayHost = LiveOverlayHostView()
+
     let mediaContainer: UIView = {
         let view = UIView()
         view.backgroundColor = .black
@@ -403,11 +406,13 @@ final class PresentationViewController: UIViewController {
         }
 
         setupAudioNowPlayingOverlay()
+        installLiveOverlayHost()
     }
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         updateStageFrame()
+        layoutLiveOverlayHost()
         if !mediaContainer.isHidden {
             applyMediaLayout()
         }

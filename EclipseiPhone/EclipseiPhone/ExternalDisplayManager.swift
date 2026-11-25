@@ -857,6 +857,13 @@ final class ExternalDisplayManager {
         present(.black, asJoined: false, preservingCameraOverlay: true)
     }
 
+    /// Whether output is black (Blackout or a black end card); template and
+    /// media overlays hide while it is.
+    var isBlackLive: Bool {
+        if case .black = lastSource?.content { return true }
+        return false
+    }
+
     /// What ending Blackout would bring back (nil when nothing was live before it).
     var blackoutHeldSource: PresentationSource? {
         blackoutRestore?.source
