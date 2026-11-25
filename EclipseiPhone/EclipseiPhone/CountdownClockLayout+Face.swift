@@ -87,7 +87,8 @@ extension CountdownClockLayout {
         let blockWidth = fitted.width + pad.width * 2
         let blockHeight = fitted.height + pad.height * 2
             + face.captionBlockHeight(fontSize: size)
-        let fit = min(1, bounds.width / blockWidth, bounds.height / blockHeight)
+        let room = CountdownClockFace.canvasFill
+        let fit = min(1, bounds.width * room / blockWidth, bounds.height * room / blockHeight)
         return max(size * fit, 1)
     }
 
@@ -95,19 +96,23 @@ extension CountdownClockLayout {
         UIFont.monospacedDigitSystemFont(ofSize: size, weight: .semibold)
     }
 
-    /// The plate is the label's own layer background, so it moves with the digits.
+    /// The plate is the label's own layer background (not `backgroundColor`, which a
+    /// label paints as a square), so it moves with the digits and keeps its corners.
     @MainActor
     private static func paintPlate(on label: UILabel, face: CountdownClockFace, fontSize: CGFloat) {
         let layer = label.layer
         layer.cornerCurve = .continuous
+        label.backgroundColor = nil
+        // An opaque label backs its text with black, hiding the plate's corners.
+        label.isOpaque = false
         if face.showsPlate {
-            label.backgroundColor = CountdownClockFace.plateColor
+            layer.backgroundColor = CountdownClockFace.plateColor.cgColor
             layer.cornerRadius = fontSize * CountdownClockFace.plateCornerFactor
             layer.borderWidth = max(1, fontSize * CountdownClockFace.plateEdgeFactor)
             layer.borderColor = CountdownClockFace.plateEdgeColor.cgColor
             label.shadowColor = nil
         } else {
-            label.backgroundColor = .clear
+            layer.backgroundColor = nil
             layer.cornerRadius = 0
             layer.borderWidth = 0
             // A plate-less clock may sit on a bright picture; a soft shadow keeps it legible.
@@ -134,7 +139,7 @@ extension CountdownClockLayout {
             width: size.width,
             height: size.height
         )
-        caption.backgroundColor = face.showsPlate ? CountdownClockFace.plateColor : .clear
+        caption.layer.backgroundColor = face.showsPlate ? CountdownClockFace.plateColor.cgColor : nil
         caption.layer.cornerRadius = fontSize * CountdownClockFace.captionCornerFactor
         caption.layer.borderWidth = face.showsPlate
             ? max(1, fontSize * CountdownClockFace.plateEdgeFactor) : 0

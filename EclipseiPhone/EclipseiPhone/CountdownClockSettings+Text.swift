@@ -16,15 +16,17 @@ extension CountdownClockSettings {
 
     /// The target as words, e.g. `6:30 PM` or `Dec 24, 6:30 PM`, plus the
     /// zone's short name when a zone other than the device's was chosen.
-    /// - Parameter now: Supplies "today" when no day is pinned.
+    /// - Parameters:
+    ///   - now: Supplies "today" when no day is pinned.
+    ///   - includesDay: False leaves out a pinned day (tiles show it on their own line).
     /// - Returns: Nil when no target time is set.
-    func targetText(now: Date = Date()) -> String? {
+    func targetText(now: Date = Date(), includesDay: Bool = true) -> String? {
         guard let target = targetDate(relativeTo: now) else { return nil }
         let formatter = DateFormatter()
         formatter.timeZone = resolvedTimeZone
         formatter.locale = .current
         formatter.setLocalizedDateFormatFromTemplate(
-            targetDay.isEmpty ? "jmm" : "MMMdjmm"
+            targetDay.isEmpty || !includesDay ? "jmm" : "MMMdjmm"
         )
         var text = formatter.string(from: target)
         if let zone = zoneShortName(at: target) {
@@ -54,6 +56,16 @@ extension CountdownClockSettings {
         return short.isEmpty ? city : "\(city) (\(short))"
     }
 
+    /// A pinned To Time day as words (`Dec 31`), nil when counting to today.
+    var targetDayText: String? {
+        guard mode == .timeOfDay, let parts = Self.dayParts(targetDay),
+              let day = Self.calendar(in: targetTimeZone).date(from: parts) else { return nil }
+        let formatter = DateFormatter()
+        formatter.timeZone = resolvedTimeZone
+        formatter.setLocalizedDateFormatFromTemplate("MMMd")
+        return formatter.string(from: day)
+    }
+
     /// Next whole hour after `now`, as minutes after midnight in the device zone.
     ///
     /// The starting value when someone first picks To Time.
@@ -80,7 +92,9 @@ extension CountdownClockSettings {
         case .countUp:
             return CountdownController.displayString(seconds: held ?? 0)
         case .timeOfDay:
-            guard let target = targetText(now: now) else { return "To Time" }
+            guard let target = targetText(now: now, includesDay: false) else {
+                return "To Time"
+            }
             return "to \(target)"
         }
     }

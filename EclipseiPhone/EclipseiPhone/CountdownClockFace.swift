@@ -57,6 +57,8 @@ struct CountdownClockFace: Equatable {
     static let captionPadVerticalFactor: CGFloat = 0.06
     static let captionCornerFactor: CGFloat = 0.12
     static let captionTrackingFactor: CGFloat = 0.18
+    /// Share of the canvas a plate or caption face may fill, leaving a margin.
+    static let canvasFill: CGFloat = 0.86
     /// Padding around bare digits (points), as before plates existed.
     static let plainPad = CGSize(width: 4, height: 2)
     /// Tag of the caption label hosted inside the digit label.

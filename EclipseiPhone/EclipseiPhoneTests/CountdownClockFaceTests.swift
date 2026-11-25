@@ -22,7 +22,7 @@ struct CountdownClockFaceTests {
         CountdownClockLayout.default.apply(
             to: label, text: "5:00", isExpired: false, face: face, in: canvas
         )
-        #expect(label.backgroundColor == CountdownClockFace.plateColor)
+        #expect(label.layer.backgroundColor == CountdownClockFace.plateColor.cgColor)
         #expect(label.layer.cornerRadius > 0)
         let caption = try #require(label.viewWithTag(CountdownClockFace.captionTag) as? UILabel)
         #expect(caption.isHidden == false)
@@ -43,7 +43,7 @@ struct CountdownClockFaceTests {
             to: label, text: "5:00", isExpired: false,
             face: CountdownClockFace(caption: "", showsPlate: false), in: canvas
         )
-        #expect(label.backgroundColor == .clear)
+        #expect(label.layer.backgroundColor == nil)
         #expect(label.layer.cornerRadius == 0)
         #expect(label.viewWithTag(CountdownClockFace.captionTag)?.isHidden == true)
     }

@@ -55,9 +55,12 @@ extension LibraryGridViewController {
         )
     }
 
-    /// "Then black" / "Then next" under the name; none for Count Up, which never ends.
+    /// Second line under the name: a To Time date and/or "Then black" / "Then
+    /// next" (never for Count Up, which does not end).
     func countdownEndHint(for item: ShowCountdown) -> String? {
-        item.clock.mode.expires ? item.endAction.tileHint : nil
+        let end = item.clock.mode.expires ? item.endAction.tileHint : nil
+        let parts = [item.clock.targetDayText, end].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
     // MARK: - Reset and Duration
