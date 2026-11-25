@@ -514,6 +514,13 @@ class iPhoneConnectionManager: NSObject {
         return sent
     }
 
+    /// Whether a library command (delete, move) would reach at least one Apple TV now.
+    /// Same check `sendCommand` makes before sending.
+    var canSendLibraryCommands: Bool {
+        guard let session else { return false }
+        return !syncTargetPeers(broadcast: true, in: session).isEmpty
+    }
+
     /// Asks the Apple TV to delete the item with the given id. Broadcast to all synced
     /// TVs so their libraries stay matched.
     @discardableResult

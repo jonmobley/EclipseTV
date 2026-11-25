@@ -18,6 +18,9 @@ final class LocalAlbumStore {
     static let didChangeNotification = Notification.Name("LocalAlbumStore.didChange")
     /// `userInfo` key for the album id that triggered a change, when known.
     static let changedAlbumIdKey = "changedAlbumId"
+    /// `userInfo` key set (true) when only what Home shows changed, not the Show
+    /// itself (hidden for a pending delete, or put back by Undo): nothing to sync.
+    static let visibilityOnlyKey = "visibilityOnly"
 
     enum StoreError: LocalizedError {
         case emptyName
@@ -32,6 +35,10 @@ final class LocalAlbumStore {
     }
 
     private(set) var albums: [LocalAlbum] = []
+
+    /// Shows hidden while their delete waits for Undo, with where they sat in `albums`.
+    /// They stay saved on disk (so a crash keeps them) and are never synced as deleted.
+    private var pendingDeletes: [UUID: (album: LocalAlbum, index: Int)] = [:]
 
     private let defaults: UserDefaults
     private let itemsKey = "EclipseTV.localAlbums.items"
@@ -135,6 +142,7 @@ final class LocalAlbumStore {
 
     /// Deletes the album with `id` when present.
     func delete(id: UUID) {
+        restorePendingDeleteSilently(id: id)
         let removed = albums.first(where: { $0.id == id })
         let before = albums.count
         albums.removeAll { $0.id == id }
@@ -616,7 +624,10 @@ final class LocalAlbumStore {
     func applySynced(_ album: LocalAlbum, modifiedAt: Date) {
         var incoming = album
         incoming.name = uniquifiedName(album.name, excluding: album.id)
-        if let index = albums.firstIndex(where: { $0.id == incoming.id }) {
+        if let pending = pendingDeletes[incoming.id] {
+            incoming.lastOpenedAt = LocalAlbum.latest(pending.album.lastOpenedAt, incoming.lastOpenedAt)
+            pendingDeletes[incoming.id] = (incoming, pending.index)
+        } else if let index = albums.firstIndex(where: { $0.id == incoming.id }) {
             // When this phone last opened a Show is local: it is not in the iCloud
             // record, so a remote copy arrives without it. Keep ours, or Recents
             // falls back to the creation date ("2 months ago") on a Show just opened.
@@ -636,6 +647,71 @@ final class LocalAlbumStore {
             )
         }
         persist(changedAlbumId: incoming.id)
+    }
+
+    // MARK: - Delete with Undo
+
+    /// Hides a Show for a delete that waits on Undo. Nothing is synced or removed:
+    /// it stays saved (and in iCloud) until `commitPendingDelete`.
+    /// - Returns: false when there is no such Show.
+    @discardableResult
+    func beginPendingDelete(id: UUID) -> Bool {
+        guard let index = albums.firstIndex(where: { $0.id == id }) else { return false }
+        pendingDeletes[id] = (albums.remove(at: index), index)
+        persist(changedAlbumId: id, visibilityOnly: true)
+        return true
+    }
+
+    /// Undo: shows the Show again where it was. A Show created meanwhile under the
+    /// same name keeps it; this one is renamed `Name (2)` and synced.
+    /// - Returns: false when it is no longer waiting (already deleted).
+    @discardableResult
+    func cancelPendingDelete(id: UUID) -> Bool {
+        guard restorePendingDeleteSilently(id: id),
+              let index = albums.firstIndex(where: { $0.id == id }) else { return false }
+        let name = uniquifiedName(albums[index].name, excluding: id)
+        guard name != albums[index].name else {
+            persist(changedAlbumId: id, visibilityOnly: true)
+            return true
+        }
+        albums[index].name = name
+        persist(changedAlbumId: id)
+        scheduleShowSaveIfNeeded(id)
+        return true
+    }
+
+    /// Deletes a hidden Show for real (iCloud, slideshows, countdowns, polls, scripts).
+    func commitPendingDelete(id: UUID) {
+        guard pendingDeletes[id] != nil else { return }
+        delete(id: id)
+    }
+
+    /// Whether `id` is hidden for a delete that waits on Undo.
+    func isPendingDelete(id: UUID) -> Bool {
+        pendingDeletes[id] != nil
+    }
+
+    /// The Show with `id` even while hidden for a pending delete — for sync, which
+    /// must keep saving and merging it until the delete really happens.
+    func albumIncludingPendingDelete(id: UUID) -> LocalAlbum? {
+        album(id: id) ?? pendingDeletes[id]?.album
+    }
+
+    /// Every Show as saved on disk: hidden ones back in their places.
+    private var albumsIncludingPendingDeletes: [LocalAlbum] {
+        var all = albums
+        for pending in pendingDeletes.values.sorted(by: { $0.index < $1.index }) {
+            all.insert(pending.album, at: min(pending.index, all.count))
+        }
+        return all
+    }
+
+    /// Moves a hidden Show back into `albums` without saving or notifying.
+    @discardableResult
+    private func restorePendingDeleteSilently(id: UUID) -> Bool {
+        guard let pending = pendingDeletes.removeValue(forKey: id) else { return false }
+        albums.insert(pending.album, at: min(pending.index, albums.count))
+        return true
     }
 
     private func scheduleShowSaveIfNeeded(_ id: UUID) {
@@ -675,13 +751,16 @@ final class LocalAlbumStore {
 
     /// - Parameter changedAlbumId: When known, lets observers scope work to one Show
     ///   instead of re-uploading every album on any mutation.
-    private func persist(changedAlbumId: UUID? = nil) {
+    private func persist(changedAlbumId: UUID? = nil, visibilityOnly: Bool = false) {
         do {
-            let data = try JSONEncoder().encode(albums)
+            let data = try JSONEncoder().encode(albumsIncludingPendingDeletes)
             defaults.set(data, forKey: itemsKey)
             var info: [AnyHashable: Any]?
             if let changedAlbumId {
                 info = [Self.changedAlbumIdKey: changedAlbumId]
+            }
+            if visibilityOnly {
+                info = (info ?? [:]).merging([Self.visibilityOnlyKey: true]) { $1 }
             }
             NotificationCenter.default.post(
                 name: Self.didChangeNotification,

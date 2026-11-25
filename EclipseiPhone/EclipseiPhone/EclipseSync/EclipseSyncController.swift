@@ -137,7 +137,9 @@ final class EclipseSyncController {
         if applyRemoteMusicDeletion(recordName: recordName, zoneID: zoneID) { return }
 
         if let uuid = UUID(uuidString: recordName) {
-            if LocalAlbumStore.shared.album(id: uuid) != nil {
+            // Includes a Show hidden for a pending delete, so Undo can't bring back
+            // a Show another device has deleted meanwhile.
+            if LocalAlbumStore.shared.albumIncludingPendingDelete(id: uuid) != nil {
                 LocalAlbumStore.shared.delete(id: uuid)
                 return
             }

@@ -40,7 +40,8 @@ extension CloudKitSyncEngine {
         }
 
         if let uuid = UUID(uuidString: name) {
-            if let album = LocalAlbumStore.shared.album(id: uuid) {
+            // A Show hidden for a delete that waits on Undo still exists until then.
+            if let album = LocalAlbumStore.shared.albumIncludingPendingDelete(id: uuid) {
                 return CloudKitRecordMapper.makeShowRecord(
                     from: album,
                     existing: existing,
