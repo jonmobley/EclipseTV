@@ -665,6 +665,13 @@ final class LibraryGridViewController: UIViewController {
         observe(MediaNoteStore.didChangeNotification) { [weak self] _ in
             self?.syncLiveNoteChrome()
         }
+        observe(TemplateCardStore.didChangeNotification) { [weak self] _ in
+            self?.reloadGridIfSafe()
+            self?.updateEmptyState()
+        }
+        observe(LiveOverlayController.didChangeNotification) { [weak self] _ in
+            self?.reloadGridIfSafe()
+        }
         observe(CountdownStore.didChangeNotification) { [weak self] _ in
             self?.reloadGridIfSafe()
             self?.refreshCountdownChrome()

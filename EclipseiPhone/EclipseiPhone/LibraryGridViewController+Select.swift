@@ -89,6 +89,7 @@ extension LibraryGridViewController {
         let deletesCards = ids.contains {
             ShowCountdownToken.countdownId(from: $0) != nil
                 || ShowLivePollToken.livePollId(from: $0) != nil
+                || ShowTemplateToken.templateId(from: $0) != nil
         }
         guard deletesCards else {
             endSelectMode()
@@ -114,6 +115,8 @@ extension LibraryGridViewController {
                 } else if let livePollId = ShowLivePollToken.livePollId(from: id) {
                     self.endQuestPollIfRemovingMembership(livePollId)
                     LivePollStore.shared.delete(id: livePollId)
+                } else if let templateId = ShowTemplateToken.templateId(from: id) {
+                    TemplateCardStore.shared.delete(id: templateId)
                 } else {
                     LocalAlbumStore.shared.remove(itemId: id, fromAlbumId: showId)
                 }
@@ -175,6 +178,12 @@ extension LibraryGridViewController {
     /// are what let two tiles claim live at the same time. Practice reaches the
     /// poll card through the resolver's `practicePollMembershipId`, not a case here.
     func isShowGridItemLive(_ item: ShowGridItem) -> Bool {
+        if case .template(let card) = item {
+            return LiveOverlayController.shared.isLive(.template(card.id))
+        }
+        if case .media(let media) = item, MediaOverlayStore.shared.entry(for: media.id) != nil {
+            return LiveOverlayController.shared.isLive(.media(media.id))
+        }
         if ShowLiveSession.shared.isRemoteOperator {
             return isShowGridItemLiveRemotely(item)
         }
@@ -259,6 +268,11 @@ extension LibraryGridViewController {
                     duration: source.duration,
                     layout: source.layout,
                     background: source.background
+                )
+            } else if let templateId = ShowTemplateToken.templateId(from: id),
+                      let source = TemplateCardStore.shared.card(id: templateId) {
+                TemplateCardStore.shared.create(
+                    config: source.config, name: source.name, showId: albumId
                 )
             } else if let livePollId = ShowLivePollToken.livePollId(from: id),
                       let source = LivePollStore.shared.poll(id: livePollId) {

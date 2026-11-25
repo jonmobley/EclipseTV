@@ -107,6 +107,8 @@ extension LibraryGridViewController {
             case .countdown(let item):
                 return ShowCountdownToken.token(for: item.id)
                     .caseInsensitiveCompare(id) == .orderedSame
+            case .template(let card):
+                return ShowTemplateToken.token(for: card.id) == id
             default:
                 return false
             }

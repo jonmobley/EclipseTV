@@ -88,7 +88,8 @@ extension ShowProgram {
         case .prompter(_, let scriptId):
             // No id (an older director): every Prompter tile reads as live.
             return kind == .prompter && (itemId == nil || itemId == scriptId.uuidString)
-        case .unresolved, .add:
+        case .template, .unresolved, .add:
+            // Templates layer over program; they never are program.
             return false
         }
     }

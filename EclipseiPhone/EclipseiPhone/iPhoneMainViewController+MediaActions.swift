@@ -308,6 +308,16 @@ extension iPhoneMainViewController {
         if albumId == nil {
             countdown.attributes = .disabled
         }
+        let template = UIAction(
+            title: "Template…",
+            image: UIImage(systemName: ThumbnailTypeIcon.template.systemName)
+        ) { [weak self] _ in
+            guard let albumId else { return }
+            self?.addTemplate(toShowId: albumId)
+        }
+        if albumId == nil {
+            template.attributes = .disabled
+        }
         // A Show can hold any number of Prompters, each with its own script.
         let prompter = UIAction(
             title: "Prompter",
@@ -349,7 +359,10 @@ extension iPhoneMainViewController {
         let imports = UIMenu(
             title: "",
             options: .displayInline,
-            children: [image, video, website, slideshow, countdown, prompter, livePoll, questionAndAnswer, pdf]
+            children: [
+                image, video, website, slideshow, countdown, template, prompter,
+                livePoll, questionAndAnswer, pdf
+            ]
         )
         // In a Show, Website opens the compose sheet (History is on that sheet).
         // Home keeps History for manage / open.
