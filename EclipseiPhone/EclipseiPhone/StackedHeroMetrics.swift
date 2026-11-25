@@ -14,7 +14,7 @@ import UIKit
 /// instead of staying phone-sized.
 enum StackedHeroMetrics {
 
-    /// Compact-width cap (Vertical always; Landscape when 16:9 would be taller).
+    /// Compact-width cap (any shape whose full-width card would be taller).
     static let phoneMaxHeight: CGFloat = 280
     /// Fraction of the pane’s safe height used by the preview on regular width.
     static let regularWidthHeightFraction: CGFloat = 0.45
@@ -36,6 +36,31 @@ enum StackedHeroMetrics {
               height < phoneLandscapeMaxPaneHeight
         else { return false }
         return width > height * 1.15
+    }
+
+    /// Size of the stacked preview card for a picture of `aspect` (width ÷ height).
+    ///
+    /// Full width when that is no taller than `maxHeight`; otherwise `maxHeight`
+    /// tall, narrower, and centred. One rule for every shape: 16:9 fills the
+    /// width, 9:16 and a tall LED wall are capped, a wide wall is a short banner.
+    /// - Parameters:
+    ///   - bleedWidth: The pane's width inside the header insets.
+    ///   - maxHeight: The cap from `maxHeight(containerSize:…)`.
+    ///   - aspect: Width ÷ height of the output picture.
+    /// - Returns: The card size, and whether it spans the full width.
+    static func stackedSize(
+        bleedWidth: CGFloat,
+        maxHeight: CGFloat,
+        aspect: CGFloat
+    ) -> (size: CGSize, isFullBleed: Bool) {
+        guard aspect > 0, bleedWidth > 0 else {
+            return (CGSize(width: max(0, bleedWidth), height: maxHeight), true)
+        }
+        let bleedHeight = bleedWidth / aspect
+        if bleedHeight <= maxHeight + 1 {
+            return (CGSize(width: bleedWidth, height: bleedHeight), true)
+        }
+        return (CGSize(width: (maxHeight * aspect).rounded(.down), height: maxHeight), false)
     }
 
     /// Max stacked-hero height for the current Display Mode aspect.

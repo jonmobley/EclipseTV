@@ -317,17 +317,27 @@ extension LibraryGridViewController {
         return inset
     }
 
-    /// Estimated 16:9 / 9:16 hero height before the first layout pass.
+    /// Width ÷ height of the live preview: the output picture's own shape, so a
+    /// custom screen size or an odd-shaped screen (an LED wall) is mirrored
+    /// truly. 16:9 in Landscape and 9:16 in Vertical otherwise.
+    var heroAspect: CGFloat {
+        let aspect = ExternalOutputSettings.outputAspectRatio
+        return aspect > 0 ? aspect : ExternalOutputSettings.orientation.aspectRatio
+    }
+
+    /// Stacked hero size for the output's shape (see `StackedHeroMetrics.stackedSize`).
+    private func stackedHeroSize() -> (size: CGSize, isFullBleed: Bool) {
+        let aspect = heroAspect
+        return StackedHeroMetrics.stackedSize(
+            bleedWidth: max(0, view.bounds.width - headerInset * 2),
+            maxHeight: stackedHeroMaxHeight(aspectWidthOverHeight: aspect),
+            aspect: aspect
+        )
+    }
+
+    /// Estimated stacked hero height before the first layout pass.
     func estimatedExpandedHeroHeight() -> CGFloat {
-        let aspect: CGFloat = ExternalOutputSettings.isVerticalMode
-            ? 9.0 / 16.0 : 16.0 / 9.0
-        let maxHeight = stackedHeroMaxHeight(aspectWidthOverHeight: aspect)
-        if ExternalOutputSettings.isVerticalMode {
-            return maxHeight
-        }
-        let bleedWidth = max(0, view.bounds.width - headerInset * 2)
-        let bleedHeight = bleedWidth * 9.0 / 16.0
-        return min(bleedHeight, maxHeight)
+        stackedHeroSize().size.height
     }
 
     /// Stacked live-preview height for this pane and Display Mode aspect.
@@ -423,23 +433,18 @@ extension LibraryGridViewController {
         view.insertSubview(heroSpacer, belowSubview: liveHeader)
     }
 
-    /// Portrait: full-bleed 16:9 or capped centered hero (Vertical / wide panes).
+    /// Portrait: full-bleed hero in the output's shape, or a capped centered one
+    /// when that would be too tall (Vertical, a tall wall, wide panes).
     /// Always the expanded size — tiles scroll under this card.
     func applyStackedHeroChrome() {
         // Don't promote a hidden live preview over Home's marketing carousel.
         guard showsLiveHero else { return }
         view.bringSubviewToFront(liveHeader)
-        if ExternalOutputSettings.isVerticalMode {
-            applyCappedHero(aspectWidthOverHeight: 9.0 / 16.0)
-            return
-        }
-        let bleedWidth = max(0, view.bounds.width - headerInset * 2)
-        let bleedHeight = bleedWidth * 9.0 / 16.0
-        let maxHeight = stackedHeroMaxHeight(aspectWidthOverHeight: 16.0 / 9.0)
-        if bleedHeight > maxHeight + 1 {
-            applyCappedHero(aspectWidthOverHeight: 16.0 / 9.0)
+        let stacked = stackedHeroSize()
+        if stacked.isFullBleed {
+            applyFullBleedHero(aspectWidthOverHeight: heroAspect)
         } else {
-            applyFullBleedLandscapeHero()
+            applyCappedHero(size: stacked.size)
         }
     }
 
@@ -464,9 +469,7 @@ extension LibraryGridViewController {
             view.bounds.height - safe.top - safe.bottom
                 - headerInset - 8 - miniReserve
         )
-        let aspect = ExternalOutputSettings.isVerticalMode
-            ? (9.0 / 16.0)
-            : (16.0 / 9.0)
+        let aspect = heroAspect
         // Plus/Max landscape is `.regular` width — still phone chrome, not iPad.
         let sizeClass = traitCollection.verticalSizeClass == .compact
             ? UIUserInterfaceSizeClass.compact
@@ -632,26 +635,24 @@ extension LibraryGridViewController {
         return view.bounds.width
     }
 
-    /// Centers a fixed-height hero (Vertical always; Landscape on wide panes).
-    private func applyCappedHero(aspectWidthOverHeight: CGFloat) {
+    /// Centers a fixed-size hero (Vertical and tall screens; any shape on wide panes).
+    private func applyCappedHero(size: CGSize) {
         deactivateHeroSizeConstraints()
         heroCenterXConstraint?.isActive = true
         heroWidthConstraint?.isActive = true
-        let height = stackedHeroMaxHeight(aspectWidthOverHeight: aspectWidthOverHeight)
-        let width = (height * aspectWidthOverHeight).rounded(.down)
-        heroWidthConstraint?.constant = width
-        let heightConstraint = liveHeader.heightAnchor.constraint(equalToConstant: height)
+        heroWidthConstraint?.constant = size.width
+        let heightConstraint = liveHeader.heightAnchor.constraint(equalToConstant: size.height)
         heightConstraint.isActive = true
         heroHeightConstraint = heightConstraint
     }
 
-    /// Pins Landscape hero leading/trailing with a 16:9 height.
-    private func applyFullBleedLandscapeHero() {
+    /// Pins the hero leading/trailing with its height following the output's shape.
+    private func applyFullBleedHero(aspectWidthOverHeight: CGFloat) {
         deactivateHeroSizeConstraints()
         heroLeadingConstraint?.isActive = true
         heroTrailingConstraint?.isActive = true
         let aspect = liveHeader.heightAnchor.constraint(
-            equalTo: liveHeader.widthAnchor, multiplier: 9.0 / 16.0
+            equalTo: liveHeader.widthAnchor, multiplier: 1 / aspectWidthOverHeight
         )
         aspect.isActive = true
         heroHeightConstraint = aspect

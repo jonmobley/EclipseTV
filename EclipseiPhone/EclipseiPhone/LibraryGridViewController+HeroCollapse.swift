@@ -14,9 +14,9 @@ import UIKit
 /// live-from-another-Show (`foreignLiveHeader`).
 extension LibraryGridViewController {
 
-    /// Trailing mini-preview width (Landscape / 16:9 content).
+    /// Trailing mini-preview width (pictures wider than tall).
     static let compactHeroWidthLandscape = LiveHeroMiniSlot.landscapeWidth
-    /// Trailing mini-preview width (Vertical / 9:16 content).
+    /// Trailing mini-preview width (pictures taller than wide).
     static let compactHeroWidthVertical = LiveHeroMiniSlot.verticalWidth
 
     /// Keeps this Show's hero expanded. Call after layout / Show changes.
@@ -31,7 +31,7 @@ extension LibraryGridViewController {
             safeAreaTop: view.safeAreaInsets.top,
             headerInset: headerInset,
             expandedHero: expandedHeroLayoutFrame(),
-            isVerticalMode: ExternalOutputSettings.isVerticalMode
+            isTall: heroAspect < 1
         )
     }
 
@@ -66,10 +66,10 @@ enum LiveHeroMiniSlot {
         safeAreaTop: CGFloat,
         headerInset: CGFloat,
         expandedHero: CGRect,
-        isVerticalMode: Bool
+        isTall: Bool
     ) -> CGRect? {
         guard expandedHero.width > 1, expandedHero.height > 1 else { return nil }
-        let width = isVerticalMode ? verticalWidth : landscapeWidth
+        let width = isTall ? verticalWidth : landscapeWidth
         guard width < expandedHero.width else { return nil }
         let height = (expandedHero.height * (width / expandedHero.width)).rounded(.down)
         return CGRect(
