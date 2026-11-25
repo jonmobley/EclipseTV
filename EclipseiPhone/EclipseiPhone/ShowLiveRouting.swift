@@ -55,10 +55,12 @@ enum ShowLiveRouting {
 
     /// Whether a director can actually act on an operator's `select`.
     ///
-    /// `ShowLiveSession.applyReceived` posts `incomingSelectNotification`, but no
-    /// view layer observes it, so a director receives commands and drops them.
-    /// Flip this to true in the same change that registers that observer.
-    static let directorAppliesSelects = false
+    /// `ShowLiveSession.applyReceived` posts `incomingSelectNotification` and
+    /// `LibraryGridViewController` observes it (`handleIncomingShowLiveSelect`).
+    /// Off, a second phone on the same Show stays an ordinary device and never
+    /// becomes a remote. It was off from 2026-09-07 to 2026-11-25 because one
+    /// branch had lost that observer; turn it off again only together with it.
+    static let directorAppliesSelects = true
 
     /// Whether a peer that just connected to a director becomes its operator.
     ///

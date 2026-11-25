@@ -149,10 +149,11 @@ struct ShowLiveRoutingTests {
         )
     }
 
-    @Test func operatorRoleIsOffUntilTheDirectorObservesSelects() {
-        // Paired with the missing `incomingSelectNotification` observer: both
-        // must change together, so this fails the moment one moves alone.
-        #expect(ShowLiveRouting.directorAppliesSelects == false)
+    @Test func operatorRoleIsOnWhileTheDirectorObservesSelects() {
+        // Paired with the `incomingSelectNotification` observer in
+        // `LibraryGridViewController`: both must change together, so this fails
+        // the moment one moves alone.
+        #expect(ShowLiveRouting.directorAppliesSelects)
     }
 
     @Test func slideStepTakesWholeSlidesWithinReason() {
