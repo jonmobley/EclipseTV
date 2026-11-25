@@ -30,12 +30,34 @@ extension LibraryThumbnailCell {
         endHint: String? = nil,
         background: UIImage? = nil
     ) {
+        configureCountdown(
+            name: name,
+            clockText: CountdownController.displayString(seconds: seconds),
+            isLive: isLive,
+            isLocked: isLocked,
+            isExpired: isExpired,
+            isHeld: isHeld,
+            endHint: endHint,
+            background: background
+        )
+    }
+
+    /// Same as `configureCountdown(name:seconds:…)` with the face already in words,
+    /// so Count Up and To Time tiles can show `0:00` or `to 6:30 PM`.
+    func configureCountdown(
+        name: String,
+        clockText clock: String,
+        isLive: Bool,
+        isLocked: Bool = false,
+        isExpired: Bool = false,
+        isHeld: Bool = false,
+        endHint: String? = nil,
+        background: UIImage? = nil
+    ) {
         resetChrome()
         applyCountdownBackdrop(background)
         placeholderIcon.isHidden = true
-
-        let clock = CountdownController.displayString(seconds: seconds)
-        applyCountdownTime(seconds, isExpired: isExpired, isHeld: isHeld)
+        applyCountdownClock(text: clock, isExpired: isExpired, isHeld: isHeld)
 
         captionLabel.text = endHint.map { "\(name)\n\($0)" } ?? name
         captionLabel.numberOfLines = endHint == nil ? 1 : 2
@@ -65,7 +87,15 @@ extension LibraryThumbnailCell {
 
     /// Updates only the clock digits/color during live ticks (keeps ⋯ / live stroke).
     func applyCountdownTime(_ seconds: Int, isExpired: Bool, isHeld: Bool = false) {
-        let clock = CountdownController.displayString(seconds: seconds)
+        applyCountdownClock(
+            text: CountdownController.displayString(seconds: seconds),
+            isExpired: isExpired,
+            isHeld: isHeld
+        )
+    }
+
+    /// Updates the tile face from ready-made text (`4:59`, `to 6:30 PM`).
+    func applyCountdownClock(text clock: String, isExpired: Bool, isHeld: Bool = false) {
         if isHeld {
             countdownTimeLabel.attributedText = Self.heldClockText(
                 clock, font: countdownTimeLabel.font

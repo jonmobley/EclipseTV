@@ -7,7 +7,8 @@
 
 import UIKit
 
-/// Configure-first Countdown add: name, duration, size & position, background, ending.
+/// Configure-first Countdown add: name, mode (Countdown / Count Up / To Time) with
+/// its length or target time, caption, size & position, background, plate, ending.
 ///
 /// Nothing reaches `CountdownStore` until Add, so backing out leaves the Show exactly
 /// as it was. Rows are drawn in `AddCountdownViewController+Rows`.
@@ -20,22 +21,31 @@ final class AddCountdownViewController: UITableViewController, UITextFieldDelega
     private(set) var draft: CountdownDraft
     /// This Show's media with a local file, in Show order.
     let showMedia: [CountdownBackgroundOption]
-    /// Sections in display order; `showMedia` is present only when the Show has media.
-    let sections: [Section]
+    /// Sections in display order; they follow the chosen mode.
+    var sections: [Section] {
+        Self.sections(hasShowMedia: !showMedia.isEmpty, mode: draft.clock.mode)
+    }
     let nameField = UITextField()
+    let captionField = UITextField()
+    /// To Time rows (time, date, zone); writes the target back into the draft.
+    private(set) lazy var targetRows: CountdownTargetRows = makeTargetRows()
 
     /// Keys the layout editor's live preview; not the id the store assigns on Add.
     private let previewId = UUID()
     private var addButton: UIBarButtonItem!
     private var thumbnailObserver: NSObjectProtocol?
 
-    /// Table sections. Order is fixed by `sections(hasShowMedia:)`.
+    /// Table sections. Order is fixed by `sections(hasShowMedia:mode:)`.
     enum Section: Equatable {
         case name
+        case mode
         case duration
+        case target
+        case caption
         case layout
         case background
         case showMedia
+        case plate
         case ending
     }
 
@@ -47,7 +57,6 @@ final class AddCountdownViewController: UITableViewController, UITextFieldDelega
     init(draft: CountdownDraft, showMedia: [CountdownBackgroundOption]) {
         self.draft = draft
         self.showMedia = showMedia
-        self.sections = Self.sections(hasShowMedia: !showMedia.isEmpty)
         super.init(style: .insetGrouped)
     }
 
@@ -69,11 +78,21 @@ final class AddCountdownViewController: UITableViewController, UITextFieldDelega
         }
     }
 
-    /// Section order for a Show with or without local media.
-    static func sections(hasShowMedia: Bool) -> [Section] {
-        var sections: [Section] = [.name, .duration, .layout, .background]
+    /// Section order for a Show with or without local media, in `mode`.
+    ///
+    /// Duration rows only for Countdown, target rows only for To Time, and no
+    /// When It Ends for Count Up, which never ends on its own.
+    static func sections(hasShowMedia: Bool, mode: CountdownMode = .countdown) -> [Section] {
+        var sections: [Section] = [.name, .mode]
+        switch mode {
+        case .countdown: sections.append(.duration)
+        case .timeOfDay: sections.append(.target)
+        case .countUp: break
+        }
+        sections += [.caption, .layout, .background]
         if hasShowMedia { sections.append(.showMedia) }
-        sections.append(.ending)
+        sections.append(.plate)
+        if mode.expires { sections.append(.ending) }
         return sections
     }
 
@@ -82,6 +101,9 @@ final class AddCountdownViewController: UITableViewController, UITextFieldDelega
         title = "New Countdown"
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: "field")
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: "row")
+        tableView.register(
+            UITableViewCell.self, forCellReuseIdentifier: CountdownTargetRows.reuseId
+        )
         tableView.keyboardDismissMode = .interactive
 
         navigationItem.leftBarButtonItem = UIBarButtonItem(
@@ -99,6 +121,7 @@ final class AddCountdownViewController: UITableViewController, UITextFieldDelega
         navigationItem.rightBarButtonItem = addButton
 
         configureNameField()
+        configureCaptionField()
         observeThumbnails()
         updateAddEnabled()
     }
@@ -121,6 +144,10 @@ final class AddCountdownViewController: UITableViewController, UITextFieldDelega
             alert.addAction(UIAlertAction(title: "OK", style: .default))
             present(alert, animated: true)
         }
+    }
+
+    @objc private func captionChanged() {
+        draft.clock.caption = CountdownClockSettings.clampedCaption(captionField.text ?? "")
     }
 
     @objc private func nameChanged() {
@@ -163,6 +190,21 @@ final class AddCountdownViewController: UITableViewController, UITextFieldDelega
         reload(.showMedia)
     }
 
+    /// Applies a Mode row; the sections around it change with the mode.
+    func select(_ mode: CountdownMode) {
+        guard draft.clock.mode != mode else { return }
+        draft.clock.mode = mode
+        if mode == .timeOfDay {
+            draft.clock.takeTarget(from: targetRows.settings)
+        }
+        tableView.reloadData()
+    }
+
+    /// Flips "Card behind numbers".
+    @objc func plateSwitchChanged(_ sender: UISwitch) {
+        draft.clock.style = sender.isOn ? .card : .simple
+    }
+
     /// Applies a When It Ends row.
     func select(_ action: CountdownEndAction) {
         draft.endAction = action
@@ -189,6 +231,27 @@ final class AddCountdownViewController: UITableViewController, UITextFieldDelega
         UserDisplayName.configureTextField(nameField)
     }
 
+    private func configureCaptionField() {
+        captionField.text = draft.clock.caption
+        captionField.placeholder = "None (e.g. Doors open in)"
+        captionField.accessibilityLabel = "Caption"
+        captionField.clearButtonMode = .whileEditing
+        captionField.autocapitalizationType = .sentences
+        captionField.returnKeyType = .done
+        captionField.delegate = self
+        captionField.addTarget(self, action: #selector(captionChanged), for: .editingChanged)
+        UserDisplayName.configureTextField(captionField)
+    }
+
+    private func makeTargetRows() -> CountdownTargetRows {
+        let rows = CountdownTargetRows(settings: draft.clock)
+        rows.onChange = { [weak self] settings, rowsChanged in
+            self?.draft.clock.takeTarget(from: settings)
+            if rowsChanged { self?.reload(.target) }
+        }
+        return rows
+    }
+
     /// Show thumbnails land from disk after the sheet paints; repaint just that row.
     private func observeThumbnails() {
         let thumbnailIdKey = TVLibraryStore.thumbnailIdKey
@@ -212,7 +275,7 @@ final class AddCountdownViewController: UITableViewController, UITextFieldDelega
         addButton.isEnabled = UserDisplayName.normalized(draft.name) != nil
     }
 
-    private func reload(_ section: Section) {
+    func reload(_ section: Section) {
         guard let index = sections.firstIndex(of: section) else { return }
         tableView.reloadSections(IndexSet(integer: index), with: .none)
     }
