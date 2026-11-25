@@ -140,6 +140,8 @@ final class LibraryGridViewController: UIViewController {
     var isSelecting = false
     /// Membership / tool ids checked while `isSelecting`.
     var selectedShowItemIds = Set<String>()
+    /// The open Show's grid order when Arrange began, for Undo after Done.
+    var arrangeStartSurface: [String]?
     /// Cancels Live Poll status polling when the ribbon hides or the Show closes.
     var questPollStatusPollTask: Task<Void, Never>?
     /// Working copy of the library order used while arranging and until the Apple TV
@@ -159,7 +161,12 @@ final class LibraryGridViewController: UIViewController {
     }()
 
     /// Media slice only (arrange working copy or mirrored TV order).
-    var displayItems: [LibraryItemDTO] { arrangeItems ?? store.items }
+    var displayItems: [LibraryItemDTO] {
+        let items = arrangeItems ?? store.items
+        // Tiles whose delete waits on Undo are already gone from Library.
+        let hidden = PendingDeletes.shared.hiddenLibraryIds
+        return hidden.isEmpty ? items : items.filter { !hidden.contains($0.id) }
+    }
 
     /// Open Show when in Show mode.
     var openShow: LocalAlbum? {
@@ -208,7 +215,12 @@ final class LibraryGridViewController: UIViewController {
     /// Live Poll cards belonging to the open Show.
     var openShowLivePolls: [ShowLivePoll] {
         guard let openShowId else { return [] }
-        return LivePollStore.shared.polls(forShowId: openShowId)
+        // A card whose delete waits on Undo is already gone from the grid; without
+        // this the surface would append it straight back.
+        let hidden = PendingDeletes.shared.hiddenShowCardTokens
+        return LivePollStore.shared.polls(forShowId: openShowId).filter {
+            !hidden.contains(ShowLivePollToken.token(for: $0.id))
+        }
     }
 
     /// Ordered Show-grid surface ids (tools, members, slideshows, Live Polls).
@@ -638,6 +650,10 @@ final class LibraryGridViewController: UIViewController {
             self?.validateOpenShow(adoptingCurrentDisplayMode: true)
             self?.refreshVisibleCameraTilePreview()
             self?.reloadLivePollForDisplayMode()
+        }
+        observe(PendingDeletes.didChangeNotification) { [weak self] _ in
+            self?.reloadGridIfSafe()
+            self?.updateEmptyState()
         }
         observe(WebPageStore.didChangeNotification) { [weak self] _ in
             self?.reloadGridIfSafe()

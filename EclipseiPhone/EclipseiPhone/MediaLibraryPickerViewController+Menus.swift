@@ -288,37 +288,17 @@ extension MediaLibraryPickerViewController {
             presentNotConnectedAlert()
             return
         }
-        let message = isPending
-            ? "This removes the item you added."
-            : "This removes the item from your Apple TV library."
-        let alert = UIAlertController(
-            title: "Delete?",
-            message: message,
-            preferredStyle: .alert
-        )
-        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        alert.addAction(UIAlertAction(title: "Delete", style: .destructive) { [weak self] _ in
-            self?.onPerformDelete?(item.id)
+        // Undo replaces the confirmation; the delete runs once the toast is gone,
+        // even if this picker has closed by then (so `perform` is held strongly).
+        let perform = onPerformDelete
+        offerLibraryDeleteUndo(id: item.id) { [weak self] in
+            perform?(item.id)
             self?.reload()
-        })
-        present(alert, animated: true)
+        }
     }
 
     private func confirmDeletePDF(_ doc: SavedPDF) {
-        let alert = UIAlertController(
-            title: "Delete PDF?",
-            message: "“\(doc.title)” is removed from every Show and from Library.",
-            preferredStyle: .alert
-        )
-        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        alert.addAction(UIAlertAction(title: "Delete", style: .destructive) { _ in
-            let manager = ExternalDisplayManager.shared
-            if manager.isPDFLive, manager.livePDFDocumentId == doc.id {
-                manager.stopPDFAndRestoreLibrary()
-            }
-            PDFStore.shared.remove(id: doc.id)
-        })
-        present(alert, animated: true)
+        deletePDFWithUndo(doc)
     }
 
     private func presentNotConnectedAlert() {

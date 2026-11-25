@@ -128,22 +128,6 @@ extension LibraryGridViewController {
         enterShowMode(album)
     }
 
-    /// Confirms and deletes the open Show, then returns Home.
-    func confirmDeleteOpenShow() {
-        guard let show = openShow else { return }
-        let alert = UIAlertController(
-            title: "Delete Show?",
-            message: "“\(show.name)” is removed from Home. Its images and videos stay on this iPhone and any linked EclipseTV.",
-            preferredStyle: .alert
-        )
-        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        alert.addAction(UIAlertAction(title: "Delete", style: .destructive) { [weak self] _ in
-            LocalAlbumStore.shared.delete(id: show.id)
-            self?.closeOpenShow()
-        })
-        present(alert, animated: true)
-    }
-
     /// Returns the grid to the top when the section contents change wholesale.
     ///
     /// Home and a Show have unrelated content heights, so carrying the old offset across
