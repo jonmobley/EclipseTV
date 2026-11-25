@@ -105,6 +105,11 @@ final class LiveHeaderView: UIView {
     private var transitionSnapshot: UIView?
     /// Whether playback transport should show when not in compact presentation.
     var wantsPlaybackControls = false
+    /// Phone-played video only: transport and expand control are tucked away, like
+    /// a video player's chrome. Owned by `LiveHeaderView+TransportAutoHide`.
+    var isTransportChromeTucked = false
+    /// Tucks the transport a few seconds into playback. See `+TransportAutoHide`.
+    var transportAutoHideTimer: Timer?
     /// Compact presentation progress (0 = full hero, 1 = tucked mini preview).
     /// Owned by `applyCollapse(progress:scale:)`. The open Show's hero stays at 0;
     /// foreign-Show live uses 1 on its own mini view.
@@ -206,8 +211,8 @@ final class LiveHeaderView: UIView {
     }
     /// When true, the in-hero library video offers fullscreen Preview.
     ///
-    /// Separate from `allowsFullscreenTap` because that hero's body tap is
-    /// play/pause — only the expand control opens Preview there.
+    /// Separate from `allowsFullscreenTap` because that hero's body tap shows or
+    /// hides the transport — only the expand control opens Preview there.
     /// Owned by `showLibraryVideoPreview` / `clearLibraryVideoPreview`.
     var allowsLibraryVideoFullscreen = false {
         didSet {
@@ -311,6 +316,10 @@ final class LiveHeaderView: UIView {
         controls.onTogglePlayPause = { [weak self] in self?.onTogglePlayPause?() }
         controls.onSkip = { [weak self] delta in self?.onSkip?(delta) }
         controls.onSeek = { [weak self] position in self?.onSeek?(position) }
+        controls.onUserActivity = { [weak self] in
+            guard let self, self.transportAutoHides else { return }
+            self.scheduleTransportAutoHide()
+        }
         addSubview(controls)
 
         let fullscreenTap = UITapGestureRecognizer(

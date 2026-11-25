@@ -141,6 +141,7 @@ extension LiveHeaderView {
         libraryVideoHost?.removeFromSuperview()
         libraryVideoHost = nil
         libraryVideoItemId = nil
+        resetTransportChrome()
         setLibraryVideoFullscreenAvailable(false)
         setStaticPreviewHidden(false)
     }
@@ -245,8 +246,8 @@ extension LiveHeaderView {
 
     /// Offers (or withdraws) fullscreen Preview for phone-local library video.
     ///
-    /// The shared expand control renders it — this hero's body tap is play/pause,
-    /// so the control is the only way into Preview here.
+    /// The shared expand control renders it — this hero's body tap shows or hides
+    /// the transport, so the control is the only way into Preview here.
     func setLibraryVideoFullscreenAvailable(_ available: Bool) {
         allowsLibraryVideoFullscreen = available
         syncExpandControl()
@@ -282,7 +283,9 @@ extension LiveHeaderView {
     }
 
     private func pushLibraryVideoPlaybackToControls() {
-        updatePlayback(libraryVideoPlaybackState)
+        let state = libraryVideoPlaybackState
+        updatePlayback(state)
+        noteLibraryVideoPlaybackForTransport(isPlaying: state.isPlaying)
     }
 
     private func bringLibraryVideoChromeToFront() {
@@ -293,10 +296,11 @@ extension LiveHeaderView {
         bringExpandControlToFront()
     }
 
+    /// Like a video player: a tap shows or tucks the transport; play / pause is
+    /// the button's job.
     @objc fileprivate func handleLibraryVideoTap() {
         guard !isCompactPresentation else { return }
-        _ = toggleLibraryVideoPlayback()
-        Haptics.impactLight()
+        toggleTransportChrome()
     }
 }
 

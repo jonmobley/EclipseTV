@@ -205,6 +205,10 @@
   view then pinches on *from the held zoom*, so a slow pinch stayed caught for good (found 2026-11-19). Once a pinch has
   held, the reader drives the zoom from finger spread (`PDFZoomSnap.fingerScale`). Only snap sizes inside the reader's
   zoom range count: a portrait page in a 16:9 frame only gets the fill-width catch.
+- Hero video controls fade like a video player (2026-11-25, `LiveHeaderView+TransportAutoHide`): only when the hero plays
+  the video itself (nothing connected / Practice Mode, or a phone Preview). They fade 3s into playback; a tap on the
+  picture shows them, a tap while they show hides them (it no longer toggles play/pause; the button does). They stay up
+  while paused, while scrubbing and with VoiceOver on. A TV-driven hero (AirPlay / Eclipse TV) is a remote and never hides.
 - Live preview (hero) takes pinch and drag directly (2026-11-04, `LiveHeaderView+DirectAdjust`):
   countdown pinch resizes / drag on the clock moves it (live through `CountdownClockLayoutPreview`,
   saved on lift); stills pinch-zoom into a crop (`StillFramingGesture`, saved via `applyFraming`
