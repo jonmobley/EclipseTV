@@ -266,6 +266,7 @@ extension LiveHeaderView {
                 player.play()
             } else {
                 player.pause()
+                NotificationCenter.default.post(name: VideoEndDecision.didFinishNotification, object: nil)
             }
             self.pushLibraryVideoPlaybackToControls()
         }

@@ -175,6 +175,8 @@ extension PresentationViewController {
 
         if isLooping, looper == nil {
             loopObserver = makeSeekToZeroLoopObserver(for: player)
+        } else if !isLooping {
+            loopObserver = makeVideoEndedObserver(for: player)
         }
 
         AirPlayVideoTransport.start(
@@ -230,6 +232,17 @@ extension PresentationViewController {
         ) { [weak player] _ in
             player?.seek(to: .zero)
             player?.play()
+        }
+    }
+
+    /// Tells the grid a non-looping video reached its end, so Next / Screensaver can run.
+    func makeVideoEndedObserver(for player: AVPlayer) -> NSObjectProtocol {
+        NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemDidPlayToEndTime,
+            object: player.currentItem,
+            queue: .main
+        ) { _ in
+            NotificationCenter.default.post(name: VideoEndDecision.didFinishNotification, object: nil)
         }
     }
 

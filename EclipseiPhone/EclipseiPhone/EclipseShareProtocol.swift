@@ -144,6 +144,9 @@ struct LibraryItemDTO: Codable, Equatable {
     /// Looping video dissolves its end into its start. nil (older peers) = off,
     /// except the TV's shipped Eclipse loop, which always blends.
     var crossfadesLoop: Bool?
+    /// "When Video Ends" choice (`VideoEndAction` raw value), kept on this phone only.
+    /// nil (older data) = follow `isLooping`. Loop is always mirrored into `isLooping`.
+    var endAction: String?
     /// nil or true means available; false means the TV's file was purged and the item
     /// can only be re-sent from the companion.
     var isAvailable: Bool?
