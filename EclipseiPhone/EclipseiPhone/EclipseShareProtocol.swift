@@ -52,6 +52,11 @@ enum EclipseShareProtocol {
         case setLibraryAlbums = "set_library_albums"
         /// Companion parks the TV (black) while AirPlay owns an overlay, or clears park.
         case setIdleMode = "set_idle_mode"
+        /// Companion hands a whole slideshow to the TV, which then advances on its own.
+        /// Sent only to TVs that list `EclipseShareCapability.slideshow`.
+        case playSlideshow = "play_slideshow"
+        /// Companion steps the TV's running slideshow to a slide, or stops it.
+        case slideshowControl = "slideshow_control"
     }
 
     /// Separate media libraries: Landscape (16:9) vs Vertical (9:16).
@@ -228,6 +233,11 @@ struct EclipseShareEnvelope: Codable {
     /// `playRequest` only: cue a video paused on its first frame instead of playing.
     /// Older TVs ignore it and play, which is how they always behaved.
     var startsPaused: Bool? = nil
+    /// `playSlideshow` only: the slides and timing the TV plays by itself.
+    var slideshow: SlideshowDTO? = nil
+    /// `libraryManifest` only (TV -> iPhone): features this TV understands, such as
+    /// `EclipseShareCapability.slideshow`. Older TVs leave it out; older phones ignore it.
+    var capabilities: [String]? = nil
 
     var kind: EclipseShareProtocol.Kind? {
         EclipseShareProtocol.Kind(rawValue: eclipseMsg)
