@@ -263,3 +263,13 @@
   acknowledgements live in `MusicSyncLedger`, not in the saved track/playlist format. Playlists keep song ids the
   phone has no file for yet (`MusicSyncPolicy.mergeOrder` on reorder). **Both record types must be deployed
   Development → Production in the CloudKit Console** before music syncs in TestFlight/App Store builds.
+- Mac remote on iPhone/iPad is the Mac's own page (2026-11-25, `MacRemote/`): Settings → Connect to Mac (or an
+  `eclipse://mac-remote` QR / link) finds the Mac, then `MacRemoteWebViewController` shows the remote page that Eclipse
+  on the Mac serves (eclipsepro `EclipsePro/RemoteControl/WebRemote`). There is no second, hand-built remote screen any
+  more (owner's call: browser and app must look and behave the same), so **new remote controls are built once, in the
+  Mac's page**, never in this app. The app only adds a Back arrow to the page's header (`MacRemotePage.backArrowScript`;
+  its own Back button stands in while the page loads, while the page's PIN card covers the header, or if the header is
+  ever missing), keeps the page on the Mac it opened (`allowsNavigation`), and keeps the remote's sign-in in its own
+  cookie store, apart from the website browser. Sign-in (link secret or PIN) is the page's job. To look at it without a
+  Mac, serve the three `WebRemote` files from a small local stand-in and open
+  `eclipse://mac-remote?h=127.0.0.1&p=<port>#t=x` in the simulator.
