@@ -21,8 +21,7 @@ struct SettingsShowEditingTests {
         let table = try #require(settings.tableView)
         #expect(table.numberOfRows(inSection: 0) == 1)
         #expect(settings.tableView(table, titleForHeaderInSection: 0) == "Show")
-        #expect(settings.tableView(table, titleForHeaderInSection: 1) == nil)
-        #expect(settings.tableView(table, titleForHeaderInSection: 2) == "Playback")
+        #expect(settings.tableView(table, titleForHeaderInSection: 1) == "Playback")
 
         let nameCell = settings.tableView(
             table, cellForRowAt: IndexPath(row: 0, section: 0)
@@ -36,25 +35,23 @@ struct SettingsShowEditingTests {
         #expect(delete?.image(for: .normal) != nil)
     }
 
-    @Test func openShowSettingsIncludesPracticeModeToggle() throws {
+    /// Practice Mode is always on (2026-11-25), so open-Show Settings has no switch.
+    @Test func openShowSettingsHasNoPracticeModeSwitch() throws {
         let settings = SettingsViewController()
         settings.openShowName = "Go"
         settings.openShowId = UUID()
         settings.loadViewIfNeeded()
 
         let table = try #require(settings.tableView)
-        #expect(table.numberOfRows(inSection: 1) == 1)
-        #expect(
-            settings.tableView(table, titleForFooterInSection: 1)
-            == SettingsViewController.disconnectedLivePreviewFooter
-        )
-
-        let cell = settings.tableView(
-            table, cellForRowAt: IndexPath(row: 0, section: 1)
-        )
-        let config = cell.contentConfiguration as? UIListContentConfiguration
-        #expect(config?.text == "Practice Mode")
-        #expect(cell.accessoryView is UISwitch)
+        for section in 0..<table.numberOfSections {
+            for row in 0..<table.numberOfRows(inSection: section) {
+                let cell = settings.tableView(
+                    table, cellForRowAt: IndexPath(row: row, section: section)
+                )
+                let config = cell.contentConfiguration as? UIListContentConfiguration
+                #expect(config?.text != "Practice Mode")
+            }
+        }
     }
 
     @Test func deleteShowAsksToConfirmBeforeCallingHost() throws {

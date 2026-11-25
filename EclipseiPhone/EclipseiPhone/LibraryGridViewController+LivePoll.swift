@@ -672,9 +672,8 @@ extension LibraryGridViewController {
         if TVLibraryStore.shared.isOnline {
             message = "QuestPoll needs AirPlay or HDMI. EclipseTV stays on the library."
         } else {
-            // Name the Settings switch, not "the phone preview" — the user has to
-            // find "Practice Mode" to act on this.
-            message = "QuestPoll needs AirPlay, HDMI, or Practice Mode."
+            // Practice Mode is always on inside a Show, so only Home lands here.
+            message = "Open a Show to use QuestPoll."
         }
         let alert = UIAlertController(
             title: "QuestPoll", message: message, preferredStyle: .alert

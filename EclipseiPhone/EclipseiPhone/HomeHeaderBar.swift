@@ -56,8 +56,6 @@ final class HomeHeaderBar: UIView {
     private var isLiveLocked = false
     private var isBlackLive = false
     private var showsShowChrome = false
-    private var previewsWhenDisconnected = false
-    private var livePollOwnsPhoneHero = false
     private var isArranging = false
     private var isSelecting = false
     private var menuPillLeadingToBack: NSLayoutConstraint?
@@ -169,7 +167,7 @@ final class HomeHeaderBar: UIView {
         blackButton.accessibilityLabel = "Blackout"
         blackButton.accessibilityHint =
             "Toggles a black screen on the live output — AirPlay, EclipseTV, "
-            + "or the Practice Mode preview"
+            + "or the preview on this iPhone"
         blackButton.addTarget(self, action: #selector(blackTapped), for: .touchUpInside)
         applyBlackButtonAppearance()
 
@@ -382,33 +380,11 @@ final class HomeHeaderBar: UIView {
             : "Open Show, New Show, Library, Music, Settings, and Recent Shows"
     }
 
-    /// Practice Mode for the open Show: live preview + Lock / Blackout when
-    /// nothing is connected. Off means taps open on-device Preview.
-    func setPreviewsWhenDisconnected(_ enabled: Bool) {
-        guard previewsWhenDisconnected != enabled else { return }
-        previewsWhenDisconnected = enabled
-        applyTrailingChrome()
-    }
-
-    /// A Live Poll gate, Practice deck, or room is hosted on the phone hero.
-    ///
-    /// That hero appears even with Practice Mode off, and it is the output, so
-    /// Lock / Blackout have to come with it.
-    func setLivePollOwnsPhoneHero(_ active: Bool) {
-        guard livePollOwnsPhoneHero != active else { return }
-        livePollOwnsPhoneHero = active
-        applyTrailingChrome()
-    }
-
-    /// Lock + Blackout: Show mode with a display, EclipseTV, Practice Mode, or a
-    /// phone-hosted Live Poll — anything that makes the hero the live output.
+    /// Lock + Blackout: every open Show. With a display or EclipseTV they act on
+    /// the audience; with nothing connected Practice Mode (always on since
+    /// 2026-11-25) makes the hero the output, so they rehearse there. Home has none.
     var showsLiveOutputChrome: Bool {
-        showsShowChrome && (
-            isAirPlayConnected
-            || connectionState == .connected
-            || previewsWhenDisconnected
-            || livePollOwnsPhoneHero
-        )
+        showsShowChrome
     }
 
     /// Reflects whether live output is locked (amber lock control).

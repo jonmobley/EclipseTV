@@ -115,7 +115,7 @@ extension LibraryGridViewController {
         }
         let message = TVLibraryStore.shared.isOnline
             ? "Prompter needs AirPlay or HDMI. EclipseTV stays on the library."
-            : "Prompter needs AirPlay, HDMI, or Practice Mode."
+            : "Open a Show to use the Prompter."
         let alert = UIAlertController(title: "Prompter", message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "OK", style: .default))
         topmostPresenter.present(alert, animated: true)

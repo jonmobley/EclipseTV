@@ -25,9 +25,6 @@ struct LocalAlbum: Codable, Equatable, Identifiable, Hashable {
     /// Ordered Show grid: tool tokens, member ids, slideshow / countdown /
     /// Live Poll tokens. `nil` = default tools, then members, then those tiles.
     var surfaceIds: [String]?
-    /// Practice Mode: live preview plus Lock / Blackout with no AirPlay, HDMI,
-    /// or EclipseTV. Default is on so a Show is rehearsable without a display.
-    var previewsWhenDisconnected: Bool
     /// Membership ids removed locally — CloudKit union merge subtracts these.
     var deletedItemIds: [String]
     /// Surface ids removed locally (tools / slideshow / countdown / Live Poll).
@@ -43,7 +40,6 @@ struct LocalAlbum: Codable, Equatable, Identifiable, Hashable {
         createdAt: Date = Date(),
         lastOpenedAt: Date? = nil,
         surfaceIds: [String]? = nil,
-        previewsWhenDisconnected: Bool = true,
         deletedItemIds: [String] = [],
         deletedSurfaceIds: [String] = []
     ) {
@@ -55,7 +51,6 @@ struct LocalAlbum: Codable, Equatable, Identifiable, Hashable {
         self.createdAt = createdAt
         self.lastOpenedAt = lastOpenedAt
         self.surfaceIds = surfaceIds
-        self.previewsWhenDisconnected = previewsWhenDisconnected
         self.deletedItemIds = deletedItemIds
         self.deletedSurfaceIds = deletedSurfaceIds
     }
@@ -195,9 +190,6 @@ struct LocalAlbum: Codable, Equatable, Identifiable, Hashable {
         createdAt = try c.decode(Date.self, forKey: .createdAt)
         lastOpenedAt = try c.decodeIfPresent(Date.self, forKey: .lastOpenedAt)
         surfaceIds = try c.decodeIfPresent([String].self, forKey: .surfaceIds)
-        previewsWhenDisconnected = try c.decodeIfPresent(
-            Bool.self, forKey: .previewsWhenDisconnected
-        ) ?? true
         deletedItemIds = try c.decodeIfPresent([String].self, forKey: .deletedItemIds) ?? []
         deletedSurfaceIds = try c.decodeIfPresent(
             [String].self, forKey: .deletedSurfaceIds
@@ -217,7 +209,9 @@ struct LocalAlbum: Codable, Equatable, Identifiable, Hashable {
         try c.encode(createdAt, forKey: .createdAt)
         try c.encodeIfPresent(lastOpenedAt, forKey: .lastOpenedAt)
         try c.encodeIfPresent(surfaceIds, forKey: .surfaceIds)
-        try c.encode(previewsWhenDisconnected, forKey: .previewsWhenDisconnected)
+        // Practice Mode is always on (2026-11-25). Builds before that still read
+        // this key as the old per-Show switch, so keep telling them "on".
+        try c.encode(true, forKey: .previewsWhenDisconnected)
         try c.encode(deletedItemIds, forKey: .deletedItemIds)
         try c.encode(deletedSurfaceIds, forKey: .deletedSurfaceIds)
     }

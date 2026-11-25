@@ -40,8 +40,8 @@ enum CloudKitRecordMapper {
         }
         record[CloudKitSchema.ShowKey.createdAt] = album.createdAt as CKRecordValue
         record[CloudKitSchema.ShowKey.modifiedAt] = modifiedAt as CKRecordValue
-        record[CloudKitSchema.ShowKey.previewsWhenDisconnected] =
-            album.previewsWhenDisconnected as CKRecordValue
+        // Practice Mode is always on; older builds still read this as their switch.
+        record[CloudKitSchema.ShowKey.previewsWhenDisconnected] = true as CKRecordValue
         setStringList(
             album.deletedItemIds,
             forKey: CloudKitSchema.ShowKey.deletedItemIds,
@@ -89,8 +89,6 @@ enum CloudKitRecordMapper {
         let rawOrientation = record[CloudKitSchema.ShowKey.orientation] as? String
         let orientation = ExternalOutputOrientation.resolved(fromStored: rawOrientation)
         let createdAt = (record[CloudKitSchema.ShowKey.createdAt] as? Date) ?? Date()
-        let previewsWhenDisconnected =
-            (record[CloudKitSchema.ShowKey.previewsWhenDisconnected] as? Bool) ?? true
         let deletedItemIds =
             (record[CloudKitSchema.ShowKey.deletedItemIds] as? [String]) ?? []
         let deletedSurfaceIds =
@@ -103,7 +101,6 @@ enum CloudKitRecordMapper {
             orientation: orientation,
             createdAt: createdAt,
             surfaceIds: surfaceIds,
-            previewsWhenDisconnected: previewsWhenDisconnected,
             deletedItemIds: deletedItemIds,
             deletedSurfaceIds: deletedSurfaceIds
         )

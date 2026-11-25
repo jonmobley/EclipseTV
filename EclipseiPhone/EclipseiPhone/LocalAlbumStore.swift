@@ -35,9 +35,6 @@ final class LocalAlbumStore {
 
     private let defaults: UserDefaults
     private let itemsKey = "EclipseTV.localAlbums.items"
-    /// One-time: enable Practice Mode on Shows created before it defaulted on.
-    private let practiceModeDefaultOnMigrationKey =
-        "EclipseTV.localAlbums.practiceModeDefaultOn.v1"
     private let logger = Logger(subsystem: "com.eclipseapp.ios", category: "LocalAlbumStore")
 
     init(defaults: UserDefaults = .standard) {
@@ -490,15 +487,6 @@ final class LocalAlbumStore {
             + slideshows + countdowns + livePolls
     }
 
-    /// Shows or hides the disconnected live preview hero for `albumId`.
-    func setPreviewsWhenDisconnected(_ enabled: Bool, albumId: UUID) {
-        guard let index = albums.firstIndex(where: { $0.id == albumId }) else { return }
-        guard albums[index].previewsWhenDisconnected != enabled else { return }
-        albums[index].previewsWhenDisconnected = enabled
-        persist(changedAlbumId: albumId)
-        scheduleShowSaveIfNeeded(albumId)
-    }
-
     /// Sets the cover thumbnail for `albumId` when `itemId` is a member.
     func setCover(itemId: String, albumId: UUID) {
         guard let index = albums.firstIndex(where: { $0.id == albumId }) else { return }
@@ -643,25 +631,6 @@ final class LocalAlbumStore {
             from: defaults,
             logger: logger
         ).elements
-        migratePracticeModeDefaultOnIfNeeded()
-    }
-
-    /// Older Shows stored Practice Mode as off by default. Flip them on once so
-    /// every Show is rehearsable without a display; the user can still turn it off.
-    private func migratePracticeModeDefaultOnIfNeeded() {
-        guard !defaults.bool(forKey: practiceModeDefaultOnMigrationKey) else { return }
-        defaults.set(true, forKey: practiceModeDefaultOnMigrationKey)
-        guard !albums.isEmpty else { return }
-        var changedIds: [UUID] = []
-        for index in albums.indices where !albums[index].previewsWhenDisconnected {
-            albums[index].previewsWhenDisconnected = true
-            changedIds.append(albums[index].id)
-        }
-        guard !changedIds.isEmpty else { return }
-        persist()
-        for id in changedIds {
-            scheduleShowSaveIfNeeded(id)
-        }
     }
 
     /// - Parameter changedAlbumId: When known, lets observers scope work to one Show

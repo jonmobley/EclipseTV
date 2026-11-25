@@ -205,6 +205,11 @@
   view then pinches on *from the held zoom*, so a slow pinch stayed caught for good (found 2026-11-19). Once a pinch has
   held, the reader drives the zoom from finger spread (`PDFZoomSnap.fingerScale`). Only snap sizes inside the reader's
   zoom range count: a portrait page in a 16:9 frame only gets the fill-width catch.
+- Practice Mode is always on (2026-11-25, owner's call: "the Mac app has no such setting"). Inside any open Show,
+  nothing connected behaves like a TV is connected: taps put cards in the hero, Lock / Blackout show, Prompter /
+  Countdown / QuestPoll / websites can go live (`prefersDisconnectedLivePreview == isShowMode`). Home is unchanged.
+  The per-Show switch is gone from Settings; the old `previewsWhenDisconnected` key is still written as `true`
+  (JSON and CloudKit) because older builds read it as their switch.
 - Hero video controls fade like a video player (2026-11-25, `LiveHeaderView+TransportAutoHide`): only when the hero plays
   the video itself (nothing connected / Practice Mode, or a phone Preview). They fade 3s into playback; a tap on the
   picture shows them, a tap while they show hides them (it no longer toggles play/pause; the button does). They stay up

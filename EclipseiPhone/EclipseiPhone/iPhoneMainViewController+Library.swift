@@ -22,7 +22,6 @@ extension iPhoneMainViewController {
             return "Live on \(name)"
         }()
         headerBar.setCenterTitle(openShow?.name ?? "Home", subtitle: subtitle)
-        headerBar.setPreviewsWhenDisconnected(openShow?.previewsWhenDisconnected ?? false)
         headerBar.setShowModeChrome(openShow != nil)
         headerBar.setNavSelection(
             HomeHeaderNavSelection(
