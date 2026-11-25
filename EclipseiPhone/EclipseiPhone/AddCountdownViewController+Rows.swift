@@ -23,7 +23,7 @@ extension AddCountdownViewController {
         case .name, .layout, .caption, .plate: return 1
         case .mode: return CountdownMode.allCases.count
         case .duration: return CountdownController.durationPresets.count + 1
-        case .target: return targetRows.rows.count
+        case .target: return targetRows.tableRows().count
         case .background: return CountdownBackgroundOption.fixed.count
         case .showMedia: return showMedia.count
         case .ending: return CountdownEndAction.allCases.count

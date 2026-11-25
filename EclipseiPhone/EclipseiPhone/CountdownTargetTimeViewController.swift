@@ -46,8 +46,8 @@ final class CountdownTargetTimeViewController: UITableViewController {
             primaryAction: UIAction { [weak self] _ in self?.finish() }
         )
         rows.onChange = { [weak self] _, rowsChanged in
-            guard rowsChanged else { return }
-            self?.tableView.reloadData()
+            guard rowsChanged, let self else { return }
+            self.rows.syncRows(in: self.tableView, section: 0)
         }
     }
 
@@ -56,7 +56,7 @@ final class CountdownTargetTimeViewController: UITableViewController {
     override func numberOfSections(in tableView: UITableView) -> Int { 1 }
 
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        rows.rows.count
+        rows.tableRows().count
     }
 
     override func tableView(

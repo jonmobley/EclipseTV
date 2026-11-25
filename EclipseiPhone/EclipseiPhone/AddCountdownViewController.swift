@@ -247,7 +247,9 @@ final class AddCountdownViewController: UITableViewController, UITextFieldDelega
         let rows = CountdownTargetRows(settings: draft.clock)
         rows.onChange = { [weak self] settings, rowsChanged in
             self?.draft.clock.takeTarget(from: settings)
-            if rowsChanged { self?.reload(.target) }
+            guard rowsChanged, let self,
+                  let index = self.sections.firstIndex(of: .target) else { return }
+            self.targetRows.syncRows(in: self.tableView, section: index)
         }
         return rows
     }

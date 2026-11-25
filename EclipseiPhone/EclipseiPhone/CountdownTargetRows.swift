@@ -34,6 +34,8 @@ final class CountdownTargetRows: NSObject {
     /// list changed (the date row came or went), so the table must reload.
     var onChange: ((CountdownClockSettings, Bool) -> Void)?
 
+    /// Rows the table was last told about, so a change can insert or delete rows.
+    private var shownRows: [Row] = []
     private let timePicker = UIDatePicker()
     private let datePicker = UIDatePicker()
     private let dateSwitch = UISwitch()
@@ -61,13 +63,36 @@ final class CountdownTargetRows: NSObject {
         return rows
     }
 
-    /// Footer under the rows.
-    var footer: String {
-        var text = CountdownMode.timeOfDay.explanation
-        if settings.zoneDescription != nil {
-            text += " The time zone was set on the Mac."
+    /// Rows for the table's row count; also remembers them for `syncRows`.
+    func tableRows() -> [Row] {
+        shownRows = rows
+        return shownRows
+    }
+
+    /// Inserts or deletes the date row in place. Reloading the section instead
+    /// would move the switch to a new cell mid-press, freezing it there.
+    /// - Parameters:
+    ///   - tableView: The host table.
+    ///   - section: Index of the target section in that table.
+    func syncRows(in tableView: UITableView, section: Int) {
+        let old = shownRows
+        let new = rows
+        guard old != new else { return }
+        let deleted = old.enumerated().filter { !new.contains($0.element) }
+            .map { IndexPath(row: $0.offset, section: section) }
+        let inserted = new.enumerated().filter { !old.contains($0.element) }
+            .map { IndexPath(row: $0.offset, section: section) }
+        shownRows = new
+        tableView.performBatchUpdates {
+            tableView.deleteRows(at: deleted, with: .fade)
+            tableView.insertRows(at: inserted, with: .fade)
         }
-        return text
+    }
+
+    /// Footer under the rows: only when the Mac chose a zone, to explain it.
+    var footer: String? {
+        guard settings.zoneDescription != nil else { return nil }
+        return "The time zone was set on the Mac; the clock counts to this time there."
     }
 
     /// A configured cell for `row`.
