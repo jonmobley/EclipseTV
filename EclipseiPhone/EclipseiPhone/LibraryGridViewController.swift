@@ -313,6 +313,12 @@ final class LibraryGridViewController: UIViewController {
 
     /// Fired when Black live chrome should update (e.g. header button).
     var onBlackLiveChanged: ((Bool) -> Void)?
+    /// Which of Freeze / White / Lock / Blackout are on (see `LiveOutputHoldState`).
+    var outputHold = LiveOutputHoldState()
+    /// Fired when Freeze turns on or off (header snowflake).
+    var onFreezeChanged: ((Bool) -> Void)?
+    /// Fired when White turns on or off (header Blackout button).
+    var onWhiteChanged: ((Bool) -> Void)?
     /// Fired when live-output lock toggles (header amber chrome).
     var onLiveOutputLockChanged: ((Bool) -> Void)?
     /// Fired when a phone-hosted Live Poll takes or releases the hero, so the

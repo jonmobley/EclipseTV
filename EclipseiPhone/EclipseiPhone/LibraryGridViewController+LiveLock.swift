@@ -20,6 +20,8 @@ extension LibraryGridViewController {
             return
         }
         isLiveOutputLocked.toggle()
+        // Lock and Freeze never stay on together.
+        applyOutputHoldChrome()
         applyLiveOutputLockChrome()
         // A mode change starts the hero over on program.
         clearHeroPhonePreview()

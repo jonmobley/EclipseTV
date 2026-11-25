@@ -25,6 +25,7 @@ final class HomeHeaderBar: UIView {
     private let navTabs = HomeHeaderNavTabs()
     private let trailingStack = UIStackView()
     private let lockButton = MinimumHitTargetButton(type: .system)
+    private let freezeButton = MinimumHitTargetButton(type: .system)
     private let blackButton = MinimumHitTargetButton(type: .system)
     private let settingsButton = MinimumHitTargetButton(type: .system)
     private let addButton = MinimumHitTargetButton(type: .system)
@@ -38,8 +39,14 @@ final class HomeHeaderBar: UIView {
     var onGoBack: (() -> Void)?
     /// Invoked when the live-output Lock control is tapped.
     var onToggleLiveLock: (() -> Void)?
+    /// Invoked when the Freeze control is tapped.
+    var onToggleFreeze: (() -> Void)?
     /// Invoked when the Blackout control is tapped.
     var onPresentBlack: (() -> Void)?
+    /// Invoked when Black is picked from the Blackout control's long-press menu.
+    var onSelectBlack: (() -> Void)?
+    /// Invoked when White is picked from the Blackout control's long-press menu.
+    var onPresentWhite: (() -> Void)?
     /// Invoked when New Show is tapped on Home.
     var onNewShow: (() -> Void)?
     /// Invoked when Done is tapped while arranging tiles.
@@ -55,6 +62,8 @@ final class HomeHeaderBar: UIView {
     private(set) var isAirPlayConnected = false
     private var isLiveLocked = false
     private var isBlackLive = false
+    private var isFrozenLive = false
+    private var isWhiteLive = false
     private var showsShowChrome = false
     private var previewsWhenDisconnected = false
     private var livePollOwnsPhoneHero = false
@@ -165,13 +174,19 @@ final class HomeHeaderBar: UIView {
         lockButton.addTarget(self, action: #selector(lockTapped), for: .touchUpInside)
         applyLockButtonAppearance()
 
+        freezeButton.translatesAutoresizingMaskIntoConstraints = false
+        HomeHeaderFreezeStyle.label(freezeButton)
+        HomeHeaderFreezeStyle.apply(to: freezeButton, frozen: false)
+        freezeButton.addTarget(self, action: #selector(freezeTapped), for: .touchUpInside)
+
         blackButton.translatesAutoresizingMaskIntoConstraints = false
         blackButton.accessibilityLabel = "Blackout"
         blackButton.accessibilityHint =
             "Toggles a black screen on the live output — AirPlay, EclipseTV, "
-            + "or the Practice Mode preview"
+            + "or the Practice Mode preview. Touch and hold to choose White"
         blackButton.addTarget(self, action: #selector(blackTapped), for: .touchUpInside)
         applyBlackButtonAppearance()
+        blackButton.menu = makeBlankMenu()
 
         // Plain SF Symbols, like UIBarButtonItem — not icons in stroked circles.
         let symbolConfig = UIImage.SymbolConfiguration(pointSize: 20, weight: .regular)
@@ -234,7 +249,7 @@ final class HomeHeaderBar: UIView {
         trailingStack.spacing = 8
         trailingStack.translatesAutoresizingMaskIntoConstraints = false
         for button in [
-            lockButton, blackButton, settingsButton,
+            lockButton, freezeButton, blackButton, settingsButton,
             addButton, newShowButton, selectActionsButton, doneButton
         ] {
             trailingStack.addArrangedSubview(button)
@@ -277,6 +292,8 @@ final class HomeHeaderBar: UIView {
             settingsButton.heightAnchor.constraint(equalToConstant: 36),
             lockButton.widthAnchor.constraint(equalToConstant: 36),
             lockButton.heightAnchor.constraint(equalToConstant: 36),
+            freezeButton.widthAnchor.constraint(equalToConstant: 36),
+            freezeButton.heightAnchor.constraint(equalToConstant: 36),
             blackButton.widthAnchor.constraint(equalToConstant: 36),
             blackButton.heightAnchor.constraint(equalToConstant: 36),
             newShowButton.heightAnchor.constraint(equalToConstant: 36),
@@ -288,7 +305,7 @@ final class HomeHeaderBar: UIView {
             )
         ])
         for button in [
-            backButton, lockButton, blackButton, settingsButton,
+            backButton, lockButton, freezeButton, blackButton, settingsButton,
             addButton, newShowButton
         ] {
             button.setContentCompressionResistancePriority(.required, for: .horizontal)
@@ -358,6 +375,10 @@ final class HomeHeaderBar: UIView {
         onToggleLiveLock?()
     }
 
+    @objc private func freezeTapped() {
+        onToggleFreeze?()
+    }
+
     @objc private func blackTapped() {
         onPresentBlack?()
     }
@@ -425,6 +446,27 @@ final class HomeHeaderBar: UIView {
     func setBlackLive(_ live: Bool) {
         guard isBlackLive != live else { return }
         isBlackLive = live
+        UIView.animate(withDuration: 0.22, delay: 0, options: .curveEaseInOut) {
+            self.applyBlackButtonAppearance()
+            self.layoutIfNeeded()
+        }
+    }
+
+    /// Reflects whether Freeze is holding the audience screen.
+    func setFrozenLive(_ frozen: Bool) {
+        guard isFrozenLive != frozen else { return }
+        isFrozenLive = frozen
+        applyTrailingChrome()
+        UIView.animate(withDuration: 0.22, delay: 0, options: .curveEaseInOut) {
+            HomeHeaderFreezeStyle.apply(to: self.freezeButton, frozen: frozen)
+            self.layoutIfNeeded()
+        }
+    }
+
+    /// Reflects whether the White screen is on (the Blackout button shows it).
+    func setWhiteLive(_ live: Bool) {
+        guard isWhiteLive != live else { return }
+        isWhiteLive = live
         UIView.animate(withDuration: 0.22, delay: 0, options: .curveEaseInOut) {
             self.applyBlackButtonAppearance()
             self.layoutIfNeeded()
@@ -511,6 +553,7 @@ final class HomeHeaderBar: UIView {
         }
         if editing {
             lockButton.isHidden = true
+            freezeButton.isHidden = true
             blackButton.isHidden = true
             settingsButton.isHidden = true
             addButton.isHidden = true
@@ -518,6 +561,8 @@ final class HomeHeaderBar: UIView {
             return
         }
         lockButton.isHidden = !showsLiveOutputChrome
+        // Freeze holds the external screen, so it needs one (or must stay reachable to end).
+        freezeButton.isHidden = !showsLiveOutputChrome || !(isAirPlayConnected || isFrozenLive)
         blackButton.isHidden = !showsLiveOutputChrome
         settingsButton.isHidden = !(showsShowChrome || showsDestinationTabs)
         addButton.isHidden = !showsShowChrome
@@ -579,11 +624,12 @@ final class HomeHeaderBar: UIView {
         let symbolConfig = UIImage.SymbolConfiguration(pointSize: 20, weight: .regular)
         // Always fill — matches lock / settings; active state is the blue capsule.
         let name = "moon.fill"
-        if isBlackLive {
+        if isBlackLive || isWhiteLive {
             var config = UIButton.Configuration.filled()
             config.image = UIImage(systemName: name, withConfiguration: symbolConfig)
-            config.baseForegroundColor = .white
-            config.baseBackgroundColor = .accent
+            // White on: a white capsule with a dark moon, so it reads as the white screen.
+            config.baseForegroundColor = isWhiteLive ? .black : .white
+            config.baseBackgroundColor = isWhiteLive ? .white : .accent
             config.cornerStyle = .capsule
             config.contentInsets = NSDirectionalEdgeInsets(
                 top: 6, leading: 6, bottom: 6, trailing: 6
@@ -595,7 +641,19 @@ final class HomeHeaderBar: UIView {
                 symbolConfig: symbolConfig
             )
         }
-        blackButton.accessibilityValue = isBlackLive ? "On" : "Off"
+        blackButton.accessibilityValue = isWhiteLive ? "White on" : (isBlackLive ? "On" : "Off")
+    }
+
+    /// Long-press menu on Blackout: pick Black or White (the Mac's right-click menu).
+    private func makeBlankMenu() -> UIMenu {
+        UIMenu(children: [
+            UIAction(title: "Black", image: UIImage(systemName: "rectangle")) { [weak self] _ in
+                self?.onSelectBlack?()
+            },
+            UIAction(title: "White", image: UIImage(systemName: "rectangle.fill")) { [weak self] _ in
+                self?.onPresentWhite?()
+            }
+        ])
     }
 
     private func applyNewShowButtonAppearance() {

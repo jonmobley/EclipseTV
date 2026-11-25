@@ -446,6 +446,11 @@ extension LibraryGridViewController: UICollectionViewDataSource,
     /// was live before. Avoids `updateCurrentId` / full `reloadData` — those were
     /// stacking a second present + grid rebuild and freezing the UI for seconds.
     func toggleBlackLive() {
+        // The blank control is one switch: with White on, it turns White off.
+        if outputHold.isWhite {
+            toggleWhiteLive()
+            return
+        }
         guard !blockLiveChangeIfLocked() else { return }
         // Operator: the director toggles its own blackout and the snapshot
         // brings the moon / hero back in step.

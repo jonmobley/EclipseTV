@@ -35,6 +35,7 @@ extension LibraryGridViewController {
             ?? (isBlackSelected && !mgr.isOverlayLive)
         onBlackLiveChanged?(blackLive)
         onLiveOutputLockChanged?(isLiveOutputLocked)
+        applyOutputHoldChrome()
         onLivePollPhoneHeroChanged?(isLivePollPhoneHeroActive)
         liveHeader.setOutputLocked(isLiveOutputLocked)
         guard showsLiveHero else {

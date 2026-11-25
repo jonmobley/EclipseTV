@@ -50,6 +50,10 @@ enum ShowLiveCommandVerb: String, Codable, Equatable {
     case countdownSetDuration
     /// Flip the director's live-output lock.
     case lockToggle
+    /// Flip the director's Freeze (audience screen held still). Older builds ignore it.
+    case freezeToggle
+    /// Flip the director's White screen. Older builds ignore it.
+    case whiteToggle
 }
 
 /// One operator command; `value` is only read for verbs that document it.
@@ -124,6 +128,10 @@ struct ShowLiveSnapshot: Codable, Equatable {
     var video: ShowLiveVideoState?
     /// Present only while a countdown is live. Absent from legacy peers.
     var countdown: ShowLiveCountdownState?
+    /// Freeze is on. Absent from legacy peers (and when off), read as false.
+    var isFrozen: Bool?
+    /// White screen is on. Absent from legacy peers (and when off), read as false.
+    var isWhite: Bool?
 
     init(
         showId: UUID,
@@ -133,7 +141,9 @@ struct ShowLiveSnapshot: Codable, Equatable {
         isLocked: Bool,
         directorName: String,
         video: ShowLiveVideoState? = nil,
-        countdown: ShowLiveCountdownState? = nil
+        countdown: ShowLiveCountdownState? = nil,
+        isFrozen: Bool? = nil,
+        isWhite: Bool? = nil
     ) {
         self.showId = showId
         self.liveItemId = liveItemId
@@ -143,6 +153,8 @@ struct ShowLiveSnapshot: Codable, Equatable {
         self.directorName = directorName
         self.video = video
         self.countdown = countdown
+        self.isFrozen = isFrozen
+        self.isWhite = isWhite
     }
 
     /// True when only transport / clock ticks differ from `other`, so an operator
@@ -154,6 +166,8 @@ struct ShowLiveSnapshot: Codable, Equatable {
             && liveKind == other.liveKind
             && isBlackout == other.isBlackout
             && isLocked == other.isLocked
+            && (isFrozen ?? false) == (other.isFrozen ?? false)
+            && (isWhite ?? false) == (other.isWhite ?? false)
             && directorName == other.directorName
     }
 }

@@ -303,6 +303,12 @@ extension iPhoneMainViewController: UIScrollViewDelegate {
         libraryViewController.onBlackLiveChanged = { [weak self] live in
             self?.headerBar.setBlackLive(live)
         }
+        libraryViewController.onFreezeChanged = { [weak self] frozen in
+            self?.headerBar.setFrozenLive(frozen)
+        }
+        libraryViewController.onWhiteChanged = { [weak self] white in
+            self?.headerBar.setWhiteLive(white)
+        }
         libraryViewController.onLiveOutputLockChanged = { [weak self] locked in
             self?.headerBar.setLiveLocked(locked)
         }

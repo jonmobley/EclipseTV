@@ -56,6 +56,10 @@ extension LibraryGridViewController {
             refreshSlideshowRibbonPresentation()
         case .lockToggle:
             toggleLiveOutputLock()
+        case .freezeToggle:
+            toggleFreeze()
+        case .whiteToggle:
+            toggleWhiteLive()
         }
     }
 

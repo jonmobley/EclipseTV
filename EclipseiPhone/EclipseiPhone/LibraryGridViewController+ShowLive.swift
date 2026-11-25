@@ -141,6 +141,7 @@ extension LibraryGridViewController {
         if ShowLiveSession.shared.isRemoteOperator,
            let snap = ShowLiveSession.shared.snapshot {
             isLiveOutputLocked = snap.isLocked
+            applyOutputHoldChrome()
         }
         // Video / clock ticks arrive about once a second; only the hero and the
         // live countdown tile need them, not a grid rebuild.
@@ -187,7 +188,9 @@ extension LibraryGridViewController {
             isLocked: isLiveOutputLocked,
             directorName: UIDevice.current.name,
             video: showLiveVideoState,
-            countdown: showLiveCountdownState
+            countdown: showLiveCountdownState,
+            isFrozen: outputHold.isFrozen ? true : nil,
+            isWhite: outputHold.isWhite ? true : nil
         )
     }
 

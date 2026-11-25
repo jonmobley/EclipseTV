@@ -186,6 +186,8 @@ final class ExternalDisplayManager {
     /// Retained so the external window isn't deallocated (which falls back to mirroring).
     private var externalWindow: UIWindow?
     private var presentationVC: PresentationViewController?
+    /// The external display's window, for Freeze / White overlays. Nil without a screen.
+    var holdOverlayWindow: UIWindow? { externalWindow }
     private var lastSource: PresentationSource?
     /// What to put back when blackout is toggled off.
     private var blackoutRestore: BlackoutRestore?
@@ -396,6 +398,8 @@ final class ExternalDisplayManager {
 
         isJoinedLive = false
         blackoutRestore = nil
+        // Freeze / White views live in the window that is about to go away.
+        ExternalDisplayHoldOverlay.shared.reset()
         // Do not set `window.windowScene = nil` — that forces mirroring.
         externalWindow = nil
         presentationVC = nil

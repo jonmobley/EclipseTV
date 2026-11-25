@@ -126,6 +126,15 @@ extension iPhoneMainViewController {
         headerBar.onPresentBlack = { [weak self] in
             self?.libraryViewController.toggleBlackLive()
         }
+        headerBar.onSelectBlack = { [weak self] in
+            self?.libraryViewController.selectBlackLive()
+        }
+        headerBar.onPresentWhite = { [weak self] in
+            self?.libraryViewController.toggleWhiteLive()
+        }
+        headerBar.onToggleFreeze = { [weak self] in
+            self?.libraryViewController.toggleFreeze()
+        }
         headerBar.onNewShow = { [weak self] in
             self?.promptNewAlbum()
         }
