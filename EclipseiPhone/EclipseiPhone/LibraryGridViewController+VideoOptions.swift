@@ -65,7 +65,7 @@ extension LibraryGridViewController {
         crossfadesLoop: Bool? = nil,
         endAction: VideoEndAction? = nil
     ) {
-        // The Apple TV and iCloud only know Loop on/off, so Loop is what travels.
+        // The Apple TV only knows Loop on/off; iCloud carries the full choice too.
         let loopFlag = endAction.map { $0 == .loop } ?? isLooping
         store.updateVideoSetting(
             id: id, isLooping: endAction == nil ? isLooping : nil, isMuted: isMuted,
