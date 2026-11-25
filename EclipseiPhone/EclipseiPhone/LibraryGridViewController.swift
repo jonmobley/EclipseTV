@@ -114,6 +114,15 @@ final class LibraryGridViewController: UIViewController {
     var isScreensaverSelected = false
     /// When true, live output cannot change; media taps open phone Preview.
     var isLiveOutputLocked = false
+    /// Freeze holds the audience screen still. It brings Lock's hold with it
+    /// (taps open phone Preview), so `isLiveOutputLocked` is on while frozen.
+    var isLiveOutputFrozen = false
+    /// Whether Lock was on before Freeze, so ending Freeze puts it back.
+    var wasLockedBeforeFreeze = false
+    /// Freeze paused the Apple TV's playing video, so ending it plays on.
+    var freezePausedTVVideo = false
+    /// Freeze paused the hero's playing video (Practice Mode), so ending it plays on.
+    var freezePausedHeroVideo = false
     /// Tile shown in the hero on this phone only while Lock / Blackout holds the
     /// TV (`HeroPhonePreview`). Nil shows program.
     var heroPhonePreview: ShowGridItem?
@@ -315,6 +324,10 @@ final class LibraryGridViewController: UIViewController {
     var onBlackLiveChanged: ((Bool) -> Void)?
     /// Fired when live-output lock toggles (header amber chrome).
     var onLiveOutputLockChanged: ((Bool) -> Void)?
+    /// Fired when Freeze turns on or off (header snowflake).
+    var onLiveOutputFreezeChanged: ((Bool) -> Void)?
+    /// Fired when Blackout's colour changes (header moon's long-press menu).
+    var onOutputBlankKindChanged: ((OutputBlankKind) -> Void)?
     /// Fired when a phone-hosted Live Poll takes or releases the hero, so the
     /// header can offer Lock / Blackout for it even with Practice Mode off.
     var onLivePollPhoneHeroChanged: ((Bool) -> Void)?

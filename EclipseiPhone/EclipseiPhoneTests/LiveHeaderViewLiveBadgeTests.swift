@@ -115,6 +115,39 @@ struct LiveHeaderViewLiveBadgeTests {
         #expect(header.liveBadge.text == "LIVE")
     }
 
+    /// White Blackout reads WHITE SCREEN, dark text on a white pill.
+    @Test func whiteBlackoutBadgeReadsWhiteScreen() {
+        let header = makeHeader()
+        header.configure(
+            with: makeStillItem(),
+            thumbnail: nil,
+            isOnline: true,
+            showsLiveBadge: true
+        )
+        header.setBlackoutHold(true, upNext: nil, kind: .white)
+        #expect(header.liveBadge.text == "WHITE SCREEN")
+        #expect(header.liveBadge.textColor == .black)
+        header.setBlackoutHold(false, upNext: nil)
+        #expect(header.liveBadge.text == "LIVE")
+        #expect(header.liveBadge.textColor == .white)
+    }
+
+    /// Freeze reads FREEZE FRAME and wins over Lock, which it brings along.
+    @Test func freezeBadgeReadsFreezeFrame() {
+        let header = makeHeader()
+        header.configure(
+            with: makeStillItem(),
+            thumbnail: nil,
+            isOnline: true,
+            showsLiveBadge: true
+        )
+        header.setOutputLocked(true)
+        header.setOutputFrozen(true)
+        #expect(header.liveBadge.text == "FREEZE FRAME")
+        header.setOutputFrozen(false)
+        #expect(header.liveBadge.text == "LOCKED SCREEN")
+    }
+
     private func makeHeader() -> LiveHeaderView {
         LiveHeaderView(frame: CGRect(x: 0, y: 0, width: 320, height: 180))
     }

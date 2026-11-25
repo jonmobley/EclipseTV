@@ -446,6 +446,10 @@ extension LibraryGridViewController: UICollectionViewDataSource,
     /// was live before. Avoids `updateCurrentId` / full `reloadData` — those were
     /// stacking a second present + grid rebuild and freezing the UI for seconds.
     func toggleBlackLive() {
+        // Blackout is the panic button: it ends Freeze rather than being held by it.
+        if isLiveOutputFrozen, !ShowLiveSession.shared.isRemoteOperator {
+            endLiveOutputFreeze(keepingLock: wasLockedBeforeFreeze)
+        }
         guard !blockLiveChangeIfLocked() else { return }
         // Operator: the director toggles its own blackout and the snapshot
         // brings the moon / hero back in step.

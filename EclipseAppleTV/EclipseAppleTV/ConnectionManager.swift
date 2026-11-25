@@ -46,7 +46,8 @@ protocol ConnectionManagerDelegate: AnyObject {
     /// The companion pushed Show groupings to present as albums.
     func connectionManager(_ manager: ConnectionManager, didReceiveLibraryAlbums albums: [LibraryAlbumDTO])
     /// The companion parked (`true`) or cleared park (`false`) while AirPlay owns program.
-    func connectionManager(_ manager: ConnectionManager, didReceiveIdleModeBlack isBlack: Bool)
+    /// `isWhite` covers the stage in white instead of black (Blackout's White).
+    func connectionManager(_ manager: ConnectionManager, didReceiveIdleModeBlack isBlack: Bool, isWhite: Bool)
 }
 
 class ConnectionManager: NSObject {
@@ -458,10 +459,11 @@ class ConnectionManager: NSObject {
                 logger.error("Ignoring set_idle_mode with unknown mode: \(raw, privacy: .public)")
                 return
             }
-            logger.info("Received set_idle_mode: \(raw, privacy: .public)")
+            let isWhite = isBlack && envelope.color == "white"
+            logger.info("Received set_idle_mode: \(raw, privacy: .public) white: \(isWhite)")
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
-                self.delegate?.connectionManager(self, didReceiveIdleModeBlack: isBlack)
+                self.delegate?.connectionManager(self, didReceiveIdleModeBlack: isBlack, isWhite: isWhite)
             }
         case .libraryManifest, .currentChanged, .playbackStatus, .none:
             // These are TV -> iPhone only; ignore if a peer ever sends them back.

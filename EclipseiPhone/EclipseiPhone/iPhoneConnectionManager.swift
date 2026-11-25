@@ -615,10 +615,13 @@ class iPhoneConnectionManager: NSObject {
     }
 
     /// Parks (`black`) or clears park on every synced TV while AirPlay owns an overlay.
+    /// - Parameters:
+    ///   - black: Park (`true`) or clear park (`false`)
+    ///   - color: `"white"` for Blackout's White; nil parks on black
     @discardableResult
-    func sendSetIdleMode(black: Bool) -> Bool {
+    func sendSetIdleMode(black: Bool, color: String? = nil) -> Bool {
         return sendCommand(
-            .setIdleMode(black: black),
+            .setIdleMode(black: black, color: color),
             description: black ? "idle park" : "idle clear",
             broadcast: true
         )

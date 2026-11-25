@@ -34,7 +34,9 @@ extension LibraryGridViewController {
         let blackLive = remoteSnapshot?.isBlackout
             ?? (isBlackSelected && !mgr.isOverlayLive)
         onBlackLiveChanged?(blackLive)
-        onLiveOutputLockChanged?(isLiveOutputLocked)
+        onOutputBlankKindChanged?(remoteSnapshot?.blankKind ?? OutputBlankKind.current)
+        onLiveOutputLockChanged?(isLiveOutputLocked && !isLiveOutputFrozen)
+        onLiveOutputFreezeChanged?(isLiveOutputFrozen)
         onLivePollPhoneHeroChanged?(isLivePollPhoneHeroActive)
         liveHeader.setOutputLocked(isLiveOutputLocked)
         guard showsLiveHero else {
@@ -81,8 +83,10 @@ extension LibraryGridViewController {
             // unless a phone preview has borrowed the hero (it says PREVIEW).
             liveHeader.setBlackoutHold(
                 isBlackoutHolding && heroPhonePreview == nil,
-                upNext: blackoutCue.flatMap { Self.blackoutCueTitle(for: $0) }
+                upNext: blackoutCue.flatMap { Self.blackoutCueTitle(for: $0) },
+                kind: OutputBlankKind.current
             )
+            liveHeader.setOutputFrozen(isLiveOutputFrozen)
             liveHeader.setPhonePreview(
                 heroPhonePreview != nil, returnTitle: heroPhonePreviewReturnTitle
             )

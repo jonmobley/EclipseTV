@@ -34,7 +34,13 @@ enum AirPlayOverlayPark {
         using connectionManager: iPhoneConnectionManager
     ) -> Bool {
         shouldBeParked = true
-        return connectionManager.sendSetIdleMode(black: true)
+        return connectionManager.sendSetIdleMode(black: true, color: parkColor)
+    }
+
+    /// White while Blackout holds on White; otherwise the park stays black.
+    @MainActor
+    private static var parkColor: String? {
+        isParkedForBlackout && OutputBlankKind.current == .white ? "white" : nil
     }
 
     /// Blackout: every synced TV goes black, AirPlay or not.
@@ -84,6 +90,6 @@ enum AirPlayOverlayPark {
                     eclipseTVOnline: eclipseTVOnline,
                     airPlayConnected: airPlayConnected
                 ) else { return }
-        _ = connectionManager.sendSetIdleMode(black: true)
+        _ = connectionManager.sendSetIdleMode(black: true, color: parkColor)
     }
 }

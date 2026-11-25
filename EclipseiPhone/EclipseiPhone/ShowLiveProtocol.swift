@@ -50,6 +50,10 @@ enum ShowLiveCommandVerb: String, Codable, Equatable {
     case countdownSetDuration
     /// Flip the director's live-output lock.
     case lockToggle
+    /// Flip the director's Freeze (audience screen held still).
+    case freezeToggle
+    /// Pick Blackout's colour; `value` is 0 for Black, 1 for White.
+    case blankKindSet
 }
 
 /// One operator command; `value` is only read for verbs that document it.
@@ -124,6 +128,10 @@ struct ShowLiveSnapshot: Codable, Equatable {
     var video: ShowLiveVideoState?
     /// Present only while a countdown is live. Absent from legacy peers.
     var countdown: ShowLiveCountdownState?
+    /// Freeze holds the director's audience screen still. Absent from legacy peers.
+    var isFrozen: Bool?
+    /// Blackout's colour on the director. Absent from legacy peers (Black).
+    var blankKind: OutputBlankKind?
 
     init(
         showId: UUID,
@@ -133,7 +141,9 @@ struct ShowLiveSnapshot: Codable, Equatable {
         isLocked: Bool,
         directorName: String,
         video: ShowLiveVideoState? = nil,
-        countdown: ShowLiveCountdownState? = nil
+        countdown: ShowLiveCountdownState? = nil,
+        isFrozen: Bool? = nil,
+        blankKind: OutputBlankKind? = nil
     ) {
         self.showId = showId
         self.liveItemId = liveItemId
@@ -143,6 +153,8 @@ struct ShowLiveSnapshot: Codable, Equatable {
         self.directorName = directorName
         self.video = video
         self.countdown = countdown
+        self.isFrozen = isFrozen
+        self.blankKind = blankKind
     }
 
     /// True when only transport / clock ticks differ from `other`, so an operator
@@ -154,6 +166,8 @@ struct ShowLiveSnapshot: Codable, Equatable {
             && liveKind == other.liveKind
             && isBlackout == other.isBlackout
             && isLocked == other.isLocked
+            && isFrozen == other.isFrozen
+            && blankKind == other.blankKind
             && directorName == other.directorName
     }
 }

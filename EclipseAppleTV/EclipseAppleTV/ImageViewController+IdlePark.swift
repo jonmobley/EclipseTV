@@ -19,27 +19,35 @@ extension ImageViewController {
         view.viewWithTag(Self.parkCoverTag) != nil
     }
 
-    /// Parks on solid black (`true`) or clears park (`false`).
+    /// Parks on a solid stage (`true`) or clears park (`false`). `isWhite`
+    /// makes the stage white (Blackout's White on the phone).
     func connectionManager(
         _ manager: ConnectionManager,
-        didReceiveIdleModeBlack isBlack: Bool
+        didReceiveIdleModeBlack isBlack: Bool,
+        isWhite: Bool
     ) {
         if isBlack {
-            applyIdleParkBlack()
+            applyIdleParkBlack(isWhite: isWhite)
         } else {
             clearIdlePark(restoreDisplay: true)
         }
     }
 
-    /// Shows a solid black cover and stops any playing video under it.
-    func applyIdleParkBlack() {
-        guard !isIdleParked else { return }
+    /// Shows a solid cover and stops any playing video under it.
+    /// - Parameter isWhite: White cover instead of black. An already parked
+    ///   stage just changes colour.
+    func applyIdleParkBlack(isWhite: Bool = false) {
+        let fill: UIColor = isWhite ? .white : .black
+        if let cover = view.viewWithTag(Self.parkCoverTag) {
+            cover.backgroundColor = fill
+            return
+        }
         retireCurrentPlayer(stopBroadcasting: true)
         imageView.isHidden = true
         playerView.view.isHidden = true
 
         let cover = UIView()
-        cover.backgroundColor = .black
+        cover.backgroundColor = fill
         cover.tag = Self.parkCoverTag
         cover.isUserInteractionEnabled = false
         cover.translatesAutoresizingMaskIntoConstraints = false

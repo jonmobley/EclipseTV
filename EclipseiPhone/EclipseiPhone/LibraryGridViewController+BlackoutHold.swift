@@ -144,10 +144,11 @@ extension LibraryGridViewController {
     /// line it up. Its transport never reaches the TV while Blackout is on.
     func applyBlackoutHoldHeader() {
         guard let item = blackoutHeldLibraryItem else {
+            let kind = OutputBlankKind.current
             liveHeader.configureOverlay(
-                title: "Blackout",
+                title: kind.screenName,
                 systemImage: "moon.fill",
-                fillColor: .black
+                fillColor: kind.fillColor
             )
             liveHeader.updatePlayback(PlaybackState())
             return
