@@ -21,6 +21,8 @@ struct ShowCountdown: Codable, Equatable, Identifiable, Hashable {
     var background: CountdownBackground
     /// What output does at 0:00.
     var endAction: CountdownEndAction
+    /// Mode (countdown / count up / to time), caption and plate.
+    var clock: CountdownClockSettings
     let createdAt: Date
 
     /// Creates a countdown with `name`, `duration`, and optional `layout`.
@@ -32,6 +34,7 @@ struct ShowCountdown: Codable, Equatable, Identifiable, Hashable {
         layout: CountdownClockLayout = .default,
         background: CountdownBackground = .black,
         endAction: CountdownEndAction = .hold,
+        clock: CountdownClockSettings = CountdownClockSettings(),
         createdAt: Date = Date()
     ) {
         self.id = id
@@ -41,19 +44,22 @@ struct ShowCountdown: Codable, Equatable, Identifiable, Hashable {
         self.layout = layout
         self.background = background
         self.endAction = endAction
+        self.clock = clock
         self.createdAt = createdAt
     }
 
-    /// Tile caption: name plus remaining or full length.
-    func tileTitle(remaining: Int? = nil) -> String {
-        let seconds = remaining ?? duration
-        return "\(name)\n\(CountdownController.displayString(seconds: seconds))"
+    /// Tile caption: name plus the live seconds, or what an idle tile shows
+    /// (full length, `0:00` for Count Up, `to 6:30 PM` for To Time).
+    func tileTitle(remaining: Int? = nil, now: Date = Date()) -> String {
+        let face = remaining.map { CountdownController.displayString(seconds: $0) }
+            ?? clock.idleFaceText(duration: duration, held: nil, now: now)
+        return "\(name)\n\(face)"
     }
 
     // MARK: - Codable
 
     private enum CodingKeys: String, CodingKey {
-        case id, showId, name, duration, layout, background, endAction, createdAt
+        case id, showId, name, duration, layout, background, endAction, clock, createdAt
     }
 
     init(from decoder: Decoder) throws {
@@ -71,6 +77,9 @@ struct ShowCountdown: Codable, Equatable, Identifiable, Hashable {
         endAction = try c.decodeIfPresent(
             CountdownEndAction.self, forKey: .endAction
         ) ?? .fallback
+        clock = try c.decodeIfPresent(
+            CountdownClockSettings.self, forKey: .clock
+        ) ?? CountdownClockSettings()
         createdAt = try c.decode(Date.self, forKey: .createdAt)
     }
 }

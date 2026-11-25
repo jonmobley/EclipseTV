@@ -126,6 +126,18 @@ enum CloudKitSchema {
         static let endAction = "endAction"
         static let createdAt = "createdAt"
         static let modifiedAt = "modifiedAt"
+        /// `countdown`, `countUp` or `timeOfDay`; absent or unknown = countdown.
+        static let mode = "mode"
+        /// To Time target, minutes after midnight (0…1439).
+        static let targetMinutes = "targetMinutes"
+        /// To Time day `yyyy-MM-dd`; `""` or absent = today's occurrence.
+        static let targetDay = "targetDay"
+        /// IANA zone id; `""` or absent = the device's current zone.
+        static let targetTimeZone = "targetTimeZone"
+        /// Words above the digits; absent or `""` = none.
+        static let caption = "caption"
+        /// `card` (plate) or `simple` (digits only); absent = card.
+        static let style = "style"
     }
 
     enum LivePollKey {

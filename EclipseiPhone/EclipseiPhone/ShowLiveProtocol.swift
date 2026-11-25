@@ -68,9 +68,16 @@ struct ShowLiveVideoState: Codable, Equatable {
 
 /// Director countdown clock, mirrored so the operator hero shows the real time.
 struct ShowLiveCountdownState: Codable, Equatable {
+    /// Seconds on the face (elapsed time for a Count Up clock).
     var remaining: Int
     var duration: Int
     var running: Bool
+    /// True for a Count Up clock, whose 0:00 is a start, not an end. Optional so
+    /// older peers that never send it decode, and older receivers ignore it.
+    var countsUp: Bool?
+
+    /// Whether the face shows a spent clock (red 0:00).
+    var isAtEnd: Bool { countsUp != true && remaining == 0 }
 }
 
 /// What the operator asked the director to put on program.

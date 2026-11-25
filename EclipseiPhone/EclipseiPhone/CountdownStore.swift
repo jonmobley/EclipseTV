@@ -76,7 +76,8 @@ final class CountdownStore {
         duration: Int,
         layout: CountdownClockLayout = .default,
         background: CountdownBackground = .black,
-        endAction: CountdownEndAction = .hold
+        endAction: CountdownEndAction = .hold,
+        clock: CountdownClockSettings = CountdownClockSettings()
     ) throws -> ShowCountdown {
         guard let trimmed = UserDisplayName.normalized(name) else {
             throw StoreError.emptyName
@@ -87,7 +88,8 @@ final class CountdownStore {
             duration: CountdownController.clampedDuration(duration),
             layout: layout,
             background: background,
-            endAction: endAction
+            endAction: endAction,
+            clock: clock
         )
         countdowns.append(item)
         persist()
@@ -145,6 +147,19 @@ final class CountdownStore {
         scheduleSaveIfNeeded(id: id)
     }
 
+    /// Sets mode, To Time target, caption and plate for the countdown with `id`.
+    ///
+    /// When that countdown is on output, the live clock picks up the new mode
+    /// or target at once.
+    func setClock(id: UUID, _ clock: CountdownClockSettings) {
+        guard let index = countdowns.firstIndex(where: { $0.id == id }) else { return }
+        guard countdowns[index].clock != clock else { return }
+        countdowns[index].clock = clock
+        persist()
+        scheduleSaveIfNeeded(id: id)
+        adoptClockIfLive(countdowns[index])
+    }
+
     /// Deletes the countdown with `id` when present.
     func delete(id: UUID) {
         guard let item = countdowns.first(where: { $0.id == id }) else { return }
@@ -173,6 +188,7 @@ final class CountdownStore {
         }
         syncedIds.insert(item.id.uuidString)
         persist()
+        adoptClockIfLive(item)
     }
 
     /// Forgets every upload acknowledgement (zone loss, iCloud account switch).
@@ -241,6 +257,13 @@ final class CountdownStore {
             )
             scheduleSaveIfNeeded(id: item.id)
         }
+    }
+
+    /// Hands a changed mode / target to the clock when `item` is the live one.
+    private func adoptClockIfLive(_ item: ShowCountdown) {
+        guard self === CountdownStore.shared,
+              CountdownController.shared.liveCountdownId == item.id else { return }
+        CountdownController.shared.adoptClock(item.clock)
     }
 
     private func scheduleSaveIfNeeded(id: UUID) {
