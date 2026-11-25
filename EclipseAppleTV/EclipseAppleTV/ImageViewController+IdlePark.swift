@@ -25,9 +25,11 @@ extension ImageViewController {
         didReceiveIdleModeBlack isBlack: Bool
     ) {
         if isBlack {
+            hideIdleScreen()
             applyIdleParkBlack()
         } else {
             clearIdlePark(restoreDisplay: true)
+            showIdleScreenIfReady()
         }
     }
 

@@ -27,6 +27,9 @@ extension ImageViewController {
     }
 
     override var preferredFocusEnvironments: [UIFocusEnvironment] {
+        if isIdleScreenShowing {
+            return [idleScreenView]
+        }
         if isInGridMode && (usesAlbumHome || !dataSource.isEmpty) {
             // If we have a selected cell, prefer to focus on it
             if let selectedIndexPath = simpleSelectionManager.currentSelection,

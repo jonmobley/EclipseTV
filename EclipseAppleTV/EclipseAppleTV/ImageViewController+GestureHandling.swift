@@ -105,6 +105,8 @@ extension ImageViewController {
     // MARK: - Gesture Handler Methods
     
     @objc func handlePlayPausePress() {
+        // The idle screen handles Play/Pause itself (opens the library).
+        guard !isIdleScreenShowing else { return }
         if !isInGridMode && isVideo {
             // Toggle video playback
             if let player = playerView.player {
@@ -174,6 +176,8 @@ extension ImageViewController {
             showGridViewTransition()
         } else if popCompanionAlbumHome() {
             // Inside an album: Menu returns to the album list.
+        } else if returnToIdleScreenFromLibrary() {
+            // Browsing from the idle screen: Menu goes back to it.
         }
         // Root grid: do not intercept Menu. The recognizer fails in
         // gestureRecognizerShouldBegin so the system can exit to Home.
@@ -278,6 +282,8 @@ extension ImageViewController {
         if !isInGridMode { return true }
         // Nested companion album: Menu pops to the album list.
         if usesAlbumHome, companionBrowse != .root { return true }
+        // Browsing the library from the idle screen: Menu goes back to it.
+        if canReturnToIdleScreen { return true }
         return false
     }
 

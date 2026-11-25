@@ -271,6 +271,14 @@ class ImageViewController: ManagedViewController, ConnectionManagerDelegate, UIG
     
     // MARK: - Empty State View
     internal lazy var emptyStateView = EmptyStateView()
+
+    // MARK: - Idle Screen & TV-Run Slideshows
+    /// Calm looping picture while the TV waits for the phone (`+IdleScreen`).
+    internal lazy var idleScreenView = IdleScreenView()
+    /// The viewer left the idle screen to browse this TV's own library.
+    internal var isBrowsingLibraryFromIdle = false
+    /// Plays a slideshow the phone handed over (`+Slideshow`).
+    internal lazy var slideshowPlayer = TVSlideshowPlayer()
     
     // Add these properties near the top of the class where other properties are defined
     internal var queuedContent = [(path: String, isVideo: Bool)]()
