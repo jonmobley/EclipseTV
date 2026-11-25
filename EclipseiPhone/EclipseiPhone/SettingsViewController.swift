@@ -69,6 +69,7 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
     private enum PlaybackRow: Int, CaseIterable {
         case displayMode
         case transition
+        case websiteTextSize
         case pauseMusicForVideo
     }
 
@@ -351,6 +352,9 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
             case .transition:
                 config.text = "Content Transition"
                 config.secondaryText = ExternalOutputSettings.contentTransition.rawValue
+            case .websiteTextSize:
+                config.text = "Website Text Size"
+                config.secondaryText = ExternalOutputSettings.webTextSize.rawValue
             case .pauseMusicForVideo:
                 configurePauseMusicForVideoCell(cell, config: &config)
             case .none:
@@ -425,6 +429,10 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
             case .transition:
                 navigationController?.pushViewController(
                     SettingsTransitionViewController(), animated: true
+                )
+            case .websiteTextSize:
+                navigationController?.pushViewController(
+                    SettingsWebTextSizeViewController(), animated: true
                 )
             case .pauseMusicForVideo, .none:
                 break

@@ -36,6 +36,12 @@ public enum RemoteCommandAction: String, Codable, Sendable {
     case timerReset
     case timerDuration
     case record
+    case musicToggle
+    case musicNext
+    case musicPrevious
+    case musicFadeOut
+    case musicFadeIn
+    case musicToggleMute
 }
 
 /// A single command decoded from a phone `POST /command` request.
@@ -138,6 +144,25 @@ public struct RemoteTimerState: Codable, Sendable {
     }
 }
 
+/// Background-music state from the Mac (only the fields the phone uses; the Mac
+/// also sends track and playlist lists, which Codable ignores here).
+public struct RemoteMusicState: Codable, Sendable {
+    /// Title of the playing, paused or focused track; empty when none.
+    public let title: String
+    public let isPlaying: Bool
+    public let isPaused: Bool
+    /// Whether the Music bus is muted.
+    public let busMuted: Bool
+
+    /// Creates a music state snapshot.
+    public init(title: String, isPlaying: Bool, isPaused: Bool, busMuted: Bool) {
+        self.title = title
+        self.isPlaying = isPlaying
+        self.isPaused = isPaused
+        self.busMuted = busMuted
+    }
+}
+
 /// Full state pushed to connected phones whenever anything changes.
 public struct RemoteStateSnapshot: Codable, Sendable {
     public let presentationName: String
@@ -156,6 +181,8 @@ public struct RemoteStateSnapshot: Codable, Sendable {
     /// Whether Prev/Next should show (slideshow, PDF, PowerPoint, Quest, web).
     public let showsSlideNavigation: Bool
     public let timer: RemoteTimerState
+    /// Background music; nil when pairing with a Mac that does not send it.
+    public let music: RemoteMusicState?
     /// Program content aspect (width ÷ height) for preview and card slots.
     ///
     /// Matches Mac Landscape / Vertical / custom show size. Defaults to 16:9
@@ -181,6 +208,7 @@ public struct RemoteStateSnapshot: Codable, Sendable {
         isRecording: Bool,
         showsSlideNavigation: Bool,
         timer: RemoteTimerState,
+        music: RemoteMusicState? = nil,
         programAspect: Double = 16.0 / 9.0,
         media: [RemoteMediaEntry],
         libraryMedia: [RemoteMediaEntry]
@@ -200,6 +228,7 @@ public struct RemoteStateSnapshot: Codable, Sendable {
         self.isRecording = isRecording
         self.showsSlideNavigation = showsSlideNavigation
         self.timer = timer
+        self.music = music
         self.programAspect = programAspect
         self.media = media
         self.libraryMedia = libraryMedia
@@ -230,6 +259,7 @@ public struct RemoteStateSnapshot: Codable, Sendable {
         isRecording = try container.decode(Bool.self, forKey: .isRecording)
         showsSlideNavigation = try container.decode(Bool.self, forKey: .showsSlideNavigation)
         timer = try container.decode(RemoteTimerState.self, forKey: .timer)
+        music = try container.decodeIfPresent(RemoteMusicState.self, forKey: .music)
         programAspect = try container.decodeIfPresent(Double.self, forKey: .programAspect)
             ?? (16.0 / 9.0)
         media = try container.decode([RemoteMediaEntry].self, forKey: .media)

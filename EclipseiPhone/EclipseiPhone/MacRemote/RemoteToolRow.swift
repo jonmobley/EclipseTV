@@ -49,7 +49,7 @@ struct RemoteHeaderToggle: View {
 // MARK: - RemoteToolRow
 
 /// Row of live tools under the remote's preview: Freeze, Screensaver,
-/// Screenshot, Timer and Record — the same tools the Mac's web remote offers.
+/// Screenshot, Timer, Music and Record — the same tools the Mac's web remote offers.
 ///
 /// Each button sends one `RemoteCommandAction`; lit states come from the
 /// Mac's state snapshot, so the row always shows what the Mac is doing.
@@ -73,6 +73,7 @@ struct RemoteToolRow: View {
                 session.send(.screenshot)
             }
             timerMenu(state: snapshot?.timer)
+            musicMenu(state: snapshot?.music)
             tool("Record", "record.circle", isOn: snapshot?.isRecording == true) {
                 session.send(.record)
             }
@@ -109,6 +110,31 @@ struct RemoteToolRow: View {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .fill(isOn ? Color.accentColor : Color(uiColor: .secondarySystemBackground))
         )
+    }
+
+    // MARK: - Music
+
+    /// Background-music controls; hidden entries mean the Mac did not send music state.
+    private func musicMenu(state: RemoteMusicState?) -> some View {
+        let playing = state?.isPlaying == true
+        return Menu {
+            if let title = state?.title, !title.isEmpty {
+                Text(title)
+            }
+            Button(playing ? "Pause" : "Play") { session.send(.musicToggle) }
+            Button("Next Track") { session.send(.musicNext) }
+            Button("Previous Track") { session.send(.musicPrevious) }
+            Button("Fade Out") { session.send(.musicFadeOut) }
+            Button("Fade In") { session.send(.musicFadeIn) }
+            Button(state?.busMuted == true ? "Unmute Music" : "Mute Music") {
+                session.send(.musicToggleMute)
+            }
+        } label: {
+            toolLabel("Music", "music.note", isOn: playing)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Music")
+        .accessibilityValue(playing ? "Playing" : "Not playing")
     }
 
     // MARK: - Timer
