@@ -42,6 +42,9 @@ final class SlideshowPlaybackController {
     private var didOverrideTransition = false
     /// Set when the user ribbon-taps or swipes; enables Resume after leaving mid-show.
     private var userDidNavigateManually = false
+    /// The Apple TV runs this slideshow by itself (it got `play_slideshow`), so the
+    /// phone sends only manual steps and the stop, never each slide.
+    private(set) var tvRunsSlideshow = false
     /// Last interrupted position after a manual advance (cleared on Restart / natural end).
     private var interruptedResume: InterruptedResume?
 
@@ -79,6 +82,7 @@ final class SlideshowPlaybackController {
         userDidNavigateManually = false
 
         applyTransitionOverride(crossfade: slideshow.crossfade)
+        handOffToTVIfPossible()
         presentCurrent()
         rescheduleAutoplayIfNeeded()
         notifyChanged()
@@ -117,6 +121,8 @@ final class SlideshowPlaybackController {
     /// Re-presents the current slide after its Fit / Fill (or crop) changes.
     func refreshPresentationIfLive(slideshowId: UUID) {
         guard activeSlideshowId == slideshowId else { return }
+        // The TV keeps each slide's framing from the hand-off; send it again.
+        if tvRunsSlideshow { handOffToTVKeepingTime() }
         presentCurrent()
         notifyChanged()
     }
@@ -139,6 +145,7 @@ final class SlideshowPlaybackController {
         )
         activeSlideIds = ids
         currentSlideIndex = next.index
+        if tvRunsSlideshow { handOffToTVKeepingTime() }
         if next.slideChanged {
             presentCurrent()
             rescheduleAutoplayIfNeeded()
@@ -185,6 +192,9 @@ final class SlideshowPlaybackController {
               index != currentSlideIndex else { return }
         userDidNavigateManually = true
         currentSlideIndex = index
+        if tvRunsSlideshow {
+            connectionManager?.sendSlideshowGoTo(id: activeSlideIds[index])
+        }
         presentCurrent()
         rescheduleAutoplayIfNeeded()
         notifyChanged()
@@ -267,6 +277,13 @@ final class SlideshowPlaybackController {
             guard LocalMediaStore.shared.localURL(forId: item.id) != nil else {
                 return false
             }
+            presentLibrarySlide(item)
+            return true
+        }
+
+        // The TV runs the slideshow itself; only AirPlay needs each slide. If the
+        // active TV changed to one that can't, fall back to photo by photo.
+        if tvRunsSlideshow, connectionManager?.activeTVRunsSlideshows == true {
             presentLibrarySlide(item)
             return true
         }
@@ -354,8 +371,40 @@ final class SlideshowPlaybackController {
         loop = false
         userDidNavigateManually = false
         let manager = connectionManager
+        if tvRunsSlideshow {
+            manager?.sendSlideshowStop()
+            tvRunsSlideshow = false
+        }
         connectionManager = nil
         restoreTransitionOverride(using: manager)
+    }
+
+    /// Sends the whole run to the active TV when it can play slideshows by itself
+    /// (from the current slide); otherwise slides keep going one photo at a time.
+    private func handOffToTVIfPossible() {
+        guard let connectionManager, let id = activeSlideshowId,
+              let show = SlideshowStore.shared.slideshow(id: id) else { return }
+        let ids = activeSlideIds
+        guard SlideshowTVHandoff.tvRunsSlideshow(
+            tvSupportsSlideshow: connectionManager.activeTVRunsSlideshows,
+            slideIds: ids,
+            isPhoneOnly: { CaptureStore.shared.contains(id: $0) }
+        ) else {
+            tvRunsSlideshow = false
+            return
+        }
+        let dto = SlideshowTVHandoff.makeDTO(
+            for: show, slideIds: ids, startIndex: currentSlideIndex,
+            framing: SlideshowTVHandoff.currentFraming(forId:)
+        )
+        tvRunsSlideshow = connectionManager.sendPlaySlideshow(dto)
+    }
+
+    /// Re-sends the run to the TV (which restarts its slide timer) and restarts
+    /// the phone's own timer with it, so the two keep changing slides together.
+    private func handOffToTVKeepingTime() {
+        handOffToTVIfPossible()
+        rescheduleAutoplayIfNeeded()
     }
 
     private func notifyChanged() {
