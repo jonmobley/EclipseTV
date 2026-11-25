@@ -53,6 +53,7 @@ extension CloudKitSyncEngine {
         WebPageStore.shared.markAllNeedsUpload()
         SlideshowStore.shared.markAllNeedsUpload()
         CountdownStore.shared.markAllNeedsUpload()
+        TemplateCardStore.shared.markAllNeedsUpload()
         LivePollStore.shared.markAllNeedsUpload()
         PrompterScriptStore.shared.markAllNeedsUpload()
         markMusicNeedsUpload()

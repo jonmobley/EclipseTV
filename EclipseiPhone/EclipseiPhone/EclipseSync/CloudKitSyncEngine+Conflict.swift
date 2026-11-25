@@ -43,6 +43,10 @@ extension CloudKitSyncEngine {
             if let uuid = UUID(uuidString: name) {
                 CountdownStore.shared.markSynced(id: uuid)
             }
+        case CloudKitSchema.RecordType.templateCard:
+            if let uuid = UUID(uuidString: name) {
+                TemplateCardStore.shared.markSynced(id: uuid)
+            }
         case CloudKitSchema.RecordType.livePoll:
             if let uuid = UUID(uuidString: name) {
                 LivePollStore.shared.markSynced(id: uuid)
@@ -130,6 +134,8 @@ extension CloudKitSyncEngine {
             if let uuid = UUID(uuidString: name) { scheduleSlideshowSave(id: uuid) }
         case CloudKitSchema.RecordType.countdown:
             if let uuid = UUID(uuidString: name) { scheduleCountdownSave(id: uuid) }
+        case CloudKitSchema.RecordType.templateCard:
+            if let uuid = UUID(uuidString: name) { scheduleTemplateCardSave(id: uuid) }
         case CloudKitSchema.RecordType.livePoll:
             if let uuid = UUID(uuidString: name) { scheduleLivePollSave(id: uuid) }
         case CloudKitSchema.RecordType.prompter:

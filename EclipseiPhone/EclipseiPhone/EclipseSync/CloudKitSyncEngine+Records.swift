@@ -58,6 +58,9 @@ extension CloudKitSyncEngine {
             if let item = CountdownStore.shared.countdown(id: uuid) {
                 return makeCountdownRecordToSave(item, existing: existing)
             }
+            if let card = TemplateCardStore.shared.card(id: uuid) {
+                return makeTemplateCardRecordToSave(card, existing: existing)
+            }
             if let item = LivePollStore.shared.poll(id: uuid) {
                 return makeLivePollRecordToSave(item, existing: existing)
             }
@@ -100,6 +103,9 @@ extension CloudKitSyncEngine {
             changes.append(
                 .saveRecord(CloudKitSchema.countdownRecordID(for: id))
             )
+        }
+        for id in TemplateCardStore.shared.idsNeedingUpload {
+            changes.append(.saveRecord(CloudKitSchema.templateCardRecordID(for: id)))
         }
         for id in LivePollStore.shared.idsNeedingUpload {
             changes.append(

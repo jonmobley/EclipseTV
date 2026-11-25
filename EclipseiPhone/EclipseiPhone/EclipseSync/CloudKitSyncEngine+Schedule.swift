@@ -106,6 +106,14 @@ extension CloudKitSyncEngine {
         scheduleDelete(CloudKitSchema.countdownRecordID(for: id))
     }
 
+    func scheduleTemplateCardSave(id: UUID) {
+        scheduleSave(CloudKitSchema.templateCardRecordID(for: id))
+    }
+
+    func scheduleTemplateCardDelete(id: UUID) {
+        scheduleDelete(CloudKitSchema.templateCardRecordID(for: id))
+    }
+
     func scheduleLivePollSave(id: UUID) {
         scheduleSave(CloudKitSchema.livePollRecordID(for: id))
     }

@@ -57,6 +57,11 @@ extension CloudKitSyncEngine {
             if let item = CloudKitRecordMapper.countdown(from: record) {
                 CountdownStore.shared.applyRemote(item)
             }
+        case CloudKitSchema.RecordType.templateCard:
+            // Unknown template kind or bad config (newer Mac): skip, never crash.
+            if let card = CloudKitRecordMapper.templateCard(from: record) {
+                TemplateCardStore.shared.applyRemote(card)
+            }
         case CloudKitSchema.RecordType.livePoll:
             if let item = CloudKitRecordMapper.livePoll(from: record) {
                 LivePollStore.shared.applyRemote(item)

@@ -161,6 +161,10 @@ final class EclipseSyncController {
                 LivePollStore.shared.purgeRemote(id: uuid)
                 return
             }
+            if TemplateCardStore.shared.card(id: uuid) != nil {
+                TemplateCardStore.shared.purgeRemote(id: uuid)
+                return
+            }
             if CameraFrameStore.shared.frame(id: uuid) != nil {
                 CameraFrameStore.shared.remove(uuid)
                 return

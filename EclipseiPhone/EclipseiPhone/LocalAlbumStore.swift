@@ -153,6 +153,7 @@ final class LocalAlbumStore {
         // on another device arrives through the sync layer, which never sees that UI.
         SlideshowStore.shared.deleteAll(forShowId: id)
         CountdownStore.shared.deleteAll(forShowId: id)
+        TemplateCardStore.shared.deleteAll(forShowId: id)
         LivePollStore.shared.deleteAll(forShowId: id)
         PrompterScriptStore.shared.deleteAll(
             forShowId: id,
@@ -341,6 +342,7 @@ final class LocalAlbumStore {
             !ShowToolToken.isTool($0)
                 && !ShowSlideshowToken.isSlideshow($0)
                 && !ShowCountdownToken.isCountdown($0)
+                && !ShowTemplateToken.isTemplate($0)
                 && !ShowLivePollToken.isLivePoll($0)
                 && $0 != ShowCountdownToken.legacyTool
                 && $0 != ShowLivePollToken.legacyTool
@@ -367,17 +369,7 @@ final class LocalAlbumStore {
 
     /// Drops a slideshow tile from this Show's surface.
     func removeSlideshow(_ slideshowId: UUID, fromAlbumId albumId: UUID) {
-        guard let index = albums.firstIndex(where: { $0.id == albumId }) else { return }
-        let token = ShowSlideshowToken.token(for: slideshowId)
-        guard var surface = albums[index].surfaceIds,
-              surface.contains(token) else { return }
-        surface.removeAll { $0 == token }
-        SyncTombstones.markRemoved(token, in: &albums[index].deletedSurfaceIds)
-        albums[index].surfaceIds = LocalAlbum.sanitizedSurface(
-            surface, itemIds: albums[index].itemIds
-        )
-        persist(changedAlbumId: albumId)
-        scheduleShowSaveIfNeeded(albumId)
+        removeSurfaceToken(ShowSlideshowToken.token(for: slideshowId), fromAlbumId: albumId)
     }
 
     /// Appends a countdown tile, materializing the default surface if needed.
@@ -390,8 +382,23 @@ final class LocalAlbumStore {
 
     /// Drops a countdown tile from this Show's surface.
     func removeCountdown(_ countdownId: UUID, fromAlbumId albumId: UUID) {
+        removeSurfaceToken(ShowCountdownToken.token(for: countdownId), fromAlbumId: albumId)
+    }
+
+    /// Appends a template card tile, materializing the default surface if needed.
+    func addTemplate(_ templateId: UUID, toAlbumId albumId: UUID) {
+        appendSurfaceToken(ShowTemplateToken.token(for: templateId), toAlbumId: albumId)
+    }
+
+    /// Drops a template card tile from this Show's surface (tombstoned so the
+    /// removal syncs to the Mac).
+    func removeTemplate(_ templateId: UUID, fromAlbumId albumId: UUID) {
+        removeSurfaceToken(ShowTemplateToken.token(for: templateId), fromAlbumId: albumId)
+    }
+
+    /// Removes one surface token and records a dated removal marker for sync.
+    private func removeSurfaceToken(_ token: String, fromAlbumId albumId: UUID) {
         guard let index = albums.firstIndex(where: { $0.id == albumId }) else { return }
-        let token = ShowCountdownToken.token(for: countdownId)
         guard var surface = albums[index].surfaceIds,
               surface.contains(token) else { return }
         surface.removeAll { $0 == token }
@@ -485,9 +492,11 @@ final class LocalAlbumStore {
             .map { ShowCountdownToken.token(for: $0.id) }
         let livePolls = LivePollStore.shared.polls(forShowId: showId)
             .map { ShowLivePollToken.token(for: $0.id) }
+        let templates = TemplateCardStore.shared.cards(forShowId: showId)
+            .map { ShowTemplateToken.token(for: $0.id) }
         albums[index].surfaceIds =
             ShowToolToken.all + albums[index].itemIds
-            + slideshows + countdowns + livePolls
+            + slideshows + countdowns + livePolls + templates
     }
 
     /// Shows or hides the disconnected live preview hero for `albumId`.

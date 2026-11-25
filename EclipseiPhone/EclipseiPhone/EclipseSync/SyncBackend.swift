@@ -71,6 +71,12 @@ protocol SyncBackend: AnyObject {
     /// Schedules deletion of a countdown record.
     func scheduleCountdownDelete(id: UUID)
 
+    /// Schedules a template card metadata upload.
+    func scheduleTemplateCardSave(id: UUID)
+
+    /// Schedules deletion of a template card record.
+    func scheduleTemplateCardDelete(id: UUID)
+
     /// Schedules a Live Poll card metadata upload.
     func scheduleLivePollSave(id: UUID)
 
