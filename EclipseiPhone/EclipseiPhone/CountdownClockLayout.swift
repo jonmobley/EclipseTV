@@ -72,27 +72,15 @@ struct CountdownClockLayout: Codable, Equatable, Hashable {
             .clampedToKeepClockVisible(text: text, in: bounds)
     }
 
-    /// Fits `label` into `bounds` for `text`.
+    /// Fits bare digits (no caption, no plate) into `bounds` for `text`.
+    @MainActor
     func apply(
         to label: UILabel,
         text: String,
         isExpired: Bool,
         in bounds: CGRect
     ) {
-        guard bounds.width > 1, bounds.height > 1 else { return }
-        let font = UIFont.monospacedDigitSystemFont(
-            ofSize: fontSize(in: bounds.size),
-            weight: .semibold
-        )
-        let frame = labelFrame(text: text, font: font, in: bounds)
-        label.font = font
-        label.text = text
-        label.textColor = isExpired ? .systemRed : .white
-        label.textAlignment = .center
-        label.numberOfLines = 1
-        label.adjustsFontSizeToFitWidth = frame.width >= bounds.width - 1
-        label.minimumScaleFactor = 0.6
-        label.frame = frame
+        apply(to: label, text: text, isExpired: isExpired, face: .plain, in: bounds)
     }
 
     /// Clock frame inside `bounds`, kept fully on-canvas.
