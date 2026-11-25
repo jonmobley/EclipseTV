@@ -273,3 +273,13 @@
   cookie store, apart from the website browser. Sign-in (link secret or PIN) is the page's job. To look at it without a
   Mac, serve the three `WebRemote` files from a small local stand-in and open
   `eclipse://mac-remote?h=127.0.0.1&p=<port>#t=x` in the simulator.
+- Second-phone remote ("Show Live", `ShowLive*`, 2026-11-25): a second iPhone on the same iCloud account with the same Show
+  open becomes a remote of the phone that owns the TV, only while `ShowLiveRouting.directorAppliesSelects` is true. That flag
+  was false from 2026-09-07 to 2026-11-25, so in every build of that period the remote never engaged and all
+  `isRemoteOperator` paths were dead code; check the flag before describing how the remote behaves. Never run on two real
+  phones since it was turned back on. The remote reads the live slideshow through `liveSlideshowView` (own player, or the
+  director's snapshot), never `SlideshowPlaybackController` directly, and the hero Fit / Fill rule is `liveScreenFitChrome()`
+  for both the button and the snapshot. New snapshot fields must be optional and new commands new verbs: an older build
+  ignores unknown fields but drops a whole message whose verb or item kind it cannot decode (which is why PTZ Camera and
+  Prompter are still sent as "nothing live"). Not done on the remote: turning PDF pages, scrolling a website, Prompter and
+  PTZ go-live, the live camera's frames and capture, pinch-to-crop.
