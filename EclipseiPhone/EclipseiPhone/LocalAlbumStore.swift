@@ -499,6 +499,15 @@ final class LocalAlbumStore {
         scheduleShowSaveIfNeeded(albumId)
     }
 
+    /// Turns card titles on or off for every card in `albumId` (Settings).
+    func setCardTitlesShown(_ shown: Bool, albumId: UUID) {
+        guard let index = albums.firstIndex(where: { $0.id == albumId }) else { return }
+        guard albums[index].cardTitlesShown != shown else { return }
+        albums[index].cardTitlesShown = shown
+        persist(changedAlbumId: albumId)
+        scheduleShowSaveIfNeeded(albumId)
+    }
+
     /// Sets the cover thumbnail for `albumId` when `itemId` is a member.
     func setCover(itemId: String, albumId: UUID) {
         guard let index = albums.firstIndex(where: { $0.id == albumId }) else { return }

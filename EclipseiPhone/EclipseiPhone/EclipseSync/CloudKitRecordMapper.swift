@@ -42,6 +42,7 @@ enum CloudKitRecordMapper {
         record[CloudKitSchema.ShowKey.modifiedAt] = modifiedAt as CKRecordValue
         record[CloudKitSchema.ShowKey.previewsWhenDisconnected] =
             album.previewsWhenDisconnected as CKRecordValue
+        record[CloudKitSchema.ShowKey.cardTitlesShown] = album.cardTitlesShown as CKRecordValue
         setStringList(
             album.deletedItemIds,
             forKey: CloudKitSchema.ShowKey.deletedItemIds,
@@ -91,6 +92,8 @@ enum CloudKitRecordMapper {
         let createdAt = (record[CloudKitSchema.ShowKey.createdAt] as? Date) ?? Date()
         let previewsWhenDisconnected =
             (record[CloudKitSchema.ShowKey.previewsWhenDisconnected] as? Bool) ?? true
+        let cardTitlesShown =
+            (record[CloudKitSchema.ShowKey.cardTitlesShown] as? Bool) ?? true
         let deletedItemIds =
             (record[CloudKitSchema.ShowKey.deletedItemIds] as? [String]) ?? []
         let deletedSurfaceIds =
@@ -104,6 +107,7 @@ enum CloudKitRecordMapper {
             createdAt: createdAt,
             surfaceIds: surfaceIds,
             previewsWhenDisconnected: previewsWhenDisconnected,
+            cardTitlesShown: cardTitlesShown,
             deletedItemIds: deletedItemIds,
             deletedSurfaceIds: deletedSurfaceIds
         )

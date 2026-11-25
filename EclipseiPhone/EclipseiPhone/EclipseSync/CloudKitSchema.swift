@@ -53,6 +53,7 @@ enum CloudKitSchema {
         static let modifiedAt = "modifiedAt"
         /// Practice Mode: live preview + Lock / Blackout when disconnected.
         static let previewsWhenDisconnected = "previewsWhenDisconnected"
+        static let cardTitlesShown = "cardTitlesShown"
         /// Membership ids removed on a device — union merge subtracts these.
         static let deletedItemIds = "deletedItemIds"
         /// Surface ids removed on a device (tools / slideshow tokens).
