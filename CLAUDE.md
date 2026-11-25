@@ -61,6 +61,12 @@
   every size the box offers and sends the one the app sets, but by itself it starts on the LARGEST offered size, not the
   box's preferred one. So the odd-shaped offered sizes are one-tap "Use W×H" rows (`selectableOffered`; tapping saves or
   reuses a custom size via `useCustomSize`), and saving a size in the editor also calls `refreshScreenSignal()`.
+- Show page preview follows the output's shape (2026-11-25): the live hero box and the small "live in another Show" preview
+  use `LibraryGridViewController.heroAspect` (= `outputAspectRatio`), not a fixed 16:9 / 9:16. Stacked layout is one rule,
+  `StackedHeroMetrics.stackedSize`: full width when no taller than the cap, else capped and centred (so a wide wall is a
+  short banner and a tall one looks like Vertical). Everything drawn in the hero fills its box, so the box's shape is what
+  makes photos, video, camera, websites and the countdown match the screen. Grid tiles, website tile art and the import
+  confirm screens stay library-shaped on purpose.
 - Leaving a live countdown (2026-11-13): `endOverlay` moves output state on *before* tearing the overlay down,
   same order as `beginOverlay`. Ending the clock posts its change synchronously, and if `overlaySource` still says
   countdown the grid repaints the hero back onto the frozen clock (countdown posts no end notice to fix it).
