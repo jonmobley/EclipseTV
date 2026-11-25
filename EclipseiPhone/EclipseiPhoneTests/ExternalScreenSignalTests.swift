@@ -103,6 +103,26 @@ struct ExternalScreenSignalTests {
         #expect(abs(plain - 16.0 / 9.0) < 0.0001)
     }
 
+    @Test func wallWidthsAreOneTapChoicesAndTVSizesAreNot() {
+        // What an iPhone lists behind a wall box that offers all five widths.
+        let listed = [
+            Size(width: 720, height: 480), Size(width: 512, height: 768),
+            Size(width: 720, height: 576), Size(width: 1024, height: 768),
+            Size(width: 1280, height: 720), Size(width: 1536, height: 768),
+            Size(width: 2048, height: 768), Size(width: 2560, height: 768),
+            Size(width: 1920, height: 1080), Size(width: 3840, height: 2160)
+        ]
+        let wall = signal(2560, 768, offered: listed)
+        #expect(wall.selectableOffered.map(\.label) == ["512×768", "1024×768", "1536×768", "2048×768"])
+        // The size being sent is never offered again as a choice.
+        #expect(signal(2048, 768, offered: listed).selectableOffered.map(\.label)
+            == ["512×768", "1024×768", "1536×768", "2560×768"])
+
+        // An ordinary TV offers nothing to choose: only TV and video sizes.
+        let tv = signal(3840, 2160, offered: listed.filter { $0.height != 768 })
+        #expect(tv.selectableOffered.isEmpty)
+    }
+
     @Test func fullScreenLabelNamesTheRealSize() {
         #expect(ExternalOutputSettings.fullScreenLabel(signal: nil) == "Full Screen (16:9)")
         #expect(ExternalOutputSettings.fullScreenLabel(signal: signal(1920, 1080)) == "Full Screen (16:9)")

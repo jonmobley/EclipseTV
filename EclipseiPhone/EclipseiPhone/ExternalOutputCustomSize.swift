@@ -164,6 +164,19 @@ extension ExternalOutputSettings {
         return size
     }
 
+    /// Makes a size the screen offers the active custom size, reusing a saved
+    /// size with the same edges rather than adding a twin.
+    /// - Returns: The active size, or nil when the edges are too small.
+    @discardableResult
+    static func useCustomSize(width: Int, height: Int) -> ExternalOutputCustomSize? {
+        let sizes = storedCustomSizes
+        guard let saved = sizes.first(where: { $0.width == width && $0.height == height }) else {
+            return addCustomSize(name: "", width: width, height: height)
+        }
+        store(sizes: sizes, selected: saved.id)
+        return saved
+    }
+
     /// Renames or resizes a saved custom size in place.
     /// - Returns: False when the size is missing or the edges are too small.
     @discardableResult

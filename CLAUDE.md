@@ -57,7 +57,10 @@
   does not post `didChangeNotification`; the manager posts it on the next main-queue turn and only when the shape
   changed, because it runs inside `attach` and that notification's observers call back into the manager. Settings →
   Display Mode → Connected Screen shows the signal being sent and the other sizes offered. Tests use the pure rules only
-  and never set the global signal. Not yet tried on real hardware: whether iOS lists or sends a non-standard size.
+  and never set the global signal. Proven on real hardware 2026-11-25 (iPhone 17 Pro → J-Tech EDID box): iOS lists
+  every size the box offers and sends the one the app sets, but by itself it starts on the LARGEST offered size, not the
+  box's preferred one. So the odd-shaped offered sizes are one-tap "Use W×H" rows (`selectableOffered`; tapping saves or
+  reuses a custom size via `useCustomSize`), and saving a size in the editor also calls `refreshScreenSignal()`.
 - Leaving a live countdown (2026-11-13): `endOverlay` moves output state on *before* tearing the overlay down,
   same order as `beginOverlay`. Ending the clock posts its change synchronously, and if `overlaySource` still says
   countdown the grid repaints the hero back onto the frozen clock (countdown posts no end notice to fix it).

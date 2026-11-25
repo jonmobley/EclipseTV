@@ -62,6 +62,22 @@ struct ExternalScreenSignal: Equatable, Sendable {
         return offered.filter { seen.insert($0).inserted }
     }
 
+    /// Video sizes iOS lists for every HDMI screen; never a screen's own shape.
+    static let standardVideoSizes: Set<PixelSize> = [
+        PixelSize(width: 640, height: 480),
+        PixelSize(width: 720, height: 480),
+        PixelSize(width: 720, height: 576)
+    ]
+
+    /// The other offered sizes that are the screen's own odd shapes, such as an
+    /// LED wall's other widths: the ones worth a one-tap choice.
+    var selectableOffered: [PixelSize] {
+        otherOffered.filter { size in
+            !Self.standardVideoSizes.contains(size)
+                && ExternalScreenSignal(current: size, offered: []).oddShape != nil
+        }
+    }
+
     /// Which offered size to switch to so the signal matches `wanted`.
     ///
     /// Only for a wanted size that is not 16:9: a custom size such as 1280×720
