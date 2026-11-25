@@ -257,11 +257,11 @@ final class LibraryGridViewController: UIViewController {
     var showsLiveSlideshowRibbon: Bool {
         if showsLivePollRibbon || showsCameraRibbon { return true }
         guard isShowMode,
-              let id = SlideshowPlaybackController.shared.activeSlideshowId,
-              let show = SlideshowStore.shared.slideshow(id: id),
+              let slides = liveSlideshowView,
+              let show = SlideshowStore.shared.slideshow(id: slides.slideshowId),
               show.showId == openShowId,
               !ribbonHiddenSlideshowIds.contains(show.id) else { return false }
-        return !SlideshowPlaybackController.shared.activeSlideIds.isEmpty
+        return !slides.slideIds.isEmpty
     }
 
     /// Live ribbon is never a Show-grid section; it docks under the hero.
@@ -557,8 +557,8 @@ final class LibraryGridViewController: UIViewController {
         liveHeader.onRequestOverlayController = { [weak self] in
             self?.presentControllerForLiveOverlay()
         }
-        liveHeader.onSlideshowSwipe = { delta in
-            SlideshowPlaybackController.shared.goToAdjacentSlide(delta: delta)
+        liveHeader.onSlideshowSwipe = { [weak self] delta in
+            self?.stepLiveSlide(by: delta)
             Haptics.impactLight()
         }
         liveHeader.onLibraryBrowse = { [weak self] delta in

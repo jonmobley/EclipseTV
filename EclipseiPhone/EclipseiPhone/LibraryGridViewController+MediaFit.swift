@@ -145,19 +145,39 @@ extension LibraryGridViewController {
     /// yet either, and `didUpdateThumbnailFor` re-runs this once one lands. A button
     /// that appears late beats one that vanishes under a finger.
     func syncLiveScreenFitChrome() {
-        let target = liveHeroAdjustTarget()
-        liveHeader.directAdjustTarget = target
-        // A phone preview is not program: Fit / Fill here would reframe the TV.
-        guard showsLiveHero, !isLiveFromOtherShow, heroPhonePreview == nil else {
+        // A remote phone shows the director's button and sends its tap there;
+        // pinch and drag stay with the phone that owns the output.
+        if ShowLiveSession.shared.isRemoteOperator {
+            liveHeader.directAdjustTarget = nil
+            let fit = showsLiveHero ? ShowLiveSession.shared.snapshot?.screenFit : nil
+            liveHeader.setScreenFitToggleVisible(
+                fit != nil,
+                mode: fit?.isFill == true ? .fill : .fit,
+                showsReset: fit?.showsReset ?? false
+            )
+            return
+        }
+        liveHeader.directAdjustTarget = liveHeroAdjustTarget()
+        guard let chrome = liveScreenFitChrome() else {
             liveHeader.setScreenFitToggleVisible(false, mode: .fit)
             return
         }
-        if case .countdown(let id) = target {
+        liveHeader.setScreenFitToggleVisible(
+            true, mode: chrome.mode, showsReset: chrome.showsReset
+        )
+    }
+
+    /// What the hero's Fit / Fill button shows for the live item, or nil when
+    /// there is none to show. One rule for the button on this phone and for
+    /// what a remote phone is told, so the two cannot disagree.
+    func liveScreenFitChrome() -> (mode: MediaFitMode, showsReset: Bool)? {
+        // A phone preview is not program: Fit / Fill here would reframe the TV.
+        guard showsLiveHero, !isLiveFromOtherShow, heroPhonePreview == nil else {
+            return nil
+        }
+        if case .countdown(let id) = liveHeroAdjustTarget() {
             let layout = CountdownStore.shared.countdown(id: id)?.layout ?? .default
-            liveHeader.setScreenFitToggleVisible(
-                layout != .default, mode: .fit, showsReset: true
-            )
-            return
+            return layout != .default ? (.fit, true) : nil
         }
         let mgr = ExternalDisplayManager.shared
         if mgr.isOverlayLive
@@ -165,8 +185,7 @@ extension LibraryGridViewController {
             || isBlackSelected
             || isLogoSelected
             || isScreensaverSelected {
-            liveHeader.setScreenFitToggleVisible(false, mode: .fit)
-            return
+            return nil
         }
         // Video has Fit / Fill too, but only from its tile menu, next to Loop and Mute.
         // The hero circle sits bottom-trailing, right where a live video puts its
@@ -174,19 +193,13 @@ extension LibraryGridViewController {
         guard let id = store.currentId,
               let item = store.item(id: id),
               !item.isVideo else {
-            liveHeader.setScreenFitToggleVisible(false, mode: .fit)
-            return
+            return nil
         }
         let isFramed = MediaFramingStore.hasFraming(forId: item.id)
         guard isFramed || MediaFitAvailability.fitDiffersFromFill(forId: item.id) == true else {
-            liveHeader.setScreenFitToggleVisible(false, mode: .fit)
-            return
+            return nil
         }
-        liveHeader.setScreenFitToggleVisible(
-            true,
-            mode: liveScreenFitMode(forId: item.id),
-            showsReset: isFramed
-        )
+        return (liveScreenFitMode(forId: item.id), isFramed)
     }
 
     /// Framing the hero circle advertises for `id`: a custom position reads as Fill,
@@ -207,7 +220,11 @@ extension LibraryGridViewController {
     /// circle is a reset instead: the still goes back to its Fit / Fill and the
     /// clock to its default size and place.
     func toggleLiveScreenFit() {
-        if case .countdown(let id) = liveHeader.directAdjustTarget {
+        if sendShowLiveCommandIfOperator(.screenFitToggle) {
+            Haptics.selection()
+            return
+        }
+        if case .countdown(let id) = liveHeroAdjustTarget() {
             CountdownStore.shared.setLayout(id: id, layout: .default)
             CountdownClockLayoutPreview.set(nil, for: id)
             Haptics.selection()

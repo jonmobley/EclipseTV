@@ -154,4 +154,27 @@ struct ShowLiveRoutingTests {
         // must change together, so this fails the moment one moves alone.
         #expect(ShowLiveRouting.directorAppliesSelects == false)
     }
+
+    @Test func slideStepTakesWholeSlidesWithinReason() {
+        #expect(ShowLiveRouting.slideStep(1) == 1)
+        #expect(ShowLiveRouting.slideStep(-1) == -1)
+        #expect(ShowLiveRouting.slideStep(2.9) == 2)
+        #expect(ShowLiveRouting.slideStep(0) == nil)
+        #expect(ShowLiveRouting.slideStep(0.4) == nil)
+        #expect(ShowLiveRouting.slideStep(nil) == nil)
+        #expect(ShowLiveRouting.slideStep(.nan) == nil)
+        #expect(ShowLiveRouting.slideStep(.infinity) == nil)
+        #expect(ShowLiveRouting.slideStep(1e12) == nil)
+    }
+
+    @Test func slideIndexMustBeASlideTheDirectorHas() {
+        #expect(ShowLiveRouting.slideIndex(0, count: 3) == 0)
+        #expect(ShowLiveRouting.slideIndex(2, count: 3) == 2)
+        #expect(ShowLiveRouting.slideIndex(3, count: 3) == nil)
+        #expect(ShowLiveRouting.slideIndex(-1, count: 3) == nil)
+        #expect(ShowLiveRouting.slideIndex(0, count: 0) == nil)
+        #expect(ShowLiveRouting.slideIndex(.nan, count: 3) == nil)
+        #expect(ShowLiveRouting.slideIndex(1e300, count: 3) == nil)
+        #expect(ShowLiveRouting.slideIndex(nil, count: 3) == nil)
+    }
 }

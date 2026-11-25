@@ -23,7 +23,7 @@ extension LibraryGridViewController {
     func liveSlideMenuConfiguration(at indexPath: IndexPath) -> UIContextMenuConfiguration? {
         guard !showsCameraRibbon, !showsLivePollRibbon, showsLiveSlideshowRibbon,
               let show = activeLiveSlideshow() else { return nil }
-        let ids = SlideshowPlaybackController.shared.activeSlideIds
+        let ids = liveSlideshowView?.slideIds ?? []
         guard ids.indices.contains(indexPath.item) else { return nil }
         let slideId = ids[indexPath.item]
         let canRemove = Self.canRemoveSlide(fromSlideshowWith: show.itemIds.count)
