@@ -76,7 +76,8 @@ enum ShowKeyMap {
 
     /// The action for a plain (no modifier) key press, nil when the key is not ours.
     static func action(forInput input: String, in context: ShowKeyContext) -> ShowKeyAction? {
-        let key = input.lowercased()
+        // Letters match either case; named keys (arrows, Escape) match exactly.
+        let key = input.count == 1 ? input.lowercased() : input
         return activeBindings(in: context).first { $0.input == key }?.action
     }
 }
