@@ -792,8 +792,8 @@ extension LibraryGridViewController: UICollectionViewDataSource,
                 image: UIImage(systemName: "trash"),
                 attributes: .destructive
             ) { [weak self] _ in
-                // Undo replaces the confirmation (`deleteShowWithUndo`).
-                self?.deleteShowWithUndo(id: show.id)
+                // Asks first; Undo is the second chance (`deleteShowWithUndo`).
+                self?.confirmDeleteShow(show)
             }
             // Only real actions are rows. Once everything is on this iPhone the
             // offline state is a status in the menu's header, never a grey row

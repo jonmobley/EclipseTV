@@ -81,14 +81,30 @@ extension LibraryGridViewController {
 
     /// Removes every selected member / tool / card from the open Show, with Undo.
     ///
-    /// Undo replaces the old confirmation: countdowns and polls are only deleted
-    /// once the toast's time is up (`removeFromShowWithUndo`).
+    /// Plain media and tools only leave the Show, so they go at once. Countdowns
+    /// and polls are deleted, so the operator is asked first; either way Undo
+    /// brings everything back (`removeFromShowWithUndo`).
     func confirmBulkRemoveFromShow() {
         guard isSelecting, let showId = openShowId else { return }
         let ids = Array(selectedShowItemIds)
         guard !ids.isEmpty else { return }
-        endSelectMode()
-        removeFromShowWithUndo(ids, showId: showId)
+        let deletesCards = ids.contains {
+            ShowCountdownToken.countdownId(from: $0) != nil
+                || ShowLivePollToken.livePollId(from: $0) != nil
+        }
+        guard deletesCards else {
+            endSelectMode()
+            removeFromShowWithUndo(ids, showId: showId)
+            return
+        }
+        askToDelete(
+            title: ids.count == 1 ? "Remove Item?" : "Remove \(ids.count) Items?",
+            message: "Selected items leave this Show. Media stays in your library.",
+            actionTitle: "Remove"
+        ) { [weak self] in
+            self?.endSelectMode()
+            self?.removeFromShowWithUndo(ids, showId: showId)
+        }
     }
 
     /// Builds the header Actions menu for the current selection count.

@@ -11,7 +11,7 @@ import UIKit
 
 extension LibraryGridViewController {
 
-    /// Deletes a Show with an Undo toast instead of a confirmation.
+    /// Deletes a Show (after its confirmation) with an Undo toast as a second chance.
     ///
     /// The Show is only hidden while the toast is up (`PendingDeletes`); its
     /// slideshows, countdowns, polls and scripts, and its iCloud record, are
@@ -42,7 +42,19 @@ extension LibraryGridViewController {
         }
     }
 
-    /// Deletes a Library photo or video with an Undo toast instead of a confirmation.
+    /// Asks "Delete Show?", then deletes it with an Undo toast.
+    /// - Parameter show: The Show to delete.
+    func confirmDeleteShow(_ show: LocalAlbum) {
+        askToDelete(
+            title: "Delete Show?",
+            message: "“\(show.name)” is removed from Home. Its images and videos stay on this iPhone and any linked EclipseTV.",
+            actionTitle: "Delete"
+        ) { [weak self] in
+            self?.deleteShowWithUndo(id: show.id)
+        }
+    }
+
+    /// Asks "Delete?", then deletes a Library photo or video with an Undo toast.
     ///
     /// The tile is hidden at once; the real delete (`performDelete`: Apple TV
     /// request, Show memberships, local file) runs once the toast's time is up.
@@ -54,8 +66,11 @@ extension LibraryGridViewController {
             presentNotConnectedAlert()
             return
         }
-        offerLibraryDeleteUndo(id: id) { [weak self] in
-            self?.performDelete(id: id)
+        askToDelete(title: "Delete?", message: Self.libraryDeleteMessage(isPending: isPending)) {
+            [weak self] in
+            self?.offerLibraryDeleteUndo(id: id) { [weak self] in
+                self?.performDelete(id: id)
+            }
         }
     }
 }
@@ -63,6 +78,34 @@ extension LibraryGridViewController {
 // MARK: - Shared Library delete flow
 
 extension UIViewController {
+
+    /// The "Delete?" message for a Library item.
+    /// - Parameter isPending: Whether the item was added here and not yet synced.
+    static func libraryDeleteMessage(isPending: Bool) -> String {
+        isPending
+            ? "This removes the item you added."
+            : "This removes the item from your Apple TV library."
+    }
+
+    /// Shows an "Are you sure?" alert with Cancel and a red action button.
+    /// - Parameters:
+    ///   - title: Alert title, e.g. "Delete Show?".
+    ///   - message: What will happen.
+    ///   - actionTitle: The red button's title.
+    ///   - onConfirm: Runs when the red button is tapped.
+    func askToDelete(
+        title: String,
+        message: String,
+        actionTitle: String = "Delete",
+        onConfirm: @escaping () -> Void
+    ) {
+        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: actionTitle, style: .destructive) { _ in
+            onConfirm()
+        })
+        present(alert, animated: true)
+    }
 
     /// Hides a Library item, shows an Undo toast, and runs `commit` afterwards.
     /// - Parameters:
@@ -80,10 +123,19 @@ extension UIViewController {
         }
     }
 
-    /// Deletes a saved PDF with an Undo toast: hidden from Library now, removed
-    /// from every Show and from disk once the toast's time is up.
+    /// Asks "Delete PDF?", then deletes it with an Undo toast: hidden from
+    /// Library now, removed from every Show and from disk once the toast's time is up.
     /// - Parameter doc: The PDF to delete.
     func deletePDFWithUndo(_ doc: SavedPDF) {
+        askToDelete(
+            title: "Delete PDF?",
+            message: "“\(doc.title)” is removed from every Show and from Library."
+        ) { [weak self] in
+            self?.commitPDFDeleteWithUndo(doc)
+        }
+    }
+
+    private func commitPDFDeleteWithUndo(_ doc: SavedPDF) {
         offerLibraryDeleteUndo(id: doc.id.uuidString) {
             let manager = ExternalDisplayManager.shared
             if manager.isPDFLive, manager.livePDFDocumentId == doc.id {

@@ -288,12 +288,15 @@ extension MediaLibraryPickerViewController {
             presentNotConnectedAlert()
             return
         }
-        // Undo replaces the confirmation; the delete runs once the toast is gone,
-        // even if this picker has closed by then (so `perform` is held strongly).
+        // Asks first, then Undo; the delete runs once the toast is gone, even if
+        // this picker has closed by then (so `perform` is held strongly).
         let perform = onPerformDelete
-        offerLibraryDeleteUndo(id: item.id) { [weak self] in
-            perform?(item.id)
-            self?.reload()
+        askToDelete(title: "Delete?", message: Self.libraryDeleteMessage(isPending: isPending)) {
+            [weak self] in
+            self?.offerLibraryDeleteUndo(id: item.id) { [weak self] in
+                perform?(item.id)
+                self?.reload()
+            }
         }
     }
 
