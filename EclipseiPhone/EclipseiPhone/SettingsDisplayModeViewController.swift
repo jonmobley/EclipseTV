@@ -324,6 +324,8 @@ final class SettingsDisplayModeViewController: UITableViewController {
             } else {
                 ExternalOutputSettings.addCustomSize(name: name, width: width, height: height)
             }
+            // A new or edited size may now match one the screen offers: send it.
+            ExternalDisplayManager.shared.refreshScreenSignal()
         }
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         alert.addAction(save)
