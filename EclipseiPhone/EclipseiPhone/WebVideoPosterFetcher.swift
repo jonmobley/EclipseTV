@@ -126,8 +126,9 @@ final class WebVideoPosterFetcher {
         (url.path as NSString).pathExtension.lowercased() != "m3u8"
     }
 
-    /// `VideoPosterFrame.poster`, or nil once `timeout` seconds pass.
-    private nonisolated static func poster(at url: URL, timeout: TimeInterval) async -> UIImage? {
+    /// `VideoPosterFrame.poster`, or nil once `timeout` seconds pass. The poster task
+    /// stops on cancel, so the group (and the limiter slot) is free right after.
+    nonisolated static func poster(at url: URL, timeout: TimeInterval) async -> UIImage? {
         await withTaskGroup(of: UIImage?.self) { group in
             group.addTask { await VideoPosterFrame.poster(at: url) }
             group.addTask {

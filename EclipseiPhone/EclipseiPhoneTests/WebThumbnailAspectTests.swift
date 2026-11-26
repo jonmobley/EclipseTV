@@ -76,4 +76,15 @@ struct WebThumbnailAspectTests {
         #expect(WebVideoPosterFetcher.canSampleFile(mp4))
         #expect(!WebVideoPosterFetcher.canSampleFile(hls))
     }
+
+    /// A server that never answers must give up at the deadline and free the slot,
+    /// not wait for the network timeout (about a minute) behind the cancel.
+    @Test func stalledFilePosterGivesUpAtTheDeadline() async throws {
+        // Non-routable address: the connection neither succeeds nor fails quickly.
+        let url = try #require(URL(string: "http://10.255.255.1/clip.mp4"))
+        let start = Date()
+        let image = await WebVideoPosterFetcher.poster(at: url, timeout: 0.5)
+        #expect(image == nil)
+        #expect(Date().timeIntervalSince(start) < 5)
+    }
 }
