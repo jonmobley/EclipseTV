@@ -42,6 +42,16 @@
   Drive the remote with osascript key codes to Simulator (123/124 arrows, 36 select, 53 Menu).
 
 - Crash reports: `CrashReporting.swift` in each app sends crashes and freezes to Sentry projects `eclipse-iphone` and `eclipse-appletv` (Release builds only; `scrub` keeps crash type, code location and device model, and drops all free text and activity trails; the `0.0.0.0` user address is what stops Sentry reading a city from the connection, since neither its IP setting nor `infer_ip` did). Upload symbols after each archive so reports are readable. App Privacy answers must list Crash Data and Other Diagnostic Data, not linked to the user, no tracking.
+- TV-run slideshows + idle screen (2026-11-25, branch claude/p5-tv-slides-idle): the TV lists `capabilities: ["slideshow"]`
+  in its library manifest; only then does the phone send `play_slideshow` (slides + seconds/Loop/Crossfade/per-slide
+  Fit/Fill) and `slideshow_control` (goto id / stop), else it sends one `playRequest` per slide as before
+  (`SlideshowTVHandoff`, `AppleTVCapabilities`). Slides that live only on the phone (captures) always go photo by photo.
+  On the TV, `TVSlideshowPlayer` keeps time; a play request, park, display-mode switch or the remote's left/right/Menu
+  stops it. New shared file `EclipseShareProtocol+Slideshow.swift` is checked by `verify_shared_sources.sh` and must be
+  listed in both build phases' input files (script sandboxing). Idle screen (`IdleScreenRules`, `IdleScreenView`): the
+  bundled Eclipse loop over the grid once a phone has paired, at launch / after disconnect; Select opens the grid, Menu
+  there returns to idle, hold Select opens Options. To see it on a fresh simulator, seed a paired phone:
+  `defaults write <container>/Library/Preferences/com.mobleypro.eclipse.EclipseTV EclipseTV.pairing.pairedDevices -data <hex of {"x":"iPhone"}>`.
 
 ## TestFlight builds
 

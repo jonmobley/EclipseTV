@@ -71,6 +71,7 @@ extension iPhoneConnectionManager: MCSessionDelegate {
             logger.info("[Eclipse:CONN] iPhone NOT connected to peer: \(peerID.displayName, privacy: .public)")
             // The attempt resolved (failed/timed out/dropped); allow a fresh invitation.
             clearPendingInvite(for: peerID)
+            AppleTVCapabilities.shared.forget(peerID)
 
             // If the active TV dropped, go offline and let the normal reconnect flow
             // re-establish a primary. Replica drops don't affect the mirrored UI.
@@ -100,7 +101,7 @@ extension iPhoneConnectionManager: MCSessionDelegate {
         // Eclipse library-mirroring control messages are tagged JSON envelopes; handle
         // them before the plain-string confirmations below.
         if let envelope = EclipseShareEnvelope.decode(from: data) {
-            handleControlEnvelope(envelope)
+            handleControlEnvelope(envelope, from: peerID)
             return
         }
 
@@ -176,14 +177,16 @@ extension iPhoneConnectionManager: MCSessionDelegate {
     // MARK: - Control Message Routing
 
     /// Routes a decoded library-mirroring envelope into the shared `TVLibraryStore`.
-    private func handleControlEnvelope(_ envelope: EclipseShareEnvelope) {
+    private func handleControlEnvelope(_ envelope: EclipseShareEnvelope, from peerID: MCPeerID) {
         let mode = envelope.resolvedLibraryMode
         switch envelope.kind {
         case .libraryManifest:
             let items = envelope.items ?? []
             let currentId = envelope.currentId
             let accountCode = envelope.accountCode
+            let capabilities = envelope.capabilities
             Task { @MainActor in
+                AppleTVCapabilities.shared.record(capabilities, for: peerID)
                 TVLibraryStore.shared.updateManifest(items: items, currentId: currentId, mode: mode)
                 self.reconcileJoinedAccount(reportedByTV: accountCode)
             }
@@ -204,7 +207,8 @@ extension iPhoneConnectionManager: MCSessionDelegate {
             }
         case .playRequest, .setVideoSetting, .setImageFit, .deleteItem, .moveItem,
              .reorderItems, .restoreItem, .playbackCommand, .setAccount, .setDisplayMode,
-             .setContentTransition, .setLibraryAlbums, .setIdleMode, .none:
+             .setContentTransition, .setLibraryAlbums, .setIdleMode, .playSlideshow,
+             .slideshowControl, .none:
             // These are iPhone -> TV commands; ignore if ever echoed back to us.
             break
         }

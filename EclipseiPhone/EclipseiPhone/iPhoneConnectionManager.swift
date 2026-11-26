@@ -638,7 +638,7 @@ class iPhoneConnectionManager: NSObject {
     /// the message goes to every connected Apple TV; otherwise it targets only the active
     /// TV (preserving single-TV behavior for live-selection and playback commands).
     @discardableResult
-    private func sendCommand(_ envelope: EclipseShareEnvelope, description: String, broadcast: Bool = false) -> Bool {
+    func sendCommand(_ envelope: EclipseShareEnvelope, description: String, broadcast: Bool = false) -> Bool {
         let stamped = envelope.withLibraryMode(ExternalOutputSettings.libraryMode)
         guard let session = session, let data = stamped.encoded() else {
             logger.error("Cannot send \(description): no session or failed to encode")

@@ -65,7 +65,7 @@ class ConnectionManager: NSObject {
     private var session: MCSession?
     private var advertiser: MCNearbyServiceAdvertiser?
     private let peerID: MCPeerID
-    private let logger = Logger(subsystem: "com.eclipsetv.app", category: "ConnectionManager")
+    let logger = Logger(subsystem: "com.eclipsetv.app", category: "ConnectionManager")
     
     weak var delegate: ConnectionManagerDelegate?
 
@@ -247,6 +247,7 @@ class ConnectionManager: NSObject {
         var envelope = EclipseShareEnvelope.manifest(items: items, currentId: currentId)
             .withLibraryMode(mode)
         envelope.accountCode = RemoteAlbumStore.shared.accountCode
+        envelope.capabilities = EclipseShareCapability.advertisedByTV
         sendControlMessage(envelope)
     }
 
@@ -313,7 +314,7 @@ class ConnectionManager: NSObject {
     }
 
     /// Ensures the active library matches the envelope's mode before applying a command.
-    private func activateModeIfNeeded(from envelope: EclipseShareEnvelope) {
+    func activateModeIfNeeded(from envelope: EclipseShareEnvelope) {
         let mode = envelope.resolvedLibraryMode
         if MediaDataSource.shared.activeLibraryMode != mode {
             MediaDataSource.shared.setActiveLibraryMode(mode)
@@ -324,7 +325,7 @@ class ConnectionManager: NSObject {
     ///
     /// Absence of `framing` means Fit / Fill alone — clear any saved position so
     /// picking Fit after Custom does not leave a stale crop on the TV.
-    private func applyIncomingFraming(_ framing: MediaFramingDTO?, forFileName id: String) {
+    func applyIncomingFraming(_ framing: MediaFramingDTO?, forFileName id: String) {
         if let framing {
             ImageFramingSettings.set(framing, forFileName: id)
         } else {
@@ -334,6 +335,7 @@ class ConnectionManager: NSObject {
 
     /// Routes a decoded control envelope received from a peer.
     private func handleControlEnvelope(_ envelope: EclipseShareEnvelope, from peerID: MCPeerID) {
+        stopSlideshowIfInterrupted(by: envelope)
         switch envelope.kind {
         case .setDisplayMode:
             let mode = envelope.resolvedLibraryMode
@@ -465,6 +467,10 @@ class ConnectionManager: NSObject {
                 guard let self = self else { return }
                 self.delegate?.connectionManager(self, didReceiveIdleModeBlack: isBlack, isWhite: isWhite)
             }
+        case .playSlideshow:
+            handlePlaySlideshow(envelope)
+        case .slideshowControl:
+            handleSlideshowControl(envelope)
         case .libraryManifest, .currentChanged, .playbackStatus, .none:
             // These are TV -> iPhone only; ignore if a peer ever sends them back.
             break

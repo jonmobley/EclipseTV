@@ -70,6 +70,10 @@ compare_from() {
 
 compare_from "$TV_PROTOCOL" "$IPHONE_PROTOCOL" "enum EclipseShareProtocol" "EclipseShareProtocol.swift" || status=1
 
+TV_SLIDESHOW="$REPO_ROOT/EclipseAppleTV/EclipseAppleTV/EclipseShareProtocol+Slideshow.swift"
+IPHONE_SLIDESHOW="$REPO_ROOT/EclipseiPhone/EclipseiPhone/EclipseShareProtocol+Slideshow.swift"
+compare_from "$TV_SLIDESHOW" "$IPHONE_SLIDESHOW" "enum EclipseShareCapability" "EclipseShareProtocol+Slideshow.swift" || status=1
+
 TV_PAIRING="$REPO_ROOT/EclipseAppleTV/EclipseAppleTV/PeerPairing.swift"
 IPHONE_PAIRING="$REPO_ROOT/EclipseiPhone/EclipseiPhone/PeerPairing.swift"
 compare_from "$TV_PAIRING" "$IPHONE_PAIRING" "enum PeerPairing" "PeerPairing.swift" || status=1

@@ -27,9 +27,11 @@ extension ImageViewController {
         isWhite: Bool
     ) {
         if isBlack {
+            hideIdleScreen()
             applyIdleParkBlack(isWhite: isWhite)
         } else {
             clearIdlePark(restoreDisplay: true)
+            showIdleScreenIfReady()
         }
     }
 
