@@ -30,7 +30,9 @@ final class HomeHeaderBar: UIView {
     /// Fills the status-bar area above the bar so nothing scrolls through it.
     private let topBackdrop = UIView()
     private let searchButton = MinimumHitTargetButton(type: .system)
-    /// Opens the phone camera from any page.
+    /// Opens the phone camera from any page. Sits at the end of the tab row
+    /// (owner's call, 2026-11-26); in phone landscape, where the tabs are inside
+    /// the header row, just before the row's own buttons.
     private let cameraButton = MinimumHitTargetButton(type: .system)
     /// The search field and Cancel, under the tabs while a page is being searched.
     private let searchRow = UIView()
@@ -290,6 +292,7 @@ final class HomeHeaderBar: UIView {
         cameraButton.addAction(UIAction { [weak self] _ in
             self?.onOpenCamera?()
         }, for: .touchUpInside)
+        addSubview(cameraButton)
 
         searchRow.isHidden = true
         searchRow.translatesAutoresizingMaskIntoConstraints = false
@@ -379,10 +382,9 @@ final class HomeHeaderBar: UIView {
         trailingStack.alignment = .center
         trailingStack.spacing = 6
         trailingStack.translatesAutoresizingMaskIntoConstraints = false
-        // Search and Camera lead the row (owner's call, 2026-11-26: in the header,
-        // not a footer and not the tab row).
+        // Search leads the row; Camera is on the tab row.
         for button in [
-            searchButton, cameraButton,
+            searchButton,
             lockButton, freezeButton, blackButton, settingsButton,
             addButton, addMusicButton,
             newShowButton, selectActionsButton, doneButton
@@ -405,8 +407,10 @@ final class HomeHeaderBar: UIView {
             tabStrip.topAnchor.constraint(equalTo: rowGuide.bottomAnchor),
             tabStrip.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 18),
             tabStrip.trailingAnchor.constraint(
-                lessThanOrEqualTo: trailingAnchor, constant: -16
-            )
+                lessThanOrEqualTo: cameraButton.leadingAnchor, constant: -8
+            ),
+            cameraButton.centerYAnchor.constraint(equalTo: tabStrip.centerYAnchor),
+            cameraButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12)
         ]
         tabStripInlineConstraints = [
             tabStrip.centerYAnchor.constraint(equalTo: rowGuide.centerYAnchor),
@@ -414,7 +418,11 @@ final class HomeHeaderBar: UIView {
                 equalTo: leadingNavStack.trailingAnchor, constant: 16
             ),
             tabStrip.trailingAnchor.constraint(
-                lessThanOrEqualTo: trailingStack.leadingAnchor, constant: -8
+                lessThanOrEqualTo: cameraButton.leadingAnchor, constant: -8
+            ),
+            cameraButton.centerYAnchor.constraint(equalTo: rowGuide.centerYAnchor),
+            cameraButton.trailingAnchor.constraint(
+                equalTo: trailingStack.leadingAnchor, constant: -6
             )
         ]
         tabStrip.setContentCompressionResistancePriority(.required, for: .horizontal)
@@ -741,7 +749,11 @@ final class HomeHeaderBar: UIView {
         backgroundColor = showsTabStrip ? .systemBackground : .clear
         let inline = traitCollection.verticalSizeClass == .compact
         NSLayoutConstraint.deactivate(tabStripBelowConstraints + tabStripInlineConstraints)
-        guard showsTabStrip else { return }
+        // With the tabs off, Camera is hidden; park it in the row.
+        guard showsTabStrip else {
+            NSLayoutConstraint.activate(Array(tabStripInlineConstraints.suffix(2)))
+            return
+        }
         NSLayoutConstraint.activate(
             inline ? tabStripInlineConstraints : tabStripBelowConstraints
         )
@@ -797,7 +809,8 @@ final class HomeHeaderBar: UIView {
         lockButton.isHidden = !showsLiveOutputChrome
         freezeButton.isHidden = !showsLiveOutputChrome
         blackButton.isHidden = !showsLiveOutputChrome
-        settingsButton.isHidden = !(showsShowChrome || showsDestinationTabs)
+        // With the text tabs, Settings is in the dropdown, not an icon here.
+        settingsButton.isHidden = showsTabStrip || !(showsShowChrome || showsDestinationTabs)
         addButton.isHidden = !showsShowChrome
         newShowButton.isHidden = showsShowChrome
     }

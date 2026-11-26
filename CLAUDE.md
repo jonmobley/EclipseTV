@@ -281,8 +281,9 @@
   and swaps its right-hand buttons by page (`setTabPage`): Music gets "+", and Library and Music hide their
   own navigation bar at the root (`HomeTabPageNavigationController`; it returns for a playlist or reordering).
   The dropdown says "Eclipse" on Home (no "Home": that is a tab) and has no Library / Music entries or back chevron there.
-  Search and Camera are icons in the header row, ahead of the page's own buttons (2026-11-26). The owner tried and
-  rejected them at the end of the tab row, then as a floating bottom bar, then as an iOS-style glass footer: do not
+  Search is an icon in the header row, ahead of the page's own buttons; Camera sits at the right-hand end of the tab
+  row; Settings has no icon on the paging home screen and is in the dropdown instead, with or without a Show open
+  (owner's calls, 2026-11-26). A floating bottom bar and an iOS-style glass footer were both tried and rejected: do not
   bring a footer back. Camera is on every page and opens the full-screen camera (`presentCameraLive`). Search shows on
   Library, Music's list and an open Show and opens one field under the tabs (`beginPageSearch` / `endPageSearch`) that
   filters the page in front by name: Show cards (`ShowGridItem.searchTitle`, `showSearchQuery`), tracks and playlists,
