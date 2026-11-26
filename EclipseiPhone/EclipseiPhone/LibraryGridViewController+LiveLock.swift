@@ -32,6 +32,7 @@ extension LibraryGridViewController {
     func applyLiveOutputLockChrome() {
         onLiveOutputLockChanged?(isLiveOutputLocked)
         liveHeader.setOutputLocked(isLiveOutputLocked)
+        syncHeroWebInteraction()
         let visible = collectionView.indexPathsForVisibleItems
         if !visible.isEmpty {
             collectionView.reconfigureItems(at: visible)

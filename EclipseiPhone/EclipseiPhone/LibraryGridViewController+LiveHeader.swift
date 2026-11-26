@@ -70,6 +70,7 @@ extension LibraryGridViewController {
         defer {
             syncSlideshowRibbonIfChromeChanged()
             syncLiveScreenFitChrome()
+            syncHeroWebInteraction()
             syncLiveSlideshowCountdownChrome()
             syncLiveCameraFlipChrome()
             syncLiveCameraCaptureChrome()

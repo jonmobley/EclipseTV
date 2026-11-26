@@ -82,6 +82,12 @@ extension LiveHeaderView: UIGestureRecognizerDelegate {
         if gestureRecognizer.view === self, isTouchOnInteractivePDF(gestureRecognizer) {
             return false
         }
+        // The live website scrolls and pinches on its own too; only the hero's
+        // tap (open the full browser) still works on it.
+        if gestureRecognizer.view === self, !(gestureRecognizer is UITapGestureRecognizer),
+           isTouchOnInteractiveWeb(gestureRecognizer) {
+            return false
+        }
         guard gestureRecognizer === directAdjustPan
                 || gestureRecognizer === directAdjustPinch else {
             return super.gestureRecognizerShouldBegin(gestureRecognizer)

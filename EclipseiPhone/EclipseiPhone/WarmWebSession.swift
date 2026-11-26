@@ -21,6 +21,9 @@ final class WarmWebSession: NSObject {
 
     let pageId: UUID
     private(set) var isAdopted = false
+    /// Page views switched off while the hero preview takes pinch and scroll, so
+    /// a tap there can't follow a link (see `setPreviewInteraction`).
+    private var tapBlockedContentViews: [UIView] = []
 
     /// One-shot callback fired once a warm load settles (loaded, failed, or already
     /// current). Lets the pool warm pages one at a time instead of all at once.
@@ -71,6 +74,7 @@ final class WarmWebSession: NSObject {
     func adopt(into remote: WebRemoteViewController, url: URL) -> WKWebView {
         intendedURL = url
         let web = ensureWebView()
+        restorePageTouches()
         isAdopted = true
         mediaConsumer = remote
         settleWorkItem?.cancel()
@@ -135,6 +139,36 @@ final class WarmWebSession: NSObject {
         return true
     }
 
+    /// Lets the hero preview scroll and pinch the page (nil `delegate` turns it off).
+    ///
+    /// Only the scroll view's own drag and pinch work: the page's content view stops
+    /// taking touches, so taps can't follow links or press buttons and the hero can
+    /// never show a different page from the TV. Touches on it fall through to the
+    /// scroll view, whose recognizers still pan and zoom.
+    /// - Parameter delegate: Receives the scroll view's scroll / zoom callbacks.
+    func setPreviewInteraction(_ delegate: UIScrollViewDelegate?) {
+        guard !isAdopted, let web = webView else { return }
+        guard let delegate else {
+            restorePageTouches()
+            web.scrollView.delegate = nil
+            web.isUserInteractionEnabled = false
+            return
+        }
+        web.scrollView.delegate = delegate
+        web.isUserInteractionEnabled = true
+        for view in web.scrollView.subviews where view.isUserInteractionEnabled
+            && !tapBlockedContentViews.contains(where: { $0 === view }) {
+            view.isUserInteractionEnabled = false
+            tapBlockedContentViews.append(view)
+        }
+    }
+
+    /// Gives the page back its own touches (links, buttons).
+    private func restorePageTouches() {
+        tapBlockedContentViews.forEach { $0.isUserInteractionEnabled = true }
+        tapBlockedContentViews.removeAll()
+    }
+
     /// Re-applies embed or desktop scaling when the hero host changes size.
     func layoutPreview(in host: UIView) {
         guard !isAdopted, let web = webView, web.superview === host else { return }
@@ -150,6 +184,8 @@ final class WarmWebSession: NSObject {
     /// Returns the web view to the off-screen park host.
     func parkOffscreen() {
         guard !isAdopted, let web = webView else { return }
+        restorePageTouches()
+        web.scrollView.delegate = nil
         web.isUserInteractionEnabled = true
         park(web)
     }
@@ -165,6 +201,7 @@ final class WarmWebSession: NSObject {
         settleWorkItem = nil
         mediaConsumer = nil
         isAdopted = false
+        restorePageTouches()
 
         if let web = webView {
             web.stopLoading()
