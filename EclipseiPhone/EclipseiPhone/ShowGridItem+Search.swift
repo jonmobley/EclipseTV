@@ -23,6 +23,7 @@ extension ShowGridItem {
         case .ptzCamera: return "PTZ Camera"
         case .countdown(let countdown): return countdown.tileTitle()
         case .prompter: return "Prompter"
+        case .template(let card): return card.name
         case .media(let media): return MediaTitleStore.displayTitle(for: media)
         case .website(let page):
             return page.title + " " + (page.url.host ?? page.url.absoluteString)
