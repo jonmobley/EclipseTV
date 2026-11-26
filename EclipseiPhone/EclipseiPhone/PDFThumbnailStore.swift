@@ -74,7 +74,9 @@ final class PDFThumbnailStore {
                 log.error("Could not open PDF for thumbnail")
                 return
             }
-            let size = CGSize(width: 360, height: 480)
+            // Big enough for an iPad tile and the operator's hero (was 360×480,
+            // which looked soft there).
+            let size = CGSize(width: 720, height: 960)
             let image = page.thumbnail(of: size, for: .mediaBox)
             guard let data = image.jpegData(compressionQuality: 0.85) else { return }
             do {
@@ -118,6 +120,7 @@ final class PDFThumbnailStore {
     // MARK: - Paths
 
     private func fileURL(for id: UUID) -> URL {
-        rootDirectory.appendingPathComponent("\(id.uuidString).jpg")
+        // "-v2": larger previews; older small ones are simply rebuilt on read.
+        rootDirectory.appendingPathComponent("\(id.uuidString)-v2.jpg")
     }
 }
