@@ -7,12 +7,13 @@
 
 import UIKit
 
-/// Floating bar at the bottom of the paging home screen: a search field for the
-/// page in front, and Camera.
+/// iOS-style footer for the paging home screen: a glass bar of buttons, Camera and
+/// Search, like a tab bar's.
 ///
-/// It slides away while the page scrolls down and returns on the way back up, and
-/// rides above the keyboard while searching. Home has nothing to search, so there
-/// it is the Camera button alone.
+/// Search turns the bar into the search field for the page in front, with ✕ beside
+/// it, the way the system's search tab does. The bar slides away while the page
+/// scrolls down and returns on the way back up, and rides above the keyboard while
+/// searching. Home has nothing to search, so there it is Camera alone.
 final class HomeFooterBar: UIView {
 
     /// Invoked when the search field takes focus.
@@ -24,16 +25,22 @@ final class HomeFooterBar: UIView {
     /// Invoked by Camera.
     var onOpenCamera: (() -> Void)?
 
-    static let height: CGFloat = 48
+    static let height: CGFloat = 56
 
     let searchField = UISearchTextField()
+    private let bar = HomeFooterBar.makeGlass()
+    private let cancelGlass = HomeFooterBar.makeGlass()
     private let cameraButton = UIButton(type: .system)
+    private let searchButton = UIButton(type: .system)
     private let cancelButton = UIButton(type: .system)
-    private let stack = UIStackView()
+    private let buttonStack = UIStackView()
+    private var idleConstraints: [NSLayoutConstraint] = []
+    private var searchingConstraints: [NSLayoutConstraint] = []
+    private var placeholder = "Search"
 
     /// The page in front can be searched (Library, Music's list, an open Show).
     private(set) var isSearchable = false
-    /// The field has focus or text: the bar must stay up, with ✕ in place of Camera.
+    /// The field is up: the bar must stay, with ✕ beside it.
     private(set) var isSearching = false
     /// Slid away by scrolling.
     private(set) var isScrolledAway = false
@@ -47,25 +54,41 @@ final class HomeFooterBar: UIView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    /// Shows the search field with `placeholder`, or (nil) leaves Camera alone.
+    /// Shows the Search button, with `placeholder` for its field, or (nil) leaves
+    /// Camera alone.
     func setSearch(placeholder: String?) {
         isSearchable = placeholder != nil
         if let placeholder {
+            self.placeholder = placeholder
             searchField.placeholder = placeholder
         }
         applyControls()
     }
 
-    /// Marks a search as under way (focus or text) or over.
+    /// Marks a search as under way (the field is up) or over.
     func setSearching(_ searching: Bool) {
+        guard searching != isSearching else { return }
         isSearching = searching
-        if !searching {
+        if searching {
+            setScrolledAway(false, animated: true)
+        } else {
             searchField.text = ""
             searchField.resignFirstResponder()
-        } else {
-            setScrolledAway(false, animated: true)
         }
-        applyControls()
+        let apply = {
+            self.applyControls()
+            self.layoutIfNeeded()
+        }
+        if window != nil, !UIAccessibility.isReduceMotionEnabled {
+            UIView.animate(
+                withDuration: 0.25,
+                delay: 0,
+                options: [.curveEaseInOut, .beginFromCurrentState],
+                animations: apply
+            )
+        } else {
+            apply()
+        }
     }
 
     /// Slides the bar off the bottom (scrolling down) or back (scrolling up).
@@ -93,14 +116,60 @@ final class HomeFooterBar: UIView {
 
     // MARK: - Setup
 
+    /// Liquid Glass on iOS 26, a blurred material before it.
+    private static func makeGlass() -> UIVisualEffectView {
+        let view: UIVisualEffectView
+        if #available(iOS 26.0, *) {
+            let glass = UIGlassEffect()
+            glass.isInteractive = true
+            view = UIVisualEffectView(effect: glass)
+        } else {
+            view = UIVisualEffectView(effect: UIBlurEffect(style: .systemThinMaterial))
+        }
+        view.layer.cornerRadius = height / 2
+        view.layer.cornerCurve = .continuous
+        view.clipsToBounds = true
+        view.translatesAutoresizingMaskIntoConstraints = false
+        return view
+    }
+
     private func setup() {
         accessibilityIdentifier = "home.footer"
+        addSubview(bar)
+        addSubview(cancelGlass)
+
+        configureItem(
+            cameraButton,
+            systemName: ThumbnailTypeIcon.camera.systemName,
+            title: "Camera"
+        )
+        cameraButton.accessibilityHint =
+            "Opens the camera. Nothing goes to the TV until you tap the picture."
+        cameraButton.accessibilityIdentifier = "home.camera"
+        cameraButton.addAction(UIAction { [weak self] _ in
+            self?.onOpenCamera?()
+        }, for: .touchUpInside)
+
+        configureItem(searchButton, systemName: "magnifyingglass", title: "Search")
+        searchButton.accessibilityIdentifier = "home.search"
+        searchButton.addAction(UIAction { [weak self] _ in
+            self?.searchField.becomeFirstResponder()
+        }, for: .touchUpInside)
+
+        buttonStack.axis = .horizontal
+        buttonStack.distribution = .fillEqually
+        buttonStack.spacing = 0
+        buttonStack.translatesAutoresizingMaskIntoConstraints = false
+        buttonStack.addArrangedSubview(cameraButton)
+        buttonStack.addArrangedSubview(searchButton)
+        bar.contentView.addSubview(buttonStack)
 
         searchField.translatesAutoresizingMaskIntoConstraints = false
         searchField.autocapitalizationType = .none
         searchField.autocorrectionType = .no
         searchField.returnKeyType = .search
-        searchField.backgroundColor = .secondarySystemBackground
+        searchField.backgroundColor = .clear
+        searchField.borderStyle = .none
         searchField.accessibilityIdentifier = "home.search.field"
         searchField.addAction(UIAction { [weak self] _ in
             self?.onBeginSearch?()
@@ -120,81 +189,109 @@ final class HomeFooterBar: UIView {
             }
             self.onCancelSearch?()
         }, for: .editingDidEnd)
+        bar.contentView.addSubview(searchField)
 
-        configureRound(
-            cameraButton,
-            systemName: ThumbnailTypeIcon.camera.systemName,
-            label: "Camera"
+        var cancelConfig = UIButton.Configuration.plain()
+        cancelConfig.image = UIImage(
+            systemName: "xmark",
+            withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .semibold)
         )
-        cameraButton.accessibilityHint =
-            "Opens the camera. Nothing goes to the TV until you tap the picture."
-        cameraButton.accessibilityIdentifier = "home.camera"
-        cameraButton.addAction(UIAction { [weak self] _ in
-            self?.onOpenCamera?()
-        }, for: .touchUpInside)
-
-        configureRound(cancelButton, systemName: "xmark", label: "Cancel search")
+        cancelConfig.baseForegroundColor = .label
+        cancelButton.configuration = cancelConfig
+        cancelButton.accessibilityLabel = "Cancel search"
+        cancelButton.translatesAutoresizingMaskIntoConstraints = false
         cancelButton.addAction(UIAction { [weak self] _ in
             self?.onCancelSearch?()
         }, for: .touchUpInside)
+        cancelGlass.contentView.addSubview(cancelButton)
 
-        stack.axis = .horizontal
-        stack.alignment = .fill
-        stack.spacing = 10
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        stack.addArrangedSubview(searchField)
-        stack.addArrangedSubview(cameraButton)
-        stack.addArrangedSubview(cancelButton)
-        addSubview(stack)
+        // Idle: the bar hugs its buttons. Searching: it stretches for the field,
+        // up to ✕ (and stops short on a wide screen).
+        idleConstraints = [
+            bar.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor)
+        ]
+        let stretch = bar.trailingAnchor.constraint(
+            equalTo: cancelGlass.leadingAnchor, constant: -10
+        )
+        stretch.priority = .defaultHigh
+        searchingConstraints = [
+            stretch,
+            bar.widthAnchor.constraint(lessThanOrEqualToConstant: 420),
+            bar.widthAnchor.constraint(greaterThanOrEqualToConstant: 160),
+            cancelGlass.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor)
+        ]
+        let hug = bar.widthAnchor.constraint(equalTo: buttonStack.widthAnchor, constant: 12)
+        hug.priority = .defaultLow
+        let pinCancel = cancelGlass.trailingAnchor.constraint(equalTo: trailingAnchor)
+        pinCancel.priority = .defaultLow
 
         NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: leadingAnchor),
-            stack.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor),
-            stack.topAnchor.constraint(equalTo: topAnchor),
-            stack.bottomAnchor.constraint(equalTo: bottomAnchor),
             heightAnchor.constraint(equalToConstant: Self.height),
-            // On a wide screen the field stops short and Camera stays beside it.
-            searchField.widthAnchor.constraint(lessThanOrEqualToConstant: 340),
-            cameraButton.widthAnchor.constraint(equalToConstant: Self.height),
-            cancelButton.widthAnchor.constraint(equalToConstant: Self.height)
+            bar.leadingAnchor.constraint(equalTo: leadingAnchor),
+            bar.topAnchor.constraint(equalTo: topAnchor),
+            bar.bottomAnchor.constraint(equalTo: bottomAnchor),
+            hug,
+
+            buttonStack.leadingAnchor.constraint(equalTo: bar.contentView.leadingAnchor, constant: 6),
+            buttonStack.topAnchor.constraint(equalTo: bar.contentView.topAnchor),
+            buttonStack.bottomAnchor.constraint(equalTo: bar.contentView.bottomAnchor),
+            cameraButton.widthAnchor.constraint(equalToConstant: 78),
+
+            searchField.leadingAnchor.constraint(equalTo: bar.contentView.leadingAnchor, constant: 18),
+            searchField.trailingAnchor.constraint(equalTo: bar.contentView.trailingAnchor, constant: -14),
+            searchField.topAnchor.constraint(equalTo: bar.contentView.topAnchor),
+            searchField.bottomAnchor.constraint(equalTo: bar.contentView.bottomAnchor),
+
+            cancelGlass.topAnchor.constraint(equalTo: topAnchor),
+            cancelGlass.bottomAnchor.constraint(equalTo: bottomAnchor),
+            cancelGlass.widthAnchor.constraint(equalToConstant: Self.height),
+            pinCancel,
+            cancelButton.leadingAnchor.constraint(equalTo: cancelGlass.contentView.leadingAnchor),
+            cancelButton.trailingAnchor.constraint(equalTo: cancelGlass.contentView.trailingAnchor),
+            cancelButton.topAnchor.constraint(equalTo: cancelGlass.contentView.topAnchor),
+            cancelButton.bottomAnchor.constraint(equalTo: cancelGlass.contentView.bottomAnchor)
         ])
-        // The field takes the room; without it the bar is just the button.
-        searchField.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        let fill = stack.trailingAnchor.constraint(equalTo: trailingAnchor)
-        fill.priority = .defaultHigh
-        fill.isActive = true
         applyControls()
     }
 
-    private func configureRound(_ button: UIButton, systemName: String, label: String) {
-        var config = UIButton.Configuration.filled()
+    /// A tab-bar style button: symbol over a small label.
+    private func configureItem(_ button: UIButton, systemName: String, title: String) {
+        var config = UIButton.Configuration.plain()
         config.image = UIImage(
             systemName: systemName,
-            withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .medium)
+            withConfiguration: UIImage.SymbolConfiguration(pointSize: 19, weight: .medium)
         )
-        config.baseBackgroundColor = .secondarySystemBackground
+        config.title = title
+        config.imagePlacement = .top
+        config.imagePadding = 3
         config.baseForegroundColor = .label
-        config.cornerStyle = .capsule
+        config.contentInsets = NSDirectionalEdgeInsets(top: 4, leading: 4, bottom: 4, trailing: 4)
+        config.titleTextAttributesTransformer =
+            UIConfigurationTextAttributesTransformer { incoming in
+                var outgoing = incoming
+                outgoing.font = .systemFont(ofSize: 10, weight: .medium)
+                return outgoing
+            }
         button.configuration = config
-        button.accessibilityLabel = label
+        button.accessibilityLabel = title
         button.translatesAutoresizingMaskIntoConstraints = false
     }
 
     private func applyControls() {
-        searchField.isHidden = !isSearchable
-        cancelButton.isHidden = !(isSearchable && isSearching)
-        cameraButton.isHidden = isSearchable && isSearching
+        searchButton.isHidden = !isSearchable
+        buttonStack.isHidden = isSearching
+        buttonStack.alpha = isSearching ? 0 : 1
+        searchField.isHidden = !isSearching
+        cancelGlass.isHidden = !isSearching
+        NSLayoutConstraint.deactivate(idleConstraints + searchingConstraints)
+        NSLayoutConstraint.activate(isSearching ? searchingConstraints : idleConstraints)
     }
 
-    /// Only the controls take touches: beside a lone Camera button the page shows
-    /// through and stays tappable.
+    /// Only the glass takes touches; the page beside it shows through and stays
+    /// tappable.
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
-        for view in [searchField, cameraButton, cancelButton] where !view.isHidden {
-            if view.frame.insetBy(dx: -4, dy: -4).contains(
-                convert(point, to: stack)
-            ) {
-                return true
-            }
+        for view in [bar, cancelGlass] where !view.isHidden {
+            if view.frame.contains(point) { return true }
         }
         return false
     }

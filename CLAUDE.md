@@ -256,8 +256,9 @@
   and swaps its right-hand buttons by page (`setTabPage`): Music gets "+", and Library and Music hide their
   own navigation bar at the root (`HomeTabPageNavigationController`; it returns for a playlist or reordering).
   The dropdown says "Eclipse" on Home (no "Home": that is a tab) and has no Library / Music entries or back chevron there.
-  Search and Camera live in a floating bar at the bottom, beside the Music button (`HomeFooterBar`, 2026-11-25; the owner
-  did not want them in the tab row). It slides away while a page scrolls down and returns on the way up or at the top
+  Search and Camera are buttons in an iOS-style glass footer, beside the Music button (`HomeFooterBar`, 2026-11-25; the
+  owner did not want them in the tab row, and asked for buttons like the Showtime app's tab bar, not an always-on field).
+  Search turns the bar into the search field with ✕ beside it. The bar slides away while a page scrolls down and returns on the way up or at the top
   (`HomeFooterScroll`, driven by watching each page's scroll position), and rides above the keyboard. Camera is on every
   page and opens the full-screen camera (`presentCameraLive`). The search field shows on Library, Music's list and an open
   Show and filters the page in front by name (`beginPageSearch` / `endPageSearch`): Show cards (`ShowGridItem.searchTitle`,
