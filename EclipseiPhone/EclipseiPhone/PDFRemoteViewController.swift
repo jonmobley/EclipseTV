@@ -19,15 +19,17 @@ import PDFKit
 /// thumbnail ribbon sit beneath it for multi-page documents. Closing dismisses
 /// the phone UI only — AirPlay stays live via `livePDFDocumentId`.
 ///
-/// Scroll/zoom stay on PDFKit; we observe offset via KVO so we never replace
-/// `PDFView`'s scroll-view delegate (which would break pinch-zoom).
+/// The page itself, its presets (Fit / Fill / Two Pages, top right), page-by-page
+/// scrolling and the pinch catch live in `PDFReaderDriver`, shared with the
+/// Show hero; while the reader is open its driver is the one the TV follows.
 final class PDFRemoteViewController: UIViewController {
 
     // MARK: - Properties
 
     let document: SavedPDF
     private let fileURL: URL
-    private var pdfView: PDFView?
+    private var driver: PDFReaderDriver?
+    private var pdfView: PDFView? { driver?.pdfView }
     /// Display-only copy of the document behind the frame, kept aligned with
     /// `pdfView` so the page around the audience frame shows dimmed.
     private var contextPDFView: PDFView?
@@ -35,23 +37,9 @@ final class PDFRemoteViewController: UIViewController {
     private var stageView: PDFReaderStageView?
     private var panelView: UIView?
     private let pageRibbon = PDFPageRibbonView()
+    private let optionsBar = PDFViewOptionsBar(buttonSize: 32)
     private var ribbonHeight: NSLayoutConstraint?
     private var lastPanelFrame: CGRect = .zero
-    private var offsetObservation: NSKeyValueObservation?
-    private weak var observedScrollView: UIScrollView?
-    private var isSyncingScroll = false
-    /// Snap sizes for the pinch in progress (page fills the frame's width / height).
-    private var pinchSnapTargets: [CGFloat] = []
-    /// The snap size the pinch is currently holding on, if any.
-    private var heldSnapScale: CGFloat?
-    /// Zoom and finger spread when the pinch began, and the latest spread.
-    private var pinchStartScale: CGFloat = 0
-    private var pinchStartSpan: CGFloat = 0
-    private var pinchSpan: CGFloat = 0
-    /// Whether this pinch has held on a snap size; from then on the reader steers
-    /// the zoom by finger spread (see `PDFZoomSnap.fingerScale`).
-    private var pinchHasHeld = false
-    private let snapHaptic = UIImpactFeedbackGenerator(style: .light)
 
     // MARK: - Init
 
@@ -89,6 +77,11 @@ final class PDFRemoteViewController: UIViewController {
         ExternalDisplayManager.shared.refreshConnection()
     }
 
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        driver?.becomeActive()
+    }
+
     /// Turns with the phone: the audience frame keeps the output shape either way,
     /// so a turned phone just gives the framed page more room.
     override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
@@ -99,6 +92,8 @@ final class PDFRemoteViewController: UIViewController {
         super.viewDidDisappear(animated)
         guard isBeingDismissed || isMovingFromParent
             || navigationController?.isBeingDismissed == true else { return }
+        // The hero takes back over from where the reader left the page.
+        driver?.resignActive()
         // Put the grid behind it back upright if the reader was read sideways.
         restoreUprightSceneGeometry()
     }
@@ -106,11 +101,10 @@ final class PDFRemoteViewController: UIViewController {
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         layoutPhonePDFViewport(force: false)
-        observeScrollViewIfNeeded()
+        stageView?.forwardingTarget = pdfView?.eclipse_scrollView
     }
 
     deinit {
-        offsetObservation?.invalidate()
         NotificationCenter.default.removeObserver(self)
     }
 
@@ -175,44 +169,52 @@ final class PDFRemoteViewController: UIViewController {
     private func setupPDFView() {
         let stage = setupStageAndRibbon()
 
-        let pdf = PDFView()
-        pdf.displayMode = .singlePageContinuous
-        pdf.displayDirection = .vertical
-        pdf.autoScales = true
-        pdf.backgroundColor = .black
-        pdf.isUserInteractionEnabled = true
-        pdf.usePageViewController(false)
-        stage.addSubview(pdf)
-        pdfView = pdf
-
-        guard let document = PDFDocument(url: fileURL), document.pageCount > 0 else {
+        guard let pdfDocument = PDFDocument(url: fileURL), pdfDocument.pageCount > 0 else {
             DispatchQueue.main.async { [weak self] in
                 self?.presentPDFOpenFailure()
             }
             return
         }
-        pdf.document = document
-        configureRibbon(for: document, pdf: pdf)
+        // Drives the TV only when this is the PDF on it; otherwise a private Preview.
+        let mgr = ExternalDisplayManager.shared
+        let drives = mgr.isPDFLive && mgr.livePDFDocumentId == document.id
+        let driver = PDFReaderDriver(document: pdfDocument, documentId: document.id, drivesOutput: drives)
+        self.driver = driver
+        driver.onChange = { [weak self] in
+            guard let self, let pdf = self.pdfView else { return }
+            self.alignContextView()
+            self.pageRibbon.refreshCounter(from: pdf)
+            self.stageView?.forwardingTarget = pdf.eclipse_scrollView
+        }
+        driver.onOptionsChange = { [weak self] in self?.syncOptionsBar() }
+        optionsBar.onPreset = { [weak self] preset in self?.driver?.apply(preset) }
+        optionsBar.onToggleSnap = { [weak self] in
+            guard let driver = self?.driver else { return }
+            driver.setSnapsToPages(!driver.state.snapsToPages)
+        }
+        syncOptionsBar()
+        configureRibbon(for: pdfDocument, pdf: driver.pdfView)
 
-        let context = makeContextPDFView(for: document)
+        let context = makeContextPDFView(for: pdfDocument)
         stage.insertSubview(context, at: 0)
         contextPDFView = context
         frameOverlay.translatesAutoresizingMaskIntoConstraints = true
         frameOverlay.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         stage.addSubview(frameOverlay)
 
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(pdfViewChanged),
-            name: .PDFViewScaleChanged,
-            object: pdf
-        )
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(pdfViewChanged),
-            name: .PDFViewPageChanged,
-            object: pdf
-        )
+        // Top right over the page, as in the Show hero. (In the navigation bar,
+        // iOS 26's bar glass repainted the lit buttons as blank white blobs.)
+        optionsBar.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(optionsBar)
+        NSLayoutConstraint.activate([
+            optionsBar.topAnchor.constraint(equalTo: stage.topAnchor, constant: 8),
+            optionsBar.trailingAnchor.constraint(equalTo: stage.trailingAnchor, constant: -12)
+        ])
+    }
+
+    private func syncOptionsBar() {
+        guard let driver else { return }
+        optionsBar.update(preset: driver.state.preset, snapsToPages: driver.state.snapsToPages)
     }
 
     private func presentPDFOpenFailure() {
@@ -228,18 +230,10 @@ final class PDFRemoteViewController: UIViewController {
         present(alert, animated: true)
     }
 
-    @objc private func pdfViewChanged() {
-        observeScrollViewIfNeeded()
-        alignContextView()
-        if let pdfView { pageRibbon.refreshCounter(from: pdfView) }
-        pushPageIndex()
-        pushSyncState()
-    }
-
-    /// Fits the PDF into the reader viewport. Skips when the viewport is unchanged
+    /// Sizes the audience frame for the stage. Skips when the frame is unchanged
     /// so layout passes don't reset the user's zoom.
     private func layoutPhonePDFViewport(force: Bool) {
-        guard let stage = stageView, let pdf = pdfView else { return }
+        guard let stage = stageView, let driver else { return }
         let bounds = stage.bounds
         guard bounds.width > 0, bounds.height > 0 else { return }
 
@@ -253,7 +247,6 @@ final class PDFRemoteViewController: UIViewController {
             host.clipsToBounds = true
             stage.insertSubview(host, belowSubview: frameOverlay)
             panelView = host
-            host.addSubview(pdf)
         }
         panelView?.frame = panel
         guard let panelView else { return }
@@ -261,140 +254,10 @@ final class PDFRemoteViewController: UIViewController {
         frameOverlay.frameRect = panel
         stage.panelRect = panel
         contextPDFView?.frame = PDFReaderViewportLayout.contextRect(for: panel, in: bounds)
-
-        PresentationViewController.applyRotatedLayout(
-            to: pdf, in: panelView, scale: 1, rotationDegrees: 0
-        )
-
-        // Fit once for the new panel size, then allow pinch beyond fit.
-        pdf.autoScales = true
-        let fit = max(pdf.scaleFactorForSizeToFit, 0.01)
-        pdf.minScaleFactor = fit * 0.5
-        pdf.maxScaleFactor = fit * 5
-        observeScrollViewIfNeeded()
+        driver.layout(in: panelView)
+        stageView?.forwardingTarget = driver.pdfView.eclipse_scrollView
         alignContextView()
-        pageRibbon.refreshCounter(from: pdf)
-        pushPageIndex()
-        pushSyncState()
-    }
-
-    /// Watches scroll offset without becoming the scroll view's delegate.
-    private func observeScrollViewIfNeeded() {
-        guard let scroll = pdfView?.eclipse_scrollView else { return }
-        if observedScrollView === scroll { return }
-        offsetObservation?.invalidate()
-        observedScrollView = scroll
-        stageView?.forwardingTarget = scroll
-        // Added after the scroll view's own handler, so it sees the zoom the
-        // scroll view just applied and can hold it on a snap size.
-        scroll.pinchGestureRecognizer?.addTarget(self, action: #selector(pinchChanged(_:)))
-        offsetObservation = scroll.observe(\.contentOffset, options: [.new]) { [weak self] _, _ in
-            guard let self else { return }
-            self.alignContextView()
-            guard !self.isSyncingScroll else { return }
-            self.pushSyncState()
-        }
-    }
-
-    // MARK: - Zoom snap
-
-    /// Makes the pinch catch where the page exactly fills the audience frame's
-    /// width or height: within `PDFZoomSnap.holdBand` of one, the zoom holds there
-    /// (with a light tap) until the pinch moves well past it.
-    ///
-    /// Holding sets the zoom, and the scroll view then pinches on from the held
-    /// zoom, so a slow pinch would never get out of the band. Once a pinch has
-    /// held, the zoom therefore follows the fingers' spread instead.
-    @objc private func pinchChanged(_ pinch: UIPinchGestureRecognizer) {
-        guard let pdf = pdfView, let scroll = pdf.eclipse_scrollView else { return }
-        switch pinch.state {
-        case .began:
-            pinchSnapTargets = currentSnapTargets()
-            heldSnapScale = nil
-            pinchHasHeld = false
-            pinchStartScale = pdf.scaleFactor
-            pinchStartSpan = fingerSpan(of: pinch) ?? 0
-            pinchSpan = pinchStartSpan
-            snapHaptic.prepare()
-        case .changed:
-            if let span = fingerSpan(of: pinch) { pinchSpan = span }
-            let fingers = PDFZoomSnap.fingerScale(
-                startScale: pinchStartScale,
-                startSpan: pinchStartSpan,
-                span: pinchSpan,
-                range: pdf.minScaleFactor...pdf.maxScaleFactor
-            ) ?? pdf.scaleFactor
-            let target = PDFZoomSnap.target(for: fingers, in: pinchSnapTargets)
-            if let target, target != heldSnapScale {
-                snapHaptic.impactOccurred()
-                snapHaptic.prepare()
-            }
-            heldSnapScale = target
-            if let target {
-                pinchHasHeld = true
-                hold(scroll, pdf: pdf, atScale: target, around: pinch)
-            } else if pinchHasHeld {
-                hold(scroll, pdf: pdf, atScale: fingers, around: pinch)
-            }
-        default:
-            if let held = heldSnapScale, pinch.state == .ended {
-                hold(scroll, pdf: pdf, atScale: held, around: pinch)
-            }
-            heldSnapScale = nil
-            pinchHasHeld = false
-            pinchSnapTargets = []
-        }
-    }
-
-    /// Distance between the two fingers, or `nil` while fewer than two are down.
-    private func fingerSpan(of pinch: UIPinchGestureRecognizer) -> CGFloat? {
-        guard pinch.numberOfTouches >= 2 else { return nil }
-        let a = pinch.location(ofTouch: 0, in: view)
-        let b = pinch.location(ofTouch: 1, in: view)
-        return hypot(a.x - b.x, a.y - b.y)
-    }
-
-    /// Snap sizes for the current page against the audience frame.
-    private func currentSnapTargets() -> [CGFloat] {
-        guard let pdf = pdfView, let panelView,
-              let page = pdf.currentPage ?? pdf.document?.page(at: 0),
-              pdf.scaleFactor > 0 else { return [] }
-        let drawn = pdf.convert(page.bounds(for: pdf.displayBox), from: page)
-        let atScaleOne = CGSize(
-            width: drawn.width / pdf.scaleFactor,
-            height: drawn.height / pdf.scaleFactor
-        )
-        return PDFZoomSnap.targets(
-            pageSizeAtScaleOne: atScaleOne,
-            container: panelView.bounds.size,
-            range: pdf.minScaleFactor...pdf.maxScaleFactor
-        )
-    }
-
-    /// Sets the zoom to `scale` while keeping the content under the fingers in place.
-    private func hold(
-        _ scroll: UIScrollView,
-        pdf: PDFView,
-        atScale scale: CGFloat,
-        around pinch: UIPinchGestureRecognizer
-    ) {
-        let current = pdf.scaleFactor
-        guard current > 0, abs(current - scale) > 0.0001,
-              let content = scroll.delegate?.viewForZooming?(in: scroll) else { return }
-        let anchor = pinch.location(in: scroll)
-        let anchorInContent = scroll.convert(anchor, to: content)
-        scroll.setZoomScale(scroll.zoomScale * scale / current, animated: false)
-        let moved = content.convert(anchorInContent, to: scroll)
-        var offset = scroll.contentOffset
-        offset.x += moved.x - anchor.x
-        offset.y += moved.y - anchor.y
-        let minX = -scroll.adjustedContentInset.left
-        let minY = -scroll.adjustedContentInset.top
-        let maxX = max(minX, scroll.contentSize.width - scroll.bounds.width + scroll.adjustedContentInset.right)
-        let maxY = max(minY, scroll.contentSize.height - scroll.bounds.height + scroll.adjustedContentInset.bottom)
-        offset.x = min(max(offset.x, minX), maxX)
-        offset.y = min(max(offset.y, minY), maxY)
-        scroll.contentOffset = offset
+        pageRibbon.refreshCounter(from: driver.pdfView)
     }
 
     /// Keeps the dimmed page behind the frame lined up with the framed page:
@@ -406,6 +269,10 @@ final class PDFRemoteViewController: UIViewController {
               let panelView,
               let scroll = pdf.eclipse_scrollView,
               let contextScroll = context.eclipse_scrollView else { return }
+        if context.displayMode != pdf.displayMode {
+            context.displayMode = pdf.displayMode
+            context.layoutDocumentView()
+        }
         if abs(context.scaleFactor - pdf.scaleFactor) > 0.0001 {
             context.minScaleFactor = min(pdf.minScaleFactor, pdf.scaleFactor)
             context.maxScaleFactor = max(pdf.maxScaleFactor, pdf.scaleFactor)
@@ -425,25 +292,6 @@ final class PDFRemoteViewController: UIViewController {
         guard abs(dx) > 0.5 || abs(dy) > 0.5 else { return }
         contextScroll.contentOffset.x += dx
         contextScroll.contentOffset.y += dy
-    }
-
-    // MARK: - Sync
-
-    private func pushPageIndex() {
-        guard let pdf = pdfView,
-              let page = pdf.currentPage,
-              let doc = pdf.document else { return }
-        ExternalDisplayManager.shared.setPDFPageIndex(doc.index(for: page))
-    }
-
-    private func pushSyncState() {
-        guard let pdf = pdfView, let scroll = pdf.eclipse_scrollView else { return }
-        let maxY = scroll.contentSize.height - scroll.bounds.height
-        let progress = maxY > 0 ? min(max(scroll.contentOffset.y / maxY, 0), 1) : 0
-        let fit = max(pdf.scaleFactorForSizeToFit, 0.01)
-        let relative = pdf.scaleFactor / fit
-        ExternalDisplayManager.shared.setPDFScrollProgress(progress)
-        ExternalDisplayManager.shared.setPDFRelativeScale(relative)
     }
 
     // MARK: - Actions

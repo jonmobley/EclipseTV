@@ -19,6 +19,7 @@ extension LiveHeaderView {
     func showPTZPreview() {
         titleLabel.isHidden = true
         clearWebPreview(parking: true)
+        clearPDFPreview()
         clearScreensaverPreview()
         clearCameraPreview()
         if viewWithTag(Self.ptzPreviewTag) == nil {

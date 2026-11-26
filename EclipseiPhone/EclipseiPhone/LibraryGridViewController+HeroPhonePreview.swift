@@ -128,13 +128,19 @@ extension LibraryGridViewController {
             liveHeader.allowsFullscreenTap = true
             liveHeader.updatePlayback(PlaybackState())
         case .pdf(let doc):
+            let fileURL = PDFStore.shared.fileURL(for: doc.id)
             liveHeader.configureOverlay(
                 title: doc.title,
                 systemImage: ThumbnailTypeIcon.pdf.systemName,
                 fillColor: .mediaPlaceholder,
                 thumbnail: PDFThumbnailStore.shared.image(for: doc.id),
+                keepPDFPreview: fileURL != nil,
                 showsLiveBadge: true
             )
+            // Readable in place; a private Preview never moves the TV.
+            if let fileURL {
+                liveHeader.showPDFPreview(documentId: doc.id, fileURL: fileURL, drivesOutput: false)
+            }
             liveHeader.allowsFullscreenTap = true
             liveHeader.updatePlayback(PlaybackState())
         case .logo:

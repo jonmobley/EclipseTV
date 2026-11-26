@@ -30,6 +30,7 @@ extension LiveHeaderView {
             return
         }
         clearWebPreview(parking: true)
+        clearPDFPreview()
         clearScreensaverPreview()
         ensureCameraPreviewHost()
         guard let host = cameraPreviewHost, let preview = cameraPreview else { return }

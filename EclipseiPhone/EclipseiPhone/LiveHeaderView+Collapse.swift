@@ -55,6 +55,7 @@ extension LiveHeaderView {
                 expand.isHidden = hideExpand
             }
         }
+        applyPDFPreviewCollapse(controlsFade: controlsFade)
         if let ribbon = slideshowRibbonButton {
             ribbon.alpha = controlsFade
             let hideRibbon = controlsFade <= 0.01

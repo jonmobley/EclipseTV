@@ -60,6 +60,7 @@ extension LiveHeaderView {
 
         clearLibraryVideoPreview()
         clearWebPreview(parking: true)
+        clearPDFPreview()
         clearScreensaverPreview()
         clearCameraPreview()
 

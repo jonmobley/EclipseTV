@@ -30,6 +30,7 @@ extension LiveHeaderView {
             // (the Screensaver poster, or an empty hero) instead of the frame
             // the operator was actually looking at.
             self.clearWebPreview(parking: true)
+            self.clearPDFPreview()
             self.clearScreensaverPreview()
             self.clearCameraPreview()
             self.clearLibraryVideoPreview()
