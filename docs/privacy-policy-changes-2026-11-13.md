@@ -1,4 +1,9 @@
-# Privacy policy: proposed changes (draft, owner decides)
+# Privacy policy: changes (published 2026-11-23)
+
+Published on moxieapps.io/eclipse/privacy on 2026-11-23 (moxie-site commit on main): items 1, 2, 5, 6,
+plus two services the draft missed: the Mac Announcer sends typed text to Anthropic (scripts) and
+ElevenLabs (voice). Item 3 (album codes) kept as is. Item 4 written for the Announcer, which is what
+"Create" turned out to be. The App Privacy answers below still need checking in App Store Connect.
 
 Page: https://moxieapps.io/eclipse/privacy (source: `moxie-site/src/content/apps/eclipse.json`,
 last updated October 19, 2026). Checked against the iPhone 1.0 prep branch on 2026-11-13.

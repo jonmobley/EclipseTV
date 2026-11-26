@@ -252,7 +252,7 @@ extension LibraryGridViewController {
         if TVLibraryStore.shared.isOnline {
             message = "Countdown needs AirPlay or HDMI. EclipseTV stays on the library."
         } else {
-            message = "Countdown needs AirPlay, HDMI, or Practice Mode."
+            message = "Open a Show to use the Countdown."
         }
         let alert = UIAlertController(
             title: "Countdown", message: message, preferredStyle: .alert

@@ -10,15 +10,19 @@ import UIKit
 // MARK: - Live Presence
 
 extension LibraryGridViewController {
-    /// Open Show asked to show the live preview hero with no AirPlay / HDMI / EclipseTV.
+    /// Practice Mode: an open Show always rehearses with no AirPlay / HDMI /
+    /// EclipseTV (live hero, Lock / Blackout), the way the Mac always shows its
+    /// program. It used to be a per-Show switch; the owner made it permanent
+    /// (2026-11-25). Home has no live hero, so it stays off there.
     var prefersDisconnectedLivePreview: Bool {
-        isShowMode && (openShow?.previewsWhenDisconnected == true)
+        isShowMode
     }
 
-    /// Tap marks live (red) when AirPlay, EclipseTV, or Practice Mode is on.
+    /// Tap marks live when AirPlay, EclipseTV, Practice Mode (any open Show) or a
+    /// remote director is available.
     ///
-    /// Otherwise the Show is Preview-only: no live hero, and taps open the
-    /// on-device gallery / browser instead of going live.
+    /// Otherwise (Home with nothing connected) taps open the on-device gallery /
+    /// browser instead of going live.
     var hasLiveOutputDestination: Bool {
         LiveOutputRouting.canMarkLive(practiceMode: prefersDisconnectedLivePreview)
     }

@@ -35,7 +35,6 @@ extension LibraryGridViewController {
             ?? (isBlackSelected && !mgr.isOverlayLive)
         onBlackLiveChanged?(blackLive)
         onLiveOutputLockChanged?(isLiveOutputLocked)
-        onLivePollPhoneHeroChanged?(isLivePollPhoneHeroActive)
         liveHeader.setOutputLocked(isLiveOutputLocked)
         guard showsLiveHero else {
             // Never leave a Show-mode live preview over the Home marketing carousel.

@@ -24,7 +24,6 @@ extension iPhoneMainViewController {
         // With the text tabs showing, Home is a tab; the menu is the app's own.
         let homeTitle = isHomeTabPaging ? "Eclipse" : "Home"
         headerBar.setCenterTitle(openShow?.name ?? homeTitle, subtitle: subtitle)
-        headerBar.setPreviewsWhenDisconnected(openShow?.previewsWhenDisconnected ?? false)
         headerBar.setShowModeChrome(openShow != nil)
         headerBar.setNavSelection(
             HomeHeaderNavSelection(

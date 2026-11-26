@@ -98,10 +98,8 @@ extension CameraLiveViewController {
     /// A TV (AirPlay or Apple TV), Practice Mode or a remote operator can take
     /// the camera live; with none of them the stage is only a viewfinder.
     var canGoLiveFromCamera: Bool {
-        let practice = captureDestinationShowId.flatMap {
-            LocalAlbumStore.shared.album(id: $0)?.previewsWhenDisconnected
-        } ?? false
-        return LiveOutputRouting.canMarkLive(practiceMode: practice)
+        // Practice Mode is always on inside a Show; Camera opened from Home has none.
+        LiveOutputRouting.canMarkLive(practiceMode: captureDestinationShowId != nil)
     }
 
     /// Blink the panel and save a still to Photos (and the Eclipse library).

@@ -542,9 +542,6 @@ extension iPhoneMainViewController: UIScrollViewDelegate {
         libraryViewController.onLiveOutputLockChanged = { [weak self] locked in
             self?.headerBar.setLiveLocked(locked)
         }
-        libraryViewController.onLivePollPhoneHeroChanged = { [weak self] active in
-            self?.headerBar.setLivePollOwnsPhoneHero(active)
-        }
         libraryViewController.onStatusMessage = { [weak self] message in
             self?.showPresentationToast(message)
         }

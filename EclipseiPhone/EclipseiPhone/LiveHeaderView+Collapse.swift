@@ -42,14 +42,14 @@ extension LiveHeaderView {
 
         // Transport is unusable long before the hero is fully tucked.
         let controlsFade = max(0, 1 - progress * 2.5)
-        controls.alpha = controlsFade
+        controls.alpha = controlsFade * transportChromeVisibility
         // Assign `isHidden` only on change — this runs inside layout passes.
         let hideControls = !wantsPlaybackControls || controlsFade <= 0.01
         if controls.isHidden != hideControls {
             controls.isHidden = hideControls
         }
         if let expand = heroExpandButton {
-            expand.alpha = controlsFade
+            expand.alpha = controlsFade * transportChromeVisibility
             let hideExpand = controlsFade <= 0.01
             if expand.isHidden != hideExpand {
                 expand.isHidden = hideExpand
@@ -90,7 +90,7 @@ extension LiveHeaderView {
                 capture.isHidden = hideCapture
             }
         }
-        gradientLayer.opacity = Float(controlsFade)
+        gradientLayer.opacity = Float(controlsFade * transportChromeVisibility)
         titleLabel.alpha = max(0, 1 - progress * 2)
         countdownClockLabel.alpha = max(0, 1 - progress * 2)
         prompterLinesView.alpha = max(0, 1 - progress * 2)

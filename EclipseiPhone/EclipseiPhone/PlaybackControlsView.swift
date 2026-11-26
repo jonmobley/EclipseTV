@@ -21,6 +21,12 @@ final class PlaybackControlsView: UIView {
     var onSkip: ((Double) -> Void)?
     /// Absolute seek target in seconds (fired when the user finishes scrubbing).
     var onSeek: ((Double) -> Void)?
+    /// Any button press or finished scrub, so a host that hides the transport can
+    /// keep it up while it is being used.
+    var onUserActivity: (() -> Void)?
+
+    /// True while a finger is on the scrubber.
+    var isUserInteracting: Bool { isScrubbing }
 
     // MARK: - Subviews
 
@@ -162,14 +168,17 @@ final class PlaybackControlsView: UIView {
     @objc private func playPauseTapped() {
         Haptics.impactLight()
         onTogglePlayPause?()
+        onUserActivity?()
     }
 
     @objc private func skipBackTapped() {
         onSkip?(-skipInterval)
+        onUserActivity?()
     }
 
     @objc private func skipForwardTapped() {
         onSkip?(skipInterval)
+        onUserActivity?()
     }
 
     @objc private func sliderTouchDown() {
@@ -188,6 +197,7 @@ final class PlaybackControlsView: UIView {
         anchorTimestamp = CACurrentMediaTime()
         onSeek?(target)
         updateInterpolation()
+        onUserActivity?()
     }
 
     // MARK: - State Updates

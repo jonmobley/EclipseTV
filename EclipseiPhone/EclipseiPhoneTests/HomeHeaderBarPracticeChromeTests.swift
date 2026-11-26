@@ -9,21 +9,13 @@ import Testing
 import UIKit
 @testable import EclipseiPhone
 
+/// Practice Mode is always on (2026-11-25): every open Show offers Lock and
+/// Blackout, connected or not, and Home never does.
 @MainActor
 struct HomeHeaderBarPracticeChromeTests {
 
-    @Test func lockAndBlackoutHiddenWhenDisconnectedAndPracticeOff() {
+    @Test func lockAndBlackoutShowInAShowWithNothingConnected() {
         let bar = HomeHeaderBar(frame: CGRect(x: 0, y: 0, width: 390, height: 52))
-        bar.setPreviewsWhenDisconnected(false)
-        bar.setShowModeChrome(true)
-        bar.setPresenting(false)
-        bar.setConnectionState(.paused)
-        #expect(bar.showsLiveOutputChrome == false)
-    }
-
-    @Test func lockAndBlackoutShowWhenPracticeIsOn() {
-        let bar = HomeHeaderBar(frame: CGRect(x: 0, y: 0, width: 390, height: 52))
-        bar.setPreviewsWhenDisconnected(true)
         bar.setShowModeChrome(true)
         bar.setPresenting(false)
         bar.setConnectionState(.paused)
@@ -32,7 +24,6 @@ struct HomeHeaderBarPracticeChromeTests {
 
     @Test func lockAndBlackoutShowWhenAirPlayConnects() {
         let bar = HomeHeaderBar(frame: CGRect(x: 0, y: 0, width: 390, height: 52))
-        bar.setPreviewsWhenDisconnected(false)
         bar.setShowModeChrome(true)
         bar.setPresenting(true)
         bar.setConnectionState(.paused)
@@ -41,52 +32,24 @@ struct HomeHeaderBarPracticeChromeTests {
 
     @Test func lockAndBlackoutShowWhenEclipseTVIsLinked() {
         let bar = HomeHeaderBar(frame: CGRect(x: 0, y: 0, width: 390, height: 52))
-        bar.setPreviewsWhenDisconnected(false)
         bar.setShowModeChrome(true)
         bar.setPresenting(false)
         bar.setConnectionState(.connected)
         #expect(bar.showsLiveOutputChrome == true)
     }
 
-    @Test func lockAndBlackoutHiddenOnHomeEvenWithPracticeOn() {
+    @Test func lockAndBlackoutHiddenOnHome() {
         let bar = HomeHeaderBar(frame: CGRect(x: 0, y: 0, width: 390, height: 52))
-        bar.setPreviewsWhenDisconnected(true)
         bar.setShowModeChrome(false)
-        bar.setPresenting(false)
-        bar.setConnectionState(.paused)
+        bar.setPresenting(true)
+        bar.setConnectionState(.connected)
         #expect(bar.showsLiveOutputChrome == false)
     }
 
-    /// Both the Live Poll Practice deck and its room take the hero with
-    /// Practice Mode off, and that hero is the output — so it needs the controls.
-    @Test func lockAndBlackoutShowForAPhoneHostedLivePoll() {
+    @Test func lockAndBlackoutGoAwayWhenLeavingTheShow() {
         let bar = HomeHeaderBar(frame: CGRect(x: 0, y: 0, width: 390, height: 52))
-        bar.setPreviewsWhenDisconnected(false)
         bar.setShowModeChrome(true)
-        bar.setPresenting(false)
-        bar.setConnectionState(.paused)
-        bar.setLivePollOwnsPhoneHero(true)
-        #expect(bar.showsLiveOutputChrome == true)
-    }
-
-    @Test func lockAndBlackoutGoAwayWhenTheLivePollReleasesTheHero() {
-        let bar = HomeHeaderBar(frame: CGRect(x: 0, y: 0, width: 390, height: 52))
-        bar.setPreviewsWhenDisconnected(false)
-        bar.setShowModeChrome(true)
-        bar.setPresenting(false)
-        bar.setConnectionState(.paused)
-        bar.setLivePollOwnsPhoneHero(true)
-        bar.setLivePollOwnsPhoneHero(false)
-        #expect(bar.showsLiveOutputChrome == false)
-    }
-
-    @Test func aPhoneHostedLivePollStillAddsNoChromeOnHome() {
-        let bar = HomeHeaderBar(frame: CGRect(x: 0, y: 0, width: 390, height: 52))
-        bar.setPreviewsWhenDisconnected(false)
         bar.setShowModeChrome(false)
-        bar.setPresenting(false)
-        bar.setConnectionState(.paused)
-        bar.setLivePollOwnsPhoneHero(true)
         #expect(bar.showsLiveOutputChrome == false)
     }
 }
