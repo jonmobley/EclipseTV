@@ -68,7 +68,9 @@ final class HomeHeaderBar: UIView {
     /// Invoked when a text tab is tapped (compact width).
     var onSelectTab: ((HomeTab) -> Void)?
     /// Invoked by "Camera" on the tab row.
-    var onOpenCamera: (() -> Void)?
+    /// Arranging, selecting or searching started or stopped (the Camera button
+    /// steps aside meanwhile).
+    var onOverlayStateChange: (() -> Void)?
     /// Invoked by the Search control (Library, Show and Music pages).
     var onBeginSearch: (() -> Void)?
     /// Invoked as the search text changes.
@@ -107,6 +109,8 @@ final class HomeHeaderBar: UIView {
     private var showsShowChrome = false
     private var isArranging = false
     private var isSelecting = false
+    /// Tiles are being arranged or selected.
+    var isEditingTiles: Bool { isArranging || isSelecting }
     /// Page the pager is on; picks the trailing controls when the tabs show.
     private var tabPage: HomeTab = .home
     /// False while Music is inside a playlist, which has its own "+".
@@ -320,10 +324,6 @@ final class HomeHeaderBar: UIView {
         tabStrip.isHidden = true
         tabStrip.onSelect = { [weak self] tab in
             self?.onSelectTab?(tab)
-        }
-        // "Camera" is the last word on the tab row (owner's call, 2026-11-26).
-        tabStrip.onOpenCamera = { [weak self] in
-            self?.onOpenCamera?()
         }
         addSubview(tabStrip)
 
@@ -564,6 +564,7 @@ final class HomeHeaderBar: UIView {
         searchRow.isHidden = false
         applyTrailingChrome()
         searchField.becomeFirstResponder()
+        onOverlayStateChange?()
     }
 
     /// Hides the search field and clears it.
@@ -574,6 +575,7 @@ final class HomeHeaderBar: UIView {
         searchField.resignFirstResponder()
         searchRow.isHidden = true
         applyTrailingChrome()
+        onOverlayStateChange?()
     }
 
     /// The Music "+" control, for anchoring its sheet on iPad.
@@ -691,6 +693,7 @@ final class HomeHeaderBar: UIView {
         navTabs.alpha = editing ? 0.45 : 1
         tabStrip.setEnabled(!editing)
         applySizeClassChrome()
+        onOverlayStateChange?()
         doneButton.accessibilityLabel = isSelecting
             ? "Done selecting"
             : "Done arranging"

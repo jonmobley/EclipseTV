@@ -147,8 +147,8 @@ extension iPhoneMainViewController {
         headerBar.onSelectTab = { [weak self] tab in
             self?.selectHomeTab(tab)
         }
-        headerBar.onOpenCamera = { [weak self] in
-            self?.presentCameraLive()
+        headerBar.onOverlayStateChange = { [weak self] in
+            self?.refreshHomeCameraButton(animated: true)
         }
         headerBar.onBeginSearch = { [weak self] in
             self?.beginPageSearch()
@@ -224,6 +224,26 @@ extension iPhoneMainViewController {
         }
         view.addSubview(audioMiniBubble)
 
+        // Camera mirrors the Music circle in the other bottom corner.
+        homeCameraButton.translatesAutoresizingMaskIntoConstraints = false
+        homeCameraButton.addAction(UIAction { [weak self] _ in
+            Haptics.impactLight()
+            self?.presentCameraLive()
+        }, for: .touchUpInside)
+        view.addSubview(homeCameraButton)
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(homeCameraStateDidChange),
+            name: ExternalDisplayManager.cameraDidEndNotification,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(homeCameraStateDidChange),
+            name: ExternalDisplayManager.didChangeNotification,
+            object: nil
+        )
+
         let height = audioMiniPlayer.heightAnchor.constraint(equalToConstant: 0)
         audioMiniHeightConstraint = height
         let cardWidth = audioMiniPlayer.widthAnchor.constraint(
@@ -249,7 +269,16 @@ extension iPhoneMainViewController {
             audioMiniBubble.bottomAnchor.constraint(
                 equalTo: view.bottomAnchor,
                 constant: -AudioMiniPlayerView.compactBottomInset
-            )
+            ),
+            homeCameraButton.leadingAnchor.constraint(
+                equalTo: view.safeAreaLayoutGuide.leadingAnchor,
+                constant: HomeCameraButton.edgeInset
+            ),
+            homeCameraButton.centerYAnchor.constraint(
+                equalTo: audioMiniBubble.centerYAnchor
+            ),
+            homeCameraButton.widthAnchor.constraint(equalToConstant: HomeCameraButton.side),
+            homeCameraButton.heightAnchor.constraint(equalToConstant: HomeCameraButton.side)
         ])
 
         hadActiveAudioSession = AudioPlayerController.shared.hasActiveSession

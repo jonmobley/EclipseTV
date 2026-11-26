@@ -359,6 +359,7 @@ final class LibraryGridViewController: UIViewController {
             syncHeroOverlayInsets(preservingProgress: currentHeroScrollProgress())
             bottomChromeBottomConstraint?.constant = -(miniPlayerBottomInset + 20)
             bottomChromeTrailingConstraint?.constant = -bottomChromeTrailingInset
+            bottomChromeCameraClearanceConstraint?.constant = bottomChromeCameraClearance
             updateHomeVerticalScrollPolicy()
         }
     }
@@ -513,6 +514,7 @@ final class LibraryGridViewController: UIViewController {
     var emptyTopConstraint: NSLayoutConstraint?
     var bottomChromeBottomConstraint: NSLayoutConstraint?
     var bottomChromeTrailingConstraint: NSLayoutConstraint?
+    var bottomChromeCameraClearanceConstraint: NSLayoutConstraint?
     /// Sync banner + Music swipe hint stack floating over the bottom of the grid.
     weak var bottomChrome: UIStackView?
     /// Grid scroll room taken by `bottomChrome` while it shows, so the last row
@@ -526,6 +528,14 @@ final class LibraryGridViewController: UIViewController {
         guard miniPlayerBottomInset == 0 else { return sectionInset }
         return AudioMiniPlayerView.compactTrailingInset
             + AudioMiniPlayerBubbleView.side + 8
+    }
+
+    /// Leading room the banner stack keeps from the screen edge so it starts
+    /// after the round Camera button, which sits alone in the bottom-leading
+    /// corner. With the mini player up the stack rides above it, as on the right.
+    var bottomChromeCameraClearance: CGFloat {
+        guard miniPlayerBottomInset == 0 else { return 0 }
+        return HomeCameraButton.edgeInset + HomeCameraButton.side + 8
     }
 
     // MARK: - Init
@@ -653,10 +663,22 @@ final class LibraryGridViewController: UIViewController {
             constant: -bottomChromeTrailingInset
         )
         bottomChromeTrailingConstraint = bottomChromeTrailing
+        // Starts at the grid column, but never under the Camera button.
+        let gridLeading = bottomChrome.leadingAnchor.constraint(
+            equalTo: gridHost.leadingAnchor, constant: sectionInset
+        )
+        gridLeading.priority = .defaultHigh
+        let cameraClearance = bottomChrome.leadingAnchor.constraint(
+            greaterThanOrEqualTo: view.safeAreaLayoutGuide.leadingAnchor,
+            constant: bottomChromeCameraClearance
+        )
+        bottomChromeCameraClearanceConstraint = cameraClearance
         NSLayoutConstraint.activate([
+            gridLeading,
             bottomChrome.leadingAnchor.constraint(
-                equalTo: gridHost.leadingAnchor, constant: sectionInset
+                greaterThanOrEqualTo: gridHost.leadingAnchor, constant: sectionInset
             ),
+            cameraClearance,
             bottomChromeTrailing,
             bottomChromeBottom
         ])

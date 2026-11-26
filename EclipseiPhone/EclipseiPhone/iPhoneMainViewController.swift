@@ -178,6 +178,8 @@ class iPhoneMainViewController: UIViewController {
     /// Persistent Music control. Regular: toggles the drawer. Compact: picker,
     /// or shows and hides the card.
     let audioMiniBubble = AudioMiniPlayerBubbleView()
+    /// Round Camera button, bottom-leading corner (mirrors the Music circle).
+    let homeCameraButton = HomeCameraButton()
     /// When true, the bar is hidden; the Music circle stays visible.
     /// Ambient control prefers the floating bubble; expand is temporary.
     var audioMiniCollapsed = true
@@ -243,6 +245,7 @@ class iPhoneMainViewController: UIViewController {
         syncHomePagerOffsetIfNeeded()
         // Library decides side-by-side after its own layout; dock the mini bar after.
         syncAudioMiniLayoutIfNeeded()
+        refreshHomeCameraButton()
     }
 
     override func viewWillDisappear(_ animated: Bool) {

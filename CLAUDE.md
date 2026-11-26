@@ -215,6 +215,11 @@
   program, and a tap with no TV (no AirPlay, Apple TV, Practice Mode or operator: `canGoLiveFromCamera`) shows a toast instead
   of parking. The centered hint says what the TV shows ("TV shows Quick Change · Tap for camera", "Preview only · No TV
   connected", else "Tap screen to go LIVE").
+- Camera's first card (2026-11-26, `CameraLiveViewController+LiveOutput`): whatever was live in the Show as the camera
+  opened (`entryLiveSource`, also with no TV). Before the camera goes live it is a blue LIVE card and a tap does nothing;
+  while the camera (or a parked still) holds the TV it shows that item without blue, and a tap puts it back
+  (`returnToEntryLive`: websites / PDFs as the same card via `entryLiveOwnerId`) and the camera screen closes on the
+  camera's end notice. "Tap screen to go LIVE" and its other wordings sit in the camera header between Back and the gear.
 - Camera frames order (2026-11-15): `CameraFrameStore.frames` is newest-first by `createdAt` and never reorders on a tap
   (sorting by `lastUsedAt` made a tapped frame jump in the camera ribbon). The camera header shows only the LIVE pill;
   the PRACTICE pill was removed at the owner's request. Buttons placed inside a `UIImageView` need
@@ -281,10 +286,15 @@
   and swaps its right-hand buttons by page (`setTabPage`): Music gets "+", and Library and Music hide their
   own navigation bar at the root (`HomeTabPageNavigationController`; it returns for a playlist or reordering).
   The dropdown says "Eclipse" on Home (no "Home": that is a tab) and has no Library / Music entries or back chevron there.
-  Search is an icon in the header row, ahead of the page's own buttons; Camera is the word "Camera" at the end of the tab
-  row, styled like a tab but not a page (it opens the full-screen camera; the line and swiping skip it); Settings has no icon on the paging home screen and is in the dropdown instead, with or without a Show open
-  (owner's calls, 2026-11-26). A floating bottom bar and an iOS-style glass footer were both tried and rejected: do not
-  bring a footer back. Camera is on every page and opens the full-screen camera (`presentCameraLive`). Search shows on
+  Search is an icon in the header row, ahead of the page's own buttons; Settings has no icon on the paging home screen and
+  is in the dropdown instead, with or without a Show open (owner's calls, 2026-11-26). Camera is a round button in the
+  bottom-leading corner (`HomeCameraButton`, owner's call 2026-11-26, after a word on the tab row): it mirrors the Music
+  circle (same size and insets), is dark grey (blue means "on the TV"; a blue ring shows while the phone camera is live),
+  and is on iPhone and iPad alike. It fades out while the music card would cover it (an upright phone; a wider screen keeps
+  it), while tiles are arranged or selected, and while a search field is up (`HomeCameraButton.shouldHide`,
+  `refreshHomeCameraButton`). The Show's bottom banners (iCloud, swipe hint) keep clear of it
+  (`bottomChromeCameraClearance`). A floating bottom bar and an iOS-style glass footer were both tried and rejected: do not
+  bring a footer back. Camera opens the full-screen camera (`presentCameraLive`). Search shows on
   Library, Music's list and an open Show and opens one field under the tabs (`beginPageSearch` / `endPageSearch`) that
   filters the page in front by name: Show cards (`ShowGridItem.searchTitle`, `showSearchQuery`), tracks and playlists,
   Library titles. The filter ends when the page or the Show changes, and arranging ends it first, because arrange

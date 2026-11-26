@@ -166,20 +166,39 @@ struct HomeHeaderBarTabStripTests {
         #expect(search?.isHidden == true)
     }
 
-    @Test func cameraIsAWordOnTheTabRow() {
+    /// Camera left the tab row for a round button in the bottom-leading corner.
+    @Test func tabRowHasOnlyTheFourPages() {
         let bar = HomeHeaderBar(frame: CGRect(x: 0, y: 0, width: 390, height: 90))
         bar.showsTabStrip = true
-        let camera = bar.tabStrip.firstDescendant(identifier: "home.tab.camera") as? UIButton
-        #expect(camera?.configuration?.title == "Camera")
-        #expect(camera?.configuration?.image == nil)
-        var opened = 0
-        bar.onOpenCamera = { opened += 1 }
-        camera?.sendActions(for: .touchUpInside)
-        #expect(opened == 1)
-        // It is not a page: the line and the selection stay on the four tabs.
+        #expect(bar.tabStrip.firstDescendant(identifier: "home.tab.camera") == nil)
         #expect(HomeTab.allCases.count == 4)
         bar.tabStrip.setPosition(3)
         #expect(bar.tabStrip.selected == .music)
+    }
+
+    /// The Camera button gives way to the music card only when the card would
+    /// reach it, and always while arranging, selecting or searching.
+    @Test func cameraButtonStepsAsideOnlyWhenCovered() {
+        let button = CGRect(x: 16, y: 800, width: 56, height: 56)
+        // Upright phone: the card spans the width and reaches the button.
+        let wideCard = CGRect(x: 20, y: 790, width: 360, height: 76)
+        #expect(HomeCameraButton.shouldHide(
+            cardFrame: wideCard, buttonFrame: button, isEditing: false, isSearching: false
+        ))
+        // Sideways phone or wider window: the card stops well short of it.
+        let shortCard = CGRect(x: 400, y: 300, width: 360, height: 76)
+        #expect(!HomeCameraButton.shouldHide(
+            cardFrame: shortCard, buttonFrame: button, isEditing: false, isSearching: false
+        ))
+        #expect(!HomeCameraButton.shouldHide(
+            cardFrame: nil, buttonFrame: button, isEditing: false, isSearching: false
+        ))
+        #expect(HomeCameraButton.shouldHide(
+            cardFrame: nil, buttonFrame: button, isEditing: true, isSearching: false
+        ))
+        #expect(HomeCameraButton.shouldHide(
+            cardFrame: nil, buttonFrame: button, isEditing: false, isSearching: true
+        ))
     }
 
     @Test func searchButtonHidesWhileItsFieldIsUp() {

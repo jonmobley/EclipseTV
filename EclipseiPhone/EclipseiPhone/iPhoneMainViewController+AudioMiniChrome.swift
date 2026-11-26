@@ -159,6 +159,7 @@ extension iPhoneMainViewController {
         applyMiniPlayerBottomInset(chromeHeight)
         libraryViewController.refreshMusicSwipeHintVisibility()
         view.layoutIfNeeded()
+        refreshHomeCameraButton()
     }
 
     // MARK: - Music picker dismiss
@@ -199,6 +200,8 @@ extension iPhoneMainViewController {
 
         bubble.isHidden = false
         bubble.alpha = 1
+        // The card spans an upright phone, so Camera fades out as it fades in.
+        let cameraHides = homeCameraButtonShouldHide(cardFrame: bar.frame)
 
         UIView.animate(
             withDuration: 0.2,
@@ -206,6 +209,7 @@ extension iPhoneMainViewController {
             options: [.curveEaseOut, .beginFromCurrentState]
         ) {
             bar.alpha = 1
+            if cameraHides { self.homeCameraButton.alpha = 0 }
             self.view.layoutIfNeeded()
         } completion: { [weak self] finished in
             self?.completeExpandAnimation(finished: finished)
@@ -229,6 +233,10 @@ extension iPhoneMainViewController {
         raiseAudioMiniChrome()
         view.layoutIfNeeded()
         applyMiniPlayerBottomInset(0)
+        let cameraShows = !homeCameraButtonShouldHide(cardFrame: nil)
+        if cameraShows {
+            homeCameraButton.isHidden = false
+        }
 
         UIView.animate(
             withDuration: 0.2,
@@ -236,6 +244,7 @@ extension iPhoneMainViewController {
             options: [.curveEaseOut, .beginFromCurrentState]
         ) {
             bar.alpha = 0
+            if cameraShows { self.homeCameraButton.alpha = 1 }
             self.view.layoutIfNeeded()
         } completion: { [weak self] finished in
             self?.completeCollapseAnimation(finished: finished)
@@ -253,6 +262,7 @@ extension iPhoneMainViewController {
         raiseAudioMiniChrome()
         resetBarChromeAppearance()
         libraryViewController.refreshMusicSwipeHintVisibility()
+        refreshHomeCameraButton()
     }
 
     private func completeCollapseAnimation(finished: Bool) {
@@ -268,6 +278,7 @@ extension iPhoneMainViewController {
         audioMiniBubble.alpha = 1
         raiseAudioMiniChrome()
         libraryViewController.refreshMusicSwipeHintVisibility()
+        refreshHomeCameraButton()
     }
 
     /// Snaps chrome when a second gesture arrives mid-animation.
@@ -324,9 +335,59 @@ extension iPhoneMainViewController {
         audioMiniHeightConstraint?.constant = next
     }
 
+    // MARK: - Camera button
+
+    /// Whether the Camera button gives way right now. `cardFrame` is where the
+    /// music card is (or will be); nil means no card.
+    func homeCameraButtonShouldHide(cardFrame: CGRect?) -> Bool {
+        HomeCameraButton.shouldHide(
+            cardFrame: cardFrame,
+            buttonFrame: homeCameraButton.frame,
+            isEditing: headerBar.isEditingTiles,
+            isSearching: headerBar.isSearching
+        )
+    }
+
+    /// Shows or hides the Camera button and sets its "on the TV" ring. Leaves it
+    /// alone while the card animates; the animation fades it itself.
+    func refreshHomeCameraButton(animated: Bool = false) {
+        homeCameraButton.setCameraOnTV(ExternalDisplayManager.shared.isCameraLive)
+        guard !isAudioMiniChromeAnimating else { return }
+        let cardShowing = !audioMiniPlayer.isHidden && audioMiniPlayer.alpha > 0.01
+        let hide = homeCameraButtonShouldHide(
+            cardFrame: cardShowing ? audioMiniPlayer.frame : nil
+        )
+        let targetAlpha: CGFloat = hide ? 0 : 1
+        guard homeCameraButton.alpha != targetAlpha || homeCameraButton.isHidden != hide
+        else { return }
+        if !hide { homeCameraButton.isHidden = false }
+        let apply = { self.homeCameraButton.alpha = targetAlpha }
+        let finish = { (_: Bool) in
+            self.homeCameraButton.isHidden = self.homeCameraButton.alpha < 0.01
+        }
+        if animated, !UIAccessibility.isReduceMotionEnabled {
+            UIView.animate(
+                withDuration: 0.2,
+                delay: 0,
+                options: [.beginFromCurrentState, .allowUserInteraction],
+                animations: apply,
+                completion: finish
+            )
+        } else {
+            apply()
+            finish(true)
+        }
+    }
+
+    @objc func homeCameraStateDidChange() {
+        refreshHomeCameraButton()
+    }
+
     /// Header, then Music. An open drawer sits above header buttons; the Music
     /// bubble stays tappable while the pane is closed.
     func raiseHomeOverlayChrome() {
+        // Camera goes first so an open Music drawer or card always covers it.
+        view.bringSubviewToFront(homeCameraButton)
         HomeOverlayZOrder.raise(
             header: headerBar,
             player: audioMiniPlayer,
