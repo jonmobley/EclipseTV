@@ -24,6 +24,10 @@ extension LiveHeaderView {
 
     /// Installs the overlay drag and pinch. Browse swipes and other hero drags
     /// wait for the drag to fail, which it does at once off an overlay.
+    ///
+    /// The two never run at once (like the still / countdown adjust): a drag that
+    /// gains a second finger stays a drag, and the pinch alone carries two-finger
+    /// moves, so a gesture is never saved halfway or moved twice.
     func installOverlayAdjustGestures() {
         let pan = UIPanGestureRecognizer(target: self, action: #selector(handleOverlayAdjustPan(_:)))
         pan.maximumNumberOfTouches = 1
@@ -57,14 +61,6 @@ extension LiveHeaderView {
         guard let session = overlayAdjustSession else { return }
         overlayAdjustSession = nil
         onAdjustOverlay?(session.original, true)
-    }
-
-    /// Lets the overlay drag and pinch run together (move while resizing).
-    func overlayAdjustRecognizeTogether(
-        _ first: UIGestureRecognizer, _ second: UIGestureRecognizer
-    ) -> Bool {
-        let pair: [UIGestureRecognizer?] = [overlayAdjustPan, overlayAdjustPinch]
-        return pair.contains { $0 === first } && pair.contains { $0 === second }
     }
 
     // MARK: - Private

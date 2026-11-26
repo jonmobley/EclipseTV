@@ -86,12 +86,4 @@ extension LiveHeaderView: UIGestureRecognizerDelegate {
         }
         return directAdjustShouldBegin(gestureRecognizer)
     }
-
-    /// Overlay drag + pinch together; everything else keeps UIKit's default.
-    func gestureRecognizer(
-        _ gestureRecognizer: UIGestureRecognizer,
-        shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
-    ) -> Bool {
-        overlayAdjustRecognizeTogether(gestureRecognizer, otherGestureRecognizer)
-    }
 }

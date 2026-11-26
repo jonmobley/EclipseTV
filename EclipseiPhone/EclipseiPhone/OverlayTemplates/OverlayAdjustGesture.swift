@@ -94,12 +94,23 @@ struct OverlayAdjustSession {
         CGSize(width: unitSize.width * factor, height: unitSize.height * factor)
     }
 
-    /// Center to draw at: snapped onto the frame's centerlines when close, and
-    /// kept inside the frame.
+    /// Center to draw at: snapped onto the frame's centerlines when close.
+    ///
+    /// A card keeps its whole body inside the frame (as on the Mac). A photo or
+    /// video overlay only keeps its center inside, like `MediaOverlayEntry.clamped()`,
+    /// so a logo may hang off an edge, also as on the Mac.
     var center: CGPoint {
         let snapped = OverlayAdjustSnap.apply(to: rawCenter, in: contentFrame,
-                                              distance: Self.snapDistance)
-        return OverlayCardLayout.clampedCenter(snapped.point, cardSize: size, in: contentFrame)
+                                              distance: Self.snapDistance).point
+        switch original {
+        case .card:
+            return OverlayCardLayout.clampedCenter(snapped, cardSize: size, in: contentFrame)
+        case .media:
+            return CGPoint(
+                x: min(contentFrame.maxX, max(contentFrame.minX, snapped.x)),
+                y: min(contentFrame.maxY, max(contentFrame.minY, snapped.y))
+            )
+        }
     }
 
     /// Recomputes `snap` and reports whether the center just landed on a line

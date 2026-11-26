@@ -141,6 +141,19 @@ struct OverlayAdjustSessionTests {
         #expect(entry(session.overlay)?.scale == MediaOverlayEntry.scaleRange.upperBound)
     }
 
+    @Test func mediaMayHangOffAnEdgeLikeOnTheMac() throws {
+        var session = try #require(OverlayAdjustSession(
+            overlay: media(), frame: CGRect(x: 104, y: 58.5, width: 112, height: 63),
+            contentFrame: content
+        ))
+        session.move(by: CGPoint(x: 150, y: 0))
+        #expect(session.center == CGPoint(x: 310, y: 90))
+        session.move(by: CGPoint(x: 500, y: -500))
+        let result = try #require(entry(session.overlay))
+        #expect(result.centerX == 1)
+        #expect(result.centerY == 0)
+    }
+
     @Test func emptyFramesStartNothing() {
         #expect(OverlayAdjustSession(overlay: media(), frame: .zero, contentFrame: content) == nil)
         #expect(OverlayAdjustSession(
