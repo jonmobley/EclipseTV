@@ -30,6 +30,43 @@ final class AudioLibraryViewController: UITableViewController {
     /// Invoked by the embedded back control to return to the Library page.
     var onRequestClose: (() -> Void)?
 
+    /// Text the list is filtered by (the Home header's search field on the Music
+    /// tab). Reordering works on the whole list, so searching ends it.
+    var searchQuery = "" {
+        didSet {
+            guard searchQuery != oldValue, isViewLoaded else { return }
+            if isSearching, isEditing {
+                setEditing(false, animated: false)
+            }
+            tableView.reloadData()
+        }
+    }
+
+    private var isSearching: Bool {
+        !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func matchesSearch(_ name: String) -> Bool {
+        let needle = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.range(
+            of: needle, options: [.caseInsensitive, .diacriticInsensitive]
+        ) != nil
+    }
+
+    /// Playlists on screen: all of them, or the ones matching the search.
+    private var shownPlaylists: [AudioPlaylist] {
+        isSearching
+            ? playlistStore.playlists.filter { matchesSearch($0.name) }
+            : playlistStore.playlists
+    }
+
+    /// Tracks on screen: all of them, or the ones matching the search.
+    private var shownTracks: [AudioTrack] {
+        isSearching
+            ? trackStore.tracks.filter { matchesSearch($0.title) }
+            : trackStore.tracks
+    }
+
     /// Called when reordering starts or ends, so a host that hides this page's bar
     /// can bring it back for Done.
     var onEditingChanged: (() -> Void)?
@@ -219,7 +256,7 @@ final class AudioLibraryViewController: UITableViewController {
     }
 
     private func beginArrangingTracks() {
-        guard trackStore.tracks.count >= 2 else { return }
+        guard trackStore.tracks.count >= 2, !isSearching else { return }
         setEditing(true, animated: true)
     }
 
@@ -233,9 +270,9 @@ final class AudioLibraryViewController: UITableViewController {
                             numberOfRowsInSection section: Int) -> Int {
         switch Section(rawValue: section)! {
         case .playlists:
-            return max(playlistStore.playlists.count, 1)
+            return max(shownPlaylists.count, 1)
         case .tracks:
-            return max(trackStore.tracks.count, 1)
+            return max(shownTracks.count, 1)
         }
     }
 
@@ -258,12 +295,12 @@ final class AudioLibraryViewController: UITableViewController {
 
         switch Section(rawValue: indexPath.section)! {
         case .playlists:
-            if playlistStore.playlists.isEmpty {
-                config.text = "No playlists yet"
+            if shownPlaylists.isEmpty {
+                config.text = isSearching ? "No matching playlists" : "No playlists yet"
                 config.textProperties.color = .secondaryLabel
                 cell.selectionStyle = .none
             } else {
-                let playlist = playlistStore.playlists[indexPath.row]
+                let playlist = shownPlaylists[indexPath.row]
                 let isCurrent = player.playlistId == playlist.id
                 config.text = playlist.name
                 config.secondaryText = nil
@@ -279,12 +316,12 @@ final class AudioLibraryViewController: UITableViewController {
                 }
             }
         case .tracks:
-            if trackStore.tracks.isEmpty {
-                config.text = "No music yet"
+            if shownTracks.isEmpty {
+                config.text = isSearching ? "No matching music" : "No music yet"
                 config.textProperties.color = .secondaryLabel
                 cell.selectionStyle = .none
             } else {
-                let track = trackStore.tracks[indexPath.row]
+                let track = shownTracks[indexPath.row]
                 let isCurrent = player.currentTrack?.id == track.id
                 config.text = track.title
                 // One line per song: long titles end in "…", no artist line.
@@ -309,11 +346,11 @@ final class AudioLibraryViewController: UITableViewController {
         guard !isEditing else { return }
         switch Section(rawValue: indexPath.section)! {
         case .playlists:
-            guard !playlistStore.playlists.isEmpty else { return }
-            openPlaylist(playlistStore.playlists[indexPath.row])
+            guard !shownPlaylists.isEmpty else { return }
+            openPlaylist(shownPlaylists[indexPath.row])
         case .tracks:
-            guard !trackStore.tracks.isEmpty else { return }
-            let track = trackStore.tracks[indexPath.row]
+            guard !shownTracks.isEmpty else { return }
+            let track = shownTracks[indexPath.row]
             if player.tapStopsPlayback(for: track.id) {
                 player.stop()
             } else {
@@ -327,10 +364,10 @@ final class AudioLibraryViewController: UITableViewController {
         switch Section(rawValue: indexPath.section)! {
         case .playlists:
             guard !isEditing else { return false }
-            guard !playlistStore.playlists.isEmpty else { return false }
-            return !playlistStore.playlists[indexPath.row].isProtected
+            guard !shownPlaylists.isEmpty else { return false }
+            return !shownPlaylists[indexPath.row].isProtected
         case .tracks:
-            guard !trackStore.tracks.isEmpty else { return false }
+            guard !shownTracks.isEmpty else { return false }
             return true
         }
     }
@@ -391,10 +428,10 @@ final class AudioLibraryViewController: UITableViewController {
     ) -> UISwipeActionsConfiguration? {
         guard Section(rawValue: indexPath.section) == .tracks,
               !isEditing,
-              trackStore.tracks.indices.contains(indexPath.row)
+              shownTracks.indices.contains(indexPath.row)
         else { return nil }
         return AudioQueueActions.leadingSwipe(
-            for: trackStore.tracks[indexPath.row].id, host: self
+            for: shownTracks[indexPath.row].id, host: self
         )
     }
 
@@ -404,16 +441,16 @@ final class AudioLibraryViewController: UITableViewController {
     ) -> UISwipeActionsConfiguration? {
         switch Section(rawValue: indexPath.section)! {
         case .playlists:
-            guard !playlistStore.playlists.isEmpty else { return nil }
-            let playlist = playlistStore.playlists[indexPath.row]
+            guard !shownPlaylists.isEmpty else { return nil }
+            let playlist = shownPlaylists[indexPath.row]
             guard !playlist.isProtected else { return nil }
             let delete = UIContextualAction(style: .destructive, title: "Delete") { [weak self] _, _, done in
                 self?.confirmDeletePlaylist(playlist, completion: done)
             }
             return UISwipeActionsConfiguration(actions: [delete])
         case .tracks:
-            guard !trackStore.tracks.isEmpty else { return nil }
-            let track = trackStore.tracks[indexPath.row]
+            guard !shownTracks.isEmpty else { return nil }
+            let track = shownTracks[indexPath.row]
             var actions: [UIContextualAction] = []
             if !track.isProtected {
                 let delete = UIContextualAction(style: .destructive, title: "Delete") { [weak self] _, _, done in
@@ -476,8 +513,8 @@ final class AudioLibraryViewController: UITableViewController {
     ) -> UIContextMenuConfiguration? {
         switch Section(rawValue: indexPath.section)! {
         case .playlists:
-            guard !playlistStore.playlists.isEmpty else { return nil }
-            let playlist = playlistStore.playlists[indexPath.row]
+            guard !shownPlaylists.isEmpty else { return nil }
+            let playlist = shownPlaylists[indexPath.row]
             return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) {
                 [weak self] _ in
                 let open = UIAction(
@@ -506,8 +543,8 @@ final class AudioLibraryViewController: UITableViewController {
                 return UIMenu(children: children)
             }
         case .tracks:
-            guard !trackStore.tracks.isEmpty, !isEditing else { return nil }
-            let track = trackStore.tracks[indexPath.row]
+            guard !shownTracks.isEmpty, !isEditing else { return nil }
+            let track = shownTracks[indexPath.row]
             return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) {
                 [weak self] _ in
                 self?.trackMoreMenu(for: track)

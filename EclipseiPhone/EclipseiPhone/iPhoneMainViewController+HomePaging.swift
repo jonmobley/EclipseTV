@@ -112,14 +112,67 @@ extension iPhoneMainViewController: UIScrollViewDelegate {
         homeTabDidSettle()
     }
 
-    /// Opens the Library page's search field.
-    func searchLibraryPage() {
-        guard let picker = libraryPagePicker else { return }
-        // Focusing the field makes UIKit scroll it into view, which stops a tab's
-        // slide wherever it has got to; finish the slide first.
+    // MARK: - Search (Library, Show, Music)
+
+    /// Opens the header's search field for the page in front.
+    func beginPageSearch() {
+        guard isHomeTabPaging, searchingTab == nil else { return }
         finishHomePagerSlide()
-        picker.searchTapped()
-        libraryPageNavController?.syncBar(animated: true)
+        let placeholder: String
+        switch homeTab {
+        case .library: placeholder = "Search Library"
+        case .show:
+            guard libraryViewController.isShowMode else { return }
+            placeholder = "Search this Show"
+        case .music: placeholder = "Search Music"
+        case .home: return
+        }
+        searchingTab = homeTab
+        headerBar.beginSearch(placeholder: placeholder)
+        animateHeaderHeightChange()
+    }
+
+    /// Filters the page being searched as the text changes.
+    func applyPageSearch(_ text: String) {
+        switch searchingTab {
+        case .library: libraryPagePicker?.setHomeTabSearchQuery(text)
+        case .show: libraryViewController.setShowSearchQuery(text)
+        case .music: audioLibraryViewController.searchQuery = text
+        case .home, nil: break
+        }
+    }
+
+    /// Closes the search field and shows the whole page again.
+    ///
+    /// Also runs when the page changes or the Show does: a filter left on a page
+    /// nobody is looking at would hide cards with nothing on screen to say why.
+    func endPageSearch(animated: Bool = true) {
+        guard searchingTab != nil else { return }
+        searchingTab = nil
+        libraryPagePicker?.setHomeTabSearchQuery("")
+        libraryViewController.setShowSearchQuery("")
+        audioLibraryViewController.searchQuery = ""
+        headerBar.endSearch()
+        if animated {
+            animateHeaderHeightChange()
+        } else {
+            applyHomePagerTopAttachment()
+        }
+    }
+
+    private func animateHeaderHeightChange() {
+        guard view.window != nil, !UIAccessibility.isReduceMotionEnabled else {
+            applyHomePagerTopAttachment()
+            return
+        }
+        UIView.animate(
+            withDuration: 0.22,
+            delay: 0,
+            options: [.curveEaseInOut, .beginFromCurrentState]
+        ) {
+            self.applyHomePagerTopAttachment()
+            self.view.layoutIfNeeded()
+        }
     }
 
     /// Locks paging while arranging media; snaps back to Library when paged.
@@ -340,6 +393,11 @@ extension iPhoneMainViewController: UIScrollViewDelegate {
         }
         let changed = isShow != wasGridInShowMode
         wasGridInShowMode = isShow
+        // Another Show, or none: its cards were what the search was filtering.
+        if searchingTab == .show, libraryViewController.openShowId != searchedShowId {
+            endPageSearch(animated: false)
+        }
+        searchedShowId = libraryViewController.openShowId
         placeGridInItsSlot()
         guard isHomeTabPaging, changed, !isMovingGridForPaging else { return }
         let leftBehind: HomeTab = isShow ? .home : .show
@@ -455,6 +513,9 @@ extension iPhoneMainViewController: UIScrollViewDelegate {
             self?.refreshLibraryMenu()
             self?.refreshHomePagerScrollEnabled()
         }
+        libraryViewController.onShowSearchEnded = { [weak self] in
+            self?.endPageSearch()
+        }
         libraryViewController.onArrangingChanged = { [weak self] arranging in
             self?.headerBar.setArranging(arranging)
             self?.refreshLibraryMenu()
@@ -552,12 +613,6 @@ extension iPhoneMainViewController: UIScrollViewDelegate {
         let picker = makeMediaLibraryPicker()
         picker.isHomeTabPage = true
         let nav = HomeTabPageNavigationController(rootViewController: picker)
-        nav.rootNeedsBar = { [weak picker] in
-            picker?.navigationItem.searchController != nil
-        }
-        picker.onSearchVisibilityChanged = { [weak nav] in
-            nav?.syncBar(animated: true)
-        }
         libraryPagePicker = picker
         libraryPageNavController = nav
 
@@ -624,6 +679,10 @@ extension iPhoneMainViewController: UIScrollViewDelegate {
         }
         nav.onDepthChanged = { [weak self] atRoot in
             self?.headerBar.setMusicAddAvailable(atRoot)
+            // The search filters the Music list, not the playlist now in front.
+            if !atRoot, self?.searchingTab == .music {
+                self?.endPageSearch()
+            }
         }
         audioLibraryViewController.onEditingChanged = { [weak nav] in
             nav?.syncBar(animated: true)
@@ -715,8 +774,8 @@ extension iPhoneMainViewController: UIScrollViewDelegate {
         headerBar.tabStrip.setSelected(homeTab, animated: animated)
         headerBar.setTabPage(homeTab)
         refreshHomePagerScrollEnabled()
-        if homeTab != .library, libraryPagePicker?.isSearching == false {
-            view.endEditing(true)
+        if let searchingTab, searchingTab != homeTab {
+            endPageSearch()
         }
     }
 
@@ -738,7 +797,8 @@ extension iPhoneMainViewController: UIScrollViewDelegate {
         headerBar.showsTabStrip = tabs
         let height = HomeHeaderBar.height(
             showsTabStrip: tabs,
-            verticalSizeClass: traitCollection.verticalSizeClass
+            verticalSizeClass: traitCollection.verticalSizeClass,
+            isSearching: headerBar.isSearching
         )
         headerHeightConstraint?.constant = height
         libraryPageTopConstraint?.constant = height

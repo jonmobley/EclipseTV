@@ -20,6 +20,13 @@ extension LibraryGridViewController {
     ///   same touch can begin an interactive move.
     private func beginArranging(preservingGesture: Bool) {
         guard isShowMode, openShowMovableCount >= 2, !isArranging else { return }
+        // Positions while arranging are positions in the whole Show, so a filtered
+        // grid would save the wrong order.
+        guard !(preservingGesture && isSearchingShow) else { return }
+        if isSearchingShow {
+            setShowSearchQuery("")
+            onShowSearchEnded?()
+        }
         if isSelecting {
             cancelSelecting()
         }

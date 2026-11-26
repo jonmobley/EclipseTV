@@ -253,9 +253,15 @@
   the current Display Mode, else the "No Show open" page). Only a finger swipe does that: tab slides and layout passes never
   change the grid's mode (a layout pass that snapped the offset mid-slide once closed the Show). `HomePagerScrollView` ignores
   `scrollRectToVisible`, or focusing a text field nudges the pager sideways. The header (`HomeHeaderBar`) stays on every page
-  and swaps its right-hand buttons by page (`setTabPage`): Library gets Search, Music gets "+", and those two pages hide their
-  own navigation bar at the root (`HomeTabPageNavigationController`; it returns for a playlist, search, or reordering).
+  and swaps its right-hand buttons by page (`setTabPage`): Music gets "+", and Library and Music hide their
+  own navigation bar at the root (`HomeTabPageNavigationController`; it returns for a playlist or reordering).
   The dropdown says "Eclipse" on Home (no "Home": that is a tab) and has no Library / Music entries or back chevron there.
+  The end of the tab row holds Search and Camera (in phone landscape they sit just before the header's own buttons).
+  Camera is on every page and opens the full-screen camera (`presentCameraLive`). Search shows on Library, Music's list and
+  an open Show; it opens one field under the tabs (`beginPageSearch` / `endPageSearch`) that filters the page in front by
+  name: Show cards (`ShowGridItem.searchTitle`, `showSearchQuery`), tracks and playlists, Library titles. The filter ends
+  when the page or the Show changes, and arranging ends it first, because arrange positions are positions in the whole
+  Show (a filtered grid would save the wrong order). The pushed Library page keeps its own search field.
   The Library *tab* only browses and previews; adding to a Show is still the pushed Library page from the Show's "+".
   Regular width (full iPad, big phones in landscape) is unchanged: `HomeHeaderNavTabs`, Music drawer, pushed Library.
 - Content icons match the Mac app (2026-11-22): `ThumbnailTypeIcon.systemName` is the one place a content kind's SF Symbol is named

@@ -121,12 +121,26 @@ struct HomeHeaderBarTabStripTests {
         #expect(HomeHeaderBar.height(showsTabStrip: true, verticalSizeClass: .compact) == 52)
     }
 
-    @Test func libraryAndMusicPagesShowTheirOwnControl() {
+    @Test func searchFieldAddsARowUnderTheTabs() {
+        #expect(
+            HomeHeaderBar.height(
+                showsTabStrip: true, verticalSizeClass: .regular, isSearching: true
+            ) == 138
+        )
+        #expect(
+            HomeHeaderBar.height(
+                showsTabStrip: true, verticalSizeClass: .compact, isSearching: true
+            ) == 100
+        )
+    }
+
+    @Test func eachPageShowsItsOwnControls() {
         let bar = HomeHeaderBar(frame: CGRect(x: 0, y: 0, width: 390, height: 90))
         bar.showsTabStrip = true
         let search = bar.firstDescendant(label: "Search")
         let addMusic = bar.firstDescendant(label: "Add Music")
         let newShow = bar.firstDescendant(label: "New Show")
+        // Home has nothing to search.
         #expect(search?.isHidden == true)
         #expect(newShow?.isHidden == false)
 
@@ -136,11 +150,58 @@ struct HomeHeaderBarTabStripTests {
         #expect(newShow?.isHidden == true)
 
         bar.setTabPage(.music)
-        #expect(search?.isHidden == true)
+        #expect(search?.isHidden == false)
         #expect(addMusic?.isHidden == false)
-        // Inside a playlist the playlist's own bar has the "+".
+        // Inside a playlist the playlist's own bar takes over.
         bar.setMusicAddAvailable(false)
         #expect(addMusic?.isHidden == true)
+        #expect(search?.isHidden == true)
+
+        // The Show page: only once a Show is open.
+        bar.setTabPage(.show)
+        #expect(search?.isHidden == true)
+        bar.setShowModeChrome(true)
+        #expect(search?.isHidden == false)
+        bar.setArranging(true)
+        #expect(search?.isHidden == true)
+    }
+
+    @Test func cameraIsOnEveryPage() {
+        let bar = HomeHeaderBar(frame: CGRect(x: 0, y: 0, width: 390, height: 90))
+        let camera = bar.firstDescendant(label: "Camera") as? UIButton
+        // No tab row (full iPad), no button.
+        #expect(camera?.isHidden == true)
+        bar.showsTabStrip = true
+        for page in HomeTab.allCases {
+            bar.setTabPage(page)
+            #expect(camera?.isHidden == false)
+        }
+        var opened = 0
+        bar.onOpenCamera = { opened += 1 }
+        camera?.sendActions(for: .touchUpInside)
+        #expect(opened == 1)
+        bar.setArranging(true)
+        #expect(camera?.isHidden == true)
+    }
+
+    @Test func searchButtonHidesWhileItsFieldIsUp() {
+        let bar = HomeHeaderBar(frame: CGRect(x: 0, y: 0, width: 390, height: 138))
+        bar.showsTabStrip = true
+        bar.setTabPage(.library)
+        let search = bar.firstDescendant(label: "Search")
+        var typed: [String] = []
+        bar.onSearchTextChanged = { typed.append($0) }
+        bar.beginSearch(placeholder: "Search Library")
+        #expect(bar.isSearching)
+        #expect(search?.isHidden == true)
+        #expect(bar.searchField.placeholder == "Search Library")
+        bar.searchField.text = "fl"
+        bar.searchField.sendActions(for: .editingChanged)
+        #expect(typed == ["fl"])
+        bar.endSearch()
+        #expect(!bar.isSearching)
+        #expect(bar.searchField.text == "")
+        #expect(search?.isHidden == false)
     }
 
     @Test func backChevronGivesWayToTheHomeTab() {
@@ -151,6 +212,32 @@ struct HomeHeaderBarTabStripTests {
         #expect(back?.isHidden == false)
         bar.showsTabStrip = true
         #expect(back?.isHidden == true)
+    }
+}
+
+struct ShowGridItemSearchTests {
+
+    @Test func cardsAreFoundByNameInAnyCase() {
+        let page = WebPage(title: "Welcome Slides", url: URL(string: "https://example.org/a")!)
+        let site = ShowGridItem.website(page)
+        #expect(site.matchesSearch("welcome"))
+        #expect(site.matchesSearch("  SLIDES "))
+        // The address counts too.
+        #expect(site.matchesSearch("example.org"))
+        #expect(!site.matchesSearch("countdown"))
+    }
+
+    @Test func toolTilesAreFoundByWhatTheyAreCalled() {
+        #expect(ShowGridItem.camera.matchesSearch("cam"))
+        #expect(ShowGridItem.logo.matchesSearch("background"))
+        #expect(ShowGridItem.screensaver.matchesSearch("screen"))
+        #expect(!ShowGridItem.camera.matchesSearch("background"))
+    }
+
+    @Test func addTileNeverMatchesAndAnEmptySearchMatchesEverything() {
+        #expect(!ShowGridItem.add.matchesSearch("a"))
+        #expect(ShowGridItem.add.matchesSearch("  "))
+        #expect(ShowGridItem.pdf(SavedPDF(title: "Résumé")).matchesSearch("resume"))
     }
 }
 

@@ -65,6 +65,10 @@ class iPhoneMainViewController: UIViewController {
     var isMovingGridForPaging = false
     /// Grid mode as of the last change, to tell opening a Show from closing one.
     var wasGridInShowMode = false
+    /// Page whose content the header's search field is filtering, if any.
+    var searchingTab: HomeTab?
+    /// Show that was open when the grid last changed (a search belongs to it).
+    var searchedShowId: UUID?
     /// The Show the Show tab returns to after a visit to Home.
     var lastOpenShowId: UUID?
     /// Library as a pager page: browse and preview, never add-to-Show.
