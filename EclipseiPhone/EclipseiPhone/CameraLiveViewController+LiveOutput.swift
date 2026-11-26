@@ -16,14 +16,36 @@ extension CameraLiveViewController {
         view.addSubview(liveOutputThumbView)
     }
 
-    /// Program monitor stays on while AirPlay is connected, including camera live.
-    static func showsLiveOutputThumb(isConnected: Bool) -> Bool { isConnected }
+    /// The "what's live" card shows while AirPlay is connected (including camera
+    /// live), and also with no TV when something is live on the phone itself
+    /// (Practice Mode, or an Apple TV link): whatever was live when the camera
+    /// opened is the first card, not a gap.
+    static func showsLiveOutputThumb(isConnected: Bool, hasLiveSource: Bool = false) -> Bool {
+        isConnected || hasLiveSource
+    }
+
+    /// What the audience sees right now: the AirPlay picture, else the camera once
+    /// it is live, else the card that is live in the Show.
+    var liveOutputSource: PresentationSource? {
+        let mgr = ExternalDisplayManager.shared
+        if let presented = mgr.presentedSource { return presented }
+        if mgr.isCameraModeActive { return .camera }
+        // The Show screen stops answering once this screen covers it, so fall back
+        // to what it said was live as the camera opened.
+        return mgr.currentSourceProvider?() ?? entryLiveSource
+    }
+
+    /// Whether the "what's live" card has anything to show.
+    var showsLiveOutputCard: Bool {
+        Self.showsLiveOutputThumb(
+            isConnected: ExternalDisplayManager.shared.isConnected,
+            hasLiveSource: liveOutputSource != nil
+        )
+    }
 
     /// Places the program thumb at the bottom-leading corner of the panel.
     func layoutLiveOutputThumb(panel: CGRect) {
-        let shouldShow = Self.showsLiveOutputThumb(
-            isConnected: ExternalDisplayManager.shared.isConnected
-        )
+        let shouldShow = showsLiveOutputCard
         liveOutputThumbView.isHidden = !shouldShow
         guard shouldShow else { return }
 
@@ -50,7 +72,7 @@ extension CameraLiveViewController {
     /// Loads art for the current AirPlay source into any program thumb
     /// (the in-panel monitor or a stacked-grid tile).
     func configureLiveOutputThumb(_ thumb: CameraLiveOutputThumbView) {
-        guard let source = ExternalDisplayManager.shared.presentedSource else {
+        guard let source = liveOutputSource else {
             thumb.configure(image: nil, symbol: nil, fill: .black)
             return
         }
@@ -248,11 +270,35 @@ final class CameraLiveOutputThumbView: UIView {
             symbolView.centerYAnchor.constraint(equalTo: centerYAnchor),
             symbolView.widthAnchor.constraint(equalToConstant: symbolSide),
             symbolView.heightAnchor.constraint(equalToConstant: symbolSide),
-            badge.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 4),
-            badge.topAnchor.constraint(equalTo: topAnchor, constant: 4),
-            badge.widthAnchor.constraint(equalToConstant: 28),
-            badge.heightAnchor.constraint(equalToConstant: 12)
+            badgeLeading, badgeTop, badgeWidth, badgeHeight
         ])
+    }
+
+    private lazy var badgeLeading = badge.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 4)
+    private lazy var badgeTop = badge.topAnchor.constraint(equalTo: topAnchor, constant: 4)
+    private lazy var badgeWidth = badge.widthAnchor.constraint(equalToConstant: 28)
+    private lazy var badgeHeight = badge.heightAnchor.constraint(equalToConstant: 12)
+
+    /// Badge metrics for a card `width` points wide: the small ribbon thumb keeps
+    /// the compact badge, a grid-sized card gets one that reads at a glance and
+    /// sits clear of the rounded corner.
+    static func badgeMetrics(forWidth width: CGFloat)
+        -> (inset: CGFloat, size: CGSize, fontSize: CGFloat, corner: CGFloat) {
+        width >= 120
+            ? (10, CGSize(width: 46, height: 22), 13, 6)
+            : (4, CGSize(width: 28, height: 12), 11, 3)
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        let metrics = Self.badgeMetrics(forWidth: bounds.width)
+        guard badgeWidth.constant != metrics.size.width else { return }
+        badgeLeading.constant = metrics.inset
+        badgeTop.constant = metrics.inset
+        badgeWidth.constant = metrics.size.width
+        badgeHeight.constant = metrics.size.height
+        badge.font = .systemFont(ofSize: metrics.fontSize, weight: .bold)
+        badge.layer.cornerRadius = metrics.corner
     }
 
     required init?(coder: NSCoder) {

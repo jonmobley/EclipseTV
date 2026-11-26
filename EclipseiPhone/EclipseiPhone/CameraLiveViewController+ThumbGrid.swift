@@ -38,9 +38,7 @@ extension CameraLiveViewController {
     /// Program, enabled frames, then Background · quick-change stills · +.
     var thumbGridItems: [CameraThumbGridItem] {
         Self.thumbGridItems(
-            showsProgram: Self.showsLiveOutputThumb(
-                isConnected: ExternalDisplayManager.shared.isConnected
-            ),
+            showsProgram: showsLiveOutputCard,
             frameIds: CameraFrameStore.shared.enabledFrames.map(\.id),
             stills: stillRibbonItems
         )

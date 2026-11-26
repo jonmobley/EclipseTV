@@ -83,6 +83,12 @@ struct CameraLiveChromeTests {
 
     @Test func liveOutputThumbStaysVisibleWhileCameraIsLive() {
         #expect(CameraLiveViewController.showsLiveOutputThumb(isConnected: true))
+        // With no TV, something live on the phone still gets its card.
+        #expect(
+            CameraLiveViewController.showsLiveOutputThumb(
+                isConnected: false, hasLiveSource: true
+            )
+        )
         #expect(
             CameraLiveViewController.showsLiveOutputThumb(isConnected: false) == false
         )
@@ -116,7 +122,10 @@ struct CameraLiveChromeTests {
         #expect(panel.width > 1)
         #expect(vc.tapToGoLiveHintView.bounds.width > 1)
         #expect(abs(vc.tapToGoLiveHintView.center.x - panel.midX) < 1)
-        #expect(abs(vc.tapToGoLiveHintView.center.y - panel.midY) < 1)
+        // In the header row beside Back, never over the picture.
+        #expect(abs(vc.tapToGoLiveHintView.center.y - vc.backButton.frame.midY) < 1)
+        #expect(vc.tapToGoLiveHintView.frame.minX >= vc.backButton.frame.maxX)
+        #expect(vc.tapToGoLiveHintView.frame.maxX <= vc.settingsButton.frame.minX)
     }
 
     @Test func cutawayParkHidesLiveBadgeAndShowsHint() {
