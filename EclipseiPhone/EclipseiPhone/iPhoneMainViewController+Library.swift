@@ -64,7 +64,9 @@ extension iPhoneMainViewController {
             children.append(musicAction())
         }
         children.append(cameraModeAction())
-        if openShow == nil {
+        // The paging home screen has no Settings icon, so it is always here; with
+        // a Show open it edits that Show too, as the gear did.
+        if openShow == nil || isHomeTabPaging {
             children.append(settingsAction())
         }
         let recents = recentShowsForMenu(excluding: openShow?.id)
