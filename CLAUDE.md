@@ -256,12 +256,15 @@
   and swaps its right-hand buttons by page (`setTabPage`): Music gets "+", and Library and Music hide their
   own navigation bar at the root (`HomeTabPageNavigationController`; it returns for a playlist or reordering).
   The dropdown says "Eclipse" on Home (no "Home": that is a tab) and has no Library / Music entries or back chevron there.
-  The end of the tab row holds Search and Camera (in phone landscape they sit just before the header's own buttons).
-  Camera is on every page and opens the full-screen camera (`presentCameraLive`). Search shows on Library, Music's list and
-  an open Show; it opens one field under the tabs (`beginPageSearch` / `endPageSearch`) that filters the page in front by
-  name: Show cards (`ShowGridItem.searchTitle`, `showSearchQuery`), tracks and playlists, Library titles. The filter ends
-  when the page or the Show changes, and arranging ends it first, because arrange positions are positions in the whole
-  Show (a filtered grid would save the wrong order). The pushed Library page keeps its own search field.
+  Search and Camera live in a floating bar at the bottom, beside the Music button (`HomeFooterBar`, 2026-11-25; the owner
+  did not want them in the tab row). It slides away while a page scrolls down and returns on the way up or at the top
+  (`HomeFooterScroll`, driven by watching each page's scroll position), and rides above the keyboard. Camera is on every
+  page and opens the full-screen camera (`presentCameraLive`). The search field shows on Library, Music's list and an open
+  Show and filters the page in front by name (`beginPageSearch` / `endPageSearch`): Show cards (`ShowGridItem.searchTitle`,
+  `showSearchQuery`), tracks and playlists, Library titles. The filter ends when the page or the Show changes, and
+  arranging ends it first, because arrange positions are positions in the whole Show (a filtered grid would save the wrong
+  order). The bar gives way to the expanded music card and to arranging / selecting. The pushed Library page keeps its own
+  search field. A tab's slide always ends on the tapped tab (`scrollViewDidEndScrollingAnimation` never reads the offset).
   The Library *tab* only browses and previews; adding to a Show is still the pushed Library page from the Show's "+".
   Regular width (full iPad, big phones in landscape) is unchanged: `HomeHeaderNavTabs`, Music drawer, pushed Library.
 - Content icons match the Mac app (2026-11-22): `ThumbnailTypeIcon.systemName` is the one place a content kind's SF Symbol is named
