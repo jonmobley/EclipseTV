@@ -256,13 +256,13 @@
   and swaps its right-hand buttons by page (`setTabPage`): Music gets "+", and Library and Music hide their
   own navigation bar at the root (`HomeTabPageNavigationController`; it returns for a playlist or reordering).
   The dropdown says "Eclipse" on Home (no "Home": that is a tab) and has no Library / Music entries or back chevron there.
-  Camera, Search and Music are icon-only buttons (no words: owner's call) in an iOS-style glass footer (`HomeFooterBar`,
-  2026-11-25; the owner did not want them in the tab row, and asked for buttons like the Showtime app's tab bar, not an
-  always-on field). Search turns the bar into the search field with ✕ beside it; Music opens the pick-something-to-play
-  sheet. What is playing shows as a strip above the footer, like Apple Music (`HomeNowPlayingStrip`: title, pause, ✕ to
-  stop, tap for Now Playing); it stays, dropping to the bottom, when the footer slides away. On the paging home screen
-  these replace the blue Music circle and its card (`refreshAudioMiniPlayer` hides both there); regular width keeps the
-  circle and drawer. The bar slides away while a page scrolls down and returns on the way up or at the top
+  Camera and Search are icon-only buttons (no words: owner's call) in an iOS-style glass footer, bottom left, level with
+  the blue Music circle (`HomeFooterBar`, 2026-11-25; the owner did not want them in the tab row, and asked for buttons
+  like the Showtime app's tab bar, not an always-on field). Search turns the bar into the search field with ✕ beside it.
+  The music player is the original circle-and-card (`AudioMiniPlayerView`, mic duck + Stop) and must stay: a replacement
+  strip was tried and the owner wanted the old player back ("we had a really cool audio player"). When the card opens,
+  circle and card lift above the footer (`audioMiniLift`), and settle back to the corner when it closes or the footer is
+  scrolled away, so neither hides the other. The bar slides away while a page scrolls down and returns on the way up or at the top
   (`HomeFooterScroll`, driven by watching each page's scroll position), and rides above the keyboard. Camera is on every
   page and opens the full-screen camera (`presentCameraLive`). The search field shows on Library, Music's list and an open
   Show and filters the page in front by name (`beginPageSearch` / `endPageSearch`): Show cards (`ShowGridItem.searchTitle`,

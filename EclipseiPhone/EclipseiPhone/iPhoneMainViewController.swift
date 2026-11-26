@@ -67,10 +67,9 @@ class iPhoneMainViewController: UIViewController {
     var wasGridInShowMode = false
     /// Search field and Camera, floating at the bottom of the paging home screen.
     let homeFooter = HomeFooterBar()
-    /// What is playing, above the footer (paging home screen; replaces the blue
-    /// Music circle and its card there).
-    let homeNowPlayingStrip = HomeNowPlayingStrip()
-    var homeNowPlayingBottomConstraint: NSLayoutConstraint?
+    /// Bottom of the Music circle (its card hangs off it); lifts above the footer
+    /// while the card is open.
+    var audioMiniBubbleBottomConstraint: NSLayoutConstraint?
     /// Watches each page's scrolling to slide `homeFooter` away.
     var homeFooterScrollObservations: [NSKeyValueObservation] = []
     /// Page whose content the bottom bar's search field is filtering, if any.

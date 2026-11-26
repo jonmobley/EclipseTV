@@ -76,8 +76,7 @@ extension iPhoneMainViewController {
     /// Expands or collapses ambient chrome. User gestures pass `animated: true`.
     /// Regular width never expands the card (Music is the drawer only).
     func setAudioMiniCollapsed(_ collapsed: Bool, animated: Bool) {
-        // Drawer (regular width) and the paging home screen have no card.
-        if usesMusicDrawerChrome || isHomeTabPaging {
+        if usesMusicDrawerChrome {
             audioMiniCollapsed = true
             refreshAudioMiniPlayer()
             return
@@ -121,19 +120,6 @@ extension iPhoneMainViewController {
     /// Compact: the circle shows or hides the card (or opens the picker when
     /// idle). Regular: the circle toggles the Music drawer; the card never appears.
     func refreshAudioMiniPlayer() {
-        if isHomeTabPaging {
-            // Paging home screen: the footer has the Music button and the strip
-            // above it shows what is playing, so the circle and card stay away.
-            audioMiniCollapsed = true
-            isAudioMiniChromeAnimating = false
-            audioMiniHeightConstraint?.constant = 0
-            audioMiniPlayer.isHidden = true
-            audioMiniBubble.isHidden = true
-            refreshHomeNowPlayingStrip(animated: true)
-            libraryViewController.refreshMusicSwipeHintVisibility()
-            return
-        }
-        homeNowPlayingStrip.isHidden = true
         let drawerChrome = usesMusicDrawerChrome
         if drawerChrome { audioMiniCollapsed = true }
 
@@ -163,6 +149,7 @@ extension iPhoneMainViewController {
 
         let chromeHeight: CGFloat = showBar ? AudioMiniPlayerView.preferredHeight : 0
         audioMiniHeightConstraint?.constant = chromeHeight
+        applyAudioMiniLift(cardShown: showBar)
         audioMiniPlayer.isHidden = !showBar
         audioMiniPlayer.alpha = 1
         audioMiniPlayer.transform = .identity
@@ -213,6 +200,8 @@ extension iPhoneMainViewController {
 
         bubble.isHidden = false
         bubble.alpha = 1
+        // The circle rises above the footer with the card as it fades in.
+        applyAudioMiniLift(cardShown: true)
 
         UIView.animate(
             withDuration: 0.2,
@@ -243,6 +232,8 @@ extension iPhoneMainViewController {
         raiseAudioMiniChrome()
         view.layoutIfNeeded()
         applyMiniPlayerBottomInset(0)
+        // The circle settles back beside the footer as the card fades out.
+        applyAudioMiniLift(cardShown: false)
 
         UIView.animate(
             withDuration: 0.2,

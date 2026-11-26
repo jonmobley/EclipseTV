@@ -213,6 +213,11 @@ extension iPhoneMainViewController {
             equalToConstant: AudioMiniPlayerView.compactWidth
         )
         audioMiniCardWidthConstraint = cardWidth
+        let bubbleBottom = audioMiniBubble.bottomAnchor.constraint(
+            equalTo: view.bottomAnchor,
+            constant: -AudioMiniPlayerView.compactBottomInset
+        )
+        audioMiniBubbleBottomConstraint = bubbleBottom
         NSLayoutConstraint.activate([
             height,
             cardWidth,
@@ -221,18 +226,13 @@ extension iPhoneMainViewController {
                 equalTo: audioMiniBubble.leadingAnchor,
                 constant: AudioMiniPlayerView.connectedOverlap
             ),
-            audioMiniPlayer.bottomAnchor.constraint(
-                equalTo: view.bottomAnchor,
-                constant: -AudioMiniPlayerView.compactBottomInset
-            ),
+            // The card hangs off the circle, so the two rise together.
+            audioMiniPlayer.bottomAnchor.constraint(equalTo: audioMiniBubble.bottomAnchor),
             audioMiniBubble.trailingAnchor.constraint(
                 equalTo: view.safeAreaLayoutGuide.trailingAnchor,
                 constant: -AudioMiniPlayerView.compactTrailingInset
             ),
-            audioMiniBubble.bottomAnchor.constraint(
-                equalTo: view.bottomAnchor,
-                constant: -AudioMiniPlayerView.compactBottomInset
-            )
+            bubbleBottom
         ])
 
         hadActiveAudioSession = AudioPlayerController.shared.hasActiveSession
