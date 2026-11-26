@@ -153,7 +153,10 @@ extension LibraryGridViewController {
         }
         updateHeroVisibility()
         reloadLibraryGrid()
+        // A remote phone's slide strip follows the director's slide.
+        refreshSlideshowRibbonPresentation()
         refreshLiveHeader()
+        scrollLiveSlideshowRibbonToCurrentSlide()
         onOpenShowChanged?(openShow)
     }
 
@@ -187,7 +190,9 @@ extension LibraryGridViewController {
             isLocked: isLiveOutputLocked,
             directorName: UIDevice.current.name,
             video: showLiveVideoState,
-            countdown: showLiveCountdownState
+            countdown: showLiveCountdownState,
+            slideshow: sharedProgram?.kind == .slideshow ? showLiveSlideshowState : nil,
+            screenFit: showLiveScreenFitState
         )
     }
 
@@ -231,10 +236,22 @@ extension LibraryGridViewController {
         case .countdown:
             applyRemoteCountdownHeader(snap)
         case .slideshow:
-            applyRemoteOverlayHeader(
-                title: remoteSlideshowTitle(snap.liveItemId),
-                systemImage: ThumbnailTypeIcon.slideshow.systemName
-            )
+            // The slide on the TV, as the director's own hero shows it. An older
+            // director reports no slides, so its slideshow stays a labelled card.
+            if let slideId = LiveSlideshowView(snapshot: snap)?.currentSlideId,
+               let item = store.item(id: slideId) {
+                liveHeader.configure(
+                    with: item,
+                    thumbnail: store.thumbnail(for: slideId),
+                    isOnline: true,
+                    showsLiveBadge: true
+                )
+            } else {
+                applyRemoteOverlayHeader(
+                    title: remoteSlideshowTitle(snap.liveItemId),
+                    systemImage: ThumbnailTypeIcon.slideshow.systemName
+                )
+            }
         case .logo:
             applyRemoteOverlayHeader(
                 title: "Background",

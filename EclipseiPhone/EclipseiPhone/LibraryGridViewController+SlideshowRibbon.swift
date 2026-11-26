@@ -30,9 +30,23 @@ extension LibraryGridViewController {
         }
     }
 
+    /// The live slideshow as this phone sees it: its own player, or on a remote
+    /// phone the director's report. The slide strip and slide steps read only this.
+    var liveSlideshowView: LiveSlideshowView? {
+        if ShowLiveSession.shared.isRemoteOperator {
+            return LiveSlideshowView(snapshot: ShowLiveSession.shared.snapshot)
+        }
+        let playback = SlideshowPlaybackController.shared
+        return LiveSlideshowView(
+            playbackSlideshowId: playback.activeSlideshowId,
+            slideIds: playback.activeSlideIds,
+            index: playback.currentSlideIndex
+        )
+    }
+
     /// Active slideshow when it belongs to the open Show.
     func activeLiveSlideshow() -> Slideshow? {
-        guard let id = SlideshowPlaybackController.shared.activeSlideshowId else {
+        guard let id = liveSlideshowView?.slideshowId else {
             return nil
         }
         guard let show = SlideshowStore.shared.slideshow(id: id),
@@ -52,7 +66,7 @@ extension LibraryGridViewController {
             return livePollRibbonItemCount()
         }
         guard showsLiveSlideshowRibbon else { return 0 }
-        return SlideshowPlaybackController.shared.activeSlideIds.count
+        return liveSlideshowView?.slideIds.count ?? 0
     }
 
     /// Configures a ribbon cell for the live slideshow slide at `indexPath`.
@@ -68,8 +82,8 @@ extension LibraryGridViewController {
             configureLivePollRibbonCell(cell, at: indexPath)
             return
         }
-        let playback = SlideshowPlaybackController.shared
-        let ids = playback.activeSlideIds
+        let slides = liveSlideshowView
+        let ids = slides?.slideIds ?? []
         guard ids.indices.contains(indexPath.item) else { return }
         let id = ids[indexPath.item]
         cell.configure(
@@ -81,7 +95,7 @@ extension LibraryGridViewController {
                 isAvailable: true
             ),
             thumbnail: store.thumbnail(for: id),
-            isLive: indexPath.item == SlideshowPlaybackController.shared.currentSlideIndex,
+            isLive: indexPath.item == slides?.index,
             showsTypeIcon: false
         )
     }
@@ -96,8 +110,20 @@ extension LibraryGridViewController {
             handleLivePollRibbonTap(at: indexPath)
             return
         }
-        SlideshowPlaybackController.shared.goToSlide(at: indexPath.item)
+        goToLiveSlide(at: indexPath.item)
         Haptics.impactLight()
+    }
+
+    /// Jumps the live slideshow to a slide; a remote phone asks the director.
+    func goToLiveSlide(at index: Int) {
+        if sendShowLiveCommandIfOperator(.slideGoTo, value: Double(index)) { return }
+        SlideshowPlaybackController.shared.goToSlide(at: index)
+    }
+
+    /// Steps the live slideshow (hero swipe); a remote phone asks the director.
+    func stepLiveSlide(by delta: Int) {
+        if sendShowLiveCommandIfOperator(.slideStep, value: Double(delta)) { return }
+        SlideshowPlaybackController.shared.goToAdjacentSlide(delta: delta)
     }
 
     /// Reapplies layout when the live ribbon appears, hides, or moves.
@@ -212,8 +238,8 @@ extension LibraryGridViewController {
             index = livePollRibbonIndex
             count = livePollRibbonItems.count
         } else {
-            index = SlideshowPlaybackController.shared.currentSlideIndex
-            count = SlideshowPlaybackController.shared.activeSlideIds.count
+            index = liveSlideshowView?.index ?? 0
+            count = liveSlideshowView?.slideIds.count ?? 0
         }
         guard count > 0, index >= 0, index < count else { return }
         if docksLiveSlideshowRibbon {

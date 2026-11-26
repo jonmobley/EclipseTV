@@ -26,7 +26,7 @@ extension LibraryGridViewController {
             }
         }
         if docksLiveSlideshowRibbon {
-            let slideIds = SlideshowPlaybackController.shared.activeSlideIds
+            let slideIds = liveSlideshowView?.slideIds ?? []
             for path in slideshowRibbonView.indexPathsForVisibleItems {
                 guard slideIds.indices.contains(path.item) else { continue }
                 ids.insert(slideIds[path.item])
@@ -148,13 +148,13 @@ extension LibraryGridViewController {
         showRows: [ShowGridItem]? = nil
     ) -> String? {
         if isDockedSlideshowRibbon(collectionView) {
-            let slideIds = SlideshowPlaybackController.shared.activeSlideIds
+            let slideIds = liveSlideshowView?.slideIds ?? []
             guard slideIds.indices.contains(path.item) else { return nil }
             return slideIds[path.item]
         }
         switch homeSection(at: path.section, in: collectionView) {
         case .slideshowRibbon:
-            let slideIds = SlideshowPlaybackController.shared.activeSlideIds
+            let slideIds = liveSlideshowView?.slideIds ?? []
             guard slideIds.indices.contains(path.item) else { return nil }
             return slideIds[path.item]
         case .shows where isShowMode:

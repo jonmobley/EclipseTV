@@ -56,6 +56,22 @@ extension LibraryGridViewController {
             refreshSlideshowRibbonPresentation()
         case .lockToggle:
             toggleLiveOutputLock()
+        case .slideStep:
+            guard activeLiveSlideshow() != nil,
+                  let step = ShowLiveRouting.slideStep(command.value) else { return }
+            SlideshowPlaybackController.shared.goToAdjacentSlide(delta: step)
+        case .slideGoTo:
+            guard activeLiveSlideshow() != nil,
+                  let index = ShowLiveRouting.slideIndex(
+                    command.value,
+                    count: SlideshowPlaybackController.shared.activeSlideIds.count
+                  ) else { return }
+            SlideshowPlaybackController.shared.goToSlide(at: index)
+        case .screenFitToggle:
+            // Same guard as the director's own button: nothing to flip unless
+            // its hero is offering Fit / Fill right now.
+            guard liveScreenFitChrome() != nil else { return }
+            toggleLiveScreenFit()
         }
     }
 
@@ -70,6 +86,26 @@ extension LibraryGridViewController {
             isPlaying: state.isPlaying,
             currentTime: Int(state.currentTime.rounded(.down)),
             duration: Int(state.duration.rounded(.down))
+        )
+    }
+
+    /// Director slideshow for the snapshot, nil when none is live in this Show.
+    var showLiveSlideshowState: ShowLiveSlideshowState? {
+        guard activeLiveSlideshow() != nil else { return nil }
+        let playback = SlideshowPlaybackController.shared
+        guard playback.activeSlideIds.indices.contains(playback.currentSlideIndex) else {
+            return nil
+        }
+        return ShowLiveSlideshowState(
+            slideIds: playback.activeSlideIds, index: playback.currentSlideIndex
+        )
+    }
+
+    /// Director Fit / Fill button for the snapshot, nil when the hero shows none.
+    var showLiveScreenFitState: ShowLiveScreenFitState? {
+        guard let chrome = liveScreenFitChrome() else { return nil }
+        return ShowLiveScreenFitState(
+            isFill: chrome.mode == .fill, showsReset: chrome.showsReset
         )
     }
 
