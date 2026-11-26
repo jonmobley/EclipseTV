@@ -25,11 +25,12 @@ enum PDFViewPreset: String, CaseIterable, Equatable {
         }
     }
 
+    /// Same words as the Mac (eclipsepro `PDFViewPreset.title`).
     var title: String {
         switch self {
-        case .fit: return "Fit Page"
-        case .fill: return "Fill Screen"
-        case .twoPages: return "Two Pages"
+        case .fit: return "Fit"
+        case .fill: return "Fill"
+        case .twoPages: return "2 Pages"
         }
     }
 
