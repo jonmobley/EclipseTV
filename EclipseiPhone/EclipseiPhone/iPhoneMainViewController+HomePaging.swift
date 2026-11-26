@@ -128,8 +128,8 @@ extension iPhoneMainViewController: UIScrollViewDelegate {
         case .home: return
         }
         searchingTab = homeTab
+        // The field takes the tab row's place, so the header keeps its height.
         headerBar.beginSearch(placeholder: placeholder)
-        animateHeaderHeightChange()
     }
 
     /// Filters the page being searched as the text changes.
@@ -153,26 +153,6 @@ extension iPhoneMainViewController: UIScrollViewDelegate {
         libraryViewController.setShowSearchQuery("")
         audioLibraryViewController.searchQuery = ""
         headerBar.endSearch()
-        if animated {
-            animateHeaderHeightChange()
-        } else {
-            applyHomePagerTopAttachment()
-        }
-    }
-
-    private func animateHeaderHeightChange() {
-        guard view.window != nil, !UIAccessibility.isReduceMotionEnabled else {
-            applyHomePagerTopAttachment()
-            return
-        }
-        UIView.animate(
-            withDuration: 0.22,
-            delay: 0,
-            options: [.curveEaseInOut, .beginFromCurrentState]
-        ) {
-            self.applyHomePagerTopAttachment()
-            self.view.layoutIfNeeded()
-        }
     }
 
     /// Locks paging while arranging media; snaps back to Library when paged.
@@ -806,8 +786,7 @@ extension iPhoneMainViewController: UIScrollViewDelegate {
         headerBar.showsTabStrip = tabs
         let height = HomeHeaderBar.height(
             showsTabStrip: tabs,
-            verticalSizeClass: traitCollection.verticalSizeClass,
-            isSearching: headerBar.isSearching
+            verticalSizeClass: traitCollection.verticalSizeClass
         )
         headerHeightConstraint?.constant = height
         libraryPageTopConstraint?.constant = height
