@@ -134,7 +134,7 @@ final class LibraryGridViewController: UIViewController {
     /// inactive, or because its album was momentarily absent. It reopens as soon as it
     /// is valid again, so a detour through Settings returns the user to the same Show.
     var showAwaitingReturnId: UUID?
-    /// Text the open Show's cards are filtered by (the header's search field).
+    /// Text the open Show's cards are filtered by (the home screen's search field).
     /// Arranging works on the whole Show, so it ends the search first.
     var showSearchQuery = ""
     /// Called when the grid itself ends the search (arranging began).

@@ -121,87 +121,22 @@ struct HomeHeaderBarTabStripTests {
         #expect(HomeHeaderBar.height(showsTabStrip: true, verticalSizeClass: .compact) == 52)
     }
 
-    @Test func searchFieldAddsARowUnderTheTabs() {
-        #expect(
-            HomeHeaderBar.height(
-                showsTabStrip: true, verticalSizeClass: .regular, isSearching: true
-            ) == 138
-        )
-        #expect(
-            HomeHeaderBar.height(
-                showsTabStrip: true, verticalSizeClass: .compact, isSearching: true
-            ) == 100
-        )
-    }
-
-    @Test func eachPageShowsItsOwnControls() {
+    @Test func libraryAndMusicPagesDropHomeAndShowControls() {
         let bar = HomeHeaderBar(frame: CGRect(x: 0, y: 0, width: 390, height: 90))
         bar.showsTabStrip = true
-        let search = bar.firstDescendant(label: "Search")
         let addMusic = bar.firstDescendant(label: "Add Music")
         let newShow = bar.firstDescendant(label: "New Show")
-        // Home has nothing to search.
-        #expect(search?.isHidden == true)
         #expect(newShow?.isHidden == false)
 
         bar.setTabPage(.library)
-        #expect(search?.isHidden == false)
         #expect(addMusic?.isHidden == true)
         #expect(newShow?.isHidden == true)
 
         bar.setTabPage(.music)
-        #expect(search?.isHidden == false)
         #expect(addMusic?.isHidden == false)
-        // Inside a playlist the playlist's own bar takes over.
+        // Inside a playlist the playlist's own bar has the "+".
         bar.setMusicAddAvailable(false)
         #expect(addMusic?.isHidden == true)
-        #expect(search?.isHidden == true)
-
-        // The Show page: only once a Show is open.
-        bar.setTabPage(.show)
-        #expect(search?.isHidden == true)
-        bar.setShowModeChrome(true)
-        #expect(search?.isHidden == false)
-        bar.setArranging(true)
-        #expect(search?.isHidden == true)
-    }
-
-    @Test func cameraIsOnEveryPage() {
-        let bar = HomeHeaderBar(frame: CGRect(x: 0, y: 0, width: 390, height: 90))
-        let camera = bar.firstDescendant(label: "Camera") as? UIButton
-        // No tab row (full iPad), no button.
-        #expect(camera?.isHidden == true)
-        bar.showsTabStrip = true
-        for page in HomeTab.allCases {
-            bar.setTabPage(page)
-            #expect(camera?.isHidden == false)
-        }
-        var opened = 0
-        bar.onOpenCamera = { opened += 1 }
-        camera?.sendActions(for: .touchUpInside)
-        #expect(opened == 1)
-        bar.setArranging(true)
-        #expect(camera?.isHidden == true)
-    }
-
-    @Test func searchButtonHidesWhileItsFieldIsUp() {
-        let bar = HomeHeaderBar(frame: CGRect(x: 0, y: 0, width: 390, height: 138))
-        bar.showsTabStrip = true
-        bar.setTabPage(.library)
-        let search = bar.firstDescendant(label: "Search")
-        var typed: [String] = []
-        bar.onSearchTextChanged = { typed.append($0) }
-        bar.beginSearch(placeholder: "Search Library")
-        #expect(bar.isSearching)
-        #expect(search?.isHidden == true)
-        #expect(bar.searchField.placeholder == "Search Library")
-        bar.searchField.text = "fl"
-        bar.searchField.sendActions(for: .editingChanged)
-        #expect(typed == ["fl"])
-        bar.endSearch()
-        #expect(!bar.isSearching)
-        #expect(bar.searchField.text == "")
-        #expect(search?.isHidden == false)
     }
 
     @Test func backChevronGivesWayToTheHomeTab() {
@@ -212,6 +147,75 @@ struct HomeHeaderBarTabStripTests {
         #expect(back?.isHidden == false)
         bar.showsTabStrip = true
         #expect(back?.isHidden == true)
+    }
+}
+
+@MainActor
+struct HomeFooterBarTests {
+
+    @Test func homeShowsCameraAloneAndSearchablePagesAddTheField() {
+        let bar = HomeFooterBar(frame: CGRect(x: 0, y: 0, width: 300, height: 48))
+        let camera = bar.firstDescendant(label: "Camera")
+        #expect(camera?.isHidden == false)
+        #expect(bar.searchField.isHidden)
+
+        bar.setSearch(placeholder: "Search Music")
+        #expect(!bar.searchField.isHidden)
+        #expect(bar.searchField.placeholder == "Search Music")
+        #expect(camera?.isHidden == false)
+    }
+
+    @Test func searchingSwapsCameraForCancelAndClearsOnEnd() {
+        let bar = HomeFooterBar(frame: CGRect(x: 0, y: 0, width: 300, height: 48))
+        bar.setSearch(placeholder: "Search Library")
+        var typed: [String] = []
+        var cancelled = 0
+        bar.onSearchTextChanged = { typed.append($0) }
+        bar.onCancelSearch = { cancelled += 1 }
+
+        bar.setSearching(true)
+        let camera = bar.firstDescendant(label: "Camera")
+        let cancel = bar.firstDescendant(label: "Cancel search") as? UIButton
+        #expect(camera?.isHidden == true)
+        #expect(cancel?.isHidden == false)
+        bar.searchField.text = "fl"
+        bar.searchField.sendActions(for: .editingChanged)
+        #expect(typed == ["fl"])
+        cancel?.sendActions(for: .touchUpInside)
+        #expect(cancelled == 1)
+
+        bar.setSearching(false)
+        #expect(bar.searchField.text == "")
+        #expect(camera?.isHidden == false)
+    }
+
+    @Test func cameraButtonOpensTheCamera() {
+        let bar = HomeFooterBar(frame: CGRect(x: 0, y: 0, width: 300, height: 48))
+        var opened = 0
+        bar.onOpenCamera = { opened += 1 }
+        (bar.firstDescendant(label: "Camera") as? UIButton)?
+            .sendActions(for: .touchUpInside)
+        #expect(opened == 1)
+    }
+
+    @Test func aSearchKeepsTheBarUpWhileScrolling() {
+        let bar = HomeFooterBar(frame: CGRect(x: 0, y: 0, width: 300, height: 48))
+        bar.setScrolledAway(true, animated: false)
+        #expect(bar.isScrolledAway)
+        bar.setScrolledAway(false, animated: false)
+        bar.setSearch(placeholder: "Search this Show")
+        bar.setSearching(true)
+        bar.setScrolledAway(true, animated: false)
+        #expect(!bar.isScrolledAway)
+    }
+
+    @Test func barHidesGoingDownAndReturnsGoingUpOrAtTheTop() {
+        #expect(HomeFooterScroll.shouldHide(delta: 12, distanceFromTop: 300) == true)
+        #expect(HomeFooterScroll.shouldHide(delta: -12, distanceFromTop: 300) == false)
+        // Tiny movements change nothing.
+        #expect(HomeFooterScroll.shouldHide(delta: 1, distanceFromTop: 300) == nil)
+        // At the top it is always there.
+        #expect(HomeFooterScroll.shouldHide(delta: 12, distanceFromTop: 2) == false)
     }
 }
 

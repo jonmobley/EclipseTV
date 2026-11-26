@@ -327,6 +327,8 @@ extension iPhoneMainViewController {
     /// Header, then Music. An open drawer sits above header buttons; the Music
     /// bubble stays tappable while the pane is closed.
     func raiseHomeOverlayChrome() {
+        // The bar gives way to the expanded music card (same strip of screen).
+        refreshHomeFooter()
         HomeOverlayZOrder.raise(
             header: headerBar,
             player: audioMiniPlayer,

@@ -104,6 +104,7 @@ extension iPhoneMainViewController {
         setupHeaderBar()
         embedHomePager()
         setupAudioMiniPlayer()
+        setupHomeFooter()
         setupMusicDrawer()
         raiseAudioMiniChrome()
         setupTransferOverlay()
@@ -140,18 +141,6 @@ extension iPhoneMainViewController {
         }
         headerBar.onSelectTab = { [weak self] tab in
             self?.selectHomeTab(tab)
-        }
-        headerBar.onOpenCamera = { [weak self] in
-            self?.presentCameraLive()
-        }
-        headerBar.onBeginSearch = { [weak self] in
-            self?.beginPageSearch()
-        }
-        headerBar.onSearchTextChanged = { [weak self] text in
-            self?.applyPageSearch(text)
-        }
-        headerBar.onCancelSearch = { [weak self] in
-            self?.endPageSearch()
         }
         headerBar.onAddMusic = { [weak self] in
             guard let self else { return }

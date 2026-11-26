@@ -112,24 +112,104 @@ extension iPhoneMainViewController: UIScrollViewDelegate {
         homeTabDidSettle()
     }
 
-    // MARK: - Search (Library, Show, Music)
+    // MARK: - Bottom bar: Search (Library, Show, Music) and Camera
 
-    /// Opens the header's search field for the page in front.
-    func beginPageSearch() {
-        guard isHomeTabPaging, searchingTab == nil else { return }
-        finishHomePagerSlide()
-        let placeholder: String
+    /// Adds the floating bar beside the Music button and watches the pages'
+    /// scrolling so it can slide away.
+    func setupHomeFooter() {
+        let footer = homeFooter
+        footer.translatesAutoresizingMaskIntoConstraints = false
+        footer.isHidden = true
+        footer.onOpenCamera = { [weak self] in
+            self?.presentCameraLive()
+        }
+        footer.onBeginSearch = { [weak self] in
+            self?.beginPageSearch()
+        }
+        footer.onSearchTextChanged = { [weak self] text in
+            self?.applyPageSearch(text)
+        }
+        footer.onCancelSearch = { [weak self] in
+            self?.endPageSearch()
+        }
+        view.addSubview(footer)
+        // Level with the Music button at rest; above the keyboard while typing.
+        // (Without the keyboard the guide is the screen's bottom edge, not the
+        // safe area, or it would hold the bar above the button.)
+        view.keyboardLayoutGuide.usesBottomSafeArea = false
+        let resting = footer.centerYAnchor.constraint(
+            equalTo: audioMiniBubble.centerYAnchor
+        )
+        resting.priority = .defaultHigh
+        NSLayoutConstraint.activate([
+            footer.leadingAnchor.constraint(
+                equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 16
+            ),
+            footer.trailingAnchor.constraint(
+                equalTo: audioMiniBubble.leadingAnchor, constant: -12
+            ),
+            resting,
+            footer.bottomAnchor.constraint(
+                lessThanOrEqualTo: view.keyboardLayoutGuide.topAnchor, constant: -8
+            )
+        ])
+
+        libraryPagePicker?.loadViewIfNeeded()
+        audioLibraryViewController.loadViewIfNeeded()
+        let scrollViews: [UIScrollView?] = [
+            libraryViewController.homeCollectionView,
+            libraryViewController.showCollectionView,
+            libraryPagePicker?.collectionView,
+            audioLibraryViewController.tableView
+        ]
+        homeFooterScrollObservations = scrollViews.compactMap { $0 }.map { scrollView in
+            scrollView.observe(\.contentOffset, options: [.old, .new]) {
+                [weak self] scrollView, change in
+                guard let old = change.oldValue, let new = change.newValue else { return }
+                MainActor.assumeIsolated {
+                    self?.pageDidScroll(scrollView, by: new.y - old.y)
+                }
+            }
+        }
+        refreshHomeFooter()
+    }
+
+    /// A page scrolled: hide the bar on the way down, bring it back on the way up.
+    private func pageDidScroll(_ scrollView: UIScrollView, by delta: CGFloat) {
+        // Only a finger's scroll counts; reloads and layout move the offset too.
+        guard scrollView.isTracking || scrollView.isDragging || scrollView.isDecelerating
+        else { return }
+        let fromTop = scrollView.contentOffset.y + scrollView.adjustedContentInset.top
+        guard let hide = HomeFooterScroll.shouldHide(
+            delta: delta, distanceFromTop: fromTop
+        ) else { return }
+        homeFooter.setScrolledAway(hide, animated: true)
+    }
+
+    /// Which controls the bar shows for the page in front, and whether it shows.
+    func refreshHomeFooter() {
+        let grid = libraryViewController
+        let editing = grid.isArranging || grid.isSelecting
+        // The expanded music card takes the same strip of screen.
+        let cardUp = !audioMiniCollapsed && !audioMiniPlayer.isHidden
+        homeFooter.isHidden = !isHomeTabPaging || editing || cardUp
+        let placeholder: String?
         switch homeTab {
         case .library: placeholder = "Search Library"
-        case .show:
-            guard libraryViewController.isShowMode else { return }
-            placeholder = "Search this Show"
-        case .music: placeholder = "Search Music"
-        case .home: return
+        case .show: placeholder = grid.isShowMode ? "Search this Show" : nil
+        case .music:
+            placeholder = audioLibraryNavController?.isAtRoot == false ? nil : "Search Music"
+        case .home: placeholder = nil
         }
+        homeFooter.setSearch(placeholder: placeholder)
+    }
+
+    /// The search field took focus: it now filters the page in front.
+    func beginPageSearch() {
+        guard isHomeTabPaging, searchingTab == nil, homeFooter.isSearchable else { return }
+        finishHomePagerSlide()
         searchingTab = homeTab
-        headerBar.beginSearch(placeholder: placeholder)
-        animateHeaderHeightChange()
+        homeFooter.setSearching(true)
     }
 
     /// Filters the page being searched as the text changes.
@@ -142,37 +222,17 @@ extension iPhoneMainViewController: UIScrollViewDelegate {
         }
     }
 
-    /// Closes the search field and shows the whole page again.
+    /// Ends the search and shows the whole page again.
     ///
     /// Also runs when the page changes or the Show does: a filter left on a page
     /// nobody is looking at would hide cards with nothing on screen to say why.
-    func endPageSearch(animated: Bool = true) {
+    func endPageSearch() {
         guard searchingTab != nil else { return }
         searchingTab = nil
         libraryPagePicker?.setHomeTabSearchQuery("")
         libraryViewController.setShowSearchQuery("")
         audioLibraryViewController.searchQuery = ""
-        headerBar.endSearch()
-        if animated {
-            animateHeaderHeightChange()
-        } else {
-            applyHomePagerTopAttachment()
-        }
-    }
-
-    private func animateHeaderHeightChange() {
-        guard view.window != nil, !UIAccessibility.isReduceMotionEnabled else {
-            applyHomePagerTopAttachment()
-            return
-        }
-        UIView.animate(
-            withDuration: 0.22,
-            delay: 0,
-            options: [.curveEaseInOut, .beginFromCurrentState]
-        ) {
-            self.applyHomePagerTopAttachment()
-            self.view.layoutIfNeeded()
-        }
+        homeFooter.setSearching(false)
     }
 
     /// Locks paging while arranging media; snaps back to Library when paged.
@@ -243,6 +303,8 @@ extension iPhoneMainViewController: UIScrollViewDelegate {
         if wasTabPaging != isHomeTabPaging {
             // The menu's title and entries depend on whether the tabs show.
             refreshLibraryMenu()
+            if !isHomeTabPaging { endPageSearch() }
+            refreshHomeFooter()
         }
         if mode != .paging {
             homePagerScrollView.contentOffset = .zero
@@ -349,8 +411,13 @@ extension iPhoneMainViewController: UIScrollViewDelegate {
     func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
         guard scrollView === homePagerScrollView else { return }
         isAnimatingHomePager = false
-        guard !isHomeSplitLayout, !isMusicInDrawer else { return }
-        updateHomePageIndexFromOffset()
+        guard isHomeTabPaging else { return }
+        // A tab's slide ends on the tab that was tapped, whatever the offset says
+        // at this instant: read from the offset, a slide cut short by something
+        // else (the search field taking focus) left the tabs on one page and the
+        // screen on another.
+        syncHomePagerOffsetIfNeeded()
+        homeTabDidSettle()
     }
 
     // MARK: - Private
@@ -395,9 +462,10 @@ extension iPhoneMainViewController: UIScrollViewDelegate {
         wasGridInShowMode = isShow
         // Another Show, or none: its cards were what the search was filtering.
         if searchingTab == .show, libraryViewController.openShowId != searchedShowId {
-            endPageSearch(animated: false)
+            endPageSearch()
         }
         searchedShowId = libraryViewController.openShowId
+        refreshHomeFooter()
         placeGridInItsSlot()
         guard isHomeTabPaging, changed, !isMovingGridForPaging else { return }
         let leftBehind: HomeTab = isShow ? .home : .show
@@ -518,6 +586,7 @@ extension iPhoneMainViewController: UIScrollViewDelegate {
         }
         libraryViewController.onArrangingChanged = { [weak self] arranging in
             self?.headerBar.setArranging(arranging)
+            self?.refreshHomeFooter()
             self?.refreshLibraryMenu()
             self?.refreshHomePagerScrollEnabled()
         }
@@ -529,6 +598,7 @@ extension iPhoneMainViewController: UIScrollViewDelegate {
             )
             self.refreshLibraryMenu()
             self.refreshHomePagerScrollEnabled()
+            self.refreshHomeFooter()
         }
         libraryViewController.onBlackLiveChanged = { [weak self] live in
             self?.headerBar.setBlackLive(live)
@@ -683,6 +753,7 @@ extension iPhoneMainViewController: UIScrollViewDelegate {
             if !atRoot, self?.searchingTab == .music {
                 self?.endPageSearch()
             }
+            self?.refreshHomeFooter()
         }
         audioLibraryViewController.onEditingChanged = { [weak nav] in
             nav?.syncBar(animated: true)
@@ -777,6 +848,9 @@ extension iPhoneMainViewController: UIScrollViewDelegate {
         if let searchingTab, searchingTab != homeTab {
             endPageSearch()
         }
+        // A new page starts with the bar in view.
+        homeFooter.setScrolledAway(false, animated: true)
+        refreshHomeFooter()
     }
 
     /// The header stays put on every page now; this only undoes anything left
@@ -797,8 +871,7 @@ extension iPhoneMainViewController: UIScrollViewDelegate {
         headerBar.showsTabStrip = tabs
         let height = HomeHeaderBar.height(
             showsTabStrip: tabs,
-            verticalSizeClass: traitCollection.verticalSizeClass,
-            isSearching: headerBar.isSearching
+            verticalSizeClass: traitCollection.verticalSizeClass
         )
         headerHeightConstraint?.constant = height
         libraryPageTopConstraint?.constant = height

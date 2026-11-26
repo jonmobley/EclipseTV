@@ -30,7 +30,7 @@ final class AudioLibraryViewController: UITableViewController {
     /// Invoked by the embedded back control to return to the Library page.
     var onRequestClose: (() -> Void)?
 
-    /// Text the list is filtered by (the Home header's search field on the Music
+    /// Text the list is filtered by (the home screen's search field on the Music
     /// tab). Reordering works on the whole list, so searching ends it.
     var searchQuery = "" {
         didSet {
