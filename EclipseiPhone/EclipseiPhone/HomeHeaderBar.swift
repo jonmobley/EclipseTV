@@ -35,6 +35,8 @@ final class HomeHeaderBar: UIView {
     let searchField = UISearchTextField()
     private let cancelSearchButton = UIButton(type: .system)
     private let addMusicButton = MinimumHitTargetButton(type: .system)
+    /// Library page "+": imports photos, videos and PDFs into the Library only.
+    private let addLibraryButton = MinimumHitTargetButton(type: .system)
     private let trailingStack = UIStackView()
     private let lockButton = MinimumHitTargetButton(type: .system)
     private let freezeButton = MinimumHitTargetButton(type: .system)
@@ -322,6 +324,18 @@ final class HomeHeaderBar: UIView {
             self?.onAddMusic?()
         }, for: .touchUpInside)
 
+        addLibraryButton.configuration = Self.barIconConfig(
+            systemName: "plus",
+            symbolConfig: symbolConfig,
+            foreground: .accent
+        )
+        addLibraryButton.translatesAutoresizingMaskIntoConstraints = false
+        addLibraryButton.accessibilityLabel = "Add to Library"
+        addLibraryButton.accessibilityHint = "Adds photos, videos or PDFs to the Library"
+        addLibraryButton.accessibilityIdentifier = "home.library.add"
+        addLibraryButton.showsMenuAsPrimaryAction = true
+        addLibraryButton.isHidden = true
+
         tabStrip.translatesAutoresizingMaskIntoConstraints = false
         tabStrip.isHidden = true
         tabStrip.onSelect = { [weak self] tab in
@@ -372,7 +386,7 @@ final class HomeHeaderBar: UIView {
         // Search is on the tab row; Camera is the round button bottom-left.
         for button in [
             lockButton, freezeButton, blackButton, settingsButton,
-            addButton, addMusicButton,
+            addButton, addMusicButton, addLibraryButton,
             newShowButton, selectActionsButton, doneButton
         ] {
             trailingStack.addArrangedSubview(button)
@@ -495,7 +509,7 @@ final class HomeHeaderBar: UIView {
         ])
         for button in [
             backButton, lockButton, freezeButton, blackButton, settingsButton,
-            addButton, addMusicButton, newShowButton
+            addButton, addMusicButton, addLibraryButton, newShowButton
         ] {
             button.setContentCompressionResistancePriority(.required, for: .horizontal)
         }
@@ -633,6 +647,11 @@ final class HomeHeaderBar: UIView {
     /// Attaches the system add menu to the "+" control (primary action).
     func setAddMenu(_ menu: UIMenu) {
         addButton.menu = menu
+    }
+
+    /// Attaches the Library page's add menu to its "+" control.
+    func setLibraryAddMenu(_ menu: UIMenu) {
+        addLibraryButton.menu = menu
     }
 
     // MARK: - Actions
@@ -816,6 +835,7 @@ final class HomeHeaderBar: UIView {
         let onMusic = showsTabStrip && tabPage == .music
         applySearchButtonAppearance()
         addMusicButton.isHidden = editing || !onMusic || !musicAddAvailable
+        addLibraryButton.isHidden = editing || !onLibrary
         if editing || onLibrary || onMusic {
             lockButton.isHidden = true
             freezeButton.isHidden = true

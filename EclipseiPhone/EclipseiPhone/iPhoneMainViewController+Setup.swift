@@ -114,6 +114,7 @@ extension iPhoneMainViewController {
     private func setupHeaderBar() {
         headerBar.translatesAutoresizingMaskIntoConstraints = false
         headerBar.setAddMenu(makeAddMenu())
+        headerBar.setLibraryAddMenu(makeLibraryAddMenu())
         headerBar.onOpenSettings = { [weak self] in
             self?.presentSettings()
         }

@@ -150,6 +150,7 @@ struct HomeHeaderBarTabStripTests {
         let search = bar.firstDescendant(label: "Search")
         let addMusic = bar.firstDescendant(label: "Add Music")
         let newShow = bar.firstDescendant(label: "New Show")
+        let addLibrary = bar.firstDescendant(label: "Add to Library")
         let searchOn = { (search as? UIControl)?.isEnabled == true && search?.isHidden == false }
         // Home has nothing to search: the icon keeps its place, dimmed.
         #expect(search?.isHidden == false)
@@ -160,8 +161,11 @@ struct HomeHeaderBarTabStripTests {
         #expect(searchOn())
         #expect(addMusic?.isHidden == true)
         #expect(newShow?.isHidden == true)
+        // Library has its own "+", which imports into the Library only.
+        #expect(addLibrary?.isHidden == false)
 
         bar.setTabPage(.music)
+        #expect(addLibrary?.isHidden == true)
         #expect(searchOn())
         #expect(addMusic?.isHidden == false)
         // Inside a playlist the playlist's own bar takes over.

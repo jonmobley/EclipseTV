@@ -286,7 +286,8 @@
   the current Display Mode, else the "No Show open" page). Only a finger swipe does that: tab slides and layout passes never
   change the grid's mode (a layout pass that snapped the offset mid-slide once closed the Show). `HomePagerScrollView` ignores
   `scrollRectToVisible`, or focusing a text field nudges the pager sideways. The header (`HomeHeaderBar`) stays on every page
-  and swaps its right-hand buttons by page (`setTabPage`): Music gets "+", and Library and Music hide their
+  and swaps its right-hand buttons by page (`setTabPage`): Library gets "+" (Photos & Videos / PDF into the Library only,
+  never the open Show: `makeLibraryAddMenu`, `pendingPDFLibraryOnly`, 2026-11-26), Music gets "+", and Library and Music hide their
   own navigation bar at the root (`HomeTabPageNavigationController`; it returns for a playlist or reordering).
   The dropdown says "Eclipse" on Home (no "Home": that is a tab) and has no Library / Music entries or back chevron there.
   Search is the first item on the tab row, left of Home (owner's call 2026-11-26); Settings has no icon on the paging home screen and

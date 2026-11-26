@@ -157,6 +157,9 @@ class iPhoneMainViewController: UIViewController {
     var pendingThumbnailEditItemId: String?
     /// When set, the next successfully added media item is also appended to this album.
     var pendingAlbumId: UUID?
+    /// A PDF picked from the Library page's "+" joins the Library only, never the
+    /// Show that happens to be open behind it.
+    var pendingPDFLibraryOnly = false
     /// When set with `pendingSlideshowName`, the next image batch becomes a Slideshow.
     var pendingSlideshowShowId: UUID?
     /// Name for the Slideshow created from the next image-only import batch.
