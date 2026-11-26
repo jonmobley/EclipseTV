@@ -104,7 +104,6 @@ extension iPhoneMainViewController {
         setupHeaderBar()
         embedHomePager()
         setupAudioMiniPlayer()
-        setupHomeFooter()
         setupMusicDrawer()
         raiseAudioMiniChrome()
         setupTransferOverlay()
@@ -141,6 +140,18 @@ extension iPhoneMainViewController {
         }
         headerBar.onSelectTab = { [weak self] tab in
             self?.selectHomeTab(tab)
+        }
+        headerBar.onOpenCamera = { [weak self] in
+            self?.presentCameraLive()
+        }
+        headerBar.onBeginSearch = { [weak self] in
+            self?.beginPageSearch()
+        }
+        headerBar.onSearchTextChanged = { [weak self] text in
+            self?.applyPageSearch(text)
+        }
+        headerBar.onCancelSearch = { [weak self] in
+            self?.endPageSearch()
         }
         headerBar.onAddMusic = { [weak self] in
             guard let self else { return }
@@ -213,11 +224,6 @@ extension iPhoneMainViewController {
             equalToConstant: AudioMiniPlayerView.compactWidth
         )
         audioMiniCardWidthConstraint = cardWidth
-        let bubbleBottom = audioMiniBubble.bottomAnchor.constraint(
-            equalTo: view.bottomAnchor,
-            constant: -AudioMiniPlayerView.compactBottomInset
-        )
-        audioMiniBubbleBottomConstraint = bubbleBottom
         NSLayoutConstraint.activate([
             height,
             cardWidth,
@@ -226,13 +232,18 @@ extension iPhoneMainViewController {
                 equalTo: audioMiniBubble.leadingAnchor,
                 constant: AudioMiniPlayerView.connectedOverlap
             ),
-            // The card hangs off the circle, so the two rise together.
-            audioMiniPlayer.bottomAnchor.constraint(equalTo: audioMiniBubble.bottomAnchor),
+            audioMiniPlayer.bottomAnchor.constraint(
+                equalTo: view.bottomAnchor,
+                constant: -AudioMiniPlayerView.compactBottomInset
+            ),
             audioMiniBubble.trailingAnchor.constraint(
                 equalTo: view.safeAreaLayoutGuide.trailingAnchor,
                 constant: -AudioMiniPlayerView.compactTrailingInset
             ),
-            bubbleBottom
+            audioMiniBubble.bottomAnchor.constraint(
+                equalTo: view.bottomAnchor,
+                constant: -AudioMiniPlayerView.compactBottomInset
+            )
         ])
 
         hadActiveAudioSession = AudioPlayerController.shared.hasActiveSession
