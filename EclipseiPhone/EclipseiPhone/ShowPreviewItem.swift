@@ -59,7 +59,7 @@ enum ShowPreviewGallery {
             case .media(let dto):
                 return stillItem(dto, localStillURL: localStillURL)
             case .slideshow, .camera, .cameraPreset, .ptzCamera, .livePoll, .countdown, .prompter,
-                 .website, .pdf, .add, .unresolved:
+                 .website, .pdf, .template, .add, .unresolved:
                 return nil
             }
         }

@@ -91,6 +91,7 @@ extension LibraryGridViewController {
         let deletesCards = ids.contains {
             ShowCountdownToken.countdownId(from: $0) != nil
                 || ShowLivePollToken.livePollId(from: $0) != nil
+                || ShowTemplateToken.templateId(from: $0) != nil
         }
         guard deletesCards else {
             endSelectMode()
@@ -102,8 +103,19 @@ extension LibraryGridViewController {
             message: "Selected items leave this Show. Media stays in your library.",
             actionTitle: "Remove"
         ) { [weak self] in
-            self?.endSelectMode()
-            self?.removeFromShowWithUndo(ids, showId: showId)
+            guard let self else { return }
+            self.endSelectMode()
+            // Template cards are deleted outright (no pending-delete path for them
+            // yet); everything else leaves with Undo.
+            var others: [String] = []
+            for id in ids {
+                if let templateId = ShowTemplateToken.templateId(from: id) {
+                    TemplateCardStore.shared.delete(id: templateId)
+                } else {
+                    others.append(id)
+                }
+            }
+            self.removeFromShowWithUndo(others, showId: showId)
         }
     }
 
@@ -159,6 +171,12 @@ extension LibraryGridViewController {
     /// are what let two tiles claim live at the same time. Practice reaches the
     /// poll card through the resolver's `practicePollMembershipId`, not a case here.
     func isShowGridItemLive(_ item: ShowGridItem) -> Bool {
+        if case .template(let card) = item {
+            return LiveOverlayController.shared.isLive(.template(card.id))
+        }
+        if case .media(let media) = item, MediaOverlayStore.shared.entry(for: media.id) != nil {
+            return LiveOverlayController.shared.isLive(.media(media.id))
+        }
         if ShowLiveSession.shared.isRemoteOperator {
             return isShowGridItemLiveRemotely(item)
         }
@@ -243,6 +261,11 @@ extension LibraryGridViewController {
                     duration: source.duration,
                     layout: source.layout,
                     background: source.background
+                )
+            } else if let templateId = ShowTemplateToken.templateId(from: id),
+                      let source = TemplateCardStore.shared.card(id: templateId) {
+                TemplateCardStore.shared.create(
+                    config: source.config, name: source.name, showId: albumId
                 )
             } else if let livePollId = ShowLivePollToken.livePollId(from: id),
                       let source = LivePollStore.shared.poll(id: livePollId) {

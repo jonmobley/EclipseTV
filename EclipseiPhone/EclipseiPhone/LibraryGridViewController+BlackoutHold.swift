@@ -279,7 +279,8 @@ extension LibraryGridViewController {
         case .camera, .cameraPreset, .livePoll, .countdown, .prompter:
             explainBlackoutHold(cueable: false)
             return true
-        case .ptzCamera, .screensaver, .logo, .media, .website, .pdf, .unresolved, .add:
+        case .ptzCamera, .screensaver, .logo, .media, .website, .pdf, .template, .unresolved,
+             .add:
             // PTZ opens its controls without taking program while previewing.
             return false
         }

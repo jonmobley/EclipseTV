@@ -32,6 +32,8 @@ enum CloudKitSchema {
         static let webPage = "WebPage"
         static let slideshow = "Slideshow"
         static let countdown = "Countdown"
+        /// Template card (Mac "card overlay"); same zone and parenting as Countdown.
+        static let templateCard = "TemplateCard"
         static let livePoll = "LivePoll"
         static let background = "Background"
         static let screensaver = "Screensaver"
@@ -143,6 +145,18 @@ enum CloudKitSchema {
         static let style = "style"
     }
 
+    /// Fields of a `TemplateCard` record. Shared contract with the Mac:
+    /// `config` is `OverlayCardConfig` JSON (`JSONEncoder` + `.sortedKeys`).
+    enum TemplateCardKey {
+        static let showId = "showId"
+        static let name = "name"
+        static let template = "template"
+        static let config = "config"
+        static let stackOrder = "stackOrder"
+        static let createdAt = "createdAt"
+        static let modifiedAt = "modifiedAt"
+    }
+
     enum LivePollKey {
         static let showId = "showId"
         static let pollId = "pollId"
@@ -235,6 +249,11 @@ enum CloudKitSchema {
 
     /// Record ID for a Countdown in the library zone.
     static func countdownRecordID(for id: UUID) -> CKRecord.ID {
+        CKRecord.ID(recordName: id.uuidString, zoneID: zoneID)
+    }
+
+    /// Record ID for a TemplateCard in the library zone.
+    static func templateCardRecordID(for id: UUID) -> CKRecord.ID {
         CKRecord.ID(recordName: id.uuidString, zoneID: zoneID)
     }
 

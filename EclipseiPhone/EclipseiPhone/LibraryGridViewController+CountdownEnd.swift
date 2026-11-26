@@ -118,7 +118,7 @@ extension LibraryGridViewController {
         case .pdf(let doc):
             presentPDFLive(doc)
         case .camera, .cameraPreset, .ptzCamera, .livePoll, .countdown, .prompter,
-             .unresolved, .add:
+             .template, .unresolved, .add:
             break
         }
     }

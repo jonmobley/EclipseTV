@@ -32,6 +32,8 @@ final class LiveHeaderView: UIView {
 
     /// Remote transport controls, shown only when the live item is a video.
     let controls = PlaybackControlsView()
+    /// Template cards and media overlays over the live preview (below chrome).
+    let liveOverlayHost = LiveOverlayHostView()
 
     /// Host for a warm `WKWebView` when a website is live (in-app preview).
     var webPreviewHost: UIView?
@@ -326,6 +328,7 @@ final class LiveHeaderView: UIView {
             self.scheduleTransportAutoHide()
         }
         addSubview(controls)
+        installLiveOverlayHost()
 
         let fullscreenTap = UITapGestureRecognizer(
             target: self,
@@ -389,6 +392,7 @@ final class LiveHeaderView: UIView {
     override func layoutSubviews() {
         super.layoutSubviews()
         gradientLayer.frame = bounds
+        layoutLiveOverlayHost()
         applyBadgeCounterScale()
         layoutLibraryVideoPreviewIfNeeded()
         layoutCameraPreviewIfNeeded()

@@ -228,6 +228,13 @@ extension LibraryGridViewController {
                 }
                 return .unresolved(id: id)
             }
+            if let uuid = ShowTemplateToken.templateId(from: id) {
+                if let card = TemplateCardStore.shared.card(id: uuid),
+                   card.showId == openShowId {
+                    return .template(card)
+                }
+                return .unresolved(id: id)
+            }
             if let uuid = ShowLivePollToken.livePollId(from: id),
                let item = LivePollStore.shared.poll(id: uuid),
                item.showId == openShowId {
@@ -379,6 +386,11 @@ extension LibraryGridViewController {
             cell.setMoreMenu(
                 (isArranging || isSelecting) ? nil : countdownContextMenu(item)
             )
+        case .template(let card):
+            configureTemplateTile(cell, card: card, isLive: live)
+            cell.setMoreMenu(
+                (isArranging || isSelecting) ? nil : templateContextMenu(card)
+            )
         case .media(let item):
             let resume = VideoResumeStore.shared
             let parked = resume.frame(for: item.id)
@@ -461,6 +473,15 @@ extension LibraryGridViewController {
         let items = openShowGridItems
         guard items.indices.contains(indexPath.item) else { return }
         let tapped = items[indexPath.item]
+        // A template layers over live (never replaces it), Blackout or not.
+        if case .template(let card) = tapped {
+            toggleTemplateOverlay(card)
+            return
+        }
+        if case .media(let item) = tapped, isMediaOverlay(item) {
+            toggleMediaOverlay(item)
+            return
+        }
         if handleShowTapDuringBlackout(tapped) { return }
         if handleShowTapForHeroPreview(tapped) { return }
         switch tapped {
@@ -537,7 +558,7 @@ extension LibraryGridViewController {
             presentPDF(doc)
         case .unresolved(let id):
             requestUnresolvedDownloadIfNeeded(id: id)
-        case .add:
+        case .template, .add:
             break
         }
     }
@@ -714,6 +735,9 @@ extension LibraryGridViewController {
             children.append(contentsOf: videoOptionActions(for: item))
         }
         children.append(screenFitMenu(for: item))
+        if item.isAvailable != false {
+            children.append(mediaOverlayMenu(for: item))
+        }
         if item.isAvailable != false, item.isVideo {
             children.append(contentsOf: videoEditActions(for: item))
         }

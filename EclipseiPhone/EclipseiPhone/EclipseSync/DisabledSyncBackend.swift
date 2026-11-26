@@ -70,6 +70,10 @@ final class DisabledSyncBackend: SyncBackend {
 
     func scheduleCountdownDelete(id: UUID) {}
 
+    func scheduleTemplateCardSave(id: UUID) {}
+
+    func scheduleTemplateCardDelete(id: UUID) {}
+
     func schedulePrompterSave(showId: UUID) {}
 
     func schedulePrompterDelete(showId: UUID) {}

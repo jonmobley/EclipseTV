@@ -163,6 +163,9 @@ struct LocalAlbum: Codable, Equatable, Identifiable, Hashable {
         if id.hasPrefix(ShowToolToken.prefix), !ShowToolToken.retired.contains(id) { return true }
         if id == ShowCountdownToken.legacyTool { return true }
         if id == ShowLivePollToken.legacyTool { return true }
+        // Template cards sync as their own records and may land after the Show:
+        // keep the token like a tool; the grid shows "Syncing…" until it arrives.
+        if ShowTemplateToken.isTemplate(id) { return true }
         if members.contains(id) { return true }
         if ShowSlideshowToken.isSlideshow(id) {
             if let slideshows { return slideshows.contains(id) }

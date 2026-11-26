@@ -76,7 +76,8 @@ extension ShowOfflinePlanner {
             let clock = CountdownStore.shared.countdown(id: id)
             return .countdown(backgroundId: clock?.background.libraryItemId)
         }
-        if ShowToolToken.isTool(surfaceId) || ShowLivePollToken.isLivePoll(surfaceId) {
+        if ShowToolToken.isTool(surfaceId) || ShowLivePollToken.isLivePoll(surfaceId)
+            || ShowTemplateToken.isTemplate(surfaceId) {
             return .other
         }
         if let uuid = UUID(uuidString: surfaceId),
