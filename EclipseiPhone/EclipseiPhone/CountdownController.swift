@@ -8,6 +8,11 @@
 import Foundation
 
 /// Session clock for the live Show Countdown tile.
+///
+/// Runs in the live countdown's mode: Countdown (down from `duration`), Count Up
+/// (up from 0:00, never ends) or To Time (down to a clock time). `remaining` is
+/// always the seconds on the face, so for Count Up it is the elapsed time.
+/// Main-actor only.
 @MainActor
 final class CountdownController {
 
@@ -42,11 +47,13 @@ final class CountdownController {
     private struct HeldClock {
         var remaining: Int
         var duration: Int
+        var mode: CountdownMode
     }
 
     private let defaults: UserDefaults
     private let now: () -> Date
     private var timer: Timer?
+    /// Deadline (Countdown, To Time) or virtual start (Count Up) of the running face.
     private var deadline: Date?
 
     /// Part-used clocks by countdown id, so cutting away to a video and back
@@ -59,8 +66,17 @@ final class CountdownController {
     /// Last chosen length; remaining resets to this on Reset / preset.
     private(set) var duration: Int
 
-    /// Seconds still on the clock.
+    /// Seconds on the face: left for Countdown / To Time, elapsed for Count Up.
     private(set) var remaining: Int
+
+    /// Mode and To Time target of the live countdown (caption / plate ride along).
+    private(set) var clockSettings = CountdownClockSettings()
+
+    /// How the live clock counts.
+    var mode: CountdownMode { clockSettings.mode }
+
+    /// True when the face shows a spent clock (red 0:00); never for Count Up.
+    var isAtEnd: Bool { mode.expires && remaining == 0 }
 
     /// True while the clock is counting toward zero.
     private(set) var running = false
@@ -108,9 +124,32 @@ final class CountdownController {
         holdOutgoingClock()
         heldClocks[item.id] = nil
         liveCountdownId = item.id
+        clockSettings = item.clock
         applyDuration(item.duration, notifying: false)
-        if let resumed {
-            remaining = resumed
+        remaining = resumed ?? item.clock.restingSeconds(duration: duration, now: now())
+        expiredAt = nil
+    }
+
+    /// Takes a new mode, target, caption or plate for the live countdown.
+    ///
+    /// A change in how it counts resets the face (and keeps it running if it
+    /// was); a caption or plate change only repaints.
+    func adoptClock(_ settings: CountdownClockSettings) {
+        guard settings != clockSettings else { return }
+        let countsSame = settings.countsLike(clockSettings)
+        clockSettings = settings
+        guard !countsSame else {
+            notify()
+            return
+        }
+        let wasRunning = running
+        stopKeepingRemaining()
+        remaining = settings.restingSeconds(duration: duration, now: now())
+        expiredAt = nil
+        if wasRunning {
+            start()
+        } else {
+            notify()
         }
     }
 
@@ -133,16 +172,24 @@ final class CountdownController {
     ///
     /// Tiles read this so the number on the card is the number a tap produces.
     func heldRemaining(for item: ShowCountdown) -> Int? {
-        guard let held = heldClocks[item.id],
-              held.duration == Self.clampedDuration(item.duration),
-              held.remaining > 0, held.remaining < held.duration
-        else { return nil }
-        return held.remaining
+        guard let held = heldClocks[item.id], held.mode == item.clock.mode,
+              held.remaining > 0 else { return nil }
+        switch held.mode {
+        case .countdown:
+            guard held.duration == Self.clampedDuration(item.duration),
+                  held.remaining < held.duration else { return nil }
+            return held.remaining
+        case .countUp:
+            return held.remaining
+        case .timeOfDay:
+            return nil
+        }
     }
 
     /// Seconds a tap on `item` would put on the clock.
     func startSeconds(for item: ShowCountdown) -> Int {
-        heldRemaining(for: item) ?? item.duration
+        heldRemaining(for: item)
+            ?? item.clock.restingSeconds(duration: item.duration, now: now())
     }
 
     /// Drops any remainder held for `id` so the next tap starts over.
@@ -153,13 +200,25 @@ final class CountdownController {
 
     // MARK: - Clock
 
-    /// Starts from remaining, or from `duration` when already at zero.
+    /// Starts from remaining (a spent countdown starts over from `duration`).
+    ///
+    /// To Time always re-reads the target, so a resume jumps to the true time
+    /// left; one whose target has passed stays on 0:00 without running.
     func start() {
-        if remaining <= 0 {
+        switch mode {
+        case .countdown where remaining <= 0:
             remaining = duration
+        case .timeOfDay:
+            remaining = clockSettings.restingSeconds(duration: duration, now: now())
+        default:
+            break
         }
         expiredAt = nil
-        deadline = now().addingTimeInterval(TimeInterval(remaining))
+        guard !isAtEnd else {
+            notify()
+            return
+        }
+        deadline = clockSettings.anchor(face: remaining, now: now())
         running = true
         installTimer()
         notify()
@@ -181,10 +240,10 @@ final class CountdownController {
         }
     }
 
-    /// Restores remaining to `duration` and stops.
+    /// Restores the resting face (length, 0:00, or time to target) and stops.
     func reset() {
         pause()
-        remaining = duration
+        remaining = clockSettings.restingSeconds(duration: duration, now: now())
         expiredAt = nil
         notify()
     }
@@ -206,8 +265,8 @@ final class CountdownController {
     @discardableResult
     func syncRemainingFromDeadline() -> Bool {
         guard running, let deadline else { return false }
-        remaining = max(0, Int(ceil(deadline.timeIntervalSince(now()))))
-        guard remaining == 0 else { return false }
+        remaining = clockSettings.face(anchor: deadline, now: now())
+        guard isAtEnd else { return false }
         running = false
         expiredAt = deadline
         self.deadline = nil
@@ -220,14 +279,18 @@ final class CountdownController {
 
     /// Duration write shared with `prepare(_:)`, which skips the notification so
     /// the overlay can publish before anything observing the clock repaints.
+    ///
+    /// Only a Countdown's face follows the length; Count Up and To Time keep theirs.
     private func applyDuration(_ seconds: Int, notifying: Bool) {
         let next = Self.clampedDuration(seconds)
         duration = next
-        remaining = next
-        expiredAt = nil
         defaults.set(next, forKey: Self.durationKey)
-        if running {
-            deadline = now().addingTimeInterval(TimeInterval(next))
+        if mode == .countdown {
+            remaining = next
+            expiredAt = nil
+            if running {
+                deadline = now().addingTimeInterval(TimeInterval(next))
+            }
         }
         if let liveCountdownId {
             CountdownStore.shared.setDuration(id: liveCountdownId, seconds: next)
@@ -241,12 +304,20 @@ final class CountdownController {
     /// Countdown → countdown does not reach overlay teardown, because the overlay
     /// kind is unchanged and `ExternalDisplayManager` has nothing to end, so
     /// `prepare(_:)` holds the outgoing clock here as well as `endLive()`.
-    /// A clock at zero or still at full length has no remainder worth keeping.
+    /// A countdown at zero or still at full length, a Count Up still at 0:00 and
+    /// any To Time clock (it re-reads its target) have nothing worth keeping.
     private func holdOutgoingClock() {
         let outgoing = liveCountdownId
         stopKeepingRemaining()
-        guard let outgoing, remaining > 0, remaining < duration else { return }
-        heldClocks[outgoing] = HeldClock(remaining: remaining, duration: duration)
+        guard let outgoing, remaining > 0 else { return }
+        switch mode {
+        case .countdown where remaining < duration, .countUp:
+            heldClocks[outgoing] = HeldClock(
+                remaining: remaining, duration: duration, mode: mode
+            )
+        default:
+            return
+        }
     }
 
     /// `pause()` without the notification, for callers that post their own.

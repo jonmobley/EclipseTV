@@ -114,7 +114,8 @@ extension LibraryGridViewController {
         guard ExternalDisplayManager.shared.isCountdownLive else { return nil }
         let clock = CountdownController.shared
         return ShowLiveCountdownState(
-            remaining: clock.remaining, duration: clock.duration, running: clock.running
+            remaining: clock.remaining, duration: clock.duration, running: clock.running,
+            countsUp: clock.mode == .countUp ? true : nil
         )
     }
 
@@ -155,7 +156,7 @@ extension LibraryGridViewController {
             return
         }
         let text = CountdownController.displayString(seconds: clock.remaining)
-        let isExpired = clock.remaining == 0
+        let isExpired = clock.isAtEnd
         if liveHeader.countdownClockLabel.isHidden {
             liveHeader.configureCountdownClock(text: text, isExpired: isExpired)
         } else {

@@ -112,7 +112,8 @@ extension PresentationViewController {
         layout.apply(
             to: label,
             text: clock.displayString,
-            isExpired: clock.remaining == 0,
+            isExpired: clock.isAtEnd,
+            face: .live,
             in: bounds
         )
     }

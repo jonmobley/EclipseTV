@@ -37,6 +37,7 @@ extension CloudKitRecordMapper {
             item.endAction.token as CKRecordValue
         record[CloudKitSchema.CountdownKey.createdAt] = item.createdAt as CKRecordValue
         record[CloudKitSchema.CountdownKey.modifiedAt] = modifiedAt as CKRecordValue
+        writeCountdownClock(item.clock, to: record)
         applyShowLink(
             to: record,
             showId: item.showId,
@@ -86,7 +87,54 @@ extension CloudKitRecordMapper {
             layout: layout.clampedScale,
             background: background,
             endAction: endAction,
+            clock: countdownClock(from: record),
             createdAt: createdAt
+        )
+    }
+
+    /// Writes mode, To Time target, caption and plate.
+    ///
+    /// A field is written when it differs from the default or the record already
+    /// carries it. Clearing a caption therefore reaches the Mac as `""` (the Mac
+    /// keeps its own value when a field is missing), while a plain countdown adds
+    /// no new fields, so it still saves on a server whose schema predates them.
+    static func writeCountdownClock(_ clock: CountdownClockSettings, to record: CKRecord) {
+        typealias Key = CloudKitSchema.CountdownKey
+        let plain = CountdownClockSettings()
+        setClockField(clock.mode.rawValue, Key.mode, plain.mode.rawValue, on: record)
+        setClockField(clock.style.rawValue, Key.style, plain.style.rawValue, on: record)
+        setClockField(clock.caption, Key.caption, plain.caption, on: record)
+        setClockField(clock.targetDay, Key.targetDay, plain.targetDay, on: record)
+        setClockField(clock.targetTimeZone, Key.targetTimeZone, plain.targetTimeZone, on: record)
+        if let minutes = clock.targetMinutes {
+            record[Key.targetMinutes] = minutes as CKRecordValue
+        }
+    }
+
+    private static func setClockField(
+        _ value: String,
+        _ key: String,
+        _ defaultValue: String,
+        on record: CKRecord
+    ) {
+        guard value != defaultValue || record[key] != nil else { return }
+        record[key] = value as CKRecordValue
+    }
+
+    /// Reads mode, To Time target, caption and plate; missing fields (older
+    /// apps) and unknown values fall back to a plain countdown with a plate.
+    static func countdownClock(from record: CKRecord) -> CountdownClockSettings {
+        typealias Key = CloudKitSchema.CountdownKey
+        let minutes = (record[Key.targetMinutes] as? NSNumber)?.intValue
+        return CountdownClockSettings(
+            mode: (record[Key.mode] as? String)
+                .flatMap(CountdownMode.init(rawValue:)) ?? .countdown,
+            targetMinutes: minutes,
+            targetDay: record[Key.targetDay] as? String ?? "",
+            targetTimeZone: record[Key.targetTimeZone] as? String ?? "",
+            caption: record[Key.caption] as? String ?? "",
+            style: (record[Key.style] as? String)
+                .flatMap(CountdownPlateStyle.init(rawValue:)) ?? .card
         )
     }
 

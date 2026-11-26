@@ -212,11 +212,14 @@ final class CountdownLayoutEditorViewController: UIViewController,
         let clock = CountdownController.shared
         let isLive = clock.liveCountdownId == item.id
             && ExternalDisplayManager.shared.isCountdownLive
-        let seconds = isLive ? clock.remaining : item.duration
+        let seconds = isLive
+            ? clock.remaining
+            : item.clock.restingSeconds(duration: item.duration, now: Date())
         layout.apply(
             to: clockLabel,
             text: CountdownController.displayString(seconds: seconds),
-            isExpired: isLive && seconds == 0,
+            isExpired: isLive && clock.isAtEnd,
+            face: CountdownClockFace(item.clock),
             in: canvas.bounds
         )
     }

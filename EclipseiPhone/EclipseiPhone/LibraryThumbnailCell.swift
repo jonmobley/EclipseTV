@@ -128,7 +128,7 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         countdownTimeLabel.textColor = .white
         countdownTimeLabel.textAlignment = .center
         countdownTimeLabel.adjustsFontSizeToFitWidth = true
-        countdownTimeLabel.minimumScaleFactor = 0.6
+        countdownTimeLabel.minimumScaleFactor = 0.45  // "to 11:00 PM EST" (To Time) fits a tile
         countdownTimeLabel.numberOfLines = 1
         countdownTimeLabel.isHidden = true
         countdownTimeLabel.translatesAutoresizingMaskIntoConstraints = false
