@@ -11,8 +11,8 @@ import UIKit
 /// hides the card. Regular: always toggles the Music drawer.
 final class AudioMiniPlayerBubbleView: UIView {
 
-    /// Matches the mini-player card so the two share one height.
-    static let side: CGFloat = AudioMiniPlayerView.preferredHeight
+    /// Matches the card's button row, so the circle lines up with the buttons.
+    static let side: CGFloat = AudioMiniPlayerView.controlRowHeight
     /// Pressed-in scale while idle so opening Music still feels like a control.
     static let idlePressScale: CGFloat = 0.9
 

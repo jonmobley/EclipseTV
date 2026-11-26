@@ -282,3 +282,8 @@
   cookie store, apart from the website browser. Sign-in (link secret or PIN) is the page's job. To look at it without a
   Mac, serve the three `WebRemote` files from a small local stand-in and open
   `eclipse://mac-remote?h=127.0.0.1&p=<port>#t=x` in the simulator.
+- Music bar on iPhone (2026-11-25, `AudioMiniPlayerView`): two rows. Song name (one line, chevron hints the tap opens Now
+  Playing) over four round buttons in the owner's order: mic duck, Pause / Play, Stop, Next. The Music circle sits in the
+  card's bottom trailing corner, level with the buttons (`controlRowHeight` = `AudioMiniPlayerBubbleView.side`; the card
+  is `preferredHeight` = button row + title row). Next dims when there is nowhere to go (`AudioPlayerController.hasNextSong`:
+  one song, nothing in Up Next). A very narrow window shrinks the four buttons evenly instead of clipping one.

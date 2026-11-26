@@ -114,6 +114,13 @@ final class AudioPlayerController: NSObject {
         )
     }
 
+    /// Whether Next has somewhere to go: a song waiting in Up Next, or more than
+    /// one song in the playlist, or the playlist song an Up Next song interrupted.
+    /// A single song on its own would only restart.
+    var hasNextSong: Bool {
+        !upNext.isEmpty || queue.count > 1 || (queuedTrackId != nil && !queue.isEmpty)
+    }
+
     /// True when the mini player should be visible.
     var hasActiveSession: Bool {
         currentTrack != nil

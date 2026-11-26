@@ -202,7 +202,7 @@ extension iPhoneMainViewController {
         NSLayoutConstraint.activate([
             height,
             cardWidth,
-            // Card tucks under the Music circle so the join has no gap.
+            // Card runs under the Music circle, which sits in its bottom corner.
             audioMiniPlayer.trailingAnchor.constraint(
                 equalTo: audioMiniBubble.leadingAnchor,
                 constant: AudioMiniPlayerView.connectedOverlap
