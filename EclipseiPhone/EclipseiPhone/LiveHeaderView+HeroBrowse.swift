@@ -77,10 +77,21 @@ extension LiveHeaderView: UIGestureRecognizerDelegate {
     /// recognizers are unaffected. (UIView's own hook and the delegate method share
     /// this selector, so one override answers both.)
     override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        if gestureRecognizer === overlayAdjustPan || gestureRecognizer === overlayAdjustPinch {
+            return overlayAdjustShouldBegin(gestureRecognizer)
+        }
         guard gestureRecognizer === directAdjustPan
                 || gestureRecognizer === directAdjustPinch else {
             return super.gestureRecognizerShouldBegin(gestureRecognizer)
         }
         return directAdjustShouldBegin(gestureRecognizer)
+    }
+
+    /// Overlay drag + pinch together; everything else keeps UIKit's default.
+    func gestureRecognizer(
+        _ gestureRecognizer: UIGestureRecognizer,
+        shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
+    ) -> Bool {
+        overlayAdjustRecognizeTogether(gestureRecognizer, otherGestureRecognizer)
     }
 }

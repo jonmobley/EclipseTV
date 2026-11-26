@@ -98,6 +98,25 @@ final class LiveHeaderView: UIView {
     var directAdjustPinch: UIPinchGestureRecognizer?
     /// Live layout while the countdown clock is pinched or dragged; `isFinal` on lift.
     var onAdjustCountdown: ((_ id: UUID, _ layout: CountdownClockLayout, _ isFinal: Bool) -> Void)?
+    /// Whether a live overlay on the hero may be dragged / pinched. Set by the
+    /// host controller; see `LiveHeaderView+OverlayAdjust`.
+    var allowsOverlayAdjust = false {
+        didSet {
+            guard allowsOverlayAdjust != oldValue else { return }
+            if !allowsOverlayAdjust { cancelOverlayAdjust() }
+            applyInteractionForPresentation()
+        }
+    }
+    /// Overlay drag / pinch progress, from the first finger down to the last up.
+    var overlayAdjustSession: OverlayAdjustSession?
+    /// One-finger drag that moves a live overlay.
+    var overlayAdjustPan: UIPanGestureRecognizer?
+    /// Pinch that resizes a live overlay.
+    var overlayAdjustPinch: UIPinchGestureRecognizer?
+    /// Pinch centre last frame, so moving both fingers also moves the overlay.
+    var overlayAdjustPinchLocation: CGPoint?
+    /// The overlay as the fingers have it; `isFinal` once they lift (save it).
+    var onAdjustOverlay: ((_ overlay: RenderedOverlay, _ isFinal: Bool) -> Void)?
     /// What to save once the fingers lift from a pinched or dragged still.
     var onAdjustStill: ((_ id: String, _ outcome: StillFramingGesture.Outcome) -> Void)?
 
@@ -247,6 +266,7 @@ final class LiveHeaderView: UIView {
         setupViews()
         installHeroBrowseGestures()
         installDirectAdjustGestures()
+        installOverlayAdjustGestures()
     }
 
     required init?(coder: NSCoder) {
@@ -712,6 +732,7 @@ final class LiveHeaderView: UIView {
             || cameraCaptureStack != nil
             || phonePreviewReturnButton != nil
             || directAdjustTarget != nil
+            || allowsOverlayAdjust
     }
 
     /// Opens whatever fullscreen surface the expanded hero stands in for.

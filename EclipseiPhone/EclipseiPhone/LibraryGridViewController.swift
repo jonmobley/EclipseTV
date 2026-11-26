@@ -619,6 +619,7 @@ final class LibraryGridViewController: UIViewController {
         liveHeader.onAdjustStill = { [weak self] id, outcome in
             self?.handleHeroStillAdjust(id: id, outcome: outcome)
         }
+        installHeroOverlayAdjust()
         liveHeader.onFlipCamera = { [weak self] in
             self?.flipLiveCameraLens()
         }
@@ -730,6 +731,7 @@ final class LibraryGridViewController: UIViewController {
         }
         observe(LiveOverlayController.didChangeNotification) { [weak self] _ in
             self?.reloadGridIfSafe()
+            self?.syncHeroOverlayAdjust()
         }
         observe(CountdownStore.didChangeNotification) { [weak self] _ in
             self?.reloadGridIfSafe()
