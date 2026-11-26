@@ -202,9 +202,10 @@
 - Interactive PDF in the hero (iPhone/iPad, 2026-11-26, `LiveHeaderView+PDFPreview`, `PDFReaderDriver`): a Show PDF card
   tap puts the PDF live in the hero as a real `PDFView` (sharp, scrolls and pinches in place); only the hero's expand
   control (or ⋯ Preview) opens the full-screen reader. Both views share one `PDFReaderDriver` design and show the same
-  icon row top right (`PDFViewOptionsBar`: Fit · Fill · 2 Pages, then Page by Page; same words as the Mac's presets on eclipsepro
-  `claude/pdf-view-presets`, but iPhone keeps its own icons: the Mac's Fill arrows match the hero's expand control and its
-  `rectangle.stack` means a Show here). Only one driver moves the TV at a
+  icon row top right (`PDFViewOptionsBar`: Fit · Fill · 2 Pages, then Page by Page; same words, defaults and Page by
+  Page icon `book.pages` as the Mac's presets. Fit / Fill icons differ on purpose (owner's call, 2026-11-26): iPhone uses
+  `rectangle.arrowtriangle.2.inward` / `.outward` because the Mac's shrink/expand arrows match the hero's expand control;
+  the Mac keeps the arrows because the triangle pair looked alike at its 12 pt size). Only one driver moves the TV at a
   time (`PDFReaderDriver.active`): the reader takes over while open and hands back on close (`didResignNotification`).
   The shared view (`PDFLiveViewState`: page, 0…1 scroll fractions, zoom relative to fit, two-up, preset, snapping) lives on
   `ExternalDisplayManager.pdfViewState` and the TV applies it whole (`applyPDFViewState`). A reader on a PDF that is not
