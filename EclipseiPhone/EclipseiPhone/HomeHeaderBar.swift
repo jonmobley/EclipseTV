@@ -30,10 +30,6 @@ final class HomeHeaderBar: UIView {
     /// Fills the status-bar area above the bar so nothing scrolls through it.
     private let topBackdrop = UIView()
     private let searchButton = MinimumHitTargetButton(type: .system)
-    /// Opens the phone camera from any page. Sits at the end of the tab row
-    /// (owner's call, 2026-11-26); in phone landscape, where the tabs are inside
-    /// the header row, just before the row's own buttons.
-    private let cameraButton = MinimumHitTargetButton(type: .system)
     /// The search field and Cancel, under the tabs while a page is being searched.
     private let searchRow = UIView()
     let searchField = UISearchTextField()
@@ -66,7 +62,7 @@ final class HomeHeaderBar: UIView {
     var onSelectDestination: ((HomeHeaderDestination) -> Void)?
     /// Invoked when a text tab is tapped (compact width).
     var onSelectTab: ((HomeTab) -> Void)?
-    /// Invoked by the Camera control.
+    /// Invoked by "Camera" on the tab row.
     var onOpenCamera: (() -> Void)?
     /// Invoked by the Search control (Library, Show and Music pages).
     var onBeginSearch: (() -> Void)?
@@ -266,21 +262,6 @@ final class HomeHeaderBar: UIView {
             self?.onBeginSearch?()
         }, for: .touchUpInside)
 
-        cameraButton.configuration = Self.barIconConfig(
-            systemName: ThumbnailTypeIcon.camera.systemName,
-            symbolConfig: UIImage.SymbolConfiguration(pointSize: 18, weight: .regular)
-        )
-        cameraButton.translatesAutoresizingMaskIntoConstraints = false
-        cameraButton.accessibilityLabel = "Camera"
-        cameraButton.accessibilityHint =
-            "Opens the camera. Nothing goes to the TV until you tap the picture."
-        cameraButton.accessibilityIdentifier = "home.camera"
-        cameraButton.isHidden = true
-        cameraButton.addAction(UIAction { [weak self] _ in
-            self?.onOpenCamera?()
-        }, for: .touchUpInside)
-        addSubview(cameraButton)
-
         searchRow.isHidden = true
         searchRow.translatesAutoresizingMaskIntoConstraints = false
         addSubview(searchRow)
@@ -326,6 +307,10 @@ final class HomeHeaderBar: UIView {
         tabStrip.isHidden = true
         tabStrip.onSelect = { [weak self] tab in
             self?.onSelectTab?(tab)
+        }
+        // "Camera" is the last word on the tab row (owner's call, 2026-11-26).
+        tabStrip.onOpenCamera = { [weak self] in
+            self?.onOpenCamera?()
         }
         addSubview(tabStrip)
 
@@ -392,12 +377,10 @@ final class HomeHeaderBar: UIView {
 
         tabStripBelowConstraints = [
             tabStrip.topAnchor.constraint(equalTo: rowGuide.bottomAnchor),
-            tabStrip.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 18),
+            tabStrip.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
             tabStrip.trailingAnchor.constraint(
-                lessThanOrEqualTo: cameraButton.leadingAnchor, constant: -8
-            ),
-            cameraButton.centerYAnchor.constraint(equalTo: tabStrip.centerYAnchor),
-            cameraButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12)
+                lessThanOrEqualTo: trailingAnchor, constant: -12
+            )
         ]
         tabStripInlineConstraints = [
             tabStrip.centerYAnchor.constraint(equalTo: rowGuide.centerYAnchor),
@@ -405,11 +388,7 @@ final class HomeHeaderBar: UIView {
                 equalTo: leadingNavStack.trailingAnchor, constant: 16
             ),
             tabStrip.trailingAnchor.constraint(
-                lessThanOrEqualTo: cameraButton.leadingAnchor, constant: -8
-            ),
-            cameraButton.centerYAnchor.constraint(equalTo: rowGuide.centerYAnchor),
-            cameraButton.trailingAnchor.constraint(
-                equalTo: trailingStack.leadingAnchor, constant: -6
+                lessThanOrEqualTo: trailingStack.leadingAnchor, constant: -8
             )
         ]
         tabStrip.setContentCompressionResistancePriority(.required, for: .horizontal)
@@ -429,8 +408,6 @@ final class HomeHeaderBar: UIView {
 
             searchButton.widthAnchor.constraint(equalToConstant: 36),
             searchButton.heightAnchor.constraint(equalToConstant: 36),
-            cameraButton.widthAnchor.constraint(equalToConstant: 36),
-            cameraButton.heightAnchor.constraint(equalToConstant: 36),
 
             searchRow.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
             searchRow.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
@@ -734,11 +711,7 @@ final class HomeHeaderBar: UIView {
         backgroundColor = showsTabStrip ? .systemBackground : .clear
         let inline = traitCollection.verticalSizeClass == .compact
         NSLayoutConstraint.deactivate(tabStripBelowConstraints + tabStripInlineConstraints)
-        // With the tabs off, Camera is hidden; park it in the row.
-        guard showsTabStrip else {
-            NSLayoutConstraint.activate(Array(tabStripInlineConstraints.suffix(2)))
-            return
-        }
+        guard showsTabStrip else { return }
         NSLayoutConstraint.activate(
             inline ? tabStripInlineConstraints : tabStripBelowConstraints
         )
@@ -779,8 +752,6 @@ final class HomeHeaderBar: UIView {
         let onShow = showsTabStrip && tabPage == .show && showsShowChrome
         let searchable = onLibrary || onShow || (onMusic && musicAddAvailable)
         searchButton.isHidden = editing || isSearching || !searchable
-        // Camera: every page, whenever the tab row shows.
-        cameraButton.isHidden = !showsTabStrip || editing
         addMusicButton.isHidden = editing || !onMusic || !musicAddAvailable
         if editing || onLibrary || onMusic {
             lockButton.isHidden = true
