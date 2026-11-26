@@ -20,6 +20,14 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         return true
     }
 
+    // MARK: Keyboard
+
+    /// ⌘Z while an Undo toast is up (iPad hardware keyboard). The app delegate ends
+    /// every responder chain, so this works whatever has focus.
+    override var keyCommands: [UIKeyCommand]? {
+        UndoToastCenter.shared.keyCommand.map { [$0] }
+    }
+
     // MARK: UISceneSession Lifecycle
 
     func application(

@@ -105,7 +105,7 @@ extension LibraryGridViewController {
             attributes: .destructive
         ) { [weak self] _ in
             context.afterClosing {
-                self?.confirmDelete(id: item.id, name: item.name)
+                self?.deleteLibraryItemWithUndo(id: item.id)
             }
         }
         return [delete]

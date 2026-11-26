@@ -79,13 +79,15 @@ extension LibraryGridViewController {
         return true
     }
 
-    /// Confirms and removes every selected member / tool from the open Show.
+    /// Removes every selected member / tool / card from the open Show, with Undo.
+    ///
+    /// Plain media and tools only leave the Show, so they go at once. Countdowns
+    /// and polls are deleted, so the operator is asked first; either way Undo
+    /// brings everything back (`removeFromShowWithUndo`).
     func confirmBulkRemoveFromShow() {
         guard isSelecting, let showId = openShowId else { return }
         let ids = Array(selectedShowItemIds)
         guard !ids.isEmpty else { return }
-        // Plain media and tools only leave the Show, so Undo replaces the
-        // confirmation. Countdowns and polls are deleted outright: confirm.
         let deletesCards = ids.contains {
             ShowCountdownToken.countdownId(from: $0) != nil
                 || ShowLivePollToken.livePollId(from: $0) != nil
@@ -95,32 +97,14 @@ extension LibraryGridViewController {
             removeFromShowWithUndo(ids, showId: showId)
             return
         }
-        let count = ids.count
-        let alert = UIAlertController(
-            title: count == 1 ? "Remove Item?" : "Remove \(count) Items?",
+        askToDelete(
+            title: ids.count == 1 ? "Remove Item?" : "Remove \(ids.count) Items?",
             message: "Selected items leave this Show. Media stays in your library.",
-            preferredStyle: .alert
-        )
-        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        alert.addAction(UIAlertAction(title: "Remove", style: .destructive) { [weak self] _ in
-            guard let self else { return }
-            self.endSelectMode()
-            for id in ids {
-                if ShowToolToken.isTool(id) {
-                    LocalAlbumStore.shared.hideTool(id, albumId: showId)
-                } else if let countdownId = ShowCountdownToken.countdownId(from: id) {
-                    self.endCountdownIfDeleting(countdownId)
-                    CountdownStore.shared.delete(id: countdownId)
-                } else if let livePollId = ShowLivePollToken.livePollId(from: id) {
-                    self.endQuestPollIfRemovingMembership(livePollId)
-                    LivePollStore.shared.delete(id: livePollId)
-                } else {
-                    LocalAlbumStore.shared.remove(itemId: id, fromAlbumId: showId)
-                }
-            }
-            Haptics.success()
-        })
-        present(alert, animated: true)
+            actionTitle: "Remove"
+        ) { [weak self] in
+            self?.endSelectMode()
+            self?.removeFromShowWithUndo(ids, showId: showId)
+        }
     }
 
     /// Builds the header Actions menu for the current selection count.

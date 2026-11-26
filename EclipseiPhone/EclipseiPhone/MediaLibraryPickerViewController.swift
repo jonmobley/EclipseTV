@@ -224,6 +224,13 @@ final class MediaLibraryPickerViewController: UIViewController {
             name: PDFStore.didChangeNotification,
             object: nil
         )
+        // Hide / show tiles whose delete waits on Undo.
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(reload),
+            name: PendingDeletes.didChangeNotification,
+            object: nil
+        )
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(reload),
@@ -433,8 +440,9 @@ final class MediaLibraryPickerViewController: UIViewController {
     }
 
     @objc func reload() {
-        let media = TVLibraryStore.shared.items
-        let pdfs = PDFStore.shared.documents
+        let hidden = PendingDeletes.shared.hiddenLibraryIds
+        let media = TVLibraryStore.shared.items.filter { !hidden.contains($0.id) }
+        let pdfs = PDFStore.shared.documents.filter { !hidden.contains($0.id.uuidString) }
         memberIds = {
             guard let showId = targetShowId,
                   let album = LocalAlbumStore.shared.album(id: showId)

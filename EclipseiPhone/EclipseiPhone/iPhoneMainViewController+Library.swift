@@ -253,9 +253,10 @@ extension iPhoneMainViewController {
         }
         settings.onDeleteShow = { [weak self] in
             guard let self, let id = self.libraryViewController.openShowId else { return }
-            LocalAlbumStore.shared.delete(id: id)
-            self.libraryViewController.closeOpenShow()
-            self.dismiss(animated: true)
+            // Settings keeps its confirmation; Undo is the second chance.
+            self.dismiss(animated: true) {
+                self.libraryViewController.deleteShowWithUndo(id: id)
+            }
         }
     }
 

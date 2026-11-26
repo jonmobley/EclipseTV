@@ -29,7 +29,8 @@ extension UIViewController {
         let toast: PresentationToastView
         if let existing = existingPresentationToast(),
            existing.superview === container,
-           existing.isCentered == (host != nil) {
+           existing.isCentered == (host != nil),
+           !existing.hasAction {
             toast = existing
             toast.setMessage(message)
         } else {
@@ -59,22 +60,28 @@ extension UIViewController {
     /// Bottom toast with an Undo button, for reversible removals.
     ///
     /// Stays up longer than a plain toast so there's time to reach the button.
+    /// While it is up, ⌘Z on a hardware keyboard does the same (`UndoToastCenter`).
     /// - Parameters:
     ///   - message: What happened ("Removed 3 items").
     ///   - undo: Puts it back; the toast dismisses itself afterward.
     func showUndoToast(_ message: String, undo: @escaping () -> Void) {
         removePresentationToast()
         let toast = PresentationToastView(message: message, isCentered: false)
-        toast.setAction(title: "Undo") { [weak toast] in
+        let token = UUID()
+        let perform: () -> Void = { [weak toast] in
+            UndoToastCenter.shared.clear(token: token)
             undo()
             Haptics.impactLight()
             toast?.removeFromSuperview()
         }
+        toast.setAction(title: "Undo", handler: perform)
         installPresentationToast(toast, in: view, centered: false)
         UIAccessibility.post(notification: .announcement, argument: "\(message). Undo available.")
-        let token = UUID()
+        UndoToastCenter.shared.register(token: token, undo: perform)
         toast.dismissToken = token
-        DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak toast] in
+        let duration = PresentationToastTiming.undoDuration
+        DispatchQueue.main.asyncAfter(deadline: .now() + duration) { [weak toast] in
+            UndoToastCenter.shared.clear(token: token)
             guard let toast, toast.superview != nil, toast.dismissToken == token else { return }
             UIView.animate(withDuration: 0.2, animations: {
                 toast.alpha = 0
@@ -147,6 +154,14 @@ extension UIViewController {
     }
 }
 
+// MARK: - Timing
+
+/// How long toasts stay up.
+enum PresentationToastTiming {
+    /// Seconds an Undo toast stays up (and the window `PendingDeletes` waits out).
+    static let undoDuration: TimeInterval = 5
+}
+
 // MARK: - View
 
 private final class PresentationToastView: UIView {
@@ -156,6 +171,8 @@ private final class PresentationToastView: UIView {
     let isCentered: Bool
     /// Identifies the latest show call; a stale dismissal compares and bails.
     var dismissToken = UUID()
+    /// True once `setAction` added a button (an Undo toast); never reused for plain text.
+    private(set) var hasAction = false
 
     private let label = UILabel()
 
@@ -197,6 +214,7 @@ private final class PresentationToastView: UIView {
     /// Adds a trailing action button (Undo). The toast then exposes the label
     /// and button separately to VoiceOver.
     func setAction(title: String, handler: @escaping () -> Void) {
+        hasAction = true
         let button = UIButton(type: .system, primaryAction: UIAction(title: title) { _ in handler() })
         button.titleLabel?.font = UIFontMetrics(forTextStyle: .subheadline)
             .scaledFont(for: .systemFont(ofSize: 15, weight: .semibold))

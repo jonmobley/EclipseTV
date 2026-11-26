@@ -34,6 +34,7 @@ extension LibraryGridViewController {
         // the collection view count disagrees with `openShowGridItems`.
         let mustReload = showsShowAddTile || !preservingGesture
         isArranging = true
+        arrangeStartSurface = openShowSurfaceIds
         reorderGesture.minimumPressDuration = 0.15
         if mustReload {
             reloadForArrangeChange()
@@ -58,9 +59,28 @@ extension LibraryGridViewController {
     @discardableResult
     func commitArranging() -> Bool {
         guard isArranging else { return true }
+        let start = arrangeStartSurface
+        let showId = openShowId
+        let changed = start != nil && start != openShowSurfaceIds
         endArrangeMode()
         Haptics.success()
+        if changed, let start, let showId {
+            offerArrangeUndo(restoring: start, showId: showId)
+        }
         return true
+    }
+
+    /// Undo toast after Done: puts the grid back in the order Arrange started from.
+    /// Cards added or removed since (another device, say) are respected.
+    private func offerArrangeUndo(restoring start: [String], showId: UUID) {
+        showUndoToast("Order changed") {
+            guard let album = LocalAlbumStore.shared.album(id: showId) else { return }
+            let current = album.surfaceIds ?? album.resolvedSurfaceIds
+            LocalAlbumStore.shared.reorderSurface(
+                ArrangeUndo.restoredOrder(original: start, current: current),
+                albumId: showId
+            )
+        }
     }
 
     /// Wiggles the tiles the user can drag and dims the ones pinned in place.
@@ -160,6 +180,7 @@ extension LibraryGridViewController {
 
     private func endArrangeMode() {
         isArranging = false
+        arrangeStartSurface = nil
         arrangeItems = nil
         reorderGesture.minimumPressDuration = 0.45
         reloadForArrangeChange()
@@ -186,5 +207,24 @@ extension LibraryGridViewController {
     private func canMoveItemAtShowIndex(_ item: Int) -> Bool {
         let surfaceCount = openShowSurfaceIds.count
         return item >= 0 && item < surfaceCount
+    }
+}
+
+// MARK: - Undo order
+
+/// Pure rule for undoing an Arrange.
+enum ArrangeUndo {
+
+    /// `original` order for the cards still in `current`, then any card that
+    /// arrived since in its current place at the end. Removed cards stay removed.
+    /// - Parameters:
+    ///   - original: Grid order when Arrange began.
+    ///   - current: Grid order now.
+    /// - Returns: The order to save.
+    static func restoredOrder(original: [String], current: [String]) -> [String] {
+        let currentSet = Set(current)
+        let kept = original.filter { currentSet.contains($0) }
+        let keptSet = Set(kept)
+        return kept + current.filter { !keptSet.contains($0) }
     }
 }

@@ -792,6 +792,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
                 image: UIImage(systemName: "trash"),
                 attributes: .destructive
             ) { [weak self] _ in
+                // Asks first; Undo is the second chance (`deleteShowWithUndo`).
                 self?.confirmDeleteShow(show)
             }
             // Only real actions are rows. Once everything is on this iPhone the
@@ -810,19 +811,6 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             }
             return UIMenu(children: [rename, share, export, download, delete])
         }
-    }
-
-    private func confirmDeleteShow(_ show: LocalAlbum) {
-        let alert = UIAlertController(
-            title: "Delete Show?",
-            message: "“\(show.name)” is removed from Home. Its images and videos stay on this iPhone and any linked EclipseTV.",
-            preferredStyle: .alert
-        )
-        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        alert.addAction(UIAlertAction(title: "Delete", style: .destructive) { _ in
-            LocalAlbumStore.shared.delete(id: show.id)
-        })
-        present(alert, animated: true)
     }
 
     private func promptRenameShow(_ show: LocalAlbum) {
@@ -885,7 +873,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             image: UIImage(systemName: "trash"),
             attributes: .destructive
         ) { [weak self] _ in
-            self?.confirmDelete(id: id, name: item.name)
+            self?.deleteLibraryItemWithUndo(id: id)
         }
         // Tap marks phone-live when offline; Preview stays available from ⋯.
         var children: [UIMenuElement] = [

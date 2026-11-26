@@ -92,7 +92,7 @@ extension CloudKitSyncEngine {
     func applyRemoteShow(_ record: CKRecord) {
         guard let remote = CloudKitRecordMapper.album(from: record) else { return }
         let remoteModified = CloudKitRecordMapper.showModifiedAt(from: record)
-        if let local = LocalAlbumStore.shared.album(id: remote.id) {
+        if let local = LocalAlbumStore.shared.albumIncludingPendingDelete(id: remote.id) {
             let localModified = showModified(id: local.id)
             let merged = CloudKitConflictResolver.mergeShows(
                 local: local,
