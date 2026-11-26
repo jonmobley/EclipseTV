@@ -81,6 +81,25 @@ struct CameraLiveChromeTests {
         #expect(Cell.showsOnBadge(isOn: true, isFrame: false) == false)
     }
 
+    /// The first card goes back to what was live as the camera opened, never to
+    /// the camera itself, and only while the camera holds the TV.
+    @Test func firstCardReturnsToEntryItemNotCamera() {
+        let vc = CameraLiveViewController()
+        #expect(vc.returnLiveSource == nil)
+        vc.entryLiveSource = .camera
+        #expect(vc.returnLiveSource == nil)
+        #expect(vc.canReturnToEntryLive == false)
+        let still = PresentationSource(
+            content: .image(url: URL(fileURLWithPath: "/tmp/bg.png"), fill: true, framing: nil)
+        )
+        vc.entryLiveSource = still
+        #expect(vc.returnLiveSource == still)
+        #expect(
+            vc.canReturnToEntryLive
+            == ExternalDisplayManager.shared.isCameraModeActive
+        )
+    }
+
     @Test func liveOutputThumbStaysVisibleWhileCameraIsLive() {
         #expect(CameraLiveViewController.showsLiveOutputThumb(isConnected: true))
         // With no TV, something live on the phone still gets its card.

@@ -346,7 +346,9 @@ extension iPhoneMainViewController {
         // Opened from inside a Show: what you shoot becomes a card in that Show.
         cameraVC.captureDestinationShowId = libraryViewController.openShow?.id
         // Whatever is live right now is the camera's first card.
-        cameraVC.entryLiveSource = ExternalDisplayManager.shared.currentSourceProvider?()
+        let entry = ExternalDisplayManager.shared.currentSourceProvider?()
+        cameraVC.entryLiveSource = entry
+        cameraVC.entryLiveOwnerId = CameraLiveViewController.liveOwnerId(for: entry)
         cameraVC.modalPresentationStyle = .fullScreen
         present(cameraVC, animated: true)
         if TVLibraryStore.shared.isOnline, ExternalDisplayManager.shared.isConnected {

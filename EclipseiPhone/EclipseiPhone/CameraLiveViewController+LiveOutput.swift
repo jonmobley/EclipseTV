@@ -24,10 +24,63 @@ extension CameraLiveViewController {
         isConnected || hasLiveSource
     }
 
-    /// What the audience sees right now: the AirPlay picture, else the camera once
-    /// it is live, else the card that is live in the Show.
+    /// What was live as the camera opened, unless that was the camera itself.
+    /// The first card goes back to it.
+    var returnLiveSource: PresentationSource? {
+        guard let entry = entryLiveSource, entry.content != .camera else { return nil }
+        return entry
+    }
+
+    /// True while the camera (or a still it parked) holds the TV and there is an
+    /// earlier item to go back to: the first card then shows that item, without the
+    /// blue outline, and a tap puts it back on the TV (owner's call 2026-11-26).
+    var canReturnToEntryLive: Bool {
+        ExternalDisplayManager.shared.isCameraModeActive && returnLiveSource != nil
+    }
+
+    /// Which bookmark or document owns `source` right now, so a website or PDF can
+    /// be put back as that same card. Read as the camera opens, before the camera
+    /// takes over and the owner is cleared.
+    static func liveOwnerId(for source: PresentationSource?) -> UUID? {
+        let mgr = ExternalDisplayManager.shared
+        switch source?.content {
+        case .web: return mgr.liveWebPageId
+        case .webVideo: return mgr.liveWebVideoPageId
+        case .pdf: return mgr.livePDFDocumentId
+        case .video: return mgr.liveWebVideoPageId
+        default: return nil
+        }
+    }
+
+    /// Puts what was live as the camera opened back on the TV. The camera's end
+    /// closes this screen (`cameraEndedExternally`), back to the Show.
+    func returnToEntryLive() {
+        guard canReturnToEntryLive, let source = returnLiveSource else { return }
+        Haptics.impactMedium()
+        let mgr = ExternalDisplayManager.shared
+        switch source.content {
+        case .web(let url):
+            mgr.presentWeb(url, pageId: entryLiveOwnerId)
+        case .webVideo(let link):
+            mgr.presentWebVideo(link, pageId: entryLiveOwnerId)
+        case .pdf(let url):
+            mgr.presentPDF(url, documentId: entryLiveOwnerId)
+        case .countdown:
+            mgr.presentCountdown()
+        case .prompter:
+            mgr.presentPrompter()
+        case .ptzCamera:
+            mgr.presentPTZCamera()
+        default:
+            mgr.present(source)
+        }
+    }
+
+    /// What the first card shows: the earlier item while the camera holds the TV,
+    /// else what the audience sees (the AirPlay picture, or the Show's live card).
     var liveOutputSource: PresentationSource? {
         let mgr = ExternalDisplayManager.shared
+        if canReturnToEntryLive { return returnLiveSource }
         if let presented = mgr.presentedSource { return presented }
         if mgr.isCameraModeActive { return .camera }
         // The Show screen stops answering once this screen covers it, so fall back
@@ -72,17 +125,22 @@ extension CameraLiveViewController {
     /// Loads art for the current AirPlay source into any program thumb
     /// (the in-panel monitor or a stacked-grid tile).
     func configureLiveOutputThumb(_ thumb: CameraLiveOutputThumbView) {
+        let returning = canReturnToEntryLive
+        thumb.setOnAir(!returning)
         guard let source = liveOutputSource else {
             thumb.configure(image: nil, symbol: nil, fill: .black)
             return
         }
-        let art = liveOutputArt(for: source)
+        let art = liveOutputArt(for: source, ownerId: returning ? entryLiveOwnerId : nil)
         thumb.configure(
             image: art.image,
             symbol: art.symbol,
             fill: art.fill,
             title: art.title
         )
+        if returning {
+            thumb.accessibilityLabel = "Back to \(art.title)"
+        }
     }
 
     // MARK: - Art
@@ -95,7 +153,10 @@ extension CameraLiveViewController {
     }
 
     /// Still / icon for a presentation source, preferring cached library thumbs.
-    private func liveOutputArt(for source: PresentationSource) -> LiveOutputArt {
+    private func liveOutputArt(
+        for source: PresentationSource,
+        ownerId: UUID? = nil
+    ) -> LiveOutputArt {
         let dim = UIColor.mediaPlaceholder
         switch source.content {
         case .camera:
@@ -133,7 +194,7 @@ extension CameraLiveViewController {
                 title: "Screensaver"
             )
         case .web:
-            let id = ExternalDisplayManager.shared.liveWebPageId
+            let id = ownerId ?? ExternalDisplayManager.shared.liveWebPageId
             let page = id.flatMap { WebPageStore.shared.page(id: $0) }
             return LiveOutputArt(
                 image: id.flatMap { WebThumbnailStore.shared.image(for: $0) },
@@ -142,7 +203,7 @@ extension CameraLiveViewController {
                 title: page?.title ?? "Website"
             )
         case .webVideo:
-            let id = ExternalDisplayManager.shared.liveWebVideoPageId
+            let id = ownerId ?? ExternalDisplayManager.shared.liveWebVideoPageId
             let page = id.flatMap { WebPageStore.shared.page(id: $0) }
             return LiveOutputArt(
                 image: id.flatMap { WebThumbnailStore.shared.image(for: $0) },
@@ -151,7 +212,7 @@ extension CameraLiveViewController {
                 title: page?.title ?? "Video"
             )
         case .pdf:
-            let id = ExternalDisplayManager.shared.livePDFDocumentId
+            let id = ownerId ?? ExternalDisplayManager.shared.livePDFDocumentId
             let doc = PDFStore.shared.documents.first { $0.id == id }
             return LiveOutputArt(
                 image: id.flatMap { PDFThumbnailStore.shared.image(for: $0) },
@@ -303,6 +364,16 @@ final class CameraLiveOutputThumbView: UIView {
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    /// On the TV now: blue outline and LIVE badge. Off it (the earlier item while
+    /// the camera is live): a plain hairline, no badge.
+    func setOnAir(_ onAir: Bool) {
+        badge.isHidden = !onAir
+        layer.borderColor = onAir
+            ? UIColor.liveStroke.cgColor
+            : UIColor.white.withAlphaComponent(0.25).cgColor
+        layer.borderWidth = onAir ? 2 : 1
     }
 
     /// Updates still, fallback symbol, and VoiceOver for the current program.

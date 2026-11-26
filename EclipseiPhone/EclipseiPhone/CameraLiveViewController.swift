@@ -195,6 +195,8 @@ final class CameraLiveViewController: UIViewController {
     /// What was live in the Show as this screen opened (nil when nothing was).
     /// Backs the "what's live" card when no TV is connected.
     var entryLiveSource: PresentationSource?
+    /// Bookmark or document that owned `entryLiveSource` (websites, PDFs).
+    var entryLiveOwnerId: UUID?
     /// Show that receives captures taken here, when the camera was opened from one.
     var captureDestinationShowId: UUID?
 
