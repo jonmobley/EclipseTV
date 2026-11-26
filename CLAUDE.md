@@ -213,6 +213,14 @@
   a row taller than the screen (zoomed in) scrolls freely and stops at its edge. A pinch clears the lit preset.
   Default is Fit with natural scrolling. PDF tile pictures are 720×960 (`<id>-v2.jpg`); old 360×480 ones stay unused in Caches.
   A hero refresh can un-hide the still picture (e.g. `clearWebPreview`), so `showPDFPreview` re-hides it every time.
+- Interactive website in the hero (iPhone/iPad, 2026-11-26, `HeroWebViewportSync`, `LibraryGridViewController+HeroWebInteraction`):
+  the live website scrolls and pinches in place in the hero and the TV follows (same `WebViewportMirror` as the full browser,
+  sent only for the operator's own drags/pinches, never below fit). Links and buttons don't work there
+  (`WarmWebSession.setPreviewInteraction` turns off touches on the page's content view, keeping the scroll view's pan
+  and pinch), so the hero can never show a different page from the TV; a tap opens the full browser. Same off-rules as
+  DirectAdjust (Live Lock, Blackout hold, phone Preview, another Show live, remote operator, tucked hero). The browser
+  is presented inside a nav controller, so its `viewWillDisappear` must also check `navigationController?.isBeingDismissed`:
+  without that it never handed the warm page back and the hero showed a still after Close.
 - PDF reader zoom snap (2026-11-14): pinching in `PDFRemoteViewController` catches where the current page exactly fills
   the audience frame's width and where it fills its height (`PDFZoomSnap`, ±4% hold band, light haptic on entry). It
   rides the scroll view's own pinch recognizer (added target, never the delegate). Holding sets the zoom, and the scroll

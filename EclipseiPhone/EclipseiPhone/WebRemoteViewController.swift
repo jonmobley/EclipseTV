@@ -171,7 +171,12 @@ final class WebRemoteViewController: UIViewController {
         if usesOverlayBrowserChrome, navigationController?.isBeingDismissed != true {
             navigationController?.setNavigationBarHidden(false, animated: animated)
         }
-        guard isBeingDismissed || isMovingFromParent else { return }
+        // The browser is presented inside a navigation controller, so on Close it is
+        // that controller (not this one) that is being dismissed. Missing that left
+        // the warm page adopted, and the hero showed a still instead of the live page.
+        let isLeavingForGood = isBeingDismissed || isMovingFromParent
+            || navigationController?.isBeingDismissed == true
+        guard isLeavingForGood else { return }
         isLeaving = true
         webURLObservation = nil
         // Park the warm sessions (home LiveHeader reclaims the live one).
