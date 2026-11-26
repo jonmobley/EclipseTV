@@ -161,6 +161,9 @@
   With no destination (or output locked) the tap still opens the browser as a phone preview.
 - Note cards: tap expands or collapses, and the pencil edits (2026-10-31).
 - Note editor on iPhone is a full-height sheet only: a medium detent gets pushed to large by the keyboard, which looks like a stall halfway up (2026-11-01). The text stops at `keyboardLayoutGuide`, and Hide Keyboard shows while editing because Done closes the editor.
+- Screensaver fallback tile (2026-11-26): with nothing picked, the TV / Practice shows the Screensaver and the hero
+  mirrors it, so the Screensaver tile gets the blue live outline too (`isScreensaverFallbackOnProgram`, used only by
+  `isShowGridItemLive`; the program resolver and operator snapshots are unchanged).
 - Hero labels with nothing connected (2026-11-26): the plain LIVE badge hides when no TV is connected (Practice Mode),
   but BLACK / WHITE SCREEN, FREEZE FRAME and LOCKED SCREEN always show (`LiveHeaderView.applyHoldBadgeVisibility`,
   re-applied after every hero refresh and on each Freeze / Lock toggle).
