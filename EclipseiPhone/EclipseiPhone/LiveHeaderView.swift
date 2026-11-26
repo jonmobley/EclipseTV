@@ -735,6 +735,7 @@ final class LiveHeaderView: UIView {
         UIView.animate(withDuration: 0.22, delay: 0, options: .curveEaseInOut) {
             self.applyOutputLockChrome()
         }
+        syncHoldBadgeAfterToggle()
     }
 
     /// Amber hero stroke + LOCKED SCREEN badge (the Mac's words) while live output is locked.
@@ -744,6 +745,7 @@ final class LiveHeaderView: UIView {
         UIView.animate(withDuration: 0.22, delay: 0, options: .curveEaseInOut) {
             self.applyOutputLockChrome()
         }
+        syncHoldBadgeAfterToggle()
     }
 
     func applyOutputLockChrome() {
@@ -809,6 +811,30 @@ final class LiveHeaderView: UIView {
         if !base.hasPrefix("Blackout") {
             accessibilityLabel = upNext.map { "Blackout on, up next \($0). \(base)" }
                 ?? "Blackout on. \(base)"
+        }
+    }
+
+    /// Blackout, Freeze and Lock always say so on the hero, connected or not: with
+    /// nothing connected (Practice Mode) the plain LIVE badge stays hidden, but
+    /// BLACK SCREEN, FREEZE FRAME and LOCKED SCREEN still show. Re-applied after
+    /// every hero refresh, since content passes rewrite the badge's visibility.
+    func applyHoldBadgeVisibility() {
+        guard isBlackoutHold || isOutputFrozen || isOutputLocked || isPhonePreview else { return }
+        liveBadge.isHidden = false
+        bringSubviewToFront(liveBadge)
+        if let label = blackoutUpNextLabel { bringSubviewToFront(label) }
+        bringSubviewToFront(controls)
+        bringExpandControlToFront()
+    }
+
+    /// Freeze or Lock just changed: show its badge at once, or, when the last
+    /// hold ends with nothing connected, hide the badge again as a plain LIVE
+    /// badge would be (the next hero refresh settles it either way).
+    private func syncHoldBadgeAfterToggle() {
+        if isBlackoutHold || isOutputFrozen || isOutputLocked || isPhonePreview {
+            applyHoldBadgeVisibility()
+        } else {
+            liveBadge.isHidden = !LiveOutputRouting.showsHeroLiveBadge()
         }
     }
 

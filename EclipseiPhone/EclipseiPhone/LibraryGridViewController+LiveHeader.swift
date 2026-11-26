@@ -89,6 +89,7 @@ extension LibraryGridViewController {
             liveHeader.setPhonePreview(
                 heroPhonePreview != nil, returnTitle: heroPhonePreviewReturnTitle
             )
+            liveHeader.applyHoldBadgeVisibility()
         }
 
         // Operator: the hero is a follow monitor for the director's program.
