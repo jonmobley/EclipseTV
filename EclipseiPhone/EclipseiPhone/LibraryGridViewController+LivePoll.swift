@@ -368,6 +368,7 @@ extension LibraryGridViewController {
                 self?.confirmEndQuestPoll()
             })
         }
+        children.append(cardNoteAction(forId: item.id.uuidString))
         children.append(arrangeAction())
         children.append(selectAction(seedId: ShowLivePollToken.token(for: item.id)))
         children.append(UIAction(
@@ -427,6 +428,7 @@ extension LibraryGridViewController {
                 self?.confirmEndQuestPoll()
             })
         }
+        children.append(cardNoteAction(forId: item.id.uuidString))
         children.append(arrangeAction())
         children.append(selectAction(seedId: ShowLivePollToken.token(for: item.id)))
         children.append(UIAction(

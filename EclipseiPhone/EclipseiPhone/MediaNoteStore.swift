@@ -18,12 +18,15 @@ enum MediaNoteVisibility: String, CaseIterable {
     var summary: String { rawValue }
 }
 
-/// Per-item presenter notes keyed by `LibraryItemDTO.id`.
+/// Per-card presenter notes. Photos and videos are keyed by `LibraryItemDTO.id`;
+/// every other card kind (website, PDF, slideshow, countdown, poll, prompter) by
+/// its own UUID string (`ShowGridItem.noteId`).
 ///
 /// Never sent on Multipeer or written onto `LibraryItemDTO`, so TV manifest
-/// replaces cannot wipe them. Synced through iCloud on the item's `MediaItem`
-/// record (`note`), so the Mac app shows them too. Cleared when the media is
-/// deleted.
+/// replaces cannot wipe them. Photo and video notes sync through iCloud on the
+/// item's `MediaItem` record (`note`), so the Mac app shows them too. Notes on
+/// other card kinds stay on this iPhone for now: their iCloud records have no
+/// `note` field yet. Cleared when the card is deleted.
 enum MediaNoteStore {
     private static let notesKey = "EclipseTV.media.notes"
     private static let visibilityKey = "EclipseTV.media.notesVisibility"

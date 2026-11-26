@@ -131,6 +131,7 @@ final class LivePollStore {
     func delete(id: UUID) {
         guard let item = polls.first(where: { $0.id == id }) else { return }
         polls.removeAll { $0.id == id }
+        MediaNoteStore.clear(forId: id.uuidString)
         syncedIds.remove(id.uuidString)
         persist()
         LocalAlbumStore.shared.removeLivePoll(id, fromAlbumId: item.showId)

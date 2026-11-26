@@ -176,6 +176,7 @@ final class WebPageStore {
             }
         } else {
             retainedPages.removeAll { $0.id == id }
+            MediaNoteStore.clear(forId: id.uuidString)
             WarmWebSessionPool.shared.remove(pageId: id)
             WebThumbnailStore.shared.remove(id: id)
             syncedIds.remove(id.uuidString)

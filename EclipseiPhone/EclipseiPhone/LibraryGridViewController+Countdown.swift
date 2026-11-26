@@ -168,6 +168,7 @@ extension LibraryGridViewController {
         ) { [weak self] _ in
             self?.promptRenameCountdown(item)
         })
+        children.append(cardNoteAction(forId: item.id.uuidString))
         children.append(arrangeAction())
         children.append(selectAction(seedId: token))
         children.append(UIAction(

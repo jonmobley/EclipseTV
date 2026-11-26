@@ -38,7 +38,8 @@ extension LibraryGridViewController {
             in: album,
             extras: [delete]
         )
-        return UIMenu(children: [preview, rename] + rest.children)
+        let note = cardNoteAction(forId: doc.id.uuidString)
+        return UIMenu(children: [preview, rename, note] + rest.children)
     }
 
     /// Deleting drops the file, so warn that every Show loses the card.

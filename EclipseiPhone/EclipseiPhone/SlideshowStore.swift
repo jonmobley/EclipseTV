@@ -138,6 +138,7 @@ final class SlideshowStore {
         guard let show = slideshows.first(where: { $0.id == id }) else { return }
         slideshows.removeAll { $0.id == id }
         SlideshowPlaybackController.shared.clearResume(for: id)
+        MediaNoteStore.clear(forId: id.uuidString)
         syncedIds.remove(id.uuidString)
         persist()
         LocalAlbumStore.shared.removeSlideshow(id, fromAlbumId: show.showId)
