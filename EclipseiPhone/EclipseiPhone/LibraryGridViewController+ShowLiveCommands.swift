@@ -72,6 +72,10 @@ extension LibraryGridViewController {
             // its hero is offering Fit / Fill right now.
             guard liveScreenFitChrome() != nil else { return }
             toggleLiveScreenFit()
+        case .freezeToggle:
+            toggleLiveOutputFreeze()
+        case .blankKindSet:
+            selectOutputBlankKind(command.value == 1 ? .white : .black)
         }
     }
 

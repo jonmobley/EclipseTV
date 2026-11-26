@@ -542,6 +542,12 @@ extension iPhoneMainViewController: UIScrollViewDelegate {
         libraryViewController.onLiveOutputLockChanged = { [weak self] locked in
             self?.headerBar.setLiveLocked(locked)
         }
+        libraryViewController.onLiveOutputFreezeChanged = { [weak self] frozen in
+            self?.headerBar.setFrozen(frozen)
+        }
+        libraryViewController.onOutputBlankKindChanged = { [weak self] kind in
+            self?.headerBar.setBlankKind(kind)
+        }
         libraryViewController.onStatusMessage = { [weak self] message in
             self?.showPresentationToast(message)
         }

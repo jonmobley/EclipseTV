@@ -116,10 +116,11 @@ extension LibraryGridViewController {
         liveHeader.setScreenFitToggleVisible(false, mode: .fit)
         liveHeader.allowsSlideshowBrowse = false
         if snap.isBlackout || snap.liveKind == .black {
+            let kind = snap.blankKind ?? .black
             liveHeader.configureOverlay(
-                title: "Blackout",
+                title: kind.screenName,
                 systemImage: "moon.fill",
-                fillColor: .black,
+                fillColor: kind.fillColor,
                 showsLiveBadge: true
             )
             liveHeader.updatePlayback(PlaybackState())
@@ -141,6 +142,7 @@ extension LibraryGridViewController {
         if ShowLiveSession.shared.isRemoteOperator,
            let snap = ShowLiveSession.shared.snapshot {
             isLiveOutputLocked = snap.isLocked
+            isLiveOutputFrozen = snap.isFrozen ?? false
         }
         // Video / clock ticks arrive about once a second; only the hero and the
         // live countdown tile need them, not a grid rebuild.
@@ -192,7 +194,9 @@ extension LibraryGridViewController {
             video: showLiveVideoState,
             countdown: showLiveCountdownState,
             slideshow: sharedProgram?.kind == .slideshow ? showLiveSlideshowState : nil,
-            screenFit: showLiveScreenFitState
+            screenFit: showLiveScreenFitState,
+            isFrozen: isLiveOutputFrozen,
+            blankKind: OutputBlankKind.current
         )
     }
 

@@ -57,6 +57,10 @@ enum ShowLiveCommandVerb: String, Codable, Equatable {
     /// What the hero's Fit / Fill button does on the director (flip, or reset
     /// a pinched still or a moved countdown clock).
     case screenFitToggle
+    /// Flip the director's Freeze (audience screen held still).
+    case freezeToggle
+    /// Pick Blackout's colour; `value` is 0 for Black, 1 for White.
+    case blankKindSet
 }
 
 /// One operator command; `value` is only read for verbs that document it.
@@ -161,6 +165,10 @@ struct ShowLiveSnapshot: Codable, Equatable {
     /// Present only while the director's hero offers Fit / Fill. Absent from
     /// legacy peers.
     var screenFit: ShowLiveScreenFitState?
+    /// Freeze holds the director's audience screen still. Absent from legacy peers.
+    var isFrozen: Bool?
+    /// Blackout's colour on the director. Absent from legacy peers (Black).
+    var blankKind: OutputBlankKind?
 
     init(
         showId: UUID,
@@ -172,7 +180,9 @@ struct ShowLiveSnapshot: Codable, Equatable {
         video: ShowLiveVideoState? = nil,
         countdown: ShowLiveCountdownState? = nil,
         slideshow: ShowLiveSlideshowState? = nil,
-        screenFit: ShowLiveScreenFitState? = nil
+        screenFit: ShowLiveScreenFitState? = nil,
+        isFrozen: Bool? = nil,
+        blankKind: OutputBlankKind? = nil
     ) {
         self.showId = showId
         self.liveItemId = liveItemId
@@ -184,6 +194,8 @@ struct ShowLiveSnapshot: Codable, Equatable {
         self.countdown = countdown
         self.slideshow = slideshow
         self.screenFit = screenFit
+        self.isFrozen = isFrozen
+        self.blankKind = blankKind
     }
 
     /// True when only transport / clock ticks differ from `other`, so an operator
@@ -196,6 +208,8 @@ struct ShowLiveSnapshot: Codable, Equatable {
             && liveKind == other.liveKind
             && isBlackout == other.isBlackout
             && isLocked == other.isLocked
+            && isFrozen == other.isFrozen
+            && blankKind == other.blankKind
             && directorName == other.directorName
             && slideshow == other.slideshow
             && screenFit == other.screenFit

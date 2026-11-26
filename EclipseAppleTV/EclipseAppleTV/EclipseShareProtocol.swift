@@ -225,6 +225,9 @@ struct EclipseShareEnvelope: Codable {
     var albums: [LibraryAlbumDTO]? = nil
     /// `"black"` / `"clear"` — park the TV stage or release park (`set_idle_mode`).
     var mode: String? = nil
+    /// `set_idle_mode` `"black"` only: `"white"` covers the stage in white instead.
+    /// Older TVs ignore it and go black, so Blackout still blanks them.
+    var color: String? = nil
     /// Normalized crop rect for a still (`setImageFit` / `playRequest`). Nil clears
     /// any saved custom position so Fit / Fill alone apply.
     var framing: MediaFramingDTO? = nil
@@ -431,11 +434,15 @@ struct EclipseShareEnvelope: Codable {
         )
     }
 
-    /// Parks the TV on a solid black stage (`true`) or clears park (`false`).
-    static func setIdleMode(black: Bool) -> EclipseShareEnvelope {
+    /// Parks the TV on a solid stage (`true`) or clears park (`false`).
+    /// - Parameters:
+    ///   - black: Park (`true`) or clear park (`false`)
+    ///   - color: `"white"` for a white stage; nil keeps it black
+    static func setIdleMode(black: Bool, color: String? = nil) -> EclipseShareEnvelope {
         EclipseShareEnvelope(
             eclipseMsg: EclipseShareProtocol.Kind.setIdleMode.rawValue,
-            mode: black ? "black" : "clear"
+            mode: black ? "black" : "clear",
+            color: black ? color : nil
         )
     }
 
