@@ -102,13 +102,42 @@ final class WebVideoPosterFetcher {
 
     /// A still from a linked video file (`.mp4`, `.mov`…). These links never load in a
     /// web view, so before this they had no picture at all, only the placeholder icon.
-    /// HLS playlists (`.m3u8`) can't be sampled this way and keep the placeholder.
+    /// HLS playlists (`.m3u8`) can't be sampled this way, are skipped and keep the placeholder.
     private func fetchFilePoster(url: URL, pageId: UUID) async {
-        guard let image = await VideoPosterFrame.poster(at: url) else {
+        guard Self.canSampleFile(url) else { return }
+        let image = await Self.fileLimiter.run {
+            await Self.poster(at: url, timeout: Self.filePosterTimeout)
+        }
+        guard let image else {
             logger.error("Video file poster failed for \(pageId.uuidString, privacy: .public)")
             return
         }
         savePoster(image, for: pageId)
+    }
+
+    /// One remote file at a time: each one is a network asset load plus several frame
+    /// grabs, and library posters already share the decoder (`TVLibraryStore.posterLimiter`).
+    private static let fileLimiter = AsyncLimiter(limit: 1)
+    /// A slow or stalled server gives up rather than holding the only slot.
+    private static let filePosterTimeout: TimeInterval = 20
+
+    /// HLS playlists have no frames to grab, so they are not fetched at all.
+    nonisolated static func canSampleFile(_ url: URL) -> Bool {
+        (url.path as NSString).pathExtension.lowercased() != "m3u8"
+    }
+
+    /// `VideoPosterFrame.poster`, or nil once `timeout` seconds pass.
+    private nonisolated static func poster(at url: URL, timeout: TimeInterval) async -> UIImage? {
+        await withTaskGroup(of: UIImage?.self) { group in
+            group.addTask { await VideoPosterFrame.poster(at: url) }
+            group.addTask {
+                try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+                return nil
+            }
+            let first = await group.next() ?? nil
+            group.cancelAll()
+            return first
+        }
     }
 
     private func savePoster(_ image: UIImage, for pageId: UUID) {

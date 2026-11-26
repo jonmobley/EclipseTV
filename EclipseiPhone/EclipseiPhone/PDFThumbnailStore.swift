@@ -95,6 +95,9 @@ final class PDFThumbnailStore {
             Task { @MainActor in
                 guard let self else { return }
                 self.remember(image, for: id)
+                // The memory cache can evict this later and iOS can purge Caches again;
+                // a later miss must be free to rebuild. Failed builds stay marked.
+                self.rebuildRequested.remove(id)
                 NotificationCenter.default.post(
                     name: Self.didChangeNotification, object: self
                 )

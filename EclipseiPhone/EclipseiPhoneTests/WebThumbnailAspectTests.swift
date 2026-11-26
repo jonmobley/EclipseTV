@@ -68,4 +68,12 @@ struct WebThumbnailAspectTests {
         let top = try red(at: CGPoint(x: 240, y: 2), in: cropped)
         #expect(top < 40)
     }
+
+    /// HLS playlists have no frames to grab, so a file poster is never attempted.
+    @Test func filePostersSkipHLSPlaylists() throws {
+        let mp4 = try #require(URL(string: "https://example.com/clip.mp4?token=1"))
+        let hls = try #require(URL(string: "https://example.com/live/index.m3u8"))
+        #expect(WebVideoPosterFetcher.canSampleFile(mp4))
+        #expect(!WebVideoPosterFetcher.canSampleFile(hls))
+    }
 }
