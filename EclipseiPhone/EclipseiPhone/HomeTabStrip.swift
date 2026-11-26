@@ -88,12 +88,17 @@ final class HomeTabStripView: UIView {
 
     /// Invoked when a tab is tapped (also the current one).
     var onSelect: ((HomeTab) -> Void)?
+    /// Invoked by "Camera", the word at the end of the row. It reads like a tab
+    /// but is not a page: it opens the full-screen camera, so the line never
+    /// moves under it and swiping never lands on it.
+    var onOpenCamera: (() -> Void)?
 
     static let height: CGFloat = 38
 
     private let stack = UIStackView()
     private let indicator = UIView()
     private var buttons: [HomeTab: UIButton] = [:]
+    private let cameraButton = MinimumHitTargetButton(type: .system)
     private(set) var selected: HomeTab = .home
     /// Pager position the line follows (0…3); whole numbers sit under a tab.
     private var position: CGFloat = 0
@@ -177,7 +182,8 @@ final class HomeTabStripView: UIView {
 
         stack.axis = .horizontal
         stack.alignment = .fill
-        stack.spacing = 22
+        // Five words have to fit a 375pt phone.
+        stack.spacing = 14
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)
 
@@ -191,6 +197,16 @@ final class HomeTabStripView: UIView {
             buttons[tab] = button
             stack.addArrangedSubview(button)
         }
+
+        cameraButton.accessibilityIdentifier = "home.tab.camera"
+        cameraButton.accessibilityLabel = "Camera"
+        cameraButton.accessibilityHint =
+            "Opens the camera. Nothing goes to the TV until you tap the picture."
+        cameraButton.addAction(UIAction { [weak self] _ in
+            self?.onOpenCamera?()
+        }, for: .touchUpInside)
+        cameraButton.setContentCompressionResistancePriority(.required, for: .horizontal)
+        stack.addArrangedSubview(cameraButton)
 
         indicator.backgroundColor = .label
         indicator.layer.cornerRadius = 1
@@ -231,6 +247,21 @@ final class HomeTabStripView: UIView {
             button.accessibilityLabel = tab.title
             button.accessibilityTraits = isSelected ? [.button, .selected] : .button
         }
+        // Camera wears the look of a tab that is not selected.
+        var camera = UIButton.Configuration.plain()
+        camera.title = "Camera"
+        camera.baseForegroundColor = .secondaryLabel
+        camera.contentInsets = .zero
+        camera.titleTextAttributesTransformer =
+            UIConfigurationTextAttributesTransformer { incoming in
+                var outgoing = incoming
+                outgoing.font = UIFontMetrics(forTextStyle: .subheadline).scaledFont(
+                    for: .systemFont(ofSize: 16, weight: .semibold),
+                    maximumPointSize: 20
+                )
+                return outgoing
+            }
+        cameraButton.configuration = camera
     }
 
     private func titleFrame(for tab: HomeTab) -> CGRect {

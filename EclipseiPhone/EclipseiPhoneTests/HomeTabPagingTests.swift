@@ -166,22 +166,20 @@ struct HomeHeaderBarTabStripTests {
         #expect(search?.isHidden == true)
     }
 
-    @Test func cameraIsOnEveryPage() {
+    @Test func cameraIsAWordOnTheTabRow() {
         let bar = HomeHeaderBar(frame: CGRect(x: 0, y: 0, width: 390, height: 90))
-        let camera = bar.firstDescendant(label: "Camera") as? UIButton
-        // No tab row (full iPad), no button.
-        #expect(camera?.isHidden == true)
         bar.showsTabStrip = true
-        for page in HomeTab.allCases {
-            bar.setTabPage(page)
-            #expect(camera?.isHidden == false)
-        }
+        let camera = bar.tabStrip.firstDescendant(identifier: "home.tab.camera") as? UIButton
+        #expect(camera?.configuration?.title == "Camera")
+        #expect(camera?.configuration?.image == nil)
         var opened = 0
         bar.onOpenCamera = { opened += 1 }
         camera?.sendActions(for: .touchUpInside)
         #expect(opened == 1)
-        bar.setArranging(true)
-        #expect(camera?.isHidden == true)
+        // It is not a page: the line and the selection stay on the four tabs.
+        #expect(HomeTab.allCases.count == 4)
+        bar.tabStrip.setPosition(3)
+        #expect(bar.tabStrip.selected == .music)
     }
 
     @Test func searchButtonHidesWhileItsFieldIsUp() {
