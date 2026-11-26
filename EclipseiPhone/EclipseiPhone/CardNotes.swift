@@ -28,7 +28,9 @@ extension ShowGridItem {
         case .countdown(let item): return item.id.uuidString
         case .livePoll(let item): return item.id.uuidString
         case .prompter(_, let scriptId): return scriptId.uuidString
-        case .screensaver, .logo, .camera, .cameraPreset, .ptzCamera, .unresolved, .add:
+        // Template cards (overlays) have no note entry in their menu yet.
+        case .screensaver, .logo, .camera, .cameraPreset, .ptzCamera, .template,
+             .unresolved, .add:
             return nil
         }
     }
