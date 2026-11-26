@@ -300,13 +300,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             return UICollectionViewCell()
         }
         guard case .show(let show) = homeItem(at: indexPath) else { return cell }
-        let coverId = show.resolvedCoverId
-        let thumb = coverId.flatMap { id -> UIImage? in
-            if let media = store.thumbnail(for: id) { return media }
-            guard let uuid = UUID(uuidString: id) else { return nil }
-            return WebThumbnailStore.shared.image(for: uuid)
-                ?? PDFThumbnailStore.shared.image(for: uuid)
-        }
+        let thumb = homeShowCover(show)
         cell.configureShow(
             showId: show.id,
             title: show.name,
@@ -385,16 +379,11 @@ extension LibraryGridViewController: UICollectionViewDataSource,
                 menu: addMenuProvider?()
             )
         case .show(let show):
-            let coverId = show.resolvedCoverId
-            let thumb = coverId.flatMap { id -> UIImage? in
-                if let media = store.thumbnail(for: id) { return media }
-                guard let uuid = UUID(uuidString: id) else { return nil }
-                return WebThumbnailStore.shared.image(for: uuid)
-            }
+            // Same cover as Recent Shows: a Show led by a PDF showed no art here.
             cell.configureSpecial(
                 title: show.name,
                 systemImage: "rectangle.stack.fill",
-                thumbnail: thumb,
+                thumbnail: homeShowCover(show),
                 fillColor: .specialTile,
                 isLive: showOwnsLiveProgram(show)
             )

@@ -18,10 +18,10 @@ import UIKit
 struct PDFThumbnailStoreTests {
 
     /// A one-page PDF filled solid red, so the preview's colour is easy to check.
-    private func makeRedPDF() throws -> URL {
+    private func makeRedPDF(width: CGFloat = 612, height: CGFloat = 792) throws -> URL {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("\(UUID().uuidString).pdf")
-        let bounds = CGRect(x: 0, y: 0, width: 612, height: 792)
+        let bounds = CGRect(x: 0, y: 0, width: width, height: height)
         let data = UIGraphicsPDFRenderer(bounds: bounds).pdfData { context in
             context.beginPage()
             UIColor.red.setFill()
@@ -97,6 +97,26 @@ struct PDFThumbnailStoreTests {
         let image = try #require(await waitForImage(id, in: store))
         let pixel = try centerPixel(of: image)
         #expect(pixel.r > 200 && pixel.g < 60 && pixel.b < 60)
+    }
+
+    /// Slides (a wide first page) came out 360 px wide, soft on a 3× phone tile.
+    @Test func widePageRendersSharpEnoughForATile() async throws {
+        let pdf = try makeRedPDF(width: 1280, height: 720)
+        let root = scratchDirectory()
+        let id = UUID()
+        defer {
+            try? FileManager.default.removeItem(at: pdf)
+            try? FileManager.default.removeItem(at: root)
+        }
+        let store = PDFThumbnailStore(rootDirectory: root, pdfURL: { _ in nil })
+
+        store.generate(from: pdf, for: id)
+
+        let image = try #require(await waitForImage(id, in: store))
+        let pixelWidth = image.size.width * image.scale
+        let pixelHeight = image.size.height * image.scale
+        #expect(pixelWidth >= 900)
+        #expect(pixelWidth > pixelHeight)
     }
 
     @Test func unknownIdDoesNotRebuild() {

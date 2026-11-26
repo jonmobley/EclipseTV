@@ -18,15 +18,30 @@ final class WebVideoPosterFetcher {
         subsystem: "com.eclipseapp.ios", category: "WebVideoPoster"
     )
     private var inFlight = Set<UUID>()
+    /// Pages tried since launch. A link with no poster to find (dead address, `.m3u8`)
+    /// would otherwise be fetched again on every scroll-driven `warmSoon` call.
+    private var attemptedThisRun = Set<UUID>()
 
-    private init() {}
+    /// Pages whose poster was saved by the current rules (centered crop, large Vimeo
+    /// art, file stills; 2026-11-26). Posters saved before then are fetched once more.
+    private static let currentPostersKey = "EclipseTV.webVideoPoster.v2Ids"
+    private var currentPosterIds: Set<String>
 
-    /// Fetches a poster when the bookmark is a video link and has no snapshot yet.
+    private init() {
+        currentPosterIds = Set(
+            UserDefaults.standard.stringArray(forKey: Self.currentPostersKey) ?? []
+        )
+    }
+
+    /// Fetches a poster when the bookmark is a video link and has no up-to-date poster yet.
     func fetchIfNeeded(for page: WebPage) {
         guard let link = page.videoLink else { return }
-        guard WebThumbnailStore.shared.snapshot(for: page.id) == nil else { return }
-        guard !inFlight.contains(page.id) else { return }
+        guard WebThumbnailStore.shared.snapshot(for: page.id) == nil
+                || !currentPosterIds.contains(page.id.uuidString)
+        else { return }
+        guard !inFlight.contains(page.id), !attemptedThisRun.contains(page.id) else { return }
         inFlight.insert(page.id)
+        attemptedThisRun.insert(page.id)
 
         Task { [weak self] in
             defer { Task { @MainActor in self?.inFlight.remove(page.id) } }
@@ -35,8 +50,8 @@ final class WebVideoPosterFetcher {
                 await self?.fetchYouTubePoster(link: link, pageId: page.id)
             case .vimeo:
                 await self?.fetchVimeoPoster(originalURL: page.url, pageId: page.id)
-            case .directFile:
-                break
+            case .directFile(let url):
+                await self?.fetchFilePoster(url: url, pageId: page.id)
             }
         }
     }
@@ -54,7 +69,7 @@ final class WebVideoPosterFetcher {
         let candidates = [link.posterURL, link.fallbackPosterURL].compactMap { $0 }
         for url in candidates {
             if let image = await downloadImage(from: url) {
-                WebThumbnailStore.shared.saveSnapshot(image, for: pageId)
+                savePoster(image, for: pageId)
                 return
             }
         }
@@ -66,8 +81,10 @@ final class WebVideoPosterFetcher {
         var components = URLComponents(
             string: "https://vimeo.com/api/oembed.json"
         )
+        // Without `width` oEmbed hands back a 295×166 thumbnail, blurry on a tile.
         components?.queryItems = [
-            URLQueryItem(name: "url", value: originalURL.absoluteString)
+            URLQueryItem(name: "url", value: originalURL.absoluteString),
+            URLQueryItem(name: "width", value: "1280")
         ]
         guard let oembedURL = components?.url else { return }
         do {
@@ -77,10 +94,27 @@ final class WebVideoPosterFetcher {
                   let thumbURL = URL(string: thumb),
                   let image = await downloadImage(from: thumbURL)
             else { return }
-            WebThumbnailStore.shared.saveSnapshot(image, for: pageId)
+            savePoster(image, for: pageId)
         } catch {
             logger.error("Vimeo oEmbed failed: \(error.localizedDescription, privacy: .public)")
         }
+    }
+
+    /// A still from a linked video file (`.mp4`, `.mov`…). These links never load in a
+    /// web view, so before this they had no picture at all, only the placeholder icon.
+    /// HLS playlists (`.m3u8`) can't be sampled this way and keep the placeholder.
+    private func fetchFilePoster(url: URL, pageId: UUID) async {
+        guard let image = await VideoPosterFrame.poster(at: url) else {
+            logger.error("Video file poster failed for \(pageId.uuidString, privacy: .public)")
+            return
+        }
+        savePoster(image, for: pageId)
+    }
+
+    private func savePoster(_ image: UIImage, for pageId: UUID) {
+        WebThumbnailStore.shared.saveSnapshot(image, for: pageId, centered: true)
+        currentPosterIds.insert(pageId.uuidString)
+        UserDefaults.standard.set(Array(currentPosterIds), forKey: Self.currentPostersKey)
     }
 
     private func downloadImage(from url: URL) async -> UIImage? {

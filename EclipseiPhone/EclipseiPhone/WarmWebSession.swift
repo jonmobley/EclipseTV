@@ -281,13 +281,23 @@ final class WarmWebSession: NSObject {
         // posted a thumbnail change and reloaded the Show grid, which dismissed
         // ⋯ menus while a room was live.
         if QuestPollConfig.isPresentURL(url) { return }
+        scheduleThumbnailCapture(after: 0.5, retakeAfter: 2.5)
+    }
+
+    /// Captures soon after load, then once more a little later. Many sites fade or
+    /// slide their content in after `didFinish` (github.com was a white page with a
+    /// header), so the early capture alone saved a nearly blank card.
+    private func scheduleThumbnailCapture(after delay: TimeInterval, retakeAfter: TimeInterval?) {
         settleWorkItem?.cancel()
         let work = DispatchWorkItem { [weak self] in
             guard let self, let web = self.webView, !self.isAdopted else { return }
             WebThumbnailPrefetcher.shared.captureVisibleWebView(web, for: self.pageId)
+            if let retakeAfter {
+                self.scheduleThumbnailCapture(after: retakeAfter, retakeAfter: nil)
+            }
         }
         settleWorkItem = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
     }
 }
 
