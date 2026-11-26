@@ -68,7 +68,7 @@ final class MediaLibraryPickerViewController: UIViewController {
     /// True for the Library page of the home pager: the Home header and its text
     /// tabs stand above it, so it has no Back, no title and no bar of its own.
     var isHomeTabPage = false
-    /// Home pager page: filters by the home screen's search field (`HomeFooterBar`).
+    /// Home pager page: filters by the home screen's search field (in the header).
     func setHomeTabSearchQuery(_ query: String) {
         guard query != searchQuery else { return }
         searchQuery = query

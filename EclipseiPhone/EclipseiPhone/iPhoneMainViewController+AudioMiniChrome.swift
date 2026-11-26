@@ -149,7 +149,6 @@ extension iPhoneMainViewController {
 
         let chromeHeight: CGFloat = showBar ? AudioMiniPlayerView.preferredHeight : 0
         audioMiniHeightConstraint?.constant = chromeHeight
-        applyAudioMiniLift(cardShown: showBar)
         audioMiniPlayer.isHidden = !showBar
         audioMiniPlayer.alpha = 1
         audioMiniPlayer.transform = .identity
@@ -200,8 +199,6 @@ extension iPhoneMainViewController {
 
         bubble.isHidden = false
         bubble.alpha = 1
-        // The circle rises above the footer with the card as it fades in.
-        applyAudioMiniLift(cardShown: true)
 
         UIView.animate(
             withDuration: 0.2,
@@ -232,8 +229,6 @@ extension iPhoneMainViewController {
         raiseAudioMiniChrome()
         view.layoutIfNeeded()
         applyMiniPlayerBottomInset(0)
-        // The circle settles back beside the footer as the card fades out.
-        applyAudioMiniLift(cardShown: false)
 
         UIView.animate(
             withDuration: 0.2,

@@ -65,14 +65,7 @@ class iPhoneMainViewController: UIViewController {
     var isMovingGridForPaging = false
     /// Grid mode as of the last change, to tell opening a Show from closing one.
     var wasGridInShowMode = false
-    /// Search field and Camera, floating at the bottom of the paging home screen.
-    let homeFooter = HomeFooterBar()
-    /// Bottom of the Music circle (its card hangs off it); lifts above the footer
-    /// while the card is open.
-    var audioMiniBubbleBottomConstraint: NSLayoutConstraint?
-    /// Watches each page's scrolling to slide `homeFooter` away.
-    var homeFooterScrollObservations: [NSKeyValueObservation] = []
-    /// Page whose content the bottom bar's search field is filtering, if any.
+    /// Page whose content the header's search field is filtering, if any.
     var searchingTab: HomeTab?
     /// Show that was open when the grid last changed (a search belongs to it).
     var searchedShowId: UUID?

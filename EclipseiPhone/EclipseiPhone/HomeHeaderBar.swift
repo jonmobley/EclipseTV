@@ -29,6 +29,13 @@ final class HomeHeaderBar: UIView {
     let tabStrip = HomeTabStripView()
     /// Fills the status-bar area above the bar so nothing scrolls through it.
     private let topBackdrop = UIView()
+    private let searchButton = MinimumHitTargetButton(type: .system)
+    /// Opens the phone camera from any page.
+    private let cameraButton = MinimumHitTargetButton(type: .system)
+    /// The search field and Cancel, under the tabs while a page is being searched.
+    private let searchRow = UIView()
+    let searchField = UISearchTextField()
+    private let cancelSearchButton = UIButton(type: .system)
     private let addMusicButton = MinimumHitTargetButton(type: .system)
     private let trailingStack = UIStackView()
     private let lockButton = MinimumHitTargetButton(type: .system)
@@ -57,6 +64,14 @@ final class HomeHeaderBar: UIView {
     var onSelectDestination: ((HomeHeaderDestination) -> Void)?
     /// Invoked when a text tab is tapped (compact width).
     var onSelectTab: ((HomeTab) -> Void)?
+    /// Invoked by the Camera control.
+    var onOpenCamera: (() -> Void)?
+    /// Invoked by the Search control (Library, Show and Music pages).
+    var onBeginSearch: (() -> Void)?
+    /// Invoked as the search text changes.
+    var onSearchTextChanged: ((String) -> Void)?
+    /// Invoked by Cancel beside the search field.
+    var onCancelSearch: (() -> Void)?
     /// Invoked by the Music page's "+" control.
     var onAddMusic: (() -> Void)?
 
@@ -67,11 +82,16 @@ final class HomeHeaderBar: UIView {
     /// landscape the tabs sit inside the row, where height is short and width is not.
     static func height(
         showsTabStrip: Bool,
-        verticalSizeClass: UIUserInterfaceSizeClass
+        verticalSizeClass: UIUserInterfaceSizeClass,
+        isSearching: Bool = false
     ) -> CGFloat {
-        guard showsTabStrip, verticalSizeClass != .compact else { return rowHeight }
-        return rowHeight + HomeTabStripView.height
+        guard showsTabStrip else { return rowHeight }
+        let tabs = verticalSizeClass == .compact ? 0 : HomeTabStripView.height
+        return rowHeight + tabs + (isSearching ? searchRowHeight : 0)
     }
+
+    /// Room the search field takes at the bottom of the bar.
+    static let searchRowHeight: CGFloat = 48
 
     /// EclipseTV Multipeer link — read by output-status chrome.
     private(set) var connectionState: ConnectionDisplayState = .paused
@@ -88,6 +108,8 @@ final class HomeHeaderBar: UIView {
     private var tabPage: HomeTab = .home
     /// False while Music is inside a playlist, which has its own "+".
     private var musicAddAvailable = true
+    /// True while the search field is showing.
+    private(set) var isSearching = false
     private var tabStripBelowConstraints: [NSLayoutConstraint] = []
     private var tabStripInlineConstraints: [NSLayoutConstraint] = []
     private var menuPillLeadingToBack: NSLayoutConstraint?
@@ -230,6 +252,60 @@ final class HomeHeaderBar: UIView {
         addButton.accessibilityLabel = "Add"
         addButton.showsMenuAsPrimaryAction = true
 
+        searchButton.configuration = Self.barIconConfig(
+            systemName: "magnifyingglass",
+            symbolConfig: symbolConfig
+        )
+        searchButton.translatesAutoresizingMaskIntoConstraints = false
+        searchButton.accessibilityLabel = "Search"
+        searchButton.accessibilityHint = "Searches this page by name"
+        searchButton.isHidden = true
+        searchButton.addAction(UIAction { [weak self] _ in
+            self?.onBeginSearch?()
+        }, for: .touchUpInside)
+
+        cameraButton.configuration = Self.barIconConfig(
+            systemName: ThumbnailTypeIcon.camera.systemName,
+            symbolConfig: UIImage.SymbolConfiguration(pointSize: 18, weight: .regular)
+        )
+        cameraButton.translatesAutoresizingMaskIntoConstraints = false
+        cameraButton.accessibilityLabel = "Camera"
+        cameraButton.accessibilityHint =
+            "Opens the camera. Nothing goes to the TV until you tap the picture."
+        cameraButton.accessibilityIdentifier = "home.camera"
+        cameraButton.isHidden = true
+        cameraButton.addAction(UIAction { [weak self] _ in
+            self?.onOpenCamera?()
+        }, for: .touchUpInside)
+
+        searchRow.isHidden = true
+        searchRow.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(searchRow)
+        searchField.translatesAutoresizingMaskIntoConstraints = false
+        searchField.autocapitalizationType = .none
+        searchField.autocorrectionType = .no
+        searchField.returnKeyType = .search
+        searchField.accessibilityIdentifier = "home.search.field"
+        searchField.addAction(UIAction { [weak self] _ in
+            guard let self else { return }
+            self.onSearchTextChanged?(self.searchField.text ?? "")
+        }, for: .editingChanged)
+        // Return keeps the results and puts the keyboard away.
+        searchField.addAction(UIAction { [weak self] _ in
+            self?.searchField.resignFirstResponder()
+        }, for: .editingDidEndOnExit)
+        searchRow.addSubview(searchField)
+        cancelSearchButton.setTitle("Cancel", for: .normal)
+        cancelSearchButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .regular)
+        cancelSearchButton.translatesAutoresizingMaskIntoConstraints = false
+        cancelSearchButton.setContentCompressionResistancePriority(.required, for: .horizontal)
+        cancelSearchButton.setContentHuggingPriority(.required, for: .horizontal)
+        cancelSearchButton.accessibilityLabel = "Cancel search"
+        cancelSearchButton.addAction(UIAction { [weak self] _ in
+            self?.onCancelSearch?()
+        }, for: .touchUpInside)
+        searchRow.addSubview(cancelSearchButton)
+
         addMusicButton.configuration = Self.barIconConfig(
             systemName: "plus",
             symbolConfig: symbolConfig,
@@ -288,9 +364,12 @@ final class HomeHeaderBar: UIView {
 
         trailingStack.axis = .horizontal
         trailingStack.alignment = .center
-        trailingStack.spacing = 8
+        trailingStack.spacing = 6
         trailingStack.translatesAutoresizingMaskIntoConstraints = false
+        // Search and Camera lead the row (owner's call, 2026-11-26: in the header,
+        // not a footer and not the tab row).
         for button in [
+            searchButton, cameraButton,
             lockButton, blackButton, settingsButton,
             addButton, addMusicButton,
             newShowButton, selectActionsButton, doneButton
@@ -340,6 +419,23 @@ final class HomeHeaderBar: UIView {
             topBackdrop.leadingAnchor.constraint(equalTo: leadingAnchor, constant: -120),
             topBackdrop.trailingAnchor.constraint(equalTo: trailingAnchor, constant: 120),
 
+            searchButton.widthAnchor.constraint(equalToConstant: 36),
+            searchButton.heightAnchor.constraint(equalToConstant: 36),
+            cameraButton.widthAnchor.constraint(equalToConstant: 36),
+            cameraButton.heightAnchor.constraint(equalToConstant: 36),
+
+            searchRow.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
+            searchRow.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
+            searchRow.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -6),
+            searchRow.heightAnchor.constraint(equalToConstant: 38),
+            searchField.leadingAnchor.constraint(equalTo: searchRow.leadingAnchor),
+            searchField.topAnchor.constraint(equalTo: searchRow.topAnchor),
+            searchField.bottomAnchor.constraint(equalTo: searchRow.bottomAnchor),
+            cancelSearchButton.leadingAnchor.constraint(
+                equalTo: searchField.trailingAnchor, constant: 10
+            ),
+            cancelSearchButton.trailingAnchor.constraint(equalTo: searchRow.trailingAnchor),
+            cancelSearchButton.centerYAnchor.constraint(equalTo: searchRow.centerYAnchor),
             addMusicButton.widthAnchor.constraint(equalToConstant: 36),
             addMusicButton.heightAnchor.constraint(equalToConstant: 36),
 
@@ -456,6 +552,26 @@ final class HomeHeaderBar: UIView {
     func setMusicAddAvailable(_ available: Bool) {
         guard musicAddAvailable != available else { return }
         musicAddAvailable = available
+        applyTrailingChrome()
+    }
+
+    /// Shows the search field under the tabs and puts the cursor in it.
+    func beginSearch(placeholder: String) {
+        searchField.placeholder = placeholder
+        searchField.text = ""
+        isSearching = true
+        searchRow.isHidden = false
+        applyTrailingChrome()
+        searchField.becomeFirstResponder()
+    }
+
+    /// Hides the search field and clears it.
+    func endSearch() {
+        guard isSearching else { return }
+        isSearching = false
+        searchField.text = ""
+        searchField.resignFirstResponder()
+        searchRow.isHidden = true
         applyTrailingChrome()
     }
 
@@ -643,10 +759,16 @@ final class HomeHeaderBar: UIView {
             selectActionsButton.isHidden = true
             selectActionsButton.menu = nil
         }
-        // Library has no controls of its own up here and Music has "+"; Home and
-        // Show keep theirs. Search and Camera live in the bottom bar (`HomeFooterBar`).
+        // Library and Music get their own control; Home and Show keep theirs.
         let onLibrary = showsTabStrip && tabPage == .library
         let onMusic = showsTabStrip && tabPage == .music
+        // Search: Library, Music's list, and an open Show. Hidden while its field
+        // is already up, and while arranging or selecting.
+        let onShow = showsTabStrip && tabPage == .show && showsShowChrome
+        let searchable = onLibrary || onShow || (onMusic && musicAddAvailable)
+        searchButton.isHidden = editing || isSearching || !searchable
+        // Camera: every page, whenever the tab row shows.
+        cameraButton.isHidden = !showsTabStrip || editing
         addMusicButton.isHidden = editing || !onMusic || !musicAddAvailable
         if editing || onLibrary || onMusic {
             lockButton.isHidden = true
