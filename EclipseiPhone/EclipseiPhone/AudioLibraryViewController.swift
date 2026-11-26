@@ -30,6 +30,10 @@ final class AudioLibraryViewController: UITableViewController {
     /// Invoked by the embedded back control to return to the Library page.
     var onRequestClose: (() -> Void)?
 
+    /// Called when reordering starts or ends, so a host that hides this page's bar
+    /// can bring it back for Done.
+    var onEditingChanged: (() -> Void)?
+
     /// When false, hides the embedded Library back chevron (split or drawer).
     var showsEmbeddedBackButton = true {
         didSet {
@@ -140,6 +144,12 @@ final class AudioLibraryViewController: UITableViewController {
     }
 
     @objc private func addTapped() {
+        presentAddMenu(from: nil)
+    }
+
+    /// Add Music / New Playlist. `anchor` is the control that asked, when it is
+    /// not this page's own "+" (the Home header's, on the Music tab).
+    func presentAddMenu(from anchor: UIView?) {
         let sheet = UIAlertController(title: nil, message: nil, preferredStyle: .actionSheet)
         sheet.addAction(UIAlertAction(title: "Add Music", style: .default) { [weak self] _ in
             self?.onAddMusic?()
@@ -149,7 +159,12 @@ final class AudioLibraryViewController: UITableViewController {
         })
         sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         if let popover = sheet.popoverPresentationController {
-            popover.barButtonItem = navigationItem.rightBarButtonItem
+            if let anchor {
+                popover.sourceView = anchor
+                popover.sourceRect = anchor.bounds
+            } else {
+                popover.barButtonItem = navigationItem.rightBarButtonItem
+            }
         }
         present(sheet, animated: true)
     }
@@ -195,6 +210,7 @@ final class AudioLibraryViewController: UITableViewController {
     override func setEditing(_ editing: Bool, animated: Bool) {
         super.setEditing(editing, animated: animated)
         updateRightBarButton()
+        onEditingChanged?()
         tableView.reloadData()
     }
 

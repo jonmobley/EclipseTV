@@ -65,6 +65,13 @@ final class MediaLibraryPickerViewController: UIViewController {
         if #available(iOS 26.0, *) { item.hidesSharedBackground = true }
         return item
     }()
+    /// True for the Library page of the home pager: the Home header and its text
+    /// tabs stand above it, so it has no Back, no title and no bar of its own.
+    var isHomeTabPage = false
+    /// Home pager page: the search field came or went (the page's bar follows it).
+    var onSearchVisibilityChanged: (() -> Void)?
+    /// True while the search field is installed in the bar.
+    var isSearching: Bool { navigationItem.searchController != nil }
     /// Called when the user confirms Add in Show mode.
     var onAddToShow: (([String], [UUID]) -> Void)?
     /// Crop a video, or Custom framing for a still (same flow as Screen Fit).
@@ -267,12 +274,21 @@ final class MediaLibraryPickerViewController: UIViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        navigationController?.setNavigationBarHidden(false, animated: animated)
+        if !isHomeTabPage {
+            navigationController?.setNavigationBarHidden(false, animated: animated)
+        }
         refreshLeadingBarItem()
     }
 
     /// Tabs on a full iPad canvas, Back everywhere else (iPhone, narrow iPad windows).
     private func refreshLeadingBarItem() {
+        if isHomeTabPage {
+            navigationItem.hidesBackButton = true
+            navigationItem.leftBarButtonItem = nil
+            // The Library tab names the page; `title` stays for VoiceOver.
+            navigationItem.titleView = UIView()
+            return
+        }
         let showsTabs = onSelectHeaderDestination != nil
             && HomeHeaderNavLayout.showsDestinationTabs(
                 horizontalSizeClass: traitCollection.horizontalSizeClass,

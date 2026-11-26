@@ -138,8 +138,24 @@ extension iPhoneMainViewController {
         headerBar.onSelectDestination = { [weak self] destination in
             self?.selectHeaderDestination(destination)
         }
+        headerBar.onSelectTab = { [weak self] tab in
+            self?.selectHomeTab(tab)
+        }
+        headerBar.onSearchLibrary = { [weak self] in
+            self?.searchLibraryPage()
+        }
+        headerBar.onAddMusic = { [weak self] in
+            guard let self else { return }
+            self.audioLibraryViewController.presentAddMenu(
+                from: self.headerBar.addMusicAnchor
+            )
+        }
         view.addSubview(headerBar)
 
+        let headerHeight = headerBar.heightAnchor.constraint(
+            equalToConstant: HomeHeaderBar.rowHeight
+        )
+        headerHeightConstraint = headerHeight
         NSLayoutConstraint.activate([
             headerBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             // Same side edges as the pager, so the header controls line up with the
@@ -150,7 +166,7 @@ extension iPhoneMainViewController {
             headerBar.trailingAnchor.constraint(
                 equalTo: view.safeAreaLayoutGuide.trailingAnchor
             ),
-            headerBar.heightAnchor.constraint(equalToConstant: 52)
+            headerHeight
         ])
 
         refreshLibraryMenu()
@@ -346,36 +362,7 @@ extension iPhoneMainViewController {
     /// Without a Show: tap Previews on top of this page (library stays open).
     func presentMediaLibrary() {
         guard !isAlreadyOpen(MediaLibraryPickerViewController.self) else { return }
-        let picker = MediaLibraryPickerViewController()
-        picker.onRequestEdit = { [weak self] id in
-            self?.beginEditCrop(forItemId: id)
-        }
-        picker.onRequestTrim = { [weak self] id in
-            self?.beginTrimVideo(forItemId: id)
-        }
-        picker.onApplyScreenFit = { [weak self] item, mode in
-            self?.libraryViewController.applyScreenFit(mode, to: item)
-        }
-        picker.onRequestVideoThumbnail = { [weak self] id in
-            self?.beginChangeVideoThumbnail(forItemId: id)
-        }
-        picker.onApplyVideoSetting = { [weak self] id, isLooping, isMuted in
-            self?.libraryViewController.applyVideoSetting(
-                id: id, isLooping: isLooping, isMuted: isMuted
-            )
-        }
-        picker.onPerformDelete = { [weak self] id in
-            self?.libraryViewController.performDelete(id: id)
-        }
-        picker.onRequestResend = { [weak self] id in
-            self?.beginResend(forItemId: id)
-        }
-        picker.onIsEclipseTVLinked = { [weak self] in
-            self?.isConnected() ?? false
-        }
-        picker.onRequestEclipseTVConnect = { [weak self] in
-            self?.resumeConnection()
-        }
+        let picker = makeMediaLibraryPicker()
         if let showId = libraryViewController.openShowId {
             picker.targetShowId = showId
             picker.onAddToShow = { mediaIds, pdfIds in
@@ -408,6 +395,44 @@ extension iPhoneMainViewController {
             }
         }
         showMediaLibraryPage(picker)
+    }
+
+    /// A Library page wired to the grid's edit, delete and re-send actions.
+    ///
+    /// Shared by the pushed page (which may add to a Show) and the pager's Library
+    /// page (which only browses and previews).
+    func makeMediaLibraryPicker() -> MediaLibraryPickerViewController {
+        let picker = MediaLibraryPickerViewController()
+        picker.onRequestEdit = { [weak self] id in
+            self?.beginEditCrop(forItemId: id)
+        }
+        picker.onRequestTrim = { [weak self] id in
+            self?.beginTrimVideo(forItemId: id)
+        }
+        picker.onApplyScreenFit = { [weak self] item, mode in
+            self?.libraryViewController.applyScreenFit(mode, to: item)
+        }
+        picker.onRequestVideoThumbnail = { [weak self] id in
+            self?.beginChangeVideoThumbnail(forItemId: id)
+        }
+        picker.onApplyVideoSetting = { [weak self] id, isLooping, isMuted in
+            self?.libraryViewController.applyVideoSetting(
+                id: id, isLooping: isLooping, isMuted: isMuted
+            )
+        }
+        picker.onPerformDelete = { [weak self] id in
+            self?.libraryViewController.performDelete(id: id)
+        }
+        picker.onRequestResend = { [weak self] id in
+            self?.beginResend(forItemId: id)
+        }
+        picker.onIsEclipseTVLinked = { [weak self] in
+            self?.isConnected() ?? false
+        }
+        picker.onRequestEclipseTVConnect = { [weak self] in
+            self?.resumeConnection()
+        }
+        return picker
     }
 
     /// Pushes onto the Home nav stack, or presents full-screen when there is none.

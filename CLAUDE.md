@@ -244,6 +244,20 @@
   choosing one for a Show is picked automatically. A running room keeps its own copy, so edits show on the next start.
   questpoll.com has no test copy: never save/delete polls against it to try things out. Check the screens with a stub
   `URLProtocol` client instead (see `QuestPollEditorTests`).
+- Home screen pages and text tabs (iPhone / narrow iPad windows, 2026-11-25, `HomeTabStrip.swift`, `HomeTabPages.swift`,
+  `iPhoneMainViewController+HomePaging.swift`): the pager has four pages, Home · Library · Show · Music (`HomeTab`), named by
+  text tabs under the header row (inside the row in phone landscape) with a line under the current one. Home and Show are still
+  one screen in two modes (`LibraryGridViewController`), so the grid *moves* between the Home slot and the Show slot; Library
+  sits between them, so the two slots are never on screen together and the grid changes mode as soon as a finger swipe brings
+  the other slot into view (`moveGrid(into:)`: Home closes the Show, Show reopens `lastOpenShowId` or the most recent Show of
+  the current Display Mode, else the "No Show open" page). Only a finger swipe does that: tab slides and layout passes never
+  change the grid's mode (a layout pass that snapped the offset mid-slide once closed the Show). `HomePagerScrollView` ignores
+  `scrollRectToVisible`, or focusing a text field nudges the pager sideways. The header (`HomeHeaderBar`) stays on every page
+  and swaps its right-hand buttons by page (`setTabPage`): Library gets Search, Music gets "+", and those two pages hide their
+  own navigation bar at the root (`HomeTabPageNavigationController`; it returns for a playlist, search, or reordering).
+  The dropdown says "Eclipse" on Home (no "Home": that is a tab) and has no Library / Music entries or back chevron there.
+  The Library *tab* only browses and previews; adding to a Show is still the pushed Library page from the Show's "+".
+  Regular width (full iPad, big phones in landscape) is unchanged: `HomeHeaderNavTabs`, Music drawer, pushed Library.
 - Content icons match the Mac app (2026-11-22): `ThumbnailTypeIcon.systemName` is the one place a content kind's SF Symbol is named
   (Website `globe`, PDF `doc.text`, Prompter `text.viewfinder`, Slideshow `photo.on.rectangle.angled`, same as the Mac's
   `AddMediaList` / `MediaTypeVisual`). Every screen reads it; never write those symbol names inline. `safari` stays only on

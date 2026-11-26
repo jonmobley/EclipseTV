@@ -17,7 +17,8 @@ extension MediaLibraryPickerViewController: UISearchResultsUpdating, UISearchCon
         if let addButton, isAddToShowMode {
             items.append(addButton)
         }
-        if !searchActive {
+        // On the home pager the Home header holds Search.
+        if !searchActive, !isHomeTabPage {
             items.append(searchBarButton)
         }
         navigationItem.rightBarButtonItems = items.isEmpty ? nil : items
@@ -26,9 +27,18 @@ extension MediaLibraryPickerViewController: UISearchResultsUpdating, UISearchCon
     /// Reveals the nav-bar search field and focuses it.
     @objc func searchTapped() {
         let search = installedSearchController()
+        if isHomeTabPage {
+            // Under the text tabs, at the top of the page. iOS 26 otherwise docks the
+            // field at the bottom of the screen, on top of the Music button.
+            navigationItem.preferredSearchBarPlacement = .stacked
+            if #available(iOS 26.0, *) {
+                navigationItem.searchBarPlacementAllowsToolbarIntegration = false
+            }
+        }
         navigationItem.searchController = search
         navigationItem.hidesSearchBarWhenScrolling = false
         updateRightBarButtons(searchActive: true)
+        onSearchVisibilityChanged?()
         // Activate on the next turn, once the nav bar has laid the field out:
         // activating in the same turn as installing it often leaves the field
         // unfocused, so the user had to tap it again to get the keyboard.
@@ -59,6 +69,7 @@ extension MediaLibraryPickerViewController: UISearchResultsUpdating, UISearchCon
             self.searchController = nil
         }
         updateRightBarButtons(searchActive: navigationItem.searchController != nil)
+        onSearchVisibilityChanged?()
     }
 
     private func installedSearchController() -> UISearchController {

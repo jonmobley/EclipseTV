@@ -21,7 +21,9 @@ extension iPhoneMainViewController {
             let name = remote.directorDeviceName ?? "another device"
             return "Live on \(name)"
         }()
-        headerBar.setCenterTitle(openShow?.name ?? "Home", subtitle: subtitle)
+        // With the text tabs showing, Home is a tab; the menu is the app's own.
+        let homeTitle = isHomeTabPaging ? "Eclipse" : "Home"
+        headerBar.setCenterTitle(openShow?.name ?? homeTitle, subtitle: subtitle)
         headerBar.setPreviewsWhenDisconnected(openShow?.previewsWhenDisconnected ?? false)
         headerBar.setShowModeChrome(openShow != nil)
         headerBar.setNavSelection(
@@ -37,7 +39,8 @@ extension iPhoneMainViewController {
     }
 
     /// Open Show → New Show → Library → Music → Camera Mode → Settings, then
-    /// Recent Shows.
+    /// Recent Shows. Compact width leaves out Library and Music: they are text tabs
+    /// there, next to Home and Show.
     /// Show mode drops Settings — the header gear already opens it. Return to
     /// Home is the compact back control or the iPad Home tab, not this menu.
     /// Home Settings omits show-specific rows.
@@ -55,8 +58,11 @@ extension iPhoneMainViewController {
             children.append(openList)
         }
         children.append(newShowAction())
-        children.append(mediaLibraryAction())
-        children.append(musicAction())
+        // Library and Music are tabs on the paging home screen.
+        if !isHomeTabPaging {
+            children.append(mediaLibraryAction())
+            children.append(musicAction())
+        }
         children.append(cameraModeAction())
         if openShow == nil {
             children.append(settingsAction())
