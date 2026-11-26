@@ -165,6 +165,10 @@ final class ExternalDisplayManager {
     /// Bookmark that owns the live PDF overlay (survives closing the phone reader).
     private(set) var livePDFDocumentId: UUID?
 
+    /// How the live PDF is viewed (page, zoom, scroll, presets). Written by
+    /// whichever phone view drives it (`PDFReaderDriver`); the TV follows.
+    private(set) var pdfViewState = PDFLiveViewState()
+
     /// Whether a joined (cloud) album item is sticky-live on the external display.
     /// Survives closing the Join browser; cleared when home-grid content takes over.
     private(set) var isJoinedLive = false
@@ -809,6 +813,11 @@ final class ExternalDisplayManager {
     /// - Parameter documentId: Saved id so the home tile stays live after the
     ///   phone reader is closed.
     func presentPDF(_ url: URL, documentId: UUID? = nil) {
+        // A different document starts at the default view; the same one keeps
+        // where it was left.
+        if documentId == nil || documentId != livePDFDocumentId {
+            pdfViewState = PDFLiveViewState()
+        }
         present(
             .pdf(url),
             asJoined: false,
@@ -1051,19 +1060,16 @@ final class ExternalDisplayManager {
 
     // MARK: - PDF Preview Forwarders
 
-    /// Jumps the external PDF to a page index (used with scroll progress).
-    func setPDFPageIndex(_ index: Int) {
-        presentationVC?.setPDFPageIndex(index)
-    }
-
-    /// Mirrors normalized vertical scroll progress (0...1) onto the external PDF view.
-    func setPDFScrollProgress(_ progress: CGFloat) {
-        presentationVC?.setPDFScrollProgress(progress)
-    }
-
-    /// Mirrors zoom relative to fit-scale onto the external PDF view.
-    func setPDFRelativeScale(_ relative: CGFloat) {
-        presentationVC?.setPDFRelativeScale(relative)
+    /// Records how the phone shows the live PDF and makes the TV match it.
+    /// Layout (two pages or one) goes first, since zoom and scroll depend on it.
+    func setPDFViewState(_ state: PDFLiveViewState) {
+        let previous = pdfViewState
+        pdfViewState = state
+        guard let vc = presentationVC else { return }
+        if previous.isTwoUp != state.isTwoUp {
+            vc.setPDFTwoUp(state.isTwoUp)
+        }
+        vc.applyPDFViewState(state)
     }
 
     /// Relayouts the external PDF view after Display Mode changes.

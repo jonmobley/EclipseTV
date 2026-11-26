@@ -72,6 +72,7 @@ extension LibraryGridViewController {
         defer {
             syncSlideshowRibbonIfChromeChanged()
             syncLiveScreenFitChrome()
+            syncHeroWebInteraction()
             syncLiveSlideshowCountdownChrome()
             syncLiveCameraFlipChrome()
             syncLiveCameraCaptureChrome()
@@ -164,12 +165,18 @@ extension LibraryGridViewController {
                 .first(where: { $0.id == mgr.livePDFDocumentId })
             let title = doc?.title ?? "PDF"
             let thumb = doc.flatMap { PDFThumbnailStore.shared.image(for: $0.id) }
+            let fileURL = doc.flatMap { PDFStore.shared.fileURL(for: $0.id) }
             liveHeader.configureOverlay(
                 title: title,
                 systemImage: ThumbnailTypeIcon.pdf.systemName,
                 fillColor: .mediaPlaceholder,
-                thumbnail: thumb
+                thumbnail: thumb,
+                keepPDFPreview: fileURL != nil
             )
+            // The PDF itself, scrollable and pinchable; the TV follows it.
+            if let doc, let fileURL {
+                liveHeader.showPDFPreview(documentId: doc.id, fileURL: fileURL, drivesOutput: true)
+            }
             // Only a saved document can be handed to the phone reader.
             liveHeader.allowsOverlayControllerTap = doc != nil
             liveHeader.updatePlayback(PlaybackState())

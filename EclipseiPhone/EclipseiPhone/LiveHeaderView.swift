@@ -37,8 +37,25 @@ final class LiveHeaderView: UIView {
 
     /// Host for a warm `WKWebView` when a website is live (in-app preview).
     var webPreviewHost: UIView?
+    /// Whether the live website in the hero may be scrolled and pinched (the TV
+    /// follows). Set by the host controller; see `LiveHeaderView+WebPreview`.
+    var allowsWebPreviewInteraction = false {
+        didSet {
+            guard allowsWebPreviewInteraction != oldValue else { return }
+            applyWebPreviewInteraction()
+            applyInteractionForPresentation()
+        }
+    }
+    /// Sends the hero page's scroll and zoom to the TV.
+    let webPreviewSync = HeroWebViewportSync()
     /// Page id currently attached to `webPreviewHost`, if any.
     var webPreviewPageId: UUID?
+    /// Interactive live PDF in the hero (`LiveHeaderView+PDFPreview`).
+    var pdfPreviewHost: UIView?
+    var pdfPreviewPanel: UIView?
+    var pdfPreviewDriver: PDFReaderDriver?
+    var pdfOptionsBar: PDFViewOptionsBar?
+    var pdfResignObserver: NSObjectProtocol?
     /// In-hero muted Screensaver loop (phone preview; external has its own player).
     var screensaverPreview: SeamlessLoopPlayerView?
     /// In-hero still or muted loop behind the countdown clock.
@@ -418,6 +435,7 @@ final class LiveHeaderView: UIView {
         layoutLibraryVideoPreviewIfNeeded()
         layoutCameraPreviewIfNeeded()
         layoutWebPreviewIfNeeded()
+        layoutPDFPreviewIfNeeded()
         layoutCountdownClockIfNeeded()
         // Keep the float-mode shadow path matched to the current bounds.
         if layer.shadowOpacity > 0, bounds.width > 1, bounds.height > 1 {
@@ -479,6 +497,7 @@ final class LiveHeaderView: UIView {
             // After the snapshot. Tearing a live preview down first made the
             // dissolve start from the poster or an empty hero.
             self.clearWebPreview(parking: true)
+            self.clearPDFPreview()
             self.clearScreensaverPreview()
             self.clearCameraPreview()
             if !showsLocalTransport {
@@ -571,6 +590,7 @@ final class LiveHeaderView: UIView {
         keepWebPreview: Bool = false,
         keepScreensaverPreview: Bool = false,
         keepCameraPreview: Bool = false,
+        keepPDFPreview: Bool = false,
         showsLiveBadge: Bool? = nil,
         showsTransport: Bool = false,
         stableContentKey: String? = nil
@@ -580,6 +600,7 @@ final class LiveHeaderView: UIView {
         let key = stableContentKey ?? (
             "overlay:\(title):\(systemImage ?? ""):\(thumbToken)"
             + ":web\(keepWebPreview):ss\(keepScreensaverPreview):cam\(keepCameraPreview)"
+            + ":pdf\(keepPDFPreview)"
             + ":badge\(showLiveBadge):transport\(showsTransport)"
         )
         applyContent(key: key) {
@@ -592,6 +613,9 @@ final class LiveHeaderView: UIView {
             }
             if !keepCameraPreview {
                 self.clearCameraPreview()
+            }
+            if !keepPDFPreview {
+                self.clearPDFPreview()
             }
             self.clearLibraryVideoPreview()
             self.hideCountdownClock()
@@ -684,6 +708,7 @@ final class LiveHeaderView: UIView {
     /// Neutral empty hero (`tv` icon + centered message). No LIVE badge.
     private func showPlaceholder(message: String) {
         clearWebPreview(parking: true)
+        clearPDFPreview()
         clearScreensaverPreview()
         clearCameraPreview()
         clearLibraryVideoPreview()
@@ -734,6 +759,7 @@ final class LiveHeaderView: UIView {
             || phonePreviewReturnButton != nil
             || directAdjustTarget != nil
             || allowsOverlayAdjust
+            || allowsWebPreviewInteraction
     }
 
     /// Opens whatever fullscreen surface the expanded hero stands in for.

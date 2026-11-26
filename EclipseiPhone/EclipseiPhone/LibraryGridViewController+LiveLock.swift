@@ -40,6 +40,7 @@ extension LibraryGridViewController {
         onLiveOutputLockChanged?(isLiveOutputLocked && !isLiveOutputFrozen)
         liveHeader.setOutputLocked(isLiveOutputLocked)
         syncHeroOverlayAdjust()
+        syncHeroWebInteraction()
         let visible = collectionView.indexPathsForVisibleItems
         if !visible.isEmpty {
             collectionView.reconfigureItems(at: visible)

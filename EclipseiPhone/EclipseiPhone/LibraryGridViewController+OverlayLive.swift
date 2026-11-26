@@ -134,9 +134,10 @@ extension LibraryGridViewController {
 
     /// Marks a saved PDF live without opening the phone reader.
     ///
-    /// Used where phone UI must not appear: an operator's tap applied on the
-    /// director and Countdown reaching 0:00. A card tap opens the reader via
-    /// `presentPDF` instead.
+    /// Used for a Show card tap (the hero then shows the PDF to read in place),
+    /// an operator's tap applied on the director and Countdown reaching 0:00.
+    /// The hero's expand control and ⋯ Preview open the reader via `presentPDF`.
+    /// Re-tapping the live card leaves the page where it was.
     func presentPDFLive(_ doc: SavedPDF) {
         guard !blockLiveChangeIfLocked() else { return }
         guard hasLiveOutputDestination else { return }

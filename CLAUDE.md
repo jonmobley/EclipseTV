@@ -242,6 +242,28 @@
   armed per owner (`armRecordingAudio(owner:)`: "fullscreen", "showHero"), so it stays on while the camera hero is up.
   Hero expand control is a 36pt circle. `CameraMirrorView` flushes its renderer when it re-enters a window or reports
   it needs a flush: a fullscreen presentation stalled it and left the hero black after closing the camera.
+- Interactive PDF in the hero (iPhone/iPad, 2026-11-26, `LiveHeaderView+PDFPreview`, `PDFReaderDriver`): a Show PDF card
+  tap puts the PDF live in the hero as a real `PDFView` (sharp, scrolls and pinches in place); only the hero's expand
+  control (or ⋯ Preview) opens the full-screen reader. Both views share one `PDFReaderDriver` design and show the same
+  icon row top right (`PDFViewOptionsBar`: Fit · Fill · 2 Pages, then Page by Page; same words, defaults and Page by
+  Page icon `book.pages` as the Mac's presets. Fit / Fill icons differ on purpose (owner's call, 2026-11-26): iPhone uses
+  `rectangle.arrowtriangle.2.inward` / `.outward` because the Mac's shrink/expand arrows match the hero's expand control;
+  the Mac keeps the arrows because the triangle pair looked alike at its 12 pt size). Only one driver moves the TV at a
+  time (`PDFReaderDriver.active`): the reader takes over while open and hands back on close (`didResignNotification`).
+  The shared view (`PDFLiveViewState`: page, 0…1 scroll fractions, zoom relative to fit, two-up, preset, snapping) lives on
+  `ExternalDisplayManager.pdfViewState` and the TV applies it whole (`applyPDFViewState`). A reader on a PDF that is not
+  live never moves the TV. Page by Page: on finger lift a pan target picks the next row stop (`PDFViewMath.snapOffset`);
+  a row taller than the screen (zoomed in) scrolls freely and stops at its edge. A pinch clears the lit preset.
+  Default is Fit with natural scrolling. PDF tile pictures are 720×960 (`<id>-v2.jpg`); old 360×480 ones stay unused in Caches.
+  A hero refresh can un-hide the still picture (e.g. `clearWebPreview`), so `showPDFPreview` re-hides it every time.
+- Interactive website in the hero (iPhone/iPad, 2026-11-26, `HeroWebViewportSync`, `LibraryGridViewController+HeroWebInteraction`):
+  the live website scrolls and pinches in place in the hero and the TV follows (same `WebViewportMirror` as the full browser,
+  sent only for the operator's own drags/pinches, never below fit). Links and buttons don't work there
+  (`WarmWebSession.setPreviewInteraction` turns off touches on the page's content view, keeping the scroll view's pan
+  and pinch), so the hero can never show a different page from the TV; a tap opens the full browser. Same off-rules as
+  DirectAdjust (Live Lock, Blackout hold, phone Preview, another Show live, remote operator, tucked hero). The browser
+  is presented inside a nav controller, so its `viewWillDisappear` must also check `navigationController?.isBeingDismissed`:
+  without that it never handed the warm page back and the hero showed a still after Close.
 - PDF reader zoom snap (2026-11-14): pinching in `PDFRemoteViewController` catches where the current page exactly fills
   the audience frame's width and where it fills its height (`PDFZoomSnap`, ±4% hold band, light haptic on entry). It
   rides the scroll view's own pinch recognizer (added target, never the delegate). Holding sets the zoom, and the scroll
