@@ -113,8 +113,9 @@ final class LiveHeaderView: UIView {
     var overlayAdjustPan: UIPanGestureRecognizer?
     /// Pinch that resizes a live overlay.
     var overlayAdjustPinch: UIPinchGestureRecognizer?
-    /// Pinch centre last frame, so moving both fingers also moves the overlay.
-    var overlayAdjustPinchLocation: CGPoint?
+    /// Pinch centre and finger count last frame, so moving the fingers (or the
+    /// one left after a lift) also moves the overlay.
+    var overlayAdjustPinchLocation: (point: CGPoint, touches: Int)?
     /// The overlay as the fingers have it; `isFinal` once they lift (save it).
     var onAdjustOverlay: ((_ overlay: RenderedOverlay, _ isFinal: Bool) -> Void)?
     /// What to save once the fingers lift from a pinched or dragged still.

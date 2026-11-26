@@ -95,15 +95,20 @@ extension LiveHeaderView {
         switch gesture.state {
         case .began:
             beginOverlayAdjustIfNeeded(gesture)
-            overlayAdjustPinchLocation = location
+            overlayAdjustPinchLocation = (location, gesture.numberOfTouches)
             gesture.scale = 1
         case .changed:
-            // Pinch centre moving carries the overlay too (both fingers dragging).
-            // A finger lifting mid-pinch jumps the centre, so skip that frame.
-            if gesture.numberOfTouches >= 2, let last = overlayAdjustPinchLocation {
-                overlayAdjustSession?.move(by: CGPoint(x: location.x - last.x, y: location.y - last.y))
+            // The fingers' centre moving carries the overlay too, both while two
+            // fingers pinch and once one has lifted (the other keeps dragging, as
+            // in the still / countdown adjust). A finger lifting or landing jumps
+            // the centre, so the frame where the count changes only re-anchors.
+            let touches = gesture.numberOfTouches
+            if let last = overlayAdjustPinchLocation, last.touches == touches {
+                overlayAdjustSession?.move(by: CGPoint(
+                    x: location.x - last.point.x, y: location.y - last.point.y
+                ))
             }
-            overlayAdjustPinchLocation = gesture.numberOfTouches >= 2 ? location : nil
+            overlayAdjustPinchLocation = (location, touches)
             overlayAdjustSession?.scale(by: gesture.scale)
             gesture.scale = 1
             renderOverlayAdjust()
