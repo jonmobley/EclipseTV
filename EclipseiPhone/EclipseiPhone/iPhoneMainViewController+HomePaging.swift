@@ -594,6 +594,9 @@ extension iPhoneMainViewController: UIScrollViewDelegate {
         if let adjustPan = libraryViewController.liveHeader.directAdjustPan {
             homePagerScrollView.panGestureRecognizer.require(toFail: adjustPan)
         }
+        if let overlayPan = libraryViewController.liveHeader.overlayAdjustPan {
+            homePagerScrollView.panGestureRecognizer.require(toFail: overlayPan)
+        }
     }
 
     /// The Library page between Home and Show: browse and preview only. Adding to

@@ -257,6 +257,12 @@
   the video itself (nothing connected / Practice Mode, or a phone Preview). They fade 3s into playback; a tap on the
   picture shows them, a tap while they show hides them (it no longer toggles play/pause; the button does). They stay up
   while paused, while scrubbing and with VoiceOver on. A TV-driven hero (AirPlay / Eclipse TV) is a remote and never hides.
+- Live overlays move on the hero (2026-11-26, `LiveHeaderView+OverlayAdjust`, `OverlayAdjustSession`): one-finger drag
+  moves a live template card or photo/video overlay, pinch resizes it (cards 0.25–3×, media 10–100% width, the Mac's
+  ranges), snapping to the centerlines with a tick. The TV follows through `LiveOverlayController.setAdjusting` (no
+  `didChangeNotification` per frame); lift saves: a card's `placement` via `TemplateCardStore.update` (syncs to the Mac,
+  editor Position then reads Custom), media via `MediaOverlayStore.update` (phone only). Hit-testing uses frames each
+  overlay reports into `LiveOverlayHostView.frames`. Off when locked, Blackout, phone Preview, other Show, remote operator.
 - Live preview (hero) takes pinch and drag directly (2026-11-04, `LiveHeaderView+DirectAdjust`):
   countdown pinch resizes / drag on the clock moves it (live through `CountdownClockLayoutPreview`,
   saved on lift); stills pinch-zoom into a crop (`StillFramingGesture`, saved via `applyFraming`

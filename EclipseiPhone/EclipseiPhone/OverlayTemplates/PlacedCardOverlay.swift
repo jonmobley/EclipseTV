@@ -28,6 +28,9 @@ struct PlacedCardOverlay: View {
 
     let config: OverlayCardConfig
     let contentFrame: CGRect
+    /// Called with the card's drawn frame in the layer's coordinate space
+    /// (`LiveOverlayLayerView.coordinateSpace`), for touch hit-testing.
+    var onFrame: ((CGRect) -> Void)?
 
     @State private var cardSize: CGSize = .zero
 
@@ -41,6 +44,9 @@ struct PlacedCardOverlay: View {
             .fixedSize()
             .onGeometryChange(for: CGSize.self) { $0.size } action: { cardSize = $0 }
             .opacity(measured ? 1 : 0)
+            .onGeometryChange(for: CGRect.self) {
+                $0.frame(in: .named(LiveOverlayLayerView.coordinateSpace))
+            } action: { onFrame?($0) }
             .position(center)
             // Measure settle and remounts must not inherit program crossfade.
             .animation(nil, value: cardSize)

@@ -53,6 +53,9 @@ final class LiveOverlayController: ObservableObject {
     private var isBlackout = false
     private var autoRemoveWork: [UUID: DispatchWorkItem] = [:]
     private var observers: [NSObjectProtocol] = []
+    /// An overlay being dragged or pinched on the hero, drawn in place of the
+    /// saved one until the fingers lift.
+    private var adjusting: RenderedOverlay?
 
     // MARK: - Initialization
 
@@ -111,6 +114,15 @@ final class LiveOverlayController: ObservableObject {
         publish()
     }
 
+    /// Draws `overlay` in place of its saved version on every screen while it is
+    /// dragged or pinched (nil when the fingers lift). Nothing is saved, and
+    /// `didChangeNotification` is not posted, since the live set is unchanged.
+    func setAdjusting(_ overlay: RenderedOverlay?) {
+        guard adjusting != overlay else { return }
+        adjusting = overlay
+        publish(notify: false)
+    }
+
     // MARK: - Private
 
     private func observeSources() {
@@ -157,11 +169,15 @@ final class LiveOverlayController: ObservableObject {
         }
     }
 
-    private func publish() {
-        let next = isBlackout
+    private func publish(notify: Bool = true) {
+        var next = isBlackout
             ? []
             : stack.drawOrder(stackOrder: stackOrder(of:)).compactMap(resolve)
+        if let adjusting, let index = next.firstIndex(where: { $0.id == adjusting.id }) {
+            next[index] = adjusting
+        }
         if next != rendered { rendered = next }
+        guard notify else { return }
         NotificationCenter.default.post(name: Self.didChangeNotification, object: self)
     }
 

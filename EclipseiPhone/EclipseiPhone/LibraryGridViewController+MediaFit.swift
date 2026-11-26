@@ -145,6 +145,7 @@ extension LibraryGridViewController {
     /// yet either, and `didUpdateThumbnailFor` re-runs this once one lands. A button
     /// that appears late beats one that vanishes under a finger.
     func syncLiveScreenFitChrome() {
+        syncHeroOverlayAdjust()
         // A remote phone shows the director's button and sends its tap there;
         // pinch and drag stay with the phone that owns the output.
         if ShowLiveSession.shared.isRemoteOperator {
