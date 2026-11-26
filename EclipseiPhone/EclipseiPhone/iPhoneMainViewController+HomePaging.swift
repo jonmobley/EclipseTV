@@ -175,8 +175,9 @@ extension iPhoneMainViewController: UIScrollViewDelegate {
     }
 
     /// Gap under the footer: centres it on the Music circle beside it.
+    /// (The circle's own size, not the card's height: the two-row card is taller.)
     static let homeFooterBottomGap: CGFloat = AudioMiniPlayerView.compactBottomInset
-        + (AudioMiniPlayerView.preferredHeight - HomeFooterBar.height) / 2
+        + (AudioMiniPlayerBubbleView.side - HomeFooterBar.height) / 2
 
     /// How far the Music circle and its card sit above their resting place.
     ///
