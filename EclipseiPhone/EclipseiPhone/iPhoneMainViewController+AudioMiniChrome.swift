@@ -76,7 +76,8 @@ extension iPhoneMainViewController {
     /// Expands or collapses ambient chrome. User gestures pass `animated: true`.
     /// Regular width never expands the card (Music is the drawer only).
     func setAudioMiniCollapsed(_ collapsed: Bool, animated: Bool) {
-        if usesMusicDrawerChrome {
+        // Drawer (regular width) and the paging home screen have no card.
+        if usesMusicDrawerChrome || isHomeTabPaging {
             audioMiniCollapsed = true
             refreshAudioMiniPlayer()
             return
@@ -120,6 +121,19 @@ extension iPhoneMainViewController {
     /// Compact: the circle shows or hides the card (or opens the picker when
     /// idle). Regular: the circle toggles the Music drawer; the card never appears.
     func refreshAudioMiniPlayer() {
+        if isHomeTabPaging {
+            // Paging home screen: the footer has the Music button and the strip
+            // above it shows what is playing, so the circle and card stay away.
+            audioMiniCollapsed = true
+            isAudioMiniChromeAnimating = false
+            audioMiniHeightConstraint?.constant = 0
+            audioMiniPlayer.isHidden = true
+            audioMiniBubble.isHidden = true
+            refreshHomeNowPlayingStrip(animated: true)
+            libraryViewController.refreshMusicSwipeHintVisibility()
+            return
+        }
+        homeNowPlayingStrip.isHidden = true
         let drawerChrome = usesMusicDrawerChrome
         if drawerChrome { audioMiniCollapsed = true }
 
@@ -327,8 +341,6 @@ extension iPhoneMainViewController {
     /// Header, then Music. An open drawer sits above header buttons; the Music
     /// bubble stays tappable while the pane is closed.
     func raiseHomeOverlayChrome() {
-        // The bar gives way to the expanded music card (same strip of screen).
-        refreshHomeFooter()
         HomeOverlayZOrder.raise(
             header: headerBar,
             player: audioMiniPlayer,

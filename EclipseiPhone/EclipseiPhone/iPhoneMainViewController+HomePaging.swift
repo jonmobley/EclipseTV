@@ -123,6 +123,9 @@ extension iPhoneMainViewController: UIScrollViewDelegate {
         footer.onOpenCamera = { [weak self] in
             self?.presentCameraLive()
         }
+        footer.onOpenMusic = { [weak self] in
+            self?.presentMusicPicker()
+        }
         footer.onBeginSearch = { [weak self] in
             self?.beginPageSearch()
         }
@@ -133,12 +136,11 @@ extension iPhoneMainViewController: UIScrollViewDelegate {
             self?.endPageSearch()
         }
         view.addSubview(footer)
-        // Level with the Music button at rest; above the keyboard while typing.
-        // (Without the keyboard the guide is the screen's bottom edge, not the
-        // safe area, or it would hold the bar above the button.)
+        // Near the bottom at rest; above the keyboard while typing. (Without the
+        // keyboard the guide is the screen's bottom edge, not the safe area.)
         view.keyboardLayoutGuide.usesBottomSafeArea = false
-        let resting = footer.centerYAnchor.constraint(
-            equalTo: audioMiniBubble.centerYAnchor
+        let resting = footer.bottomAnchor.constraint(
+            equalTo: view.bottomAnchor, constant: -Self.homeFooterBottomGap
         )
         resting.priority = .defaultHigh
         NSLayoutConstraint.activate([
@@ -146,12 +148,36 @@ extension iPhoneMainViewController: UIScrollViewDelegate {
                 equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 16
             ),
             footer.trailingAnchor.constraint(
-                equalTo: audioMiniBubble.leadingAnchor, constant: -12
+                equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16
             ),
             resting,
             footer.bottomAnchor.constraint(
                 lessThanOrEqualTo: view.keyboardLayoutGuide.topAnchor, constant: -8
             )
+        ])
+
+        // What is playing: a strip above the footer that stays when it hides.
+        let strip = homeNowPlayingStrip
+        strip.translatesAutoresizingMaskIntoConstraints = false
+        strip.isHidden = true
+        strip.onOpen = { [weak self] in
+            self?.presentNowPlaying()
+        }
+        strip.onStop = { [weak self] in
+            self?.stopAmbientPlayback()
+        }
+        view.insertSubview(strip, belowSubview: footer)
+        let stripBottom = strip.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        homeNowPlayingBottomConstraint = stripBottom
+        let stripWidth = strip.widthAnchor.constraint(
+            equalTo: view.safeAreaLayoutGuide.widthAnchor, constant: -32
+        )
+        stripWidth.priority = .defaultHigh
+        NSLayoutConstraint.activate([
+            strip.centerXAnchor.constraint(equalTo: view.safeAreaLayoutGuide.centerXAnchor),
+            stripWidth,
+            strip.widthAnchor.constraint(lessThanOrEqualToConstant: 460),
+            stripBottom
         ])
 
         libraryPagePicker?.loadViewIfNeeded()
@@ -174,6 +200,44 @@ extension iPhoneMainViewController: UIScrollViewDelegate {
         refreshHomeFooter()
     }
 
+    /// Gap under the footer (and under the player strip when the footer is away).
+    static let homeFooterBottomGap: CGFloat = 26
+
+    /// Paging home screen: the player strip replaces the blue Music circle and its
+    /// card. Shows it while something is loaded, parks it above the footer (or at
+    /// the bottom when the footer is away), and keeps page content clear of both.
+    func refreshHomeNowPlayingStrip(animated: Bool = false) {
+        let player = AudioPlayerController.shared
+        let track = isHomeTabPaging ? player.currentTrack : nil
+        let strip = homeNowPlayingStrip
+        strip.isHidden = track == nil
+        if let track {
+            strip.show(title: track.title, isPlaying: player.isPlaying)
+        }
+        let footerUp = !homeFooter.isHidden && !homeFooter.isScrolledAway
+        let bottom = Self.homeFooterBottomGap
+            + (footerUp ? HomeFooterBar.height + 8 : 0)
+        let move = homeNowPlayingBottomConstraint?.constant != -bottom
+        homeNowPlayingBottomConstraint?.constant = -bottom
+        if isHomeTabPaging {
+            // Content can scroll clear of the footer and the strip.
+            let inset = HomeFooterBar.height + 12
+                + (track == nil ? 0 : HomeNowPlayingStrip.height + 8)
+            libraryViewController.sideBySideMiniPlayerHeight = 0
+            libraryViewController.miniPlayerBottomInset = inset
+            audioLibraryViewController.miniPlayerBottomInset = inset
+        }
+        guard move, animated, view.window != nil,
+              !UIAccessibility.isReduceMotionEnabled else { return }
+        UIView.animate(
+            withDuration: 0.25,
+            delay: 0,
+            options: [.curveEaseInOut, .beginFromCurrentState, .allowUserInteraction]
+        ) {
+            self.view.layoutIfNeeded()
+        }
+    }
+
     /// A page scrolled: hide the bar on the way down, bring it back on the way up.
     private func pageDidScroll(_ scrollView: UIScrollView, by delta: CGFloat) {
         // Only a finger's scroll counts; reloads and layout move the offset too.
@@ -184,15 +248,14 @@ extension iPhoneMainViewController: UIScrollViewDelegate {
             delta: delta, distanceFromTop: fromTop
         ) else { return }
         homeFooter.setScrolledAway(hide, animated: true)
+        refreshHomeNowPlayingStrip(animated: true)
     }
 
     /// Which controls the bar shows for the page in front, and whether it shows.
     func refreshHomeFooter() {
         let grid = libraryViewController
         let editing = grid.isArranging || grid.isSelecting
-        // The expanded music card takes the same strip of screen.
-        let cardUp = !audioMiniCollapsed && !audioMiniPlayer.isHidden
-        homeFooter.isHidden = !isHomeTabPaging || editing || cardUp
+        homeFooter.isHidden = !isHomeTabPaging || editing
         let placeholder: String?
         switch homeTab {
         case .library: placeholder = "Search Library"
@@ -202,6 +265,7 @@ extension iPhoneMainViewController: UIScrollViewDelegate {
         case .home: placeholder = nil
         }
         homeFooter.setSearch(placeholder: placeholder)
+        refreshHomeNowPlayingStrip(animated: true)
     }
 
     /// The search field took focus: it now filters the page in front.
@@ -305,6 +369,8 @@ extension iPhoneMainViewController: UIScrollViewDelegate {
             refreshLibraryMenu()
             if !isHomeTabPaging { endPageSearch() }
             refreshHomeFooter()
+            // Circle and card on regular width, strip and footer when paging.
+            refreshAudioMiniPlayer()
         }
         if mode != .paging {
             homePagerScrollView.contentOffset = .zero

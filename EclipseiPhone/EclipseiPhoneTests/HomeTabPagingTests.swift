@@ -154,7 +154,7 @@ struct HomeHeaderBarTabStripTests {
 struct HomeFooterBarTests {
 
     @Test func homeShowsCameraAloneAndSearchablePagesAddSearch() {
-        let bar = HomeFooterBar(frame: CGRect(x: 0, y: 0, width: 300, height: 56))
+        let bar = HomeFooterBar(frame: CGRect(x: 0, y: 0, width: 300, height: 52))
         let camera = bar.firstDescendant(label: "Camera")
         let search = bar.firstDescendant(label: "Search")
         #expect(camera?.isHidden == false)
@@ -169,7 +169,7 @@ struct HomeFooterBarTests {
     }
 
     @Test func searchingTurnsTheBarIntoTheFieldAndBackOnEnd() {
-        let bar = HomeFooterBar(frame: CGRect(x: 0, y: 0, width: 300, height: 56))
+        let bar = HomeFooterBar(frame: CGRect(x: 0, y: 0, width: 300, height: 52))
         bar.setSearch(placeholder: "Search Library")
         var typed: [String] = []
         var cancelled = 0
@@ -192,8 +192,36 @@ struct HomeFooterBarTests {
         #expect(bar.firstDescendant(label: "Camera")?.superview?.isHidden == false)
     }
 
+    @Test func footerButtonsAreIconsWithSpokenNames() {
+        let bar = HomeFooterBar(frame: CGRect(x: 0, y: 0, width: 300, height: 52))
+        for name in ["Camera", "Search", "Music"] {
+            let button = bar.firstDescendant(label: name) as? UIButton
+            #expect(button != nil)
+            #expect(button?.configuration?.title == nil)
+            #expect(button?.configuration?.image != nil)
+        }
+        var opened = 0
+        bar.onOpenMusic = { opened += 1 }
+        (bar.firstDescendant(label: "Music") as? UIButton)?.sendActions(for: .touchUpInside)
+        #expect(opened == 1)
+    }
+
+    @Test func nowPlayingStripShowsTheTrackAndStops() {
+        let strip = HomeNowPlayingStrip(frame: CGRect(x: 0, y: 0, width: 340, height: 46))
+        strip.show(title: "Chill Low Fi", isPlaying: true)
+        #expect(strip.titleLabel.text == "Chill Low Fi")
+        #expect(strip.firstDescendant(label: "Pause") != nil)
+        strip.show(title: "Chill Low Fi", isPlaying: false)
+        #expect(strip.firstDescendant(label: "Play") != nil)
+        var stopped = 0
+        strip.onStop = { stopped += 1 }
+        (strip.firstDescendant(label: "Stop music") as? UIButton)?
+            .sendActions(for: .touchUpInside)
+        #expect(stopped == 1)
+    }
+
     @Test func cameraButtonOpensTheCamera() {
-        let bar = HomeFooterBar(frame: CGRect(x: 0, y: 0, width: 300, height: 56))
+        let bar = HomeFooterBar(frame: CGRect(x: 0, y: 0, width: 300, height: 52))
         var opened = 0
         bar.onOpenCamera = { opened += 1 }
         (bar.firstDescendant(label: "Camera") as? UIButton)?
@@ -202,7 +230,7 @@ struct HomeFooterBarTests {
     }
 
     @Test func aSearchKeepsTheBarUpWhileScrolling() {
-        let bar = HomeFooterBar(frame: CGRect(x: 0, y: 0, width: 300, height: 56))
+        let bar = HomeFooterBar(frame: CGRect(x: 0, y: 0, width: 300, height: 52))
         bar.setScrolledAway(true, animated: false)
         #expect(bar.isScrolledAway)
         bar.setScrolledAway(false, animated: false)

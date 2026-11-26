@@ -7,8 +7,8 @@
 
 import UIKit
 
-/// iOS-style footer for the paging home screen: a glass bar of buttons, Camera and
-/// Search, like a tab bar's.
+/// iOS-style footer for the paging home screen: a glass bar of icon buttons —
+/// Camera, Search, Music — like a tab bar's, with no words under them.
 ///
 /// Search turns the bar into the search field for the page in front, with ✕ beside
 /// it, the way the system's search tab does. The bar slides away while the page
@@ -24,14 +24,17 @@ final class HomeFooterBar: UIView {
     var onCancelSearch: (() -> Void)?
     /// Invoked by Camera.
     var onOpenCamera: (() -> Void)?
+    /// Invoked by Music (pick something to play).
+    var onOpenMusic: (() -> Void)?
 
-    static let height: CGFloat = 56
+    static let height: CGFloat = 52
 
     let searchField = UISearchTextField()
     private let bar = HomeFooterBar.makeGlass()
     private let cancelGlass = HomeFooterBar.makeGlass()
     private let cameraButton = UIButton(type: .system)
     private let searchButton = UIButton(type: .system)
+    private let musicButton = UIButton(type: .system)
     private let cancelButton = UIButton(type: .system)
     private let buttonStack = UIStackView()
     private var idleConstraints: [NSLayoutConstraint] = []
@@ -156,12 +159,20 @@ final class HomeFooterBar: UIView {
             self?.searchField.becomeFirstResponder()
         }, for: .touchUpInside)
 
+        configureItem(musicButton, systemName: "music.note", title: "Music")
+        musicButton.accessibilityHint = "Choose something to play"
+        musicButton.accessibilityIdentifier = "home.music"
+        musicButton.addAction(UIAction { [weak self] _ in
+            self?.onOpenMusic?()
+        }, for: .touchUpInside)
+
         buttonStack.axis = .horizontal
         buttonStack.distribution = .fillEqually
         buttonStack.spacing = 0
         buttonStack.translatesAutoresizingMaskIntoConstraints = false
         buttonStack.addArrangedSubview(cameraButton)
         buttonStack.addArrangedSubview(searchButton)
+        buttonStack.addArrangedSubview(musicButton)
         bar.contentView.addSubview(buttonStack)
 
         searchField.translatesAutoresizingMaskIntoConstraints = false
@@ -235,7 +246,7 @@ final class HomeFooterBar: UIView {
             buttonStack.leadingAnchor.constraint(equalTo: bar.contentView.leadingAnchor, constant: 6),
             buttonStack.topAnchor.constraint(equalTo: bar.contentView.topAnchor),
             buttonStack.bottomAnchor.constraint(equalTo: bar.contentView.bottomAnchor),
-            cameraButton.widthAnchor.constraint(equalToConstant: 78),
+            cameraButton.widthAnchor.constraint(equalToConstant: 60),
 
             searchField.leadingAnchor.constraint(equalTo: bar.contentView.leadingAnchor, constant: 18),
             searchField.trailingAnchor.constraint(equalTo: bar.contentView.trailingAnchor, constant: -14),
@@ -254,25 +265,19 @@ final class HomeFooterBar: UIView {
         applyControls()
     }
 
-    /// A tab-bar style button: symbol over a small label.
+    /// A tab-bar style button, symbol only (the owner wants no words down here);
+    /// `title` is what VoiceOver says.
     private func configureItem(_ button: UIButton, systemName: String, title: String) {
         var config = UIButton.Configuration.plain()
         config.image = UIImage(
             systemName: systemName,
-            withConfiguration: UIImage.SymbolConfiguration(pointSize: 19, weight: .medium)
+            withConfiguration: UIImage.SymbolConfiguration(pointSize: 21, weight: .medium)
         )
-        config.title = title
-        config.imagePlacement = .top
-        config.imagePadding = 3
         config.baseForegroundColor = .label
         config.contentInsets = NSDirectionalEdgeInsets(top: 4, leading: 4, bottom: 4, trailing: 4)
-        config.titleTextAttributesTransformer =
-            UIConfigurationTextAttributesTransformer { incoming in
-                var outgoing = incoming
-                outgoing.font = .systemFont(ofSize: 10, weight: .medium)
-                return outgoing
-            }
         button.configuration = config
+        button.showsLargeContentViewer = true
+        button.largeContentTitle = title
         button.accessibilityLabel = title
         button.translatesAutoresizingMaskIntoConstraints = false
     }
@@ -311,5 +316,143 @@ enum HomeFooterScroll {
         if delta > 3 { return true }
         if delta < -3 { return false }
         return nil
+    }
+}
+
+/// What is playing, as a slim glass strip above the footer (the way Apple Music
+/// keeps its player above the tab bar). It stays when the footer slides away.
+final class HomeNowPlayingStrip: UIView {
+
+    /// Invoked by a tap on the strip (opens Now Playing).
+    var onOpen: (() -> Void)?
+    /// Invoked by ✕ (stops the music).
+    var onStop: (() -> Void)?
+
+    static let height: CGFloat = 46
+
+    private let glass: UIVisualEffectView = {
+        let view: UIVisualEffectView
+        if #available(iOS 26.0, *) {
+            view = UIVisualEffectView(effect: UIGlassEffect())
+        } else {
+            view = UIVisualEffectView(effect: UIBlurEffect(style: .systemThinMaterial))
+        }
+        view.layer.cornerRadius = HomeNowPlayingStrip.height / 2
+        view.layer.cornerCurve = .continuous
+        view.clipsToBounds = true
+        view.translatesAutoresizingMaskIntoConstraints = false
+        return view
+    }()
+    private let badge = UIImageView()
+    let titleLabel = UILabel()
+    private let playPauseButton = UIButton(type: .system)
+    private let stopButton = UIButton(type: .system)
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        setup()
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    /// Shows `title` and whether it is playing (pause) or paused (play).
+    func show(title: String, isPlaying: Bool) {
+        titleLabel.text = title
+        var config = playPauseButton.configuration ?? .plain()
+        config.image = UIImage(
+            systemName: isPlaying ? "pause.fill" : "play.fill",
+            withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .semibold)
+        )
+        playPauseButton.configuration = config
+        playPauseButton.accessibilityLabel = isPlaying ? "Pause" : "Play"
+    }
+
+    private func setup() {
+        accessibilityIdentifier = "home.nowPlaying"
+        addSubview(glass)
+
+        badge.image = UIImage(
+            systemName: "music.note",
+            withConfiguration: UIImage.SymbolConfiguration(pointSize: 13, weight: .bold)
+        )
+        badge.tintColor = .white
+        badge.backgroundColor = .accent
+        badge.contentMode = .center
+        badge.layer.cornerRadius = 16
+        badge.clipsToBounds = true
+        badge.isAccessibilityElement = false
+        badge.translatesAutoresizingMaskIntoConstraints = false
+
+        titleLabel.font = .systemFont(ofSize: 15, weight: .medium)
+        titleLabel.textColor = .label
+        titleLabel.lineBreakMode = .byTruncatingTail
+        titleLabel.accessibilityTraits = .button
+        titleLabel.accessibilityHint = "Opens Now Playing"
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
+        var playConfig = UIButton.Configuration.plain()
+        playConfig.baseForegroundColor = .label
+        playPauseButton.configuration = playConfig
+        playPauseButton.translatesAutoresizingMaskIntoConstraints = false
+        playPauseButton.addAction(UIAction { _ in
+            AudioPlayerController.shared.togglePlayPause()
+        }, for: .touchUpInside)
+
+        var stopConfig = UIButton.Configuration.plain()
+        stopConfig.image = UIImage(
+            systemName: "xmark",
+            withConfiguration: UIImage.SymbolConfiguration(pointSize: 14, weight: .semibold)
+        )
+        stopConfig.baseForegroundColor = .secondaryLabel
+        stopButton.configuration = stopConfig
+        stopButton.accessibilityLabel = "Stop music"
+        stopButton.translatesAutoresizingMaskIntoConstraints = false
+        stopButton.addAction(UIAction { [weak self] _ in
+            self?.onStop?()
+        }, for: .touchUpInside)
+
+        let content = glass.contentView
+        for view in [badge, titleLabel, playPauseButton, stopButton] {
+            content.addSubview(view)
+        }
+        content.addGestureRecognizer(
+            UITapGestureRecognizer(target: self, action: #selector(openTapped))
+        )
+
+        NSLayoutConstraint.activate([
+            heightAnchor.constraint(equalToConstant: Self.height),
+            glass.leadingAnchor.constraint(equalTo: leadingAnchor),
+            glass.trailingAnchor.constraint(equalTo: trailingAnchor),
+            glass.topAnchor.constraint(equalTo: topAnchor),
+            glass.bottomAnchor.constraint(equalTo: bottomAnchor),
+
+            badge.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 7),
+            badge.centerYAnchor.constraint(equalTo: content.centerYAnchor),
+            badge.widthAnchor.constraint(equalToConstant: 32),
+            badge.heightAnchor.constraint(equalToConstant: 32),
+
+            titleLabel.leadingAnchor.constraint(equalTo: badge.trailingAnchor, constant: 10),
+            titleLabel.centerYAnchor.constraint(equalTo: content.centerYAnchor),
+            titleLabel.trailingAnchor.constraint(
+                lessThanOrEqualTo: playPauseButton.leadingAnchor, constant: -6
+            ),
+
+            stopButton.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -4),
+            stopButton.centerYAnchor.constraint(equalTo: content.centerYAnchor),
+            stopButton.widthAnchor.constraint(equalToConstant: 40),
+            stopButton.heightAnchor.constraint(equalToConstant: 44),
+            playPauseButton.trailingAnchor.constraint(equalTo: stopButton.leadingAnchor),
+            playPauseButton.centerYAnchor.constraint(equalTo: content.centerYAnchor),
+            playPauseButton.widthAnchor.constraint(equalToConstant: 44),
+            playPauseButton.heightAnchor.constraint(equalToConstant: 44)
+        ])
+        show(title: "", isPlaying: false)
+    }
+
+    @objc private func openTapped() {
+        onOpen?()
     }
 }
