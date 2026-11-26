@@ -98,8 +98,10 @@ final class WebThumbnailStore {
     // MARK: - Writes
 
     /// Persists a page snapshot and notifies the UI.
-    func saveSnapshot(_ image: UIImage, for id: UUID) {
-        let normalized = WebThumbnailAspect.croppedToDisplayAspect(image)
+    /// - Parameter centered: Crop tall art from the middle (video posters) rather than
+    ///   the top (web pages, where the top is what the TV shows first).
+    func saveSnapshot(_ image: UIImage, for id: UUID, centered: Bool = false) {
+        let normalized = WebThumbnailAspect.croppedToDisplayAspect(image, centered: centered)
         memory.setObject(normalized, forKey: id as NSUUID, cost: Self.cost(of: normalized))
         display.setObject(normalized, forKey: id as NSUUID, cost: Self.cost(of: normalized))
         let url = snapshotURL(for: id)

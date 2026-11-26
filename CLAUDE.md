@@ -328,6 +328,13 @@
   strength at the title and unreadable on a white website thumbnail; keep the three-stop shade for any new title over art.
 - Shows list (2026-11-22): presented as a form sheet (compact centred sheet on iPad, like Settings); its filter says
   "Landscape", the same word as Display Mode, never "Horizontal".
+- Card pictures for websites, video links and PDFs (audit 2026-11-26): website cards are captured from the warm web view
+  0.5s after load and again 2.5s later (`WarmWebSession.scheduleThumbnailCapture`; sites that fade in, like github.com, were
+  blank white at 0.5s). Video-link posters (`WebVideoPosterFetcher`) crop from the middle (`saveSnapshot(_:for:centered:)`;
+  YouTube's 4:3 `hqdefault` fallback has bars), ask Vimeo oEmbed for `width=1280` (default is 295×166), and direct
+  `.mp4`/`.mov` links get a still from `VideoPosterFrame` (HLS `.m3u8` can't be sampled and keeps the icon). Posters saved
+  before these rules are fetched once more (`EclipseTV.webVideoPoster.v2Ids`). PDF pictures render into 960×960
+  (`PDFThumbnailStore.renderSize`, files `<id>-v2.jpg`, NSCache-bounded); older 360 px files are rebuilt on first read.
 - Background colors (2026-11-22, `BackgroundColorPreset`): the Background tile's ⋯ menu has a "Color" row with the Mac's
   eight presets (same names, order, stops and `eclipse://builtin/gradient/<name>` URL as eclipsepro's
   `BackgroundGradientPreset`; keep them in step). Picking one draws a 1920×1080 picture and stores it as the Background
