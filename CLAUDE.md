@@ -199,6 +199,17 @@
   armed per owner (`armRecordingAudio(owner:)`: "fullscreen", "showHero"), so it stays on while the camera hero is up.
   Hero expand control is a 36pt circle. `CameraMirrorView` flushes its renderer when it re-enters a window or reports
   it needs a flush: a fullscreen presentation stalled it and left the hero black after closing the camera.
+- Interactive PDF in the hero (iPhone/iPad, 2026-11-26, `LiveHeaderView+PDFPreview`, `PDFReaderDriver`): a Show PDF card
+  tap puts the PDF live in the hero as a real `PDFView` (sharp, scrolls and pinches in place); only the hero's expand
+  control (or ⋯ Preview) opens the full-screen reader. Both views share one `PDFReaderDriver` design and show the same
+  icon row top right (`PDFViewOptionsBar`: Fit · Fill · Two Pages, then Page by Page). Only one driver moves the TV at a
+  time (`PDFReaderDriver.active`): the reader takes over while open and hands back on close (`didResignNotification`).
+  The shared view (`PDFLiveViewState`: page, 0…1 scroll fractions, zoom relative to fit, two-up, preset, snapping) lives on
+  `ExternalDisplayManager.pdfViewState` and the TV applies it whole (`applyPDFViewState`). A reader on a PDF that is not
+  live never moves the TV. Page by Page: on finger lift a pan target picks the next row stop (`PDFViewMath.snapOffset`);
+  a row taller than the screen (zoomed in) scrolls freely and stops at its edge. A pinch clears the lit preset.
+  Default is Fit with natural scrolling. PDF tile pictures are 720×960 (`<id>-v2.jpg`); old 360×480 ones stay unused in Caches.
+  A hero refresh can un-hide the still picture (e.g. `clearWebPreview`), so `showPDFPreview` re-hides it every time.
 - PDF reader zoom snap (2026-11-14): pinching in `PDFRemoteViewController` catches where the current page exactly fills
   the audience frame's width and where it fills its height (`PDFZoomSnap`, ±4% hold band, light haptic on entry). It
   rides the scroll view's own pinch recognizer (added target, never the delegate). Holding sets the zoom, and the scroll
