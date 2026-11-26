@@ -161,14 +161,10 @@ extension MediaLibraryPickerViewController {
 
     func videoLibraryActions(for item: LibraryItemDTO) -> [UIMenuElement] {
         guard item.isVideo, item.isAvailable != false else { return [] }
-        let loopOn = item.isLooping ?? false
         let muted = item.isMuted ?? false
         var actions: [UIMenuElement] = [
-            UIAction(
-                title: "Loop",
-                image: UIImage(systemName: loopOn ? "checkmark" : "repeat")
-            ) { [weak self] _ in
-                self?.onApplyVideoSetting?(item.id, !loopOn, nil)
+            VideoEndAction.menu(current: item.videoEndAction) { [weak self] choice in
+                self?.onApplyVideoEndAction?(item.id, choice)
                 self?.reload()
             },
             UIAction(

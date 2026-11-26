@@ -702,6 +702,9 @@ final class LibraryGridViewController: UIViewController {
         observe(CountdownController.didExpireNotification) { [weak self] _ in
             self?.handleCountdownExpiry()
         }
+        observe(VideoEndDecision.didFinishNotification) { [weak self] _ in
+            self?.handleLiveVideoEnded()
+        }
         observe(PrompterScriptStore.didChangeNotification) { [weak self] _ in
             // The tile shows the script's first line.
             self?.reloadGridIfSafe()

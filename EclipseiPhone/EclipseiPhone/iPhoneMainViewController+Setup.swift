@@ -429,6 +429,11 @@ extension iPhoneMainViewController {
                 id: id, isLooping: isLooping, isMuted: isMuted
             )
         }
+        picker.onApplyVideoEndAction = { [weak self] id, choice in
+            self?.libraryViewController.applyVideoSetting(
+                id: id, isLooping: nil, isMuted: nil, endAction: choice
+            )
+        }
         picker.onPerformDelete = { [weak self] id in
             self?.libraryViewController.performDelete(id: id)
         }

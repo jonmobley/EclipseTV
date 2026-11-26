@@ -228,6 +228,9 @@ enum CloudKitRecordMapper {
             let item = TVLibraryStore.shared.items.first { $0.id == libraryId }
             record[CloudKitSchema.MediaKey.isLooping] =
                 (item?.isLooping ?? false) as CKRecordValue
+            record[CloudKitSchema.MediaKey.videoEndAction] = VideoEndAction.resolve(
+                isLooping: item?.isLooping, stored: item?.endAction
+            ).rawValue as CKRecordValue
             record[CloudKitSchema.MediaKey.isMuted] =
                 (item?.isMuted ?? false) as CKRecordValue
         } else {
@@ -368,11 +371,14 @@ enum CloudKitRecordMapper {
         guard isVideo else { return }
         let looping = record[CloudKitSchema.MediaKey.isLooping] as? Bool
         let muted = record[CloudKitSchema.MediaKey.isMuted] as? Bool
-        guard looping != nil || muted != nil else { return }
+        let endAction = (record[CloudKitSchema.MediaKey.videoEndAction] as? String)
+            .flatMap(VideoEndAction.init(rawValue:))
+        guard looping != nil || muted != nil || endAction != nil else { return }
         TVLibraryStore.shared.updateVideoSetting(
             id: libraryId,
             isLooping: looping,
-            isMuted: muted
+            isMuted: muted,
+            endAction: endAction
         )
     }
 

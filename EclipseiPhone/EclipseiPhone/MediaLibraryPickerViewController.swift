@@ -86,6 +86,8 @@ final class MediaLibraryPickerViewController: UIViewController {
     var onApplyScreenFit: ((LibraryItemDTO, MediaFitMode) -> Void)?
     /// Persist loop / mute and sync to EclipseTV when linked.
     var onApplyVideoSetting: ((String, Bool?, Bool?) -> Void)?
+    /// A video's "When Video Ends" choice changed in a row menu.
+    var onApplyVideoEndAction: ((String, VideoEndAction) -> Void)?
     /// Deletes after the picker’s confirmation. Grid owns TV + local teardown.
     var onPerformDelete: ((String) -> Void)?
     /// Re-send a purged Apple TV item from Photos.

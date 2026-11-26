@@ -79,6 +79,9 @@ enum CloudKitSchema {
         /// Normalized crop `[x, y, width, height]` for custom still framing. Missing → none.
         static let framing = "framing"
         static let isLooping = "isLooping"
+        /// `pause` / `loop` / `next` / `screensaver` (same as the Mac). Absent on
+        /// records from older apps, which only know `isLooping`.
+        static let videoEndAction = "videoEndAction"
         static let isMuted = "isMuted"
         /// Presenter note (`""` = deleted; absent = never set by any device).
         static let note = "note"
