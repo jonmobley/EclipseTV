@@ -895,6 +895,8 @@ final class LibraryGridViewController: UIViewController {
         warmHomeCameraPreview()
         updateHeroCollapse()
         restoreLastOpenedShowIfNeeded()
+        // Hardware-keyboard / clicker keys (LibraryGridViewController+KeyCommands).
+        becomeFirstResponder()
     }
 
     /// Reopens the most recently used Show once per process launch.
