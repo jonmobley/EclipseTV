@@ -12,6 +12,16 @@ import AVFoundation
 import UniformTypeIdentifiers
 import os
 
+/// The home pager. It moves only by a swipe or a tab.
+///
+/// UIKit scrolls every enclosing scroll view to reveal a text field that takes
+/// focus (Library search, a playlist name). In a pager that reads as a sideways
+/// nudge: the page ends up off-centre, and far enough towards Home it would count as
+/// a swipe that closes the open Show.
+final class HomePagerScrollView: UIScrollView {
+    override func scrollRectToVisible(_ rect: CGRect, animated: Bool) {}
+}
+
 class iPhoneMainViewController: UIViewController {
     
     // MARK: - UI Elements
@@ -25,9 +35,11 @@ class iPhoneMainViewController: UIViewController {
     /// Music list; pager page on compact, drawer or pinned sidebar on regular width.
     lazy var audioLibraryViewController = AudioLibraryViewController(embedded: true)
 
-    /// Horizontal pager hosting Library (page 0) and Music (page 1).
+    /// Horizontal pager. Compact width: Home, Library, Show, Music (`HomeTab`), with
+    /// the Home / Show grid standing in whichever of its two slots matches its mode.
+    /// Regular width: the grid alone (Music is the drawer, Library a pushed page).
     let homePagerScrollView: UIScrollView = {
-        let scroll = UIScrollView()
+        let scroll = HomePagerScrollView()
         scroll.isPagingEnabled = true
         scroll.showsHorizontalScrollIndicator = false
         scroll.showsVerticalScrollIndicator = false
@@ -41,9 +53,48 @@ class iPhoneMainViewController: UIViewController {
 
     /// Navigation stack for the Music page. An open playlist stays here so
     /// Show ↔ Music paging returns to that playlist instead of the library list.
-    var audioLibraryNavController: UINavigationController?
-    /// 0 = Library, 1 = Music.
-    var homePageIndex = 0
+    var audioLibraryNavController: HomeTabPageNavigationController?
+    /// Page the compact pager is settled on (or heading for).
+    var homeTab: HomeTab = .home
+    /// True while the home screen is the four-page pager with text tabs.
+    var isHomeTabPaging = false
+    /// True while a tab tap is sliding the pager to its page.
+    var isAnimatingHomePager = false
+    /// True while the pager itself is switching the grid between Home and Show,
+    /// so the change is not mistaken for one the pager should follow.
+    var isMovingGridForPaging = false
+    /// Grid mode as of the last change, to tell opening a Show from closing one.
+    var wasGridInShowMode = false
+    /// Search field and Camera, floating at the bottom of the paging home screen.
+    let homeFooter = HomeFooterBar()
+    /// Bottom of the Music circle (its card hangs off it); lifts above the footer
+    /// while the card is open.
+    var audioMiniBubbleBottomConstraint: NSLayoutConstraint?
+    /// Watches each page's scrolling to slide `homeFooter` away.
+    var homeFooterScrollObservations: [NSKeyValueObservation] = []
+    /// Page whose content the bottom bar's search field is filtering, if any.
+    var searchingTab: HomeTab?
+    /// Show that was open when the grid last changed (a search belongs to it).
+    var searchedShowId: UUID?
+    /// The Show the Show tab returns to after a visit to Home.
+    var lastOpenShowId: UUID?
+    /// Library as a pager page: browse and preview, never add-to-Show.
+    var libraryPageNavController: HomeTabPageNavigationController?
+    var libraryPagePicker: MediaLibraryPickerViewController?
+    /// Shown in the Show slot when there is no Show to open.
+    let showPlaceholderView = HomeShowPlaceholderView()
+    /// Where the grid stands in the pager (Home slot or Show slot).
+    var gridPageLeadingConstraint: NSLayoutConstraint?
+    var libraryPageLeadingConstraint: NSLayoutConstraint?
+    var libraryTabPageWidthConstraint: NSLayoutConstraint?
+    var libraryPageTopConstraint: NSLayoutConstraint?
+    var showPlaceholderLeadingConstraint: NSLayoutConstraint?
+    var showPlaceholderWidthConstraint: NSLayoutConstraint?
+    var showPlaceholderTopConstraint: NSLayoutConstraint?
+    var musicPageLeadingConstraint: NSLayoutConstraint?
+    var musicPageTopConstraint: NSLayoutConstraint?
+    /// Header height: the row, plus the text tabs when they sit under it.
+    var headerHeightConstraint: NSLayoutConstraint?
     /// True when Library and Music share the home screen (unused; drawer-only on
     /// regular width). Kept so layout math can still branch on `.split`.
     var isHomeSplitLayout = false
@@ -160,13 +211,16 @@ class iPhoneMainViewController: UIViewController {
             [UITraitHorizontalSizeClass.self]
         ) { (self: Self, _: UITraitCollection) in
             self.updateHomeSplitLayoutIfNeeded()
+            self.applyHomePagerTopAttachment()
             self.syncAudioMiniLayoutIfNeeded()
             self.refreshLibraryMenu()
         }
         registerForTraitChanges(
             [UITraitVerticalSizeClass.self]
         ) { (self: Self, _: UITraitCollection) in
-            // Phone landscape disables Library↔Music paging (grid|preview split).
+            // Phone landscape locks paging on the Show page (grid|preview split)
+            // and moves the text tabs up into the header row.
+            self.applyHomePagerTopAttachment()
             self.setHomePagingEnabled(true)
             self.syncAudioMiniLayoutIfNeeded()
         }

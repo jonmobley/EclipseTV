@@ -244,6 +244,34 @@
   choosing one for a Show is picked automatically. A running room keeps its own copy, so edits show on the next start.
   questpoll.com has no test copy: never save/delete polls against it to try things out. Check the screens with a stub
   `URLProtocol` client instead (see `QuestPollEditorTests`).
+- Home screen pages and text tabs (iPhone / narrow iPad windows, 2026-11-25, `HomeTabStrip.swift`, `HomeTabPages.swift`,
+  `iPhoneMainViewController+HomePaging.swift`): the pager has four pages, Home · Library · Show · Music (`HomeTab`), named by
+  text tabs under the header row (inside the row in phone landscape) with a line under the current one. Home and Show are still
+  one screen in two modes (`LibraryGridViewController`), so the grid *moves* between the Home slot and the Show slot; Library
+  sits between them, so the two slots are never on screen together and the grid changes mode as soon as a finger swipe brings
+  the other slot into view (`moveGrid(into:)`: Home closes the Show, Show reopens `lastOpenShowId` or the most recent Show of
+  the current Display Mode, else the "No Show open" page). Only a finger swipe does that: tab slides and layout passes never
+  change the grid's mode (a layout pass that snapped the offset mid-slide once closed the Show). `HomePagerScrollView` ignores
+  `scrollRectToVisible`, or focusing a text field nudges the pager sideways. The header (`HomeHeaderBar`) stays on every page
+  and swaps its right-hand buttons by page (`setTabPage`): Music gets "+", and Library and Music hide their
+  own navigation bar at the root (`HomeTabPageNavigationController`; it returns for a playlist or reordering).
+  The dropdown says "Eclipse" on Home (no "Home": that is a tab) and has no Library / Music entries or back chevron there.
+  Camera and Search are icon-only buttons (no words: owner's call) in an iOS-style glass footer, bottom left, level with
+  the blue Music circle (`HomeFooterBar`, 2026-11-25; the owner did not want them in the tab row, and asked for buttons
+  like the Showtime app's tab bar, not an always-on field). Search turns the bar into the search field with ✕ beside it.
+  The music player is the original circle-and-card (`AudioMiniPlayerView`, mic duck + Stop) and must stay: a replacement
+  strip was tried and the owner wanted the old player back ("we had a really cool audio player"). When the card opens,
+  circle and card lift above the footer (`audioMiniLift`), and settle back to the corner when it closes or the footer is
+  scrolled away, so neither hides the other. The bar slides away while a page scrolls down and returns on the way up or at the top
+  (`HomeFooterScroll`, driven by watching each page's scroll position), and rides above the keyboard. Camera is on every
+  page and opens the full-screen camera (`presentCameraLive`). The search field shows on Library, Music's list and an open
+  Show and filters the page in front by name (`beginPageSearch` / `endPageSearch`): Show cards (`ShowGridItem.searchTitle`,
+  `showSearchQuery`), tracks and playlists, Library titles. The filter ends when the page or the Show changes, and
+  arranging ends it first, because arrange positions are positions in the whole Show (a filtered grid would save the wrong
+  order). The bar gives way to arranging / selecting. The pushed Library page keeps its own
+  search field. A tab's slide always ends on the tapped tab (`scrollViewDidEndScrollingAnimation` never reads the offset).
+  The Library *tab* only browses and previews; adding to a Show is still the pushed Library page from the Show's "+".
+  Regular width (full iPad, big phones in landscape) is unchanged: `HomeHeaderNavTabs`, Music drawer, pushed Library.
 - Content icons match the Mac app (2026-11-22): `ThumbnailTypeIcon.systemName` is the one place a content kind's SF Symbol is named
   (Website `globe`, PDF `doc.text`, Prompter `text.viewfinder`, Slideshow `photo.on.rectangle.angled`, same as the Mac's
   `AddMediaList` / `MediaTypeVisual`). Every screen reads it; never write those symbol names inline. `safari` stays only on

@@ -23,6 +23,13 @@ final class HomeHeaderBar: UIView {
     private let menuPill = UIView()
     private let libraryButton = MinimumHitTargetButton(type: .system)
     private let navTabs = HomeHeaderNavTabs()
+    /// The 52pt row of controls. The text tabs sit under it on an upright phone.
+    private let rowGuide = UILayoutGuide()
+    /// Home · Library · Show · Music, when the home screen pages (compact width).
+    let tabStrip = HomeTabStripView()
+    /// Fills the status-bar area above the bar so nothing scrolls through it.
+    private let topBackdrop = UIView()
+    private let addMusicButton = MinimumHitTargetButton(type: .system)
     private let trailingStack = UIStackView()
     private let lockButton = MinimumHitTargetButton(type: .system)
     private let blackButton = MinimumHitTargetButton(type: .system)
@@ -48,6 +55,23 @@ final class HomeHeaderBar: UIView {
     var onDoneSelecting: (() -> Void)?
     /// Invoked by an iPad destination tab (Home, Show, Library, Music).
     var onSelectDestination: ((HomeHeaderDestination) -> Void)?
+    /// Invoked when a text tab is tapped (compact width).
+    var onSelectTab: ((HomeTab) -> Void)?
+    /// Invoked by the Music page's "+" control.
+    var onAddMusic: (() -> Void)?
+
+    /// Height of the row of controls, without the text tabs.
+    static let rowHeight: CGFloat = 52
+
+    /// Bar height: the row alone, or the row plus the text tabs under it. In phone
+    /// landscape the tabs sit inside the row, where height is short and width is not.
+    static func height(
+        showsTabStrip: Bool,
+        verticalSizeClass: UIUserInterfaceSizeClass
+    ) -> CGFloat {
+        guard showsTabStrip, verticalSizeClass != .compact else { return rowHeight }
+        return rowHeight + HomeTabStripView.height
+    }
 
     /// EclipseTV Multipeer link — read by output-status chrome.
     private(set) var connectionState: ConnectionDisplayState = .paused
@@ -60,6 +84,12 @@ final class HomeHeaderBar: UIView {
     private var livePollOwnsPhoneHero = false
     private var isArranging = false
     private var isSelecting = false
+    /// Page the pager is on; picks the trailing controls when the tabs show.
+    private var tabPage: HomeTab = .home
+    /// False while Music is inside a playlist, which has its own "+".
+    private var musicAddAvailable = true
+    private var tabStripBelowConstraints: [NSLayoutConstraint] = []
+    private var tabStripInlineConstraints: [NSLayoutConstraint] = []
     private var menuPillLeadingToBack: NSLayoutConstraint?
     private var menuPillLeadingToSafe: NSLayoutConstraint?
 
@@ -79,6 +109,13 @@ final class HomeHeaderBar: UIView {
     // MARK: - Setup
 
     private func setupViews() {
+        addLayoutGuide(rowGuide)
+        topBackdrop.backgroundColor = .systemBackground
+        topBackdrop.isUserInteractionEnabled = false
+        topBackdrop.isHidden = true
+        topBackdrop.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(topBackdrop)
+
         let symbol = UIImage.SymbolConfiguration(pointSize: 17, weight: .semibold)
         backButton.configuration = Self.barIconConfig(
             systemName: "chevron.left",
@@ -145,7 +182,7 @@ final class HomeHeaderBar: UIView {
         libraryButton.showsMenuAsPrimaryAction = true
         libraryButton.accessibilityLabel = "Home menu"
         libraryButton.accessibilityHint =
-            "Open Show, New Show, Library, Music, Settings, and Recent Shows"
+            "Open Show, New Show, Camera Mode, Settings, and Recent Shows"
         libraryButton.translatesAutoresizingMaskIntoConstraints = false
         libraryButton.setContentCompressionResistancePriority(
             .defaultLow, for: .horizontal
@@ -193,6 +230,26 @@ final class HomeHeaderBar: UIView {
         addButton.accessibilityLabel = "Add"
         addButton.showsMenuAsPrimaryAction = true
 
+        addMusicButton.configuration = Self.barIconConfig(
+            systemName: "plus",
+            symbolConfig: symbolConfig,
+            foreground: .accent
+        )
+        addMusicButton.translatesAutoresizingMaskIntoConstraints = false
+        addMusicButton.accessibilityLabel = "Add Music"
+        addMusicButton.accessibilityHint = "Adds music or makes a playlist"
+        addMusicButton.isHidden = true
+        addMusicButton.addAction(UIAction { [weak self] _ in
+            self?.onAddMusic?()
+        }, for: .touchUpInside)
+
+        tabStrip.translatesAutoresizingMaskIntoConstraints = false
+        tabStrip.isHidden = true
+        tabStrip.onSelect = { [weak self] tab in
+            self?.onSelectTab?(tab)
+        }
+        addSubview(tabStrip)
+
         newShowButton.translatesAutoresizingMaskIntoConstraints = false
         newShowButton.accessibilityLabel = "New Show"
         newShowButton.addTarget(self, action: #selector(newShowTapped), for: .touchUpInside)
@@ -235,7 +292,8 @@ final class HomeHeaderBar: UIView {
         trailingStack.translatesAutoresizingMaskIntoConstraints = false
         for button in [
             lockButton, blackButton, settingsButton,
-            addButton, newShowButton, selectActionsButton, doneButton
+            addButton, addMusicButton,
+            newShowButton, selectActionsButton, doneButton
         ] {
             trailingStack.addArrangedSubview(button)
         }
@@ -251,14 +309,47 @@ final class HomeHeaderBar: UIView {
         menuPillLeadingToSafe = leadingSafe
         menuPillLeadingToBack = leadingBack
 
+        tabStripBelowConstraints = [
+            tabStrip.topAnchor.constraint(equalTo: rowGuide.bottomAnchor),
+            tabStrip.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 18),
+            tabStrip.trailingAnchor.constraint(
+                lessThanOrEqualTo: trailingAnchor, constant: -16
+            )
+        ]
+        tabStripInlineConstraints = [
+            tabStrip.centerYAnchor.constraint(equalTo: rowGuide.centerYAnchor),
+            tabStrip.leadingAnchor.constraint(
+                equalTo: leadingNavStack.trailingAnchor, constant: 16
+            ),
+            tabStrip.trailingAnchor.constraint(
+                lessThanOrEqualTo: trailingStack.leadingAnchor, constant: -8
+            )
+        ]
+        tabStrip.setContentCompressionResistancePriority(.required, for: .horizontal)
+
         NSLayoutConstraint.activate([
+            rowGuide.topAnchor.constraint(equalTo: topAnchor),
+            rowGuide.leadingAnchor.constraint(equalTo: leadingAnchor),
+            rowGuide.trailingAnchor.constraint(equalTo: trailingAnchor),
+            rowGuide.heightAnchor.constraint(equalToConstant: Self.rowHeight),
+
+            // Up through the status bar and out to the screen edges (the bar itself
+            // stops at the safe area in landscape).
+            topBackdrop.bottomAnchor.constraint(equalTo: bottomAnchor),
+            topBackdrop.heightAnchor.constraint(equalToConstant: 400),
+            topBackdrop.leadingAnchor.constraint(equalTo: leadingAnchor, constant: -120),
+            topBackdrop.trailingAnchor.constraint(equalTo: trailingAnchor, constant: 120),
+
+            addMusicButton.widthAnchor.constraint(equalToConstant: 36),
+            addMusicButton.heightAnchor.constraint(equalToConstant: 36),
+
             backButton.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
-            backButton.centerYAnchor.constraint(equalTo: centerYAnchor),
+            backButton.centerYAnchor.constraint(equalTo: rowGuide.centerYAnchor),
             backButton.widthAnchor.constraint(equalToConstant: 36),
             backButton.heightAnchor.constraint(equalToConstant: 36),
 
             leadingSafe,
-            leadingNavStack.centerYAnchor.constraint(equalTo: centerYAnchor),
+            leadingNavStack.centerYAnchor.constraint(equalTo: rowGuide.centerYAnchor),
             leadingNavStack.heightAnchor.constraint(equalToConstant: 44),
 
             menuPill.heightAnchor.constraint(equalToConstant: 36),
@@ -269,7 +360,7 @@ final class HomeHeaderBar: UIView {
             libraryButton.bottomAnchor.constraint(equalTo: menuPill.bottomAnchor),
 
             trailingStack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
-            trailingStack.centerYAnchor.constraint(equalTo: centerYAnchor),
+            trailingStack.centerYAnchor.constraint(equalTo: rowGuide.centerYAnchor),
 
             addButton.widthAnchor.constraint(equalToConstant: 36),
             addButton.heightAnchor.constraint(equalToConstant: 36),
@@ -289,7 +380,7 @@ final class HomeHeaderBar: UIView {
         ])
         for button in [
             backButton, lockButton, blackButton, settingsButton,
-            addButton, newShowButton
+            addButton, addMusicButton, newShowButton
         ] {
             button.setContentCompressionResistancePriority(.required, for: .horizontal)
         }
@@ -343,6 +434,34 @@ final class HomeHeaderBar: UIView {
         applySizeClassChrome()
     }
 
+    /// Turns the text tabs on (the home screen pages) or off (iPad tabs, drawer).
+    ///
+    /// On also means: no back chevron (the Home tab returns), a solid backdrop so
+    /// pages never scroll through the bar, and page-specific trailing controls.
+    var showsTabStrip = false {
+        didSet {
+            guard showsTabStrip != oldValue else { return }
+            applySizeClassChrome()
+        }
+    }
+
+    /// The page the pager is nearest; picks the trailing controls.
+    func setTabPage(_ page: HomeTab) {
+        guard tabPage != page else { return }
+        tabPage = page
+        applyTrailingChrome()
+    }
+
+    /// Hides the Music "+" while a playlist (with its own bar) is open.
+    func setMusicAddAvailable(_ available: Bool) {
+        guard musicAddAvailable != available else { return }
+        musicAddAvailable = available
+        applyTrailingChrome()
+    }
+
+    /// The Music "+" control, for anchoring its sheet on iPad.
+    var addMusicAnchor: UIView { addMusicButton }
+
     /// Attaches the system add menu to the "+" control (primary action).
     func setAddMenu(_ menu: UIMenu) {
         addButton.menu = menu
@@ -378,8 +497,8 @@ final class HomeHeaderBar: UIView {
         showsShowChrome = showMode
         applySizeClassChrome()
         libraryButton.accessibilityHint = showMode
-            ? "Open Show, New Show, Library, Music, and Recent Shows"
-            : "Open Show, New Show, Library, Music, Settings, and Recent Shows"
+            ? "Open Show, New Show, Camera Mode, and Recent Shows"
+            : "Open Show, New Show, Camera Mode, Settings, and Recent Shows"
     }
 
     /// Practice Mode for the open Show: live preview + Lock / Blackout when
@@ -454,6 +573,7 @@ final class HomeHeaderBar: UIView {
         menuPill.alpha = editing ? 0.45 : 1
         navTabs.isUserInteractionEnabled = !editing
         navTabs.alpha = editing ? 0.45 : 1
+        tabStrip.setEnabled(!editing)
         applySizeClassChrome()
         doneButton.accessibilityLabel = isSelecting
             ? "Done selecting"
@@ -467,7 +587,7 @@ final class HomeHeaderBar: UIView {
     /// and on iPad tabs (Home is the return control).
     private func applyBackButtonChrome() {
         let show = showsShowChrome && !isArranging && !isSelecting
-            && !showsDestinationTabs
+            && !showsDestinationTabs && !showsTabStrip
         backButton.isHidden = !show
         backButton.isEnabled = show
         menuPillLeadingToSafe?.isActive = !show
@@ -477,9 +597,23 @@ final class HomeHeaderBar: UIView {
     /// Compact dropdown vs iPad destination tabs, plus trailing/back that
     /// depend on that choice.
     private func applySizeClassChrome() {
+        applyTabStripPlacement()
         applyLeadingNavChrome()
         applyTrailingChrome()
         applyBackButtonChrome()
+    }
+
+    /// Text tabs under the row (upright) or inside it (phone landscape).
+    private func applyTabStripPlacement() {
+        tabStrip.isHidden = !showsTabStrip
+        topBackdrop.isHidden = !showsTabStrip
+        backgroundColor = showsTabStrip ? .systemBackground : .clear
+        let inline = traitCollection.verticalSizeClass == .compact
+        NSLayoutConstraint.deactivate(tabStripBelowConstraints + tabStripInlineConstraints)
+        guard showsTabStrip else { return }
+        NSLayoutConstraint.activate(
+            inline ? tabStripInlineConstraints : tabStripBelowConstraints
+        )
     }
 
     /// Compact dropdown vs iPad destination tabs.
@@ -509,7 +643,12 @@ final class HomeHeaderBar: UIView {
             selectActionsButton.isHidden = true
             selectActionsButton.menu = nil
         }
-        if editing {
+        // Library has no controls of its own up here and Music has "+"; Home and
+        // Show keep theirs. Search and Camera live in the bottom bar (`HomeFooterBar`).
+        let onLibrary = showsTabStrip && tabPage == .library
+        let onMusic = showsTabStrip && tabPage == .music
+        addMusicButton.isHidden = editing || !onMusic || !musicAddAvailable
+        if editing || onLibrary || onMusic {
             lockButton.isHidden = true
             blackButton.isHidden = true
             settingsButton.isHidden = true

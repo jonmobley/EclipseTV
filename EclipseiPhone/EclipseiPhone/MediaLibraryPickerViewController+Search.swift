@@ -17,7 +17,9 @@ extension MediaLibraryPickerViewController: UISearchResultsUpdating, UISearchCon
         if let addButton, isAddToShowMode {
             items.append(addButton)
         }
-        if !searchActive {
+        // On the home pager the bottom bar holds the search field
+        // (`setHomeTabSearchQuery`).
+        if !searchActive, !isHomeTabPage {
             items.append(searchBarButton)
         }
         navigationItem.rightBarButtonItems = items.isEmpty ? nil : items

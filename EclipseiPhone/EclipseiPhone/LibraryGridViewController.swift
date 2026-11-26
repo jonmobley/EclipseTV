@@ -134,6 +134,14 @@ final class LibraryGridViewController: UIViewController {
     /// inactive, or because its album was momentarily absent. It reopens as soon as it
     /// is valid again, so a detour through Settings returns the user to the same Show.
     var showAwaitingReturnId: UUID?
+    /// Text the open Show's cards are filtered by (the home screen's search field).
+    /// Arranging works on the whole Show, so it ends the search first.
+    var showSearchQuery = ""
+    /// Called when the grid itself ends the search (arranging began).
+    var onShowSearchEnded: (() -> Void)?
+    var isSearchingShow: Bool {
+        !showSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
     /// True while the user is dragging Show items to rearrange them.
     var isArranging = false
     /// True while the user is multi-selecting Show surface tiles.
@@ -225,10 +233,13 @@ final class LibraryGridViewController: UIViewController {
     }
 
     /// Show-grid rows in surface order. Empty Shows append a trailing Add tile
-    /// (unless arranging).
+    /// (unless arranging). While searching, only the cards whose name matches.
     var openShowGridItems: [ShowGridItem] {
         guard isShowMode else { return [] }
         let surface = openShowSurfaceIds.compactMap { showGridItem(forSurfaceId: $0) }
+        if isSearchingShow {
+            return surface.filter { matchesShowSearch($0) }
+        }
         if showsShowAddTile {
             return surface + [.add]
         }
