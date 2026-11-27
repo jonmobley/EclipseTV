@@ -14,6 +14,7 @@ extension LiveHeaderView {
     /// Shows the warm website session in the home hero (works without AirPlay).
     /// - Parameter pageId: Live free-browse or bookmark id.
     func showWebPreview(pageId: UUID) {
+        clearPDFPreview()
         if webPreviewPageId != pageId {
             clearWebPreview(parking: true)
         }

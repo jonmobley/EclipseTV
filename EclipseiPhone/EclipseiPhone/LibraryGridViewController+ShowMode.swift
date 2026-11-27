@@ -544,6 +544,10 @@ extension LibraryGridViewController {
             isScreensaverSelected = false
             presentWebPageLive(page)
         case .pdf(let doc):
+            // Like a website card: a tap only puts the PDF live, and the hero shows
+            // it to read, scroll and zoom in place (the TV follows). The hero's
+            // expand control or ⋯ Preview opens the full-screen reader. With
+            // nothing to go live on, the tap opens the reader as a phone preview.
             if prefersPhonePreviewOnTap {
                 presentPDF(doc)
                 return
@@ -555,7 +559,7 @@ extension LibraryGridViewController {
             isBlackSelected = false
             isLogoSelected = false
             isScreensaverSelected = false
-            presentPDF(doc)
+            presentPDFLive(doc)
         case .unresolved(let id):
             requestUnresolvedDownloadIfNeeded(id: id)
         case .template, .add:

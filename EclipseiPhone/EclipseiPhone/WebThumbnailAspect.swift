@@ -19,7 +19,10 @@ enum WebThumbnailAspect {
     ///
     /// Tall captures keep the top (matching the TV viewport); wide ones crop
     /// the sides. Near-matches are returned unchanged.
-    static func croppedToDisplayAspect(_ image: UIImage) -> UIImage {
+    /// - Parameter centered: Crop tall art from the middle instead of the top. Video
+    ///   posters need this: YouTube's 4:3 `hqdefault` has black bars above and below a
+    ///   16:9 picture, and a top crop kept one bar and cut off the bottom of the frame.
+    static func croppedToDisplayAspect(_ image: UIImage, centered: Bool = false) -> UIImage {
         let target = displayAspectRatio
         let size = image.size
         guard size.width > 1, size.height > 1 else { return image }
@@ -37,7 +40,8 @@ enum WebThumbnailAspect {
             )
         } else {
             let height = size.width / target
-            crop = CGRect(x: 0, y: 0, width: size.width, height: height)
+            let top = centered ? (size.height - height) / 2 : 0
+            crop = CGRect(x: 0, y: top, width: size.width, height: height)
         }
         return render(image, in: crop.size) { image.draw(at: CGPoint(x: -crop.minX, y: -crop.minY)) }
     }

@@ -80,6 +80,11 @@ extension LiveHeaderView: UIGestureRecognizerDelegate {
         if gestureRecognizer === overlayAdjustPan || gestureRecognizer === overlayAdjustPinch {
             return overlayAdjustShouldBegin(gestureRecognizer)
         }
+        // The interactive PDF scrolls and pinches on its own; the hero's tap,
+        // swipes and adjust gestures stay off it.
+        if gestureRecognizer.view === self, isTouchOnInteractivePDF(gestureRecognizer) {
+            return false
+        }
         guard gestureRecognizer === directAdjustPan
                 || gestureRecognizer === directAdjustPinch else {
             return super.gestureRecognizerShouldBegin(gestureRecognizer)

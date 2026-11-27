@@ -17,8 +17,10 @@ extension PresentationViewController {
         if let pdfView { return pdfView }
 
         let view = PDFView()
-        view.displayMode = .singlePageContinuous
+        view.displayMode = ExternalDisplayManager.shared.pdfViewState.isTwoUp
+            ? .twoUpContinuous : .singlePageContinuous
         view.displayDirection = .vertical
+        view.displaysPageBreaks = true
         view.autoScales = true
         view.backgroundColor = .black
         view.isUserInteractionEnabled = false
@@ -52,6 +54,8 @@ extension PresentationViewController {
             view.autoScales = true
             activityIndicator.stopAnimating()
         }
+        setPDFTwoUp(ExternalDisplayManager.shared.pdfViewState.isTwoUp)
+        applyPDFViewState(ExternalDisplayManager.shared.pdfViewState)
     }
 
     /// Hides the PDF view without destroying it.
@@ -70,42 +74,55 @@ extension PresentationViewController {
         if case .pdf = presentedSource?.content { presentedSource = nil }
     }
 
-    /// Fills the AirPlay surface with the mode-aspect PDF panel (rotates when Vertical).
+    /// Fills the AirPlay surface with the mode-aspect PDF panel (rotates when
+    /// Vertical), then puts the page back where the phone has it.
     func applyPDFLayout() {
         guard !pdfContainer.isHidden, let pdfView else { return }
         applyRotatedLayout(to: pdfView, in: pdfContainer, scale: 1)
-        pdfView.autoScales = true
+        pdfView.layoutIfNeeded()
+        applyPDFViewState(ExternalDisplayManager.shared.pdfViewState)
     }
 
-    /// Jumps the AirPlay PDF to `index` when page-based sync drifts from scroll alone.
-    func setPDFPageIndex(_ index: Int) {
-        guard let pdfView, !pdfContainer.isHidden,
-              let page = pdfView.document?.page(at: index) else { return }
-        if pdfView.currentPage != page {
-            pdfView.go(to: page)
-        }
+    /// One page or two to a row, matching the phone.
+    func setPDFTwoUp(_ twoUp: Bool) {
+        guard let pdfView else { return }
+        let mode: PDFDisplayMode = twoUp ? .twoUpContinuous : .singlePageContinuous
+        guard pdfView.displayMode != mode else { return }
+        pdfView.displayMode = mode
+        pdfView.layoutDocumentView()
     }
 
-    /// Mirrors normalized vertical scroll progress (0...1) from the phone PDF view.
-    func setPDFScrollProgress(_ progress: CGFloat) {
-        guard let pdfView, !pdfContainer.isHidden,
-              let scroll = pdfView.eclipse_scrollView else { return }
-        let maxY = max(0, scroll.contentSize.height - scroll.bounds.height)
-        guard maxY > 0 else { return }
-        let clamped = min(max(progress, 0), 1)
-        let offset = CGPoint(x: scroll.contentOffset.x, y: clamped * maxY)
-        if abs(scroll.contentOffset.y - offset.y) > 0.5 {
-            scroll.contentOffset = offset
-        }
-    }
-
-    /// Mirrors zoom relative to fit-scale from the phone PDF view.
-    func setPDFRelativeScale(_ relative: CGFloat) {
-        guard let pdfView, !pdfContainer.isHidden else { return }
+    /// Mirrors the phone's zoom (relative to fit) and scroll position.
+    ///
+    /// Both views have the audience frame's shape, so the same zoom relative to
+    /// fit and the same fractions of the scroll range land on the same picture.
+    func applyPDFViewState(_ state: PDFLiveViewState) {
+        guard let pdfView, !pdfContainer.isHidden, pdfView.document != nil,
+              pdfView.bounds.width > 0 else { return }
         let fit = max(pdfView.scaleFactorForSizeToFit, 0.01)
-        let next = max(relative, 0.25) * fit
-        if abs(pdfView.scaleFactor - next) > 0.001 {
+        let next = max(state.relativeScale, 0.1) * fit
+        pdfView.minScaleFactor = min(pdfView.minScaleFactor, next)
+        pdfView.maxScaleFactor = max(pdfView.maxScaleFactor, next)
+        if abs(pdfView.scaleFactor - next) > 0.0005 {
+            pdfView.autoScales = false
             pdfView.scaleFactor = next
+            pdfView.layoutIfNeeded()
+        }
+        guard let scroll = pdfView.eclipse_scrollView else { return }
+        let inset = scroll.adjustedContentInset
+        let minX = -inset.left
+        let minY = -inset.top
+        let maxX = max(minX, scroll.contentSize.width - scroll.bounds.width + inset.right)
+        let maxY = max(minY, scroll.contentSize.height - scroll.bounds.height + inset.bottom)
+        let px = min(max(state.progress.x, 0), 1)
+        let py = min(max(state.progress.y, 0), 1)
+        let offset = CGPoint(
+            x: minX + (maxX - minX) * px,
+            y: minY + (maxY - minY) * py
+        )
+        if abs(scroll.contentOffset.x - offset.x) > 0.5
+            || abs(scroll.contentOffset.y - offset.y) > 0.5 {
+            scroll.contentOffset = offset
         }
     }
 }

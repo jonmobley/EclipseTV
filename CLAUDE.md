@@ -236,6 +236,20 @@
   armed per owner (`armRecordingAudio(owner:)`: "fullscreen", "showHero"), so it stays on while the camera hero is up.
   Hero expand control is a 36pt circle. `CameraMirrorView` flushes its renderer when it re-enters a window or reports
   it needs a flush: a fullscreen presentation stalled it and left the hero black after closing the camera.
+- Interactive PDF in the hero (iPhone/iPad, 2026-11-26, `LiveHeaderView+PDFPreview`, `PDFReaderDriver`): a Show PDF card
+  tap puts the PDF live in the hero as a real `PDFView` (sharp, scrolls and pinches in place); only the hero's expand
+  control (or ⋯ Preview) opens the full-screen reader. Both views share one `PDFReaderDriver` design and show the same
+  icon row top right (`PDFViewOptionsBar`: Fit · Fill · 2 Pages, then Page by Page; same words, defaults and Page by
+  Page icon `book.pages` as the Mac's presets. Fit / Fill icons differ on purpose (owner's call, 2026-11-26): iPhone uses
+  `rectangle.arrowtriangle.2.inward` / `.outward` because the Mac's shrink/expand arrows match the hero's expand control;
+  the Mac keeps the arrows because the triangle pair looked alike at its 12 pt size). Only one driver moves the TV at a
+  time (`PDFReaderDriver.active`): the reader takes over while open and hands back on close (`didResignNotification`).
+  The shared view (`PDFLiveViewState`: page, 0…1 scroll fractions, zoom relative to fit, two-up, preset, snapping) lives on
+  `ExternalDisplayManager.pdfViewState` and the TV applies it whole (`applyPDFViewState`). A reader on a PDF that is not
+  live never moves the TV. Page by Page: on finger lift a pan target picks the next row stop (`PDFViewMath.snapOffset`);
+  a row taller than the screen (zoomed in) scrolls freely and stops at its edge. A pinch clears the lit preset.
+  Default is Fit with natural scrolling. PDF tile pictures are 960 on the long side (`PDFThumbnailStore.renderSize`, `<id>-v2.jpg`).
+  A hero refresh can un-hide the still picture (e.g. `clearWebPreview`), so `showPDFPreview` re-hides it every time.
 - PDF reader zoom snap (2026-11-14): pinching in `PDFRemoteViewController` catches where the current page exactly fills
   the audience frame's width and where it fills its height (`PDFZoomSnap`, ±4% hold band, light haptic on entry). It
   rides the scroll view's own pinch recognizer (added target, never the delegate). Holding sets the zoom, and the scroll
@@ -325,6 +339,13 @@
   strength at the title and unreadable on a white website thumbnail; keep the three-stop shade for any new title over art.
 - Shows list (2026-11-22): presented as a form sheet (compact centred sheet on iPad, like Settings); its filter says
   "Landscape", the same word as Display Mode, never "Horizontal".
+- Card pictures for websites, video links and PDFs (audit 2026-11-26): website cards are captured from the warm web view
+  0.5s after load and again 2.5s later (`WarmWebSession.scheduleThumbnailCapture`; sites that fade in, like github.com, were
+  blank white at 0.5s). Video-link posters (`WebVideoPosterFetcher`) crop from the middle (`saveSnapshot(_:for:centered:)`;
+  YouTube's 4:3 `hqdefault` fallback has bars), ask Vimeo oEmbed for `width=1280` (default is 295×166), and direct
+  `.mp4`/`.mov` links get a still from `VideoPosterFrame` (HLS `.m3u8` can't be sampled and keeps the icon). Posters saved
+  before these rules are fetched once more (`EclipseTV.webVideoPoster.v2Ids`). PDF pictures render into 960×960
+  (`PDFThumbnailStore.renderSize`, files `<id>-v2.jpg`, NSCache-bounded); older 360 px files are rebuilt on first read.
 - Background colors (2026-11-22, `BackgroundColorPreset`): the Background tile's ⋯ menu has a "Color" row with the Mac's
   eight presets (same names, order, stops and `eclipse://builtin/gradient/<name>` URL as eclipsepro's
   `BackgroundGradientPreset`; keep them in step). Picking one draws a 1920×1080 picture and stores it as the Background

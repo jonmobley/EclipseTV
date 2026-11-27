@@ -80,6 +80,7 @@ extension LiveHeaderView {
         let showLiveBadge = LiveOutputRouting.showsHeroLiveBadge()
         applyContent(key: "overlay:prompter") {
             self.clearWebPreview(parking: true)
+            self.clearPDFPreview()
             self.clearScreensaverPreview()
             self.clearCameraPreview()
             self.clearLibraryVideoPreview()

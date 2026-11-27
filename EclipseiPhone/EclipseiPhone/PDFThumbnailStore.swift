@@ -23,7 +23,13 @@ final class PDFThumbnailStore {
         label: "com.eclipseapp.ios.PDFThumbnailStore", qos: .utility
     )
     private let logger = Logger(subsystem: "com.eclipseapp.ios", category: "PDFThumbnail")
-    private var memory: [UUID: UIImage] = [:]
+    /// Bounded like `WebThumbnailStore`: renders are larger now (up to 960 px), and a
+    /// plain dictionary held every one for the life of the app. Reads fall back to disk.
+    private let memory: NSCache<NSUUID, UIImage> = {
+        let cache = NSCache<NSUUID, UIImage>()
+        cache.totalCostLimit = 24 * 1024 * 1024
+        return cache
+    }()
     /// Finds a saved PDF's file, so a purged preview can be rebuilt from it.
     private let pdfURL: (UUID) -> URL?
     /// Ids already sent for a rebuild, so a broken PDF isn't re-rendered on every reload.
@@ -51,13 +57,13 @@ final class PDFThumbnailStore {
     /// for a PDF that is still saved, this starts a rebuild and returns `nil`; the
     /// tile picks the preview up from `didChangeNotification`.
     func image(for id: UUID) -> UIImage? {
-        if let cached = memory[id] { return cached }
+        if let cached = memory.object(forKey: id as NSUUID) { return cached }
         let url = fileURL(for: id)
         guard let image = UIImage(contentsOfFile: url.path) else {
             rebuildIfMissing(id)
             return nil
         }
-        memory[id] = image
+        remember(image, for: id)
         return image
     }
 
@@ -74,8 +80,7 @@ final class PDFThumbnailStore {
                 log.error("Could not open PDF for thumbnail")
                 return
             }
-            let size = CGSize(width: 360, height: 480)
-            let image = page.thumbnail(of: size, for: .mediaBox)
+            let image = page.thumbnail(of: Self.renderSize, for: .mediaBox)
             guard let data = image.jpegData(compressionQuality: 0.85) else { return }
             do {
                 // iOS may have purged the whole folder, not just its files.
@@ -89,7 +94,10 @@ final class PDFThumbnailStore {
             }
             Task { @MainActor in
                 guard let self else { return }
-                self.memory[id] = image
+                self.remember(image, for: id)
+                // The memory cache can evict this later and iOS can purge Caches again;
+                // a later miss must be free to rebuild. Failed builds stay marked.
+                self.rebuildRequested.remove(id)
                 NotificationCenter.default.post(
                     name: Self.didChangeNotification, object: self
                 )
@@ -106,18 +114,35 @@ final class PDFThumbnailStore {
 
     /// Drops the thumbnail for a deleted PDF.
     func remove(id: UUID) {
-        memory[id] = nil
+        memory.removeObject(forKey: id as NSUUID)
         rebuildRequested.remove(id)
-        let url = fileURL(for: id)
+        let urls = [fileURL(for: id), legacyFileURL(for: id)]
         ioQueue.async {
-            try? FileManager.default.removeItem(at: url)
+            for url in urls { try? FileManager.default.removeItem(at: url) }
         }
         NotificationCenter.default.post(name: Self.didChangeNotification, object: self)
     }
 
+    private func remember(_ image: UIImage, for id: UUID) {
+        let pixels = image.size.width * image.scale * image.size.height * image.scale
+        memory.setObject(image, forKey: id as NSUUID, cost: Int(pixels * 4))
+    }
+
     // MARK: - Paths
 
+    /// Box the first page is fitted into. It used to be 360×480, which left a
+    /// landscape page (slides) 360 px wide, soft on a phone tile at 3×. Square so a
+    /// page of either shape gets 960 px on its long side.
+    nonisolated static let renderSize = CGSize(width: 960, height: 960)
+
+    /// `-v2` since the larger render (2026-11-26): older, smaller files are left
+    /// unread and each card rebuilds its picture once (`rebuildIfMissing`).
     private func fileURL(for id: UUID) -> URL {
+        rootDirectory.appendingPathComponent("\(id.uuidString)-v2.jpg")
+    }
+
+    /// The pre-v2 file, deleted with the document.
+    private func legacyFileURL(for id: UUID) -> URL {
         rootDirectory.appendingPathComponent("\(id.uuidString).jpg")
     }
 }

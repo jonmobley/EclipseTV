@@ -31,6 +31,7 @@ extension LiveHeaderView {
             clearScreensaverPreview()
         }
         clearWebPreview(parking: true)
+        clearPDFPreview()
         clearCameraPreview()
 
         let preview = SeamlessLoopPlayerView(
