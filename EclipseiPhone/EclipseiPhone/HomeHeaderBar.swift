@@ -274,7 +274,7 @@ final class HomeHeaderBar: UIView {
         )
         searchButton.translatesAutoresizingMaskIntoConstraints = false
         searchButton.accessibilityLabel = "Search"
-        searchButton.accessibilityHint = "Searches this page by name"
+        searchButton.accessibilityHint = "Searches Shows, Library and Music by name"
         searchButton.accessibilityIdentifier = "home.search.button"
         searchButton.isHidden = true
         // First on the tab row, left of Home (owner's call 2026-11-26).
@@ -605,6 +605,14 @@ final class HomeHeaderBar: UIView {
         onOverlayStateChange?()
     }
 
+    /// The text typed so far.
+    var searchText: String { searchField.text ?? "" }
+
+    /// Puts the keyboard away and keeps the field and its text.
+    func dismissSearchKeyboard() {
+        searchField.resignFirstResponder()
+    }
+
     /// Hides the search field, clears it and brings the tabs back.
     func endSearch() {
         guard isSearching else { return }
@@ -858,20 +866,14 @@ final class HomeHeaderBar: UIView {
         newShowButton.isHidden = showsShowChrome
     }
 
-    /// Whether the page in front has something to search: Library, Music's list
-    /// and an open Show.
+    /// Search covers the whole app, so it works from every page (owner's call
+    /// 2026-11-26); only arranging or selecting cards turns it off.
     var isSearchAvailable: Bool {
-        guard showsTabStrip, !isArranging, !isSelecting else { return false }
-        switch tabPage {
-        case .library: return true
-        case .music: return musicAddAvailable
-        case .show: return showsShowChrome
-        case .home: return false
-        }
+        showsTabStrip && !isArranging && !isSelecting
     }
 
     /// The search icon keeps its place left of Home on every page, so the tabs
-    /// never shift sideways: dimmed and inactive where there is nothing to search,
+    /// never shift sideways: dimmed while cards are being arranged or selected,
     /// and out of the way while its field is up.
     private func applySearchButtonAppearance() {
         searchButton.isHidden = !showsTabStrip

@@ -401,3 +401,9 @@
   ignores unknown fields but drops a whole message whose verb or item kind it cannot decode (which is why PTZ Camera and
   Prompter are still sent as "nothing live"). Not done on the remote: turning PDF pages, scrolling a website, Prompter and
   PTZ go-live, the live camera's frames and capture, pinch-to-crop.
+- Header search is app-wide (iPhone / narrow iPad tab header, owner's call 2026-11-26: "Search should always be for entire
+  app"). The magnifier works on every page, Home included (off only while arranging / selecting). Typing lists Shows, the
+  open Show's cards ("In “<Show>”"), Library (media + PDFs) and Music in `AppSearchResultsView` (rules in `AppSearch`,
+  wiring `iPhoneMainViewController+AppSearch`). Tapping a Show opens it; anything else goes to its page with the typed text
+  applied as that page's own filter (`searchingTab`), and typing again returns to the whole-app list. Known limits: only the
+  open Show's cards are searched (other Shows by name only), and the Library page's type filter still applies.
