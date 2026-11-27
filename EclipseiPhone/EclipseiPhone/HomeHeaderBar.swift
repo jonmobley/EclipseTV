@@ -469,6 +469,10 @@ final class HomeHeaderBar: UIView {
             cancelSearchButton.centerYAnchor.constraint(equalTo: searchRow.centerYAnchor),
             addMusicButton.widthAnchor.constraint(equalToConstant: 36),
             addMusicButton.heightAnchor.constraint(equalToConstant: 36),
+            // Without a set size this menu button grew past its icon and sat the
+            // "+" in from the right edge on the Library page.
+            addLibraryButton.widthAnchor.constraint(equalToConstant: 36),
+            addLibraryButton.heightAnchor.constraint(equalToConstant: 36),
 
             backButton.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
             backButton.centerYAnchor.constraint(equalTo: rowGuide.centerYAnchor),
