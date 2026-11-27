@@ -16,7 +16,8 @@ import UIKit
 
 extension iPhoneMainViewController {
 
-    /// Places the (hidden) results list under the header, above the keyboard.
+    /// Places the (hidden) results list under the header, down to the screen's
+    /// bottom edge so it covers the Music button; its rows stop at the keyboard.
     func setupAppSearchResults() {
         let results = appSearchResultsView
         results.translatesAutoresizingMaskIntoConstraints = false
@@ -29,7 +30,7 @@ extension iPhoneMainViewController {
             results.topAnchor.constraint(equalTo: headerBar.bottomAnchor),
             results.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             results.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            results.bottomAnchor.constraint(equalTo: view.keyboardLayoutGuide.topAnchor),
+            results.bottomAnchor.constraint(equalTo: view.bottomAnchor),
         ])
     }
 
@@ -85,8 +86,10 @@ extension iPhoneMainViewController {
         appSearchResultsView.show(AppSearch.results(for: query, in: catalog.catalog), query: query)
         if appSearchResultsView.isHidden {
             appSearchResultsView.isHidden = false
+            // Above the Music player and camera button too: the list starts under
+            // the header, so nothing of the header is covered, and every row stays
+            // tappable once the keyboard is down.
             view.bringSubviewToFront(appSearchResultsView)
-            raiseHomeOverlayChrome()
         }
     }
 
@@ -98,8 +101,12 @@ extension iPhoneMainViewController {
             setHomeTab(.show, animated: true)
         case .page(let tab):
             let query = headerBar.searchText
-            if tab == .music {
-                audioLibraryNavController?.popToRootViewController(animated: false)
+            // The filtered list is each page's first screen; a playlist, album or
+            // preview left open there would hide the match.
+            switch tab {
+            case .music: audioLibraryNavController?.popToRootViewController(animated: false)
+            case .library: libraryPageNavController?.popToRootViewController(animated: false)
+            case .home, .show: break
             }
             searchingTab = tab
             searchedShowId = libraryViewController.openShowId

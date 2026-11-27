@@ -43,12 +43,15 @@ final class AppSearchResultsView: UIView, UITableViewDataSource, UITableViewDele
         emptyLabel.textAlignment = .center
         emptyLabel.numberOfLines = 0
         addSubview(emptyLabel)
+        keyboardLayoutGuide.usesBottomSafeArea = false
 
         NSLayoutConstraint.activate([
             tableView.topAnchor.constraint(equalTo: topAnchor),
             tableView.leadingAnchor.constraint(equalTo: leadingAnchor),
             tableView.trailingAnchor.constraint(equalTo: trailingAnchor),
-            tableView.bottomAnchor.constraint(equalTo: bottomAnchor),
+            // Rows end above the keyboard; with it down, the list runs to the
+            // bottom edge (the table keeps its own safe-area inset).
+            tableView.bottomAnchor.constraint(equalTo: keyboardLayoutGuide.topAnchor),
             emptyLabel.topAnchor.constraint(equalTo: safeAreaLayoutGuide.topAnchor, constant: 48),
             emptyLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 32),
             emptyLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -32),
