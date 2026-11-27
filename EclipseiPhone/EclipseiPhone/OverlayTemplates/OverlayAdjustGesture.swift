@@ -149,8 +149,12 @@ struct OverlayAdjustSession {
     // MARK: - Private
 
     /// A docked card that was touched but not moved keeps its corner dock.
+    ///
+    /// Reads the fingers (`rawCenter`), not the drawn `center`: an overlay that
+    /// already sits near a centerline would otherwise count as moved by the snap
+    /// alone, and a touch that never moved would save it as a free placement.
     private var hasMovedOrResized: Bool {
-        abs(center.x - startCenter.x) > 0.5 || abs(center.y - startCenter.y) > 0.5
+        abs(rawCenter.x - startCenter.x) > 0.5 || abs(rawCenter.y - startCenter.y) > 0.5
             || abs(factor - startFactor) > 0.001
     }
 
