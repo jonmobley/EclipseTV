@@ -254,7 +254,7 @@
   `ExternalDisplayManager.pdfViewState` and the TV applies it whole (`applyPDFViewState`). A reader on a PDF that is not
   live never moves the TV. Page by Page: on finger lift a pan target picks the next row stop (`PDFViewMath.snapOffset`);
   a row taller than the screen (zoomed in) scrolls freely and stops at its edge. A pinch clears the lit preset.
-  Default is Fit with natural scrolling. PDF tile pictures are 720×960 (`<id>-v2.jpg`); old 360×480 ones stay unused in Caches.
+  Default is Fit with natural scrolling. PDF tile pictures are 960 on the long side (`PDFThumbnailStore.renderSize`, `<id>-v2.jpg`).
   A hero refresh can un-hide the still picture (e.g. `clearWebPreview`), so `showPDFPreview` re-hides it every time.
 - Interactive website in the hero (iPhone/iPad, 2026-11-26, `HeroWebViewportSync`, `LibraryGridViewController+HeroWebInteraction`):
   the live website scrolls and pinches in place in the hero and the TV follows (same `WebViewportMirror` as the full browser,

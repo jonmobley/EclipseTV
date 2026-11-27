@@ -126,18 +126,59 @@ final class WebVideoPosterFetcher {
         (url.path as NSString).pathExtension.lowercased() != "m3u8"
     }
 
-    /// `VideoPosterFrame.poster`, or nil once `timeout` seconds pass. The poster task
-    /// stops on cancel, so the group (and the limiter slot) is free right after.
+    /// `VideoPosterFrame.poster`, or nil once `timeout` seconds pass.
+    ///
+    /// Returns at the deadline whatever the loader does. A task group waits for every
+    /// child, and on CI a cancelled remote asset load did not return, so the old
+    /// group never finished (the iPhone job hung for hours). The poster runs as its
+    /// own task: on timeout it is cancelled (which stops `VideoPosterFrame`'s work as
+    /// soon as AVFoundation allows) and left behind, and the limiter slot is freed.
     nonisolated static func poster(at url: URL, timeout: TimeInterval) async -> UIImage? {
-        await withTaskGroup(of: UIImage?.self) { group in
-            group.addTask { await VideoPosterFrame.poster(at: url) }
-            group.addTask {
-                try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
-                return nil
+        let race = FirstResult()
+        let work = Task { await VideoPosterFrame.poster(at: url) }
+        return await withCheckedContinuation { continuation in
+            race.set(continuation)
+            Task {
+                race.finish(await work.value)
             }
-            let first = await group.next() ?? nil
-            group.cancelAll()
-            return first
+            Task {
+                try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+                if race.finish(nil) { work.cancel() }
+            }
+        }
+    }
+
+    /// Resumes a continuation once, with whichever result arrives first.
+    private final class FirstResult: @unchecked Sendable {
+        private let lock = NSLock()
+        private var continuation: CheckedContinuation<UIImage?, Never>?
+        private var pending: UIImage??
+
+        func set(_ continuation: CheckedContinuation<UIImage?, Never>) {
+            lock.lock()
+            if let pending {
+                lock.unlock()
+                continuation.resume(returning: pending)
+                return
+            }
+            self.continuation = continuation
+            lock.unlock()
+        }
+
+        /// True when this call delivered the result (it came first).
+        @discardableResult
+        func finish(_ value: UIImage?) -> Bool {
+            lock.lock()
+            if pending != nil {
+                lock.unlock()
+                return false
+            }
+            pending = .some(value)
+            let waiting = continuation
+            continuation = nil
+            lock.unlock()
+            waiting?.resume(returning: value)
+            return true
         }
     }
 
