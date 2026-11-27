@@ -58,15 +58,14 @@ extension LibraryGridViewController {
     ///
     /// The tile is hidden at once; the real delete (`performDelete`: Apple TV
     /// request, Show memberships, local file) runs once the toast's time is up.
-    /// A TV-backed item still needs the EclipseTV link, checked up front.
+    /// With no EclipseTV linked, the Apple TV's copy goes the next time it links.
     /// - Parameter id: Library item id.
     func deleteLibraryItemWithUndo(id: String) {
         let isPending = PendingUploadStore.shared.contains(id: id)
-        guard isPending || connectionManager.canSendLibraryCommands else {
-            presentNotConnectedAlert()
-            return
-        }
-        askToDelete(title: "Delete?", message: Self.libraryDeleteMessage(isPending: isPending)) {
+        let message = Self.libraryDeleteMessage(
+            isPending: isPending, isLinked: connectionManager.canSendLibraryCommands
+        )
+        askToDelete(title: "Delete?", message: message) {
             [weak self] in
             self?.offerLibraryDeleteUndo(id: id) { [weak self] in
                 self?.performDelete(id: id)
@@ -80,11 +79,14 @@ extension LibraryGridViewController {
 extension UIViewController {
 
     /// The "Delete?" message for a Library item.
-    /// - Parameter isPending: Whether the item was added here and not yet synced.
-    static func libraryDeleteMessage(isPending: Bool) -> String {
-        isPending
-            ? "This removes the item you added."
-            : "This removes the item from your Apple TV library."
+    /// - Parameters:
+    ///   - isPending: Whether the item was added here and not yet synced.
+    ///   - isLinked: Whether an EclipseTV is linked right now.
+    static func libraryDeleteMessage(isPending: Bool, isLinked: Bool) -> String {
+        if isPending { return "This removes the item you added." }
+        return isLinked
+            ? "This removes the item from your Apple TV library."
+            : "This removes the item from Library. Your Apple TV deletes its copy the next time it's linked."
     }
 
     /// Shows an "Are you sure?" alert with Cancel and a red action button.

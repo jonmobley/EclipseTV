@@ -281,14 +281,13 @@ extension MediaLibraryPickerViewController {
     func confirmDeleteMedia(_ item: LibraryItemDTO) {
         let isPending = PendingUploadStore.shared.contains(id: item.id)
         let linked = onIsEclipseTVLinked?() ?? false
-        if !isPending && !linked {
-            presentNotConnectedAlert()
-            return
-        }
         // Asks first, then Undo; the delete runs once the toast is gone, even if
         // this picker has closed by then (so `perform` is held strongly).
         let perform = onPerformDelete
-        askToDelete(title: "Delete?", message: Self.libraryDeleteMessage(isPending: isPending)) {
+        askToDelete(
+            title: "Delete?",
+            message: Self.libraryDeleteMessage(isPending: isPending, isLinked: linked)
+        ) {
             [weak self] in
             self?.offerLibraryDeleteUndo(id: item.id) { [weak self] in
                 perform?(item.id)
@@ -299,19 +298,5 @@ extension MediaLibraryPickerViewController {
 
     private func confirmDeletePDF(_ doc: SavedPDF) {
         deletePDFWithUndo(doc)
-    }
-
-    private func presentNotConnectedAlert() {
-        let alert = UIAlertController(
-            title: "EclipseTV Not Linked",
-            message: "This action needs a link to the EclipseTV app (Pairing Code). "
-                + "AirPlay alone is enough to present, but not for this.",
-            preferredStyle: .alert
-        )
-        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        alert.addAction(UIAlertAction(title: "Connect…", style: .default) { [weak self] _ in
-            self?.onRequestEclipseTVConnect?()
-        })
-        present(alert, animated: true)
     }
 }

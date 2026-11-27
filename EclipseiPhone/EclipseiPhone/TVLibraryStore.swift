@@ -417,6 +417,7 @@ final class TVLibraryStore {
             }
         }
 
+        PendingTVDeleteStore.shared.reconcile(manifestIds: manifestIds, mode: mode)
         persistTVManifestIds(manifestIds, mode: mode)
         if mode != activeLibraryMode {
             persistBucket(items: items, currentId: currentId, mode: mode)
@@ -431,6 +432,7 @@ final class TVLibraryStore {
         mergeCaptures()
         mergeImportedMedia()
         recoverOrphanedLocalMedia()
+        dropItemsWaitingForTVDelete()
 
         let keepIds = Set(self.items.map { $0.id })
             .union(PendingUploadStore.shared.pendingIds(for: mode))
@@ -507,6 +509,19 @@ final class TVLibraryStore {
             ImportedMediaStore.shared.markDeleted(cloudId: imported.cloudId)
         }
         delegate?.libraryStoreDidUpdateItems(self)
+    }
+
+    /// Deletes an Apple TV item from this phone while no EclipseTV is linked, and
+    /// remembers to delete the TV's copy once it is (`PendingTVDeleteStore`).
+    func removeItemUntilTVLinks(id: String) {
+        PendingTVDeleteStore.shared.add(id, mode: activeLibraryMode)
+        removeLocalItem(id: id)
+    }
+
+    /// Keeps items deleted while unlinked out of the list until the TV drops them.
+    private func dropItemsWaitingForTVDelete() {
+        let waiting = PendingTVDeleteStore.shared
+        items.removeAll { waiting.contains($0.id) }
     }
 
     /// Appends queued uploads for the active mode that aren't already present.
@@ -601,6 +616,7 @@ final class TVLibraryStore {
         mergeImportedMedia()
         recoverOrphanedLocalMedia()
         recoverFromCachedManifests()
+        dropItemsWaitingForTVDelete()
         warmMissingThumbnails()
         fillMissingVideoDurations()
     }

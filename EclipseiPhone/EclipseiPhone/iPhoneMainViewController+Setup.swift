@@ -483,9 +483,6 @@ extension iPhoneMainViewController {
         picker.onIsEclipseTVLinked = { [weak self] in
             self?.isConnected() ?? false
         }
-        picker.onRequestEclipseTVConnect = { [weak self] in
-            self?.resumeConnection()
-        }
         return picker
     }
 

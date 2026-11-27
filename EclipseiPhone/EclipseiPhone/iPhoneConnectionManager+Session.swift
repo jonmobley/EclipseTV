@@ -188,6 +188,7 @@ extension iPhoneConnectionManager: MCSessionDelegate {
             Task { @MainActor in
                 AppleTVCapabilities.shared.record(capabilities, for: peerID)
                 TVLibraryStore.shared.updateManifest(items: items, currentId: currentId, mode: mode)
+                self.sendWaitingTVDeletes(manifestIds: Set(items.map(\.id)), mode: mode)
                 self.reconcileJoinedAccount(reportedByTV: accountCode)
             }
         case .currentChanged:
@@ -237,6 +238,24 @@ extension iPhoneConnectionManager {
                 name: JoinedAccountReconcile.conflictNotification,
                 object: nil
             )
+        }
+    }
+}
+
+// MARK: - Deletes made while unlinked
+
+extension iPhoneConnectionManager {
+    /// Asks the Apple TV to delete items the phone deleted while no EclipseTV was
+    /// linked (`PendingTVDeleteStore`). Runs after each library manifest, so the
+    /// ids are only forgotten once the TV stops listing them.
+    /// - Parameters:
+    ///   - manifestIds: Every id in the manifest just received.
+    ///   - mode: The library the manifest describes.
+    @MainActor
+    func sendWaitingTVDeletes(manifestIds: Set<String>, mode: EclipseShareProtocol.LibraryMode) {
+        let stillOnTV = PendingTVDeleteStore.shared.ids(for: mode).intersection(manifestIds)
+        for id in stillOnTV {
+            sendDeleteRequest(id: id)
         }
     }
 }

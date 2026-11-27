@@ -11,13 +11,13 @@ import UIKit
 
 extension LibraryGridViewController {
 
-    /// Confirms deletion. Pending (not-yet-synced) items can be removed locally even
-    /// while offline; TV-backed items still require a live connection to delete.
+    /// Confirms deletion. Works linked or not: unlinked, the Apple TV's copy is
+    /// deleted the next time an EclipseTV links.
     func confirmDelete(id: String, name: String) {
         let isPending = PendingUploadStore.shared.contains(id: id)
-        let message = isPending
-            ? "This removes the item you added."
-            : "This removes the item from your Apple TV library."
+        let message = Self.libraryDeleteMessage(
+            isPending: isPending, isLinked: connectionManager.canSendLibraryCommands
+        )
         let alert = UIAlertController(title: "Delete?", message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         alert.addAction(UIAlertAction(title: "Delete", style: .destructive) { [weak self] _ in
@@ -28,6 +28,7 @@ extension LibraryGridViewController {
 
     /// Deletes an item. Queued items are removed locally and dropped from the upload
     /// queue; a delete is still sent to the TV in case it already has the item.
+    /// With no EclipseTV linked, the item is deleted here and from the TV later.
     func performDelete(id: String) {
         let wasPending = PendingUploadStore.shared.contains(id: id)
         let sent = connectionManager.sendDeleteRequest(id: id)
@@ -42,14 +43,23 @@ extension LibraryGridViewController {
             SlideshowStore.shared.removeItemFromAllSlideshows(itemId: id)
         }
         if sent || wasPending {
-            MediaFitSettings.clear(forId: id)
-            MediaFramingStore.clear(forId: id)
-            MediaNoteStore.clear(forId: id)
-            MediaTitleStore.clear(forId: id)
+            clearPerItemSettings(id: id)
             Haptics.impactLight()
         } else {
-            presentNotConnectedAlert()
+            // No EclipseTV linked: delete it here now; the TV's copy goes the
+            // next time it links (`PendingTVDeleteStore`).
+            endLiveIfDeleting(mediaId: id)
+            store.removeItemUntilTVLinks(id: id)
+            clearPerItemSettings(id: id)
+            Haptics.impactLight()
         }
+    }
+
+    private func clearPerItemSettings(id: String) {
+        MediaFitSettings.clear(forId: id)
+        MediaFramingStore.clear(forId: id)
+        MediaNoteStore.clear(forId: id)
+        MediaTitleStore.clear(forId: id)
     }
 
     /// Ends program output for a library item that is about to be deleted.

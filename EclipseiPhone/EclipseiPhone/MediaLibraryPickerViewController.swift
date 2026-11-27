@@ -92,10 +92,9 @@ final class MediaLibraryPickerViewController: UIViewController {
     var onPerformDelete: ((String) -> Void)?
     /// Re-send a purged Apple TV item from Photos.
     var onRequestResend: ((String) -> Void)?
-    /// True when EclipseTV is linked (TV-backed deletes need a live link).
+    /// True when EclipseTV is linked; picks the delete message (unlinked, the
+    /// Apple TV's copy is deleted the next time it links).
     var onIsEclipseTVLinked: (() -> Bool)?
-    /// Invoked when a TV-backed delete is blocked because EclipseTV is unlinked.
-    var onRequestEclipseTVConnect: (() -> Void)?
 
     var filter: Filter = .all
     var items: [Item] = []
