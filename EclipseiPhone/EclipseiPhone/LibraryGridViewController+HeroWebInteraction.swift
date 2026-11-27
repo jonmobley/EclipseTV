@@ -32,8 +32,24 @@ extension LibraryGridViewController {
             && !ShowLiveSession.shared.isRemoteOperator
     }
 
-    /// Re-reads `allowsHeroWebInteraction` onto the hero.
+    /// Whether scrolling or pinching the hero's live PDF may move the TV: the same
+    /// rules as the website. Otherwise the PDF still moves on the phone only.
+    var allowsHeroPDFOutput: Bool {
+        let mgr = ExternalDisplayManager.shared
+        return showsLiveHero
+            && mgr.isPDFLive
+            && heroPhonePreview == nil
+            && !isBlackoutHolding
+            && !isLiveFromOtherShow
+            && !isLiveOutputLocked
+            && !ShowLiveSession.shared.isRemoteOperator
+    }
+
+    /// Re-reads `allowsHeroWebInteraction` (and the PDF's output rule) onto the hero.
     func syncHeroWebInteraction() {
+        liveHeader.pdfPreviewDriver?.allowsOutput = { [weak self] in
+            self?.allowsHeroPDFOutput ?? false
+        }
         liveHeader.webPreviewSync.drivesOutput = { [weak self] in
             self?.allowsHeroWebInteraction ?? false
         }
