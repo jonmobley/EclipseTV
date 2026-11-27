@@ -79,7 +79,8 @@ struct WebThumbnailAspectTests {
 
     /// A server that never answers must give up at the deadline and free the slot,
     /// not wait for the network timeout (about a minute) behind the cancel.
-    @Test func stalledFilePosterGivesUpAtTheDeadline() async throws {
+    @Test(.timeLimit(.minutes(1)))
+    func stalledFilePosterGivesUpAtTheDeadline() async throws {
         // Non-routable address: the connection neither succeeds nor fails quickly.
         let url = try #require(URL(string: "http://10.255.255.1/clip.mp4"))
         let start = Date()
