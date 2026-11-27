@@ -65,8 +65,11 @@ class iPhoneMainViewController: UIViewController {
     var isMovingGridForPaging = false
     /// Grid mode as of the last change, to tell opening a Show from closing one.
     var wasGridInShowMode = false
-    /// Page whose content the header's search field is filtering, if any.
+    /// Page the header's search is filtering after a result was tapped; `nil`
+    /// while the whole-app results list shows (or no search is open).
     var searchingTab: HomeTab?
+    /// Whole-app search results, under the header while the search field is up.
+    let appSearchResultsView = AppSearchResultsView()
     /// Show that was open when the grid last changed (a search belongs to it).
     var searchedShowId: UUID?
     /// The Show the Show tab returns to after a visit to Home.

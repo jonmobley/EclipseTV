@@ -103,6 +103,7 @@ extension iPhoneMainViewController {
 
         setupHeaderBar()
         embedHomePager()
+        setupAppSearchResults()
         setupAudioMiniPlayer()
         setupMusicDrawer()
         raiseAudioMiniChrome()

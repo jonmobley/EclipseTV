@@ -152,9 +152,9 @@ struct HomeHeaderBarTabStripTests {
         let newShow = bar.firstDescendant(label: "New Show")
         let addLibrary = bar.firstDescendant(label: "Add to Library")
         let searchOn = { (search as? UIControl)?.isEnabled == true && search?.isHidden == false }
-        // Home has nothing to search: the icon keeps its place, dimmed.
+        // Search covers the whole app, so it works from Home too.
         #expect(search?.isHidden == false)
-        #expect(!searchOn())
+        #expect(searchOn())
         #expect(newShow?.isHidden == false)
 
         bar.setTabPage(.library)
@@ -171,11 +171,11 @@ struct HomeHeaderBarTabStripTests {
         // Inside a playlist the playlist's own bar takes over.
         bar.setMusicAddAvailable(false)
         #expect(addMusic?.isHidden == true)
-        #expect(!searchOn())
+        #expect(searchOn())
 
-        // The Show page: only once a Show is open.
+        // The Show page, with or without a Show open; never while arranging.
         bar.setTabPage(.show)
-        #expect(!searchOn())
+        #expect(searchOn())
         bar.setShowModeChrome(true)
         #expect(searchOn())
         bar.setArranging(true)
