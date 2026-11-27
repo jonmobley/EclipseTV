@@ -92,7 +92,9 @@ struct WebVideoPosterDeadlineTests {
             await stalled.run()
         }
         #expect(image == nil)
-        #expect(stalled.wasCancelled)
+        // The work task may not have started when the deadline cancelled it (CI's
+        // pool can be busy), so wait for its cancel handler rather than read a flag.
+        await stalled.waitUntilCancelled()
     }
 
     /// A loader that answers before the deadline wins.
@@ -109,10 +111,20 @@ private final class StalledWork: @unchecked Sendable {
     private let lock = NSLock()
     private var cancelled = false
     private var waiter: CheckedContinuation<Void, Never>?
+    private var cancelWatchers: [CheckedContinuation<Void, Never>] = []
 
-    var wasCancelled: Bool {
-        lock.lock(); defer { lock.unlock() }
-        return cancelled
+    /// Returns once `run()` has seen its cancellation (the time limit catches a miss).
+    func waitUntilCancelled() async {
+        await withCheckedContinuation { continuation in
+            lock.lock()
+            if cancelled {
+                lock.unlock()
+                continuation.resume()
+            } else {
+                cancelWatchers.append(continuation)
+                lock.unlock()
+            }
+        }
     }
 
     func run() async -> UIImage? {
@@ -131,9 +143,12 @@ private final class StalledWork: @unchecked Sendable {
             lock.lock()
             cancelled = true
             let waiting = waiter
+            let watchers = cancelWatchers
             waiter = nil
+            cancelWatchers = []
             lock.unlock()
             waiting?.resume()
+            watchers.forEach { $0.resume() }
         }
         return nil
     }

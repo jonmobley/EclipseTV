@@ -149,7 +149,8 @@ final class WebVideoPosterFetcher {
         let race = FirstResult()
         let task = Task { await work() }
         DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + max(timeout, 0)) {
-            if race.finish(nil) { task.cancel() }
+            // Cancel before the caller resumes, so the work is already told to stop.
+            race.finish(nil, beforeResuming: { task.cancel() })
         }
         return await withCheckedContinuation { continuation in
             race.set(continuation)
@@ -176,9 +177,10 @@ final class WebVideoPosterFetcher {
             lock.unlock()
         }
 
-        /// True when this call delivered the result (it came first).
+        /// True when this call delivered the result (it came first). `beforeResuming`
+        /// runs only for the winner, before the waiting caller is resumed.
         @discardableResult
-        func finish(_ value: UIImage?) -> Bool {
+        func finish(_ value: UIImage?, beforeResuming: () -> Void = {}) -> Bool {
             lock.lock()
             if pending != nil {
                 lock.unlock()
@@ -188,6 +190,7 @@ final class WebVideoPosterFetcher {
             let waiting = continuation
             continuation = nil
             lock.unlock()
+            beforeResuming()
             waiting?.resume(returning: value)
             return true
         }
