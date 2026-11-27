@@ -65,13 +65,37 @@ enum VideoPosterFrame {
         generator.requestedTimeToleranceBefore = CMTime(seconds: 0.05, preferredTimescale: 600)
         generator.requestedTimeToleranceAfter = CMTime(seconds: 0.3, preferredTimescale: 600)
 
-        let duration = await assetDurationSeconds(asset)
-        for seconds in candidateSeconds(duration: duration) {
-            let time = CMTime(seconds: seconds, preferredTimescale: 600)
-            guard let still = await copyStill(generator, at: time) else { continue }
-            if isUsable(still) { return still }
+        // Cancelling the calling task stops the work, not just the wait: a remote file
+        // that stalls (website video links) must free its `AsyncLimiter` slot.
+        let work = CancellableWork(asset: asset, generator: generator)
+        return await withTaskCancellationHandler {
+            let duration = await assetDurationSeconds(asset)
+            for seconds in candidateSeconds(duration: duration) {
+                if Task.isCancelled { return nil }
+                let time = CMTime(seconds: seconds, preferredTimescale: 600)
+                guard let still = await copyStill(generator, at: time) else { continue }
+                if isUsable(still) { return still }
+            }
+            return nil
+        } onCancel: {
+            work.cancel()
         }
-        return nil
+    }
+
+    /// Lets the cancellation handler (which may run on any thread) stop loading.
+    private final class CancellableWork: @unchecked Sendable {
+        private let asset: AVURLAsset
+        private let generator: AVAssetImageGenerator
+
+        init(asset: AVURLAsset, generator: AVAssetImageGenerator) {
+            self.asset = asset
+            self.generator = generator
+        }
+
+        func cancel() {
+            generator.cancelAllCGImageGeneration()
+            asset.cancelLoading()
+        }
     }
 
     private static func copyStill(
