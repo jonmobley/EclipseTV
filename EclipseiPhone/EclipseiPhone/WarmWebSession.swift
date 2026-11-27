@@ -24,6 +24,10 @@ final class WarmWebSession: NSObject {
     /// Page views switched off while the hero preview takes pinch and scroll, so
     /// a tap there can't follow a link (see `setPreviewInteraction`).
     private var tapBlockedContentViews: [UIView] = []
+    /// True while the hero lets the page scroll and pinch: the page's own touches
+    /// stay blocked (re-applied after each load) and link / form navigations are
+    /// cancelled, so the hero never shows a different page from the TV.
+    private var blocksPageNavigation = false
 
     /// One-shot callback fired once a warm load settles (loaded, failed, or already
     /// current). Lets the pool warm pages one at a time instead of all at once.
@@ -149,13 +153,22 @@ final class WarmWebSession: NSObject {
     func setPreviewInteraction(_ delegate: UIScrollViewDelegate?) {
         guard !isAdopted, let web = webView else { return }
         guard let delegate else {
+            blocksPageNavigation = false
             restorePageTouches()
             web.scrollView.delegate = nil
             web.isUserInteractionEnabled = false
             return
         }
+        blocksPageNavigation = true
         web.scrollView.delegate = delegate
         web.isUserInteractionEnabled = true
+        blockPageTouches()
+    }
+
+    /// Stops the page's content views taking touches; WebKit may swap or re-enable
+    /// them on a load, so this runs again after each one.
+    private func blockPageTouches() {
+        guard blocksPageNavigation, !isAdopted, let web = webView else { return }
         for view in web.scrollView.subviews where view.isUserInteractionEnabled
             && !tapBlockedContentViews.contains(where: { $0 === view }) {
             view.isUserInteractionEnabled = false
@@ -332,9 +345,23 @@ final class WarmWebSession: NSObject {
 
 extension WarmWebSession: WKNavigationDelegate {
 
+    func webView(
+        _ webView: WKWebView,
+        decidePolicyFor navigationAction: WKNavigationAction,
+        decisionHandler: @escaping @MainActor (WKNavigationActionPolicy) -> Void
+    ) {
+        // The interactive hero follows the TV's page: a tap or form that slipped
+        // past the blocked touches must not take it somewhere else.
+        let userNavigation = navigationAction.navigationType == .linkActivated
+            || navigationAction.navigationType == .formSubmitted
+        let blocked = blocksPageNavigation && !isAdopted && userNavigation
+        decisionHandler(blocked ? .cancel : .allow)
+    }
+
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         backgroundTint?.refresh()
         settleWarm()
+        blockPageTouches()
         guard !isAdopted else { return }
         captureThumbnailIfPossible()
     }
