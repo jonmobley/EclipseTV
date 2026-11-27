@@ -76,16 +76,65 @@ struct WebThumbnailAspectTests {
         #expect(WebVideoPosterFetcher.canSampleFile(mp4))
         #expect(!WebVideoPosterFetcher.canSampleFile(hls))
     }
+}
 
-    /// A server that never answers must give up at the deadline and free the slot,
-    /// not wait for the network timeout (about a minute) behind the cancel.
-    @Test(.timeLimit(.minutes(1)))
-    func stalledFilePosterGivesUpAtTheDeadline() async throws {
-        // Non-routable address: the connection neither succeeds nor fails quickly.
-        let url = try #require(URL(string: "http://10.255.255.1/clip.mp4"))
-        let start = Date()
-        let image = await WebVideoPosterFetcher.poster(at: url, timeout: 0.5)
+/// Not on the main actor: under CI's parallel run the main thread can be busy with other
+/// suites for minutes, and a main-actor test could not resume after the deadline fired.
+struct WebVideoPosterDeadlineTests {
+
+    /// A loader that never answers must give up at the deadline and cancel the work (which
+    /// frees the `AsyncLimiter` slot), not wait for the network timeout behind it. The work
+    /// never finishes on its own, so returning at all proves the deadline won the race.
+    @Test(.timeLimit(.minutes(10)))
+    func stalledPosterGivesUpAtTheDeadlineAndCancelsTheWork() async {
+        let stalled = StalledWork()
+        let image = await WebVideoPosterFetcher.firstResult(timeout: 0.2) {
+            await stalled.run()
+        }
         #expect(image == nil)
-        #expect(Date().timeIntervalSince(start) < 5)
+        #expect(stalled.wasCancelled)
+    }
+
+    /// A loader that answers before the deadline wins.
+    @Test(.timeLimit(.minutes(10)))
+    func quickPosterBeatsTheDeadline() async {
+        let still = UIGraphicsImageRenderer(size: CGSize(width: 2, height: 2)).image { _ in }
+        let image = await WebVideoPosterFetcher.firstResult(timeout: 600) { still }
+        #expect(image === still)
+    }
+}
+
+/// Waits until cancelled, like a remote asset load against a server that never answers.
+private final class StalledWork: @unchecked Sendable {
+    private let lock = NSLock()
+    private var cancelled = false
+    private var waiter: CheckedContinuation<Void, Never>?
+
+    var wasCancelled: Bool {
+        lock.lock(); defer { lock.unlock() }
+        return cancelled
+    }
+
+    func run() async -> UIImage? {
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                lock.lock()
+                if cancelled {
+                    lock.unlock()
+                    continuation.resume()
+                } else {
+                    waiter = continuation
+                    lock.unlock()
+                }
+            }
+        } onCancel: {
+            lock.lock()
+            cancelled = true
+            let waiting = waiter
+            waiter = nil
+            lock.unlock()
+            waiting?.resume()
+        }
+        return nil
     }
 }
