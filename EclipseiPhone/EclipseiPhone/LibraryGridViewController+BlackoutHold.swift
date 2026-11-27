@@ -138,16 +138,17 @@ extension LibraryGridViewController {
         return store.playback.currentTime > 0 ? store.playback.currentTime : nil
     }
 
-    /// Hero while Blackout holds: the held picture, dimmed, with BLACKOUT and Up Next.
+    /// Hero while Blackout holds: the held picture, dimmed, with BLACK SCREEN and Up Next.
     ///
     /// A held video gets a silent phone-only player, paused, so the operator can
     /// line it up. Its transport never reaches the TV while Blackout is on.
     func applyBlackoutHoldHeader() {
         guard let item = blackoutHeldLibraryItem else {
+            let kind = OutputBlankKind.current
             liveHeader.configureOverlay(
-                title: "Blackout",
+                title: kind.screenName,
                 systemImage: "moon.fill",
-                fillColor: .black
+                fillColor: kind.fillColor
             )
             liveHeader.updatePlayback(PlaybackState())
             return
@@ -278,7 +279,8 @@ extension LibraryGridViewController {
         case .camera, .cameraPreset, .livePoll, .countdown, .prompter:
             explainBlackoutHold(cueable: false)
             return true
-        case .ptzCamera, .screensaver, .logo, .media, .website, .pdf, .unresolved, .add:
+        case .ptzCamera, .screensaver, .logo, .media, .website, .pdf, .template, .unresolved,
+             .add:
             // PTZ opens its controls without taking program while previewing.
             return false
         }

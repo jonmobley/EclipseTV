@@ -23,6 +23,9 @@ final class LibraryThumbnailCell: UICollectionViewCell {
     let imageView = UIImageView()
     let placeholderIcon = UIImageView()
     let captionLabel = UILabel()
+    /// Set by the Show grid when the Show's Card Titles setting is off: every
+    /// caption path keeps the title hidden (VoiceOver still reads it).
+    var hidesCaptions = false
     /// Bottom fade under on-card titles (tools, Shows, websites).
     let captionScrimView = GradientView()
     /// Top-leading photo / video / slideshow / website / PDF glyph.
@@ -125,7 +128,7 @@ final class LibraryThumbnailCell: UICollectionViewCell {
         countdownTimeLabel.textColor = .white
         countdownTimeLabel.textAlignment = .center
         countdownTimeLabel.adjustsFontSizeToFitWidth = true
-        countdownTimeLabel.minimumScaleFactor = 0.6
+        countdownTimeLabel.minimumScaleFactor = 0.45  // "to 11:00 PM EST" (To Time) fits a tile
         countdownTimeLabel.numberOfLines = 1
         countdownTimeLabel.isHidden = true
         countdownTimeLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -549,6 +552,7 @@ final class LibraryThumbnailCell: UICollectionViewCell {
 
     override func prepareForReuse() {
         super.prepareForReuse()
+        hidesCaptions = false
         resetChrome()
         setUpNext(false)
         setFrameOn(false)

@@ -36,13 +36,13 @@ extension MediaLibraryPickerViewController {
             previewAction { [weak self] in self?.previewMedia(item) },
             titleAction(forId: item.id)
         ]
+        children.append(noteAction(forId: item.id))
         if item.isVideo {
             children.append(contentsOf: videoLibraryActions(for: item))
             children.append(screenFitMenu(for: item))
             children.append(trimAction(forId: item.id))
             children.append(cropAction(forId: item.id))
         } else {
-            children.append(noteAction(forId: item.id))
             children.append(screenFitMenu(for: item))
         }
         children.append(addToShowMenu(membershipId: item.id))
@@ -55,6 +55,7 @@ extension MediaLibraryPickerViewController {
         UIMenu(children: [
             previewAction { [weak self] in self?.previewPDF(doc) },
             renamePDFAction(doc),
+            noteAction(forId: doc.id.uuidString),
             addToShowMenu(membershipId: doc.id.uuidString),
             deletePDFAction(doc)
         ])
@@ -160,14 +161,10 @@ extension MediaLibraryPickerViewController {
 
     func videoLibraryActions(for item: LibraryItemDTO) -> [UIMenuElement] {
         guard item.isVideo, item.isAvailable != false else { return [] }
-        let loopOn = item.isLooping ?? false
         let muted = item.isMuted ?? false
         var actions: [UIMenuElement] = [
-            UIAction(
-                title: "Loop",
-                image: UIImage(systemName: loopOn ? "checkmark" : "repeat")
-            ) { [weak self] _ in
-                self?.onApplyVideoSetting?(item.id, !loopOn, nil)
+            VideoEndAction.menu(current: item.videoEndAction) { [weak self] choice in
+                self?.onApplyVideoEndAction?(item.id, choice)
                 self?.reload()
             },
             UIAction(
@@ -288,37 +285,20 @@ extension MediaLibraryPickerViewController {
             presentNotConnectedAlert()
             return
         }
-        let message = isPending
-            ? "This removes the item you added."
-            : "This removes the item from your Apple TV library."
-        let alert = UIAlertController(
-            title: "Delete?",
-            message: message,
-            preferredStyle: .alert
-        )
-        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        alert.addAction(UIAlertAction(title: "Delete", style: .destructive) { [weak self] _ in
-            self?.onPerformDelete?(item.id)
-            self?.reload()
-        })
-        present(alert, animated: true)
+        // Asks first, then Undo; the delete runs once the toast is gone, even if
+        // this picker has closed by then (so `perform` is held strongly).
+        let perform = onPerformDelete
+        askToDelete(title: "Delete?", message: Self.libraryDeleteMessage(isPending: isPending)) {
+            [weak self] in
+            self?.offerLibraryDeleteUndo(id: item.id) { [weak self] in
+                perform?(item.id)
+                self?.reload()
+            }
+        }
     }
 
     private func confirmDeletePDF(_ doc: SavedPDF) {
-        let alert = UIAlertController(
-            title: "Delete PDF?",
-            message: "“\(doc.title)” is removed from every Show and from Library.",
-            preferredStyle: .alert
-        )
-        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        alert.addAction(UIAlertAction(title: "Delete", style: .destructive) { _ in
-            let manager = ExternalDisplayManager.shared
-            if manager.isPDFLive, manager.livePDFDocumentId == doc.id {
-                manager.stopPDFAndRestoreLibrary()
-            }
-            PDFStore.shared.remove(id: doc.id)
-        })
-        present(alert, animated: true)
+        deletePDFWithUndo(doc)
     }
 
     private func presentNotConnectedAlert() {

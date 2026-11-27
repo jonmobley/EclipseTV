@@ -44,6 +44,7 @@ extension ImageViewController {
         } else {
             // PIN rotates on connect; refresh empty-state display when advertising again.
             emptyStateView.setPairingCode(manager.currentPairingPIN)
+            idleScreenPhoneDidDisconnect()
         }
     }
 
@@ -52,6 +53,12 @@ extension ImageViewController {
     /// apply-and-sync flow so an invalid/unknown code is reported (and rolled back) here
     /// too, rather than failing silently.
     func connectionManager(_ manager: ConnectionManager, didReceiveSetAccountCode code: String) {
+        // Same rule as the TV's own menu: while code entry is off (1.0 review), a
+        // phone may only change a code this TV already has, never add the first one.
+        guard AlbumConfig.offersAccountCodeEntry || albumStore.hasAlbumConfigured else {
+            logger.info("Ignored a pushed album code: code entry is switched off")
+            return
+        }
         applyAccountCodeAndSync(code)
     }
 
@@ -69,6 +76,7 @@ extension ImageViewController {
     ) {
         // Library play always unparks so AirPlay overlays cannot leave a black cover.
         clearIdleParkForPlayRequest()
+        hideIdleScreen()
 
         // A file may have been purged by tvOS since the last sync; catch it now (this
         // moves any missing file into the ledger and rebroadcasts an updated manifest)

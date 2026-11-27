@@ -80,7 +80,7 @@ struct LiveHeaderViewLiveBadgeTests {
         #expect(header.accessibilityLabel == "Live, Photo")
     }
 
-    @Test func lockModeChangesLiveBadgeTextToLiveLocked() {
+    @Test func lockModeChangesLiveBadgeTextToLockedScreen() {
         let header = makeHeader()
         header.configure(
             with: makeStillItem(),
@@ -91,12 +91,61 @@ struct LiveHeaderViewLiveBadgeTests {
         #expect(header.liveBadge.text == "LIVE")
 
         header.setOutputLocked(true)
-        #expect(header.liveBadge.text == "LIVE LOCKED")
+        #expect(header.liveBadge.text == "LOCKED SCREEN")
         #expect(header.liveBadge.backgroundColor == UIColor.systemOrange)
 
         header.setOutputLocked(false)
         #expect(header.liveBadge.text == "LIVE")
         #expect(header.liveBadge.backgroundColor == UIColor.liveStroke)
+    }
+
+    /// Blackout's badge uses the Mac's words, as Lock's does.
+    @Test func blackoutHoldBadgeReadsBlackScreen() {
+        let header = makeHeader()
+        header.configure(
+            with: makeStillItem(),
+            thumbnail: nil,
+            isOnline: true,
+            showsLiveBadge: true
+        )
+        header.setBlackoutHold(true, upNext: nil)
+        #expect(header.liveBadge.text == "BLACK SCREEN")
+
+        header.setBlackoutHold(false, upNext: nil)
+        #expect(header.liveBadge.text == "LIVE")
+    }
+
+    /// White Blackout reads WHITE SCREEN, dark text on a white pill.
+    @Test func whiteBlackoutBadgeReadsWhiteScreen() {
+        let header = makeHeader()
+        header.configure(
+            with: makeStillItem(),
+            thumbnail: nil,
+            isOnline: true,
+            showsLiveBadge: true
+        )
+        header.setBlackoutHold(true, upNext: nil, kind: .white)
+        #expect(header.liveBadge.text == "WHITE SCREEN")
+        #expect(header.liveBadge.textColor == .black)
+        header.setBlackoutHold(false, upNext: nil)
+        #expect(header.liveBadge.text == "LIVE")
+        #expect(header.liveBadge.textColor == .white)
+    }
+
+    /// Freeze reads FREEZE FRAME and wins over Lock, which it brings along.
+    @Test func freezeBadgeReadsFreezeFrame() {
+        let header = makeHeader()
+        header.configure(
+            with: makeStillItem(),
+            thumbnail: nil,
+            isOnline: true,
+            showsLiveBadge: true
+        )
+        header.setOutputLocked(true)
+        header.setOutputFrozen(true)
+        #expect(header.liveBadge.text == "FREEZE FRAME")
+        header.setOutputFrozen(false)
+        #expect(header.liveBadge.text == "LOCKED SCREEN")
     }
 
     private func makeHeader() -> LiveHeaderView {

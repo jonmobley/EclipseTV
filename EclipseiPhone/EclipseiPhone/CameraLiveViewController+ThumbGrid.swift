@@ -38,9 +38,7 @@ extension CameraLiveViewController {
     /// Program, enabled frames, then Background · quick-change stills · +.
     var thumbGridItems: [CameraThumbGridItem] {
         Self.thumbGridItems(
-            showsProgram: Self.showsLiveOutputThumb(
-                isConnected: ExternalDisplayManager.shared.isConnected
-            ),
+            showsProgram: showsLiveOutputCard,
             frameIds: CameraFrameStore.shared.enabledFrames.map(\.id),
             stills: stillRibbonItems
         )
@@ -105,7 +103,7 @@ extension CameraLiveViewController {
             ) as? CameraProgramGridCell else { return UICollectionViewCell() }
             configureLiveOutputThumb(cell.thumbView)
             cell.thumbView.layer.cornerRadius = radius
-            cell.mirrorThumbAccessibility()
+            cell.mirrorThumbAccessibility(isReturn: canReturnToEntryLive)
             return cell
         case .frame(let id):
             guard let cell = thumbGridView.dequeueReusableCell(
@@ -133,13 +131,14 @@ extension CameraLiveViewController {
         }
     }
 
-    /// Same actions as the ribbons; the program monitor is display-only.
+    /// Same actions as the ribbons. The first card puts the earlier item back on
+    /// the TV while the camera holds it; otherwise it is display-only.
     func handleThumbGridTap(at indexPath: IndexPath) {
         let items = thumbGridItems
         guard items.indices.contains(indexPath.item) else { return }
         switch items[indexPath.item] {
         case .program:
-            break
+            returnToEntryLive()
         case .frame(let id):
             toggleFrameOverlay(id)
         case .still(let item):
@@ -193,10 +192,11 @@ final class CameraProgramGridCell: UICollectionViewCell {
     }
 
     /// The thumb is not interactive, so the cell speaks for it.
-    func mirrorThumbAccessibility() {
+    func mirrorThumbAccessibility(isReturn: Bool = false) {
         isAccessibilityElement = true
         accessibilityLabel = thumbView.accessibilityLabel
-        accessibilityValue = thumbView.accessibilityValue
-        accessibilityTraits = .image
+        accessibilityValue = isReturn ? nil : thumbView.accessibilityValue
+        accessibilityTraits = isReturn ? .button : .image
+        accessibilityHint = isReturn ? "Puts it back on the TV and closes the camera" : nil
     }
 }

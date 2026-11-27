@@ -32,6 +32,8 @@ final class LiveHeaderView: UIView {
 
     /// Remote transport controls, shown only when the live item is a video.
     let controls = PlaybackControlsView()
+    /// Template cards and media overlays over the live preview (below chrome).
+    let liveOverlayHost = LiveOverlayHostView()
 
     /// Host for a warm `WKWebView` when a website is live (in-app preview).
     var webPreviewHost: UIView?
@@ -122,11 +124,16 @@ final class LiveHeaderView: UIView {
     var collapseProgress: CGFloat = 0
     /// Uniform transform scale the host controller currently applies to this view.
     var collapseScale: CGFloat = 1
-    /// When true, amber stroke (and LIVE LOCKED badge) mark locked live output.
+    /// When true, amber stroke (and LOCKED SCREEN badge) mark locked live output.
     /// Read by collapse chrome so content updates don't wipe the thicker lock stroke.
     private(set) var isOutputLocked = false
-    /// Blackout is holding the screen: the picture dims and the badge reads BLACKOUT.
+    /// Blackout is holding the screen: the picture dims and the badge reads
+    /// BLACK SCREEN (or WHITE SCREEN), as on the Mac.
     private(set) var isBlackoutHold = false
+    /// Colour Blackout puts up, which names the badge.
+    private(set) var blackoutKind: OutputBlankKind = .black
+    /// Freeze holds the audience screen still: the badge reads FREEZE FRAME.
+    private(set) var isOutputFrozen = false
     /// Shade over the held picture while Blackout is on (never takes touches).
     var blackoutDimView: UIView?
     /// "Up Next: …" beside the badge while Blackout has a cue.
@@ -327,6 +334,7 @@ final class LiveHeaderView: UIView {
             self.scheduleTransportAutoHide()
         }
         addSubview(controls)
+        installLiveOverlayHost()
 
         let fullscreenTap = UITapGestureRecognizer(
             target: self,
@@ -390,6 +398,7 @@ final class LiveHeaderView: UIView {
     override func layoutSubviews() {
         super.layoutSubviews()
         gradientLayer.frame = bounds
+        layoutLiveOverlayHost()
         applyBadgeCounterScale()
         layoutLibraryVideoPreviewIfNeeded()
         layoutCameraPreviewIfNeeded()
@@ -527,6 +536,14 @@ final class LiveHeaderView: UIView {
         }
     }
 
+    /// Text and icon colour that reads on an overlay fill: black on light
+    /// fills (Blackout's White), white otherwise.
+    static func overlayInk(on fill: UIColor) -> UIColor {
+        var white: CGFloat = 0
+        guard fill.getWhite(&white, alpha: nil) else { return .white }
+        return white > 0.6 ? .black : .white
+    }
+
     /// Live overlay (website / camera / black) — never shows leftover media art.
     /// - Parameter showsLiveBadge: When true (HDMI / AirPlay / EclipseTV), show
     ///   the LIVE overlay. Practice Mode keeps the preview without the badge.
@@ -578,7 +595,7 @@ final class LiveHeaderView: UIView {
             self.imageView.isHidden = thumbnail == nil
             if let systemImage {
                 self.placeholderIcon.image = UIImage(systemName: systemImage)
-                self.placeholderIcon.tintColor = UIColor.white.withAlphaComponent(0.55)
+                self.placeholderIcon.tintColor = Self.overlayInk(on: fillColor).withAlphaComponent(0.55)
                 self.placeholderIcon.isHidden = thumbnail != nil
             } else {
                 self.placeholderIcon.isHidden = true
@@ -594,7 +611,7 @@ final class LiveHeaderView: UIView {
             let hidingStatic = keepWebPreview || keepScreensaverPreview
                 || keepCameraPreview
             self.titleLabel.isHidden = thumbnail != nil || hidingStatic || showsTransport
-            self.titleLabel.textColor = UIColor.white.withAlphaComponent(0.85)
+            self.titleLabel.textColor = Self.overlayInk(on: fillColor).withAlphaComponent(0.85)
             self.titleLabel.font = .systemFont(ofSize: 16, weight: .semibold)
             self.titleLabel.textAlignment = .center
             self.titleLabel.text = title
@@ -725,7 +742,16 @@ final class LiveHeaderView: UIView {
         controls.update(isPlaying: state.isPlaying, currentTime: state.currentTime, duration: state.duration)
     }
 
-    /// Amber hero stroke + LIVE LOCKED badge while live output is locked.
+    /// FREEZE FRAME badge while Freeze holds the audience screen still.
+    func setOutputFrozen(_ frozen: Bool) {
+        guard isOutputFrozen != frozen else { return }
+        isOutputFrozen = frozen
+        UIView.animate(withDuration: 0.22, delay: 0, options: .curveEaseInOut) {
+            self.applyOutputLockChrome()
+        }
+    }
+
+    /// Amber hero stroke + LOCKED SCREEN badge (the Mac's words) while live output is locked.
     func setOutputLocked(_ locked: Bool) {
         guard isOutputLocked != locked else { return }
         isOutputLocked = locked
@@ -735,6 +761,7 @@ final class LiveHeaderView: UIView {
     }
 
     func applyOutputLockChrome() {
+        liveBadge.textColor = .white
         if isPhonePreview {
             // Not program output, so neither the live blue nor the lock amber.
             layer.borderColor = UIColor.separator.cgColor
@@ -742,12 +769,17 @@ final class LiveHeaderView: UIView {
             liveBadge.text = "PREVIEW"
         } else if isBlackoutHold {
             layer.borderColor = UIColor.separator.cgColor
-            liveBadge.backgroundColor = .black
-            liveBadge.text = "BLACKOUT"
+            liveBadge.backgroundColor = blackoutKind.fillColor
+            liveBadge.textColor = blackoutKind == .white ? .black : .white
+            liveBadge.text = blackoutKind.badgeText
+        } else if isOutputFrozen {
+            layer.borderColor = UIColor.liveStroke.cgColor
+            liveBadge.backgroundColor = .liveStroke
+            liveBadge.text = "FREEZE FRAME"
         } else if isOutputLocked {
             layer.borderColor = UIColor.systemOrange.cgColor
             liveBadge.backgroundColor = .systemOrange
-            liveBadge.text = "LIVE LOCKED"
+            liveBadge.text = "LOCKED SCREEN"
         } else {
             layer.borderColor = UIColor.separator.cgColor
             liveBadge.backgroundColor = .liveStroke
@@ -757,13 +789,18 @@ final class LiveHeaderView: UIView {
         applyCollapseChrome()
     }
 
-    /// Dims the held picture and swaps the badge to BLACKOUT while Blackout holds.
+    /// Dims the held picture and swaps the badge to BLACK SCREEN while Blackout holds.
     ///
     /// Re-applied after every hero refresh: content updates rewrite the badge's
     /// visibility (Practice hides it), and Blackout must always say so.
-    func setBlackoutHold(_ holding: Bool, upNext: String?) {
-        if isBlackoutHold != holding {
+    /// - Parameters:
+    ///   - holding: Blackout is on
+    ///   - upNext: Title of the cue that follows Blackout, if any
+    ///   - kind: Black or White, which names the badge
+    func setBlackoutHold(_ holding: Bool, upNext: String?, kind: OutputBlankKind = .black) {
+        if isBlackoutHold != holding || blackoutKind != kind {
             isBlackoutHold = holding
+            blackoutKind = kind
             applyOutputLockChrome()
         }
         if holding {

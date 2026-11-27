@@ -42,6 +42,7 @@ enum CloudKitRecordMapper {
         record[CloudKitSchema.ShowKey.modifiedAt] = modifiedAt as CKRecordValue
         // Practice Mode is always on; older builds still read this as their switch.
         record[CloudKitSchema.ShowKey.previewsWhenDisconnected] = true as CKRecordValue
+        record[CloudKitSchema.ShowKey.cardTitlesShown] = album.cardTitlesShown as CKRecordValue
         setStringList(
             album.deletedItemIds,
             forKey: CloudKitSchema.ShowKey.deletedItemIds,
@@ -89,6 +90,8 @@ enum CloudKitRecordMapper {
         let rawOrientation = record[CloudKitSchema.ShowKey.orientation] as? String
         let orientation = ExternalOutputOrientation.resolved(fromStored: rawOrientation)
         let createdAt = (record[CloudKitSchema.ShowKey.createdAt] as? Date) ?? Date()
+        let cardTitlesShown =
+            (record[CloudKitSchema.ShowKey.cardTitlesShown] as? Bool) ?? true
         let deletedItemIds =
             (record[CloudKitSchema.ShowKey.deletedItemIds] as? [String]) ?? []
         let deletedSurfaceIds =
@@ -101,6 +104,7 @@ enum CloudKitRecordMapper {
             orientation: orientation,
             createdAt: createdAt,
             surfaceIds: surfaceIds,
+            cardTitlesShown: cardTitlesShown,
             deletedItemIds: deletedItemIds,
             deletedSurfaceIds: deletedSurfaceIds
         )
@@ -224,6 +228,9 @@ enum CloudKitRecordMapper {
             let item = TVLibraryStore.shared.items.first { $0.id == libraryId }
             record[CloudKitSchema.MediaKey.isLooping] =
                 (item?.isLooping ?? false) as CKRecordValue
+            record[CloudKitSchema.MediaKey.videoEndAction] = VideoEndAction.resolve(
+                isLooping: item?.isLooping, stored: item?.endAction
+            ).rawValue as CKRecordValue
             record[CloudKitSchema.MediaKey.isMuted] =
                 (item?.isMuted ?? false) as CKRecordValue
         } else {
@@ -364,11 +371,14 @@ enum CloudKitRecordMapper {
         guard isVideo else { return }
         let looping = record[CloudKitSchema.MediaKey.isLooping] as? Bool
         let muted = record[CloudKitSchema.MediaKey.isMuted] as? Bool
-        guard looping != nil || muted != nil else { return }
+        let endAction = (record[CloudKitSchema.MediaKey.videoEndAction] as? String)
+            .flatMap(VideoEndAction.init(rawValue:))
+        guard looping != nil || muted != nil || endAction != nil else { return }
         TVLibraryStore.shared.updateVideoSetting(
             id: libraryId,
             isLooping: looping,
-            isMuted: muted
+            isMuted: muted,
+            endAction: endAction
         )
     }
 

@@ -55,10 +55,12 @@ enum ShowLiveRouting {
 
     /// Whether a director can actually act on an operator's `select`.
     ///
-    /// `ShowLiveSession.applyReceived` posts `incomingSelectNotification`, but no
-    /// view layer observes it, so a director receives commands and drops them.
-    /// Flip this to true in the same change that registers that observer.
-    static let directorAppliesSelects = false
+    /// `ShowLiveSession.applyReceived` posts `incomingSelectNotification` and
+    /// `LibraryGridViewController` observes it (`handleIncomingShowLiveSelect`).
+    /// Off, a second phone on the same Show stays an ordinary device and never
+    /// becomes a remote. It was off from 2026-09-07 to 2026-11-25 because one
+    /// branch had lost that observer; turn it off again only together with it.
+    static let directorAppliesSelects = true
 
     /// Whether a peer that just connected to a director becomes its operator.
     ///
@@ -84,6 +86,27 @@ enum ShowLiveRouting {
     static func wholeSeconds(_ value: Double?) -> Int? {
         guard let value, value.isFinite, value >= 1 else { return nil }
         return Int(min(value, Double(maximumRemoteCountdownSeconds)))
+    }
+
+    /// Longest jump a remote may ask for in one `slideStep`.
+    static let maximumRemoteSlideStep = 50
+
+    /// A remote slide step as whole slides, or nil when it is not usable.
+    /// - Parameter value: Slides as sent by the operator; negative goes back.
+    static func slideStep(_ value: Double?) -> Int? {
+        guard let value, value.isFinite, value != 0,
+              abs(value) <= Double(maximumRemoteSlideStep) else { return nil }
+        let step = Int(value.rounded(.towardZero))
+        return step == 0 ? nil : step
+    }
+
+    /// A remote slide place as an index into `count` slides, or nil when it is
+    /// not a slide the director has.
+    static func slideIndex(_ value: Double?, count: Int) -> Int? {
+        guard let value, value.isFinite, value >= 0, value < Double(count) else {
+            return nil
+        }
+        return Int(value.rounded(.down))
     }
 
     /// Short hash for discovery info (Multipeer discoveryInfo is tiny).

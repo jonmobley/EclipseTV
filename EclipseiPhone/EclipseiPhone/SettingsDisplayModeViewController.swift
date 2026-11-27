@@ -25,6 +25,13 @@ final class SettingsDisplayModeViewController: UITableViewController {
         case add
     }
 
+    /// Rows of the Connected Screen section.
+    private enum ConnectedScreenRow {
+        case signal(String)
+        case use(ExternalScreenSignal.PixelSize)
+        case alsoOffered(String)
+    }
+
     /// Set while this controller applies its own row edit, so the settings
     /// notification that edit posts does not reload the table mid-update
     /// (UIKit throws when a reload lands inside a swipe-to-delete commit).
@@ -79,15 +86,22 @@ final class SettingsDisplayModeViewController: UITableViewController {
             : sections + [.connectedScreen]
     }
 
-    /// Rows of the Connected Screen section: the signal, then other offered sizes.
-    private var connectedScreenRows: [(title: String, value: String)] {
+    /// Rows of the Connected Screen section: the signal, one tappable row per
+    /// odd-shaped size the screen also offers (an LED wall's other widths), then
+    /// the ordinary TV sizes as plain text.
+    private var connectedScreenRows: [ConnectedScreenRow] {
         guard let signal = ExternalOutputSettings.connectedScreenSignal else { return [] }
-        var rows = [(title: "Signal", value: signal.current.label)]
-        let others = signal.otherOffered.map(\.label)
-        if !others.isEmpty {
-            rows.append((title: "Also Offered", value: others.joined(separator: ", ")))
-        }
-        return rows
+        // Custom sizes apply in Landscape only, so the choices show there only.
+        let choices = ExternalOutputSettings.isVerticalMode ? [] : signal.selectableOffered
+        let plain = signal.otherOffered.filter { !choices.contains($0) }.map(\.label)
+        return [.signal(signal.current.label)]
+            + choices.map { .use($0) }
+            + (plain.isEmpty ? [] : [.alsoOffered(plain.joined(separator: ", "))])
+    }
+
+    private func connectedScreenRow(at row: Int) -> ConnectedScreenRow? {
+        let rows = connectedScreenRows
+        return rows.indices.contains(row) ? rows[row] : nil
     }
 
     private func section(at index: Int) -> Section? {
@@ -153,12 +167,7 @@ final class SettingsDisplayModeViewController: UITableViewController {
             Swipe a size to delete it; tap ⓘ to edit.
             """
         case .connectedScreen:
-            return ExternalOutputSettings.connectedScreenSignal?.oddShape == nil
-                ? "The size this device is sending to the screen."
-                : """
-                This screen is not 16:9, so Full Screen fills its real size and \
-                every dot of the signal is used.
-                """
+            return connectedScreenFooter
         case .none:
             return nil
         }
@@ -207,18 +216,45 @@ final class SettingsDisplayModeViewController: UITableViewController {
                 break
             }
         case .connectedScreen:
-            let rows = connectedScreenRows
-            guard rows.indices.contains(indexPath.row) else { break }
-            config = UIListContentConfiguration.valueCell()
-            config.text = rows[indexPath.row].title
-            config.secondaryText = rows[indexPath.row].value
-            cell.selectionStyle = .none
+            config = connectedScreenContent(at: indexPath.row, cell: cell)
         case .none:
             break
         }
 
         cell.contentConfiguration = config
         return cell
+    }
+
+    /// Content for a Connected Screen row; only the "Use" rows can be tapped.
+    private func connectedScreenContent(at row: Int, cell: UITableViewCell) -> UIListContentConfiguration {
+        var config = UIListContentConfiguration.valueCell()
+        cell.selectionStyle = .none
+        switch connectedScreenRow(at: row) {
+        case .signal(let size):
+            config.text = "Signal"
+            config.secondaryText = size
+        case .use(let size):
+            config = cell.defaultContentConfiguration()
+            config.text = "Use \(size.label)"
+            config.textProperties.color = view.tintColor
+            cell.selectionStyle = .default
+        case .alsoOffered(let sizes):
+            config.text = "Also Offered"
+            config.secondaryText = sizes
+        case .none:
+            break
+        }
+        return config
+    }
+
+    private var connectedScreenFooter: String {
+        guard let signal = ExternalOutputSettings.connectedScreenSignal, signal.oddShape != nil else {
+            return "The size this device is sending to the screen."
+        }
+        let fills = "This screen is not 16:9, so Full Screen fills its real size and every dot of the signal is used."
+        return connectedScreenRows.contains { if case .use = $0 { true } else { false } }
+            ? fills + " Tap another size to send that one instead."
+            : fills
     }
 
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
@@ -244,7 +280,12 @@ final class SettingsDisplayModeViewController: UITableViewController {
             case .none:
                 break
             }
-        case .connectedScreen, .none:
+        case .connectedScreen:
+            guard case .use(let size)? = connectedScreenRow(at: indexPath.row) else { break }
+            // Saved as the active custom size, so it is sent again on the next connect.
+            ExternalOutputSettings.useCustomSize(width: size.width, height: size.height)
+            ExternalDisplayManager.shared.refreshScreenSignal()
+        case .none:
             break
         }
     }
@@ -324,6 +365,8 @@ final class SettingsDisplayModeViewController: UITableViewController {
             } else {
                 ExternalOutputSettings.addCustomSize(name: name, width: width, height: height)
             }
+            // A new or edited size may now match one the screen offers: send it.
+            ExternalDisplayManager.shared.refreshScreenSignal()
         }
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         alert.addAction(save)

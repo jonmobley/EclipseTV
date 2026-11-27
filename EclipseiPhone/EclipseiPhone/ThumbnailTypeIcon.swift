@@ -20,6 +20,7 @@ enum ThumbnailTypeIcon: Equatable {
     case livePoll
     case countdown
     case prompter
+    case template
 
     /// SF Symbol for this kind of content, everywhere it is named: the + menu, tile
     /// placeholders and the hero. Website, PDF, Prompter and Slideshow use the same
@@ -37,6 +38,7 @@ enum ThumbnailTypeIcon: Equatable {
         case .livePoll: return "chart.bar.fill"
         case .countdown: return "timer"
         case .prompter: return "text.viewfinder"
+        case .template: return "textformat"
         }
     }
 
@@ -51,9 +53,10 @@ enum ThumbnailTypeIcon: Equatable {
         case .pdf: return "PDF"
         case .camera: return "camera"
         case .ptzCamera: return "PTZ camera"
-        case .livePoll: return "QuestPoll"
+        case .livePoll: return "Poll"
         case .countdown: return "countdown"
         case .prompter: return "prompter"
+        case .template: return "template"
         }
     }
 

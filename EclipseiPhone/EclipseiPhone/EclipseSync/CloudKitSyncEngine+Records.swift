@@ -30,6 +30,9 @@ extension CloudKitSyncEngine {
         if name.hasPrefix("eclipse.cameraSettings.") {
             return makeCameraSettingsRecordToSave(name: name, existing: existing)
         }
+        if Self.isMusicRecordName(name) {
+            return makeMusicRecordToSave(name: name, existing: existing)
+        }
         if let showId = CloudKitSchema.prompterShowId(fromRecordName: name) {
             guard let entry = PrompterScriptStore.shared.entry(forShowId: showId)
             else { return nil }
@@ -37,7 +40,8 @@ extension CloudKitSyncEngine {
         }
 
         if let uuid = UUID(uuidString: name) {
-            if let album = LocalAlbumStore.shared.album(id: uuid) {
+            // A Show hidden for a delete that waits on Undo still exists until then.
+            if let album = LocalAlbumStore.shared.albumIncludingPendingDelete(id: uuid) {
                 return CloudKitRecordMapper.makeShowRecord(
                     from: album,
                     existing: existing,
@@ -54,6 +58,9 @@ extension CloudKitSyncEngine {
             }
             if let item = CountdownStore.shared.countdown(id: uuid) {
                 return makeCountdownRecordToSave(item, existing: existing)
+            }
+            if let card = TemplateCardStore.shared.card(id: uuid) {
+                return makeTemplateCardRecordToSave(card, existing: existing)
             }
             if let item = LivePollStore.shared.poll(id: uuid) {
                 return makeLivePollRecordToSave(item, existing: existing)
@@ -98,6 +105,9 @@ extension CloudKitSyncEngine {
                 .saveRecord(CloudKitSchema.countdownRecordID(for: id))
             )
         }
+        for id in TemplateCardStore.shared.idsNeedingUpload {
+            changes.append(.saveRecord(CloudKitSchema.templateCardRecordID(for: id)))
+        }
         for id in LivePollStore.shared.idsNeedingUpload {
             changes.append(
                 .saveRecord(CloudKitSchema.livePollRecordID(for: id))
@@ -108,6 +118,7 @@ extension CloudKitSyncEngine {
                 .saveRecord(CloudKitSchema.prompterRecordID(for: showId))
             )
         }
+        enqueueMusicContent(into: &changes)
         if LogoStore.shared.hasCustomImage {
             changes.append(.saveRecord(CloudKitSchema.backgroundRecordID))
         }

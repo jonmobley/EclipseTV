@@ -116,10 +116,10 @@ final class QuestPollPickerViewController: UITableViewController {
     }
 
     private func delete(_ poll: LivePollDeckSummary) {
-        let writer = QuestPollDeckWriter(client: client)
+        let client = self.client
         Task { @MainActor [weak self] in
             do {
-                try await writer.delete(pollId: poll.id)
+                try await client.deleteDeck(id: poll.id)
             } catch {
                 let alert = UIAlertController(
                     title: "Could Not Delete",
@@ -229,8 +229,8 @@ final class QuestPollPickerViewController: UITableViewController {
     }
 
     static func footerText(mode: Mode, hasPolls: Bool) -> String {
-        let saved = "Polls are saved to your QuestPoll account, so they are on your "
-            + "other devices and questpoll.com too."
+        let saved = "Polls are saved to your Eclipse Polls account, so they are on your "
+            + "other devices and polls.eclipseapp.com too."
         guard hasPolls else { return saved }
         switch mode {
         case .choose: return "Tap a poll to use it. Tap the pencil to change it. " + saved
@@ -288,7 +288,7 @@ enum QuestPollPlanText {
 
     /// "Free plan · up to 50 people" / "Eclipse plan · up to 300 people".
     static func title(_ plan: LivePollPlan?) -> String {
-        guard let plan else { return "QuestPoll" }
+        guard let plan else { return "Eclipse Polls" }
         let name = plan.eclipse ? "Eclipse plan" : "Free plan"
         return "\(name) · up to \(plan.playerLimit) people"
     }
@@ -297,8 +297,8 @@ enum QuestPollPlanText {
     static func detail(_ plan: LivePollPlan?) -> String? {
         guard let plan, !plan.eclipse else { return nil }
         if plan.linkExpired == true {
-            return "Your Eclipse license needs re-checking. Add it again at questpoll.com."
+            return "Your Eclipse license needs re-checking. Add it again at polls.eclipseapp.com."
         }
-        return "Add your Eclipse license key at questpoll.com to allow 300."
+        return "Add your Eclipse license key at polls.eclipseapp.com to allow 300."
     }
 }

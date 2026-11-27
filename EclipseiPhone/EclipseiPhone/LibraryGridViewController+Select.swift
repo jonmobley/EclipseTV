@@ -79,48 +79,44 @@ extension LibraryGridViewController {
         return true
     }
 
-    /// Confirms and removes every selected member / tool from the open Show.
+    /// Removes every selected member / tool / card from the open Show, with Undo.
+    ///
+    /// Plain media and tools only leave the Show, so they go at once. Countdowns
+    /// and polls are deleted, so the operator is asked first; either way Undo
+    /// brings everything back (`removeFromShowWithUndo`).
     func confirmBulkRemoveFromShow() {
         guard isSelecting, let showId = openShowId else { return }
         let ids = Array(selectedShowItemIds)
         guard !ids.isEmpty else { return }
-        // Plain media and tools only leave the Show, so Undo replaces the
-        // confirmation. Countdowns and polls are deleted outright: confirm.
         let deletesCards = ids.contains {
             ShowCountdownToken.countdownId(from: $0) != nil
                 || ShowLivePollToken.livePollId(from: $0) != nil
+                || ShowTemplateToken.templateId(from: $0) != nil
         }
         guard deletesCards else {
             endSelectMode()
             removeFromShowWithUndo(ids, showId: showId)
             return
         }
-        let count = ids.count
-        let alert = UIAlertController(
-            title: count == 1 ? "Remove Item?" : "Remove \(count) Items?",
+        askToDelete(
+            title: ids.count == 1 ? "Remove Item?" : "Remove \(ids.count) Items?",
             message: "Selected items leave this Show. Media stays in your library.",
-            preferredStyle: .alert
-        )
-        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        alert.addAction(UIAlertAction(title: "Remove", style: .destructive) { [weak self] _ in
+            actionTitle: "Remove"
+        ) { [weak self] in
             guard let self else { return }
             self.endSelectMode()
+            // Template cards are deleted outright (no pending-delete path for them
+            // yet); everything else leaves with Undo.
+            var others: [String] = []
             for id in ids {
-                if ShowToolToken.isTool(id) {
-                    LocalAlbumStore.shared.hideTool(id, albumId: showId)
-                } else if let countdownId = ShowCountdownToken.countdownId(from: id) {
-                    self.endCountdownIfDeleting(countdownId)
-                    CountdownStore.shared.delete(id: countdownId)
-                } else if let livePollId = ShowLivePollToken.livePollId(from: id) {
-                    self.endQuestPollIfRemovingMembership(livePollId)
-                    LivePollStore.shared.delete(id: livePollId)
+                if let templateId = ShowTemplateToken.templateId(from: id) {
+                    TemplateCardStore.shared.delete(id: templateId)
                 } else {
-                    LocalAlbumStore.shared.remove(itemId: id, fromAlbumId: showId)
+                    others.append(id)
                 }
             }
-            Haptics.success()
-        })
-        present(alert, animated: true)
+            self.removeFromShowWithUndo(others, showId: showId)
+        }
     }
 
     /// Builds the header Actions menu for the current selection count.
@@ -175,6 +171,12 @@ extension LibraryGridViewController {
     /// are what let two tiles claim live at the same time. Practice reaches the
     /// poll card through the resolver's `practicePollMembershipId`, not a case here.
     func isShowGridItemLive(_ item: ShowGridItem) -> Bool {
+        if case .template(let card) = item {
+            return LiveOverlayController.shared.isLive(.template(card.id))
+        }
+        if case .media(let media) = item, MediaOverlayStore.shared.entry(for: media.id) != nil {
+            return LiveOverlayController.shared.isLive(.media(media.id))
+        }
         if ShowLiveSession.shared.isRemoteOperator {
             return isShowGridItemLiveRemotely(item)
         }
@@ -259,6 +261,11 @@ extension LibraryGridViewController {
                     duration: source.duration,
                     layout: source.layout,
                     background: source.background
+                )
+            } else if let templateId = ShowTemplateToken.templateId(from: id),
+                      let source = TemplateCardStore.shared.card(id: templateId) {
+                TemplateCardStore.shared.create(
+                    config: source.config, name: source.name, showId: albumId
                 )
             } else if let livePollId = ShowLivePollToken.livePollId(from: id),
                       let source = LivePollStore.shared.poll(id: livePollId) {

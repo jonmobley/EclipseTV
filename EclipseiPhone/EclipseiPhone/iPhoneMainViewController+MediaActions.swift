@@ -308,6 +308,16 @@ extension iPhoneMainViewController {
         if albumId == nil {
             countdown.attributes = .disabled
         }
+        let template = UIAction(
+            title: "Template…",
+            image: UIImage(systemName: ThumbnailTypeIcon.template.systemName)
+        ) { [weak self] _ in
+            guard let albumId else { return }
+            self?.addTemplate(toShowId: albumId)
+        }
+        if albumId == nil {
+            template.attributes = .disabled
+        }
         // A Show can hold any number of Prompters, each with its own script.
         let prompter = UIAction(
             title: "Prompter",
@@ -320,7 +330,7 @@ extension iPhoneMainViewController {
             prompter.attributes = .disabled
         }
         let livePoll = UIAction(
-            title: "QuestPoll",
+            title: "Poll",
             image: UIImage(systemName: "chart.bar.fill")
         ) { [weak self] _ in
             guard let albumId else { return }
@@ -349,7 +359,10 @@ extension iPhoneMainViewController {
         let imports = UIMenu(
             title: "",
             options: .displayInline,
-            children: [image, video, website, slideshow, countdown, prompter, livePoll, questionAndAnswer, pdf]
+            children: [
+                image, video, website, slideshow, countdown, template, prompter,
+                livePoll, questionAndAnswer, pdf
+            ]
         )
         // In a Show, Website opens the compose sheet (History is on that sheet).
         // Home keeps History for manage / open.
@@ -556,21 +569,15 @@ extension iPhoneMainViewController {
             title: "New Slideshow", message: nil, preferredStyle: .alert
         )
         alert.addTextField { field in
-            field.placeholder = "Slideshow name"
+            field.placeholder = SlideshowStore.shared.nextName(forShowId: showId)
             field.autocapitalizationType = .words
             UserDisplayName.configureTextField(field)
         }
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         alert.addAction(UIAlertAction(title: "Next", style: .default) { [weak self] _ in
             let name = alert.textFields?.first?.text ?? ""
+            // Blank is fine: the store names it "Slideshow NN" when it is created.
             let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty else {
-                self?.showAlert(
-                    title: "Couldn't Create Slideshow",
-                    message: SlideshowStore.StoreError.emptyName.localizedDescription
-                )
-                return
-            }
             self?.pendingAlbumId = nil
             self?.pendingSlideshowShowId = showId
             self?.pendingSlideshowName = trimmed

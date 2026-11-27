@@ -126,6 +126,12 @@ extension iPhoneMainViewController {
         headerBar.onPresentBlack = { [weak self] in
             self?.libraryViewController.toggleBlackLive()
         }
+        headerBar.onToggleFreeze = { [weak self] in
+            self?.libraryViewController.toggleLiveOutputFreeze()
+        }
+        headerBar.onSelectBlankKind = { [weak self] kind in
+            self?.libraryViewController.selectOutputBlankKind(kind)
+        }
         headerBar.onNewShow = { [weak self] in
             self?.promptNewAlbum()
         }
@@ -138,8 +144,33 @@ extension iPhoneMainViewController {
         headerBar.onSelectDestination = { [weak self] destination in
             self?.selectHeaderDestination(destination)
         }
+        headerBar.onSelectTab = { [weak self] tab in
+            self?.selectHomeTab(tab)
+        }
+        headerBar.onOverlayStateChange = { [weak self] in
+            self?.refreshHomeCameraButton(animated: true)
+        }
+        headerBar.onBeginSearch = { [weak self] in
+            self?.beginPageSearch()
+        }
+        headerBar.onSearchTextChanged = { [weak self] text in
+            self?.applyPageSearch(text)
+        }
+        headerBar.onCancelSearch = { [weak self] in
+            self?.endPageSearch()
+        }
+        headerBar.onAddMusic = { [weak self] in
+            guard let self else { return }
+            self.audioLibraryViewController.presentAddMenu(
+                from: self.headerBar.addMusicAnchor
+            )
+        }
         view.addSubview(headerBar)
 
+        let headerHeight = headerBar.heightAnchor.constraint(
+            equalToConstant: HomeHeaderBar.rowHeight
+        )
+        headerHeightConstraint = headerHeight
         NSLayoutConstraint.activate([
             headerBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             // Same side edges as the pager, so the header controls line up with the
@@ -150,7 +181,7 @@ extension iPhoneMainViewController {
             headerBar.trailingAnchor.constraint(
                 equalTo: view.safeAreaLayoutGuide.trailingAnchor
             ),
-            headerBar.heightAnchor.constraint(equalToConstant: 52)
+            headerHeight
         ])
 
         refreshLibraryMenu()
@@ -193,6 +224,26 @@ extension iPhoneMainViewController {
         }
         view.addSubview(audioMiniBubble)
 
+        // Camera mirrors the Music circle in the other bottom corner.
+        homeCameraButton.translatesAutoresizingMaskIntoConstraints = false
+        homeCameraButton.addAction(UIAction { [weak self] _ in
+            Haptics.impactLight()
+            self?.presentCameraLive()
+        }, for: .touchUpInside)
+        view.addSubview(homeCameraButton)
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(homeCameraStateDidChange),
+            name: ExternalDisplayManager.cameraDidEndNotification,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(homeCameraStateDidChange),
+            name: ExternalDisplayManager.didChangeNotification,
+            object: nil
+        )
+
         let height = audioMiniPlayer.heightAnchor.constraint(equalToConstant: 0)
         audioMiniHeightConstraint = height
         let cardWidth = audioMiniPlayer.widthAnchor.constraint(
@@ -202,7 +253,7 @@ extension iPhoneMainViewController {
         NSLayoutConstraint.activate([
             height,
             cardWidth,
-            // Card tucks under the Music circle so the join has no gap.
+            // Card runs under the Music circle, which sits in its bottom corner.
             audioMiniPlayer.trailingAnchor.constraint(
                 equalTo: audioMiniBubble.leadingAnchor,
                 constant: AudioMiniPlayerView.connectedOverlap
@@ -218,7 +269,16 @@ extension iPhoneMainViewController {
             audioMiniBubble.bottomAnchor.constraint(
                 equalTo: view.bottomAnchor,
                 constant: -AudioMiniPlayerView.compactBottomInset
-            )
+            ),
+            homeCameraButton.leadingAnchor.constraint(
+                equalTo: view.safeAreaLayoutGuide.leadingAnchor,
+                constant: HomeCameraButton.edgeInset
+            ),
+            homeCameraButton.centerYAnchor.constraint(
+                equalTo: audioMiniBubble.centerYAnchor
+            ),
+            homeCameraButton.widthAnchor.constraint(equalToConstant: HomeCameraButton.side),
+            homeCameraButton.heightAnchor.constraint(equalToConstant: HomeCameraButton.side)
         ])
 
         hadActiveAudioSession = AudioPlayerController.shared.hasActiveSession
@@ -314,6 +374,10 @@ extension iPhoneMainViewController {
         let cameraVC = CameraLiveViewController()
         // Opened from inside a Show: what you shoot becomes a card in that Show.
         cameraVC.captureDestinationShowId = libraryViewController.openShow?.id
+        // Whatever is live right now is the camera's first card.
+        let entry = ExternalDisplayManager.shared.currentSourceProvider?()
+        cameraVC.entryLiveSource = entry
+        cameraVC.entryLiveOwnerId = CameraLiveViewController.liveOwnerId(for: entry)
         cameraVC.modalPresentationStyle = .fullScreen
         present(cameraVC, animated: true)
         if TVLibraryStore.shared.isOnline, ExternalDisplayManager.shared.isConnected {
@@ -346,36 +410,7 @@ extension iPhoneMainViewController {
     /// Without a Show: tap Previews on top of this page (library stays open).
     func presentMediaLibrary() {
         guard !isAlreadyOpen(MediaLibraryPickerViewController.self) else { return }
-        let picker = MediaLibraryPickerViewController()
-        picker.onRequestEdit = { [weak self] id in
-            self?.beginEditCrop(forItemId: id)
-        }
-        picker.onRequestTrim = { [weak self] id in
-            self?.beginTrimVideo(forItemId: id)
-        }
-        picker.onApplyScreenFit = { [weak self] item, mode in
-            self?.libraryViewController.applyScreenFit(mode, to: item)
-        }
-        picker.onRequestVideoThumbnail = { [weak self] id in
-            self?.beginChangeVideoThumbnail(forItemId: id)
-        }
-        picker.onApplyVideoSetting = { [weak self] id, isLooping, isMuted in
-            self?.libraryViewController.applyVideoSetting(
-                id: id, isLooping: isLooping, isMuted: isMuted
-            )
-        }
-        picker.onPerformDelete = { [weak self] id in
-            self?.libraryViewController.performDelete(id: id)
-        }
-        picker.onRequestResend = { [weak self] id in
-            self?.beginResend(forItemId: id)
-        }
-        picker.onIsEclipseTVLinked = { [weak self] in
-            self?.isConnected() ?? false
-        }
-        picker.onRequestEclipseTVConnect = { [weak self] in
-            self?.resumeConnection()
-        }
+        let picker = makeMediaLibraryPicker()
         if let showId = libraryViewController.openShowId {
             picker.targetShowId = showId
             picker.onAddToShow = { mediaIds, pdfIds in
@@ -408,6 +443,49 @@ extension iPhoneMainViewController {
             }
         }
         showMediaLibraryPage(picker)
+    }
+
+    /// A Library page wired to the grid's edit, delete and re-send actions.
+    ///
+    /// Shared by the pushed page (which may add to a Show) and the pager's Library
+    /// page (which only browses and previews).
+    func makeMediaLibraryPicker() -> MediaLibraryPickerViewController {
+        let picker = MediaLibraryPickerViewController()
+        picker.onRequestEdit = { [weak self] id in
+            self?.beginEditCrop(forItemId: id)
+        }
+        picker.onRequestTrim = { [weak self] id in
+            self?.beginTrimVideo(forItemId: id)
+        }
+        picker.onApplyScreenFit = { [weak self] item, mode in
+            self?.libraryViewController.applyScreenFit(mode, to: item)
+        }
+        picker.onRequestVideoThumbnail = { [weak self] id in
+            self?.beginChangeVideoThumbnail(forItemId: id)
+        }
+        picker.onApplyVideoSetting = { [weak self] id, isLooping, isMuted in
+            self?.libraryViewController.applyVideoSetting(
+                id: id, isLooping: isLooping, isMuted: isMuted
+            )
+        }
+        picker.onApplyVideoEndAction = { [weak self] id, choice in
+            self?.libraryViewController.applyVideoSetting(
+                id: id, isLooping: nil, isMuted: nil, endAction: choice
+            )
+        }
+        picker.onPerformDelete = { [weak self] id in
+            self?.libraryViewController.performDelete(id: id)
+        }
+        picker.onRequestResend = { [weak self] id in
+            self?.beginResend(forItemId: id)
+        }
+        picker.onIsEclipseTVLinked = { [weak self] in
+            self?.isConnected() ?? false
+        }
+        picker.onRequestEclipseTVConnect = { [weak self] in
+            self?.resumeConnection()
+        }
+        return picker
     }
 
     /// Pushes onto the Home nav stack, or presents full-screen when there is none.

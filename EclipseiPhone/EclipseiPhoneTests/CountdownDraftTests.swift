@@ -113,12 +113,33 @@ struct CountdownDraftTests {
     @Test func addScreenOffersFromThisShowOnlyWhenMediaIsOnDevice() {
         #expect(
             AddCountdownViewController.sections(hasShowMedia: false)
-                == [.name, .duration, .layout, .background, .ending]
+                == [.name, .mode, .duration, .caption, .layout, .background, .plate, .ending]
         )
         #expect(
             AddCountdownViewController.sections(hasShowMedia: true)
-                == [.name, .duration, .layout, .background, .showMedia, .ending]
+                == [.name, .mode, .duration, .caption, .layout, .background, .showMedia,
+                    .plate, .ending]
         )
+    }
+
+    @Test func addScreenSectionsFollowTheMode() {
+        #expect(
+            AddCountdownViewController.sections(hasShowMedia: false, mode: .countUp)
+                == [.name, .mode, .caption, .layout, .background, .plate]
+        )
+        #expect(
+            AddCountdownViewController.sections(hasShowMedia: false, mode: .timeOfDay)
+                == [.name, .mode, .target, .caption, .layout, .background, .plate, .ending]
+        )
+    }
+
+    @Test func draftCommitKeepsModeCaptionAndPlate() throws {
+        let (store, defaults) = makeStore()
+        var draft = CountdownDraft(showId: UUID(), name: "Walk-in", duration: 60)
+        draft.clock = CountdownClockSettings(mode: .countUp, caption: "Get ready", style: .simple)
+        let item = try draft.commit(to: store, defaults: defaults)
+        #expect(item.clock == draft.clock)
+        #expect(store.countdown(id: item.id)?.clock.mode == .countUp)
     }
 
     // MARK: - Helpers

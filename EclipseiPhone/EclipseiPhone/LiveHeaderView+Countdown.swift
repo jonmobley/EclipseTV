@@ -58,9 +58,11 @@ extension LiveHeaderView {
             self.bringSubviewToFront(self.countdownClockLabel)
             self.bringSubviewToFront(self.liveBadge)
             self.applyCollapseChrome()
+            let caption = CountdownClockFace.live.caption
+            let spoken = caption.isEmpty ? text : "\(caption), \(text)"
             self.accessibilityLabel = self.isCompactPresentation
-                ? "\(text), countdown, tap to expand"
-                : "\(text), countdown"
+                ? "\(spoken), countdown, tap to expand"
+                : "\(spoken), countdown"
         }
     }
 
@@ -92,7 +94,7 @@ extension LiveHeaderView {
         let clock = CountdownController.shared
         layoutCountdownClock(
             text: countdownClockLabel.text ?? clock.displayString,
-            isExpired: clock.remaining == 0
+            isExpired: clock.isAtEnd
         )
     }
 
@@ -196,7 +198,7 @@ extension LiveHeaderView {
               CountdownController.shared.liveCountdownId != nil else { return }
         let clock = CountdownController.shared
         configureCountdownClock(
-            text: clock.displayString, isExpired: clock.remaining == 0
+            text: clock.displayString, isExpired: clock.isAtEnd
         )
     }
 
@@ -227,6 +229,7 @@ extension LiveHeaderView {
             to: countdownClockLabel,
             text: text,
             isExpired: isExpired,
+            face: .live,
             in: bounds
         )
     }

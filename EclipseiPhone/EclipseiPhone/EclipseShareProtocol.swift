@@ -52,6 +52,11 @@ enum EclipseShareProtocol {
         case setLibraryAlbums = "set_library_albums"
         /// Companion parks the TV (black) while AirPlay owns an overlay, or clears park.
         case setIdleMode = "set_idle_mode"
+        /// Companion hands a whole slideshow to the TV, which then advances on its own.
+        /// Sent only to TVs that list `EclipseShareCapability.slideshow`.
+        case playSlideshow = "play_slideshow"
+        /// Companion steps the TV's running slideshow to a slide, or stops it.
+        case slideshowControl = "slideshow_control"
     }
 
     /// Separate media libraries: Landscape (16:9) vs Vertical (9:16).
@@ -144,6 +149,9 @@ struct LibraryItemDTO: Codable, Equatable {
     /// Looping video dissolves its end into its start. nil (older peers) = off,
     /// except the TV's shipped Eclipse loop, which always blends.
     var crossfadesLoop: Bool?
+    /// "When Video Ends" choice (`VideoEndAction` raw value), kept on this phone only.
+    /// nil (older data) = follow `isLooping`. Loop is always mirrored into `isLooping`.
+    var endAction: String?
     /// nil or true means available; false means the TV's file was purged and the item
     /// can only be re-sent from the companion.
     var isAvailable: Bool?
@@ -222,12 +230,20 @@ struct EclipseShareEnvelope: Codable {
     var albums: [LibraryAlbumDTO]? = nil
     /// `"black"` / `"clear"` — park the TV stage or release park (`set_idle_mode`).
     var mode: String? = nil
+    /// `set_idle_mode` `"black"` only: `"white"` covers the stage in white instead.
+    /// Older TVs ignore it and go black, so Blackout still blanks them.
+    var color: String? = nil
     /// Normalized crop rect for a still (`setImageFit` / `playRequest`). Nil clears
     /// any saved custom position so Fit / Fill alone apply.
     var framing: MediaFramingDTO? = nil
     /// `playRequest` only: cue a video paused on its first frame instead of playing.
     /// Older TVs ignore it and play, which is how they always behaved.
     var startsPaused: Bool? = nil
+    /// `playSlideshow` only: the slides and timing the TV plays by itself.
+    var slideshow: SlideshowDTO? = nil
+    /// `libraryManifest` only (TV -> iPhone): features this TV understands, such as
+    /// `EclipseShareCapability.slideshow`. Older TVs leave it out; older phones ignore it.
+    var capabilities: [String]? = nil
 
     var kind: EclipseShareProtocol.Kind? {
         EclipseShareProtocol.Kind(rawValue: eclipseMsg)
@@ -428,11 +444,15 @@ struct EclipseShareEnvelope: Codable {
         )
     }
 
-    /// Parks the TV on a solid black stage (`true`) or clears park (`false`).
-    static func setIdleMode(black: Bool) -> EclipseShareEnvelope {
+    /// Parks the TV on a solid stage (`true`) or clears park (`false`).
+    /// - Parameters:
+    ///   - black: Park (`true`) or clear park (`false`)
+    ///   - color: `"white"` for a white stage; nil keeps it black
+    static func setIdleMode(black: Bool, color: String? = nil) -> EclipseShareEnvelope {
         EclipseShareEnvelope(
             eclipseMsg: EclipseShareProtocol.Kind.setIdleMode.rawValue,
-            mode: black ? "black" : "clear"
+            mode: black ? "black" : "clear",
+            color: black ? color : nil
         )
     }
 

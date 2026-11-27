@@ -195,8 +195,10 @@ extension LibraryGridViewController: UICollectionViewDataSource,
     ) -> UIContextMenuConfiguration? {
         guard !isArranging, !isSelecting else { return nil }
         switch homeSection(at: indexPath.section, in: collectionView) {
-        case .hero, .slideshowRibbon:
+        case .hero:
             return nil
+        case .slideshowRibbon:
+            return liveSlideMenuConfiguration(at: indexPath)
         case .shows where !isHomePage(collectionView):
             // Show tiles: long-press enters arrange; ⋯ hosts Preview / Cover / Remove.
             return nil
@@ -298,13 +300,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             return UICollectionViewCell()
         }
         guard case .show(let show) = homeItem(at: indexPath) else { return cell }
-        let coverId = show.resolvedCoverId
-        let thumb = coverId.flatMap { id -> UIImage? in
-            if let media = store.thumbnail(for: id) { return media }
-            guard let uuid = UUID(uuidString: id) else { return nil }
-            return WebThumbnailStore.shared.image(for: uuid)
-                ?? PDFThumbnailStore.shared.image(for: uuid)
-        }
+        let thumb = homeShowCover(show)
         cell.configureShow(
             showId: show.id,
             title: show.name,
@@ -383,16 +379,11 @@ extension LibraryGridViewController: UICollectionViewDataSource,
                 menu: addMenuProvider?()
             )
         case .show(let show):
-            let coverId = show.resolvedCoverId
-            let thumb = coverId.flatMap { id -> UIImage? in
-                if let media = store.thumbnail(for: id) { return media }
-                guard let uuid = UUID(uuidString: id) else { return nil }
-                return WebThumbnailStore.shared.image(for: uuid)
-            }
+            // Same cover as Recent Shows: a Show led by a PDF showed no art here.
             cell.configureSpecial(
                 title: show.name,
                 systemImage: "rectangle.stack.fill",
-                thumbnail: thumb,
+                thumbnail: homeShowCover(show),
                 fillColor: .specialTile,
                 isLive: showOwnsLiveProgram(show)
             )
@@ -444,6 +435,10 @@ extension LibraryGridViewController: UICollectionViewDataSource,
     /// was live before. Avoids `updateCurrentId` / full `reloadData` — those were
     /// stacking a second present + grid rebuild and freezing the UI for seconds.
     func toggleBlackLive() {
+        // Blackout is the panic button: it ends Freeze rather than being held by it.
+        if isLiveOutputFrozen, !ShowLiveSession.shared.isRemoteOperator {
+            endLiveOutputFreeze(keepingLock: wasLockedBeforeFreeze)
+        }
         guard !blockLiveChangeIfLocked() else { return }
         // Operator: the director toggles its own blackout and the snapshot
         // brings the moon / hero back in step.
@@ -790,6 +785,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
                 image: UIImage(systemName: "trash"),
                 attributes: .destructive
             ) { [weak self] _ in
+                // Asks first; Undo is the second chance (`deleteShowWithUndo`).
                 self?.confirmDeleteShow(show)
             }
             // Only real actions are rows. Once everything is on this iPhone the
@@ -808,19 +804,6 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             }
             return UIMenu(children: [rename, share, export, download, delete])
         }
-    }
-
-    private func confirmDeleteShow(_ show: LocalAlbum) {
-        let alert = UIAlertController(
-            title: "Delete Show?",
-            message: "“\(show.name)” is removed from Home. Its images and videos stay on this iPhone and any linked EclipseTV.",
-            preferredStyle: .alert
-        )
-        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        alert.addAction(UIAlertAction(title: "Delete", style: .destructive) { _ in
-            LocalAlbumStore.shared.delete(id: show.id)
-        })
-        present(alert, animated: true)
     }
 
     private func promptRenameShow(_ show: LocalAlbum) {
@@ -883,7 +866,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             image: UIImage(systemName: "trash"),
             attributes: .destructive
         ) { [weak self] _ in
-            self?.confirmDelete(id: id, name: item.name)
+            self?.deleteLibraryItemWithUndo(id: id)
         }
         // Tap marks phone-live when offline; Preview stays available from ⋯.
         var children: [UIMenuElement] = [
@@ -895,12 +878,12 @@ extension LibraryGridViewController: UICollectionViewDataSource,
             },
             titleAction(for: item)
         ]
+        children.append(noteAction(for: item))
         if item.isVideo {
             children.append(contentsOf: videoOptionActions(for: item))
             children.append(screenFitMenu(for: item))
             children.append(contentsOf: videoEditActions(for: item))
         } else {
-            children.append(noteAction(for: item))
             children.append(screenFitMenu(for: item))
         }
         children.append(delete)

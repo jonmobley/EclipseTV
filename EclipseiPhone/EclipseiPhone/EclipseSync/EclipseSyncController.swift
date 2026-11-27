@@ -5,6 +5,7 @@
 //  Copyright © 2026 Moxie LLC. All rights reserved.
 //
 
+import CloudKit
 import Foundation
 import UIKit
 
@@ -108,7 +109,12 @@ final class EclipseSyncController {
     /// UUID as their record name, so the owner has to be resolved by asking the
     /// stores; deletions carry no record type. Runs with `isApplyingRemote` set
     /// so the local delete does not echo back as an upload.
-    func applyRemoteDeletion(recordName: String) {
+    ///
+    /// - Parameters:
+    ///   - recordName: The deleted record's name.
+    ///   - zoneID: The zone it was deleted from. Music tombstones count only from
+    ///     the owner's private library zone (see `applyRemoteMusicDeletion`).
+    func applyRemoteDeletion(recordName: String, zoneID: CKRecordZone.ID) {
         let wasApplying = isApplyingRemote
         isApplyingRemote = true
         defer { isApplyingRemote = wasApplying }
@@ -128,9 +134,12 @@ final class EclipseSyncController {
             PrompterScriptStore.shared.purgeRemote(showId: showId)
             return
         }
+        if applyRemoteMusicDeletion(recordName: recordName, zoneID: zoneID) { return }
 
         if let uuid = UUID(uuidString: recordName) {
-            if LocalAlbumStore.shared.album(id: uuid) != nil {
+            // Includes a Show hidden for a pending delete, so Undo can't bring back
+            // a Show another device has deleted meanwhile.
+            if LocalAlbumStore.shared.albumIncludingPendingDelete(id: uuid) != nil {
                 LocalAlbumStore.shared.delete(id: uuid)
                 return
             }
@@ -154,6 +163,10 @@ final class EclipseSyncController {
                 LivePollStore.shared.purgeRemote(id: uuid)
                 return
             }
+            if TemplateCardStore.shared.card(id: uuid) != nil {
+                TemplateCardStore.shared.purgeRemote(id: uuid)
+                return
+            }
             if CameraFrameStore.shared.frame(id: uuid) != nil {
                 CameraFrameStore.shared.remove(uuid)
                 return
@@ -168,5 +181,31 @@ final class EclipseSyncController {
             return
         }
         CaptureStore.shared.purge(id: recordName)
+    }
+}
+
+// MARK: - Music deletions
+
+extension EclipseSyncController {
+
+    /// Applies a song (`audio-`) or playlist (`playlist-`) tombstone.
+    ///
+    /// Tombstones have no record type, so the name prefix picks the store. A song
+    /// also loses its file and its place in every local playlist. A music-named
+    /// tombstone from any other zone (a share someone else owns) is swallowed, so
+    /// it can never remove the owner's own songs or playlists.
+    /// - Returns: False when `recordName` is not a music record name.
+    func applyRemoteMusicDeletion(recordName: String, zoneID: CKRecordZone.ID) -> Bool {
+        switch CloudKitSchema.musicDeletion(recordName: recordName, zoneID: zoneID) {
+        case .track(let id):
+            AudioStore.shared.purgeRemote(id: id)
+        case .playlist(let id):
+            AudioPlaylistStore.shared.purgeRemote(id: id)
+        case .ignored:
+            break
+        case nil:
+            return false
+        }
+        return true
     }
 }

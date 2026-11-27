@@ -30,7 +30,7 @@ extension LibraryGridViewController {
             title: "New Slideshow", message: nil, preferredStyle: .alert
         )
         alert.addTextField { field in
-            field.placeholder = "Slideshow name"
+            field.placeholder = SlideshowStore.shared.nextName(forShowId: showId)
             field.autocapitalizationType = .words
             UserDisplayName.configureTextField(field)
         }
@@ -59,16 +59,11 @@ extension LibraryGridViewController {
         itemIds: [String],
         showId: UUID
     ) {
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            showPresentationToast(SlideshowStore.StoreError.emptyName.localizedDescription)
-            return
-        }
         let orientation = LocalAlbumStore.shared.album(id: showId)?.orientation
             ?? ExternalOutputSettings.orientation
         do {
             let created = try SlideshowStore.shared.create(
-                name: trimmed,
+                name: name,
                 showId: showId,
                 itemIds: itemIds,
                 orientation: orientation

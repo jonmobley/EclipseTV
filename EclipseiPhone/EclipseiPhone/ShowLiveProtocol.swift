@@ -50,6 +50,17 @@ enum ShowLiveCommandVerb: String, Codable, Equatable {
     case countdownSetDuration
     /// Flip the director's live-output lock.
     case lockToggle
+    /// Step the live slideshow; `value` is slides, negative to go back.
+    case slideStep
+    /// Jump the live slideshow; `value` is the slide's place, counted from 0.
+    case slideGoTo
+    /// What the hero's Fit / Fill button does on the director (flip, or reset
+    /// a pinched still or a moved countdown clock).
+    case screenFitToggle
+    /// Flip the director's Freeze (audience screen held still).
+    case freezeToggle
+    /// Pick Blackout's colour; `value` is 0 for Black, 1 for White.
+    case blankKindSet
 }
 
 /// One operator command; `value` is only read for verbs that document it.
@@ -68,9 +79,34 @@ struct ShowLiveVideoState: Codable, Equatable {
 
 /// Director countdown clock, mirrored so the operator hero shows the real time.
 struct ShowLiveCountdownState: Codable, Equatable {
+    /// Seconds on the face (elapsed time for a Count Up clock).
     var remaining: Int
     var duration: Int
     var running: Bool
+    /// True for a Count Up clock, whose 0:00 is a start, not an end. Optional so
+    /// older peers that never send it decode, and older receivers ignore it.
+    var countsUp: Bool?
+
+    /// Whether the face shows a spent clock (red 0:00).
+    var isAtEnd: Bool { countsUp != true && remaining == 0 }
+}
+
+/// The director's live slideshow, mirrored so the operator gets the same slide
+/// strip and sees the slide that is on the TV.
+struct ShowLiveSlideshowState: Codable, Equatable {
+    /// Library ids of the slides being shown, in order.
+    var slideIds: [String]
+    /// Place of the slide on program, counted from 0.
+    var index: Int
+}
+
+/// The director's hero Fit / Fill button, mirrored so the operator's button
+/// shows the same word and does the same thing. Absent when the director has
+/// no such button for what is live.
+struct ShowLiveScreenFitState: Codable, Equatable {
+    var isFill: Bool
+    /// The button is a reset (a pinched still or a moved countdown clock).
+    var showsReset: Bool
 }
 
 /// What the operator asked the director to put on program.
@@ -124,6 +160,15 @@ struct ShowLiveSnapshot: Codable, Equatable {
     var video: ShowLiveVideoState?
     /// Present only while a countdown is live. Absent from legacy peers.
     var countdown: ShowLiveCountdownState?
+    /// Present only while a slideshow is live. Absent from legacy peers.
+    var slideshow: ShowLiveSlideshowState?
+    /// Present only while the director's hero offers Fit / Fill. Absent from
+    /// legacy peers.
+    var screenFit: ShowLiveScreenFitState?
+    /// Freeze holds the director's audience screen still. Absent from legacy peers.
+    var isFrozen: Bool?
+    /// Blackout's colour on the director. Absent from legacy peers (Black).
+    var blankKind: OutputBlankKind?
 
     init(
         showId: UUID,
@@ -133,7 +178,11 @@ struct ShowLiveSnapshot: Codable, Equatable {
         isLocked: Bool,
         directorName: String,
         video: ShowLiveVideoState? = nil,
-        countdown: ShowLiveCountdownState? = nil
+        countdown: ShowLiveCountdownState? = nil,
+        slideshow: ShowLiveSlideshowState? = nil,
+        screenFit: ShowLiveScreenFitState? = nil,
+        isFrozen: Bool? = nil,
+        blankKind: OutputBlankKind? = nil
     ) {
         self.showId = showId
         self.liveItemId = liveItemId
@@ -143,10 +192,15 @@ struct ShowLiveSnapshot: Codable, Equatable {
         self.directorName = directorName
         self.video = video
         self.countdown = countdown
+        self.slideshow = slideshow
+        self.screenFit = screenFit
+        self.isFrozen = isFrozen
+        self.blankKind = blankKind
     }
 
     /// True when only transport / clock ticks differ from `other`, so an operator
-    /// can refresh the hero without rebuilding the grid.
+    /// can refresh the hero without rebuilding the grid. A slide change or a
+    /// Fit / Fill change is not a tick: the strip and the button follow it.
     func isSameProgram(as other: ShowLiveSnapshot?) -> Bool {
         guard let other else { return false }
         return showId == other.showId
@@ -154,7 +208,11 @@ struct ShowLiveSnapshot: Codable, Equatable {
             && liveKind == other.liveKind
             && isBlackout == other.isBlackout
             && isLocked == other.isLocked
+            && isFrozen == other.isFrozen
+            && blankKind == other.blankKind
             && directorName == other.directorName
+            && slideshow == other.slideshow
+            && screenFit == other.screenFit
     }
 }
 

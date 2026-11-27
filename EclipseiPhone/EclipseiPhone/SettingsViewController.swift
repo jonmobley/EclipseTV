@@ -47,6 +47,7 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
 
     private enum Section: Hashable {
         case show
+        case showCardTitles
         case playback
         case notes
         case showSharing
@@ -67,6 +68,7 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
     private enum PlaybackRow: Int, CaseIterable {
         case displayMode
         case transition
+        case websiteTextSize
         case pauseMusicForVideo
     }
 
@@ -88,6 +90,7 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
         var result: [Section] = []
         if openShowName != nil {
             result.append(.show)
+            result.append(.showCardTitles)
         }
         result.append(contentsOf: [.playback, .notes])
         if !showSharingRows.isEmpty {
@@ -243,6 +246,7 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         switch sections[section] {
         case .show: return 1
+        case .showCardTitles: return 1
         case .playback: return PlaybackRow.allCases.count
         case .notes: return 1
         case .showSharing: return showSharingRows.count
@@ -261,12 +265,13 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
         switch sections[section] {
         case .show:
             return "Show"
+        case .showCardTitles: return nil
         case .playback: return "Playback"
         case .notes: return "Notes"
         case .showSharing: return "Show Sharing"
         case .eclipseTV: return "EclipseTV"
         case .eclipseMac: return "Eclipse for Mac"
-        case .questPoll: return "QuestPoll"
+        case .questPoll: return "Eclipse Polls"
         case .recommendations: return GuidedAccessRecommendation.settingsHeader
         case .help: return "Help"
         }
@@ -277,6 +282,8 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
         titleForFooterInSection section: Int
     ) -> String? {
         switch sections[section] {
+        case .showCardTitles:
+            return Self.cardTitlesFooter
         case .notes:
             return "Notes stay attached to each image. Always shows an empty Note "
                 + "card on Preview so you can add notes while browsing."
@@ -327,6 +334,8 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
         switch sections[indexPath.section] {
         case .show:
             break
+        case .showCardTitles:
+            configureCardTitlesCell(cell, config: &config)
         case .playback:
             switch PlaybackRow(rawValue: indexPath.row) {
             case .displayMode:
@@ -335,6 +344,9 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
             case .transition:
                 config.text = "Content Transition"
                 config.secondaryText = ExternalOutputSettings.contentTransition.rawValue
+            case .websiteTextSize:
+                config.text = "Website Text Size"
+                config.secondaryText = ExternalOutputSettings.webTextSize.rawValue
             case .pauseMusicForVideo:
                 configurePauseMusicForVideoCell(cell, config: &config)
             case .none:
@@ -364,7 +376,7 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
                 break
             }
         case .questPoll:
-            config.text = "QuestPoll Account"
+            config.text = "Eclipse Polls Account"
             config.secondaryText = LivePollAccountStore.isSignedIn ? "Signed in" : "Not signed in"
             config.image = UIImage(systemName: "chart.bar.fill")
         case .recommendations:
@@ -398,6 +410,8 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
         switch sections[indexPath.section] {
         case .show:
             showNameField.becomeFirstResponder()
+        case .showCardTitles:
+            break
         case .playback:
             switch PlaybackRow(rawValue: indexPath.row) {
             case .displayMode:
@@ -407,6 +421,10 @@ final class SettingsViewController: UITableViewController, UITextFieldDelegate {
             case .transition:
                 navigationController?.pushViewController(
                     SettingsTransitionViewController(), animated: true
+                )
+            case .websiteTextSize:
+                navigationController?.pushViewController(
+                    SettingsWebTextSizeViewController(), animated: true
                 )
             case .pauseMusicForVideo, .none:
                 break

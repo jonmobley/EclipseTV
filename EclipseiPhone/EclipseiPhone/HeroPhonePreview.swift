@@ -75,7 +75,7 @@ enum HeroPhonePreview {
             // A video link has no phone picture to show; it keeps its own rules.
             return page.videoLink == nil
         case .slideshow, .livePoll, .camera, .cameraPreset, .ptzCamera, .countdown,
-             .prompter, .unresolved, .add:
+             .prompter, .template, .unresolved, .add:
             return false
         }
     }

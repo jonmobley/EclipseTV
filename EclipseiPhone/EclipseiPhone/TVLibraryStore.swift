@@ -869,14 +869,29 @@ final class TVLibraryStore {
         id: String,
         isLooping: Bool?,
         isMuted: Bool?,
-        crossfadesLoop: Bool? = nil
+        crossfadesLoop: Bool? = nil,
+        endAction: VideoEndAction? = nil
     ) {
         guard let index = items.firstIndex(where: { $0.id == id }) else { return }
         var item = items[index]
         guard item.isVideo else { return }
         var changed = false
-        if let isLooping, item.isLooping != isLooping {
+        if let endAction {
+            // Loop rides on the synced flag; the others turn it off.
+            let loops = endAction == .loop
+            if item.isLooping != loops {
+                item.isLooping = loops
+                changed = true
+            }
+            let stored: String? = endAction == .pause ? nil : endAction.rawValue
+            if item.endAction != stored {
+                item.endAction = stored
+                changed = true
+            }
+        } else if let isLooping, item.isLooping != isLooping {
             item.isLooping = isLooping
+            // A change from elsewhere (iCloud) overrides the phone-only choice.
+            item.endAction = isLooping ? VideoEndAction.loop.rawValue : nil
             changed = true
         }
         if let isMuted, item.isMuted != isMuted {
@@ -912,6 +927,7 @@ final class TVLibraryStore {
                 isLooping: item.isLooping,
                 isMuted: item.isMuted,
                 crossfadesLoop: item.crossfadesLoop,
+                endAction: item.endAction,
                 isAvailable: item.isAvailable
             )
             items[index] = updated

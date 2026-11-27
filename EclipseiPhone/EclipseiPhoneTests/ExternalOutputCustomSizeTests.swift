@@ -71,6 +71,26 @@ struct ExternalOutputCustomSizeTests {
         }
     }
 
+    @Test @MainActor func usingAnOfferedSizeReusesASavedTwin() {
+        withCleanCustomSizes {
+            // Nothing saved: tapping an offered size saves and selects it.
+            let wall = ExternalOutputSettings.useCustomSize(width: 2048, height: 768)
+            #expect(wall?.name == "2048×768")
+            #expect(ExternalOutputSettings.activeCustomSize == wall)
+
+            let narrow = ExternalOutputSettings.useCustomSize(width: 1536, height: 768)
+            #expect(ExternalOutputSettings.customSizes.count == 2)
+            #expect(ExternalOutputSettings.activeCustomSize == narrow)
+
+            // Tapping the first size again selects the saved one; no twin is added.
+            #expect(ExternalOutputSettings.useCustomSize(width: 2048, height: 768) == wall)
+            #expect(ExternalOutputSettings.customSizes.count == 2)
+            #expect(ExternalOutputSettings.activeCustomSize == wall)
+
+            #expect(ExternalOutputSettings.useCustomSize(width: 1, height: 768) == nil)
+        }
+    }
+
     @Test @MainActor func updateAndRemove() {
         withCleanCustomSizes {
             guard let size = ExternalOutputSettings.addCustomSize(name: "A", width: 4, height: 2)

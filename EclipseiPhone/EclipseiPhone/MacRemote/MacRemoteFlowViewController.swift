@@ -10,21 +10,21 @@ import UIKit
 
 // MARK: - MacRemoteFlowViewController
 
-/// Presents connect + lean live control for Eclipse on Mac.
+/// Finds Eclipse on a Mac, then shows the Mac's own remote page.
 ///
-/// Invisible to the rest of the app until Settings → Eclipse for Mac or an
-/// `eclipse://mac-remote` QR / deep link opens this controller.
+/// Opened from Settings → Connect to Mac or an `eclipse://mac-remote` QR / deep link.
 final class MacRemoteFlowViewController: UIViewController {
 
     // MARK: - Properties
 
-    private let session = RemoteSessionModel()
-    private var hostingController: UIHostingController<MacRemoteRootView>?
+    private let model = MacRemoteConnectModel()
+    private var connectHost: UIHostingController<ConnectView>?
+    private var remote: MacRemoteWebViewController?
     private var pendingConnectString: String?
 
     // MARK: - Initialization
 
-    /// - Parameter initialConnectString: Deep link / QR payload to pair on appear.
+    /// - Parameter initialConnectString: Deep link / QR payload to open on appear.
     init(initialConnectString: String? = nil) {
         self.pendingConnectString = initialConnectString
         super.init(nibName: nil, bundle: nil)
@@ -36,10 +36,13 @@ final class MacRemoteFlowViewController: UIViewController {
 
     // MARK: - Lifecycle
 
+    override var childForStatusBarStyle: UIViewController? { remote }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .black
-        embedRemoteRoot()
+        model.onConnect = { [weak self] info in self?.showRemote(info) }
+        embedConnectScreen()
     }
 
     override func viewDidAppear(_ animated: Bool) {
@@ -59,34 +62,62 @@ final class MacRemoteFlowViewController: UIViewController {
 
     // MARK: - Public Interface
 
-    /// Applies a fresh QR / deep-link payload to the active session.
+    /// Opens the Mac named by a fresh QR / deep-link payload.
     /// - Parameter raw: `eclipse://mac-remote…` or `http://…#t=…` string.
     func connect(with raw: String) {
-        session.connect(scannedURL: raw)
+        model.connect(scannedURL: raw)
     }
 
     // MARK: - Private Helpers
 
-    private func embedRemoteRoot() {
-        let root = MacRemoteRootView(session: session) { [weak self] in
+    private func embedConnectScreen() {
+        let root = ConnectView(model: model) { [weak self] in
             self?.closeFlow()
         }
         let host = UIHostingController(rootView: root)
-        hostingController = host
-        addChild(host)
-        host.view.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(host.view)
+        connectHost = host
+        embed(host)
+    }
+
+    /// Covers the connect screen with the Mac's remote page.
+    private func showRemote(_ info: RemoteConnectInfo) {
+        removeRemote()
+        view.endEditing(true)
+        let remote = MacRemoteWebViewController(info: info)
+        // Back returns to the connect screen's caller, like Back on a Show.
+        remote.onClose = { [weak self] in self?.closeFlow() }
+        remote.onFailure = { [weak self] message in
+            self?.removeRemote()
+            self?.model.fail(message)
+        }
+        self.remote = remote
+        embed(remote)
+        setNeedsStatusBarAppearanceUpdate()
+    }
+
+    private func removeRemote() {
+        guard let remote else { return }
+        remote.willMove(toParent: nil)
+        remote.view.removeFromSuperview()
+        remote.removeFromParent()
+        self.remote = nil
+        setNeedsStatusBarAppearanceUpdate()
+    }
+
+    private func embed(_ child: UIViewController) {
+        addChild(child)
+        child.view.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(child.view)
         NSLayoutConstraint.activate([
-            host.view.topAnchor.constraint(equalTo: view.topAnchor),
-            host.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            host.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            host.view.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+            child.view.topAnchor.constraint(equalTo: view.topAnchor),
+            child.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            child.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            child.view.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
-        host.didMove(toParent: self)
+        child.didMove(toParent: self)
     }
 
     private func closeFlow() {
-        session.disconnect()
         MacRemoteLauncher.didDismiss(self)
         dismiss(animated: true)
     }

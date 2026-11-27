@@ -81,8 +81,33 @@ struct CameraLiveChromeTests {
         #expect(Cell.showsOnBadge(isOn: true, isFrame: false) == false)
     }
 
+    /// The first card goes back to what was live as the camera opened, never to
+    /// the camera itself, and only while the camera holds the TV.
+    @Test func firstCardReturnsToEntryItemNotCamera() {
+        let vc = CameraLiveViewController()
+        #expect(vc.returnLiveSource == nil)
+        vc.entryLiveSource = .camera
+        #expect(vc.returnLiveSource == nil)
+        #expect(vc.canReturnToEntryLive == false)
+        let still = PresentationSource(
+            content: .image(url: URL(fileURLWithPath: "/tmp/bg.png"), fill: true, framing: nil)
+        )
+        vc.entryLiveSource = still
+        #expect(vc.returnLiveSource == still)
+        #expect(
+            vc.canReturnToEntryLive
+            == ExternalDisplayManager.shared.isCameraModeActive
+        )
+    }
+
     @Test func liveOutputThumbStaysVisibleWhileCameraIsLive() {
         #expect(CameraLiveViewController.showsLiveOutputThumb(isConnected: true))
+        // With no TV, something live on the phone still gets its card.
+        #expect(
+            CameraLiveViewController.showsLiveOutputThumb(
+                isConnected: false, hasLiveSource: true
+            )
+        )
         #expect(
             CameraLiveViewController.showsLiveOutputThumb(isConnected: false) == false
         )
@@ -116,7 +141,10 @@ struct CameraLiveChromeTests {
         #expect(panel.width > 1)
         #expect(vc.tapToGoLiveHintView.bounds.width > 1)
         #expect(abs(vc.tapToGoLiveHintView.center.x - panel.midX) < 1)
-        #expect(abs(vc.tapToGoLiveHintView.center.y - panel.midY) < 1)
+        // In the header row beside Back, never over the picture.
+        #expect(abs(vc.tapToGoLiveHintView.center.y - vc.backButton.frame.midY) < 1)
+        #expect(vc.tapToGoLiveHintView.frame.minX >= vc.backButton.frame.maxX)
+        #expect(vc.tapToGoLiveHintView.frame.maxX <= vc.settingsButton.frame.minX)
     }
 
     @Test func cutawayParkHidesLiveBadgeAndShowsHint() {

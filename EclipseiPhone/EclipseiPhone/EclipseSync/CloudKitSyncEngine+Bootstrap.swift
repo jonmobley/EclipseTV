@@ -138,6 +138,8 @@ extension CloudKitSyncEngine {
         CameraAlternateStillStore.shared.markAllNeedsUpload()
         // Scripts are text-only, so a re-upload into the new zone is cheap.
         PrompterScriptStore.shared.markAllNeedsUpload()
+        // Songs go back with their files: the new zone has no assets.
+        markMusicNeedsUpload()
         engine.state.add(pendingDatabaseChanges: [
             .saveZone(CKRecordZone(zoneID: CloudKitSchema.zoneID))
         ])
@@ -170,6 +172,8 @@ extension CloudKitSyncEngine {
         guard engine != nil,
               !isApplyingRemote,
               !EclipseSyncController.shared.isApplyingRemote else { return }
+        // Hidden for a pending delete or shown again by Undo: the Show is unchanged.
+        if notification.userInfo?[LocalAlbumStore.visibilityOnlyKey] as? Bool == true { return }
         if let id = notification.userInfo?[LocalAlbumStore.changedAlbumIdKey] as? UUID {
             guard !sharedZones.isSharedIn(showId: id) else { return }
             scheduleShowSave(id: id)

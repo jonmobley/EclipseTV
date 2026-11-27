@@ -514,6 +514,13 @@ class iPhoneConnectionManager: NSObject {
         return sent
     }
 
+    /// Whether a library command (delete, move) would reach at least one Apple TV now.
+    /// Same check `sendCommand` makes before sending.
+    var canSendLibraryCommands: Bool {
+        guard let session else { return false }
+        return !syncTargetPeers(broadcast: true, in: session).isEmpty
+    }
+
     /// Asks the Apple TV to delete the item with the given id. Broadcast to all synced
     /// TVs so their libraries stay matched.
     @discardableResult
@@ -615,10 +622,13 @@ class iPhoneConnectionManager: NSObject {
     }
 
     /// Parks (`black`) or clears park on every synced TV while AirPlay owns an overlay.
+    /// - Parameters:
+    ///   - black: Park (`true`) or clear park (`false`)
+    ///   - color: `"white"` for Blackout's White; nil parks on black
     @discardableResult
-    func sendSetIdleMode(black: Bool) -> Bool {
+    func sendSetIdleMode(black: Bool, color: String? = nil) -> Bool {
         return sendCommand(
-            .setIdleMode(black: black),
+            .setIdleMode(black: black, color: color),
             description: black ? "idle park" : "idle clear",
             broadcast: true
         )
@@ -628,7 +638,7 @@ class iPhoneConnectionManager: NSObject {
     /// the message goes to every connected Apple TV; otherwise it targets only the active
     /// TV (preserving single-TV behavior for live-selection and playback commands).
     @discardableResult
-    private func sendCommand(_ envelope: EclipseShareEnvelope, description: String, broadcast: Bool = false) -> Bool {
+    func sendCommand(_ envelope: EclipseShareEnvelope, description: String, broadcast: Bool = false) -> Bool {
         let stamped = envelope.withLibraryMode(ExternalOutputSettings.libraryMode)
         guard let session = session, let data = stamped.encoded() else {
             logger.error("Cannot send \(description): no session or failed to encode")

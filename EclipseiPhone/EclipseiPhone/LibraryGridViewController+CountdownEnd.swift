@@ -66,10 +66,12 @@ extension LibraryGridViewController {
 
     /// Blanks output and drops the clock.
     ///
+    /// Also the end of a video's Next when the Show has nothing after it.
+    ///
     /// Goes through `present(.black)` rather than `beginBlackout()` so no restore
     /// point is captured — toggling blackout back off should not bring a dead
     /// 0:00 clock back to the projector.
-    private func presentBlackAfterCountdown() {
+    func presentBlackAfterCountdown() {
         SlideshowPlaybackController.shared.stop()
         ExternalDisplayManager.shared.present(.black)
         isBlackSelected = true
@@ -116,7 +118,7 @@ extension LibraryGridViewController {
         case .pdf(let doc):
             presentPDFLive(doc)
         case .camera, .cameraPreset, .ptzCamera, .livePoll, .countdown, .prompter,
-             .unresolved, .add:
+             .template, .unresolved, .add:
             break
         }
     }

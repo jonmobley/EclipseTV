@@ -70,9 +70,21 @@ final class DisabledSyncBackend: SyncBackend {
 
     func scheduleCountdownDelete(id: UUID) {}
 
+    func scheduleTemplateCardSave(id: UUID) {}
+
+    func scheduleTemplateCardDelete(id: UUID) {}
+
     func schedulePrompterSave(showId: UUID) {}
 
     func schedulePrompterDelete(showId: UUID) {}
+
+    func scheduleAudioTrackSave(id: UUID) {}
+
+    func scheduleAudioTrackDelete(id: UUID) {}
+
+    func scheduleAudioPlaylistSave(id: UUID) {}
+
+    func scheduleAudioPlaylistDelete(id: UUID) {}
 
     func scheduleLivePollSave(id: UUID) {}
 

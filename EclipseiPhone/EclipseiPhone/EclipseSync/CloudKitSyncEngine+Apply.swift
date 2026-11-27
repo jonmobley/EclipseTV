@@ -57,6 +57,11 @@ extension CloudKitSyncEngine {
             if let item = CloudKitRecordMapper.countdown(from: record) {
                 CountdownStore.shared.applyRemote(item)
             }
+        case CloudKitSchema.RecordType.templateCard:
+            // Unknown template kind or bad config (newer Mac): skip, never crash.
+            if let card = CloudKitRecordMapper.templateCard(from: record) {
+                TemplateCardStore.shared.applyRemote(card)
+            }
         case CloudKitSchema.RecordType.livePoll:
             if let item = CloudKitRecordMapper.livePoll(from: record) {
                 LivePollStore.shared.applyRemote(item)
@@ -85,14 +90,14 @@ extension CloudKitSyncEngine {
         case CloudKitSchema.RecordType.cutawayStill:
             applyRemoteCutaway(record)
         default:
-            break
+            applyRemoteMusic(record)
         }
     }
 
     func applyRemoteShow(_ record: CKRecord) {
         guard let remote = CloudKitRecordMapper.album(from: record) else { return }
         let remoteModified = CloudKitRecordMapper.showModifiedAt(from: record)
-        if let local = LocalAlbumStore.shared.album(id: remote.id) {
+        if let local = LocalAlbumStore.shared.albumIncludingPendingDelete(id: remote.id) {
             let localModified = showModified(id: local.id)
             let merged = CloudKitConflictResolver.mergeShows(
                 local: local,

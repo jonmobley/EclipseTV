@@ -169,6 +169,8 @@ extension PresentationViewController {
 
         if isLooping, looper == nil {
             incomingLoopObserver = makeSeekToZeroLoopObserver(for: player)
+        } else if !isLooping {
+            incomingLoopObserver = makeVideoEndedObserver(for: player)
         }
 
         let beginPlayback = { [weak self, weak player] in

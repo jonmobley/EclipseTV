@@ -19,6 +19,8 @@ struct CountdownDraft: Equatable {
     var layout: CountdownClockLayout
     var background: CountdownBackground
     var endAction: CountdownEndAction
+    /// Mode, To Time target, caption and plate.
+    var clock: CountdownClockSettings
 
     /// Fresh draft for `showId`: next free name and the last chosen length.
     ///
@@ -30,7 +32,8 @@ struct CountdownDraft: Equatable {
         duration: Int,
         layout: CountdownClockLayout = .default,
         background: CountdownBackground = .black,
-        endAction: CountdownEndAction = .hold
+        endAction: CountdownEndAction = .hold,
+        clock: CountdownClockSettings = CountdownClockSettings()
     ) {
         self.showId = showId
         self.name = name
@@ -38,6 +41,7 @@ struct CountdownDraft: Equatable {
         self.layout = layout
         self.background = background
         self.endAction = endAction
+        self.clock = clock
     }
 
     /// Whether `duration` is one of the ribbon presets (Custom… is highlighted otherwise).
@@ -79,7 +83,8 @@ struct CountdownDraft: Equatable {
             duration: CountdownController.clampedDuration(duration),
             layout: layout,
             background: background,
-            endAction: endAction
+            endAction: endAction,
+            clock: clock
         )
     }
 
@@ -100,7 +105,8 @@ struct CountdownDraft: Equatable {
             duration: duration,
             layout: layout,
             background: background,
-            endAction: endAction
+            endAction: endAction,
+            clock: clock
         )
         // Same memory the ⋯ Duration menu keeps, so the next Add starts here.
         defaults.set(item.duration, forKey: CountdownController.durationKey)

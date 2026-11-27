@@ -168,6 +168,8 @@ final class SlideshowDetailViewController: UITableViewController,
         guard name != slideshow.name else { return }
         do {
             try SlideshowStore.shared.rename(id: slideshow.id, to: name)
+            // A cleared name came back as "Slideshow NN": show what was saved.
+            textField.text = SlideshowStore.shared.slideshow(id: slideshow.id)?.name ?? name
         } catch {
             // Put the old name back rather than leave an unsaved one on screen.
             textField.text = slideshow.name

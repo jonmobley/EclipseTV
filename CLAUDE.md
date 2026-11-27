@@ -16,6 +16,12 @@
   with `showsMenuAsPrimaryAction`: UIKit opens those on touch-down, so starting a scroll on ⋯
   popped the menu (2026-10-19). It opens on a clean tap, ignores taps mid-glide, and lets drags
   that start on it scroll the grid.
+- **Blackout White + Freeze** (2026-11-25, match the Mac): long-press the moon picks Black / White
+  (`OutputBlankKind`, remembered). White reaches the TV as `set_idle_mode` `"black"` + `color: "white"`,
+  so older TV builds still go black; AirPlay gets a white cover over the `.black` source
+  (`ExternalDisplayManager+Covers`). Freeze (snowflake) brings Lock's hold, pauses video (TV via the
+  plain pause command, AirPlay player) or lays a still over AirPlay; Lock while frozen = moving Lock,
+  Blackout ends Freeze. Show Live carries `isFrozen` / `blankKind` (optional, legacy-safe).
 - UI tests: if the iPhone simulator refuses to launch the test runner ("request was denied
   by service delegate"), run them on another simulator; it's a simulator state problem.
 - **Pairing protocol is `EclipseShare/v3`** (2026-10-15): each iPhone sends a random device key
@@ -57,7 +63,16 @@
   does not post `didChangeNotification`; the manager posts it on the next main-queue turn and only when the shape
   changed, because it runs inside `attach` and that notification's observers call back into the manager. Settings →
   Display Mode → Connected Screen shows the signal being sent and the other sizes offered. Tests use the pure rules only
-  and never set the global signal. Not yet tried on real hardware: whether iOS lists or sends a non-standard size.
+  and never set the global signal. Proven on real hardware 2026-11-25 (iPhone 17 Pro → J-Tech EDID box): iOS lists
+  every size the box offers and sends the one the app sets, but by itself it starts on the LARGEST offered size, not the
+  box's preferred one. So the odd-shaped offered sizes are one-tap "Use W×H" rows (`selectableOffered`; tapping saves or
+  reuses a custom size via `useCustomSize`), and saving a size in the editor also calls `refreshScreenSignal()`.
+- Show page preview follows the output's shape (2026-11-25): the live hero box and the small "live in another Show" preview
+  use `LibraryGridViewController.heroAspect` (= `outputAspectRatio`), not a fixed 16:9 / 9:16. Stacked layout is one rule,
+  `StackedHeroMetrics.stackedSize`: full width when no taller than the cap, else capped and centred (so a wide wall is a
+  short banner and a tall one looks like Vertical). Everything drawn in the hero fills its box, so the box's shape is what
+  makes photos, video, camera, websites and the countdown match the screen. Grid tiles, website tile art and the import
+  confirm screens stay library-shaped on purpose.
 - Leaving a live countdown (2026-11-13): `endOverlay` moves output state on *before* tearing the overlay down,
   same order as `beginOverlay`. Ending the clock posts its change synchronously, and if `overlaySource` still says
   countdown the grid repaints the hero back onto the frozen clock (countdown posts no end notice to fix it).
@@ -82,6 +97,23 @@
   `ExternalOutputOrientationFixture` now clears any selected custom size for its body (also covers simulators with a
   size saved by hand). A local test run reading 512×786 / "Lobby wall" comes from that simulator's own saved settings.
 - Crash reports: `CrashReporting.swift` in each app sends crashes and freezes to Sentry projects `eclipse-iphone` and `eclipse-appletv` (Release builds only; `scrub` keeps crash type, code location and device model, and drops all free text and activity trails; the `0.0.0.0` user address is what stops Sentry reading a city from the connection, since neither its IP setting nor `infer_ip` did). Upload symbols after each archive so reports are readable. App Privacy answers must list Crash Data and Other Diagnostic Data, not linked to the user, no tracking.
+- Music Up Next (iPhone, 2026-11-23, `MusicUpNext`, `AudioQueueActions`): Play Next / Add to Queue on song rows
+  (menu + leading swipe), same rules as the Mac's `MusicQueue` (a song at most once; Play Next puts it first, Add to
+  Queue last). Offered only while music is loaded (`AudioPlayerController.canQueue`). A queued song playing sets
+  `queuedTrackId` and leaves `currentIndex` on the interrupted playlist song, so the playlist resumes at index+1.
+  Queued songs play even with Autoplay Next off. Up Next is session-only (cleared by `stop()`), reorderable by drag in
+  Now Playing (VoiceOver: Move Up / Move Down). Now Playing reloads its list only when `queueState` changes, since the
+  player posts its change notice twice a second while playing (a reload every tick cancelled swipes and drags).
+- TV-run slideshows + idle screen (2026-11-25, branch claude/p5-tv-slides-idle): the TV lists `capabilities: ["slideshow"]`
+  in its library manifest; only then does the phone send `play_slideshow` (slides + seconds/Loop/Crossfade/per-slide
+  Fit/Fill) and `slideshow_control` (goto id / stop), else it sends one `playRequest` per slide as before
+  (`SlideshowTVHandoff`, `AppleTVCapabilities`). Slides that live only on the phone (captures) always go photo by photo.
+  On the TV, `TVSlideshowPlayer` keeps time; a play request, park, display-mode switch or the remote's left/right/Menu
+  stops it. New shared file `EclipseShareProtocol+Slideshow.swift` is checked by `verify_shared_sources.sh` and must be
+  listed in both build phases' input files (script sandboxing). Idle screen (`IdleScreenRules`, `IdleScreenView`): the
+  bundled Eclipse loop over the grid once a phone has paired, at launch / after disconnect; Select opens the grid, Menu
+  there returns to idle, hold Select opens Options. To see it on a fresh simulator, seed a paired phone:
+  `defaults write <container>/Library/Preferences/com.mobleypro.eclipse.EclipseTV EclipseTV.pairing.pairedDevices -data <hex of {"x":"iPhone"}>`.
 
 ## TestFlight builds
 
@@ -183,6 +215,11 @@
   program, and a tap with no TV (no AirPlay, Apple TV, Practice Mode or operator: `canGoLiveFromCamera`) shows a toast instead
   of parking. The centered hint says what the TV shows ("TV shows Quick Change · Tap for camera", "Preview only · No TV
   connected", else "Tap screen to go LIVE").
+- Camera's first card (2026-11-26, `CameraLiveViewController+LiveOutput`): whatever was live in the Show as the camera
+  opened (`entryLiveSource`, also with no TV). Before the camera goes live it is a blue LIVE card and a tap does nothing;
+  while the camera (or a parked still) holds the TV it shows that item without blue, and a tap puts it back
+  (`returnToEntryLive`: websites / PDFs as the same card via `entryLiveOwnerId`) and the camera screen closes on the
+  camera's end notice. "Tap screen to go LIVE" and its other wordings sit in the camera header between Back and the gear.
 - Camera frames order (2026-11-15): `CameraFrameStore.frames` is newest-first by `createdAt` and never reorders on a tap
   (sorting by `lastUsedAt` made a tapped frame jump in the camera ribbon). The camera header shows only the LIVE pill;
   the PRACTICE pill was removed at the owner's request. Buttons placed inside a `UIImageView` need
@@ -211,7 +248,7 @@
   `ExternalDisplayManager.pdfViewState` and the TV applies it whole (`applyPDFViewState`). A reader on a PDF that is not
   live never moves the TV. Page by Page: on finger lift a pan target picks the next row stop (`PDFViewMath.snapOffset`);
   a row taller than the screen (zoomed in) scrolls freely and stops at its edge. A pinch clears the lit preset.
-  Default is Fit with natural scrolling. PDF tile pictures are 720×960 (`<id>-v2.jpg`); old 360×480 ones stay unused in Caches.
+  Default is Fit with natural scrolling. PDF tile pictures are 960 on the long side (`PDFThumbnailStore.renderSize`, `<id>-v2.jpg`).
   A hero refresh can un-hide the still picture (e.g. `clearWebPreview`), so `showPDFPreview` re-hides it every time.
 - PDF reader zoom snap (2026-11-14): pinching in `PDFRemoteViewController` catches where the current page exactly fills
   the audience frame's width and where it fills its height (`PDFZoomSnap`, ±4% hold band, light haptic on entry). It
@@ -239,15 +276,48 @@
   `alert.preferConfirmAction()` before it is presented; without a preferred action UIKit sends a keyboard's
   Return to Cancel. The camera and QR scanner sessions set `isMultitaskingCameraAccessEnabled` so the camera
   keeps running in Split View / resized windows (unconfirmed on a real iPad).
+- Polls naming (2026-11-23): the owner dropped the QuestPoll brand. On screen, the thing on stage is a "Poll", and the
+  web account/service is "Eclipse Polls" at polls.eclipseapp.com (Q&A audience link ask.eclipseapp.com/CODE).
+  questpoll.com / quest.eclipseapp.com still answer the API and forward pages. Code names (QuestPoll*, LivePoll*) stay.
 - Polls are made and edited in the app (iPhone/iPad, 2026-11-22): `QuestPollEditorViewController` (name, Poll / Quiz,
   time per question, question list) → `QuestPollQuestionEditorViewController` (text, 2–5 answers, right answer in a quiz).
   Reached from the poll list's + and pencil (`QuestPollPickerViewController`, also Settings → QuestPoll → My Polls in
   `.manage` mode) and a card's ⋯ → Edit Poll…. `QuestPollDraft` holds the unsaved poll and its limits (mirrors
-  `quest-relay/src/limits.ts`); `QuestPollDeckWriter` does `POST` / `PUT` / `DELETE /api/polls` (the same calls the website
-  editor uses; LivePollKit itself only reads, so move the writer there when the Mac editor lands). A new poll made while
+  `quest-relay/src/limits.ts`); saving and deleting go through LivePollKit's `saveDeck` / `deleteDeck` (`POST` / `PUT` / `DELETE /api/polls`, the same calls
+  the website editor and the Mac use). A new poll made while
   choosing one for a Show is picked automatically. A running room keeps its own copy, so edits show on the next start.
   questpoll.com has no test copy: never save/delete polls against it to try things out. Check the screens with a stub
   `URLProtocol` client instead (see `QuestPollEditorTests`).
+- Home screen pages and text tabs (iPhone / narrow iPad windows, 2026-11-25, `HomeTabStrip.swift`, `HomeTabPages.swift`,
+  `iPhoneMainViewController+HomePaging.swift`): the pager has four pages, Home · Library · Show · Music (`HomeTab`), named by
+  text tabs under the header row (inside the row in phone landscape) with a line under the current one. Home and Show are still
+  one screen in two modes (`LibraryGridViewController`), so the grid *moves* between the Home slot and the Show slot; Library
+  sits between them, so the two slots are never on screen together and the grid changes mode as soon as a finger swipe brings
+  the other slot into view (`moveGrid(into:)`: Home closes the Show, Show reopens `lastOpenShowId` or the most recent Show of
+  the current Display Mode, else the "No Show open" page). Only a finger swipe does that: tab slides and layout passes never
+  change the grid's mode (a layout pass that snapped the offset mid-slide once closed the Show). `HomePagerScrollView` ignores
+  `scrollRectToVisible`, or focusing a text field nudges the pager sideways. The header (`HomeHeaderBar`) stays on every page
+  and swaps its right-hand buttons by page (`setTabPage`): Music gets "+", and Library and Music hide their
+  own navigation bar at the root (`HomeTabPageNavigationController`; it returns for a playlist or reordering).
+  The dropdown says "Eclipse" on Home (no "Home": that is a tab) and has no Library / Music entries or back chevron there.
+  Search is an icon in the header row, ahead of the page's own buttons; Settings has no icon on the paging home screen and
+  is in the dropdown instead, with or without a Show open (owner's calls, 2026-11-26). Camera is a round button in the
+  bottom-leading corner (`HomeCameraButton`, owner's call 2026-11-26, after a word on the tab row): it mirrors the Music
+  circle (same size and insets), is dark grey (blue means "on the TV"; a blue ring shows while the phone camera is live),
+  and is on iPhone and iPad alike. It fades out while the music card would cover it (an upright phone; a wider screen keeps
+  it), while tiles are arranged or selected, and while a search field is up (`HomeCameraButton.shouldHide`,
+  `refreshHomeCameraButton`). The Show's bottom banners (iCloud, swipe hint) keep clear of it
+  (`bottomChromeCameraClearance`). A floating bottom bar and an iOS-style glass footer were both tried and rejected: do not
+  bring a footer back. Camera opens the full-screen camera (`presentCameraLive`). Search shows on
+  Library, Music's list and an open Show and opens one field under the tabs (`beginPageSearch` / `endPageSearch`) that
+  filters the page in front by name: Show cards (`ShowGridItem.searchTitle`, `showSearchQuery`), tracks and playlists,
+  Library titles. The filter ends when the page or the Show changes, and arranging ends it first, because arrange
+  positions are positions in the whole Show (a filtered grid would save the wrong order). The pushed Library page keeps
+  its own search field. The music player (blue circle + card) is untouched and must stay as it is: a replacement strip
+  was tried and the owner wanted the old player back. A tab's slide always ends on the tapped tab
+  (`scrollViewDidEndScrollingAnimation` never reads the offset).
+  The Library *tab* only browses and previews; adding to a Show is still the pushed Library page from the Show's "+".
+  Regular width (full iPad, big phones in landscape) is unchanged: `HomeHeaderNavTabs`, Music drawer, pushed Library.
 - Content icons match the Mac app (2026-11-22): `ThumbnailTypeIcon.systemName` is the one place a content kind's SF Symbol is named
   (Website `globe`, PDF `doc.text`, Prompter `text.viewfinder`, Slideshow `photo.on.rectangle.angled`, same as the Mac's
   `AddMediaList` / `MediaTypeVisual`). Every screen reads it; never write those symbol names inline. `safari` stays only on
@@ -263,6 +333,13 @@
   strength at the title and unreadable on a white website thumbnail; keep the three-stop shade for any new title over art.
 - Shows list (2026-11-22): presented as a form sheet (compact centred sheet on iPad, like Settings); its filter says
   "Landscape", the same word as Display Mode, never "Horizontal".
+- Card pictures for websites, video links and PDFs (audit 2026-11-26): website cards are captured from the warm web view
+  0.5s after load and again 2.5s later (`WarmWebSession.scheduleThumbnailCapture`; sites that fade in, like github.com, were
+  blank white at 0.5s). Video-link posters (`WebVideoPosterFetcher`) crop from the middle (`saveSnapshot(_:for:centered:)`;
+  YouTube's 4:3 `hqdefault` fallback has bars), ask Vimeo oEmbed for `width=1280` (default is 295×166), and direct
+  `.mp4`/`.mov` links get a still from `VideoPosterFrame` (HLS `.m3u8` can't be sampled and keeps the icon). Posters saved
+  before these rules are fetched once more (`EclipseTV.webVideoPoster.v2Ids`). PDF pictures render into 960×960
+  (`PDFThumbnailStore.renderSize`, files `<id>-v2.jpg`, NSCache-bounded); older 360 px files are rebuilt on first read.
 - Background colors (2026-11-22, `BackgroundColorPreset`): the Background tile's ⋯ menu has a "Color" row with the Mac's
   eight presets (same names, order, stops and `eclipse://builtin/gradient/<name>` URL as eclipsepro's
   `BackgroundGradientPreset`; keep them in step). Picking one draws a 1920×1080 picture and stores it as the Background
@@ -270,3 +347,34 @@
   custom picture, like the Mac. Which preset is chosen is remembered on this device only (UserDefaults
   `EclipseTV.background.colorPreset`): other iPhones receive the picture without the name, since the iCloud Background
   record has no field for it. The Mac does not sync its Background (it is per presentation there).
+- Music sync (2026-11-23, with the Mac): songs are `AudioTrack` records `audio-<UUID>`, playlists `AudioPlaylist`
+  records `playlist-<UUID>`, never parented, last writer wins on `modifiedAt` (tie → remote). Protected items
+  (Background Music + Chill Low Fi) never sync; `caf` and files over 200 MB stay on the phone. Clocks and
+  acknowledgements live in `MusicSyncLedger`, not in the saved track/playlist format. Playlists keep song ids the
+  phone has no file for yet (`MusicSyncPolicy.mergeOrder` on reorder). **Both record types must be deployed
+  Development → Production in the CloudKit Console** before music syncs in TestFlight/App Store builds.
+- Mac remote on iPhone/iPad is the Mac's own page (2026-11-25, `MacRemote/`): Settings → Connect to Mac (or an
+  `eclipse://mac-remote` QR / link) finds the Mac, then `MacRemoteWebViewController` shows the remote page that Eclipse
+  on the Mac serves (eclipsepro `EclipsePro/RemoteControl/WebRemote`). There is no second, hand-built remote screen any
+  more (owner's call: browser and app must look and behave the same), so **new remote controls are built once, in the
+  Mac's page**, never in this app. The app only adds a Back arrow to the page's header (`MacRemotePage.backArrowScript`;
+  its own Back button stands in while the page loads, while the page's PIN card covers the header, or if the header is
+  ever missing), keeps the page on the Mac it opened (`allowsNavigation`), and keeps the remote's sign-in in its own
+  cookie store, apart from the website browser. Sign-in (link secret or PIN) is the page's job. To look at it without a
+  Mac, serve the three `WebRemote` files from a small local stand-in and open
+  `eclipse://mac-remote?h=127.0.0.1&p=<port>#t=x` in the simulator.
+- Music bar on iPhone (2026-11-25, `AudioMiniPlayerView`): two rows. Song name (one line, chevron hints the tap opens Now
+  Playing) over four round buttons in the owner's order: mic duck, Pause / Play, Stop, Next. The Music circle sits in the
+  card's bottom trailing corner, level with the buttons (`controlRowHeight` = `AudioMiniPlayerBubbleView.side`; the card
+  is `preferredHeight` = button row + title row). Next dims when there is nowhere to go (`AudioPlayerController.hasNextSong`:
+  one song, nothing in Up Next). A very narrow window shrinks the four buttons evenly instead of clipping one.
+- Second-phone remote ("Show Live", `ShowLive*`, 2026-11-25): a second iPhone on the same iCloud account with the same Show
+  open becomes a remote of the phone that owns the TV, only while `ShowLiveRouting.directorAppliesSelects` is true. That flag
+  was false from 2026-09-07 to 2026-11-25, so in every build of that period the remote never engaged and all
+  `isRemoteOperator` paths were dead code; check the flag before describing how the remote behaves. Never run on two real
+  phones since it was turned back on. The remote reads the live slideshow through `liveSlideshowView` (own player, or the
+  director's snapshot), never `SlideshowPlaybackController` directly, and the hero Fit / Fill rule is `liveScreenFitChrome()`
+  for both the button and the snapshot. New snapshot fields must be optional and new commands new verbs: an older build
+  ignores unknown fields but drops a whole message whose verb or item kind it cannot decode (which is why PTZ Camera and
+  Prompter are still sent as "nothing live"). Not done on the remote: turning PDF pages, scrolling a website, Prompter and
+  PTZ go-live, the live camera's frames and capture, pinch-to-crop.

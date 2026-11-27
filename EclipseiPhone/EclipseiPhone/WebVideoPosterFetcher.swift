@@ -18,15 +18,30 @@ final class WebVideoPosterFetcher {
         subsystem: "com.eclipseapp.ios", category: "WebVideoPoster"
     )
     private var inFlight = Set<UUID>()
+    /// Pages tried since launch. A link with no poster to find (dead address, `.m3u8`)
+    /// would otherwise be fetched again on every scroll-driven `warmSoon` call.
+    private var attemptedThisRun = Set<UUID>()
 
-    private init() {}
+    /// Pages whose poster was saved by the current rules (centered crop, large Vimeo
+    /// art, file stills; 2026-11-26). Posters saved before then are fetched once more.
+    private static let currentPostersKey = "EclipseTV.webVideoPoster.v2Ids"
+    private var currentPosterIds: Set<String>
 
-    /// Fetches a poster when the bookmark is a video link and has no snapshot yet.
+    private init() {
+        currentPosterIds = Set(
+            UserDefaults.standard.stringArray(forKey: Self.currentPostersKey) ?? []
+        )
+    }
+
+    /// Fetches a poster when the bookmark is a video link and has no up-to-date poster yet.
     func fetchIfNeeded(for page: WebPage) {
         guard let link = page.videoLink else { return }
-        guard WebThumbnailStore.shared.snapshot(for: page.id) == nil else { return }
-        guard !inFlight.contains(page.id) else { return }
+        guard WebThumbnailStore.shared.snapshot(for: page.id) == nil
+                || !currentPosterIds.contains(page.id.uuidString)
+        else { return }
+        guard !inFlight.contains(page.id), !attemptedThisRun.contains(page.id) else { return }
         inFlight.insert(page.id)
+        attemptedThisRun.insert(page.id)
 
         Task { [weak self] in
             defer { Task { @MainActor in self?.inFlight.remove(page.id) } }
@@ -35,8 +50,8 @@ final class WebVideoPosterFetcher {
                 await self?.fetchYouTubePoster(link: link, pageId: page.id)
             case .vimeo:
                 await self?.fetchVimeoPoster(originalURL: page.url, pageId: page.id)
-            case .directFile:
-                break
+            case .directFile(let url):
+                await self?.fetchFilePoster(url: url, pageId: page.id)
             }
         }
     }
@@ -54,7 +69,7 @@ final class WebVideoPosterFetcher {
         let candidates = [link.posterURL, link.fallbackPosterURL].compactMap { $0 }
         for url in candidates {
             if let image = await downloadImage(from: url) {
-                WebThumbnailStore.shared.saveSnapshot(image, for: pageId)
+                savePoster(image, for: pageId)
                 return
             }
         }
@@ -66,8 +81,10 @@ final class WebVideoPosterFetcher {
         var components = URLComponents(
             string: "https://vimeo.com/api/oembed.json"
         )
+        // Without `width` oEmbed hands back a 295×166 thumbnail, blurry on a tile.
         components?.queryItems = [
-            URLQueryItem(name: "url", value: originalURL.absoluteString)
+            URLQueryItem(name: "url", value: originalURL.absoluteString),
+            URLQueryItem(name: "width", value: "1280")
         ]
         guard let oembedURL = components?.url else { return }
         do {
@@ -77,10 +94,98 @@ final class WebVideoPosterFetcher {
                   let thumbURL = URL(string: thumb),
                   let image = await downloadImage(from: thumbURL)
             else { return }
-            WebThumbnailStore.shared.saveSnapshot(image, for: pageId)
+            savePoster(image, for: pageId)
         } catch {
             logger.error("Vimeo oEmbed failed: \(error.localizedDescription, privacy: .public)")
         }
+    }
+
+    /// A still from a linked video file (`.mp4`, `.mov`…). These links never load in a
+    /// web view, so before this they had no picture at all, only the placeholder icon.
+    /// HLS playlists (`.m3u8`) can't be sampled this way, are skipped and keep the placeholder.
+    private func fetchFilePoster(url: URL, pageId: UUID) async {
+        guard Self.canSampleFile(url) else { return }
+        let image = await Self.fileLimiter.run {
+            await Self.poster(at: url, timeout: Self.filePosterTimeout)
+        }
+        guard let image else {
+            logger.error("Video file poster failed for \(pageId.uuidString, privacy: .public)")
+            return
+        }
+        savePoster(image, for: pageId)
+    }
+
+    /// One remote file at a time: each one is a network asset load plus several frame
+    /// grabs, and library posters already share the decoder (`TVLibraryStore.posterLimiter`).
+    private static let fileLimiter = AsyncLimiter(limit: 1)
+    /// A slow or stalled server gives up rather than holding the only slot.
+    private static let filePosterTimeout: TimeInterval = 20
+
+    /// HLS playlists have no frames to grab, so they are not fetched at all.
+    nonisolated static func canSampleFile(_ url: URL) -> Bool {
+        (url.path as NSString).pathExtension.lowercased() != "m3u8"
+    }
+
+    /// `VideoPosterFrame.poster`, or nil once `timeout` seconds pass.
+    ///
+    /// Returns at the deadline whatever the loader does. A task group waits for every
+    /// child, and on CI a cancelled remote asset load did not return, so the old
+    /// group never finished (the iPhone job hung for hours). The poster runs as its
+    /// own task: on timeout it is cancelled (which stops `VideoPosterFrame`'s work as
+    /// soon as AVFoundation allows) and left behind, and the limiter slot is freed.
+    nonisolated static func poster(at url: URL, timeout: TimeInterval) async -> UIImage? {
+        let race = FirstResult()
+        let work = Task { await VideoPosterFrame.poster(at: url) }
+        return await withCheckedContinuation { continuation in
+            race.set(continuation)
+            Task {
+                race.finish(await work.value)
+            }
+            Task {
+                try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+                if race.finish(nil) { work.cancel() }
+            }
+        }
+    }
+
+    /// Resumes a continuation once, with whichever result arrives first.
+    private final class FirstResult: @unchecked Sendable {
+        private let lock = NSLock()
+        private var continuation: CheckedContinuation<UIImage?, Never>?
+        private var pending: UIImage??
+
+        func set(_ continuation: CheckedContinuation<UIImage?, Never>) {
+            lock.lock()
+            if let pending {
+                lock.unlock()
+                continuation.resume(returning: pending)
+                return
+            }
+            self.continuation = continuation
+            lock.unlock()
+        }
+
+        /// True when this call delivered the result (it came first).
+        @discardableResult
+        func finish(_ value: UIImage?) -> Bool {
+            lock.lock()
+            if pending != nil {
+                lock.unlock()
+                return false
+            }
+            pending = .some(value)
+            let waiting = continuation
+            continuation = nil
+            lock.unlock()
+            waiting?.resume(returning: value)
+            return true
+        }
+    }
+
+    private func savePoster(_ image: UIImage, for pageId: UUID) {
+        WebThumbnailStore.shared.saveSnapshot(image, for: pageId, centered: true)
+        currentPosterIds.insert(pageId.uuidString)
+        UserDefaults.standard.set(Array(currentPosterIds), forKey: Self.currentPostersKey)
     }
 
     private func downloadImage(from url: URL) async -> UIImage? {

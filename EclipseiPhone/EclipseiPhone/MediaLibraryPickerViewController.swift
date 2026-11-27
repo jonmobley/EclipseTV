@@ -65,6 +65,15 @@ final class MediaLibraryPickerViewController: UIViewController {
         if #available(iOS 26.0, *) { item.hidesSharedBackground = true }
         return item
     }()
+    /// True for the Library page of the home pager: the Home header and its text
+    /// tabs stand above it, so it has no Back, no title and no bar of its own.
+    var isHomeTabPage = false
+    /// Home pager page: filters by the home screen's search field (in the header).
+    func setHomeTabSearchQuery(_ query: String) {
+        guard query != searchQuery else { return }
+        searchQuery = query
+        if isViewLoaded { reload() }
+    }
     /// Called when the user confirms Add in Show mode.
     var onAddToShow: (([String], [UUID]) -> Void)?
     /// Crop a video, or Custom framing for a still (same flow as Screen Fit).
@@ -77,6 +86,8 @@ final class MediaLibraryPickerViewController: UIViewController {
     var onApplyScreenFit: ((LibraryItemDTO, MediaFitMode) -> Void)?
     /// Persist loop / mute and sync to EclipseTV when linked.
     var onApplyVideoSetting: ((String, Bool?, Bool?) -> Void)?
+    /// A video's "When Video Ends" choice changed in a row menu.
+    var onApplyVideoEndAction: ((String, VideoEndAction) -> Void)?
     /// Deletes after the picker’s confirmation. Grid owns TV + local teardown.
     var onPerformDelete: ((String) -> Void)?
     /// Re-send a purged Apple TV item from Photos.
@@ -215,6 +226,13 @@ final class MediaLibraryPickerViewController: UIViewController {
             name: PDFStore.didChangeNotification,
             object: nil
         )
+        // Hide / show tiles whose delete waits on Undo.
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(reload),
+            name: PendingDeletes.didChangeNotification,
+            object: nil
+        )
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(reload),
@@ -267,12 +285,21 @@ final class MediaLibraryPickerViewController: UIViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        navigationController?.setNavigationBarHidden(false, animated: animated)
+        if !isHomeTabPage {
+            navigationController?.setNavigationBarHidden(false, animated: animated)
+        }
         refreshLeadingBarItem()
     }
 
     /// Tabs on a full iPad canvas, Back everywhere else (iPhone, narrow iPad windows).
     private func refreshLeadingBarItem() {
+        if isHomeTabPage {
+            navigationItem.hidesBackButton = true
+            navigationItem.leftBarButtonItem = nil
+            // The Library tab names the page; `title` stays for VoiceOver.
+            navigationItem.titleView = UIView()
+            return
+        }
         let showsTabs = onSelectHeaderDestination != nil
             && HomeHeaderNavLayout.showsDestinationTabs(
                 horizontalSizeClass: traitCollection.horizontalSizeClass,
@@ -415,8 +442,9 @@ final class MediaLibraryPickerViewController: UIViewController {
     }
 
     @objc func reload() {
-        let media = TVLibraryStore.shared.items
-        let pdfs = PDFStore.shared.documents
+        let hidden = PendingDeletes.shared.hiddenLibraryIds
+        let media = TVLibraryStore.shared.items.filter { !hidden.contains($0.id) }
+        let pdfs = PDFStore.shared.documents.filter { !hidden.contains($0.id.uuidString) }
         memberIds = {
             guard let showId = targetShowId,
                   let album = LocalAlbumStore.shared.album(id: showId)

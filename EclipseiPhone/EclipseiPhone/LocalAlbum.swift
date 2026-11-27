@@ -25,6 +25,9 @@ struct LocalAlbum: Codable, Equatable, Identifiable, Hashable {
     /// Ordered Show grid: tool tokens, member ids, slideshow / countdown /
     /// Live Poll tokens. `nil` = default tools, then members, then those tiles.
     var surfaceIds: [String]?
+    /// Settings → Card Titles: every card in the Show draws its name over the
+    /// thumbnail. Default on; syncs with the Mac's Show Settings.
+    var cardTitlesShown: Bool
     /// Membership ids removed locally — CloudKit union merge subtracts these.
     var deletedItemIds: [String]
     /// Surface ids removed locally (tools / slideshow / countdown / Live Poll).
@@ -40,6 +43,7 @@ struct LocalAlbum: Codable, Equatable, Identifiable, Hashable {
         createdAt: Date = Date(),
         lastOpenedAt: Date? = nil,
         surfaceIds: [String]? = nil,
+        cardTitlesShown: Bool = true,
         deletedItemIds: [String] = [],
         deletedSurfaceIds: [String] = []
     ) {
@@ -51,6 +55,7 @@ struct LocalAlbum: Codable, Equatable, Identifiable, Hashable {
         self.createdAt = createdAt
         self.lastOpenedAt = lastOpenedAt
         self.surfaceIds = surfaceIds
+        self.cardTitlesShown = cardTitlesShown
         self.deletedItemIds = deletedItemIds
         self.deletedSurfaceIds = deletedSurfaceIds
     }
@@ -158,6 +163,9 @@ struct LocalAlbum: Codable, Equatable, Identifiable, Hashable {
         if id.hasPrefix(ShowToolToken.prefix), !ShowToolToken.retired.contains(id) { return true }
         if id == ShowCountdownToken.legacyTool { return true }
         if id == ShowLivePollToken.legacyTool { return true }
+        // Template cards sync as their own records and may land after the Show:
+        // keep the token like a tool; the grid shows "Syncing…" until it arrives.
+        if ShowTemplateToken.isTemplate(id) { return true }
         if members.contains(id) { return true }
         if ShowSlideshowToken.isSlideshow(id) {
             if let slideshows { return slideshows.contains(id) }
@@ -178,7 +186,7 @@ struct LocalAlbum: Codable, Equatable, Identifiable, Hashable {
 
     private enum CodingKeys: String, CodingKey {
         case id, name, itemIds, coverId, orientation, createdAt, lastOpenedAt, surfaceIds
-        case previewsWhenDisconnected, deletedItemIds, deletedSurfaceIds
+        case previewsWhenDisconnected, cardTitlesShown, deletedItemIds, deletedSurfaceIds
     }
 
     init(from decoder: Decoder) throws {
@@ -190,6 +198,7 @@ struct LocalAlbum: Codable, Equatable, Identifiable, Hashable {
         createdAt = try c.decode(Date.self, forKey: .createdAt)
         lastOpenedAt = try c.decodeIfPresent(Date.self, forKey: .lastOpenedAt)
         surfaceIds = try c.decodeIfPresent([String].self, forKey: .surfaceIds)
+        cardTitlesShown = try c.decodeIfPresent(Bool.self, forKey: .cardTitlesShown) ?? true
         deletedItemIds = try c.decodeIfPresent([String].self, forKey: .deletedItemIds) ?? []
         deletedSurfaceIds = try c.decodeIfPresent(
             [String].self, forKey: .deletedSurfaceIds
@@ -212,6 +221,7 @@ struct LocalAlbum: Codable, Equatable, Identifiable, Hashable {
         // Practice Mode is always on (2026-11-25). Builds before that still read
         // this key as the old per-Show switch, so keep telling them "on".
         try c.encode(true, forKey: .previewsWhenDisconnected)
+        try c.encode(cardTitlesShown, forKey: .cardTitlesShown)
         try c.encode(deletedItemIds, forKey: .deletedItemIds)
         try c.encode(deletedSurfaceIds, forKey: .deletedSurfaceIds)
     }

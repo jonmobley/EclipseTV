@@ -178,6 +178,7 @@ extension LibraryGridViewController {
         ) { _ in
             PrompterController.shared.reset()
         })
+        children.append(cardNoteAction(forId: scriptId.uuidString))
         children.append(arrangeAction())
         children.append(selectAction(seedId: token))
         if let showId = openShowId {

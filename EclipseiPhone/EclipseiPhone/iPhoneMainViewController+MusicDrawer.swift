@@ -85,8 +85,10 @@ extension iPhoneMainViewController: UIGestureRecognizerDelegate {
         } else {
             musicDrawer.setOpen(false, animated: false)
         }
-        audioLibraryViewController.showsEmbeddedBackButton = mode == .paging
-        libraryViewController.setMusicPagingAvailable(mode == .paging)
+        // The Music tab names the page and the Home tab leads back, so the page
+        // needs no back chevron, and Home needs no "swipe for Music" tip.
+        audioLibraryViewController.showsEmbeddedBackButton = false
+        libraryViewController.setMusicPagingAvailable(false)
     }
 
     func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
@@ -126,24 +128,27 @@ extension iPhoneMainViewController: UIGestureRecognizerDelegate {
     }
 
     private func activateMusicPagerConstraints(musicView: UIView) {
-        let gridView = libraryViewController.view!
-        let frame = homePagerScrollView.frameLayoutGuide
+        // Music is the last page: three page widths in when the pager has all four
+        // (`applyTabPageGeometry` keeps the offsets), and below the header there.
+        let content = homePagerScrollView.contentLayoutGuide
+        let pageWidth = libraryPageWidthConstraint?.constant ?? 0
+        let leading = musicPageLeadingConstraint
+            ?? musicView.leadingAnchor.constraint(equalTo: content.leadingAnchor)
+        leading.constant = isHomeTabPaging
+            ? CGFloat(HomeTab.music.rawValue) * pageWidth : pageWidth
+        musicPageLeadingConstraint = leading
+        let top = musicPageTopConstraint
+            ?? musicView.topAnchor.constraint(equalTo: content.topAnchor)
+        musicPageTopConstraint = top
         let width = musicPageWidthConstraint
             ?? musicView.widthAnchor.constraint(equalToConstant: 320)
         musicPageWidthConstraint = width
         let constraints: [NSLayoutConstraint] = [
-            musicView.topAnchor.constraint(
-                equalTo: homePagerScrollView.contentLayoutGuide.topAnchor
-            ),
-            musicView.bottomAnchor.constraint(
-                equalTo: homePagerScrollView.contentLayoutGuide.bottomAnchor
-            ),
-            musicView.leadingAnchor.constraint(equalTo: gridView.trailingAnchor),
-            musicView.trailingAnchor.constraint(
-                equalTo: homePagerScrollView.contentLayoutGuide.trailingAnchor
-            ),
-            width,
-            musicView.heightAnchor.constraint(equalTo: frame.heightAnchor)
+            top,
+            musicView.bottomAnchor.constraint(equalTo: content.bottomAnchor),
+            leading,
+            musicView.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+            width
         ]
         musicPagerConstraints = constraints
         NSLayoutConstraint.activate(constraints)

@@ -188,8 +188,8 @@ final class ExternalDisplayManager {
     var currentSourceProvider: (() -> PresentationSource?)?
 
     /// Retained so the external window isn't deallocated (which falls back to mirroring).
-    private var externalWindow: UIWindow?
-    private var presentationVC: PresentationViewController?
+    private(set) var externalWindow: UIWindow?
+    private(set) var presentationVC: PresentationViewController?
     private var lastSource: PresentationSource?
     /// What to put back when blackout is toggled off.
     private var blackoutRestore: BlackoutRestore?
@@ -656,6 +656,7 @@ final class ExternalDisplayManager {
             }
         }
         presentationVC?.show(source)
+        applyBlankCover()
         updateIdleTimer()
     }
 
@@ -836,6 +837,11 @@ final class ExternalDisplayManager {
         lastSource?.content == .ptzCamera
     }
 
+    /// Whether Blackout's blank is what the external display shows.
+    var isBlankPresented: Bool {
+        lastSource?.content == .black
+    }
+
     /// Presents a solid black screen on the external display.
     func presentBlack() {
         beginBlackout()
@@ -864,6 +870,13 @@ final class ExternalDisplayManager {
             }
         }
         present(.black, asJoined: false, preservingCameraOverlay: true)
+    }
+
+    /// Whether output is black (Blackout or a black end card); template and
+    /// media overlays hide while it is.
+    var isBlackLive: Bool {
+        if case .black = lastSource?.content { return true }
+        return false
     }
 
     /// What ending Blackout would bring back (nil when nothing was live before it).
@@ -968,6 +981,7 @@ final class ExternalDisplayManager {
             present(source)
         } else {
             presentationVC?.showIdle()
+            applyBlankCover()
             updateIdleTimer()
         }
     }

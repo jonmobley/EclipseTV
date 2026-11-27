@@ -67,6 +67,7 @@ extension LibraryThumbnailCell {
 
     /// Bottom fade under any title drawn on the thumbnail.
     func updateCaptionScrim() {
+        if hidesCaptions { captionLabel.isHidden = true }
         let showScrim = !captionLabel.isHidden
         captionScrimView.isHidden = !showScrim
         captionLabel.textColor = .white

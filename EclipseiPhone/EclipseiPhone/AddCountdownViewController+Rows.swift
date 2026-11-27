@@ -20,8 +20,10 @@ extension AddCountdownViewController {
         numberOfRowsInSection section: Int
     ) -> Int {
         switch sections[section] {
-        case .name, .layout: return 1
+        case .name, .layout, .caption, .plate: return 1
+        case .mode: return CountdownMode.allCases.count
         case .duration: return CountdownController.durationPresets.count + 1
+        case .target: return targetRows.tableRows().count
         case .background: return CountdownBackgroundOption.fixed.count
         case .showMedia: return showMedia.count
         case .ending: return CountdownEndAction.allCases.count
@@ -34,6 +36,10 @@ extension AddCountdownViewController {
     ) -> String? {
         switch sections[section] {
         case .name: return "Name"
+        case .mode: return "Mode"
+        case .target: return "Count Down To"
+        case .caption: return "Caption"
+        case .plate: return nil
         case .duration: return "Duration"
         case .layout: return "Size & Position"
         case .background: return "Background"
@@ -49,6 +55,12 @@ extension AddCountdownViewController {
         switch sections[section] {
         case .duration:
             return "Custom accepts minutes, m:ss, or h:mm:ss."
+        case .target:
+            return targetRows.footer
+        case .caption:
+            return "Short words shown above the digits. Leave empty for none."
+        case .plate:
+            return "A dark rounded card behind the digits and caption."
         case .layout:
             return "Drag and pinch the clock to where it should sit on the projector."
         case .background:
@@ -56,7 +68,7 @@ extension AddCountdownViewController {
             return "Photos and videos in this Show appear here once they are on this device."
         case .ending:
             return "What the projector does when the clock reaches 0:00."
-        case .name, .showMedia:
+        case .name, .mode, .showMedia:
             return nil
         }
     }
@@ -73,6 +85,8 @@ extension AddCountdownViewController {
             return cell
         case .duration:
             return durationCell(tableView, at: indexPath)
+        case .mode, .target, .caption, .plate:
+            return clockCell(tableView, at: indexPath)
         case .layout:
             let cell = tableView.dequeueReusableCell(withIdentifier: "row", for: indexPath)
             var config = cell.defaultContentConfiguration()
@@ -100,9 +114,16 @@ extension AddCountdownViewController {
     ) {
         tableView.deselectRow(at: indexPath, animated: true)
         nameField.resignFirstResponder()
+        captionField.resignFirstResponder()
         switch sections[indexPath.section] {
         case .name:
             nameField.becomeFirstResponder()
+        case .mode:
+            select(CountdownMode.allCases[indexPath.row])
+        case .caption:
+            captionField.becomeFirstResponder()
+        case .target, .plate:
+            break
         case .duration:
             selectDuration(at: indexPath.row)
         case .layout:
@@ -173,7 +194,7 @@ extension AddCountdownViewController {
         return cell
     }
 
-    private func install(_ field: UITextField, in cell: UITableViewCell) {
+    func install(_ field: UITextField, in cell: UITableViewCell) {
         field.removeFromSuperview()
         field.translatesAutoresizingMaskIntoConstraints = false
         cell.contentView.addSubview(field)

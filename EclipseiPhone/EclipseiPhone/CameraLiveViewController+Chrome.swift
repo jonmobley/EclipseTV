@@ -64,8 +64,8 @@ extension CameraLiveViewController {
             height: goSize.height
         )
 
-        layoutRecordingTimerPill(in: panel)
         layoutTapToGoLiveHint(in: panel)
+        layoutRecordingTimerPill(in: panel)
         view.bringSubviewToFront(tapToGoLiveHintView)
         view.bringSubviewToFront(backButton)
         view.bringSubviewToFront(goLiveButton)
@@ -440,23 +440,28 @@ extension CameraLiveViewController {
             : ("Preview only", "Connect a TV to go live")
     }
 
-    /// Builds the centered "Tap screen to go LIVE" overlay.
+    /// Builds the "Tap screen to go LIVE" hint. It sits in the header row, where
+    /// the LIVE pill goes once the camera is live, so it never covers the picture.
     private func configureTapToGoLiveHint() {
         var config = UIButton.Configuration.filled()
         config.cornerStyle = .capsule
         config.baseForegroundColor = .white
         config.baseBackgroundColor = UIColor.black.withAlphaComponent(0.45)
         config.contentInsets = NSDirectionalEdgeInsets(
-            top: 10, leading: 16, bottom: 10, trailing: 16
+            top: 6, leading: 12, bottom: 6, trailing: 12
         )
+        config.titleLineBreakMode = .byTruncatingTail
         config.title = "Tap screen to go LIVE"
         config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer {
             var attrs = $0
-            attrs.font = .systemFont(ofSize: 16, weight: .semibold)
+            attrs.font = .systemFont(ofSize: 14, weight: .semibold)
             return attrs
         }
         tapToGoLiveHintView.configuration = config
         tapToGoLiveHintView.isUserInteractionEnabled = true
+        // The longest wording has to fit between Back and the gear on a small phone.
+        tapToGoLiveHintView.titleLabel?.adjustsFontSizeToFitWidth = true
+        tapToGoLiveHintView.titleLabel?.minimumScaleFactor = 0.75
         tapToGoLiveHintView.accessibilityLabel = String(localized: "Go LIVE")
         tapToGoLiveHintView.accessibilityHint = "Starts live camera on AirPlay"
         tapToGoLiveHintView.accessibilityTraits = .button
@@ -482,7 +487,9 @@ extension CameraLiveViewController {
         recordingTimerPillView.layer.cornerRadius = height / 2
         recordingTimerPillView.clipsToBounds = true
         let y: CGFloat
-        if goLiveButton.isHidden {
+        if !tapToGoLiveHintView.isHidden {
+            y = tapToGoLiveHintView.frame.maxY + 4
+        } else if goLiveButton.isHidden {
             y = goLiveButton.frame.minY
         } else {
             y = goLiveButton.frame.maxY + (stackedLayout == nil ? 8 : 4)
@@ -509,7 +516,8 @@ extension CameraLiveViewController {
         tapToGoLiveHintView.accessibilityHint = words.hint
     }
 
-    /// Centers the go-live hint in the Display Mode panel.
+    /// Puts the go-live hint in the header row, between Back and the buttons on
+    /// the right (owner's call 2026-11-26: not over the preview).
     private func layoutTapToGoLiveHint(in panel: CGRect) {
         let show = Self.showsTapToGoLiveHint(
             isCameraLive: ExternalDisplayManager.shared.isCameraLive
@@ -523,11 +531,18 @@ extension CameraLiveViewController {
                 CGSize(width: panel.width - 32, height: 44)
             )
         }
-        let width = min(max(size.width, 200), panel.width - 32)
-        let height = max(size.height, 36)
+        let gap: CGFloat = 8
+        let rightEdge = savePresetButton.isHidden
+            ? settingsButton.frame.minX
+            : savePresetButton.frame.minX
+        // Centered on the panel, like the LIVE pill, as wide as both sides allow.
+        let room = 2 * min(panel.midX - backButton.frame.maxX, rightEdge - panel.midX)
+            - 2 * gap
+        let width = max(min(size.width, room), 0)
+        let height = max(size.height, 30)
         tapToGoLiveHintView.frame = CGRect(
             x: panel.midX - width / 2,
-            y: panel.midY - height / 2,
+            y: backButton.frame.midY - height / 2,
             width: width,
             height: height
         )

@@ -128,22 +128,6 @@ extension LibraryGridViewController {
         enterShowMode(album)
     }
 
-    /// Confirms and deletes the open Show, then returns Home.
-    func confirmDeleteOpenShow() {
-        guard let show = openShow else { return }
-        let alert = UIAlertController(
-            title: "Delete Show?",
-            message: "“\(show.name)” is removed from Home. Its images and videos stay on this iPhone and any linked EclipseTV.",
-            preferredStyle: .alert
-        )
-        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        alert.addAction(UIAlertAction(title: "Delete", style: .destructive) { [weak self] _ in
-            LocalAlbumStore.shared.delete(id: show.id)
-            self?.closeOpenShow()
-        })
-        present(alert, animated: true)
-    }
-
     /// Returns the grid to the top when the section contents change wholesale.
     ///
     /// Home and a Show have unrelated content heights, so carrying the old offset across
@@ -244,6 +228,13 @@ extension LibraryGridViewController {
                 }
                 return .unresolved(id: id)
             }
+            if let uuid = ShowTemplateToken.templateId(from: id) {
+                if let card = TemplateCardStore.shared.card(id: uuid),
+                   card.showId == openShowId {
+                    return .template(card)
+                }
+                return .unresolved(id: id)
+            }
             if let uuid = ShowLivePollToken.livePollId(from: id),
                let item = LivePollStore.shared.poll(id: uuid),
                item.showId == openShowId {
@@ -279,6 +270,7 @@ extension LibraryGridViewController {
         guard items.indices.contains(indexPath.item) else { return }
         let gridItem = items[indexPath.item]
         let live = isShowGridItemLive(gridItem)
+        cell.hidesCaptions = hidesCardTitle(gridItem)
         defer { cell.setUpNext(isBlackoutCue(gridItem)) }
         switch gridItem {
         case .slideshow(let show):
@@ -394,6 +386,11 @@ extension LibraryGridViewController {
             cell.setMoreMenu(
                 (isArranging || isSelecting) ? nil : countdownContextMenu(item)
             )
+        case .template(let card):
+            configureTemplateTile(cell, card: card, isLive: live)
+            cell.setMoreMenu(
+                (isArranging || isSelecting) ? nil : templateContextMenu(card)
+            )
         case .media(let item):
             let resume = VideoResumeStore.shared
             let parked = resume.frame(for: item.id)
@@ -476,6 +473,15 @@ extension LibraryGridViewController {
         let items = openShowGridItems
         guard items.indices.contains(indexPath.item) else { return }
         let tapped = items[indexPath.item]
+        // A template layers over live (never replaces it), Blackout or not.
+        if case .template(let card) = tapped {
+            toggleTemplateOverlay(card)
+            return
+        }
+        if case .media(let item) = tapped, isMediaOverlay(item) {
+            toggleMediaOverlay(item)
+            return
+        }
         if handleShowTapDuringBlackout(tapped) { return }
         if handleShowTapForHeroPreview(tapped) { return }
         switch tapped {
@@ -556,7 +562,7 @@ extension LibraryGridViewController {
             presentPDFLive(doc)
         case .unresolved(let id):
             requestUnresolvedDownloadIfNeeded(id: id)
-        case .add:
+        case .template, .add:
             break
         }
     }
@@ -667,7 +673,9 @@ extension LibraryGridViewController {
             self?.confirmDeleteSlideshow(show)
         }
         // Fit / Fill is per slide now, set in the editor (Edit).
-        return UIMenu(children: [edit, rename, arrangeAction(), delete])
+        return UIMenu(children: [
+            edit, rename, cardNoteAction(forId: show.id.uuidString), arrangeAction(), delete
+        ])
     }
 
     /// Opens the pan/zoom cropper for a video. Stills use Screen Fit → Custom.
@@ -726,12 +734,13 @@ extension LibraryGridViewController {
             },
             titleAction(for: item)
         ]
+        children.append(noteAction(for: item))
         if item.isVideo {
             children.append(contentsOf: videoOptionActions(for: item))
-            children.append(screenFitMenu(for: item))
-        } else {
-            children.append(noteAction(for: item))
-            children.append(screenFitMenu(for: item))
+        }
+        children.append(screenFitMenu(for: item))
+        if item.isAvailable != false {
+            children.append(mediaOverlayMenu(for: item))
         }
         if item.isAvailable != false, item.isVideo {
             children.append(contentsOf: videoEditActions(for: item))
@@ -761,7 +770,8 @@ extension LibraryGridViewController {
             self?.presentWebPage(page)
         }
         let rest = memberContextMenu(itemId: page.id.uuidString, in: album)
-        return UIMenu(children: [preview] + rest.children)
+        let note = cardNoteAction(forId: page.id.uuidString)
+        return UIMenu(children: [preview, note] + rest.children)
     }
 
     /// Cover / Arrange / Remove for a Show member (media, website, or PDF id).

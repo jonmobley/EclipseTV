@@ -21,7 +21,8 @@ struct SettingsShowEditingTests {
         let table = try #require(settings.tableView)
         #expect(table.numberOfRows(inSection: 0) == 1)
         #expect(settings.tableView(table, titleForHeaderInSection: 0) == "Show")
-        #expect(settings.tableView(table, titleForHeaderInSection: 1) == "Playback")
+        #expect(settings.tableView(table, titleForHeaderInSection: 1) == nil)
+        #expect(settings.tableView(table, titleForHeaderInSection: 2) == "Playback")
 
         let nameCell = settings.tableView(
             table, cellForRowAt: IndexPath(row: 0, section: 0)
@@ -92,14 +93,25 @@ struct SettingsShowEditingTests {
         settings.loadViewIfNeeded()
 
         let table = try #require(settings.tableView)
-        #expect(table.numberOfRows(inSection: 0) == 3)
+        #expect(table.numberOfRows(inSection: 0) == 4)
         let cell = settings.tableView(
-            table, cellForRowAt: IndexPath(row: 2, section: 0)
+            table, cellForRowAt: IndexPath(row: 3, section: 0)
         )
         let config = cell.contentConfiguration as? UIListContentConfiguration
         #expect(config?.text == "Pause Music for Video")
         let toggle = try #require(cell.accessoryView as? UISwitch)
         #expect(toggle.isOn == ExternalOutputSettings.pauseMusicForVideo)
         #expect(toggle.accessibilityLabel == "Pause Music for Video")
+    }
+
+    @Test func playbackOffersWebsiteTextSize() throws {
+        let settings = SettingsViewController()
+        settings.loadViewIfNeeded()
+
+        let table = try #require(settings.tableView)
+        let cell = settings.tableView(table, cellForRowAt: IndexPath(row: 2, section: 0))
+        let config = cell.contentConfiguration as? UIListContentConfiguration
+        #expect(config?.text == "Website Text Size")
+        #expect(config?.secondaryText == ExternalOutputSettings.webTextSize.rawValue)
     }
 }

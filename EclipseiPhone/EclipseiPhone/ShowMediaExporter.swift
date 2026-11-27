@@ -105,6 +105,7 @@ enum ShowMediaExporter {
             }
             if ShowToolToken.isTool(surfaceId)
                 || ShowCountdownToken.isCountdown(surfaceId)
+                || ShowTemplateToken.isTemplate(surfaceId)
                 || ShowLivePollToken.isLivePoll(surfaceId) {
                 continue
             }

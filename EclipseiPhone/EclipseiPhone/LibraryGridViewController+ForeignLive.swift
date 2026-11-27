@@ -118,12 +118,9 @@ extension LibraryGridViewController {
 
     private func foreignLiveTargetRect() -> CGRect? {
         if let rect = compactHeroTargetRect() { return rect }
-        let width = ExternalOutputSettings.isVerticalMode
-            ? Self.compactHeroWidthVertical
-            : Self.compactHeroWidthLandscape
-        let height: CGFloat = ExternalOutputSettings.isVerticalMode
-            ? (width * 16.0 / 9.0).rounded(.down)
-            : (width * 9.0 / 16.0).rounded(.down)
+        let aspect = heroAspect
+        let width = aspect < 1 ? Self.compactHeroWidthVertical : Self.compactHeroWidthLandscape
+        let height = (width / aspect).rounded(.down)
         guard view.bounds.width > width + headerInset * 2 else { return nil }
         return CGRect(
             x: view.bounds.width - headerInset - width,
@@ -156,7 +153,7 @@ extension LibraryGridViewController {
             return
         }
         if mgr.isQuestPollLive {
-            let title = QuestPollSessionStore.shared.session?.deckTitle ?? "QuestPoll"
+            let title = QuestPollSessionStore.shared.session?.deckTitle ?? "Poll"
             foreignLiveHeader.configureOverlay(
                 title: title,
                 systemImage: "chart.bar.fill",

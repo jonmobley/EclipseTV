@@ -18,7 +18,7 @@ struct LiveHeroMiniSlotTests {
             safeAreaTop: 59,
             headerInset: 16,
             expandedHero: hero,
-            isVerticalMode: false
+            isTall: false
         )
         #expect(rect?.width == 148)
         #expect(rect?.minX == CGFloat(393 - 16 - 148))
@@ -32,7 +32,7 @@ struct LiveHeroMiniSlotTests {
             safeAreaTop: 59,
             headerInset: 16,
             expandedHero: hero,
-            isVerticalMode: true
+            isTall: true
         )
         #expect(rect?.width == 84)
         #expect(rect?.width ?? 0 < hero.width)
@@ -45,7 +45,7 @@ struct LiveHeroMiniSlotTests {
             safeAreaTop: 59,
             headerInset: 16,
             expandedHero: hero,
-            isVerticalMode: false
+            isTall: false
         )
         #expect(rect == nil)
     }

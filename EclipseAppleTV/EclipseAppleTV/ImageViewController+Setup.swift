@@ -81,6 +81,7 @@ extension ImageViewController {
     /// paths in `setupViewModel`. Must be called on the main thread.
     func presentInitialMedia() {
         isInGridMode = true
+        defer { showIdleScreenIfReady() }
 
         guard !dataSource.isEmpty else {
             logger.info("❌ [SETUP] Data source is empty - showing empty state")

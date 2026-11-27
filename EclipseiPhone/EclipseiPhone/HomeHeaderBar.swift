@@ -23,8 +23,21 @@ final class HomeHeaderBar: UIView {
     private let menuPill = UIView()
     private let libraryButton = MinimumHitTargetButton(type: .system)
     private let navTabs = HomeHeaderNavTabs()
+    /// The 52pt row of controls. The text tabs sit under it on an upright phone.
+    private let rowGuide = UILayoutGuide()
+    /// Home · Library · Show · Music, when the home screen pages (compact width).
+    let tabStrip = HomeTabStripView()
+    /// Fills the status-bar area above the bar so nothing scrolls through it.
+    private let topBackdrop = UIView()
+    private let searchButton = MinimumHitTargetButton(type: .system)
+    /// The search field and Cancel, under the tabs while a page is being searched.
+    private let searchRow = UIView()
+    let searchField = UISearchTextField()
+    private let cancelSearchButton = UIButton(type: .system)
+    private let addMusicButton = MinimumHitTargetButton(type: .system)
     private let trailingStack = UIStackView()
     private let lockButton = MinimumHitTargetButton(type: .system)
+    private let freezeButton = MinimumHitTargetButton(type: .system)
     private let blackButton = MinimumHitTargetButton(type: .system)
     private let settingsButton = MinimumHitTargetButton(type: .system)
     private let addButton = MinimumHitTargetButton(type: .system)
@@ -40,6 +53,10 @@ final class HomeHeaderBar: UIView {
     var onToggleLiveLock: (() -> Void)?
     /// Invoked when the Blackout control is tapped.
     var onPresentBlack: (() -> Void)?
+    /// Header snowflake: hold the audience screen still.
+    var onToggleFreeze: (() -> Void)?
+    /// Blackout's long-press menu: Black or White.
+    var onSelectBlankKind: ((OutputBlankKind) -> Void)?
     /// Invoked when New Show is tapped on Home.
     var onNewShow: (() -> Void)?
     /// Invoked when Done is tapped while arranging tiles.
@@ -48,6 +65,38 @@ final class HomeHeaderBar: UIView {
     var onDoneSelecting: (() -> Void)?
     /// Invoked by an iPad destination tab (Home, Show, Library, Music).
     var onSelectDestination: ((HomeHeaderDestination) -> Void)?
+    /// Invoked when a text tab is tapped (compact width).
+    var onSelectTab: ((HomeTab) -> Void)?
+    /// Invoked by "Camera" on the tab row.
+    /// Arranging, selecting or searching started or stopped (the Camera button
+    /// steps aside meanwhile).
+    var onOverlayStateChange: (() -> Void)?
+    /// Invoked by the Search control (Library, Show and Music pages).
+    var onBeginSearch: (() -> Void)?
+    /// Invoked as the search text changes.
+    var onSearchTextChanged: ((String) -> Void)?
+    /// Invoked by Cancel beside the search field.
+    var onCancelSearch: (() -> Void)?
+    /// Invoked by the Music page's "+" control.
+    var onAddMusic: (() -> Void)?
+
+    /// Height of the row of controls, without the text tabs.
+    static let rowHeight: CGFloat = 52
+
+    /// Bar height: the row alone, or the row plus the text tabs under it. In phone
+    /// landscape the tabs sit inside the row, where height is short and width is not.
+    static func height(
+        showsTabStrip: Bool,
+        verticalSizeClass: UIUserInterfaceSizeClass,
+        isSearching: Bool = false
+    ) -> CGFloat {
+        guard showsTabStrip else { return rowHeight }
+        let tabs = verticalSizeClass == .compact ? 0 : HomeTabStripView.height
+        return rowHeight + tabs + (isSearching ? searchRowHeight : 0)
+    }
+
+    /// Room the search field takes at the bottom of the bar.
+    static let searchRowHeight: CGFloat = 48
 
     /// EclipseTV Multipeer link — read by output-status chrome.
     private(set) var connectionState: ConnectionDisplayState = .paused
@@ -55,9 +104,21 @@ final class HomeHeaderBar: UIView {
     private(set) var isAirPlayConnected = false
     private var isLiveLocked = false
     private var isBlackLive = false
+    private var isFrozen = false
+    private var blankKind = OutputBlankKind.current
     private var showsShowChrome = false
     private var isArranging = false
     private var isSelecting = false
+    /// Tiles are being arranged or selected.
+    var isEditingTiles: Bool { isArranging || isSelecting }
+    /// Page the pager is on; picks the trailing controls when the tabs show.
+    private var tabPage: HomeTab = .home
+    /// False while Music is inside a playlist, which has its own "+".
+    private var musicAddAvailable = true
+    /// True while the search field is showing.
+    private(set) var isSearching = false
+    private var tabStripBelowConstraints: [NSLayoutConstraint] = []
+    private var tabStripInlineConstraints: [NSLayoutConstraint] = []
     private var menuPillLeadingToBack: NSLayoutConstraint?
     private var menuPillLeadingToSafe: NSLayoutConstraint?
 
@@ -77,6 +138,13 @@ final class HomeHeaderBar: UIView {
     // MARK: - Setup
 
     private func setupViews() {
+        addLayoutGuide(rowGuide)
+        topBackdrop.backgroundColor = .systemBackground
+        topBackdrop.isUserInteractionEnabled = false
+        topBackdrop.isHidden = true
+        topBackdrop.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(topBackdrop)
+
         let symbol = UIImage.SymbolConfiguration(pointSize: 17, weight: .semibold)
         backButton.configuration = Self.barIconConfig(
             systemName: "chevron.left",
@@ -143,7 +211,7 @@ final class HomeHeaderBar: UIView {
         libraryButton.showsMenuAsPrimaryAction = true
         libraryButton.accessibilityLabel = "Home menu"
         libraryButton.accessibilityHint =
-            "Open Show, New Show, Library, Music, Settings, and Recent Shows"
+            "Open Show, New Show, Camera Mode, Settings, and Recent Shows"
         libraryButton.translatesAutoresizingMaskIntoConstraints = false
         libraryButton.setContentCompressionResistancePriority(
             .defaultLow, for: .horizontal
@@ -164,12 +232,20 @@ final class HomeHeaderBar: UIView {
         applyLockButtonAppearance()
 
         blackButton.translatesAutoresizingMaskIntoConstraints = false
-        blackButton.accessibilityLabel = "Blackout"
         blackButton.accessibilityHint =
-            "Toggles a black screen on the live output — AirPlay, EclipseTV, "
-            + "or the preview on this iPhone"
+            "Toggles a black or white screen on the live output — AirPlay, EclipseTV, "
+            + "or the preview on this iPhone. Touch and hold to choose Black or White."
         blackButton.addTarget(self, action: #selector(blackTapped), for: .touchUpInside)
+        // Long press picks Black or White; a tap still toggles Blackout.
+        blackButton.showsMenuAsPrimaryAction = false
         applyBlackButtonAppearance()
+
+        freezeButton.translatesAutoresizingMaskIntoConstraints = false
+        freezeButton.accessibilityLabel = "Freeze"
+        freezeButton.accessibilityHint =
+            "Holds the audience screen still; media, Screensaver, and Background open in Preview"
+        freezeButton.addTarget(self, action: #selector(freezeTapped), for: .touchUpInside)
+        applyFreezeButtonAppearance()
 
         // Plain SF Symbols, like UIBarButtonItem — not icons in stroked circles.
         let symbolConfig = UIImage.SymbolConfiguration(pointSize: 20, weight: .regular)
@@ -190,6 +266,66 @@ final class HomeHeaderBar: UIView {
         addButton.translatesAutoresizingMaskIntoConstraints = false
         addButton.accessibilityLabel = "Add"
         addButton.showsMenuAsPrimaryAction = true
+
+        searchButton.configuration = Self.barIconConfig(
+            systemName: "magnifyingglass",
+            symbolConfig: symbolConfig
+        )
+        searchButton.translatesAutoresizingMaskIntoConstraints = false
+        searchButton.accessibilityLabel = "Search"
+        searchButton.accessibilityHint = "Searches this page by name"
+        searchButton.isHidden = true
+        searchButton.addAction(UIAction { [weak self] _ in
+            self?.onBeginSearch?()
+        }, for: .touchUpInside)
+
+        searchRow.isHidden = true
+        searchRow.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(searchRow)
+        searchField.translatesAutoresizingMaskIntoConstraints = false
+        searchField.autocapitalizationType = .none
+        searchField.autocorrectionType = .no
+        searchField.returnKeyType = .search
+        searchField.accessibilityIdentifier = "home.search.field"
+        searchField.addAction(UIAction { [weak self] _ in
+            guard let self else { return }
+            self.onSearchTextChanged?(self.searchField.text ?? "")
+        }, for: .editingChanged)
+        // Return keeps the results and puts the keyboard away.
+        searchField.addAction(UIAction { [weak self] _ in
+            self?.searchField.resignFirstResponder()
+        }, for: .editingDidEndOnExit)
+        searchRow.addSubview(searchField)
+        cancelSearchButton.setTitle("Cancel", for: .normal)
+        cancelSearchButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .regular)
+        cancelSearchButton.translatesAutoresizingMaskIntoConstraints = false
+        cancelSearchButton.setContentCompressionResistancePriority(.required, for: .horizontal)
+        cancelSearchButton.setContentHuggingPriority(.required, for: .horizontal)
+        cancelSearchButton.accessibilityLabel = "Cancel search"
+        cancelSearchButton.addAction(UIAction { [weak self] _ in
+            self?.onCancelSearch?()
+        }, for: .touchUpInside)
+        searchRow.addSubview(cancelSearchButton)
+
+        addMusicButton.configuration = Self.barIconConfig(
+            systemName: "plus",
+            symbolConfig: symbolConfig,
+            foreground: .accent
+        )
+        addMusicButton.translatesAutoresizingMaskIntoConstraints = false
+        addMusicButton.accessibilityLabel = "Add Music"
+        addMusicButton.accessibilityHint = "Adds music or makes a playlist"
+        addMusicButton.isHidden = true
+        addMusicButton.addAction(UIAction { [weak self] _ in
+            self?.onAddMusic?()
+        }, for: .touchUpInside)
+
+        tabStrip.translatesAutoresizingMaskIntoConstraints = false
+        tabStrip.isHidden = true
+        tabStrip.onSelect = { [weak self] tab in
+            self?.onSelectTab?(tab)
+        }
+        addSubview(tabStrip)
 
         newShowButton.translatesAutoresizingMaskIntoConstraints = false
         newShowButton.accessibilityLabel = "New Show"
@@ -229,11 +365,14 @@ final class HomeHeaderBar: UIView {
 
         trailingStack.axis = .horizontal
         trailingStack.alignment = .center
-        trailingStack.spacing = 8
+        trailingStack.spacing = 6
         trailingStack.translatesAutoresizingMaskIntoConstraints = false
+        // Search leads the row; Camera is on the tab row.
         for button in [
-            lockButton, blackButton, settingsButton,
-            addButton, newShowButton, selectActionsButton, doneButton
+            searchButton,
+            lockButton, freezeButton, blackButton, settingsButton,
+            addButton, addMusicButton,
+            newShowButton, selectActionsButton, doneButton
         ] {
             trailingStack.addArrangedSubview(button)
         }
@@ -249,14 +388,62 @@ final class HomeHeaderBar: UIView {
         menuPillLeadingToSafe = leadingSafe
         menuPillLeadingToBack = leadingBack
 
+        tabStripBelowConstraints = [
+            tabStrip.topAnchor.constraint(equalTo: rowGuide.bottomAnchor),
+            tabStrip.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
+            tabStrip.trailingAnchor.constraint(
+                lessThanOrEqualTo: trailingAnchor, constant: -12
+            )
+        ]
+        tabStripInlineConstraints = [
+            tabStrip.centerYAnchor.constraint(equalTo: rowGuide.centerYAnchor),
+            tabStrip.leadingAnchor.constraint(
+                equalTo: leadingNavStack.trailingAnchor, constant: 16
+            ),
+            tabStrip.trailingAnchor.constraint(
+                lessThanOrEqualTo: trailingStack.leadingAnchor, constant: -8
+            )
+        ]
+        tabStrip.setContentCompressionResistancePriority(.required, for: .horizontal)
+
         NSLayoutConstraint.activate([
+            rowGuide.topAnchor.constraint(equalTo: topAnchor),
+            rowGuide.leadingAnchor.constraint(equalTo: leadingAnchor),
+            rowGuide.trailingAnchor.constraint(equalTo: trailingAnchor),
+            rowGuide.heightAnchor.constraint(equalToConstant: Self.rowHeight),
+
+            // Up through the status bar and out to the screen edges (the bar itself
+            // stops at the safe area in landscape).
+            topBackdrop.bottomAnchor.constraint(equalTo: bottomAnchor),
+            topBackdrop.heightAnchor.constraint(equalToConstant: 400),
+            topBackdrop.leadingAnchor.constraint(equalTo: leadingAnchor, constant: -120),
+            topBackdrop.trailingAnchor.constraint(equalTo: trailingAnchor, constant: 120),
+
+            searchButton.widthAnchor.constraint(equalToConstant: 36),
+            searchButton.heightAnchor.constraint(equalToConstant: 36),
+
+            searchRow.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
+            searchRow.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
+            searchRow.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -6),
+            searchRow.heightAnchor.constraint(equalToConstant: 38),
+            searchField.leadingAnchor.constraint(equalTo: searchRow.leadingAnchor),
+            searchField.topAnchor.constraint(equalTo: searchRow.topAnchor),
+            searchField.bottomAnchor.constraint(equalTo: searchRow.bottomAnchor),
+            cancelSearchButton.leadingAnchor.constraint(
+                equalTo: searchField.trailingAnchor, constant: 10
+            ),
+            cancelSearchButton.trailingAnchor.constraint(equalTo: searchRow.trailingAnchor),
+            cancelSearchButton.centerYAnchor.constraint(equalTo: searchRow.centerYAnchor),
+            addMusicButton.widthAnchor.constraint(equalToConstant: 36),
+            addMusicButton.heightAnchor.constraint(equalToConstant: 36),
+
             backButton.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
-            backButton.centerYAnchor.constraint(equalTo: centerYAnchor),
+            backButton.centerYAnchor.constraint(equalTo: rowGuide.centerYAnchor),
             backButton.widthAnchor.constraint(equalToConstant: 36),
             backButton.heightAnchor.constraint(equalToConstant: 36),
 
             leadingSafe,
-            leadingNavStack.centerYAnchor.constraint(equalTo: centerYAnchor),
+            leadingNavStack.centerYAnchor.constraint(equalTo: rowGuide.centerYAnchor),
             leadingNavStack.heightAnchor.constraint(equalToConstant: 44),
 
             menuPill.heightAnchor.constraint(equalToConstant: 36),
@@ -267,7 +454,7 @@ final class HomeHeaderBar: UIView {
             libraryButton.bottomAnchor.constraint(equalTo: menuPill.bottomAnchor),
 
             trailingStack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
-            trailingStack.centerYAnchor.constraint(equalTo: centerYAnchor),
+            trailingStack.centerYAnchor.constraint(equalTo: rowGuide.centerYAnchor),
 
             addButton.widthAnchor.constraint(equalToConstant: 36),
             addButton.heightAnchor.constraint(equalToConstant: 36),
@@ -275,6 +462,8 @@ final class HomeHeaderBar: UIView {
             settingsButton.heightAnchor.constraint(equalToConstant: 36),
             lockButton.widthAnchor.constraint(equalToConstant: 36),
             lockButton.heightAnchor.constraint(equalToConstant: 36),
+            freezeButton.widthAnchor.constraint(equalToConstant: 36),
+            freezeButton.heightAnchor.constraint(equalToConstant: 36),
             blackButton.widthAnchor.constraint(equalToConstant: 36),
             blackButton.heightAnchor.constraint(equalToConstant: 36),
             newShowButton.heightAnchor.constraint(equalToConstant: 36),
@@ -286,13 +475,14 @@ final class HomeHeaderBar: UIView {
             )
         ])
         for button in [
-            backButton, lockButton, blackButton, settingsButton,
-            addButton, newShowButton
+            backButton, lockButton, freezeButton, blackButton, settingsButton,
+            addButton, addMusicButton, newShowButton
         ] {
             button.setContentCompressionResistancePriority(.required, for: .horizontal)
         }
         backButton.setContentHuggingPriority(.required, for: .horizontal)
         lockButton.setContentHuggingPriority(.required, for: .horizontal)
+        freezeButton.setContentHuggingPriority(.required, for: .horizontal)
         blackButton.setContentHuggingPriority(.required, for: .horizontal)
         applySizeClassChrome()
     }
@@ -341,6 +531,56 @@ final class HomeHeaderBar: UIView {
         applySizeClassChrome()
     }
 
+    /// Turns the text tabs on (the home screen pages) or off (iPad tabs, drawer).
+    ///
+    /// On also means: no back chevron (the Home tab returns), a solid backdrop so
+    /// pages never scroll through the bar, and page-specific trailing controls.
+    var showsTabStrip = false {
+        didSet {
+            guard showsTabStrip != oldValue else { return }
+            applySizeClassChrome()
+        }
+    }
+
+    /// The page the pager is nearest; picks the trailing controls.
+    func setTabPage(_ page: HomeTab) {
+        guard tabPage != page else { return }
+        tabPage = page
+        applyTrailingChrome()
+    }
+
+    /// Hides the Music "+" while a playlist (with its own bar) is open.
+    func setMusicAddAvailable(_ available: Bool) {
+        guard musicAddAvailable != available else { return }
+        musicAddAvailable = available
+        applyTrailingChrome()
+    }
+
+    /// Shows the search field under the tabs and puts the cursor in it.
+    func beginSearch(placeholder: String) {
+        searchField.placeholder = placeholder
+        searchField.text = ""
+        isSearching = true
+        searchRow.isHidden = false
+        applyTrailingChrome()
+        searchField.becomeFirstResponder()
+        onOverlayStateChange?()
+    }
+
+    /// Hides the search field and clears it.
+    func endSearch() {
+        guard isSearching else { return }
+        isSearching = false
+        searchField.text = ""
+        searchField.resignFirstResponder()
+        searchRow.isHidden = true
+        applyTrailingChrome()
+        onOverlayStateChange?()
+    }
+
+    /// The Music "+" control, for anchoring its sheet on iPad.
+    var addMusicAnchor: UIView { addMusicButton }
+
     /// Attaches the system add menu to the "+" control (primary action).
     func setAddMenu(_ menu: UIMenu) {
         addButton.menu = menu
@@ -360,6 +600,10 @@ final class HomeHeaderBar: UIView {
         onPresentBlack?()
     }
 
+    @objc private func freezeTapped() {
+        onToggleFreeze?()
+    }
+
     @objc private func settingsTapped() {
         onOpenSettings?()
     }
@@ -376,8 +620,8 @@ final class HomeHeaderBar: UIView {
         showsShowChrome = showMode
         applySizeClassChrome()
         libraryButton.accessibilityHint = showMode
-            ? "Open Show, New Show, Library, Music, and Recent Shows"
-            : "Open Show, New Show, Library, Music, Settings, and Recent Shows"
+            ? "Open Show, New Show, Camera Mode, and Recent Shows"
+            : "Open Show, New Show, Camera Mode, Settings, and Recent Shows"
     }
 
     /// Lock + Blackout: every open Show. With a display or EclipseTV they act on
@@ -407,6 +651,23 @@ final class HomeHeaderBar: UIView {
         }
     }
 
+    /// Reflects whether Freeze holds the audience screen (blue snowflake).
+    func setFrozen(_ frozen: Bool) {
+        guard isFrozen != frozen else { return }
+        isFrozen = frozen
+        UIView.animate(withDuration: 0.22, delay: 0, options: .curveEaseInOut) {
+            self.applyFreezeButtonAppearance()
+            self.layoutIfNeeded()
+        }
+    }
+
+    /// Reflects Blackout's colour (VoiceOver name and the long-press menu tick).
+    func setBlankKind(_ kind: OutputBlankKind) {
+        guard blankKind != kind else { return }
+        blankKind = kind
+        applyBlackButtonAppearance()
+    }
+
     /// Enters or leaves arrange mode, where Done replaces the trailing controls.
     func setArranging(_ arranging: Bool) {
         isArranging = arranging
@@ -430,7 +691,9 @@ final class HomeHeaderBar: UIView {
         menuPill.alpha = editing ? 0.45 : 1
         navTabs.isUserInteractionEnabled = !editing
         navTabs.alpha = editing ? 0.45 : 1
+        tabStrip.setEnabled(!editing)
         applySizeClassChrome()
+        onOverlayStateChange?()
         doneButton.accessibilityLabel = isSelecting
             ? "Done selecting"
             : "Done arranging"
@@ -443,7 +706,7 @@ final class HomeHeaderBar: UIView {
     /// and on iPad tabs (Home is the return control).
     private func applyBackButtonChrome() {
         let show = showsShowChrome && !isArranging && !isSelecting
-            && !showsDestinationTabs
+            && !showsDestinationTabs && !showsTabStrip
         backButton.isHidden = !show
         backButton.isEnabled = show
         menuPillLeadingToSafe?.isActive = !show
@@ -453,9 +716,23 @@ final class HomeHeaderBar: UIView {
     /// Compact dropdown vs iPad destination tabs, plus trailing/back that
     /// depend on that choice.
     private func applySizeClassChrome() {
+        applyTabStripPlacement()
         applyLeadingNavChrome()
         applyTrailingChrome()
         applyBackButtonChrome()
+    }
+
+    /// Text tabs under the row (upright) or inside it (phone landscape).
+    private func applyTabStripPlacement() {
+        tabStrip.isHidden = !showsTabStrip
+        topBackdrop.isHidden = !showsTabStrip
+        backgroundColor = showsTabStrip ? .systemBackground : .clear
+        let inline = traitCollection.verticalSizeClass == .compact
+        NSLayoutConstraint.deactivate(tabStripBelowConstraints + tabStripInlineConstraints)
+        guard showsTabStrip else { return }
+        NSLayoutConstraint.activate(
+            inline ? tabStripInlineConstraints : tabStripBelowConstraints
+        )
     }
 
     /// Compact dropdown vs iPad destination tabs.
@@ -485,8 +762,18 @@ final class HomeHeaderBar: UIView {
             selectActionsButton.isHidden = true
             selectActionsButton.menu = nil
         }
-        if editing {
+        // Library and Music get their own control; Home and Show keep theirs.
+        let onLibrary = showsTabStrip && tabPage == .library
+        let onMusic = showsTabStrip && tabPage == .music
+        // Search: Library, Music's list, and an open Show. Hidden while its field
+        // is already up, and while arranging or selecting.
+        let onShow = showsTabStrip && tabPage == .show && showsShowChrome
+        let searchable = onLibrary || onShow || (onMusic && musicAddAvailable)
+        searchButton.isHidden = editing || isSearching || !searchable
+        addMusicButton.isHidden = editing || !onMusic || !musicAddAvailable
+        if editing || onLibrary || onMusic {
             lockButton.isHidden = true
+            freezeButton.isHidden = true
             blackButton.isHidden = true
             settingsButton.isHidden = true
             addButton.isHidden = true
@@ -494,8 +781,10 @@ final class HomeHeaderBar: UIView {
             return
         }
         lockButton.isHidden = !showsLiveOutputChrome
+        freezeButton.isHidden = !showsLiveOutputChrome
         blackButton.isHidden = !showsLiveOutputChrome
-        settingsButton.isHidden = !(showsShowChrome || showsDestinationTabs)
+        // With the text tabs, Settings is in the dropdown, not an icon here.
+        settingsButton.isHidden = showsTabStrip || !(showsShowChrome || showsDestinationTabs)
         addButton.isHidden = !showsShowChrome
         newShowButton.isHidden = showsShowChrome
     }
@@ -572,6 +861,45 @@ final class HomeHeaderBar: UIView {
             )
         }
         blackButton.accessibilityValue = isBlackLive ? "On" : "Off"
+        blackButton.accessibilityLabel = blankKind.title
+        blackButton.menu = blankKindMenu()
+    }
+
+    /// Long-press menu on Blackout: Black or White, the current one ticked.
+    private func blankKindMenu() -> UIMenu {
+        let actions = OutputBlankKind.allCases.map { kind in
+            UIAction(
+                title: kind.title,
+                image: UIImage(systemName: kind.systemImage),
+                state: kind == blankKind ? .on : .off
+            ) { [weak self] _ in
+                self?.onSelectBlankKind?(kind)
+            }
+        }
+        return UIMenu(title: "Blackout Color", children: actions)
+    }
+
+    private func applyFreezeButtonAppearance() {
+        let symbolConfig = UIImage.SymbolConfiguration(pointSize: 20, weight: .regular)
+        // Same snowflake both ways, as on the Mac; the blue capsule marks "on".
+        let name = "snowflake"
+        if isFrozen {
+            var config = UIButton.Configuration.filled()
+            config.image = UIImage(systemName: name, withConfiguration: symbolConfig)
+            config.baseForegroundColor = .white
+            config.baseBackgroundColor = .accent
+            config.cornerStyle = .capsule
+            config.contentInsets = NSDirectionalEdgeInsets(
+                top: 6, leading: 6, bottom: 6, trailing: 6
+            )
+            freezeButton.configuration = config
+        } else {
+            freezeButton.configuration = Self.barIconConfig(
+                systemName: name,
+                symbolConfig: symbolConfig
+            )
+        }
+        freezeButton.accessibilityValue = isFrozen ? "On" : "Off"
     }
 
     private func applyNewShowButtonAppearance() {

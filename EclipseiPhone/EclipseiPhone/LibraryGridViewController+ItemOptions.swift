@@ -56,12 +56,23 @@ extension LibraryGridViewController {
         })
 
         if item.isVideo {
-            let loopOn = item.isLooping ?? false
+            let current = item.videoEndAction
             sheet.addAction(UIAlertAction(
-                title: loopOn ? "Loop ✓" : "Loop",
+                title: "\(VideoEndAction.menuTitle)…",
                 style: .default
             ) { [weak self] _ in
-                self?.applyVideoSetting(id: id, isLooping: !loopOn, isMuted: nil)
+                guard let self else { return }
+                let choices = VideoEndAction.sheet(current: current) { [weak self] choice in
+                    self?.applyVideoSetting(
+                        id: id, isLooping: nil, isMuted: nil, endAction: choice
+                    )
+                }
+                if let popover = choices.popoverPresentationController {
+                    let anchor = self.cellForShowMedia(id: id) ?? self.view
+                    popover.sourceView = anchor
+                    popover.sourceRect = anchor?.bounds ?? self.view.bounds
+                }
+                self.present(choices, animated: true)
             })
 
             let muted = item.isMuted ?? false

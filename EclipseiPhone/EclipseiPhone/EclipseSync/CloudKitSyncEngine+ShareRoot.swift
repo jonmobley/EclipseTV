@@ -60,6 +60,10 @@ extension CloudKitSyncEngine {
                 .saveRecord(CloudKitSchema.countdownRecordID(for: item.id))
             )
         }
+        for card in TemplateCardStore.shared.cards(forShowId: showId)
+        where seen.insert(card.id.uuidString).inserted {
+            changes.append(.saveRecord(CloudKitSchema.templateCardRecordID(for: card.id)))
+        }
         for item in LivePollStore.shared.polls(forShowId: showId) {
             let key = item.id.uuidString
             guard seen.insert(key).inserted else { continue }

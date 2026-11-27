@@ -32,6 +32,8 @@ enum CloudKitSchema {
         static let webPage = "WebPage"
         static let slideshow = "Slideshow"
         static let countdown = "Countdown"
+        /// Template card (Mac "card overlay"); same zone and parenting as Countdown.
+        static let templateCard = "TemplateCard"
         static let livePoll = "LivePoll"
         static let background = "Background"
         static let screensaver = "Screensaver"
@@ -53,6 +55,7 @@ enum CloudKitSchema {
         static let modifiedAt = "modifiedAt"
         /// Practice Mode: live preview + Lock / Blackout when disconnected.
         static let previewsWhenDisconnected = "previewsWhenDisconnected"
+        static let cardTitlesShown = "cardTitlesShown"
         /// Membership ids removed on a device — union merge subtracts these.
         static let deletedItemIds = "deletedItemIds"
         /// Surface ids removed on a device (tools / slideshow tokens).
@@ -78,6 +81,9 @@ enum CloudKitSchema {
         /// Normalized crop `[x, y, width, height]` for custom still framing. Missing → none.
         static let framing = "framing"
         static let isLooping = "isLooping"
+        /// `pause` / `loop` / `next` / `screensaver` (same as the Mac). Absent on
+        /// records from older apps, which only know `isLooping`.
+        static let videoEndAction = "videoEndAction"
         static let isMuted = "isMuted"
         /// Presenter note (`""` = deleted; absent = never set by any device).
         static let note = "note"
@@ -123,6 +129,30 @@ enum CloudKitSchema {
         static let layoutScale = "layoutScale"
         static let background = "background"
         static let endAction = "endAction"
+        static let createdAt = "createdAt"
+        static let modifiedAt = "modifiedAt"
+        /// `countdown`, `countUp` or `timeOfDay`; absent or unknown = countdown.
+        static let mode = "mode"
+        /// To Time target, minutes after midnight (0…1439).
+        static let targetMinutes = "targetMinutes"
+        /// To Time day `yyyy-MM-dd`; `""` or absent = today's occurrence.
+        static let targetDay = "targetDay"
+        /// IANA zone id; `""` or absent = the device's current zone.
+        static let targetTimeZone = "targetTimeZone"
+        /// Words above the digits; absent or `""` = none.
+        static let caption = "caption"
+        /// `card` (plate) or `simple` (digits only); absent = card.
+        static let style = "style"
+    }
+
+    /// Fields of a `TemplateCard` record. Shared contract with the Mac:
+    /// `config` is `OverlayCardConfig` JSON (`JSONEncoder` + `.sortedKeys`).
+    enum TemplateCardKey {
+        static let showId = "showId"
+        static let name = "name"
+        static let template = "template"
+        static let config = "config"
+        static let stackOrder = "stackOrder"
         static let createdAt = "createdAt"
         static let modifiedAt = "modifiedAt"
     }
@@ -219,6 +249,11 @@ enum CloudKitSchema {
 
     /// Record ID for a Countdown in the library zone.
     static func countdownRecordID(for id: UUID) -> CKRecord.ID {
+        CKRecord.ID(recordName: id.uuidString, zoneID: zoneID)
+    }
+
+    /// Record ID for a TemplateCard in the library zone.
+    static func templateCardRecordID(for id: UUID) -> CKRecord.ID {
         CKRecord.ID(recordName: id.uuidString, zoneID: zoneID)
     }
 

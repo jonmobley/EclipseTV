@@ -71,6 +71,12 @@ protocol SyncBackend: AnyObject {
     /// Schedules deletion of a countdown record.
     func scheduleCountdownDelete(id: UUID)
 
+    /// Schedules a template card metadata upload.
+    func scheduleTemplateCardSave(id: UUID)
+
+    /// Schedules deletion of a template card record.
+    func scheduleTemplateCardDelete(id: UUID)
+
     /// Schedules a Live Poll card metadata upload.
     func scheduleLivePollSave(id: UUID)
 
@@ -82,6 +88,18 @@ protocol SyncBackend: AnyObject {
 
     /// Schedules deletion of a Show's Prompter script record.
     func schedulePrompterDelete(showId: UUID)
+
+    /// Schedules a song upload (`audio-<id>`).
+    func scheduleAudioTrackSave(id: UUID)
+
+    /// Schedules deletion of a song record.
+    func scheduleAudioTrackDelete(id: UUID)
+
+    /// Schedules a playlist upload (`playlist-<id>`).
+    func scheduleAudioPlaylistSave(id: UUID)
+
+    /// Schedules deletion of a playlist record.
+    func scheduleAudioPlaylistDelete(id: UUID)
 
     /// Schedules the account-global Background custom image upload (or clear).
     func scheduleBackgroundSave()

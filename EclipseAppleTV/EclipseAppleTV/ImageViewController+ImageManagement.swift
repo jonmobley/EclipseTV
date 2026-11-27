@@ -85,7 +85,7 @@ extension ImageViewController {
     }
     
     /// Displays the media at the current index with a smooth dissolve transition
-    private func displayImageAtCurrentIndexWithDissolveTransition() {
+    func displayImageAtCurrentIndexWithDissolveTransition() {
         guard let currentPath = currentDisplayPath() else {
             logger.error("❌ [DISSOLVE] No current path available")
             presentEmptyLibraryState(context: "displayImageAtCurrentIndexWithDissolveTransition")
@@ -180,6 +180,7 @@ extension ImageViewController {
     /// Moves to the next item in the active collection (library or album)
     internal func nextImage() {
         guard !isInGridMode else { return }
+        stopSlideshowForLocalNavigation()
 
         if advanceDisplayIndex() {
             // Video preloading is only wired for the local library data source.
@@ -195,6 +196,7 @@ extension ImageViewController {
     /// Moves to the previous item in the active collection (library or album)
     internal func previousImage() {
         guard !isInGridMode else { return }
+        stopSlideshowForLocalNavigation()
 
         if retreatDisplayIndex() {
             if activeCollection == .library {
@@ -263,6 +265,7 @@ extension ImageViewController {
     /// Shows the grid view and hides the fullscreen content with smooth animation
     internal func showGridView() {
         guard !isInGridMode else { return }
+        stopSlideshowForLocalNavigation()
 
         // Grid selection/focus is library-driven; album viewing is re-entered on tap.
         activeCollection = .library

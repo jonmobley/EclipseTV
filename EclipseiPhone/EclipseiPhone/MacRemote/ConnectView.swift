@@ -9,11 +9,11 @@ import SwiftUI
 
 // MARK: - ConnectView
 
-/// First screen: type a Mac host or scan the Settings QR code.
+/// First screen: type a Mac address or scan the QR code from Eclipse on the Mac.
 ///
 /// Thread Safety: Main thread only.
 struct ConnectView: View {
-    @ObservedObject var session: RemoteSessionModel
+    @ObservedObject var model: MacRemoteConnectModel
     var onClose: () -> Void
     @State private var showScanner = false
 
@@ -21,45 +21,35 @@ struct ConnectView: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("Mac address", text: $session.hostText)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .keyboardType(.URL)
-                    Button("Connect") { session.connectFromHostField() }
-                        .disabled(session.phase == .connecting)
-                } header: {
-                    Text("Eclipse on your Mac")
+                    Button("Scan QR Code") { showScanner = true }
                 } footer: {
                     Text(
-                        "Same Wi‑Fi as the Mac. Scan the QR in Eclipse → Settings "
-                            + "→ Remote with Camera to jump here, or type the "
-                            + "address / PIN below."
+                        "On the Mac, open Eclipse → Settings → Eclipse Remote "
+                            + "and scan the code shown there."
                     )
                 }
 
-                if session.phase == .needsPIN || !session.pinText.isEmpty {
-                    Section("Pairing PIN") {
-                        TextField("6-digit PIN", text: $session.pinText)
-                            .keyboardType(.numberPad)
-                            .textContentType(.oneTimeCode)
-                        Button("Pair") { session.submitPIN() }
-                    }
-                }
-
                 Section {
-                    Button("Scan QR Code") { showScanner = true }
+                    TextField("Mac address", text: $model.hostText)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .keyboardType(.URL)
+                        .submitLabel(.go)
+                        .onSubmit { model.connectFromHostField() }
+                    Button("Connect") { model.connectFromHostField() }
+                } header: {
+                    Text("Or type the address")
+                } footer: {
+                    Text(
+                        "Use the same Wi‑Fi as the Mac. You'll be asked for the "
+                            + "6-digit PIN from the same Settings page."
+                    )
                 }
 
-                if case .failed(let message) = session.phase {
+                if let failure = model.failure {
                     Section {
-                        Text(message)
+                        Text(failure)
                             .foregroundStyle(.red)
-                    }
-                }
-
-                if session.phase == .connecting {
-                    Section {
-                        ProgressView("Connecting…")
                     }
                 }
             }
@@ -73,7 +63,7 @@ struct ConnectView: View {
             .sheet(isPresented: $showScanner) {
                 QRScannerView { payload in
                     showScanner = false
-                    session.connect(scannedURL: payload)
+                    model.connect(scannedURL: payload)
                 }
             }
         }

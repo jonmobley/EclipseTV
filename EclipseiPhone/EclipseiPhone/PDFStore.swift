@@ -197,6 +197,7 @@ final class PDFStore {
         let url = rootDirectory.appendingPathComponent("\(id.uuidString).pdf")
         try? FileManager.default.removeItem(at: url)
         PDFThumbnailStore.shared.remove(id: id)
+        MediaNoteStore.clear(forId: id.uuidString)
         syncedIds.remove(id.uuidString)
         persist()
         LocalAlbumStore.shared.removeItemFromAllAlbums(itemId: id.uuidString)

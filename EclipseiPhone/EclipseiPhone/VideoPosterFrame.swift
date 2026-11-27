@@ -13,6 +13,12 @@ import UIKit
 enum VideoPosterFrame {
     static let maximumSize = CGSize(width: 720, height: 720)
 
+    /// Later sample points for long videos. Films and recorded shows often open
+    /// on many seconds of black or dark titles, so the first 3 s alone left the
+    /// card on the film placeholder (a 1 h 28 min movie synced from the Mac).
+    private static let laterSeconds: [TimeInterval] = [5, 10, 30]
+    private static let laterFractions: [Double] = [0.1, 0.25]
+
     /// Times to try, in order. First frame is preferred when it isn’t black.
     static func candidateSeconds(duration: TimeInterval) -> [TimeInterval] {
         let end = duration.isFinite ? max(duration, 0) : 0
@@ -21,7 +27,9 @@ enum VideoPosterFrame {
                 [end * 0.5, end * 0.75, 0].map { clamp($0, duration: end) }
             )
         }
-        let points: [TimeInterval] = [0, 0.2, 0.5, 1.0, 2.0, min(3.0, end * 0.45)]
+        var points: [TimeInterval] = [0, 0.2, 0.5, 1.0, 2.0, min(3.0, end * 0.45)]
+        points += laterSeconds.filter { $0 < end * 0.5 }
+        points += laterFractions.map { end * $0 }.filter { $0 > 3.0 }
         return uniqued(points.map { clamp($0, duration: end) })
     }
 
@@ -57,13 +65,37 @@ enum VideoPosterFrame {
         generator.requestedTimeToleranceBefore = CMTime(seconds: 0.05, preferredTimescale: 600)
         generator.requestedTimeToleranceAfter = CMTime(seconds: 0.3, preferredTimescale: 600)
 
-        let duration = await assetDurationSeconds(asset)
-        for seconds in candidateSeconds(duration: duration) {
-            let time = CMTime(seconds: seconds, preferredTimescale: 600)
-            guard let still = await copyStill(generator, at: time) else { continue }
-            if isUsable(still) { return still }
+        // Cancelling the calling task stops the work, not just the wait: a remote file
+        // that stalls (website video links) must free its `AsyncLimiter` slot.
+        let work = CancellableWork(asset: asset, generator: generator)
+        return await withTaskCancellationHandler {
+            let duration = await assetDurationSeconds(asset)
+            for seconds in candidateSeconds(duration: duration) {
+                if Task.isCancelled { return nil }
+                let time = CMTime(seconds: seconds, preferredTimescale: 600)
+                guard let still = await copyStill(generator, at: time) else { continue }
+                if isUsable(still) { return still }
+            }
+            return nil
+        } onCancel: {
+            work.cancel()
         }
-        return nil
+    }
+
+    /// Lets the cancellation handler (which may run on any thread) stop loading.
+    private final class CancellableWork: @unchecked Sendable {
+        private let asset: AVURLAsset
+        private let generator: AVAssetImageGenerator
+
+        init(asset: AVURLAsset, generator: AVAssetImageGenerator) {
+            self.asset = asset
+            self.generator = generator
+        }
+
+        func cancel() {
+            generator.cancelAllCGImageGeneration()
+            asset.cancelLoading()
+        }
     }
 
     private static func copyStill(

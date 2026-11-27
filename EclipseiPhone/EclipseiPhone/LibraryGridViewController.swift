@@ -114,6 +114,15 @@ final class LibraryGridViewController: UIViewController {
     var isScreensaverSelected = false
     /// When true, live output cannot change; media taps open phone Preview.
     var isLiveOutputLocked = false
+    /// Freeze holds the audience screen still. It brings Lock's hold with it
+    /// (taps open phone Preview), so `isLiveOutputLocked` is on while frozen.
+    var isLiveOutputFrozen = false
+    /// Whether Lock was on before Freeze, so ending Freeze puts it back.
+    var wasLockedBeforeFreeze = false
+    /// Freeze paused the Apple TV's playing video, so ending it plays on.
+    var freezePausedTVVideo = false
+    /// Freeze paused the hero's playing video (Practice Mode), so ending it plays on.
+    var freezePausedHeroVideo = false
     /// Tile shown in the hero on this phone only while Lock / Blackout holds the
     /// TV (`HeroPhonePreview`). Nil shows program.
     var heroPhonePreview: ShowGridItem?
@@ -134,12 +143,22 @@ final class LibraryGridViewController: UIViewController {
     /// inactive, or because its album was momentarily absent. It reopens as soon as it
     /// is valid again, so a detour through Settings returns the user to the same Show.
     var showAwaitingReturnId: UUID?
+    /// Text the open Show's cards are filtered by (the home screen's search field).
+    /// Arranging works on the whole Show, so it ends the search first.
+    var showSearchQuery = ""
+    /// Called when the grid itself ends the search (arranging began).
+    var onShowSearchEnded: (() -> Void)?
+    var isSearchingShow: Bool {
+        !showSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
     /// True while the user is dragging Show items to rearrange them.
     var isArranging = false
     /// True while the user is multi-selecting Show surface tiles.
     var isSelecting = false
     /// Membership / tool ids checked while `isSelecting`.
     var selectedShowItemIds = Set<String>()
+    /// The open Show's grid order when Arrange began, for Undo after Done.
+    var arrangeStartSurface: [String]?
     /// Cancels Live Poll status polling when the ribbon hides or the Show closes.
     var questPollStatusPollTask: Task<Void, Never>?
     /// Working copy of the library order used while arranging and until the Apple TV
@@ -159,7 +178,12 @@ final class LibraryGridViewController: UIViewController {
     }()
 
     /// Media slice only (arrange working copy or mirrored TV order).
-    var displayItems: [LibraryItemDTO] { arrangeItems ?? store.items }
+    var displayItems: [LibraryItemDTO] {
+        let items = arrangeItems ?? store.items
+        // Tiles whose delete waits on Undo are already gone from Library.
+        let hidden = PendingDeletes.shared.hiddenLibraryIds
+        return hidden.isEmpty ? items : items.filter { !hidden.contains($0.id) }
+    }
 
     /// Open Show when in Show mode.
     var openShow: LocalAlbum? {
@@ -208,7 +232,12 @@ final class LibraryGridViewController: UIViewController {
     /// Live Poll cards belonging to the open Show.
     var openShowLivePolls: [ShowLivePoll] {
         guard let openShowId else { return [] }
-        return LivePollStore.shared.polls(forShowId: openShowId)
+        // A card whose delete waits on Undo is already gone from the grid; without
+        // this the surface would append it straight back.
+        let hidden = PendingDeletes.shared.hiddenShowCardTokens
+        return LivePollStore.shared.polls(forShowId: openShowId).filter {
+            !hidden.contains(ShowLivePollToken.token(for: $0.id))
+        }
     }
 
     /// Ordered Show-grid surface ids (tools, members, slideshows, Live Polls).
@@ -225,10 +254,13 @@ final class LibraryGridViewController: UIViewController {
     }
 
     /// Show-grid rows in surface order. Empty Shows append a trailing Add tile
-    /// (unless arranging).
+    /// (unless arranging). While searching, only the cards whose name matches.
     var openShowGridItems: [ShowGridItem] {
         guard isShowMode else { return [] }
         let surface = openShowSurfaceIds.compactMap { showGridItem(forSurfaceId: $0) }
+        if isSearchingShow {
+            return surface.filter { matchesShowSearch($0) }
+        }
         if showsShowAddTile {
             return surface + [.add]
         }
@@ -257,11 +289,11 @@ final class LibraryGridViewController: UIViewController {
     var showsLiveSlideshowRibbon: Bool {
         if showsLivePollRibbon || showsCameraRibbon { return true }
         guard isShowMode,
-              let id = SlideshowPlaybackController.shared.activeSlideshowId,
-              let show = SlideshowStore.shared.slideshow(id: id),
+              let slides = liveSlideshowView,
+              let show = SlideshowStore.shared.slideshow(id: slides.slideshowId),
               show.showId == openShowId,
               !ribbonHiddenSlideshowIds.contains(show.id) else { return false }
-        return !SlideshowPlaybackController.shared.activeSlideIds.isEmpty
+        return !slides.slideIds.isEmpty
     }
 
     /// Live ribbon is never a Show-grid section; it docks under the hero.
@@ -315,6 +347,10 @@ final class LibraryGridViewController: UIViewController {
     var onBlackLiveChanged: ((Bool) -> Void)?
     /// Fired when live-output lock toggles (header amber chrome).
     var onLiveOutputLockChanged: ((Bool) -> Void)?
+    /// Fired when Freeze turns on or off (header snowflake).
+    var onLiveOutputFreezeChanged: ((Bool) -> Void)?
+    /// Fired when Blackout's colour changes (header moon's long-press menu).
+    var onOutputBlankKindChanged: ((OutputBlankKind) -> Void)?
 
     /// Extra bottom inset reserved for the home mini player.
     var miniPlayerBottomInset: CGFloat = 0 {
@@ -323,6 +359,7 @@ final class LibraryGridViewController: UIViewController {
             syncHeroOverlayInsets(preservingProgress: currentHeroScrollProgress())
             bottomChromeBottomConstraint?.constant = -(miniPlayerBottomInset + 20)
             bottomChromeTrailingConstraint?.constant = -bottomChromeTrailingInset
+            bottomChromeCameraClearanceConstraint?.constant = bottomChromeCameraClearance
             updateHomeVerticalScrollPolicy()
         }
     }
@@ -477,6 +514,7 @@ final class LibraryGridViewController: UIViewController {
     var emptyTopConstraint: NSLayoutConstraint?
     var bottomChromeBottomConstraint: NSLayoutConstraint?
     var bottomChromeTrailingConstraint: NSLayoutConstraint?
+    var bottomChromeCameraClearanceConstraint: NSLayoutConstraint?
     /// Sync banner + Music swipe hint stack floating over the bottom of the grid.
     weak var bottomChrome: UIStackView?
     /// Grid scroll room taken by `bottomChrome` while it shows, so the last row
@@ -490,6 +528,14 @@ final class LibraryGridViewController: UIViewController {
         guard miniPlayerBottomInset == 0 else { return sectionInset }
         return AudioMiniPlayerView.compactTrailingInset
             + AudioMiniPlayerBubbleView.side + 8
+    }
+
+    /// Leading room the banner stack keeps from the screen edge so it starts
+    /// after the round Camera button, which sits alone in the bottom-leading
+    /// corner. With the mini player up the stack rides above it, as on the right.
+    var bottomChromeCameraClearance: CGFloat {
+        guard miniPlayerBottomInset == 0 else { return 0 }
+        return HomeCameraButton.edgeInset + HomeCameraButton.side + 8
     }
 
     // MARK: - Init
@@ -554,8 +600,8 @@ final class LibraryGridViewController: UIViewController {
         liveHeader.onRequestOverlayController = { [weak self] in
             self?.presentControllerForLiveOverlay()
         }
-        liveHeader.onSlideshowSwipe = { delta in
-            SlideshowPlaybackController.shared.goToAdjacentSlide(delta: delta)
+        liveHeader.onSlideshowSwipe = { [weak self] delta in
+            self?.stepLiveSlide(by: delta)
             Haptics.impactLight()
         }
         liveHeader.onLibraryBrowse = { [weak self] delta in
@@ -617,10 +663,22 @@ final class LibraryGridViewController: UIViewController {
             constant: -bottomChromeTrailingInset
         )
         bottomChromeTrailingConstraint = bottomChromeTrailing
+        // Starts at the grid column, but never under the Camera button.
+        let gridLeading = bottomChrome.leadingAnchor.constraint(
+            equalTo: gridHost.leadingAnchor, constant: sectionInset
+        )
+        gridLeading.priority = .defaultHigh
+        let cameraClearance = bottomChrome.leadingAnchor.constraint(
+            greaterThanOrEqualTo: view.safeAreaLayoutGuide.leadingAnchor,
+            constant: bottomChromeCameraClearance
+        )
+        bottomChromeCameraClearanceConstraint = cameraClearance
         NSLayoutConstraint.activate([
+            gridLeading,
             bottomChrome.leadingAnchor.constraint(
-                equalTo: gridHost.leadingAnchor, constant: sectionInset
+                greaterThanOrEqualTo: gridHost.leadingAnchor, constant: sectionInset
             ),
+            cameraClearance,
             bottomChromeTrailing,
             bottomChromeBottom
         ])
@@ -635,6 +693,10 @@ final class LibraryGridViewController: UIViewController {
             self?.validateOpenShow(adoptingCurrentDisplayMode: true)
             self?.refreshVisibleCameraTilePreview()
             self?.reloadLivePollForDisplayMode()
+        }
+        observe(PendingDeletes.didChangeNotification) { [weak self] _ in
+            self?.reloadGridIfSafe()
+            self?.updateEmptyState()
         }
         observe(WebPageStore.didChangeNotification) { [weak self] _ in
             self?.reloadGridIfSafe()
@@ -662,6 +724,13 @@ final class LibraryGridViewController: UIViewController {
         observe(MediaNoteStore.didChangeNotification) { [weak self] _ in
             self?.syncLiveNoteChrome()
         }
+        observe(TemplateCardStore.didChangeNotification) { [weak self] _ in
+            self?.reloadGridIfSafe()
+            self?.updateEmptyState()
+        }
+        observe(LiveOverlayController.didChangeNotification) { [weak self] _ in
+            self?.reloadGridIfSafe()
+        }
         observe(CountdownStore.didChangeNotification) { [weak self] _ in
             self?.reloadGridIfSafe()
             self?.refreshCountdownChrome()
@@ -674,6 +743,9 @@ final class LibraryGridViewController: UIViewController {
         }
         observe(CountdownController.didExpireNotification) { [weak self] _ in
             self?.handleCountdownExpiry()
+        }
+        observe(VideoEndDecision.didFinishNotification) { [weak self] _ in
+            self?.handleLiveVideoEnded()
         }
         observe(PrompterScriptStore.didChangeNotification) { [weak self] _ in
             // The tile shows the script's first line.
@@ -884,6 +956,8 @@ final class LibraryGridViewController: UIViewController {
         warmHomeCameraPreview()
         updateHeroCollapse()
         restoreLastOpenedShowIfNeeded()
+        // Hardware-keyboard / clicker keys (LibraryGridViewController+KeyCommands).
+        becomeFirstResponder()
     }
 
     /// Reopens the most recently used Show once per process launch.

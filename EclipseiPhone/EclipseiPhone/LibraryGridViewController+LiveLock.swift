@@ -19,6 +19,12 @@ extension LibraryGridViewController {
             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
             return
         }
+        // From a still frame back to moving Lock, as the Mac's L key does.
+        if isLiveOutputFrozen {
+            endLiveOutputFreeze(keepingLock: true)
+            Haptics.impactMedium()
+            return
+        }
         isLiveOutputLocked.toggle()
         applyLiveOutputLockChrome()
         // A mode change starts the hero over on program.
@@ -30,7 +36,8 @@ extension LibraryGridViewController {
 
     /// Updates header, hero stroke, and visible tile accents for the lock state.
     func applyLiveOutputLockChrome() {
-        onLiveOutputLockChanged?(isLiveOutputLocked)
+        // Only one of Lock and Freeze is lit: while frozen the snowflake is.
+        onLiveOutputLockChanged?(isLiveOutputLocked && !isLiveOutputFrozen)
         liveHeader.setOutputLocked(isLiveOutputLocked)
         let visible = collectionView.indexPathsForVisibleItems
         if !visible.isEmpty {
