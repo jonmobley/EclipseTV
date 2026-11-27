@@ -54,6 +54,19 @@ struct OverlayAdjustSessionTests {
         #expect(!session.hasChanged)
     }
 
+    @Test func touchingADockedCardNearACenterlineKeepsItsDock() throws {
+        // Center 2pt off the vertical centerline: the snap would draw it on the
+        // line, but the fingers never moved, so nothing is saved.
+        let overlay = card()
+        var session = try #require(OverlayAdjustSession(
+            overlay: overlay, frame: CGRect(x: 112, y: 140, width: 100, height: 30),
+            contentFrame: content
+        ))
+        _ = session.refreshSnap()
+        #expect(session.overlay == overlay)
+        #expect(!session.hasChanged)
+    }
+
     @Test func draggingADockedCardGivesItAFreePlacement() throws {
         var session = try #require(OverlayAdjustSession(
             overlay: card(), frame: CGRect(x: 8, y: 140, width: 100, height: 30),
