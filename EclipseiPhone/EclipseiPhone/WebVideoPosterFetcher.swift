@@ -127,23 +127,35 @@ final class WebVideoPosterFetcher {
     }
 
     /// `VideoPosterFrame.poster`, or nil once `timeout` seconds pass.
+    nonisolated static func poster(at url: URL, timeout: TimeInterval) async -> UIImage? {
+        await firstResult(timeout: timeout) { await VideoPosterFrame.poster(at: url) }
+    }
+
+    /// `work`'s result, or nil once `timeout` seconds pass; on timeout `work` is cancelled.
     ///
     /// Returns at the deadline whatever the loader does. A task group waits for every
     /// child, and on CI a cancelled remote asset load did not return, so the old
-    /// group never finished (the iPhone job hung for hours). The poster runs as its
+    /// group never finished (the iPhone job hung for hours). The work runs as its
     /// own task: on timeout it is cancelled (which stops `VideoPosterFrame`'s work as
     /// soon as AVFoundation allows) and left behind, and the limiter slot is freed.
-    nonisolated static func poster(at url: URL, timeout: TimeInterval) async -> UIImage? {
+    ///
+    /// The deadline is a Dispatch timer, not a `Task.sleep`: under heavy load (CI runs
+    /// the unit tests in parallel) the Swift task pool can be busy for a long time, and
+    /// a sleeping deadline task then woke far too late.
+    nonisolated static func firstResult(
+        timeout: TimeInterval,
+        work: @escaping @Sendable () async -> UIImage?
+    ) async -> UIImage? {
         let race = FirstResult()
-        let work = Task { await VideoPosterFrame.poster(at: url) }
+        let task = Task { await work() }
+        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + max(timeout, 0)) {
+            // Cancel before the caller resumes, so the work is already told to stop.
+            race.finish(nil, beforeResuming: { task.cancel() })
+        }
         return await withCheckedContinuation { continuation in
             race.set(continuation)
             Task {
-                race.finish(await work.value)
-            }
-            Task {
-                try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
-                if race.finish(nil) { work.cancel() }
+                race.finish(await task.value)
             }
         }
     }
@@ -165,9 +177,10 @@ final class WebVideoPosterFetcher {
             lock.unlock()
         }
 
-        /// True when this call delivered the result (it came first).
+        /// True when this call delivered the result (it came first). `beforeResuming`
+        /// runs only for the winner, before the waiting caller is resumed.
         @discardableResult
-        func finish(_ value: UIImage?) -> Bool {
+        func finish(_ value: UIImage?, beforeResuming: () -> Void = {}) -> Bool {
             lock.lock()
             if pending != nil {
                 lock.unlock()
@@ -177,6 +190,7 @@ final class WebVideoPosterFetcher {
             let waiting = continuation
             continuation = nil
             lock.unlock()
+            beforeResuming()
             waiting?.resume(returning: value)
             return true
         }
