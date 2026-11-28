@@ -41,6 +41,7 @@ extension LibraryGridViewController {
         guard showsLiveHero else {
             // Never leave a Show-mode live preview over the Home marketing carousel.
             liveHeader.clearWebPreview(parking: true)
+            liveHeader.clearPDFPreview()
             liveHeader.clearScreensaverPreview()
             liveHeader.clearLibraryVideoPreview()
             liveHeader.clearCameraPreview()
@@ -72,6 +73,7 @@ extension LibraryGridViewController {
         defer {
             syncSlideshowRibbonIfChromeChanged()
             syncLiveScreenFitChrome()
+            syncHeroWebInteraction()
             syncLiveSlideshowCountdownChrome()
             syncLiveCameraFlipChrome()
             syncLiveCameraCaptureChrome()

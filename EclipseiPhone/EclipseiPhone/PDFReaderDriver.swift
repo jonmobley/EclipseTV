@@ -89,6 +89,24 @@ final class PDFReaderDriver: NSObject {
         )
     }
 
+    /// Whether this driver may move the TV right now (Live Lock, Blackout hold and
+    /// the like turn it off for the hero). The view still scrolls and pinches.
+    var allowsOutput: () -> Bool = { true }
+
+    /// Stops listening to the PDF view's scroll view. Call before letting go of the
+    /// driver: its pinch / pan recognizers keep unretained targets, and a hero torn
+    /// down mid-gesture would otherwise message a freed driver.
+    func detach() {
+        if let scroll = observedScrollView {
+            scroll.pinchGestureRecognizer?.removeTarget(self, action: #selector(pinchChanged(_:)))
+            scroll.panGestureRecognizer.removeTarget(self, action: #selector(panChanged(_:)))
+        }
+        observedScrollView = nil
+        offsetObservation?.invalidate()
+        offsetObservation = nil
+        NotificationCenter.default.removeObserver(self)
+    }
+
     deinit {
         offsetObservation?.invalidate()
         NotificationCenter.default.removeObserver(self)
@@ -321,7 +339,7 @@ final class PDFReaderDriver: NSObject {
             y: range.height > 0 ? min(max((scroll.contentOffset.y - range.minY) / range.height, 0), 1) : 0
         )
         state.relativeScale = pdfView.scaleFactor / max(pdfView.scaleFactorForSizeToFit, 0.01)
-        if drivesOutput, isActive {
+        if drivesOutput, isActive, allowsOutput() {
             ExternalDisplayManager.shared.setPDFViewState(state)
         }
         onChange?()

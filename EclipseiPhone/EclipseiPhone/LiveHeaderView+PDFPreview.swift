@@ -121,6 +121,7 @@ extension LiveHeaderView {
         }
         pdfResignObserver = nil
         pdfPreviewDriver?.resignActive()
+        pdfPreviewDriver?.detach()
         pdfPreviewDriver = nil
         pdfOptionsBar?.removeFromSuperview()
         pdfOptionsBar = nil

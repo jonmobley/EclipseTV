@@ -39,6 +39,7 @@ extension LibraryGridViewController {
         // Only one of Lock and Freeze is lit: while frozen the snowflake is.
         onLiveOutputLockChanged?(isLiveOutputLocked && !isLiveOutputFrozen)
         liveHeader.setOutputLocked(isLiveOutputLocked)
+        syncHeroWebInteraction()
         let visible = collectionView.indexPathsForVisibleItems
         if !visible.isEmpty {
             collectionView.reconfigureItems(at: visible)

@@ -153,6 +153,11 @@ final class WarmWebSessionPool {
         return session.attachPreview(to: host)
     }
 
+    /// Turns the hero preview's pinch and scroll on (`delegate`) or off (nil).
+    func setPreviewInteraction(pageId: UUID, delegate: UIScrollViewDelegate?) {
+        sessions[pageId]?.setPreviewInteraction(delegate)
+    }
+
     /// Re-scales an attached hero preview when the host bounds change.
     func layoutPreview(pageId: UUID, in host: UIView) {
         sessions[pageId]?.layoutPreview(in: host)

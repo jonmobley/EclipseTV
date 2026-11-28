@@ -37,6 +37,17 @@ final class LiveHeaderView: UIView {
 
     /// Host for a warm `WKWebView` when a website is live (in-app preview).
     var webPreviewHost: UIView?
+    /// Whether the live website in the hero may be scrolled and pinched (the TV
+    /// follows). Set by the host controller; see `LiveHeaderView+WebPreview`.
+    var allowsWebPreviewInteraction = false {
+        didSet {
+            guard allowsWebPreviewInteraction != oldValue else { return }
+            applyWebPreviewInteraction()
+            applyInteractionForPresentation()
+        }
+    }
+    /// Sends the hero page's scroll and zoom to the TV.
+    let webPreviewSync = HeroWebViewportSync()
     /// Page id currently attached to `webPreviewHost`, if any.
     var webPreviewPageId: UUID?
     /// Interactive live PDF in the hero (`LiveHeaderView+PDFPreview`).
@@ -726,6 +737,7 @@ final class LiveHeaderView: UIView {
             || cameraCaptureStack != nil
             || phonePreviewReturnButton != nil
             || directAdjustTarget != nil
+            || allowsWebPreviewInteraction
     }
 
     /// Opens whatever fullscreen surface the expanded hero stands in for.
