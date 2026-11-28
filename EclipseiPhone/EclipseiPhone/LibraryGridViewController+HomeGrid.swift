@@ -74,6 +74,7 @@ extension LibraryGridViewController: UICollectionViewDataSource,
         case .slideshowRibbon:
             configureLiveSlideshowRibbonCell(cell, at: indexPath)
         case .shows:
+            cell.namesBelow = true
             configureShowModeCell(cell, at: indexPath)
         }
         return cell
