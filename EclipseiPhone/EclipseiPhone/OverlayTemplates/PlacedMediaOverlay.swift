@@ -23,6 +23,9 @@ struct PlacedMediaOverlay: View {
 
     let entry: MediaOverlayEntry
     let contentFrame: CGRect
+    /// Called with the overlay's drawn frame in the layer's coordinate space
+    /// (`LiveOverlayLayerView.coordinateSpace`), for touch hit-testing.
+    var onFrame: ((CGRect) -> Void)?
 
     /// Width / height of the media; 16:9 until the file is read.
     @State private var aspect: CGFloat = 16.0 / 9.0
@@ -38,6 +41,9 @@ struct PlacedMediaOverlay: View {
         let size = Self.displaySize(entry: entry, aspect: aspect, in: contentFrame)
         content
             .frame(width: size.width, height: size.height)
+            .onGeometryChange(for: CGRect.self) {
+                $0.frame(in: .named(LiveOverlayLayerView.coordinateSpace))
+            } action: { onFrame?($0) }
             .position(
                 x: contentFrame.minX + entry.centerX * contentFrame.width,
                 y: contentFrame.minY + entry.centerY * contentFrame.height

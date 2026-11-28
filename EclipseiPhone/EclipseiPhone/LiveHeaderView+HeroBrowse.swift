@@ -77,6 +77,9 @@ extension LiveHeaderView: UIGestureRecognizerDelegate {
     /// recognizers are unaffected. (UIView's own hook and the delegate method share
     /// this selector, so one override answers both.)
     override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        if gestureRecognizer === overlayAdjustPan || gestureRecognizer === overlayAdjustPinch {
+            return overlayAdjustShouldBegin(gestureRecognizer)
+        }
         // The interactive PDF scrolls and pinches on its own; the hero's tap,
         // swipes and adjust gestures stay off it.
         if gestureRecognizer.view === self, isTouchOnInteractivePDF(gestureRecognizer) {

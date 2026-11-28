@@ -24,6 +24,11 @@ struct LiveOverlayLayerView: View {
     @ObservedObject var controller: LiveOverlayController
     /// Program aspect (width / height). nil fills the whole container.
     let programAspect: CGFloat?
+    /// Where each overlay is drawn, for surfaces that take touches (the hero).
+    var frames: LiveOverlayFrames?
+
+    /// Coordinate space overlays report their frames in (the layer's own).
+    static let coordinateSpace = "LiveOverlayLayer"
 
     // MARK: - Body
 
@@ -36,7 +41,10 @@ struct LiveOverlayLayerView: View {
                 }
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
+            .coordinateSpace(.named(Self.coordinateSpace))
             .clipped()
+            .onAppear { frames?.contentFrame = frame }
+            .onChange(of: frame) { _, next in frames?.contentFrame = next }
         }
         .allowsHitTesting(false)
         .animation(.easeInOut(duration: 0.25), value: controller.rendered.map(\.id))
@@ -68,11 +76,15 @@ struct LiveOverlayLayerView: View {
     private func overlayView(_ overlay: RenderedOverlay, frame: CGRect) -> some View {
         switch overlay {
         case .card(let card):
-            PlacedCardOverlay(config: card.config, contentFrame: frame)
-                .transition(.opacity)
+            PlacedCardOverlay(config: card.config, contentFrame: frame) { rect in
+                frames?.frames[overlay.id] = rect
+            }
+            .transition(.opacity)
         case .media(let entry):
-            PlacedMediaOverlay(entry: entry, contentFrame: frame)
-                .transition(.opacity)
+            PlacedMediaOverlay(entry: entry, contentFrame: frame) { rect in
+                frames?.frames[overlay.id] = rect
+            }
+            .transition(.opacity)
         }
     }
 }
@@ -89,6 +101,8 @@ final class LiveOverlayHostView: UIView {
     // MARK: - Properties
 
     private let hosting: UIHostingController<LiveOverlayLayerView>
+    /// Where each live overlay is drawn in this view, for touch hit-testing.
+    let frames: LiveOverlayFrames
 
     // MARK: - Initialization
 
@@ -97,9 +111,12 @@ final class LiveOverlayHostView: UIView {
     /// - Parameter programAspect: Width / height of the program frame inside
     ///   this view, or nil when the view itself is the program frame.
     init(controller: LiveOverlayController? = nil, programAspect: CGFloat? = nil) {
+        let frames = LiveOverlayFrames()
+        self.frames = frames
         hosting = UIHostingController(rootView: LiveOverlayLayerView(
             controller: controller ?? .shared,
-            programAspect: programAspect
+            programAspect: programAspect,
+            frames: frames
         ))
         super.init(frame: .zero)
         isUserInteractionEnabled = false
@@ -124,12 +141,40 @@ final class LiveOverlayHostView: UIView {
         guard hosting.rootView.programAspect != aspect else { return }
         hosting.rootView = LiveOverlayLayerView(
             controller: hosting.rootView.controller,
-            programAspect: aspect
+            programAspect: aspect,
+            frames: frames
         )
+    }
+
+    /// The topmost live overlay under `point` (this view's coordinates), with
+    /// where it is drawn and the program frame it sits in.
+    ///
+    /// - Parameter slop: Extra points around each overlay that still count.
+    func overlay(
+        at point: CGPoint, slop: CGFloat = 0
+    ) -> (overlay: RenderedOverlay, frame: CGRect, contentFrame: CGRect)? {
+        let controller = hosting.rootView.controller
+        for overlay in controller.rendered.reversed() {
+            guard let frame = frames.frames[overlay.id],
+                  frame.insetBy(dx: -slop, dy: -slop).contains(point) else { continue }
+            return (overlay, frame, frames.contentFrame)
+        }
+        return nil
     }
 
     /// Moves this view above its siblings so overlays always draw on top.
     func bringToFront() {
         superview?.bringSubviewToFront(self)
     }
+}
+
+// MARK: - LiveOverlayFrames
+
+/// Where each overlay was last drawn in one overlay layer (plain storage, not
+/// observed: it only answers "what is under this finger").
+final class LiveOverlayFrames {
+    /// Drawn frame per overlay, in the layer's coordinates.
+    var frames: [LiveOverlayID: CGRect] = [:]
+    /// Program frame the overlays are placed in.
+    var contentFrame: CGRect = .zero
 }
