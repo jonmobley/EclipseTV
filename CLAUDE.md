@@ -161,6 +161,12 @@
   With no destination (or output locked) the tap still opens the browser as a phone preview.
 - Note cards: tap expands or collapses, and the pencil edits (2026-10-31).
 - Note editor on iPhone is a full-height sheet only: a medium detent gets pushed to large by the keyboard, which looks like a stall halfway up (2026-11-01). The text stops at `keyboardLayoutGuide`, and Hide Keyboard shows while editing because Done closes the editor.
+- Screensaver fallback tile (2026-11-26): with nothing picked, the TV / Practice shows the Screensaver and the hero
+  mirrors it, so the Screensaver tile gets the blue live outline too (`isScreensaverFallbackOnProgram`, used only by
+  `isShowGridItemLive`; the program resolver and operator snapshots are unchanged).
+- Hero labels with nothing connected (2026-11-26): the plain LIVE badge hides when no TV is connected (Practice Mode),
+  but BLACK / WHITE SCREEN, FREEZE FRAME and LOCKED SCREEN always show (`LiveHeaderView.applyHoldBadgeVisibility`,
+  re-applied after every hero refresh and on each Freeze / Lock toggle).
 - Blackout hold (iPhone, 2026-11-13, `LibraryGridViewController+BlackoutHold.swift`): while Blackout is on the TV stays
   black and the phone stays usable. Tile taps open a private Preview in the hero (`prefersPhonePreviewOnTap(isBlackoutHolding:)`, see Hero phone preview),
   the held video scrubs muted in the hero, and ⋯ › Show After Blackout cues what follows (`blackoutCue`, "UP NEXT" pill).
@@ -212,8 +218,8 @@
 - Camera tile colors (2026-11-23): blue (`liveStroke`) means "on the TV" and nothing else. A frame switched on over the
   camera gets the "✓ ON" badge (`CameraFrameOnBadge`, check only on small ribbon thumbs), never the blue outline, in the
   full-screen camera, the Pictures sheet and the Show camera ribbon. Background / Quick Change tiles are blue while parked on
-  program, and a tap with no TV (no AirPlay, Apple TV, Practice Mode or operator: `canGoLiveFromCamera`) shows a toast instead
-  of parking. The centered hint says what the TV shows ("TV shows Quick Change · Tap for camera", "Preview only · No TV
+  program, and the camera can always go live, TV or not (`canGoLiveFromCamera` is always true since 2026-11-26: opened from the
+  round Camera button on any tab it used to say "Preview only · No TV connected" and refuse, which the owner rejected). The centered hint says what the TV shows ("TV shows Quick Change · Tap for camera", "Preview only · No TV
   connected", else "Tap screen to go LIVE").
 - Camera's first card (2026-11-26, `CameraLiveViewController+LiveOutput`): whatever was live in the Show as the camera
   opened (`entryLiveSource`, also with no TV). Before the camera goes live it is a blue LIVE card and a tap does nothing;
@@ -311,10 +317,11 @@
   the current Display Mode, else the "No Show open" page). Only a finger swipe does that: tab slides and layout passes never
   change the grid's mode (a layout pass that snapped the offset mid-slide once closed the Show). `HomePagerScrollView` ignores
   `scrollRectToVisible`, or focusing a text field nudges the pager sideways. The header (`HomeHeaderBar`) stays on every page
-  and swaps its right-hand buttons by page (`setTabPage`): Music gets "+", and Library and Music hide their
+  and swaps its right-hand buttons by page (`setTabPage`): Library gets "+" (Photos & Videos / PDF into the Library only,
+  never the open Show: `makeLibraryAddMenu`, `pendingPDFLibraryOnly`, 2026-11-26), Music gets "+", and Library and Music hide their
   own navigation bar at the root (`HomeTabPageNavigationController`; it returns for a playlist or reordering).
   The dropdown says "Eclipse" on Home (no "Home": that is a tab) and has no Library / Music entries or back chevron there.
-  Search is an icon in the header row, ahead of the page's own buttons; Settings has no icon on the paging home screen and
+  Search is the first item on the tab row, left of Home (owner's call 2026-11-26); Settings has no icon on the paging home screen and
   is in the dropdown instead, with or without a Show open (owner's calls, 2026-11-26). Camera is a round button in the
   bottom-leading corner (`HomeCameraButton`, owner's call 2026-11-26, after a word on the tab row): it mirrors the Music
   circle (same size and insets), is dark grey (blue means "on the TV"; a blue ring shows while the phone camera is live),
@@ -322,8 +329,10 @@
   it), while tiles are arranged or selected, and while a search field is up (`HomeCameraButton.shouldHide`,
   `refreshHomeCameraButton`). The Show's bottom banners (iCloud, swipe hint) keep clear of it
   (`bottomChromeCameraClearance`). A floating bottom bar and an iOS-style glass footer were both tried and rejected: do not
-  bring a footer back. Camera opens the full-screen camera (`presentCameraLive`). Search shows on
-  Library, Music's list and an open Show and opens one field under the tabs (`beginPageSearch` / `endPageSearch`) that
+  bring a footer back. Camera opens the full-screen camera (`presentCameraLive`). Search works on
+  Library, Music's list and an open Show (elsewhere, and while arranging, the icon stays put, dimmed and inactive, so the
+  tabs never shift). Its field replaces the tab row until Cancel (`beginPageSearch` / `endPageSearch`; the header keeps
+  its height) and
   filters the page in front by name: Show cards (`ShowGridItem.searchTitle`, `showSearchQuery`), tracks and playlists,
   Library titles. The filter ends when the page or the Show changes, and arranging ends it first, because arrange
   positions are positions in the whole Show (a filtered grid would save the wrong order). The pushed Library page keeps
@@ -392,3 +401,9 @@
   ignores unknown fields but drops a whole message whose verb or item kind it cannot decode (which is why PTZ Camera and
   Prompter are still sent as "nothing live"). Not done on the remote: turning PDF pages, scrolling a website, Prompter and
   PTZ go-live, the live camera's frames and capture, pinch-to-crop.
+- Header search is app-wide (iPhone / narrow iPad tab header, owner's call 2026-11-26: "Search should always be for entire
+  app"). The magnifier works on every page, Home included (off only while arranging / selecting). Typing lists Shows, the
+  open Show's cards ("In “<Show>”"), Library (media + PDFs) and Music in `AppSearchResultsView` (rules in `AppSearch`,
+  wiring `iPhoneMainViewController+AppSearch`). Tapping a Show opens it; anything else goes to its page with the typed text
+  applied as that page's own filter (`searchingTab`), and typing again returns to the whole-app list. Known limits: only the
+  open Show's cards are searched (other Shows by name only), and the Library page's type filter still applies.

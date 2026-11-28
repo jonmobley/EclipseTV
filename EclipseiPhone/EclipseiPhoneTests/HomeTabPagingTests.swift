@@ -121,17 +121,27 @@ struct HomeHeaderBarTabStripTests {
         #expect(HomeHeaderBar.height(showsTabStrip: true, verticalSizeClass: .compact) == 52)
     }
 
-    @Test func searchFieldAddsARowUnderTheTabs() {
-        #expect(
-            HomeHeaderBar.height(
-                showsTabStrip: true, verticalSizeClass: .regular, isSearching: true
-            ) == 138
-        )
-        #expect(
-            HomeHeaderBar.height(
-                showsTabStrip: true, verticalSizeClass: .compact, isSearching: true
-            ) == 100
-        )
+    /// Search sits left of Home on the tab row, and its field replaces the tabs
+    /// while it is up, so the bar never grows.
+    @Test func searchFieldTakesTheTabRowsPlace() {
+        let bar = HomeHeaderBar(frame: CGRect(x: 0, y: 0, width: 390, height: 90))
+        bar.showsTabStrip = true
+        bar.setTabPage(.library)
+        bar.layoutIfNeeded()
+        let search = bar.firstDescendant(label: "Search")
+        let home = bar.firstDescendant(identifier: HomeTab.home.accessibilityIdentifier)
+        let searchFrame = search.map { bar.convert($0.bounds, from: $0) } ?? .null
+        let homeFrame = home.map { bar.convert($0.bounds, from: $0) } ?? .null
+        #expect(searchFrame.maxX <= homeFrame.minX)
+        #expect(abs(searchFrame.midY - homeFrame.midY) < 2)
+
+        bar.beginSearch(placeholder: "Search Library")
+        bar.layoutIfNeeded()
+        #expect(bar.tabStrip.isHidden)
+        let field = bar.convert(bar.searchField.bounds, from: bar.searchField)
+        #expect(abs(field.midY - homeFrame.midY) < 2)
+        bar.endSearch()
+        #expect(!bar.tabStrip.isHidden)
     }
 
     @Test func eachPageShowsItsOwnControls() {
@@ -140,30 +150,36 @@ struct HomeHeaderBarTabStripTests {
         let search = bar.firstDescendant(label: "Search")
         let addMusic = bar.firstDescendant(label: "Add Music")
         let newShow = bar.firstDescendant(label: "New Show")
-        // Home has nothing to search.
-        #expect(search?.isHidden == true)
+        let addLibrary = bar.firstDescendant(label: "Add to Library")
+        let searchOn = { (search as? UIControl)?.isEnabled == true && search?.isHidden == false }
+        // Search covers the whole app, so it works from Home too.
+        #expect(search?.isHidden == false)
+        #expect(searchOn())
         #expect(newShow?.isHidden == false)
 
         bar.setTabPage(.library)
-        #expect(search?.isHidden == false)
+        #expect(searchOn())
         #expect(addMusic?.isHidden == true)
         #expect(newShow?.isHidden == true)
+        // Library has its own "+", which imports into the Library only.
+        #expect(addLibrary?.isHidden == false)
 
         bar.setTabPage(.music)
-        #expect(search?.isHidden == false)
+        #expect(addLibrary?.isHidden == true)
+        #expect(searchOn())
         #expect(addMusic?.isHidden == false)
         // Inside a playlist the playlist's own bar takes over.
         bar.setMusicAddAvailable(false)
         #expect(addMusic?.isHidden == true)
-        #expect(search?.isHidden == true)
+        #expect(searchOn())
 
-        // The Show page: only once a Show is open.
+        // The Show page, with or without a Show open; never while arranging.
         bar.setTabPage(.show)
-        #expect(search?.isHidden == true)
+        #expect(searchOn())
         bar.setShowModeChrome(true)
-        #expect(search?.isHidden == false)
+        #expect(searchOn())
         bar.setArranging(true)
-        #expect(search?.isHidden == true)
+        #expect(!searchOn())
     }
 
     /// Camera left the tab row for a round button in the bottom-leading corner.
@@ -210,7 +226,7 @@ struct HomeHeaderBarTabStripTests {
         bar.onSearchTextChanged = { typed.append($0) }
         bar.beginSearch(placeholder: "Search Library")
         #expect(bar.isSearching)
-        #expect(search?.isHidden == true)
+        #expect(search?.alpha == 0)
         #expect(bar.searchField.placeholder == "Search Library")
         bar.searchField.text = "fl"
         bar.searchField.sendActions(for: .editingChanged)
@@ -218,7 +234,7 @@ struct HomeHeaderBarTabStripTests {
         bar.endSearch()
         #expect(!bar.isSearching)
         #expect(bar.searchField.text == "")
-        #expect(search?.isHidden == false)
+        #expect(search?.alpha == 1)
     }
 
     @Test func backChevronGivesWayToTheHomeTab() {

@@ -112,69 +112,6 @@ extension iPhoneMainViewController: UIScrollViewDelegate {
         homeTabDidSettle()
     }
 
-    // MARK: - Search (Library, Show, Music)
-
-    /// Opens the header's search field for the page in front.
-    func beginPageSearch() {
-        guard isHomeTabPaging, searchingTab == nil else { return }
-        finishHomePagerSlide()
-        let placeholder: String
-        switch homeTab {
-        case .library: placeholder = "Search Library"
-        case .show:
-            guard libraryViewController.isShowMode else { return }
-            placeholder = "Search this Show"
-        case .music: placeholder = "Search Music"
-        case .home: return
-        }
-        searchingTab = homeTab
-        headerBar.beginSearch(placeholder: placeholder)
-        animateHeaderHeightChange()
-    }
-
-    /// Filters the page being searched as the text changes.
-    func applyPageSearch(_ text: String) {
-        switch searchingTab {
-        case .library: libraryPagePicker?.setHomeTabSearchQuery(text)
-        case .show: libraryViewController.setShowSearchQuery(text)
-        case .music: audioLibraryViewController.searchQuery = text
-        case .home, nil: break
-        }
-    }
-
-    /// Closes the search field and shows the whole page again.
-    ///
-    /// Also runs when the page changes or the Show does: a filter left on a page
-    /// nobody is looking at would hide cards with nothing on screen to say why.
-    func endPageSearch(animated: Bool = true) {
-        guard searchingTab != nil else { return }
-        searchingTab = nil
-        libraryPagePicker?.setHomeTabSearchQuery("")
-        libraryViewController.setShowSearchQuery("")
-        audioLibraryViewController.searchQuery = ""
-        headerBar.endSearch()
-        if animated {
-            animateHeaderHeightChange()
-        } else {
-            applyHomePagerTopAttachment()
-        }
-    }
-
-    private func animateHeaderHeightChange() {
-        guard view.window != nil, !UIAccessibility.isReduceMotionEnabled else {
-            applyHomePagerTopAttachment()
-            return
-        }
-        UIView.animate(
-            withDuration: 0.22,
-            delay: 0,
-            options: [.curveEaseInOut, .beginFromCurrentState]
-        ) {
-            self.applyHomePagerTopAttachment()
-            self.view.layoutIfNeeded()
-        }
-    }
-
     /// Locks paging while arranging media; snaps back to Library when paged.
     func setHomePagingEnabled(_ enabled: Bool) {
         if !enabled {
@@ -433,7 +370,7 @@ extension iPhoneMainViewController: UIScrollViewDelegate {
     }
 
     /// The Show the Show tab opens when none is open.
-    private func showIdForShowTab() -> UUID? {
+    func showIdForShowTab() -> UUID? {
         let store = LocalAlbumStore.shared
         let mode = ExternalOutputSettings.orientation
         return HomeTabPaging.showToOpen(
@@ -713,7 +650,7 @@ extension iPhoneMainViewController: UIScrollViewDelegate {
 
     /// Goes to `tab`. Neighbours slide; a jump across pages fades instead, so the
     /// pages in between never flash by.
-    private func setHomeTab(_ tab: HomeTab, animated: Bool) {
+    func setHomeTab(_ tab: HomeTab, animated: Bool) {
         guard isHomeTabPaging else { return }
         if tab == .music {
             libraryViewController.dismissMusicSwipeHint()
@@ -809,8 +746,7 @@ extension iPhoneMainViewController: UIScrollViewDelegate {
         headerBar.showsTabStrip = tabs
         let height = HomeHeaderBar.height(
             showsTabStrip: tabs,
-            verticalSizeClass: traitCollection.verticalSizeClass,
-            isSearching: headerBar.isSearching
+            verticalSizeClass: traitCollection.verticalSizeClass
         )
         headerHeightConstraint?.constant = height
         libraryPageTopConstraint?.constant = height

@@ -24,7 +24,10 @@ extension iPhoneMainViewController: UIDocumentPickerDelegate {
             do {
                 let doc = try PDFStore.shared.add(from: url, title: nil)
                 // Show membership only — tap the new card to go live.
-                if let albumId = pendingAlbumId ?? libraryViewController.openShowId {
+                let libraryOnly = pendingPDFLibraryOnly
+                pendingPDFLibraryOnly = false
+                if !libraryOnly,
+                   let albumId = pendingAlbumId ?? libraryViewController.openShowId {
                     LocalAlbumStore.shared.add(
                         itemId: doc.id.uuidString,
                         toAlbumId: albumId
@@ -33,6 +36,7 @@ extension iPhoneMainViewController: UIDocumentPickerDelegate {
                 pendingAlbumId = nil
             } catch {
                 pendingAlbumId = nil
+                pendingPDFLibraryOnly = false
                 showAlert(title: "Couldn't Add PDF", message: error.localizedDescription)
             }
         case .audio:
@@ -64,6 +68,7 @@ extension iPhoneMainViewController: UIDocumentPickerDelegate {
         isShowingPicker = false
         if pendingDocumentKind == .pdf {
             pendingAlbumId = nil
+            pendingPDFLibraryOnly = false
         }
     }
 }
