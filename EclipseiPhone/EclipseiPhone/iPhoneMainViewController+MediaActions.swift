@@ -246,6 +246,30 @@ extension iPhoneMainViewController {
     /// Library and History sit at the top; Image / Video / Website / Slideshow /
     /// Countdown / Live Poll / PDF follow under a divider. In a Show, imports add non-live
     /// cards; Website opens the compose sheet (History is reachable from there).
+    /// The Library page's "+": photos, videos and PDFs go into the Library only,
+    /// even while a Show is open on the Show tab.
+    func makeLibraryAddMenu() -> UIMenu {
+        let media = UIAction(
+            title: "Photos & Videos",
+            image: UIImage(systemName: "photo.on.rectangle")
+        ) { [weak self] _ in
+            guard let self else { return }
+            self.pendingAlbumId = nil
+            self.pendingSlideshowShowId = nil
+            self.showImportPicker()
+        }
+        let pdf = UIAction(
+            title: "PDF",
+            image: UIImage(systemName: ThumbnailTypeIcon.pdf.systemName)
+        ) { [weak self] _ in
+            guard let self else { return }
+            self.pendingAlbumId = nil
+            self.pendingPDFLibraryOnly = true
+            self.showPDFPicker()
+        }
+        return UIMenu(title: "Add to Library", children: [media, pdf])
+    }
+
     func makeAddMenu() -> UIMenu {
         let albumId = libraryViewController.openShowId
         let library = UIAction(

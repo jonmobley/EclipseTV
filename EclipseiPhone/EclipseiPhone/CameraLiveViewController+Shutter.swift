@@ -95,12 +95,11 @@ extension CameraLiveViewController {
         startAlwaysLiveRecordingIfNeeded()
     }
 
-    /// A TV (AirPlay or Apple TV), Practice Mode or a remote operator can take
-    /// the camera live; with none of them the stage is only a viewfinder.
-    var canGoLiveFromCamera: Bool {
-        // Practice Mode is always on inside a Show; Camera opened from Home has none.
-        LiveOutputRouting.canMarkLive(practiceMode: captureDestinationShowId != nil)
-    }
+    /// The camera can always go live, with or without a TV (owner's call
+    /// 2026-11-26: "it should all operate normally without a screen"). The round
+    /// Camera button opens it from any tab, and a "Preview only" camera there was
+    /// a dead end. Kept as a property so the chrome reads one rule.
+    var canGoLiveFromCamera: Bool { true }
 
     /// Blink the panel and save a still to Photos (and the Eclipse library).
     ///

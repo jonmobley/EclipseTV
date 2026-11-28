@@ -180,9 +180,26 @@ extension LibraryGridViewController {
         if ShowLiveSession.shared.isRemoteOperator {
             return isShowGridItemLiveRemotely(item)
         }
-        return resolvedShowProgram?.matches(
+        guard let program = resolvedShowProgram else {
+            // Nothing picked: the TV (or Practice) falls back to the Screensaver,
+            // and the hero shows it, so its tile says so too (owner's call
+            // 2026-11-26: a hero showing an unlit tile was confusing).
+            if case .screensaver = item { return isScreensaverFallbackOnProgram }
+            return false
+        }
+        return program.matches(
             item, cameraPresetFrameIds: cameraPresetFrameIds(for: item)
-        ) == true
+        )
+    }
+
+    /// Nothing is picked and the Screensaver fills the screen by itself: with
+    /// AirPlay connected, or in Practice Mode with no Apple TV. Same rule the hero
+    /// uses for its fallback (`refreshLiveHeader`).
+    var isScreensaverFallbackOnProgram: Bool {
+        let mgr = ExternalDisplayManager.shared
+        guard !mgr.isOverlayLive,
+              store.currentId.flatMap({ store.item(id: $0) }) == nil else { return false }
+        return mgr.isConnected || (prefersDisconnectedLivePreview && !store.isOnline)
     }
 
     /// Preset frames on the open Show, needed only to decide the plain Camera tile.
