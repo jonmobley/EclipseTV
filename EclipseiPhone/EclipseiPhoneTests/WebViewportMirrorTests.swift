@@ -84,15 +84,49 @@ struct WebViewportMirrorTests {
 
 /// Real web pages: the phone's zoomed view lands on the TV's page, which
 /// takes no touches, the same way the AirPlay page is set up (2026-11-23).
+///
+/// CI runs the suite in parallel, where a page load once never reported back and the
+/// job hung for six hours (2026-11-27). So every way a load can end counts (finish,
+/// failure, web process crash), a load that says nothing gives up after a while and is
+/// tried again, and the suite has a time limit.
 @MainActor
+@Suite(.timeLimit(.minutes(10)))
 struct WebViewportMirrorWebKitTests {
 
+    /// Resumes once, with true only when the page finished loading.
     private final class LoadWaiter: NSObject, WKNavigationDelegate {
-        var continuation: CheckedContinuation<Void, Never>?
-        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-            continuation?.resume()
+        private var continuation: CheckedContinuation<Bool, Never>?
+        private var attempt = 0
+
+        func wait(load: () -> Void) async -> Bool {
+            attempt += 1
+            let thisAttempt = attempt
+            return await withCheckedContinuation { continuation in
+                self.continuation = continuation
+                load()
+                // Dispatch, not a sleeping task: CI's task pool can be busy for minutes.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 90) { [weak self] in
+                    guard let self, self.attempt == thisAttempt else { return }
+                    self.end(false)
+                }
+            }
+        }
+
+        private func end(_ loaded: Bool) {
+            continuation?.resume(returning: loaded)
             continuation = nil
         }
+
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { end(true) }
+        func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+            end(false)
+        }
+        func webView(
+            _ webView: WKWebView,
+            didFailProvisionalNavigation navigation: WKNavigation!,
+            withError error: Error
+        ) { end(false) }
+        func webViewWebContentProcessDidTerminate(_ webView: WKWebView) { end(false) }
     }
 
     private func loadedPage(width: CGFloat, height: CGFloat, interactive: Bool) async -> WKWebView {
@@ -107,10 +141,11 @@ struct WebViewportMirrorWebKitTests {
         <html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head>
         <body style="margin:0"><div style="height:4000px;background:linear-gradient(red,blue)"></div></body></html>
         """
-        await withCheckedContinuation { continuation in
-            waiter.continuation = continuation
-            web.loadHTMLString(html, baseURL: nil)
+        var loaded = false
+        for _ in 0..<3 where !loaded {
+            loaded = await waiter.wait { web.loadHTMLString(html, baseURL: nil) }
         }
+        #expect(loaded, "test page never finished loading")
         // Let WebKit settle content size and zoom limits.
         for _ in 0..<20 where web.scrollView.contentSize.height < 3000 {
             try? await Task.sleep(for: .milliseconds(50))
